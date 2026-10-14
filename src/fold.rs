@@ -1,6 +1,7 @@
 use crate::event::{Event, EventKind, Mode, Phase};
 use crate::view::{
-    Board, FlowView, ReviewCount, State, Step, StepStatus, Tasks, TimelineEntry, Tone, VIEW_VERSION,
+    Board, FlowView, ReviewCount, State, Step, StepStatus, Tasks, TimelineEntry, Tone,
+    VIEW_VERSION, Workspace,
 };
 
 /// A flow with a heartbeat older than this, not done or ended, is not responding.
@@ -95,6 +96,7 @@ impl Folding {
             timeline: vec![entry(at, "started".to_string(), Tone::Neutral)],
             started_at: at,
             changed_at: at,
+            workspace: None,
         };
         Folding {
             view,
@@ -171,6 +173,21 @@ impl Folding {
                 self.view.merge_request = Some(url.clone());
                 self.stopped_at.get_or_insert(at);
                 self.note(at, "MR opened".to_string(), Tone::Success);
+            }
+            EventKind::Workspace {
+                path,
+                branch,
+                slot,
+                window,
+                agent,
+            } => {
+                self.view.workspace = Some(Workspace {
+                    path: path.clone(),
+                    branch: branch.clone(),
+                    slot: *slot,
+                    window: window.clone(),
+                    agent: agent.clone(),
+                });
             }
             EventKind::Ended => {
                 if self.view.state != State::Done {
@@ -735,6 +752,38 @@ mod tests {
         assert_eq!(resolve(&flows, "shop-221").unwrap().changed_at, 5);
         assert_eq!(resolve(&flows, "shop-230").unwrap().state, State::Working);
         assert_eq!(resolve(&flows, "shop-999"), None);
+    }
+
+    fn workspace(slot: u8, window: Option<&str>) -> EventKind {
+        EventKind::Workspace {
+            path: "/repo/.flow/worktrees/shop-221".into(),
+            branch: "flow/shop-221".into(),
+            slot,
+            window: window.map(String::from),
+            agent: "claude".into(),
+        }
+    }
+
+    #[test]
+    fn keeps_the_last_workspace_without_changing_the_state() {
+        let flow = view(
+            &[
+                started(0),
+                at(1, workspace(1, None)),
+                at(2, workspace(1, Some("@14"))),
+            ],
+            3,
+        );
+
+        assert_eq!(
+            flow.workspace.as_ref().and_then(|ws| ws.window.as_deref()),
+            Some("@14")
+        );
+        assert_eq!(flow.workspace.as_ref().map(|ws| ws.slot), Some(1));
+        assert_eq!(flow.state, State::Working);
+        assert_eq!(flow.changed_at, 0);
+        assert_eq!(texts(&flow), vec!["started"]);
+        assert_eq!(view(&[started(0)], 1).workspace, None);
     }
 
     #[test]

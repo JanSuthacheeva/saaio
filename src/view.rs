@@ -33,6 +33,18 @@ pub struct FlowView {
     pub timeline: Vec<TimelineEntry>,
     pub started_at: u64,
     pub changed_at: u64,
+    pub workspace: Option<Workspace>,
+}
+
+/// Where a started flow's worker runs: its worktree, branch, port slot, tmux window and agent.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Workspace {
+    pub path: String,
+    pub branch: String,
+    pub slot: u8,
+    pub window: Option<String>,
+    pub agent: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -144,6 +156,13 @@ mod tests {
             }],
             started_at: 1,
             changed_at: 2,
+            workspace: Some(Workspace {
+                path: "/repo/.flow/worktrees/shop-221".into(),
+                branch: "flow/shop-221".into(),
+                slot: 1,
+                window: Some("@14".into()),
+                agent: "claude".into(),
+            }),
         }
     }
 
@@ -174,6 +193,8 @@ mod tests {
         assert_eq!(flow["steps"][0]["durationMs"], 540_000);
         assert_eq!(flow["steps"][0]["status"], "done");
         assert_eq!(flow["timeline"][0]["tone"], "neutral");
+        assert_eq!(flow["workspace"]["branch"], "flow/shop-221");
+        assert_eq!(flow["workspace"]["window"], "@14");
     }
 
     #[test]

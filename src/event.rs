@@ -49,6 +49,13 @@ pub enum EventKind {
         url: String,
     },
     Ended,
+    Workspace {
+        path: String,
+        branch: String,
+        slot: u8,
+        window: Option<String>,
+        agent: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
