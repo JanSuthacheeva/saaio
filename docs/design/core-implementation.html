@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en" data-theme="nord">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flow core - implementation</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge, dd) { overflow-wrap: anywhere; }
+  svg { max-width: 100%; height: auto; }
+  :not(pre) > code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  .codebox { border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent); border-radius: 8px; overflow: hidden; font-size: 13px; }
+  .fig text { font: 12px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .fig .small { font-size: 10px; opacity: .7; }
+  .fig .new rect { fill: color-mix(in oklab, var(--color-success) 18%, transparent); stroke: var(--color-success); stroke-width: 1.5; }
+  .fig .old rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .fig .later rect { fill: none; stroke: color-mix(in oklab, var(--color-base-content) 35%, transparent); stroke-dasharray: 4 3; }
+  .fig .edge { stroke: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke-width: 1.3; fill: none; marker-end: url(#arr); }
+  .fig .err { stroke: var(--color-error); stroke-width: 1.1; stroke-dasharray: 5 4; fill: none; marker-end: url(#arrErr); opacity: .8; }
+  .fig .life { stroke: color-mix(in oklab, var(--color-base-content) 25%, transparent); stroke-dasharray: 3 4; }
+  .fig .lane rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 25%, transparent); }
+  .fig .errtext { fill: var(--color-error); font-size: 10.5px; }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; margin-right: 1rem; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  ol.steps { list-style: decimal; padding-left: 1.4rem; }
+  ol.steps li { margin: .2rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  ol.steps li.e { color: var(--color-error); }
+  nav a { white-space: nowrap; }
+  pre.term { background: #1e1e1e; color: #e6e6e6; border-radius: 8px; padding: .8rem 1rem; font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-x: auto; margin: 0; }
+  .t-sub { color: #8a8a8a; } .t-key { color: #88c0d0; }
+  table.rules td, table.rules th { font-size: 12.5px; vertical-align: top; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-12">
+
+<header class="space-y-3">
+  <p class="text-sm opacity-60">design-code / phase 3 - piece 1+2 of 6: event format + flow core, revision 2</p>
+  <h1 class="text-3xl font-bold"><code>flow</code>: an AXI that records flows and shows where they stand</h1>
+  <div class="alert alert-soft alert-info text-sm"><span><b>Changed in this revision:</b> <code>flow</code> is an <a class="link" href="https://axi.md">AXI</a>, since its main user is an agent: TOON output by default, a live home view with no arguments, <code>help[]</code> next steps on every output, structured errors on stdout with exit codes 0/1/2, idempotent <code>flow new</code>, short default fields with <code>--full</code>, flows addressed by name. <code>--json</code> stays for programs (the mod). The plain colored board is gone; <code>render.rs</code> became <code>output.rs</code>.</span></div>
+  <nav class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+    <a class="link" href="#recap">1 Recap</a><a class="link" href="#overview">2 Structure</a><a class="link" href="#units">3 Units</a><a class="link" href="#data">4 Data</a><a class="link" href="#chains">5 Call chains</a><a class="link" href="#conventions">6 Conventions</a><a class="link" href="#tests">7 Test seams</a><a class="link" href="#assumptions">8 Assumptions</a><a class="link" href="#questions">9 Decided</a>
+  </nav>
+</header>
+
+<section id="recap" class="space-y-4">
+  <h2 class="text-2xl font-bold">1. Decision recap</h2>
+  <p>A new Rust AXI in <code>~/projects/flow</code> is the only writer of one append-only JSONL log per flow and the only place that folds those logs into what a flow looks like. Agents talk to it in TOON; programs (the Claude Code mod later) read <code>flow status --json</code>. The log stays private.</p>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li>Decided: CLI folds, readers use status output (round 3); files, no daemon; ship-feature keeps phase order and auto mode (round 2); new repo; follow the AXI principles (this round).</li>
+    <li>In this piece: <code>flow</code> (home), <code>flow new</code>, <code>flow report</code>, <code>flow status</code>, <code>flow clear</code>. Later: <code>flow start</code> (piece 5), the mod (3, 4), auto mode and a skill stub (6), a <code>flow setup</code> hook for ambient context (AXI principle 7, with piece 6).</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4 items-start">
+    <div class="space-y-1"><p class="text-sm font-semibold">No arguments: the home view</p>
+<pre class="term"><span class="t-sub">$</span> flow
+<span class="t-key">bin:</span> ~/.cargo/bin/flow
+<span class="t-key">description:</span> Tracks parallel feature flows: what each is doing, where it is blocked, how far it got
+<span class="t-key">count:</span> 3
+<span class="t-key">needs_you:</span> 1
+<span class="t-key">flows[3]{name,state,phase,tasks,age}:</span>
+  shop-221,blocked,implement,4/9,1m
+  export-csv,done,merge-request,9/9,12m
+  shop-230,working,design,"",3m
+<span class="t-key">blocked[1]{name,blocker}:</span>
+  shop-221,"Task 5: migration needs a default value"
+<span class="t-key">help[2]:</span> "Run `flow status &lt;name&gt;` for one flow's phases, timeline and decisions","Run `flow new --name &lt;name&gt; --request &lt;text&gt;` to track a new flow"</pre></div>
+    <div class="space-y-3">
+      <div class="space-y-1"><p class="text-sm font-semibold">A worker reports (flow from <code>$FLOW_ID</code>, or <code>--flow &lt;name|id&gt;</code>)</p>
+<pre class="term"><span class="t-sub">$</span> flow report blocked "Task 5: migration needs a default value"
+<span class="t-key">flow:</span> shop-221
+<span class="t-key">state:</span> blocked
+<span class="t-key">phase:</span> implement
+<span class="t-key">help[1]:</span> "Run `flow report working` once the block is resolved"</pre></div>
+      <div class="space-y-1"><p class="text-sm font-semibold">An error, on stdout, exit 1</p>
+<pre class="term"><span class="t-sub">$</span> flow report --flow shop-999 working
+<span class="t-key">error:</span> no flow named shop-999
+<span class="t-key">help[2]:</span> "Run `flow` to list the flows","Run `flow new --name shop-999 --request &lt;text&gt;` to start it"</pre></div>
+    </div>
+  </div>
+</section>
+
+<section id="overview" class="space-y-3">
+  <h2 class="text-2xl font-bold">2. Structure overview</h2>
+  <div class="legend text-sm">
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-success) 40%,transparent)"></i>new</span>
+    <span><i class="sw" style="background:var(--color-base-300)"></i>existing</span>
+    <span><i class="sw" style="border:1px dashed currentColor"></i>later piece</span>
+  </div>
+  <svg class="fig" viewBox="0 0 860 330" role="img" aria-label="Structure overview">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" stroke="none"/></marker>
+      <marker id="arrErr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--color-error)" stroke="none"/></marker>
+    </defs>
+    <g class="new" id="o-main"><title>src/main.rs: clap Cli, dispatch, exit codes</title><rect x="340" y="20" width="180" height="50" rx="6"/><text x="430" y="42" text-anchor="middle">src/main.rs</text><text x="430" y="58" text-anchor="middle" class="small">parse, dispatch, exit codes</text></g>
+    <g class="new" id="o-event"><title>src/event.rs: what can be reported, one JSON line</title><rect x="30" y="130" width="150" height="50" rx="6"/><text x="105" y="152" text-anchor="middle">src/event.rs</text><text x="105" y="168" text-anchor="middle" class="small">what was reported</text></g>
+    <g class="new" id="o-store"><title>src/store.rs: logs and heartbeats on disk</title><rect x="215" y="130" width="150" height="50" rx="6"/><text x="290" y="152" text-anchor="middle">src/store.rs</text><text x="290" y="168" text-anchor="middle" class="small">files on disk</text></g>
+    <g class="new" id="o-fold"><title>src/fold.rs: events to FlowView, Board, resolve</title><rect x="400" y="130" width="140" height="50" rx="6"/><text x="470" y="152" text-anchor="middle">src/fold.rs</text><text x="470" y="168" text-anchor="middle" class="small">events -> view</text></g>
+    <g class="new" id="o-view"><title>src/view.rs: derived types, --json contract</title><rect x="575" y="130" width="130" height="50" rx="6"/><text x="640" y="152" text-anchor="middle">src/view.rs</text><text x="640" y="168" text-anchor="middle" class="small">--json contract</text></g>
+    <g class="new" id="o-output"><title>src/output.rs: TOON documents, Failure, help lines</title><rect x="575" y="225" width="250" height="50" rx="6"/><text x="700" y="247" text-anchor="middle">src/output.rs</text><text x="700" y="263" text-anchor="middle" class="small">TOON home / status / report / error, help[]</text></g>
+    <g class="old" id="o-toon"><title>serde_toon_format crate</title><rect x="740" y="130" width="100" height="50" rx="6"/><text x="790" y="152" text-anchor="middle">serde_toon</text><text x="790" y="168" text-anchor="middle" class="small">_format</text></g>
+    <g class="old" id="o-fs"><title>~/.local/state/flow/flows/</title><rect x="215" y="235" width="150" height="40" rx="6"/><text x="290" y="260" text-anchor="middle">state dir (files)</text></g>
+    <g class="new" id="o-tests"><title>tests/cli.rs: runs the binary</title><rect x="30" y="235" width="150" height="40" rx="6"/><text x="105" y="260" text-anchor="middle">tests/cli.rs</text></g>
+    <g class="later" id="o-mod"><title>later pieces call the binary</title><rect x="640" y="20" width="200" height="50" rx="6"/><text x="740" y="42" text-anchor="middle">mod, skills, flow start</text><text x="740" y="58" text-anchor="middle" class="small">later pieces, call the binary</text></g>
+    <path class="edge" d="M380,70 L300,128"/>
+    <path class="edge" d="M410,70 L180,140"/>
+    <path class="edge" d="M450,70 L468,128"/>
+    <path class="edge" d="M500,70 C600,100 630,110 638,128"/>
+    <path class="edge" d="M520,58 C640,120 660,190 680,223"/>
+    <path class="edge" d="M290,180 L290,233"/>
+    <path class="edge" d="M540,155 L573,155"/>
+    <path class="edge" d="M790,180 L790,223"/>
+    <path class="edge" d="M640,180 L660,223"/>
+    <path class="edge" d="M640,45 L522,45"/>
+    <text x="560" y="38" class="small">process</text>
+  </svg>
+  <p class="text-sm opacity-80"><code>event.rs</code>, <code>fold.rs</code>, <code>view.rs</code> and <code>output.rs</code> are pure; <code>store.rs</code> owns every file operation; <code>main.rs</code> is the only place that reads the environment and the clock and writes stdout. Everything uses <code>event.rs</code>; those edges are left out.</p>
+</section>
+
+<section id="units" class="space-y-6">
+  <h2 class="text-2xl font-bold">3. Units</h2>
+
+  <article class="card card-border bg-base-100" id="u-main">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">src/main.rs</h3><span class="badge badge-success">new</span><span class="badge badge-ghost">edge</span></div>
+      <p class="text-sm"><b>Responsibility:</b> parses the command line, runs one command, prints one TOON (or JSON) document and exits 0, 1 or 2.</p>
+      <p class="text-sm"><b>Collaborators:</b> <code>Store</code>, <code>fold</code>, <code>output</code>; environment (<code>FLOW_ID</code>, <code>FLOW_HOME</code>, <code>XDG_STATE_HOME</code>, <code>HOME</code>), clock, stdout. Uses <code>Cli::try_parse()</code> so a clap error becomes a TOON error on stdout with exit 2. Commands return <code>Result&lt;Document, Failure&gt;</code>; nothing prompts.</p>
+      <script type="text/x-code" data-name="src/main.rs">/// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
+#[derive(Debug, Parser)]
+#[command(version, about)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,   // None: the home view
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Track a new flow, or return the unfinished flow of that name
+    New {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        request: String,
+        #[arg(long, value_enum, default_value = "guided")]
+        mode: Mode,
+    },
+    /// Append one event to a flow
+    Report {
+        /// Flow name or id [default: $FLOW_ID]
+        #[arg(long, env = "FLOW_ID")]
+        flow: Option<String>,
+        #[command(subcommand)]
+        event: ReportEvent,
+    },
+    /// Every flow, or one flow with its phases, timeline and decisions
+    Status {
+        /// Flow name or id
+        flow: Option<String>,
+        /// Print the versioned JSON programs read, instead of TOON
+        #[arg(long)]
+        json: bool,
+        /// Do not truncate long texts
+        #[arg(long)]
+        full: bool,
+    },
+    /// Forget flows that are done or ended
+    Clear,
+}
+
+#[derive(Debug, Subcommand)]
+enum ReportEvent {
+    Phase { phase: Phase },
+    Working,
+    Delegated { description: String },
+    Waiting { question: String },
+    Blocked { reason: String },
+    Decision { text: String },
+    Tasks { done: u32, total: u32 },
+    Review { #[arg(long)] fixed: u32, #[arg(long)] open: u32 },
+    MergeRequest { url: String },
+    Ended,
+    /// Mark the flow alive without adding an event
+    Heartbeat,
+}
+
+fn main() -> ExitCode;
+fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure>;
+fn home(store: &Store, now: u64) -> Result<Document, Failure>;
+fn new_flow(store: &Store, name: String, request: String, mode: Mode, now: u64) -> Result<Document, Failure>;
+fn report(store: &Store, flow: Option<String>, event: ReportEvent, now: u64) -> Result<Document, Failure>;
+fn status(store: &Store, flow: Option<String>, json: bool, full: bool, now: u64) -> Result<Document, Failure>;
+fn clear(store: &Store, now: u64) -> Result<Document, Failure>;
+fn views(store: &Store, now: u64) -> (Vec<FlowView>, Vec<String>);   // every flow folded, plus warnings for unreadable ones
+fn now_ms() -> u64;
+
+impl ReportEvent {
+    /// The event to append; None for Heartbeat.
+    fn into_kind(self) -> Option<EventKind>;
+}</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-event">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">src/event.rs</h3><span class="badge badge-success">new</span><span class="badge badge-ghost">pure</span></div>
+      <p class="text-sm"><b>Responsibility:</b> defines what can be reported and how one event is one JSON line in the log.</p>
+      <script type="text/x-code" data-name="src/event.rs">pub const EVENT_VERSION: u32 = 1;
+pub const TEXT_LIMIT: usize = 500;
+
+impl Event {
+    /// An event of the current version at `at` (Unix ms), each text cut to TEXT_LIMIT chars.
+    pub fn new(at: u64, kind: EventKind) -> Event;
+
+    /// One line of JSON, no trailing newline.
+    pub fn to_line(&self) -> String;
+
+    /// None for a broken line, another version or an unknown kind,
+    /// so a log written by a newer flow still folds.
+    pub fn from_line(line: &str) -> Option<Event>;
+}
+
+impl Phase {
+    /// design, implement, review, merge-request - in flow order.
+    pub const ALL: [Phase; 4];
+}</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-store">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">src/store.rs</h3><span class="badge badge-success">new</span><span class="badge badge-ghost">I/O</span></div>
+      <p class="text-sm"><b>Responsibility:</b> reads and writes flow logs and heartbeats under one directory.</p>
+      <p class="text-sm"><b>Collaborators:</b> <code>std::fs</code>, <code>uuid</code>. Appends use <code>OpenOptions::append</code> and one <code>write_all</code> per line, so two writers in one worker (the mod and a skill) never interleave a line. Errors are <code>anyhow</code> with context; <code>main.rs</code> turns them into a <code>Failure</code>.</p>
+      <script type="text/x-code" data-name="src/store.rs">pub struct Store {
+    root: PathBuf, // holds flows/<id>.jsonl and flows/<id>.alive
+}
+
+impl Store {
+    /// $FLOW_HOME, else $XDG_STATE_HOME/flow, else $HOME/.local/state/flow.
+    pub fn locate(flow_home: Option<PathBuf>, xdg_state: Option<PathBuf>, home: Option<PathBuf>) -> Result<Store>;
+
+    pub fn at(root: PathBuf) -> Store;
+
+    /// A new flow with a fresh UUID v4 and its first event; returns the id.
+    pub fn create(&self, first: &Event) -> Result<String>;
+
+    /// Appends one event to an existing log.
+    pub fn append(&self, id: &str, event: &Event) -> Result<()>;
+
+    /// Every readable event of one flow, in order.
+    pub fn events(&self, id: &str) -> Result<Vec<Event>>;
+
+    /// Ids of all flows, by log file name.
+    pub fn ids(&self) -> Result<Vec<String>>;
+
+    /// Touches <id>.alive; its mtime is the last heartbeat.
+    pub fn beat(&self, id: &str) -> Result<()>;
+
+    /// Unix ms of the last heartbeat; None when the flow never sent one.
+    pub fn last_beat(&self, id: &str) -> Result<Option<u64>>;
+
+    /// Deletes the log and the heartbeat file.
+    pub fn remove(&self, id: &str) -> Result<()>;
+}</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-fold">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">src/fold.rs</h3><span class="badge badge-success">new</span><span class="badge badge-ghost">pure</span></div>
+      <p class="text-sm"><b>Responsibility:</b> turns one flow's events into its view, views into the sorted board, and a name or id into one flow.</p>
+      <p class="text-sm"><b>Collaborators:</b> <code>event</code>, <code>view</code>. Rules in <a class="link" href="#rules">4. Data - fold rules</a>.</p>
+      <script type="text/x-code" data-name="src/fold.rs">/// A flow with a heartbeat older than this, not done or ended, is not responding.
+pub const SILENT_AFTER_MS: u64 = 90_000;
+
+/// One flow's view at `now`; None when the log has no Started event to name it.
+pub fn fold(id: &str, events: &[Event], last_beat: Option<u64>, now: u64) -> Option<FlowView>;
+
+/// Sorted: needs you, running, finished; newest change first within each group.
+pub fn board(flows: Vec<FlowView>, now: u64) -> Board;
+
+/// The flow a name or id means: an exact id, else the unfinished flow of that name,
+/// else the most recent finished one of that name.
+pub fn resolve<'a>(flows: &'a [FlowView], name_or_id: &str) -> Option<&'a FlowView>;</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-view">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">src/view.rs</h3><span class="badge badge-success">new</span><span class="badge badge-ghost">contract</span></div>
+      <p class="text-sm"><b>Responsibility:</b> the derived types; serialised whole as the <code>--json</code> contract programs depend on (types in <a class="link" href="#data">4. Data</a>).</p>
+      <script type="text/x-code" data-name="src/view.rs">pub const VIEW_VERSION: u32 = 1;
+
+impl Board {
+    /// Pretty JSON with camelCase keys, `version` first, nothing truncated.
+    pub fn to_json(&self) -> String;
+}
+
+impl FlowView {
+    pub fn needs_you(&self) -> bool;   // waiting, blocked or not responding
+    pub fn is_finished(&self) -> bool; // done or ended
+}</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-output">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">src/output.rs</h3><span class="badge badge-success">new</span><span class="badge badge-ghost">pure</span></div>
+      <p class="text-sm"><b>Responsibility:</b> shapes every agent-facing answer: lean TOON documents with aggregates, explicit empty states, truncation hints and <code>help[]</code> next steps.</p>
+      <p class="text-sm"><b>Collaborators:</b> <code>view</code>, <code>serde_toon_format</code> (encodes small private serde structs per document). Help texts keep fixed flags and use placeholders (<code>&lt;name&gt;</code>) for runtime values.</p>
+      <script type="text/x-code" data-name="src/output.rs">/// List views cut long texts to this many chars, with a hint; --full lifts it.
+pub const LIST_TEXT_LIMIT: usize = 80;
+
+/// What a successful command prints: TOON for agents or JSON for programs.
+pub enum Document {
+    Toon(String),
+    Json(String),
+}
+
+/// An error an agent can act on: a message and next steps, printed as TOON on stdout.
+pub struct Failure {
+    pub message: String,
+    pub help: Vec<String>,
+    pub code: u8,           // 1 for errors, 2 for usage
+}
+
+impl Document {
+    pub fn text(&self) -> &str;
+}
+
+impl Failure {
+    pub fn error(message: impl Into<String>, help: Vec<String>) -> Failure;   // code 1
+    pub fn usage(clap_error: &clap::Error) -> Failure;                        // code 2: clap's message + `flow <command> --help`
+    pub fn from_io(error: anyhow::Error) -> Failure;                          // code 1: the error chain as message
+    pub fn to_toon(&self) -> String;                                          // error: ..., help[n]: ...
+}
+
+/// bin, description, count, needs_you, flows[n]{name,state,phase,tasks,age}, blocked[n]{name,blocker}, warnings, help.
+pub fn home(board: &Board, bin: &str, warnings: &[String]) -> Document;
+
+/// count, needs_you, the flows table and blockers, warnings, help; "flows: none tracked" when empty.
+pub fn status_list(board: &Board, warnings: &[String], full: bool) -> Document;
+
+/// One flow: name, request, mode, state, phase, blocker, tasks, review, merge_request,
+/// steps[4]{phase,status,duration}, decisions[n], timeline[n]{at,text}, help.
+pub fn status_detail(flow: &FlowView, now: u64, full: bool) -> Document;
+
+/// flow, id, existing (true when `new` found the unfinished flow of that name), help with `export FLOW_ID=<id>`.
+pub fn created(flow: &FlowView, existing: bool) -> Document;
+
+/// flow, state, phase, and the next step that fits the new state.
+pub fn reported(flow: &FlowView) -> Document;
+
+/// skipped: no flow id, help: set FLOW_ID or pass --flow (see Q3).
+pub fn skipped() -> Document;
+
+/// cleared: n, names[n], help.
+pub fn cleared(names: &[String]) -> Document;
+
+/// 45s, 12m, 3h, 2d.
+pub fn short_duration(ms: u64) -> String;
+
+/// text cut to `limit` chars with " (truncated, N chars - use --full)" unless `full`.
+pub fn truncated(text: &str, limit: usize, full: bool) -> String;</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-repo">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">Cargo.toml, README.md, CLAUDE.md, .gitignore</h3><span class="badge badge-success">new</span></div>
+      <p class="text-sm">Crate and binary <code>flow</code>, edition 2024. Dependencies: <code>anyhow</code>, <code>clap</code> (derive, env), <code>serde</code> (derive), <code>serde_json</code>, <code>serde_toon_format</code>, <code>uuid</code> (v4); dev: <code>tempfile</code>. README: install, commands, the TOON views, the <code>--json</code> contract. CLAUDE.md: build/test commands and the module map, as <code>mdterm/CLAUDE.md</code> does.</p>
+    </div>
+  </article>
+</section>
+
+<section id="data" class="space-y-4">
+  <h2 class="text-2xl font-bold">4. Data</h2>
+  <p class="text-sm"><b>Event</b> crosses CLI -> file (private, versioned for forward compatibility). <b>Board</b> crosses CLI -> stdout as <code>--json</code> for programs (public contract, <code>VIEW_VERSION</code>). TOON documents are built from the same views in <code>output.rs</code> with fewer fields (AXI: minimal default schemas). Times are Unix ms.</p>
+  <script type="text/x-code" data-name="src/event.rs (types)">#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Event {
+    pub v: u32,
+    pub at: u64,
+    #[serde(flatten)]
+    pub kind: EventKind,
+}
+
+/// One line per event: {"v":1,"at":1791945698308,"kind":"blocked","reason":"..."}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum EventKind {
+    Started { name: String, request: String, mode: Mode },
+    Phase { phase: Phase },
+    Working,
+    Delegated { description: String },
+    Waiting { question: String },
+    Blocked { reason: String },
+    Decision { text: String },
+    Tasks { done: u32, total: u32 },
+    Review { fixed: u32, open: u32 },
+    MergeRequest { url: String },
+    Ended,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum Phase { Design, Implement, Review, MergeRequest }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum Mode { Guided, Auto }</script>
+  <div class="codebox"></div>
+  <script type="text/x-code" data-name="src/view.rs (types) - the --json contract">#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Board {
+    pub version: u32,
+    pub now: u64,
+    pub count: usize,
+    pub needs_you: usize,
+    pub flows: Vec<FlowView>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowView {
+    pub id: String,
+    pub name: String,
+    pub request: String,
+    pub mode: Mode,
+    pub phase: Option<Phase>,
+    pub state: State,
+    pub blocker: Option<String>,       // the open question or block reason
+    pub delegate: Option<String>,      // what the running subagent does
+    pub tasks: Option<Tasks>,
+    pub review: Option<ReviewCount>,
+    pub merge_request: Option<String>,
+    pub decisions: Vec<String>,
+    pub steps: Vec<Step>,              // always the four phases, in order
+    pub timeline: Vec<TimelineEntry>,
+    pub started_at: u64,
+    pub changed_at: u64,               // last event that changed state, phase or blocker
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum State { Working, Delegated, Waiting, Blocked, NotResponding, Done, Ended }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Step {
+    pub phase: Phase,
+    pub status: StepStatus,
+    pub duration_ms: Option<u64>,      // None for a phase never entered
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StepStatus { Done, Current, Open }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Tasks { pub done: u32, pub total: u32 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReviewCount { pub fixed: u32, pub open: u32 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TimelineEntry {
+    pub at: u64,
+    pub text: String,                  // "started", "phase: implement", "blocked: Task 5 ...", "decided: approach B"
+    pub tone: Tone,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Tone { Neutral, Progress, Attention, Problem, Success }</script>
+  <div class="codebox"></div>
+
+  <h3 class="text-lg font-semibold pt-2" id="rules">Fold rules</h3>
+  <div class="overflow-x-auto">
+    <table class="table table-sm rules">
+      <thead><tr><th>Event</th><th>State</th><th>Other fields</th><th>Timeline</th></tr></thead>
+      <tbody>
+        <tr><td>started</td><td>working</td><td>name, request, mode, startedAt</td><td>started (neutral)</td></tr>
+        <tr><td>phase p</td><td>working</td><td>phase = p; blocker, delegate cleared; previous step done with its duration. Same phase again: no change (idempotent)</td><td>phase: p (progress)</td></tr>
+        <tr><td>working</td><td>working</td><td>blocker, delegate cleared</td><td>answered (progress), only after waiting or blocked</td></tr>
+        <tr><td>delegated d</td><td>delegated</td><td>delegate = d</td><td>-</td></tr>
+        <tr><td>waiting q</td><td>waiting</td><td>blocker = q</td><td>waiting: q (attention); repeated same q: no entry</td></tr>
+        <tr><td>blocked r</td><td>blocked</td><td>blocker = r</td><td>blocked: r (problem); repeated same r: no entry</td></tr>
+        <tr><td>decision t</td><td>unchanged</td><td>decisions += t unless already there</td><td>decided: t (neutral)</td></tr>
+        <tr><td>tasks d t</td><td>unchanged</td><td>tasks = d/t</td><td>-</td></tr>
+        <tr><td>review f o</td><td>unchanged</td><td>review = f/o</td><td>review: f fixed, o open (progress, attention if o &gt; 0)</td></tr>
+        <tr><td>merge-request u</td><td>done</td><td>phase = merge-request, url; all steps done</td><td>MR opened (success)</td></tr>
+        <tr><td>ended</td><td>ended, unless done</td><td>current step stops counting</td><td>ended (neutral)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="text-sm opacity-80">After the events: a heartbeat older than <code>SILENT_AFTER_MS</code> turns any state but done and ended into <code>not-responding</code>; a flow that never sent a heartbeat never becomes not-responding (harnesses without the mod). The current step's duration runs until <code>now</code>. Repeated reports fold to the same view, so a retried <code>flow report</code> is harmless (AXI: idempotent mutations).</p>
+</section>
+
+<section id="chains" class="space-y-10">
+  <h2 class="text-2xl font-bold">5. Call chains</h2>
+
+  <div class="space-y-3" id="chain-entry">
+    <h3 class="text-lg font-semibold">5.1 Every invocation: parse, run, print, exit</h3>
+    <svg class="fig" viewBox="0 0 860 200" role="img" aria-label="entry sequence">
+      <g class="lane"><rect x="20" y="10" width="140" height="30" rx="5"/><text x="90" y="30" text-anchor="middle">main.rs</text></g>
+      <g class="lane"><rect x="260" y="10" width="140" height="30" rx="5"/><text x="330" y="30" text-anchor="middle">clap</text></g>
+      <g class="lane"><rect x="500" y="10" width="140" height="30" rx="5"/><text x="570" y="30" text-anchor="middle">command fn</text></g>
+      <g class="lane"><rect x="700" y="10" width="140" height="30" rx="5"/><text x="770" y="30" text-anchor="middle">output.rs</text></g>
+      <line class="life" x1="90" y1="40" x2="90" y2="195"/><line class="life" x1="330" y1="40" x2="330" y2="195"/><line class="life" x1="570" y1="40" x2="570" y2="195"/><line class="life" x1="770" y1="40" x2="770" y2="195"/>
+      <path class="edge" d="M90,65 L328,65"/><text x="210" y="60" text-anchor="middle">Cli::try_parse()</text>
+      <path class="err" d="M328,82 L92,82"/><text x="210" y="96" text-anchor="middle" class="errtext">clap error -> Failure::usage, exit 2</text>
+      <path class="edge" d="M90,120 L568,120"/><text x="330" y="115" text-anchor="middle">run(cli, &amp;store, now)</text>
+      <path class="edge" d="M570,140 L768,140"/><text x="670" y="135" text-anchor="middle" class="small">build Document / Failure</text>
+      <path class="edge" d="M570,170 L92,170"/><text x="330" y="165" text-anchor="middle">Ok(Document) -> stdout, exit 0 | Err(Failure) -> to_toon() on stdout, its code</text>
+    </svg>
+    <ol class="steps">
+      <li>main -> Cli::try_parse(): Cli</li>
+      <li class="e">Err(clap::Error) -> --help / --version print as clap does, exit 0; any other -> Failure::usage(&amp;error).to_toon() on stdout, exit 2 (unknown flags fail loudly)</li>
+      <li>Store::locate(env FLOW_HOME, env XDG_STATE_HOME, env HOME)</li>
+      <li class="e">no HOME and no override -> Failure "cannot find a state directory", help "Set FLOW_HOME to a directory", exit 1</li>
+      <li>run(cli, &amp;store, now_ms()): Result&lt;Document, Failure&gt; -> command None -> home(), else the command's fn</li>
+      <li>Ok(doc) -> print doc.text(), ExitCode 0; Err(failure) -> print failure.to_toon(), ExitCode failure.code</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-new">
+    <h3 class="text-lg font-semibold">5.2 <code>flow new --name shop-221 --request "..." --mode auto</code></h3>
+    <ol class="steps">
+      <li>new_flow -> views(&amp;store, now) -> fold::resolve(&amp;views, "shop-221")</li>
+      <li>an unfinished flow of that name -> output::created(flow, existing: true) - nothing written (idempotent)</li>
+      <li>else Event::new(now, EventKind::Started { name, request, mode }) -> store.create(&amp;event): id -> fold::fold(&amp;id, &amp;[event], None, now)</li>
+      <li class="e">create fails -> Failure::from_io: "could not create flow in ~/.local/state/flow/flows: Permission denied", exit 1</li>
+      <li>output::created(&amp;flow, existing: false) -> flow, id, existing, help: "Run `export FLOW_ID=&lt;id&gt;` in the worker", "Run `flow report phase design` when design starts"</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-report">
+    <h3 class="text-lg font-semibold">5.3 <code>flow report blocked "Task 5: ..."</code> (and <code>heartbeat</code>)</h3>
+    <svg class="fig" viewBox="0 0 860 220" role="img" aria-label="report sequence">
+      <g class="lane"><rect x="20" y="10" width="140" height="30" rx="5"/><text x="90" y="30" text-anchor="middle">main.rs</text></g>
+      <g class="lane"><rect x="250" y="10" width="140" height="30" rx="5"/><text x="320" y="30" text-anchor="middle">fold.rs</text></g>
+      <g class="lane"><rect x="480" y="10" width="140" height="30" rx="5"/><text x="550" y="30" text-anchor="middle">store.rs</text></g>
+      <g class="lane"><rect x="700" y="10" width="140" height="30" rx="5"/><text x="770" y="30" text-anchor="middle">output.rs</text></g>
+      <line class="life" x1="90" y1="40" x2="90" y2="215"/><line class="life" x1="320" y1="40" x2="320" y2="215"/><line class="life" x1="550" y1="40" x2="550" y2="215"/><line class="life" x1="770" y1="40" x2="770" y2="215"/>
+      <path class="err" d="M90,58 L140,58 L140,72 L92,72"/><text x="150" y="69" class="errtext">no --flow, no $FLOW_ID -> output::skipped(), exit 0 (Q3)</text>
+      <path class="edge" d="M90,100 L318,100"/><text x="205" y="95" text-anchor="middle">resolve(views, name_or_id)</text>
+      <path class="err" d="M318,115 L92,115"/><text x="205" y="128" text-anchor="middle" class="errtext">None -> "no flow named ..." exit 1</text>
+      <path class="edge" d="M90,150 L548,150"/><text x="320" y="145" text-anchor="middle">append(id, &amp;event) | beat(id)</text>
+      <path class="edge" d="M90,175 L318,175"/><text x="205" y="170" text-anchor="middle">fold again</text>
+      <path class="edge" d="M90,200 L768,200"/><text x="430" y="195" text-anchor="middle">reported(&amp;flow) -> flow, state, phase, help</text>
+    </svg>
+    <ol class="steps">
+      <li>main -> Command::Report { flow: --flow or $FLOW_ID (clap env), event: ReportEvent::Blocked { reason } }</li>
+      <li class="e">flow None -> output::skipped(): "skipped: no flow id", help "Set FLOW_ID or pass --flow &lt;name&gt;", exit 0 (Q3)</li>
+      <li>report -> views(&amp;store, now) -> fold::resolve(&amp;views, &amp;flow): &amp;FlowView</li>
+      <li class="e">None -> Failure "no flow named shop-999", help "Run `flow` to list the flows", "Run `flow new --name shop-999 --request &lt;text&gt;` to start it", exit 1</li>
+      <li>event.into_kind(): Some(kind) -> store.append(&amp;flow.id, &amp;Event::new(now, kind)) (texts cut to 500 chars) | None (Heartbeat) -> store.beat(&amp;flow.id)</li>
+      <li class="e">io error -> Failure::from_io, exit 1</li>
+      <li>fold::fold(&amp;id, &amp;store.events(&amp;id)?, store.last_beat(&amp;id)?, now) -> output::reported(&amp;flow): help by state - blocked: "Run `flow report working` once the block is resolved"; waiting: "... once answered"; done: "Run `flow clear` after the MR is merged"</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-status">
+    <h3 class="text-lg font-semibold">5.4 <code>flow</code>, <code>flow status [&lt;name&gt;] [--json] [--full]</code></h3>
+    <svg class="fig" viewBox="0 0 860 220" role="img" aria-label="status sequence">
+      <g class="lane"><rect x="20" y="10" width="130" height="30" rx="5"/><text x="85" y="30" text-anchor="middle">main.rs</text></g>
+      <g class="lane"><rect x="220" y="10" width="130" height="30" rx="5"/><text x="285" y="30" text-anchor="middle">store.rs</text></g>
+      <g class="lane"><rect x="420" y="10" width="130" height="30" rx="5"/><text x="485" y="30" text-anchor="middle">fold.rs</text></g>
+      <g class="lane"><rect x="620" y="10" width="220" height="30" rx="5"/><text x="730" y="30" text-anchor="middle">view.rs / output.rs</text></g>
+      <line class="life" x1="85" y1="40" x2="85" y2="215"/><line class="life" x1="285" y1="40" x2="285" y2="215"/><line class="life" x1="485" y1="40" x2="485" y2="215"/><line class="life" x1="730" y1="40" x2="730" y2="215"/>
+      <path class="edge" d="M85,65 L283,65"/><text x="185" y="60" text-anchor="middle">ids, events, last_beat</text>
+      <path class="err" d="M283,80 L87,80"/><text x="185" y="93" text-anchor="middle" class="errtext">unreadable log -> warning</text>
+      <path class="edge" d="M85,120 L483,120"/><text x="285" y="115" text-anchor="middle">fold per flow -> board -> resolve(name)</text>
+      <path class="edge" d="M85,160 L728,160"/><text x="400" y="155" text-anchor="middle">--json: board.to_json() | home / status_list / status_detail</text>
+      <path class="err" d="M483,180 L87,180"/><text x="285" y="195" text-anchor="middle" class="errtext">named flow missing -> Failure, exit 1</text>
+    </svg>
+    <ol class="steps">
+      <li>views(&amp;store, now): per store.ids() -> store.events(id), store.last_beat(id) -> fold::fold(...)</li>
+      <li class="e">events() fails for one flow -> left out, and the document carries warnings[n]: "cannot read &lt;id&gt;: &lt;error&gt;" (data stays on stdout)</li>
+      <li>fold::board(views, now): Board</li>
+      <li>json -> Document::Json(board.to_json()) (named: a board with only that flow) - nothing truncated</li>
+      <li>no command -> output::home(&amp;board, bin path with $HOME as ~, &amp;warnings)</li>
+      <li>status without name -> output::status_list(&amp;board, &amp;warnings, full); empty -> "count: 0", "flows: none tracked", help "Run `flow new ...`"</li>
+      <li>status &lt;name&gt; -> fold::resolve(&amp;board.flows, name) -> output::status_detail(flow, now, full)</li>
+      <li class="e">resolve None -> Failure "no flow named ...", exit 1</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-clear">
+    <h3 class="text-lg font-semibold">5.5 <code>flow clear</code></h3>
+    <ol class="steps">
+      <li>clear -> views(&amp;store, now) -> those with view.is_finished() -> store.remove(&amp;view.id) each</li>
+      <li>output::cleared(&amp;names): "cleared: 2", names[2], help "Run `flow` to see what is left"; nothing finished -> "cleared: 0" (idempotent)</li>
+      <li class="e">remove fails -> Failure with the id, the rest stays removed, exit 1</li>
+    </ol>
+  </div>
+</section>
+
+<section id="conventions" class="space-y-3">
+  <h2 class="text-2xl font-bold">6. Conventions followed</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li>AXI principles (<a class="link" href="https://axi.md">axi.md</a>): TOON output, minimal default fields, truncation with <code>--full</code>, aggregates (<code>count</code>, <code>needs_you</code>), definitive empty states, errors on stdout with exit 0/1/2, idempotent mutations, no prompts, home view with <code>bin</code> and <code>description</code>, <code>help[]</code> next steps, concise <code>--help</code>. The home view mirrors <code>lavish-axi --help</code>'s shape.</li>
+    <li>Flat <code>src/</code>, one module per concern, declared in <code>main.rs</code>: <code>wordstamp/src/main.rs:1-7</code>.</li>
+    <li><code>clap</code> derive with doc-comment help and <code>#[command(version, about)]</code>: <code>wordstamp/src/main.rs:21-22</code>.</li>
+    <li><code>anyhow</code> inside, with context: <code>wordstamp/src/main.rs:14</code>.</li>
+    <li>Inline <code>#[cfg(test)] mod tests</code> per module: <code>wordstamp/src/align.rs:177</code>.</li>
+    <li><code>CLAUDE.md</code> with build commands and a module map: <code>mdterm/CLAUDE.md</code>.</li>
+    <li>Pure core and one I/O module, like plan-progress's <code>pane.ts</code> / <code>register.tsx</code> split.</li>
+    <li><b>Deviation:</b> <code>main</code> returns <code>ExitCode</code>, not <code>anyhow::Result</code> as in wordstamp (<code>main.rs:59</code>), so errors land on stdout as TOON with the AXI exit codes.</li>
+    <li><b>Deviation:</b> no <code>dirs</code> crate - <code>dirs::state_dir()</code> is None on macOS, so <code>Store::locate</code> resolves XDG itself and takes its inputs as arguments.</li>
+  </ul>
+</section>
+
+<section id="tests" class="space-y-3">
+  <h2 class="text-2xl font-bold">7. Test seams</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li><code>event.rs</code> - unit: round trip per kind; text cut at 500 chars; <code>from_line</code> None for broken JSON, version 2, unknown kind.</li>
+    <li><code>fold.rs</code> - unit, the heart: every row of the fold rules, idempotent repeats, durations with a fixed <code>now</code>, not-responding only with a heartbeat, board order, <code>resolve</code> by id, by unfinished name, by finished name.</li>
+    <li><code>store.rs</code> - unit on a <code>tempfile::TempDir</code>: create/append/events, append to a missing flow fails, beat/last_beat, ids, remove; <code>locate</code> precedence.</li>
+    <li><code>output.rs</code> - unit, exact TOON for: home, empty status, list with truncation hint, detail, created (new and existing), reported per state, skipped, error, usage error.</li>
+    <li><code>tests/cli.rs</code> - integration on the built binary with <code>FLOW_HOME</code> in a temp dir: new twice (same id), reports, <code>status --json</code> parsed with serde_json, home, unknown flag exits 2 with TOON on stdout, missing flow exits 1, clear.</li>
+    <li>End to end: an agent in a scratch repo told only "use <code>flow</code> to report your progress" finds its way from the home view and help lines alone.</li>
+  </ul>
+</section>
+
+<section id="assumptions" class="space-y-3">
+  <h2 class="text-2xl font-bold">8. Assumptions</h2>
+  <ol class="list-decimal pl-5 text-sm space-y-1.5">
+    <li>Ids are UUID v4 (reused later as the worker's <code>--session-id</code>); agents mostly use names, and an id works wherever a name does.</li>
+    <li><code>flow new</code> with the name of an unfinished flow returns that flow (<code>existing: true</code>) instead of a second one.</li>
+    <li>Report texts are cut to 500 chars when stored; list views cut to 80 with a hint; <code>--json</code> and <code>--full</code> never truncate.</li>
+    <li>Unknown event kinds and broken lines are skipped when folding, so an older <code>flow</code> reads a newer log.</li>
+    <li>"Not responding" after 90 s without a heartbeat, only for flows that ever sent one.</li>
+    <li>TOON via <code>serde_toon_format</code> 0.2 (TOON v4.1, a young crate); if it misencodes, <code>output.rs</code> gets a small encoder for the three shapes used (scalars, inline arrays, tabular arrays) behind the same functions.</li>
+    <li><code>--json</code> keys are camelCase for the TypeScript reader; TOON keys are snake_case like lavish-axi's (<code>needs_you</code>).</li>
+    <li>Ambient context (AXI principle 7) is not in this piece: in Claude Code the mod's board provides it; a <code>flow setup</code> hook and skill stub come with piece 6.</li>
+  </ol>
+</section>
+
+<section id="questions" class="space-y-3">
+  <h2 class="text-2xl font-bold">9. Decided in review</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li><b>Command surface</b> as proposed: <code>flow</code>, <code>flow new</code>, <code>flow report &lt;event&gt;</code>, <code>flow status [&lt;name&gt;] [--json] [--full]</code>, <code>flow clear</code>; flow from <code>--flow &lt;name|id&gt;</code> or <code>$FLOW_ID</code>.</li>
+    <li><b>Logs</b> in <code>$FLOW_HOME</code>, else <code>$XDG_STATE_HOME/flow</code>, else <code>~/.local/state/flow</code>.</li>
+    <li><b>No flow id:</b> <code>flow report</code> answers <code>skipped: no flow id</code> with exit 0.</li>
+    <li><b>Ship mode:</b> implement-plan builds it.</li>
+    <li><b>AXI:</b> TOON by default, home view, <code>help[]</code>, errors on stdout, exit 0/1/2, idempotent mutations; <code>--json</code> for programs.</li>
+  </ul>
+</section>
+
+</main>
+
+<script type="module">
+  import { File } from "https://esm.sh/@pierre/diffs@1.2.10?bundle";
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const options = { theme: { light: "github-light", dark: "github-dark" }, themeType: dark ? "dark" : "light", overflow: "wrap" };
+  for (const src of document.querySelectorAll('script[type="text/x-code"]')) {
+    const box = src.nextElementSibling;
+    new File(options).render({ containerWrapper: box, file: { name: src.dataset.name, contents: src.textContent.replace(/^\n/, "") } });
+  }
+</script>
+</body>
+</html>

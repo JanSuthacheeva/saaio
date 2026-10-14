@@ -1,0 +1,193 @@
+# Handover: the flows system
+
+Written 2026-10-14 at the end of the session that designed the system and built `flow`
+core. Everything needed to continue is here; the conversation itself is not.
+
+## Goal
+
+Run several features in parallel, each as its own ship-feature flow in its own Claude
+session and worktree, and keep track of all of them from one master session: phase, state
+(exploring, delegated, implementing, reviewing, waiting, blocked, done), open blockers and
+progress history. Small features should later run without stops and only be reviewed at the
+end (auto mode).
+
+The flow being tracked is the agent-skills chain in `~/projects/agent-skills`:
+design-code -> implement-plan -> review-changes -> write-merge-request, run in order by a
+ship-feature orchestrator skill (planned there, not written yet; see its plan page
+`~/projects/agent-skills/.lavish/ship-feature-plan.html`). The skills stay agent-agnostic.
+
+## The six pieces
+
+| # | Piece | Where | Status |
+| --- | --- | --- | --- |
+| 1+2 | Event format + `flow` core (new, report, status, clear, home) | this repo | **done**, plan `.claude/plans/plan-flow-core.md` |
+| 3 | Board viewer mod: pane showing all flows with progress | `~/projects/claude-code-mods` (new mod, working name `flows`) | not designed |
+| 4 | Adapter mod: observes a Claude Code worker and calls `flow report` | same mod as 3 | not designed |
+| 5 | `flow start`: worktree + worker session in a tmux window | this repo | not designed |
+| 6 | Auto mode + optional report line in the skills, `flow setup` hook | `~/projects/agent-skills` (+ this repo for setup) | not designed |
+
+Each piece gets its own design-code round (approaches page, implementation page, plan)
+before building.
+
+## Decisions and why
+
+Round 1 (first approaches, a mod-only design, superseded):
+- Workers are separate Claude sessions, one per worktree, not subagents of the master.
+- The master starts the workers (later `flow start`).
+- You answer a blocker in the worker itself; the board shows it and jumps you there. No
+  answering from the master - one-way data, nothing lost when the master is closed.
+- Status in Claude Code comes from observing engine events, not from the model remembering
+  to report (we saw Claude skip the plan-progress tool once).
+
+Round 2 (system structure), chosen **A: a `flow` CLI owns event files, the mod adapts and views**:
+- `flow` is a Rust CLI so it works across harnesses; any harness reports through a shell
+  command. Rejected: a `flow serve` daemon (process lifecycle, sockets, not needed for a
+  2 s board) and `flow` driving the phases itself instead of ship-feature (cold context per
+  phase, judgement moves out of the agent, duplicates the approved ship-feature plan; kept
+  as the fallback if instructions prove unreliable at keeping order and stops).
+- Append-only event log per flow: progress and history come for free.
+- Auto mode lives in the skills, not in `flow` (see piece 6).
+
+Round 3 (core structure), chosen **A: the CLI folds; readers use `flow status`**:
+- The fold (events -> state, durations, tasks, timeline) exists once, in Rust. The log is
+  private; the only contracts are the command line and `flow status --json`.
+- Rejected: readers folding raw logs themselves (two folds drift), and snapshot files next
+  to each log (second contract, crash consistency; a possible later optimisation if process
+  starts every 2 s ever matter).
+
+AXI (asked during review):
+- `flow`'s main user is an agent, so it follows https://axi.md: TOON output by default, a
+  home view with no arguments (`bin`, `description`, live data), `help[]` next steps on every
+  output, structured errors on stdout, exit codes 0/1/2, idempotent mutations, no prompts,
+  short default fields with `--full`, aggregates (`count`, `needs_you`), explicit empty
+  states. `--json` stays for programs.
+
+Answered open questions:
+- Command surface: `flow`, `flow new`, `flow report <event>`, `flow status [<name>] [--json] [--full]`, `flow clear`; flow from `--flow <name|id>` or `$FLOW_ID`.
+- Logs in `$FLOW_HOME`, else `$XDG_STATE_HOME/flow`, else `~/.local/state/flow`.
+- `flow report` with no flow id answers `skipped: no flow id` and exits 0, so the skills'
+  optional report line never derails a normal session.
+- Ship mode: Claude builds `flow` with implement-plan (despite personal Rust defaulting to
+  learn mode in `~/OPINIONS.md`).
+- New repo `~/projects/flow` for the CLI (not inside claude-code-mods or agent-skills).
+
+Earlier answers from round 1 that still hold for pieces 3-5:
+- Only sessions started by the master appear on the board (recommended, not re-confirmed).
+- `flow start` outside tmux: refuse with a hint (recommended, not re-confirmed).
+- Finished flows stay until `flow clear` (implemented).
+- Workers run in your default permission mode (recommended, not re-confirmed).
+
+## What `flow` core does now
+
+See `README.md` for the commands and output, `CLAUDE.md` for the module map, and the plan
+for signatures, fold rules and call chains. Built in 14 commits, 46 unit and 13 integration
+tests, installed with `cargo install --path .` at `~/.cargo/bin/flow`.
+
+Changes made while building (all in the plan):
+- `Phase::name()` added for timeline text and TOON output.
+- The list of open questions and block reasons is `blockers[n]{name,blocker}`.
+- Detail timeline rows are `{ago,text}`; absent values are left out, not `null`.
+- `Store::at` is test-only.
+- After `flow new` the first hint is `flow report --flow <name> ...`: in the end-to-end run
+  an agent's shell did not keep an exported `FLOW_ID` between commands, so `--flow` is what
+  agents actually use.
+
+End-to-end results: two shells writing 200 reports each into one flow lost nothing (401
+lines, all parse); a fresh agent told only "use `flow` to report your progress" found its
+way from the home view and hints, created a flow, reported phase and tasks, and ended it.
+
+## Verified facts the next pieces build on
+
+Claude Code mods (2.1.296 / 2.1.299):
+- A mod's `$.store` is shared live between simultaneous sessions (probe mod in two
+  sessions: each read the other's writes at once; 2 x 200 concurrent writes to distinct keys,
+  none lost). It is one file per plugin **and install source**
+  (`~/.claude/plugins/store/<plugin>_<source>-<hash>.json`): marketplace install,
+  `--plugin-dir` and a skills-dir symlink each get their own file.
+- `$.session.send({ to: { sessionId } })` reaches another local session, and a
+  `session.receive` hook there can consume it before the model sees it. The text arrives as
+  `<cross-session-message from="uds:..." from-name="...">...</cross-session-message>`.
+- `$.fs` reads and lists any absolute path; `$.process.run(argv, { cwd, env, timeoutMs })`
+  inherits the host environment (so `TMUX` is visible to a master inside tmux).
+- A worker's mod can observe: `skill.prompt` (which skill started; since 2.1.299 also its
+  frontmatter, source and path), `tool.call` (Agent, AskUserQuestion, `mcp__plan-progress__report`,
+  Bash), `turn.start` / `turn.complete` (with `agentId` for subagent loops), `agent.spawn`,
+  `$.agent.list()`, `session.end`.
+- `$.ui.open({ id, title, columns })`: a pane opened by something the person did is placed
+  at any width; opened unasked it waits below 144 terminal columns (110 for an id the person
+  opened before). In a docked pane's `ui.render`, `e.viewport.columns` is the transcript
+  beside the dock, not the terminal: terminal = viewport + bodyColumns + 1.
+- A width the person dragged is saved globally as `pluginPanes.dockColumns` in
+  `~/.claude.json` and overrides every mod's `columns` request.
+- There is no API for the dock's grey background yet (a recurring check watched for it).
+
+Claude Code CLI:
+- `claude -w <name> --session-id <uuid> -n <name> "<prompt>"` creates a worktree, fixes the
+  session id (reuse the flow id) and names the session. `--tmux[=classic]` exists too.
+- A new folder shows the workspace trust prompt first; a launcher that types a prompt blindly
+  answers it "No, exit" (seen in the end-to-end run). `flow start` must handle that.
+
+TOON: `serde_toon_format` 0.2 (crate name `serde_toon`) encodes tables, inline arrays and
+quoting as the design expects.
+
+## Gotchas learned
+
+- **Old engines keep running.** Sessions run for days on the version they started with, but
+  load mods from the repo folder on `/reload-plugins`. Switching plan-progress to the
+  2.1.299-only `Text weight` prop blanked its pane in 2.1.296 sessions ("ui.render (Pane)
+  refused: Text prop weight is not allowed"). Test mod renders under the oldest installed
+  version too: `~/.local/share/claude/versions/<v> --plugin-dir <mod>` in a private tmux.
+- **Never touch the default tmux server** in tests; use a private socket (`tmux -L ppshot`)
+  and kill only your own session there.
+- An open pane can be off screen (behind another pane's tab, or not placed); a toggle must
+  check `isShown && isPlaced`, not just "is open" (fixed in plan-progress on branch
+  `fix/plan-progress-toggle`).
+- An agent's Bash calls do not share shell state; pass `--flow` or set `FLOW_ID` in the
+  worker's environment at launch.
+
+## Notes for the next pieces
+
+**3 - board viewer (mod).** Start from plan-progress in `~/projects/claude-code-mods/plan-progress`:
+store + 2 s poll + pure model (`hooks/pane.ts`) + drawing (`hooks/register.tsx`), dock at a
+third of the terminal (`dockColumns`, `terminalColumnsBesideDock`). The board runs
+`flow status --json` every 2 s while open (`$.process.run`), shows a clear "install flow"
+state when the binary is missing, and draws one row per flow: name, state in its colour,
+phase strip with durations, task bar, blocker, age; a row opens the flow's timeline. One mod
+cannot import another, so shared helpers are copied. Mock of the intended look is in
+`docs/design/system-approaches.html` ("The same in every approach").
+
+**4 - adapter (mod).** In a worker, map engine events to `flow report` calls: a phase skill
+starting (design-code -> design, implement-plan -> implement, review-changes -> review,
+write-merge-request -> merge-request), Agent tool start/end (delegated / working), an
+AskUserQuestion (waiting), a main-loop `turn.complete` (waiting), plan-progress reports
+(tasks, blocked), `gh pr create` / `glab mr create` succeeding (merge-request), `session.end`
+(ended), and `heartbeat` every 30 s. The flow id comes from `$FLOW_ID` set by `flow start`.
+Background subagents should not count as delegated.
+
+**5 - `flow start`.** `flow new`, then `tmux new-window -d -P -F '#{window_id}' -n <name> -c <repo> -- claude -w <name> --session-id <flow id> -n <name> "/ship-feature <request>"` with `FLOW_ID` in the
+environment; record the window id (a new event or a side file) so the board can jump with
+`tmux select-window`. Handle the trust prompt. Name from the ticket key (`SHOP-217` ->
+`shop-217`) or the first words, `-2` when taken. Per-harness command templates come later.
+
+**6 - auto mode (agent-skills).** ship-feature takes a mode (guided / auto). In auto,
+design-code picks its recommended approach and writes the plan without review pages,
+recording choices under `## Decisions`; implement-plan and review-changes run as today;
+write-merge-request leads with the decisions so the one review at the end covers code and
+choices. Guardrail: anything expensive to reverse (stored data, public surface,
+user-visible behaviour) stops the flow even in auto. One optional, agent-agnostic line in the
+skills: "if a `flow` command exists, report each phase, decision and stop". Needs evals that
+prove auto picks sensibly and really stops on the expensive cases. A `flow setup` command can
+install the ambient-context hook (AXI principle 7).
+
+## Where things are
+
+- This repo: `~/projects/flow` (no remote yet). Plan: `.claude/plans/plan-flow-core.md`.
+  Design pages: `docs/design/` (system approaches round 2, core approaches, core
+  implementation) - open them in a browser or with `npx -y lavish-axi <file>`.
+- Mods: `~/projects/claude-code-mods` (plan-progress, skill-usage, merge-status), installed
+  from its folder marketplace. Branch `fix/plan-progress-toggle` is unpushed: the toggle fix
+  and the revert of the `weight` change, which `origin/main` still has.
+- Skills: `~/projects/agent-skills` (design-code, implement-plan, review-changes,
+  write-merge-request; ship-feature planned).
+- Claude memory for the mods project: `~/.claude/projects/-Users-jansuthacheeva-projects-claude-code-mods/memory/`
+  (`flows-system.md`, `mods-old-engine-compat.md`).

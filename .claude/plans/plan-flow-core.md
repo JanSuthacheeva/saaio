@@ -1,6 +1,6 @@
 # flow core: event format and core commands
 
-Implementation page (review surface): `~/projects/claude-code-mods/.lavish/flow-core-implementation.html`
+Implementation page (review surface): `docs/design/core-implementation.html`; system context: `docs/HANDOVER.md`
 
 Piece 1+2 of 6 of the flows system (event format + core CLI). Later pieces: the Claude Code
 mod viewer (3) and adapter (4), `flow start` (5), auto mode in agent-skills (6).
