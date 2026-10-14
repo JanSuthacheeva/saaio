@@ -7,6 +7,8 @@ mod launch;
 mod output;
 mod store;
 mod view;
+#[allow(dead_code)]
+mod workspace;
 
 use std::env;
 use std::path::PathBuf;
