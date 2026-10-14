@@ -74,8 +74,10 @@ pub enum ClientMsg {
     History(Option<u32>),   // lines back; None = live
     Reopen(PaneKey),
     CloseFlow(String),      // Control role
-    /// end_flows: append Ended to every unfinished flow first, so none reopens.
-    StopServer { end_flows: bool },
+    StopServer,
+    /// Appends Ended to every unfinished flow, so none reopens; sent before StopServer (a separate message
+    /// rather than StopServer { end_flows }, so a running older server still understands flow ui --stop).
+    EndFlows,
 }
 pub enum ServerMsg {
     Welcome { version: u32 },
@@ -304,7 +306,7 @@ pub struct UiEnv { pub claude_home: PathBuf, pub home: Option<PathBuf> }   // $C
 pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String>;
 
 // app.rs
-pub enum View { Panes, Board(BoardState), NewFlow(NewFlowForm), History(u32), Help, Stop { unfinished: Vec<String> } }
+pub enum View { Panes, Board(BoardState), NewFlow(NewFlowForm), History(u32), Stop(Vec<String>), Help }
 pub enum Effect { Send(ClientMsg), Run(Job), Mirror(Modes), Quit(String) }
 /// A flow command the UI runs on a thread (`<exe> start <request> --mode <mode>` in the form's repo,
 /// `<exe> remove <name>` for x on the board); its first stdout line comes back through App::on_ran.
@@ -497,10 +499,10 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
    1. `C-space d -> Effect::Quit("detached")` -> Outer restores the terminal; server sees `Gone`, panes keep running
    2. second `flow ui` attaches -> `Detached` to the old one -> `Quit("attached elsewhere")`
    3. `C-space Q -> View::Stop { unfinished }` (names of the unfinished flows on the board)
-      - none: `y -> StopServer { end_flows: false }`
-      - some: `k -> StopServer { end_flows: false }`; `e -> StopServer { end_flows: true }`; `esc` back
-      - `flow ui --stop` over Control sends `StopServer { end_flows: false }`
-   4. `Server::handle(StopServer { end_flows })`: when end_flows, `Store::append(id, Ended)` for each unfinished
+      - none: `y -> StopServer`
+      - some: `k -> StopServer`; `e -> EndFlows, StopServer`; `esc` back
+      - `flow ui --stop` over Control sends `StopServer`
+   4. `Server::handle(EndFlows)`: `Store::append(id, Ended)` for each unfinished flow; `Server::handle(StopServer)`:
       flow; delete master.json; `Host::close` every pane (SIGHUP, SIGKILL after 3 s), wait, remove socket, exit
    - Panic in the UI: Outer's Drop/panic hook restores the terminal; server and panes keep running
 
@@ -566,8 +568,8 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [x] Add ui/board.rs BoardView and C-space o, with TestBackend tests against the board screen
 - [x] Add ui/newflow.rs NewFlowForm, C-space n and the `flow start` thread with App::on_ran, with tests
 - [x] Add ui/rail.rs Rail and C-space b
-- [ ] History (C-space [, ClientMsg::History) through Host::frame
-- [ ] Help (C-space ?) and the stop dialog (C-space Q): unfinished workers listed, `k` keeps them, `e` ends them (StopServer { end_flows }) and the UI prints each ended flow's branch and worktree as it quits, `y` when none; tests for each answer
+- [x] History (C-space [, ClientMsg::History) through Host::frame
+- [ ] Help (C-space ?) and the stop dialog (C-space Q): unfinished workers listed, `k` keeps them, `e` ends them (EndFlows, then StopServer) and the UI prints each ended flow's branch and worktree as it quits, `y` when none; tests for each answer
 
 ### Milestone 5: restore and hardening
 

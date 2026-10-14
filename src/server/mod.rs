@@ -226,6 +226,7 @@ impl Server {
                 self.send_full_frame();
             }
             ClientMsg::StopServer => return false,
+            ClientMsg::EndFlows => self.end_flows(),
         }
         true
     }
@@ -441,6 +442,26 @@ impl Server {
             }
         }
         self.send_panes();
+    }
+
+    /// An Ended event for every unfinished flow with a worker, so the next start opens none of them.
+    fn end_flows(&mut self) {
+        let now = (self.clock)();
+        let unfinished: Vec<String> = self
+            .board
+            .flows
+            .iter()
+            .filter(|flow| flow.workspace.is_some() && !flow.is_finished())
+            .map(|flow| flow.id.clone())
+            .collect();
+        for id in unfinished {
+            if let Err(error) = self
+                .store
+                .append(&id, &LogEvent::new(now, EventKind::Ended))
+            {
+                eprintln!("{error:#}");
+            }
+        }
     }
 
     fn flow(&self, id: &str) -> Option<&FlowView> {
@@ -1015,6 +1036,41 @@ mod tests {
 
         proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
         handle.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn ends_every_unfinished_flow_before_a_stop_when_asked() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let csv = started_flow(&store, dir.path(), "csv", "claude");
+        let done = started_flow(&store, dir.path(), "done", "claude");
+        store
+            .append(&done, &LogEvent::new(2, EventKind::Ended))
+            .unwrap();
+        let (paths, handle) = start(dir.path());
+        let mut ui = connect(
+            &paths.socket,
+            Role::Attach {
+                size: Size { cols: 30, rows: 4 },
+            },
+        );
+        let mut panes = Vec::new();
+        wait_for(&mut ui, &mut panes, &csv, Some(PaneStatus::Running));
+
+        proto::write_msg(&mut ui, &ClientMsg::EndFlows).unwrap();
+        proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+        handle.join().unwrap().unwrap();
+
+        let ends = |id: &str| {
+            store
+                .events(id)
+                .unwrap()
+                .iter()
+                .filter(|event| event.kind == EventKind::Ended)
+                .count()
+        };
+        assert_eq!(ends(&csv), 1);
+        assert_eq!(ends(&done), 1, "a finished flow is left alone");
     }
 
     #[test]

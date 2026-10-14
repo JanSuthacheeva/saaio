@@ -30,7 +30,10 @@ pub enum View {
     NewFlow(NewFlowForm),
     /// Scrolled back this many lines in the pane's history (C-space [).
     History(u32),
-    ConfirmStop,
+    /// C-space Q: the ids of the workers that are not finished, which the answer keeps or ends.
+    Stop(Vec<String>),
+    /// C-space ?: every key.
+    Help,
 }
 
 /// A flow command flow ui runs in the background.
@@ -297,7 +300,8 @@ impl App {
             None => {}
         }
         match self.view {
-            View::ConfirmStop => draw_confirm_stop(frame, areas.pane, theme),
+            View::Stop(ref unfinished) => self.draw_stop(frame, areas.pane, theme, unfinished),
+            View::Help => draw_help(frame, areas.pane, theme),
             View::Board(_) => {}
             View::History(back) => {
                 let hint = Line::from(vec![
@@ -362,7 +366,13 @@ impl App {
                 "detached - the agents keep running; run `flow ui` to attach again".to_string(),
             )],
             Command::StopServer => {
-                self.view = View::ConfirmStop;
+                let unfinished = self
+                    .workers()
+                    .into_iter()
+                    .filter(|flow| !flow.is_finished())
+                    .map(|flow| flow.id.clone())
+                    .collect();
+                self.view = View::Stop(unfinished);
                 vec![]
             }
             Command::Reopen => vec![Effect::Send(ClientMsg::Reopen(self.focus.clone()))],
@@ -400,6 +410,10 @@ impl App {
                 self.view = View::History(0);
                 vec![Effect::Send(ClientMsg::History(Some(0)))]
             }
+            Command::Help => {
+                self.view = View::Help;
+                vec![]
+            }
             Command::NewFlow => {
                 self.view = View::NewFlow(NewFlowForm::new(self.focused_repo()));
                 vec![]
@@ -411,7 +425,6 @@ impl App {
                 };
                 self.focus(PaneKey::Flow(flow.id.clone()))
             }
-            _ => vec![],
         }
     }
 
@@ -448,19 +461,61 @@ impl App {
                 }
             };
         }
-        match self.view {
-            View::ConfirmStop if key == Key::Char('y') => vec![
-                Effect::Send(ClientMsg::StopServer),
-                Effect::Quit("stopped the flow server and every session in it".to_string()),
-            ],
-            View::ConfirmStop
-            | View::Panes
-            | View::Board(_)
-            | View::NewFlow(_)
-            | View::History(_) => {
+        if let View::Stop(unfinished) = &self.view {
+            let unfinished = unfinished.clone();
+            return self.on_stop_key(&unfinished, key);
+        }
+        self.view = View::Panes;
+        vec![]
+    }
+
+    /// With every worker finished: y stops, any other key keeps flow running. With some unfinished:
+    /// k keeps them for the next flow ui, e ends them, esc goes back.
+    fn on_stop_key(&mut self, unfinished: &[String], key: Key) -> Vec<Effect> {
+        let stop =
+            |message: String| vec![Effect::Send(ClientMsg::StopServer), Effect::Quit(message)];
+        if unfinished.is_empty() {
+            if key == Key::Char('y') {
+                return stop("stopped flow and every session in it".to_string());
+            }
+            self.view = View::Panes;
+            return vec![];
+        }
+        match key {
+            Key::Char('k') => stop(format!(
+                "stopped flow; {} unfinished flow{} resume the next time you run `flow ui`",
+                unfinished.len(),
+                if unfinished.len() == 1 { "" } else { "s" }
+            )),
+            Key::Char('e') => {
+                let mut message = format!(
+                    "stopped flow and ended {} flow{}; their code stays until `flow clear`:",
+                    unfinished.len(),
+                    if unfinished.len() == 1 { "" } else { "s" }
+                );
+                for flow in self
+                    .workers()
+                    .into_iter()
+                    .filter(|flow| unfinished.contains(&flow.id))
+                {
+                    if let Some(space) = &flow.workspace {
+                        message.push_str(&format!(
+                            "\n  {}  {}  {}",
+                            flow.name,
+                            space.branch,
+                            self.tilde(&space.path)
+                        ));
+                    }
+                }
+                let mut effects = vec![Effect::Send(ClientMsg::EndFlows)];
+                effects.extend(stop(message));
+                effects
+            }
+            Key::Esc => {
                 self.view = View::Panes;
                 vec![]
             }
+            _ => vec![],
         }
     }
 
@@ -680,6 +735,67 @@ impl App {
 
     /// The rounded border around the focused pane: its name in the top edge, and for a worker
     /// its steps, branch and slot, and the way back to the master on the right.
+    fn draw_stop(&self, frame: &mut TuiFrame, pane: Rect, theme: &Theme, unfinished: &[String]) {
+        if unfinished.is_empty() {
+            let text = vec![
+                Line::styled("Stop flow? Every session in it ends.", theme.ui.text),
+                Line::from(vec![
+                    Span::styled("y", theme.ui.key),
+                    Span::styled(" stops it, any other key keeps it", theme.ui.muted),
+                ]),
+            ];
+            draw_dialog(frame, pane, " stop ", theme.ui.rule, text);
+            return;
+        }
+        let sidebar = self.sidebar(theme, &[]);
+        let count = unfinished.len();
+        let mut text = vec![Line::styled(
+            format!(
+                "{count} flow{} {} not finished:",
+                if count == 1 { "" } else { "s" },
+                if count == 1 { "is" } else { "are" }
+            ),
+            theme.ui.text,
+        )];
+        for flow in self
+            .workers()
+            .into_iter()
+            .filter(|flow| unfinished.contains(&flow.id))
+        {
+            let doing = flow
+                .blocker
+                .clone()
+                .or_else(|| flow.delegate.as_ref().map(|text| format!("agent: {text}")))
+                .unwrap_or_else(|| sidebar.label(flow).content.to_string());
+            text.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
+                Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
+                Span::styled(crate::ui::sidebar::clip(&doing, 44), theme.ui.muted),
+            ]));
+        }
+        text.push(Line::raw(""));
+        text.push(Line::from(vec![
+            Span::styled("k", theme.ui.key),
+            Span::styled(
+                " keep them; they resume the next time flow ui starts",
+                theme.ui.muted,
+            ),
+        ]));
+        text.push(Line::from(vec![
+            Span::styled("e", theme.ui.key),
+            Span::styled(
+                " end them; branches and worktrees stay until flow clear",
+                theme.ui.muted,
+            ),
+        ]));
+        text.push(Line::from(vec![
+            Span::styled("esc", theme.ui.key),
+            Span::styled(" keep flow running", theme.ui.muted),
+        ]));
+        draw_dialog(frame, pane, " stop ", theme.state.waiting, text);
+    }
+
     fn border(&self, theme: &Theme) -> Block<'static> {
         let mut block = Block::bordered()
             .border_type(BorderType::Rounded)
@@ -814,10 +930,8 @@ impl App {
             Span::styled(" then  ", theme.ui.faint),
             Span::styled("n", theme.ui.key),
             Span::styled(" new flow   ", theme.ui.muted),
-            Span::styled("d", theme.ui.key),
-            Span::styled(" detach   ", theme.ui.muted),
-            Span::styled("Q", theme.ui.key),
-            Span::styled(" stop ", theme.ui.muted),
+            Span::styled("?", theme.ui.key),
+            Span::styled(" keys ", theme.ui.muted),
         ];
         let mut full = vec![
             Span::styled("no workers yet", theme.ui.faint),
@@ -900,18 +1014,35 @@ fn draw_dialog(frame: &mut TuiFrame, pane: Rect, title: &str, border: Style, tex
     );
 }
 
-fn draw_confirm_stop(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
-    let text = vec![
-        Line::styled(
-            "Stop the flow server? Every session in it ends.",
-            theme.ui.text,
-        ),
-        Line::from(vec![
-            Span::styled("y", theme.ui.key),
-            Span::styled(" stops it, any other key keeps it", theme.ui.muted),
-        ]),
+/// Every key behind C-space, over the pane.
+fn draw_help(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
+    let keys = [
+        ("0-9", "jump to a session (0 is the master)"),
+        ("j k", "move the peek over the workers"),
+        ("enter", "jump into the peeked worker"),
+        ("n", "start a new flow"),
+        ("o", "the board of every session"),
+        ("b", "fold the sidebar to a rail and back"),
+        ("r", "resume a session that ended"),
+        ("[", "scroll back through the history"),
+        ("d", "detach; every session keeps running"),
+        ("Q", "stop flow"),
+        ("C-space", "send C-space itself"),
+        ("?", "these keys"),
     ];
-    draw_dialog(frame, pane, " stop ", theme.ui.rule, text);
+    let mut text = vec![Line::from(vec![
+        Span::styled("C-space", theme.ui.key),
+        Span::styled(" then", theme.ui.muted),
+    ])];
+    for (key, what) in keys {
+        text.push(Line::from(vec![
+            Span::styled(format!("  {key:<9}"), theme.ui.key),
+            Span::styled(what, theme.ui.text),
+        ]));
+    }
+    text.push(Line::raw(""));
+    text.push(Line::styled("any key closes this", theme.ui.faint));
+    draw_dialog(frame, pane, " keys ", theme.ui.rule, text);
 }
 
 #[cfg(test)]
@@ -1052,7 +1183,7 @@ mod tests {
         let bar = row(&terminal, 9);
         assert!(bar.contains("≋ flow"), "{bar}");
         assert!(bar.contains("◎ master"), "{bar}");
-        assert!(bar.contains("C-space then  n new flow   d detach"), "{bar}");
+        assert!(bar.contains("C-space then  n new flow   ? keys"), "{bar}");
         let buffer = terminal.backend().buffer();
         assert!(
             (0..SIZE.cols).all(|x| buffer[(x, 9)].bg == Theme::builtin().ui.bar.bg.unwrap()),
@@ -1529,7 +1660,7 @@ mod tests {
         });
         let wide = row(&render_at(&wide, FLEET), 43);
         assert!(
-            wide.ends_with("no workers yet   │  C-space then  n new flow   d detach   Q stop "),
+            wide.ends_with("no workers yet   │  C-space then  n new flow   ? keys "),
             "{wide}"
         );
         assert!(row(&sidebar, 0).starts_with("╭ ◎ master  ~/projects/shop · main ─"));
@@ -1790,6 +1921,82 @@ mod tests {
             app.on_input(Routed::View(vec![Key::Char('q')])),
             vec![Effect::Send(ClientMsg::History(None))]
         );
+        assert!(!app.is_modal());
+    }
+
+    #[test]
+    fn keeps_or_ends_unfinished_flows_when_flow_stops() {
+        let mut app = board_app();
+        app.on_input(Routed::Command(Command::StopServer));
+        let terminal = render_at(&app, FLEET);
+        let dialog: String = (0..44).map(|y| row(&terminal, y) + "\n").collect();
+        assert!(dialog.contains("3 flows are not finished:"), "{dialog}");
+        assert!(
+            dialog.contains("✖ shop-221  migration needs a default value"),
+            "{dialog}"
+        );
+        assert!(
+            dialog.contains("e end them; branches and worktrees stay until flow clear"),
+            "{dialog}"
+        );
+
+        assert_eq!(
+            app.on_input(Routed::View(vec![Key::Char('y')])),
+            vec![],
+            "y is not an answer here"
+        );
+        let kept = app.on_input(Routed::View(vec![Key::Char('k')]));
+        assert_eq!(kept[0], Effect::Send(ClientMsg::StopServer));
+        assert_eq!(
+            kept[1],
+            Effect::Quit(
+                "stopped flow; 3 unfinished flows resume the next time you run `flow ui`".into()
+            )
+        );
+
+        let mut app = board_app();
+        app.on_input(Routed::Command(Command::StopServer));
+        let ended = app.on_input(Routed::View(vec![Key::Char('e')]));
+        assert_eq!(ended[0], Effect::Send(ClientMsg::EndFlows));
+        assert_eq!(ended[1], Effect::Send(ClientMsg::StopServer));
+        let Effect::Quit(message) = &ended[2] else {
+            panic!("expected to quit: {ended:?}");
+        };
+        assert!(
+            message.starts_with(
+                "stopped flow and ended 3 flows; their code stays until `flow clear`:\n"
+            ),
+            "{message}"
+        );
+        assert!(
+            message.contains("\n  shop-221  flow/shop-221  /shop/.flow/worktrees/shop-221"),
+            "{message}"
+        );
+
+        let mut app = board_app();
+        app.on_input(Routed::Command(Command::StopServer));
+        assert_eq!(app.on_input(Routed::View(vec![Key::Esc])), vec![]);
+        assert!(!app.is_modal());
+    }
+
+    #[test]
+    fn lists_every_key_until_any_key() {
+        let mut app = with_fleet();
+        app.on_input(Routed::Command(Command::Help));
+
+        let terminal = render_at(&app, FLEET);
+        let help: String = (0..44).map(|y| row(&terminal, y) + "\n").collect();
+        assert!(help.contains("C-space then"), "{help}");
+        assert!(
+            help.contains("  b        fold the sidebar to a rail and back"),
+            "{help}"
+        );
+        assert_eq!(
+            side(&terminal, 43).trim_end(),
+            "         o board  b rail  ? all keys"
+        );
+
+        app.on_input(Routed::View(vec![Key::Char('x')]));
         assert!(!app.is_modal());
     }
 }

@@ -459,10 +459,10 @@ impl Sidebar<'_> {
                 Span::raw("         "),
                 key("o"),
                 hint(" board  "),
-                key("r"),
-                hint(" resume  "),
-                key("Q"),
-                hint(" stop"),
+                key("b"),
+                hint(" rail  "),
+                key("?"),
+                hint(" all keys"),
             ])),
         ]
     }

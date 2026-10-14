@@ -43,6 +43,8 @@ pub enum ClientMsg {
     Reopen(PaneKey),
     CloseFlow(String),
     StopServer,
+    /// Ends every unfinished flow (an Ended event), so none reopens; the UI sends it before StopServer.
+    EndFlows,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -241,6 +243,7 @@ mod tests {
             ClientMsg::Reopen(PaneKey::Master),
             ClientMsg::CloseFlow("7f3c".into()),
             ClientMsg::StopServer,
+            ClientMsg::EndFlows,
         ]
     }
 
