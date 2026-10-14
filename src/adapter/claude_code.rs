@@ -98,8 +98,9 @@ pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
             kinds
         }
         "PermissionRequest" if tool != "AskUserQuestion" && !tool.is_empty() => {
+            let cwd = payload["cwd"].as_str().unwrap_or("");
             vec![EventKind::Waiting {
-                question: cut(&format!("permission: {}", tool_call(tool, input))),
+                question: cut(&format!("permission: {}", tool_call(tool, input, cwd))),
             }]
         }
         "Stop" if payload["stop_hook_active"] != Value::Bool(true) => {
@@ -245,8 +246,9 @@ fn typed_skill(prompt: &str) -> Option<&str> {
     first.strip_prefix('/').filter(|name| !name.is_empty())
 }
 
-/// Name(target) for a permission question: Bash(command), Write(file_path), ...
-fn tool_call(name: &str, input: &Value) -> String {
+/// Name(target) for a permission question: Bash(command), Write(file_path), ...; a path inside the
+/// session's folder is shown relative to it.
+fn tool_call(name: &str, input: &Value, cwd: &str) -> String {
     let target = [
         "command",
         "file_path",
@@ -259,6 +261,11 @@ fn tool_call(name: &str, input: &Value) -> String {
     .find_map(|key| input[*key].as_str())
     .and_then(|value| value.lines().next())
     .unwrap_or("");
+    let inside = format!("{}/", cwd.trim_end_matches('/'));
+    let target = match target.strip_prefix(&inside) {
+        Some(relative) if !cwd.is_empty() => relative,
+        _ => target,
+    };
     if target.is_empty() {
         name.to_string()
     } else {
@@ -344,6 +351,23 @@ mod tests {
         assert_eq!(
             events("permission_bash"),
             vec![waiting("permission: Bash(rm -rf build)")]
+        );
+    }
+
+    #[test]
+    fn names_a_file_inside_the_session_folder_by_its_relative_path() {
+        let mut payload = fixture("permission_bash");
+        payload["tool_name"] = json!("Write");
+        payload["tool_input"] = json!({"file_path": "/repo/src/export.rs", "content": "x"});
+
+        assert_eq!(
+            translate(&payload, &phases()),
+            vec![waiting("permission: Write(src/export.rs)")]
+        );
+        payload["tool_input"] = json!({"file_path": "/etc/hosts"});
+        assert_eq!(
+            translate(&payload, &phases()),
+            vec![waiting("permission: Write(/etc/hosts)")]
         );
     }
 

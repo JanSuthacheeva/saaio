@@ -122,12 +122,12 @@ Every event with `agent_id` (a subagent's) means nothing. Otherwise:
 
 ## Tasks
 
-- [ ] Add adapter/mod.rs (Adapter, phase_of, cut) and adapter/claude_code.rs (settings, translate and helpers) with fixture-based table tests
-- [ ] Add config Agent.adapter, Config.phases with builtin_phases (merged under the file's), builtin claude and master on claude-code; tests
-- [ ] Add fold::changes and output::Document::Silent with tests
-- [ ] Add the hidden `flow hook <adapter>` command (main::hook) with tests/cli.rs cases: appends, silent, exit 0 without FLOW_ID, with garbage, for an unknown flow
-- [ ] LaunchEnv.flow_exe; worker_spec inserts the adapter's wiring, fresh and resumed; reconcile fails an unknown adapter; tests
+- [x] Add adapter/mod.rs (Adapter, phase_of, cut) and adapter/claude_code.rs (settings, translate and helpers) with fixture-based table tests
+- [x] Add config Agent.adapter, Config.phases with builtin_phases (merged under the file's), builtin claude and master on claude-code; tests
+- [x] Add fold::changes and output::Document::Silent with tests
+- [x] Add the hidden `flow hook <adapter>` command (main::hook) with tests/cli.rs cases: appends, silent, exit 0 without FLOW_ID, with garbage, for an unknown flow
+- [x] LaunchEnv.flow_exe; worker_spec inserts the adapter's wiring, fresh and resumed; reconcile fails an unknown adapter; tests
 - [ ] Docs: README (adapters, [phases], adapter key), CLAUDE.md module map, HANDOVER (piece 4 replaced)
-- [ ] End-to-end check: a real Claude worker in flow ui with the flows mod's reporting off shows phase, delegated, the question, a permission wait and ended
+- [x] End-to-end check: a real Claude worker in flow ui with the flows mod's reporting off shows phase, delegated, the question, a permission wait and ended
 - [ ] Remove the "report to flow" blocks from the skills in ~/projects/agent-skills (design-code, implement-plan, review-changes, write-merge-request, ship-feature)
 - [ ] Remove the flows mod from ~/projects/claude-code-mods and uninstall it from Claude Code
