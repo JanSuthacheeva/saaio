@@ -486,11 +486,11 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [x] Add client.rs (Client::connect, send, recv, try_clone, socket_path, ensure_server) with tests against a test server
 - [x] Add ui outer.rs, input.rs Router, screen.rs Screen, layout.rs (Solo), app.rs App (pane + bottom bar) and ui::run, with Router, layout and App tests
 - [x] Add `flow ui [--stop]` and hidden `flow server` to main.rs
-- [ ] End-to-end check of milestone 1: real claude master in flow ui, type and scroll, detach and reattach, kill the ui and see claude still running
+- [x] End-to-end check of milestone 1: real claude master in flow ui, type and scroll, detach and reattach, kill the ui and see claude still running
 
 ### Milestone 2: workers and the sidebar
 
-- [ ] Add Store::root, Store::logs, Store::stamps and fold::views; replace main::views; tests
+- [x] Add Store::root, Store::logs, Store::stamps and fold::views; replace main::views; tests
 - [ ] Add server/watch.rs StoreWatch with tests for change, beat, removal and the 5 s refold
 - [ ] Add launch::worker_spec and HOSTED with tests (fresh, resume, no resume template)
 - [ ] Add server/reconcile.rs reconcile with table tests (open, known, close removed, failed)
