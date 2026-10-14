@@ -204,6 +204,13 @@ The vision below is built as `flow ui`, see README and `.claude/plans/plan-flow-
   next to auto and guided, and a flag on `flow start`. Small, because the server already opens
   whatever the log records: the Workspace event would carry the folder and no branch, and
   `worker_spec` would skip the prompt.
+- **Working across repos.** One flow ui already shows every repo's flows and the master can
+  `cd` anywhere to `flow start`; three gaps remain:
+  - the new-flow dialog takes the repo of the session in view; give it a repo field, prefilled
+    and choosing from the repos flow has seen in its logs;
+  - the sidebar and board do not say which repo a flow belongs to; show it on the flow's second
+    line and on its card, grouped by repo once there are flows in more than one;
+  - `flow start --repo <path>`, so the master and scripts need no `cd`.
 - **Extensions:** glab and ClickUp as data sources (ticket as the request, MR and pipeline status
   per flow); the new-flow dialog's "from ClickUp" list in the design waits for this.
 - **Theme file:** the colours are already named tokens (`ui::theme::Theme`); load overrides from a
