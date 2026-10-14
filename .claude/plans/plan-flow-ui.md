@@ -220,6 +220,8 @@ impl Host {
     /// The pane's rows: all when full, else the damaged ones; scrolled back by history lines.
     pub fn frame(&mut self, key: &PaneKey, full: bool, history: Option<u32>) -> Option<Frame>;
     pub fn panes(&self) -> Vec<PaneInfo>;
+    /// Ends synchronized updates their programs left open too long (Terminal::expire_sync).
+    pub fn expire_sync(&mut self);
 }
 
 // terminal.rs - the only file that knows the emulator crate
@@ -469,8 +471,8 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 
 - [x] Add proto.rs (all message types, write_msg, read_msg) and derive Deserialize on view.rs types, with tests for round trips (incl. Board), split reads, oversize, garbage and clean EOF
 - [x] Emulator spike: run a real `claude` session through vt100 and alacritty_terminal behind Terminal, compare fidelity (redraws, wide chars, colors, DA/DSR replies, scrollback, resize) and speed; record the result in the plan and keep the winner
-- [ ] Add server/terminal.rs Terminal on the chosen crate with golden tests for feed, replies, damaged, row, cursor, modes and history
-- [ ] Add launch::PaneSpec, LaunchEnv, pane_env and the empty-argument rule in agent_argv, with tests
+- [x] Add server/terminal.rs Terminal on the chosen crate with golden tests for feed, replies, damaged, row, cursor, modes and history
+- [x] Add launch::PaneSpec, LaunchEnv, pane_env and the empty-argument rule in agent_argv, with tests
 - [ ] Add server/host.rs Host (open, fail, feed, write, resize, exited, close, frame, panes) with PTY tests on real `sh`
 - [ ] Add config Agent.resume (builtin claude `--resume {id}`) and server/master.rs MasterRecord (load_or_create, spec) with tests
 - [ ] Add server/mod.rs run and Server (handle, flush; master pane only, Hello/Welcome/Refused, Input, Resize, Focus, StopServer, stale socket) with an integration test over a real socket and a `cat` master

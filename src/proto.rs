@@ -10,7 +10,7 @@ pub const PROTOCOL_VERSION: u32 = 1;
 pub const MAX_MESSAGE: usize = 8 << 20;
 
 /// Which session a pane runs: the master, or the worker of a flow id.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum PaneKey {
     Master,
     Flow(String),
