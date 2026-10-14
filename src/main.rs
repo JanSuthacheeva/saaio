@@ -1,4 +1,4 @@
-#[allow(dead_code)] // until flow hook uses it (plan-flow-adapters.md)
+#[allow(dead_code)] // until worker_spec wires adapters (plan-flow-adapters.md)
 mod adapter;
 mod client;
 mod config;
@@ -104,6 +104,12 @@ enum Command {
     /// The session server flow ui starts on its own
     #[command(hide = true)]
     Server,
+    /// What a harness hook runs: reports the event on stdin into $FLOW_ID's flow
+    #[command(hide = true)]
+    Hook {
+        /// The harness: claude-code
+        adapter: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -170,6 +176,10 @@ fn main() -> ExitCode {
         }
         Err(error) => return fail(&Failure::usage(&error)),
     };
+    if let Some(Command::Hook { adapter }) = &cli.command {
+        run_hook(adapter);
+        return ExitCode::SUCCESS;
+    }
     let store = match Store::locate(
         env_path("FLOW_HOME"),
         env_path("XDG_STATE_HOME"),
@@ -184,6 +194,7 @@ fn main() -> ExitCode {
         }
     };
     match run(cli, &store, now_ms()) {
+        Ok(Document::Silent) => ExitCode::SUCCESS,
         Ok(document) => {
             println!("{}", document.text());
             ExitCode::SUCCESS
@@ -232,7 +243,91 @@ fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure> {
         Some(Command::Clear) => clear(store, now),
         Some(Command::Ui { stop }) => ui(store, stop),
         Some(Command::Server) => server(store.clone()),
+        Some(Command::Hook { .. }) => Ok(Document::Silent),
     }
+}
+
+/// `flow hook`: never prints to stdout (a hook's stdout can reach the model) and never fails (a
+/// failing hook shows the user a notice); what goes wrong goes to stderr, Claude Code's debug log.
+fn run_hook(adapter: &str) {
+    let store = match Store::locate(
+        env_path("FLOW_HOME"),
+        env_path("XDG_STATE_HOME"),
+        env_path("HOME"),
+    ) {
+        Ok(store) => store,
+        Err(error) => return eprintln!("flow hook: {error:#}"),
+    };
+    let config = match Config::load(
+        env_path("FLOW_CONFIG"),
+        env_path("XDG_CONFIG_HOME"),
+        env_path("HOME"),
+    ) {
+        Ok(config) => config,
+        Err(error) => return eprintln!("flow hook: {error:#}"),
+    };
+    let mut payload = String::new();
+    if let Err(error) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut payload) {
+        return eprintln!("flow hook: could not read the event: {error}");
+    }
+    let flow = env::var("FLOW_ID").ok();
+    hook(&store, &config, adapter, flow, &payload, now_ms());
+}
+
+/// Translates one hook event with the named adapter and appends what changes the flow.
+fn hook(
+    store: &Store,
+    config: &Config,
+    adapter: &str,
+    flow: Option<String>,
+    payload: &str,
+    now: u64,
+) -> Document {
+    let Some(flow) = flow.filter(|flow| !flow.is_empty()) else {
+        return Document::Silent;
+    };
+    let Some(named) = adapter::Adapter::named(adapter) else {
+        eprintln!("flow hook: no adapter named {adapter}");
+        return Document::Silent;
+    };
+    let payload: serde_json::Value = match serde_json::from_str(payload) {
+        Ok(payload) => payload,
+        Err(error) => {
+            eprintln!("flow hook: the event is not JSON: {error}");
+            return Document::Silent;
+        }
+    };
+    let kinds = named.translate(&payload, &config.phases);
+    if kinds.is_empty() {
+        return Document::Silent;
+    }
+    let id = if store.events(&flow).is_ok() {
+        flow
+    } else {
+        let (flows, _) = views(store, now);
+        match fold::resolve(&flows, &flow) {
+            Some(view) => view.id.clone(),
+            None => {
+                eprintln!("flow hook: no flow {flow}");
+                return Document::Silent;
+            }
+        }
+    };
+    for kind in kinds {
+        let events = match store.events(&id) {
+            Ok(events) => events,
+            Err(error) => {
+                eprintln!("flow hook: {error:#}");
+                return Document::Silent;
+            }
+        };
+        if fold::changes(&id, &events, &kind, now)
+            && let Err(error) = store.append(&id, &Event::new(now, kind))
+        {
+            eprintln!("flow hook: {error:#}");
+        }
+    }
+    Document::Silent
 }
 
 fn ui(store: &Store, stop: bool) -> Result<Document, Failure> {

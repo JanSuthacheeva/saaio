@@ -541,6 +541,85 @@ resume = ["sh", "-c", "echo resumed {{name}} >> {log}; exec cat"]"#,
     assert!(again.wait().unwrap().success());
 }
 
+/// Runs `flow hook claude-code` with a hook payload on stdin, as Claude Code does.
+fn hook(home: &Path, flow_id: Option<&str>, payload: &str) -> Output {
+    use std::io::Write;
+    let mut command = Command::new(env!("CARGO_BIN_EXE_flow"));
+    command
+        .args(["hook", "claude-code"])
+        .env("FLOW_HOME", home)
+        .env("FLOW_CONFIG", home.join("no-config.toml"))
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    match flow_id {
+        Some(id) => command.env("FLOW_ID", id),
+        None => command.env_remove("FLOW_ID"),
+    };
+    let mut child = command.spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(payload.as_bytes())
+        .unwrap();
+    child.wait_with_output().unwrap()
+}
+
+#[test]
+fn a_hook_event_reports_into_the_flow_silently_and_only_once() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let question = r#"{"hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"Red or blue?"}]}}"#;
+    let skill = r#"{"hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"design-code"}}"#;
+
+    let first = hook(home.path(), Some(&id), question);
+    let again = hook(home.path(), Some(&id), question);
+    let phase = hook(home.path(), Some(&id), skill);
+
+    for output in [&first, &again, &phase] {
+        assert!(output.status.success());
+        assert!(output.stdout.is_empty(), "{}", stdout(output));
+    }
+    let detail = stdout(&flow(home.path(), &["status", "shop-221"]));
+    assert!(detail.contains("phase: design"), "{detail}");
+    let log = fs::read_to_string(home.path().join(format!("flows/{id}.jsonl"))).unwrap();
+    assert_eq!(
+        log.lines()
+            .filter(|line| line.contains("Red or blue?"))
+            .count(),
+        1,
+        "{log}"
+    );
+}
+
+#[test]
+fn a_hook_never_fails_or_prints_whatever_it_gets() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let stop = r#"{"hook_event_name":"Stop","last_assistant_message":"Done?"}"#;
+
+    let cases = [
+        hook(home.path(), None, stop),
+        hook(home.path(), Some(&id), "not json"),
+        hook(home.path(), Some("no-such-flow"), stop),
+        hook(
+            home.path(),
+            Some(&id),
+            r#"{"hook_event_name":"Notification"}"#,
+        ),
+    ];
+
+    for output in &cases {
+        assert!(output.status.success());
+        assert!(output.stdout.is_empty(), "{}", stdout(output));
+    }
+    assert!(String::from_utf8_lossy(&cases[1].stderr).contains("not JSON"));
+    assert!(String::from_utf8_lossy(&cases[2].stderr).contains("no flow no-such-flow"));
+    let list = stdout(&flow(home.path(), &["status"]));
+    assert!(!list.contains("waiting"), "{list}");
+}
+
 #[test]
 fn start_refuses_outside_a_repository() {
     let lab = Lab::new();
