@@ -33,6 +33,9 @@ enum Event {
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
 pub fn run(socket: &Path, theme: Theme) -> Result<String> {
     let mut outer = Outer::enter()?;
+    // Before any thread reads stdin: creating the terminal asks for the cursor position.
+    let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
+    terminal.clear()?;
     let mut app = App::new(outer.size()?);
     let client = Client::connect(
         socket,
@@ -47,8 +50,6 @@ pub fn run(socket: &Path, theme: Theme) -> Result<String> {
     read_server(client, events.clone());
     watch_resize(events)?;
 
-    let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
-    terminal.clear()?;
     let mut router = Router::default();
     loop {
         let mut effects = Vec::new();

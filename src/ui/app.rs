@@ -1,7 +1,7 @@
 use ratatui::Frame as TuiFrame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Clear, Paragraph};
+use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
 
 use crate::proto::{ClientMsg, Modes, PaneInfo, PaneKey, PaneStatus, ServerMsg, Size};
 use crate::ui::input::{Command, Key, Routed};
@@ -200,7 +200,7 @@ impl App {
 }
 
 fn draw_confirm_stop(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
-    let width = 52.min(pane.width);
+    let width = 54.min(pane.width);
     let height = 5.min(pane.height);
     let area = Rect::new(
         pane.x + (pane.width - width) / 2,
@@ -224,6 +224,7 @@ fn draw_confirm_stop(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
             Block::bordered()
                 .border_type(BorderType::Rounded)
                 .border_style(theme.ui.rule)
+                .padding(Padding::horizontal(1))
                 .title(" stop "),
         ),
         area,
