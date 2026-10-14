@@ -3,12 +3,14 @@ pub mod input;
 pub mod layout;
 pub mod outer;
 pub mod screen;
+pub mod sidebar;
 pub mod theme;
 
 use std::io::{self, Read};
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use ratatui::Terminal;
@@ -28,7 +30,11 @@ enum Event {
     Server(ServerMsg),
     ServerGone,
     Resize,
+    Tick,
 }
+
+/// How often spinners turn.
+const TICK_EVERY: Duration = Duration::from_millis(100);
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
 pub fn run(socket: &Path, theme: Theme) -> Result<String> {
@@ -48,12 +54,16 @@ pub fn run(socket: &Path, theme: Theme) -> Result<String> {
     let (events, inbox) = mpsc::channel();
     read_stdin(events.clone());
     read_server(client, events.clone());
-    watch_resize(events)?;
+    watch_resize(events.clone())?;
+    tick(events);
 
     let mut router = Router::default();
+    app.on_tick(now_ms());
     loop {
         let mut effects = Vec::new();
+        let mut redraw = false;
         for event in next_batch(&inbox)? {
+            redraw |= !matches!(event, Event::Tick);
             effects.extend(match event {
                 Event::Input(bytes) => {
                     let pane = app.areas().pane;
@@ -71,6 +81,10 @@ pub fn run(socket: &Path, theme: Theme) -> Result<String> {
                     terminal.autoresize()?;
                     app.on_resize(size)
                 }
+                Event::Tick => {
+                    redraw |= app.on_tick(now_ms());
+                    vec![]
+                }
             });
         }
         for effect in effects {
@@ -80,8 +94,28 @@ pub fn run(socket: &Path, theme: Theme) -> Result<String> {
                 Effect::Quit(message) => return Ok(message),
             }
         }
-        terminal.draw(|frame| app.draw(frame, &theme))?;
+        if redraw {
+            terminal.draw(|frame| app.draw(frame, &theme))?;
+        }
     }
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|since| since.as_millis() as u64)
+        .unwrap_or_default()
+}
+
+fn tick(events: Sender<Event>) {
+    thread::spawn(move || {
+        loop {
+            thread::sleep(TICK_EVERY);
+            if events.send(Event::Tick).is_err() {
+                return;
+            }
+        }
+    });
 }
 
 /// Blocks for one event, then takes every other one already waiting, so a burst draws once.

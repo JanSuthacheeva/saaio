@@ -44,11 +44,17 @@ pub struct Glyphs {
     pub spinner: &'static [&'static str],
     pub cursor: &'static str,
     pub separator: &'static str,
+    pub in_view: &'static str,
+    pub step_done: &'static str,
+    pub step_current: &'static str,
+    pub step_open: &'static str,
+    pub step_join: &'static str,
+    pub more: &'static str,
 }
 
 impl Theme {
-    /// ANSI colors 0-15, so flow takes on the terminal's own palette; the accent (clay) and the bar's
-    /// dark panel are 256-color.
+    /// ANSI colors 0-15, so flow takes on the terminal's own palette; the accent (clay), the bar's
+    /// dark panel and the selection's slightly lighter one are 256-color.
     pub fn builtin() -> Theme {
         let plain = Style::default();
         Theme {
@@ -59,7 +65,7 @@ impl Theme {
                 faint: plain.fg(Color::DarkGray),
                 accent: plain.fg(Color::Indexed(173)),
                 rule: plain.fg(Color::DarkGray),
-                selection: plain.add_modifier(Modifier::REVERSED),
+                selection: plain.bg(Color::Indexed(236)),
                 key: plain.add_modifier(Modifier::BOLD),
                 bar: plain.bg(Color::Indexed(235)).fg(Color::Indexed(252)),
             },
@@ -80,6 +86,12 @@ impl Theme {
                 spinner: &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
                 cursor: "▌",
                 separator: "│",
+                in_view: "◂",
+                step_done: "●",
+                step_current: "◉",
+                step_open: "○",
+                step_join: "─",
+                more: "…",
             },
         }
     }

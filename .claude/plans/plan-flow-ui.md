@@ -303,6 +303,8 @@ impl App {
     pub fn on_server(&mut self, message: ServerMsg) -> Vec<Effect>;
     pub fn on_input(&mut self, routed: Routed) -> Vec<Effect>;
     pub fn on_resize(&mut self, size: Size) -> Vec<Effect>;
+    /// Every 100 ms with the time ages count to; true when a spinner turned or a second passed.
+    pub fn on_tick(&mut self, now: u64) -> bool;
     /// The `flow start` the dialog ran: the flow's name, or the error it printed.
     pub fn on_started(&mut self, result: Result<String, String>);
     /// The flow under the sidebar cursor, for the peek.
@@ -343,7 +345,14 @@ pub struct Areas { pub frame: Rect, pub pane: Rect, pub side: Option<Rect>, pub 
 pub fn areas(size: Size, chrome: Chrome) -> Areas;
 
 // sidebar.rs, board.rs, rail.rs, help.rs - widgets over the Board
-pub struct Sidebar<'a> { pub board: &'a Board, pub panes: &'a [PaneInfo], pub focus: &'a PaneKey, pub cursor: Option<&'a str>, pub peek: &'a [PeekLine], pub theme: &'a Theme }
+pub struct Sidebar<'a> { pub board: &'a Board, pub panes: &'a [PaneInfo], pub focus: &'a PaneKey, pub now: u64, pub spin: usize, pub theme: &'a Theme }
+// milestone 4 adds: pub cursor: Option<&'a str>, pub peek: &'a [PeekLine]
+/// The flows with a workspace in board order (needs you, running, done); digit n focuses the nth.
+pub fn workers(board: &Board) -> Vec<&FlowView>;
+impl Sidebar<'_> {
+    /// The pane a click on this row focuses.
+    pub fn key_at(&self, row: u16, height: u16) -> Option<PaneKey>;
+}
 pub struct BoardView<'a> { pub board: &'a Board, pub state: &'a BoardState, pub theme: &'a Theme }
 pub struct Rail<'a> { pub board: &'a Board, pub focus: &'a PaneKey, pub theme: &'a Theme }
 
@@ -520,7 +529,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [x] Add launch::worker_spec and HOSTED with tests (fresh, resume, no resume template)
 - [x] Add server/reconcile.rs reconcile with table tests (open, known, close removed, failed)
 - [x] Server::refresh and Server::apply: board broadcast, worker panes, HOSTED append, Host::fail and Blocked on failure; integration test with a `cat` agent
-- [ ] Add ui theme.rs Theme::builtin, sidebar.rs Sidebar, layout Sidebar chrome, App focus switching (0-9) and pane status; TestBackend tests against the fleet and worker screens
+- [x] Add ui theme.rs Theme::builtin, sidebar.rs Sidebar, layout Sidebar chrome, App focus switching (0-9) and pane status; TestBackend tests against the fleet and worker screens
 
 ### Milestone 3: flow start, remove and clear through the server
 

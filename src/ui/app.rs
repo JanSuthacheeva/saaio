@@ -8,7 +8,12 @@ use crate::proto::{ClientMsg, Modes, PaneInfo, PaneKey, PaneStatus, ServerMsg, S
 use crate::ui::input::{Command, Key, Routed};
 use crate::ui::layout::{self, Areas, Chrome};
 use crate::ui::screen::Screen;
+use crate::ui::sidebar::{self, Sidebar};
 use crate::ui::theme::Theme;
+use crate::view::{Board, FlowView, State};
+
+/// Ticks between redraws that only refresh how long ago things changed.
+const TICKS_PER_AGE: u32 = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum View {
@@ -27,10 +32,14 @@ pub enum Effect {
 pub struct App {
     size: Size,
     screen: Screen,
+    board: Option<Board>,
     panes: Vec<PaneInfo>,
     focus: PaneKey,
     view: View,
     mirrored: Modes,
+    now: u64,
+    spin: usize,
+    ticks: u32,
 }
 
 impl App {
@@ -38,15 +47,40 @@ impl App {
         App {
             size,
             screen: Screen::default(),
+            board: None,
             panes: Vec::new(),
             focus: PaneKey::Master,
             view: View::Panes,
             mirrored: Modes::default(),
+            now: 0,
+            spin: 0,
+            ticks: 0,
         }
     }
 
+    /// The bottom bar while the master is alone, the sidebar once there are workers.
     pub fn areas(&self) -> Areas {
-        layout::areas(self.size, Chrome::Solo)
+        let chrome = if self.workers().is_empty() {
+            Chrome::Solo
+        } else {
+            Chrome::Sidebar
+        };
+        layout::areas(self.size, chrome)
+    }
+
+    /// The time (Unix ms) ages count to; true when the screen should be drawn again for it:
+    /// a spinner turns, or an age may have changed.
+    pub fn on_tick(&mut self, now: u64) -> bool {
+        self.now = now;
+        self.ticks = self.ticks.wrapping_add(1);
+        let spinning = self
+            .workers()
+            .iter()
+            .any(|flow| matches!(flow.state, State::Working | State::Delegated));
+        if spinning {
+            self.spin = self.spin.wrapping_add(1);
+        }
+        spinning || self.ticks.is_multiple_of(TICKS_PER_AGE)
     }
 
     /// True while a dialog takes the keys instead of the pane.
@@ -56,7 +90,17 @@ impl App {
 
     pub fn on_server(&mut self, message: ServerMsg) -> Vec<Effect> {
         match message {
-            ServerMsg::Welcome { .. } | ServerMsg::Board(_) | ServerMsg::Closed(_) => vec![],
+            ServerMsg::Welcome { .. } | ServerMsg::Closed(_) => vec![],
+            ServerMsg::Board(board) => {
+                let before = self.areas().pane;
+                self.now = self.now.max(board.now);
+                self.board = Some(board);
+                let after = self.areas();
+                if after.pane == before {
+                    return vec![];
+                }
+                vec![Effect::Send(ClientMsg::Resize(after.pane_size()))]
+            }
             ServerMsg::Refused { reason } => vec![Effect::Quit(reason)],
             ServerMsg::Panes(panes) => {
                 self.panes = panes;
@@ -84,6 +128,7 @@ impl App {
             Routed::Pane(bytes) if self.view == View::Panes => {
                 vec![Effect::Send(ClientMsg::Input(bytes))]
             }
+            Routed::Click { col, row } if self.view == View::Panes => self.on_click(col, row),
             Routed::Pane(_) | Routed::Click { .. } => vec![],
             Routed::View(keys) => self.on_keys(keys),
             Routed::Command(command) => self.on_command(command),
@@ -102,10 +147,14 @@ impl App {
         if let Some(bar) = areas.bar {
             self.draw_bar(frame, bar, theme);
         }
-        if let Some(status) = self.status(&self.focus)
-            && *status != PaneStatus::Running
-        {
-            draw_not_running(frame, areas.pane, status, theme);
+        if let Some(side) = areas.side {
+            frame.render_widget(self.sidebar(theme), side);
+        }
+        match self.status(&self.focus) {
+            Some(PaneStatus::Running) => {}
+            Some(status) => draw_not_running(frame, areas.pane, status, theme),
+            None if self.focus != PaneKey::Master => draw_no_session(frame, areas.pane, theme),
+            None => {}
         }
         match self.view {
             View::ConfirmStop => draw_confirm_stop(frame, areas.pane, theme),
@@ -135,6 +184,12 @@ impl App {
             }
             Command::Reopen => vec![Effect::Send(ClientMsg::Reopen(self.focus.clone()))],
             Command::Focus(0) => self.focus(PaneKey::Master),
+            Command::Focus(digit) => {
+                let Some(flow) = self.workers().get(digit as usize - 1).copied() else {
+                    return vec![];
+                };
+                self.focus(PaneKey::Flow(flow.id.clone()))
+            }
             _ => vec![],
         }
     }
@@ -155,28 +210,93 @@ impl App {
         }
     }
 
+    fn on_click(&mut self, col: u16, row: u16) -> Vec<Effect> {
+        let Some(side) = self.areas().side else {
+            return vec![];
+        };
+        let inside = col >= side.x && col < side.x + side.width && row >= side.y;
+        let theme = Theme::builtin();
+        match self.sidebar(&theme).key_at(row - side.y, side.height) {
+            Some(key) if inside => self.focus(key),
+            _ => vec![],
+        }
+    }
+
     fn focus(&mut self, key: PaneKey) -> Vec<Effect> {
         if key == self.focus {
             return vec![];
         }
         self.focus = key.clone();
+        self.screen = Screen::default();
         vec![Effect::Send(ClientMsg::Focus(key))]
     }
 
-    /// The rounded border around the focused pane, its name in the top edge.
+    fn workers(&self) -> Vec<&FlowView> {
+        self.board
+            .as_ref()
+            .map(sidebar::workers)
+            .unwrap_or_default()
+    }
+
+    fn sidebar<'a>(&'a self, theme: &'a Theme) -> Sidebar<'a> {
+        static EMPTY: Board = Board {
+            version: crate::view::VIEW_VERSION,
+            now: 0,
+            count: 0,
+            needs_you: 0,
+            flows: Vec::new(),
+        };
+        Sidebar {
+            board: self.board.as_ref().unwrap_or(&EMPTY),
+            panes: &self.panes,
+            focus: &self.focus,
+            now: self.now,
+            spin: self.spin,
+            theme,
+        }
+    }
+
+    /// The rounded border around the focused pane: its name in the top edge, and for a worker
+    /// its steps, branch and slot, and the way back to the master on the right.
     fn border(&self, theme: &Theme) -> Block<'static> {
-        let title = match &self.focus {
-            PaneKey::Master => Line::from(vec![
+        let block = Block::bordered()
+            .border_type(BorderType::Rounded)
+            .border_style(theme.ui.rule);
+        let PaneKey::Flow(id) = &self.focus else {
+            return block.title(Line::from(vec![
                 Span::raw(" "),
                 Span::styled(theme.glyphs.master, theme.ui.accent),
                 Span::styled(" master ", theme.ui.strong),
-            ]),
-            PaneKey::Flow(id) => Line::from(Span::styled(format!(" {id} "), theme.ui.strong)),
+            ]));
         };
-        Block::bordered()
-            .border_type(BorderType::Rounded)
-            .border_style(theme.ui.rule)
-            .title(title)
+        let Some(flow) = self.workers().into_iter().find(|flow| &flow.id == id) else {
+            return block.title(Line::styled(format!(" {id} "), theme.ui.strong));
+        };
+        let sidebar = self.sidebar(theme);
+        let mut title = vec![
+            Span::raw(" "),
+            Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
+            Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
+        ];
+        title.extend(sidebar.steps(flow));
+        title.push(Span::raw(" "));
+        title.push(sidebar.label(flow));
+        if let Some(space) = &flow.workspace {
+            title.push(Span::styled(
+                format!(
+                    "  {} {} · slot {} ",
+                    theme.glyphs.separator, space.branch, space.slot
+                ),
+                theme.ui.faint,
+            ));
+        }
+        block.title(Line::from(title)).title(
+            Line::from(vec![
+                Span::styled(" C-space 0", theme.ui.key),
+                Span::styled(" back to master ", theme.ui.faint),
+            ])
+            .right_aligned(),
+        )
     }
 
     fn status(&self, key: &PaneKey) -> Option<&PaneStatus> {
@@ -252,6 +372,18 @@ fn draw_not_running(frame: &mut TuiFrame, pane: Rect, status: &PaneStatus, theme
     draw_dialog(frame, pane, title, style, text);
 }
 
+/// A notice over a worker pane flow ui has no session for, such as a flow that ended before it opened.
+fn draw_no_session(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
+    let text = vec![
+        Line::styled("flow ui has no session for this flow.", theme.ui.text),
+        Line::from(vec![
+            Span::styled("C-space 0", theme.ui.key),
+            Span::styled(" goes back to the master", theme.ui.muted),
+        ]),
+    ];
+    draw_dialog(frame, pane, " not open ", theme.ui.rule, text);
+}
+
 fn draw_dialog(frame: &mut TuiFrame, pane: Rect, title: &str, border: Style, text: Vec<Line>) {
     let inner = text.iter().map(Line::width).max().unwrap_or(0) as u16;
     let width = (inner + 4).min(pane.width);
@@ -295,6 +427,8 @@ mod tests {
     use ratatui::backend::TestBackend;
 
     use super::*;
+    use crate::event::{Event, EventKind};
+    use crate::fold;
     use crate::proto::{Cell, Color, Flags, Frame, Mouse};
 
     const SIZE: Size = Size { cols: 80, rows: 10 };
@@ -452,5 +586,266 @@ mod tests {
             app.on_input(Routed::Command(Command::Reopen)),
             vec![Effect::Send(ClientMsg::Reopen(PaneKey::Master))]
         );
+    }
+
+    const MINUTE: u64 = 60_000;
+    const NOW: u64 = 1_000 * MINUTE;
+
+    /// A started flow at `age` minutes ago, with the events after Started and Workspace.
+    fn worker(id: &str, mode: crate::event::Mode, age: u64, events: Vec<EventKind>) -> FlowView {
+        let at = NOW - age * MINUTE;
+        let mut log = vec![
+            Event::new(
+                at,
+                EventKind::Started {
+                    name: id.into(),
+                    request: id.into(),
+                    mode,
+                },
+            ),
+            Event::new(
+                at,
+                EventKind::Workspace {
+                    path: format!("/shop/.flow/worktrees/{id}"),
+                    branch: format!("flow/{id}"),
+                    slot: 1,
+                    window: Some("flow-ui".into()),
+                    agent: "claude".into(),
+                },
+            ),
+        ];
+        log.extend(events.into_iter().map(|kind| Event::new(at, kind)));
+        fold::fold(id, &log, None, NOW).unwrap()
+    }
+
+    fn fleet() -> Board {
+        use crate::event::Mode::{Auto, Guided};
+        use crate::event::Phase::{Design, Implement, Review};
+        let phase = |phase| EventKind::Phase { phase };
+        let tasks = |done, total| EventKind::Tasks { done, total };
+        let flows = vec![
+            worker(
+                "shop-221",
+                Auto,
+                29,
+                vec![
+                    phase(Design),
+                    phase(Implement),
+                    tasks(4, 9),
+                    EventKind::Blocked {
+                        reason: "migration needs a default value for orders.exported_at".into(),
+                    },
+                ],
+            ),
+            worker(
+                "shop-230",
+                Guided,
+                31,
+                vec![
+                    phase(Design),
+                    EventKind::Waiting {
+                        question: "Which approach: a channel column or a join table?".into(),
+                    },
+                ],
+            ),
+            worker(
+                "export-csv",
+                Auto,
+                60,
+                vec![
+                    phase(Design),
+                    phase(Implement),
+                    phase(Review),
+                    tasks(6, 6),
+                    EventKind::Delegated {
+                        description: "review changes".into(),
+                    },
+                ],
+            ),
+            worker(
+                "shop-198",
+                Auto,
+                120,
+                vec![EventKind::MergeRequest {
+                    url: "https://gitlab.com/shop/-/merge_requests/418".into(),
+                }],
+            ),
+        ];
+        fold::board(flows, NOW)
+    }
+
+    fn with_fleet() -> App {
+        let mut app = App::new(FLEET);
+        app.on_server(ServerMsg::Board(fleet()));
+        app.on_tick(NOW);
+        app
+    }
+
+    const FLEET: Size = Size {
+        cols: 150,
+        rows: 44,
+    };
+
+    fn render_at(app: &App, size: Size) -> Terminal<TestBackend> {
+        let mut terminal = Terminal::new(TestBackend::new(size.cols, size.rows)).unwrap();
+        terminal
+            .draw(|frame| app.draw(frame, &Theme::builtin()))
+            .unwrap();
+        terminal
+    }
+
+    fn side(terminal: &Terminal<TestBackend>, y: u16) -> String {
+        row(terminal, y).chars().skip(110).collect::<String>()
+    }
+
+    #[test]
+    fn makes_room_for_the_sidebar_once_the_first_worker_shows_up() {
+        let mut app = App::new(FLEET);
+
+        assert_eq!(
+            app.on_server(ServerMsg::Board(fold::board(vec![], NOW))),
+            vec![]
+        );
+        assert_eq!(app.areas().side, None);
+        assert_eq!(
+            app.on_server(ServerMsg::Board(fleet())),
+            vec![Effect::Send(ClientMsg::Resize(Size {
+                cols: 107,
+                rows: 42
+            }))]
+        );
+        assert_eq!(app.on_server(ServerMsg::Board(fleet())), vec![]);
+    }
+
+    #[test]
+    fn draws_the_fleet_in_the_sidebar_grouped_by_what_it_needs() {
+        let terminal = render_at(&with_fleet(), FLEET);
+
+        assert_eq!(
+            side(&terminal, 0),
+            " ≋ flow                      2 need you "
+        );
+        assert_eq!(
+            side(&terminal, 2),
+            " 0 ◎ master                   ◂ in view "
+        );
+        assert_eq!(side(&terminal, 4).trim_end(), " NEEDS YOU");
+        assert_eq!(
+            side(&terminal, 5),
+            " 1 ✖ shop-221                       29m "
+        );
+        assert_eq!(
+            side(&terminal, 6),
+            "     ●─◉─○─○ implement              4/9 "
+        );
+        assert_eq!(
+            side(&terminal, 7),
+            "     migration needs a default value f… "
+        );
+        assert_eq!(
+            side(&terminal, 10),
+            "     ◉─○─○─○ design              guided "
+        );
+        assert_eq!(side(&terminal, 13).trim_end(), " RUNNING");
+        assert!(side(&terminal, 14).starts_with(" 3 ⠙ export-csv"));
+        assert_eq!(side(&terminal, 16).trim_end(), "     agent: review changes");
+        assert_eq!(side(&terminal, 18).trim_end(), " DONE");
+        assert_eq!(side(&terminal, 20).trim_end(), "     ●─●─●─● MR !418");
+        assert_eq!(side(&terminal, 41), "─".repeat(40));
+        assert_eq!(
+            side(&terminal, 42).trim_end(),
+            " C-space 0-9 jump  r resume"
+        );
+        let buffer = terminal.backend().buffer();
+        assert_eq!(
+            buffer[(113, 5)].fg,
+            Theme::builtin().state.blocked.fg.unwrap()
+        );
+    }
+
+    #[test]
+    fn focuses_a_worker_by_digit_or_click_and_marks_it() {
+        let mut app = with_fleet();
+
+        assert_eq!(
+            app.on_input(Routed::Command(Command::Focus(2))),
+            vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
+                "shop-230".into()
+            )))]
+        );
+        let terminal = render_at(&app, FLEET);
+        let title = row(&terminal, 0);
+        assert!(
+            title.starts_with("╭ ◆ shop-230  ◉─○─○─○ design  │ flow/shop-230 · slot 1 ─"),
+            "{title}"
+        );
+        assert!(
+            title.ends_with(" C-space 0 back to master ╮  ≋ flow                      2 need you "),
+            "{title}"
+        );
+        assert_eq!(
+            side(&terminal, 2),
+            " 0 ◎ master                         you "
+        );
+        assert!(side(&terminal, 9).starts_with("▌2 ◆ shop-230"));
+        let buffer = terminal.backend().buffer();
+        let selection = Theme::builtin().ui.selection.bg.unwrap();
+        assert!((110..150).all(|x| buffer[(x, 10)].bg == selection));
+        assert_ne!(buffer[(120, 8)].bg, selection);
+
+        assert_eq!(
+            app.on_input(Routed::Click { col: 120, row: 6 }),
+            vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
+                "shop-221".into()
+            )))]
+        );
+        assert_eq!(app.on_input(Routed::Click { col: 120, row: 30 }), vec![]);
+        assert_eq!(app.on_input(Routed::Command(Command::Focus(9))), vec![]);
+        assert_eq!(
+            app.on_input(Routed::Command(Command::Focus(0))),
+            vec![Effect::Send(ClientMsg::Focus(PaneKey::Master))]
+        );
+    }
+
+    #[test]
+    fn shows_workers_that_exited_failed_or_have_no_session() {
+        let mut app = with_fleet();
+        app.on_server(ServerMsg::Panes(vec![
+            PaneInfo {
+                key: PaneKey::Flow("shop-221".into()),
+                status: PaneStatus::Exited { code: Some(0) },
+            },
+            PaneInfo {
+                key: PaneKey::Flow("shop-230".into()),
+                status: PaneStatus::Failed {
+                    reason: "no agent named codex".into(),
+                },
+            },
+        ]));
+        app.on_input(Routed::Command(Command::Focus(3)));
+
+        let terminal = render_at(&app, FLEET);
+
+        assert!(side(&terminal, 5).ends_with("exited "));
+        assert!(side(&terminal, 9).ends_with("failed "));
+        assert_eq!(side(&terminal, 11).trim_end(), "     no agent named codex");
+        let pane: String = (1..43).map(|y| row(&terminal, y)).collect();
+        assert!(
+            pane.contains("flow ui has no session for this flow."),
+            "{pane}"
+        );
+    }
+
+    #[test]
+    fn turns_the_spinner_only_while_a_worker_works() {
+        let mut app = with_fleet();
+
+        assert!(app.on_tick(NOW + 100), "export-csv is delegated");
+        let mut idle = App::new(FLEET);
+        idle.on_server(ServerMsg::Board(fold::board(vec![], NOW)));
+        let redraws = (1..=20)
+            .filter(|tick| idle.on_tick(NOW + tick * 100))
+            .count();
+        assert_eq!(redraws, 2, "only for the ages, once a second");
     }
 }
