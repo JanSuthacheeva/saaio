@@ -420,6 +420,8 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
    4. `reconcile` with `known` empty -> every unfinished flow with a workspace
    5. `worker_spec`: window == HOSTED -> agent.resume argv -> `Host::open`
    - Error: no resume template -> `Wanted.failed` -> `Host::fail(key, "agent X cannot resume")`
+   - Error: the resumed process exits non-zero within 5 s (Claude saved no session, it saves one only
+     after the first message) -> the server opens it once more fresh, same session id
 5. A worker exits; you resume it
    1. waiter thread -> `HostEvent::Exited(key, code) -> Host::exited -> ServerMsg::Panes`
    2. `App::on_server(Panes)`: row shows exited, pane keeps its last screen
@@ -466,7 +468,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 2. Wire format: u32 length + postcard.
 3. Only the focused pane streams: changed rows, at most 60 frames/s; every pane has the size of the pane area.
 4. The server checks the store every 500 ms by size and mtime; refolds at least every 5 s.
-5. An exited pane keeps its last screen and is not reopened on its own; `C-space r` resumes it.
+5. An exited pane keeps its last screen under a notice and is not reopened on its own; `C-space r` resumes it.
 6. Keys reach the pane as raw bytes; the outer terminal mirrors the pane's paste, mouse and cursor-key modes.
 7. `flow start` without a running server records the flow and says it opens when flow ui runs.
 8. One UI attached at a time; a new one takes over.
