@@ -343,6 +343,7 @@ mod tests {
         let agent = Agent {
             command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
             prompt: "/ship-feature {request}".into(),
+            adapter: None,
             resume: None,
         };
 
@@ -364,6 +365,7 @@ mod tests {
         let agent = Agent {
             command: strings(&["claude", "-n", "{name}", "{prompt}"]),
             prompt: String::new(),
+            adapter: None,
             resume: None,
         };
 
@@ -378,6 +380,7 @@ mod tests {
         let mut agent = Agent {
             command: strings(&["claude"]),
             prompt: String::new(),
+            adapter: None,
             resume: Some(strings(&["claude", "-n", "{name}", "--resume", "{id}"])),
         };
 
@@ -493,6 +496,7 @@ mod tests {
         let agent = Agent {
             command: strings(&["aider"]),
             prompt: String::new(),
+            adapter: None,
             resume: None,
         };
         let env = LaunchEnv::default();

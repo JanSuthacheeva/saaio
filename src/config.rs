@@ -19,6 +19,10 @@ pub struct Agent {
     /// The command that continues session {id}; an agent without one is started fresh by hand.
     #[serde(default)]
     pub resume: Option<Vec<String>>,
+    /// The harness flow observes it through ("claude-code"); without one, flow ui shows only
+    /// whether its process runs.
+    #[serde(default)]
+    pub adapter: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -27,6 +31,9 @@ pub struct Config {
     pub agent: String,
     #[serde(default)]
     pub agents: BTreeMap<String, Agent>,
+    /// Skill name -> phase: the built-in map with the file's entries over it.
+    #[serde(default)]
+    pub phases: PhaseMap,
 }
 
 impl Config {
@@ -52,6 +59,9 @@ impl Config {
         let mut agents = builtin_agents();
         agents.append(&mut config.agents);
         config.agents = agents;
+        let mut phases = builtin_phases();
+        phases.append(&mut config.phases);
+        config.phases = phases;
         Ok(config)
     }
 
@@ -76,6 +86,20 @@ pub fn config_file(
         .or_else(|| set(home).map(|dir| dir.join(".config/flow/config.toml")))
 }
 
+/// The phases of the agent-skills chain: design-code, implement-plan, review-changes,
+/// write-merge-request. A config file adds others or points these elsewhere.
+pub fn builtin_phases() -> PhaseMap {
+    PhaseMap::from([
+        ("design-code".to_string(), Phase::Design),
+        ("implement-plan".to_string(), Phase::Implement),
+        ("review-changes".to_string(), Phase::Review),
+        ("write-merge-request".to_string(), Phase::MergeRequest),
+    ])
+}
+
+/// The adapter the built-in agents report through.
+const CLAUDE_CODE: &str = "claude-code";
+
 /// The agent flow ui runs as its master when there is one; else the default agent.
 pub const MASTER_AGENT: &str = "master";
 
@@ -88,6 +112,7 @@ pub fn builtin_agents() -> BTreeMap<String, Agent> {
             .map(String::from)
             .to_vec(),
         prompt: "/ship-feature {request}".to_string(),
+        adapter: Some(CLAUDE_CODE.to_string()),
         resume: Some(
             ["claude", "-n", "{name}", "--resume", "{id}"]
                 .map(String::from)
@@ -106,6 +131,7 @@ pub fn builtin_agents() -> BTreeMap<String, Agent> {
             "{instructions}",
         ]),
         prompt: String::new(),
+        adapter: Some(CLAUDE_CODE.to_string()),
         resume: Some(strings(&[
             "claude",
             "-n",
@@ -127,6 +153,7 @@ impl Config {
         Config {
             agent: default_agent_name(),
             agents: BTreeMap::new(),
+            phases: PhaseMap::new(),
         }
     }
 }
@@ -167,6 +194,37 @@ mod tests {
                 .ends_with(&["--append-system-prompt-file", "{instructions}"].map(String::from))
         );
         assert_eq!(master.prompt, "");
+    }
+
+    #[test]
+    fn maps_the_agent_skills_to_phases_and_takes_more_from_the_file() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        fs::write(
+            &file,
+            "[phases]\nbrainstorm = \"design\"\nreview-changes = \"implement\"\n",
+        )
+        .unwrap();
+
+        let config = Config::load(Some(file), None, None).unwrap();
+        let none = Config::load(Some(dir.path().join("missing.toml")), None, None).unwrap();
+
+        assert_eq!(none.phases, builtin_phases());
+        assert_eq!(config.phases["brainstorm"], Phase::Design);
+        assert_eq!(
+            config.phases["review-changes"],
+            Phase::Implement,
+            "the file wins"
+        );
+        assert_eq!(config.phases["design-code"], Phase::Design);
+        assert_eq!(
+            none.agent(None).unwrap().1.adapter.as_deref(),
+            Some("claude-code")
+        );
+        assert_eq!(
+            none.agent(Some(MASTER_AGENT)).unwrap().1.adapter.as_deref(),
+            Some("claude-code")
+        );
     }
 
     #[test]

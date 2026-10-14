@@ -155,6 +155,7 @@ mod tests {
         assert_eq!(resumed.cwd, PathBuf::from("/work"));
         assert!(resumed.env.iter().all(|(key, _)| key != "FLOW_ID"));
         let plain = Agent {
+            adapter: None,
             resume: None,
             ..claude.clone()
         };

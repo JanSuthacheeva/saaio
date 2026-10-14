@@ -722,6 +722,7 @@ mod tests {
             Agent {
                 command: vec!["cat".into()],
                 prompt: String::new(),
+                adapter: None,
                 resume: Some(vec!["cat".into()]),
             },
         )
@@ -749,6 +750,7 @@ mod tests {
         let config = Config {
             agent: "claude".into(),
             agents,
+            phases: crate::config::builtin_phases(),
         };
         let handle =
             thread::spawn(move || run(&thread_paths, store, config, LaunchEnv::default(), || 0));
@@ -888,11 +890,13 @@ mod tests {
         let cat = Agent {
             command: vec!["cat".into()],
             prompt: String::new(),
+            adapter: None,
             resume: Some(vec!["cat".into()]),
         };
         let broken = Agent {
             command: vec!["/nonexistent/flow-agent".into()],
             prompt: String::new(),
+            adapter: None,
             resume: None,
         };
         let csv = started_flow(&store, dir.path(), "csv", "claude");
@@ -1165,6 +1169,7 @@ mod tests {
             Agent {
                 command: vec!["cat".into()],
                 prompt: String::new(),
+                adapter: None,
                 resume: Some(vec![
                     "sh".into(),
                     "-c".into(),

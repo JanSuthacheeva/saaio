@@ -69,12 +69,14 @@ mod tests {
             Agent {
                 command: vec!["aider".into()],
                 prompt: String::new(),
+                adapter: None,
                 resume: None,
             },
         );
         Config {
             agent: "claude".into(),
             agents,
+            phases: crate::config::builtin_phases(),
         }
     }
 
