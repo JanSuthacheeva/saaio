@@ -17,10 +17,12 @@ cargo install --path .
 
 ```
 flow                                    home view: every flow and what needs you
+flow start <request> [--name <name>] [--mode guided|auto] [--agent <name>]
+                                        a worker in its own worktree and tmux window
 flow new --name <name> --request <text> [--mode guided|auto]
 flow report [--flow <name|id>] <event>  the flow comes from --flow or $FLOW_ID
 flow status [<name|id>] [--json] [--full]
-flow clear                              forget flows that are done or ended
+flow clear                              forget finished flows, tear down their worktrees
 ```
 
 Events for `flow report`:
@@ -42,6 +44,80 @@ Events for `flow report`:
 `flow report` without a flow id answers `skipped: no flow id` and exits 0, so a skill can
 report unconditionally and still work in a session that is not a flow. Repeated reports fold
 to the same state, so retries are harmless.
+
+## Starting a worker
+
+Run `flow start` inside the repository and inside tmux:
+
+```
+$ flow start "SHOP-217 add CSV export"
+flow: shop-217
+worktree: ~/projects/shop/.flow/worktrees/shop-217
+branch: flow/shop-217
+slot: 1
+setup: ran
+agent: claude
+window: @14
+```
+
+It creates the flow, a git worktree in `.flow/worktrees/<name>` on branch `flow/<name>` (kept out
+of `git status` through `.git/info/exclude`), runs the repo's setup hook there, and opens a
+background tmux window running the agent with `FLOW_ID` set, so it reports into the flow. The
+name comes from the ticket key (`SHOP-217` -> `shop-217`) or the first four words.
+
+### Agents
+
+Claude Code is built in: `claude -n <name> --session-id <id> "/ship-feature <request>"`. Add or
+change agents in `~/.config/flow/config.toml` (or `$XDG_CONFIG_HOME/flow/config.toml`, or
+`$FLOW_CONFIG`):
+
+```toml
+agent = "claude"              # the default for flow start
+
+[agents.claude]
+command = ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
+prompt = "/ship-feature {request}"
+
+[agents.codex]
+command = ["codex", "{prompt}"]
+prompt = "{request}"
+```
+
+Placeholders: `{id}`, `{name}`, `{request}`, `{prompt}`.
+
+### Hooks, slots and Docker
+
+A repo can commit two executable hooks; `flow` runs them in the worktree with `FLOW_ID`,
+`FLOW_NAME`, `FLOW_SLOT`, `FLOW_WORKTREE` and `FLOW_REPO` set:
+
+- `.flow/setup` after the worktree is created. If it fails, the flow is marked blocked with its
+  last error line and the window still opens so you can look.
+- `.flow/teardown` when `flow clear` removes a finished flow's worktree.
+
+`FLOW_SLOT` is 1 to 9, unique among running flows, for anything that must not collide, such as
+ports. For a Docker Compose project whose tests run in the containers, read the ports from
+variables in `compose.yaml` (`"${HTTP_PORT:-80}:80"`, `"${DB_PORT:-3306}:3306"`), then:
+
+```sh
+#!/bin/sh
+# .flow/setup
+set -e
+export HTTP_PORT=$((8000 + FLOW_SLOT)) DB_PORT=$((33060 + FLOW_SLOT))
+docker compose up -d
+docker compose exec -T php php artisan migrate --seed
+```
+
+```sh
+#!/bin/sh
+# .flow/teardown
+docker compose down -v
+```
+
+Compose names a project after its folder, so each worktree runs its own stack and
+`docker compose exec ...` inside a worktree reaches that stack.
+
+`flow clear` keeps a worktree with uncommitted work (listed under `kept`) and always keeps the
+branch, which carries the merge request.
 
 ## Output
 

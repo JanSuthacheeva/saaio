@@ -179,5 +179,5 @@ pub fn cleared(names: &[String], kept: &[(String, String)]) -> Document;
 - [x] Add `workspace.rs` (`repo_root`, `create_worktree`, `run_hook`, `open_window`, `remove_worktree`) with tests on a temp git repo
 - [x] Add `flow start` (`start`, `output::started`) with tests/cli.rs cases using a fake tmux: start, outside tmux, outside a repo, failing hook, full slots
 - [x] Extend `flow clear` with teardown and worktree removal (`output::cleared` with kept) with tests/cli.rs cases for clean and dirty worktrees
-- [ ] Update README, CLAUDE.md and the handover: `flow start`, hooks, slots, a Docker hook example
+- [x] Update README, CLAUDE.md and the handover: `flow start`, hooks, slots, a Docker hook example
 - [ ] End-to-end: in a real repo inside tmux, `flow start` a tiny request, watch the worker run /ship-feature with the board in the master, then finish or end it and `flow clear`
