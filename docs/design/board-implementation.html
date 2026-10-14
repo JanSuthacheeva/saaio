@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en" data-theme="nord">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flows board - implementation</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge, dd) { overflow-wrap: anywhere; }
+  svg { max-width: 100%; height: auto; }
+  :not(pre) > code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  .codebox { border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent); border-radius: 8px; overflow: hidden; font-size: 13px; }
+  .fig text { font: 12px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .fig .small { font-size: 10px; opacity: .7; }
+  .fig .new rect { fill: color-mix(in oklab, var(--color-success) 18%, transparent); stroke: var(--color-success); stroke-width: 1.5; }
+  .fig .mod rect { fill: color-mix(in oklab, var(--color-warning) 18%, transparent); stroke: var(--color-warning); stroke-width: 1.5; }
+  .fig .old rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .fig .edge { stroke: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke-width: 1.3; fill: none; marker-end: url(#arr); }
+  .fig .err { stroke: var(--color-error); stroke-width: 1.1; stroke-dasharray: 5 4; fill: none; marker-end: url(#arrErr); opacity: .8; }
+  .fig .life { stroke: color-mix(in oklab, var(--color-base-content) 25%, transparent); stroke-dasharray: 3 4; }
+  .fig .lane rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 25%, transparent); }
+  .fig .errtext { fill: var(--color-error); font-size: 10.5px; }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; margin-right: 1rem; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  ol.steps { list-style: decimal; padding-left: 1.4rem; }
+  ol.steps li { margin: .2rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  ol.steps li.e { color: var(--color-error); }
+  nav a { white-space: nowrap; }
+  table.rules td, table.rules th { font-size: 12.5px; vertical-align: top; }
+  /* terminal mock, colours from Jan's Noctalia theme */
+  .term { background: #2b2b2d; color: #d8d2cc; border-radius: 10px; padding: .9rem 1.1rem; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-x: auto; }
+  .term .row { white-space: pre; }
+  .term .rule { color: #4a4446; }
+  .c-claude { color: #cb9168; } .c-ok { color: #8da388; } .c-warn { color: #e9b896; } .c-err { color: #d4877f; }
+  .c-dim { color: #8f8580; } .c-inact { color: #5d5655; } .b { font-weight: 700; } .u { text-decoration: underline; text-underline-offset: 3px; }
+  .focus { background: #4a4446; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-12">
+
+<header class="space-y-3">
+  <p class="text-sm opacity-60">design-code / phase 3 - piece 3 of 6: the board viewer mod</p>
+  <h1 class="text-3xl font-bold"><code>flows</code>: a tabbed board above the prompt</h1>
+  <nav class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+    <a class="link" href="#recap">1 Recap</a><a class="link" href="#look">Look</a><a class="link" href="#overview">2 Structure</a><a class="link" href="#units">3 Units</a><a class="link" href="#data">4 Data</a><a class="link" href="#chains">5 Call chains</a><a class="link" href="#conventions">6 Conventions</a><a class="link" href="#tests">7 Test seams</a><a class="link" href="#assumptions">8 Assumptions</a><a class="link" href="#questions">9 Decided</a>
+  </nav>
+</header>
+
+<section id="recap" class="space-y-3">
+  <h2 class="text-2xl font-bold">1. Decision recap</h2>
+  <p>A new mod, <code>flows</code>, draws the board in the band above the prompt, not in a pane: a tab row (<code>All</code> plus one tab per flow), an overview of every flow on <code>All</code>, and a compact detail on a flow's tab. It runs <code>flow status --json</code> every 2 s while shown, turns the board into a band model in a pure module, and draws it with <code>Button</code>s so digits, vim keys and the engine's focus ring do the navigation.</p>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li>Decided with the prototype: band over pane (full width, digits from an empty prompt, every layout); tabs inside the band; vim-like keys; visual polish.</li>
+    <li>Prototype findings folded in: an overview of cards with pills (your request after the first version); a flow's tab fits the band so the tabs never scroll away; colour by progress, not per phase (per-phase hues collapse in Noctalia); <code>Box</code> has no <code>flexBasis</code> (whole-percent <code>width</code> instead); the title and pills keep their width with <code>flexShrink={0}</code>.</li>
+  </ul>
+</section>
+
+<section id="look" class="space-y-4">
+  <h2 class="text-2xl font-bold">The look</h2>
+  <p class="text-sm opacity-80">Real Claude Code 2.1.299 with the prototype mod, your Noctalia theme, a narrow 99-column window. Everything is theme keys, so <code>/theme</code> recolours it. Rounded pill ends are Nerd Font glyphs (<code>U+E0B6</code>, <code>U+E0B4</code>).</p>
+  <div class="grid md:grid-cols-2 gap-4">
+    <figure class="space-y-1"><img src="flows-board-all.png" alt="Overview: cards per flow" class="rounded-lg border border-base-300"><figcaption class="text-sm opacity-70">All (<code>0</code>): one card per flow</figcaption></figure>
+    <figure class="space-y-1"><img src="flows-board-flow.png" alt="A flow's tab" class="rounded-lg border border-base-300"><figcaption class="text-sm opacity-70">A flow's tab (<code>1</code>)</figcaption></figure>
+  </div>
+  <div class="grid md:grid-cols-2 gap-4 text-sm">
+    <ul class="list-disc pl-5 space-y-1">
+      <li><b>Tab row:</b> lightning mark and "flows", then <code>All</code> and one tab per flow; the active tab is a filled <code>claude</code> pill, the rest dim text with a state mark (<code>●</code> in the state tone for flows that need you, <code>✓</code> done). A <code>warning</code> pill on the right counts flows that need you ("2 need you", just "2" below 110 columns).</li>
+      <li><b>Cards (All):</b> rounded border, in the state tone when the flow needs you, <code>inactive</code> otherwise; 3 columns from 120 columns, 2 from 78, else 1. Each card: name and a state pill; a phase rail <code>● ── ● ── ◉ ── ○</code> with the current phase named; a task bar with count and age; one line: the blocker, or the agent's task, or the request.</li>
+    </ul>
+    <ul class="list-disc pl-5 space-y-1">
+      <li><b>A flow's tab:</b> a hero card - name, state pill, mode pill, "started 1h ago"; the request; the phase stepper with durations next to the task bar; the blocker after a <code>!</code> or <code>?</code> pill. Under it TIMELINE (newest first, <code>◉</code> for the latest, 3 rows, <code>j</code>/<code>k</code> scroll) and DECISIONS (last 3, <code>◆</code>) side by side.</li>
+      <li><b>Colours by progress:</b> done <code>success</code>, current in the state tone (claude, warning, error), open <code>inactive</code>. State pills: working/delegated <code>claude</code>, waiting <code>warning</code>, blocked and not responding <code>error</code>, done <code>success</code>, ended <code>subtle</code>; text <code>inverseText</code>.</li>
+      <li><b>Legend</b> right-aligned under the board: <code>h ‹ l › j ↓ k ↑ · 0-9 jump · ctrl+x tab for keys</code>.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="overview" class="space-y-3">
+  <h2 class="text-2xl font-bold">2. Structure overview</h2>
+  <div class="legend text-sm">
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-success) 40%,transparent)"></i>new</span>
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-warning) 40%,transparent)"></i>modified</span>
+    <span><i class="sw" style="background:var(--color-base-300)"></i>existing</span>
+  </div>
+  <svg class="fig" viewBox="0 0 860 300" role="img" aria-label="Structure overview">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" stroke="none"/></marker>
+      <marker id="arrErr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--color-error)" stroke="none"/></marker>
+    </defs>
+    <g class="new" id="o-register"><title>flows/hooks/register.tsx</title><rect x="320" y="20" width="200" height="54" rx="6"/><text x="420" y="43" text-anchor="middle">hooks/register.tsx</text><text x="420" y="60" text-anchor="middle" class="small">poll, command, band drawing, keys</text></g>
+    <g class="new" id="o-board"><title>flows/hooks/board.ts</title><rect x="200" y="130" width="170" height="50" rx="6"/><text x="285" y="152" text-anchor="middle">hooks/board.ts</text><text x="285" y="168" text-anchor="middle" class="small">parse + band model (pure)</text></g>
+    <g class="new" id="o-nav"><title>flows/hooks/navigation.ts</title><rect x="470" y="130" width="170" height="50" rx="6"/><text x="555" y="152" text-anchor="middle">hooks/navigation.ts</text><text x="555" y="168" text-anchor="middle" class="small">tabs, cursor, timeline (pure)</text></g>
+    <g class="new" id="o-types"><title>flows/types/index.d.ts</title><rect x="330" y="230" width="180" height="44" rx="6"/><text x="420" y="256" text-anchor="middle">types/index.d.ts</text></g>
+    <g class="old" id="o-flow"><title>flow status --json via $.process.run</title><rect x="20" y="20" width="200" height="54" rx="6"/><text x="120" y="43" text-anchor="middle">flow status --json</text><text x="120" y="60" text-anchor="middle" class="small">~/projects/flow, contract v1</text></g>
+    <g class="old" id="o-band"><title>AbovePrompt band, $.ui.focus</title><rect x="640" y="20" width="200" height="54" rx="6"/><text x="740" y="43" text-anchor="middle">AbovePrompt band</text><text x="740" y="60" text-anchor="middle" class="small">Buttons, focus ring, next(e)</text></g>
+    <g class="old" id="o-browser"><title>open / xdg-open for o</title><rect x="660" y="140" width="180" height="40" rx="6"/><text x="750" y="165" text-anchor="middle">browser opener</text></g>
+    <g class="mod" id="o-market"><title>.claude-plugin/marketplace.json + root README</title><rect x="20" y="230" width="200" height="44" rx="6"/><text x="120" y="250" text-anchor="middle">marketplace.json</text><text x="120" y="265" text-anchor="middle" class="small">+ root README</text></g>
+    <path class="edge" d="M320,47 L222,47"/>
+    <path class="edge" d="M520,47 L638,47"/>
+    <path class="edge" d="M380,74 L300,128"/>
+    <path class="edge" d="M460,74 L540,128"/>
+    <path class="edge" d="M520,65 C600,100 650,130 690,138"/>
+    <path class="edge" d="M555,180 C520,200 470,215 450,228"/>
+    <path class="edge" d="M285,180 C320,200 370,215 390,228"/>
+  </svg>
+  <p class="text-sm opacity-80"><code>board.ts</code> and <code>navigation.ts</code> are pure and tested from plain boards; <code>register.tsx</code> alone runs processes, holds atoms and draws, as plan-progress splits <code>pane.ts</code> from <code>register.tsx</code>. Manifest, hooks.json, README and CHANGELOG are new too.</p>
+</section>
+
+<section id="units" class="space-y-6">
+  <h2 class="text-2xl font-bold">3. Units</h2>
+
+  <article class="card card-border bg-base-100" id="u-board">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">flows/hooks/board.ts</h3><span class="badge badge-success">new</span><span class="badge badge-ghost">pure</span></div>
+      <p class="text-sm"><b>Responsibility:</b> turns <code>flow status --json</code> output into the model the band draws.</p>
+      <p class="text-sm"><b>Collaborators:</b> types only. <code>shortDuration</code> mirrors <code>relativeAge</code> in <code>plan-progress/hooks/pane.ts:66</code> (copied: a mod cannot import another).</p>
+      <script type="text/x-code" data-name="flows/hooks/board.ts">import type { Board, FlowView, Navigation, Problem } from '../types'
+
+/** The flow status --json version this mod reads. */
+export const boardVersion = 1
+/** Flows that get a digit and a tab; the rest show as +n and are reached with l. */
+export const maxTabs = 9
+/** Timeline entries a flow's tab shows at once. */
+export const timelineRows = 3
+
+export type Tone = 'claude' | 'success' | 'warning' | 'error' | 'subtle' | 'inactive' | 'text'
+
+/** The board, or why there is none: unparsable output or another contract version. */
+export function parseBoard(stdout: string): Board | Problem
+
+/** Everything the band draws for the board and where the person is in it. */
+export function bandModel(board: Board, navigation: Navigation, columns: number): BandModel
+
+/** 3 cards per row from 120 columns, 2 from 78, else 1. */
+export function cardColumns(columns: number): number
+
+/** designing, implementing · agent, waiting for you, blocked, not responding, MR open, ended. */
+export function stateLabel(flow: FlowView): string
+
+/** claude while running, warning waiting, error blocked or silent, success done, subtle ended. */
+export function stateTone(flow: FlowView): Tone
+
+/** ● for flows that need you, ✓ done, – ended, null while running. */
+export function flowMark(flow: FlowView): string | null
+
+/** One step per phase: done success, current in the state tone, open inactive. */
+export function phaseSteps(flow: FlowView): Step[]
+
+/** 45s, 12m, 3h, 2d. */
+export function shortDuration(ms: number): string</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-nav">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">flows/hooks/navigation.ts</h3><span class="badge badge-success">new</span><span class="badge badge-ghost">pure</span></div>
+      <p class="text-sm"><b>Responsibility:</b> answers where a key press moves the person on the board.</p>
+      <script type="text/x-code" data-name="flows/hooks/navigation.ts">import type { Board, FlowView, Navigation } from '../types'
+
+/** All tab, cursor on the first row, newest timeline entries. */
+export const start: Navigation
+
+/** 0 is All, 1-9 the flow in that tab; a digit without a flow changes nothing. */
+export function jumpTo(board: Board, navigation: Navigation, digit: number): Navigation
+
+/** h / l: the previous or next tab, wrapping from the last flow to All. */
+export function stepTab(board: Board, navigation: Navigation, by: -1 | 1): Navigation
+
+/** j / k on All: the cursor one row down or up, clamped. */
+export function moveCursor(board: Board, navigation: Navigation, by: -1 | 1): Navigation
+
+/** j / k on a flow's tab: the timeline window one entry older or newer, clamped. */
+export function scrollTimeline(board: Board, navigation: Navigation, by: -1 | 1): Navigation
+
+/** g: the first row on All, the newest entries on a flow's tab. */
+export function toTop(navigation: Navigation): Navigation
+
+/** After a refresh: a cleared flow's tab falls back to All, cursor and window clamped. */
+export function reconcile(board: Board, navigation: Navigation): Navigation
+
+/** The flow on the open tab, or under the cursor on All. */
+export function currentFlow(board: Board, navigation: Navigation): FlowView | null</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-register">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">flows/hooks/register.tsx</h3><span class="badge badge-success">new</span><span class="badge badge-ghost">hooks + I/O + drawing</span></div>
+      <p class="text-sm"><b>Responsibility:</b> wires the poll, the command and the band to the pure modules and draws the model.</p>
+      <p class="text-sm"><b>Collaborators:</b> <code>board.ts</code>, <code>navigation.ts</code>; <code>$.process</code> (flow, the browser opener), <code>$.clock</code>, <code>$.store</code> (remembered visibility), <code>$.ui.focus</code>. Settings from <code>userConfig</code>: <code>flowPath</code>. Module variable <code>bandId</code> is the band's <code>requestId</code>, kept from the last drawing for <code>$.ui.focus</code>.</p>
+      <script type="text/x-code" data-name="flows/hooks/register.tsx">const commandName = 'flows'
+const pollIntervalMs = 2_000
+const statusTimeoutMs = 5_000
+const shownKey = 'isShown'                       // $.store, across sessions
+
+const settings = { flowPath: 'flow' }
+const emptyView: BandView = { board: null, problem: null }
+
+const view = atom({ plugin: 'flows', key: 'view' } as const, emptyView)          // BandView
+const navigation = atom({ plugin: 'flows', key: 'navigation' } as const, start)  // Navigation
+const isShown = atom({ plugin: 'flows', key: 'isShown' } as const, false)
+
+let bandId: string | null = null
+
+async function readBoard($: EngineInterface): Promise<BandView>            // runs flow status --json, never throws
+async function refresh($: EngineInterface): Promise<void>                  // readBoard, reconcile navigation, update atoms
+async function show($: EngineInterface, shown: boolean): Promise<void>     // atom + $.store, refresh when shown
+async function navigate($: EngineInterface, move: (board: Board, at: Navigation) => Navigation): Promise<void>
+async function focusCursor($: EngineInterface): Promise<void>              // $.ui.focus on the cursor row
+async function openMergeRequest($: EngineInterface): Promise<void>         // o: current flow's MR in the browser
+
+export const register: Register = (on, options) => {
+  on('session.start', ...)                                   // command, settings, remembered visibility, poll
+  on('command.run', { command: commandName }, ...)           // '' toggles, '<name>' shows that flow's tab
+  on('ui.render', { component: 'AbovePrompt' }, ...)         // draws the board above whatever is beneath
+}
+
+// inside the ui.render hook, closing over Box, Text and Button:
+// pill(text, tone), drawTabs(model), drawCards(model), drawDetail(model), drawLegend(), drawProblem(problem)</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-rest">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">flows/ manifest and docs; marketplace.json, root README</h3><span class="badge badge-success">new</span><span class="badge badge-warning">modified</span></div>
+      <p class="text-sm">New: <code>hooks/browser.ts</code> (a copy of <code>merge-status/hooks/browser.ts</code>: <code>detectPlatform</code>, <code>openUrlArgv</code>, with its tests), <code>.claude-plugin/plugin.json</code> (with <code>types</code> and <code>userConfig.flowPath</code>), <code>hooks/hooks.json</code>, <code>README.md</code> (requires <code>flow</code> and Claude Code 2.1.299+), <code>CHANGELOG.md</code>. Modified: <code>.claude-plugin/marketplace.json</code> gains <code>flows</code>; the root <code>README.md</code> lists it.</p>
+    </div>
+  </article>
+</section>
+
+<section id="data" class="space-y-4">
+  <h2 class="text-2xl font-bold">4. Data</h2>
+  <p class="text-sm"><b>Board</b> crosses <code>flow</code> -> stdout -> <code>parseBoard</code> (the core's <code>--json</code> contract v1, mirrored, read only). <b>BandView</b>, <b>Navigation</b> and the shown flag are atoms; only the shown flag is stored (<code>$.store</code>). <b>BandModel</b> crosses <code>board.ts</code> -> drawing and is never stored.</p>
+  <script type="text/x-code" data-name="flows/types/index.d.ts">// flow status --json, contract version 1 (~/projects/flow/src/view.rs)
+export type FlowState = 'working' | 'delegated' | 'waiting' | 'blocked' | 'not-responding' | 'done' | 'ended'
+export type Phase = 'design' | 'implement' | 'review' | 'merge-request'
+
+export interface FlowStep { phase: Phase; status: 'done' | 'current' | 'open'; durationMs: number | null }
+export interface FlowEntry { at: number; text: string; tone: 'neutral' | 'progress' | 'attention' | 'problem' | 'success' }
+
+export interface FlowView {
+  id: string
+  name: string
+  request: string
+  mode: 'guided' | 'auto'
+  phase: Phase | null
+  state: FlowState
+  blocker: string | null
+  delegate: string | null
+  tasks: { done: number; total: number } | null
+  review: { fixed: number; open: number } | null
+  mergeRequest: string | null
+  decisions: string[]
+  steps: FlowStep[]
+  timeline: FlowEntry[]
+  startedAt: number
+  changedAt: number
+}
+
+export interface Board { version: number; now: number; count: number; needsYou: number; flows: FlowView[] }
+
+// what the band keeps
+export type Problem =
+  | { kind: 'missing'; path: string }          // the flow binary is not there
+  | { kind: 'failed'; message: string }        // flow exited non-zero; its TOON error line
+  | { kind: 'unsupported'; version: number }   // another contract version
+
+export interface BandView { board: Board | null; problem: Problem | null }
+
+export interface Navigation {
+  tab: string | null    // flow id, null for All
+  cursor: number        // row on All
+  offset: number        // timeline entries skipped from the newest, on a flow's tab
+}
+
+declare module 'claude-code' {
+  interface PluginState {
+    flows: { view: BandView; navigation: Navigation; isShown: boolean }
+  }
+}</script>
+  <div class="codebox"></div>
+  <script type="text/x-code" data-name="flows/hooks/board.ts (model types, not stored)">export interface Step {
+  phase: Phase
+  label: string          // design, implement, review, MR
+  duration: string       // '9m', '' when never entered
+  tone: Tone
+  glyph: '●' | '◉' | '○' // done, current, open
+  isCurrent: boolean     // drawn bold
+}
+
+export interface Pill { text: string; tone: Tone }
+
+export interface TabModel { key: string; hotkey: string; label: string; mark: string | null; markTone: Tone; isActive: boolean }
+
+export interface CardModel {
+  key: string            // row-<flow id>, the focus ring's address
+  flowId: string
+  name: string
+  state: Pill
+  borderTone: Tone       // the state tone when the flow needs you, inactive otherwise
+  rail: Step[]
+  railLabel: string      // the current phase's name, 'starting' or 'done'
+  tasks: { done: number; total: number } | null
+  age: string            // since changedAt
+  line: { text: string; tone: Tone }   // blocker, agent task or request
+}
+
+export interface DetailModel {
+  name: string
+  state: Pill
+  mode: Pill
+  started: string        // 'started 1h ago'
+  request: string
+  borderTone: Tone
+  steps: Step[]
+  tasks: { done: number; total: number } | null
+  blocker: { badge: '!' | '?'; text: string; tone: Tone } | null
+  timeline: { glyph: '◉' | '○'; ago: string; text: string; tone: Tone }[]   // timelineRows
+  older: number
+  decisions: string[]    // the last timelineRows
+  mergeRequest: string | null
+}
+
+export interface BandModel {
+  tabs: TabModel[]       // All first, then up to maxTabs flows
+  moreFlows: number
+  needsYou: Pill | null  // '2 need you', or '2' when narrow
+  cards: CardModel[][] | null   // rows of cards on All
+  detail: DetailModel | null    // on a flow's tab
+}
+</script>
+  <div class="codebox"></div>
+</section>
+
+<section id="chains" class="space-y-10">
+  <h2 class="text-2xl font-bold">5. Call chains</h2>
+
+  <div class="space-y-3" id="chain-toggle">
+    <h3 class="text-lg font-semibold">5.1 <code>/flows</code> and <code>/flows shop-221</code></h3>
+    <ol class="steps">
+      <li>command.run { args: '' } -> register.show($, !isShown) -> update(isShown); $.store.set(shownKey, shown)</li>
+      <li>shown -> register.refresh($) -> answer 'Flows shown.'; hidden -> answer 'Flows hidden.'</li>
+      <li>command.run { args: 'shop-221' } -> show($, true) -> refresh($) -> navigate($, board =&gt; open tab of the flow named shop-221)</li>
+      <li class="e">no such flow -> answer 'No flow named shop-221.' (band shown on All)</li>
+      <li>session.start -> settings.flowPath = options.flowPath ?? 'flow'; isShown = $.store.get(shownKey) === true; register the command; clock.every(2 s, refresh while shown)</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-refresh">
+    <h3 class="text-lg font-semibold">5.2 Refresh every 2 s while shown</h3>
+    <svg class="fig" viewBox="0 0 860 230" role="img" aria-label="Refresh sequence">
+      <g class="lane"><rect x="20" y="10" width="140" height="30" rx="5"/><text x="90" y="30" text-anchor="middle">register.tsx</text></g>
+      <g class="lane"><rect x="230" y="10" width="140" height="30" rx="5"/><text x="300" y="30" text-anchor="middle">flow (process)</text></g>
+      <g class="lane"><rect x="440" y="10" width="140" height="30" rx="5"/><text x="510" y="30" text-anchor="middle">board.ts</text></g>
+      <g class="lane"><rect x="650" y="10" width="160" height="30" rx="5"/><text x="730" y="30" text-anchor="middle">navigation.ts</text></g>
+      <line class="life" x1="90" y1="40" x2="90" y2="225"/><line class="life" x1="300" y1="40" x2="300" y2="225"/><line class="life" x1="510" y1="40" x2="510" y2="225"/><line class="life" x1="730" y1="40" x2="730" y2="225"/>
+      <path class="edge" d="M90,65 L298,65"/><text x="195" y="60" text-anchor="middle">flow status --json</text>
+      <path class="err" d="M298,82 L92,82"/><text x="195" y="96" text-anchor="middle" class="errtext">ENOENT -> missing; exit != 0 -> failed</text>
+      <path class="edge" d="M90,125 L508,125"/><text x="300" y="120" text-anchor="middle">parseBoard(stdout)</text>
+      <path class="err" d="M508,140 L92,140"/><text x="300" y="153" text-anchor="middle" class="errtext">Problem: unsupported version</text>
+      <path class="edge" d="M90,180 L728,180"/><text x="410" y="175" text-anchor="middle">reconcile(board, navigation)</text>
+      <path class="edge" d="M90,205 L140,205 L140,218 L92,218"/><text x="148" y="214" class="small">update(view), update(navigation) -> band redraws</text>
+    </svg>
+    <ol class="steps">
+      <li>clock.every(2_000) -> isShown? register.refresh($) : nothing</li>
+      <li>refresh -> readBoard($) -> $.process.run([settings.flowPath, 'status', '--json'], { timeoutMs: 5_000 })</li>
+      <li class="e">throws ENOENT / not found -> { board: previous, problem: { kind: 'missing', path } }</li>
+      <li class="e">exitCode != 0 -> { problem: { kind: 'failed', message: first stdout line without 'error: ' } }</li>
+      <li>board.parseBoard(stdout): Board | Problem</li>
+      <li class="e">Problem (unparsable or version != 1) -> { board: null, problem }</li>
+      <li>navigation.reconcile(board, current): Navigation -> update($, view, ...) and update($, navigation, ...) -> the band's ui.render runs again</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-render">
+    <h3 class="text-lg font-semibold">5.3 Drawing the band</h3>
+    <svg class="fig" viewBox="0 0 860 210" role="img" aria-label="Render sequence">
+      <g class="lane"><rect x="20" y="10" width="140" height="30" rx="5"/><text x="90" y="30" text-anchor="middle">engine</text></g>
+      <g class="lane"><rect x="250" y="10" width="160" height="30" rx="5"/><text x="330" y="30" text-anchor="middle">register.tsx</text></g>
+      <g class="lane"><rect x="500" y="10" width="140" height="30" rx="5"/><text x="570" y="30" text-anchor="middle">board.ts</text></g>
+      <g class="lane"><rect x="700" y="10" width="140" height="30" rx="5"/><text x="770" y="30" text-anchor="middle">hooks beneath</text></g>
+      <line class="life" x1="90" y1="40" x2="90" y2="205"/><line class="life" x1="330" y1="40" x2="330" y2="205"/><line class="life" x1="570" y1="40" x2="570" y2="205"/><line class="life" x1="770" y1="40" x2="770" y2="205"/>
+      <path class="edge" d="M90,65 L328,65"/><text x="210" y="60" text-anchor="middle">ui.render AbovePrompt</text>
+      <path class="err" d="M328,82 L92,82"/><text x="210" y="96" text-anchor="middle" class="errtext">hidden or survey -> next(e)</text>
+      <path class="edge" d="M330,120 L568,120"/><text x="450" y="115" text-anchor="middle">bandModel(board, navigation)</text>
+      <path class="edge" d="M330,150 L768,150"/><text x="550" y="145" text-anchor="middle">next(e): what is beneath (skill-usage)</text>
+      <path class="edge" d="M330,185 L92,185"/><text x="210" y="180" text-anchor="middle">board tree, beneath stacked under it</text>
+    </svg>
+    <ol class="steps">
+      <li>ui.render { component: 'AbovePrompt' } -> !isShown or e.props.hasSurvey -> return next(e)</li>
+      <li>bandId = e.requestId; read view, navigation</li>
+      <li>view.board null -> drawProblem(view.problem): missing -> 'flow is not installed - cargo install --path ~/projects/flow, or set flowPath'; failed -> its message; unsupported -> 'flow speaks contract v2; update the flows mod'</li>
+      <li>board.bandModel(board, navigation, e.props.bodyColumns): BandModel -> drawTabs + (drawCards | drawDetail) + drawLegend</li>
+      <li>beneath = await next(e) -> stacked under the board when it is not empty (Q3)</li>
+      <li class="e">any throw -> the hook's .catch answers next(e): the band shows what was beneath, never a broken tree</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-keys">
+    <h3 class="text-lg font-semibold">5.4 Keys</h3>
+    <ol class="steps">
+      <li>digit n (empty prompt, or band focused) -> tab Button (hotkey n) onPress -> navigate($, (b, at) =&gt; jumpTo(b, at, n))</li>
+      <li>h / l (band focused) -> legend Button onPress -> navigate($, (b, at) =&gt; stepTab(b, at, -1 | 1))</li>
+      <li>j / k on All -> navigate(moveCursor) -> focusCursor($) -> $.ui.focus({ requestId: bandId, key: 'row-' + flow.id })</li>
+      <li class="e">$.ui.focus { deny } (band lost the keyboard) -> ignored; the cursor still moved</li>
+      <li>j / k on a flow's tab -> navigate(scrollTimeline)</li>
+      <li>Enter on a focused row -> row Button onPress -> navigate(at =&gt; ({ ...at, tab: flow.id, offset: 0 }))</li>
+      <li>g -> navigate(toTop) (+ focusCursor on All)</li>
+      <li>o -> openMergeRequest($) -> currentFlow(board, navigation)?.mergeRequest -> $.process.run(openUrlArgv(platform, url))</li>
+      <li class="e">no MR -> $.ui.toast('shop-221 has no merge request yet'); opener fails -> toast with the URL</li>
+    </ol>
+  </div>
+</section>
+
+<section id="conventions" class="space-y-3">
+  <h2 class="text-2xl font-bold">6. Conventions followed</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li>Pure model module + drawing in <code>register.tsx</code>, atoms for what the drawing reads: <code>plan-progress/hooks/pane.ts:105</code>, <code>register.tsx:31-33</code>.</li>
+    <li>2 s poll from <code>session.start</code>: <code>plan-progress/hooks/register.tsx:24,209</code>; toggle command: <code>register.tsx:225</code>.</li>
+    <li>Band drawing in <code>ui.render</code> on <code>AbovePrompt</code>, passing with <code>next(e)</code> when hidden: <code>skill-usage/hooks/register.tsx:113</code>.</li>
+    <li>Processes through one helper with a timeout: <code>merge-status/hooks/register.tsx:41-42</code>; URL opener: <code>merge-status/hooks/browser.ts:12</code> (copied).</li>
+    <li><code>userConfig</code> in <code>plugin.json</code>, read from <code>options</code> in <code>register</code>: <code>merge-status/.claude-plugin/plugin.json</code>, <code>register.tsx:269</code>.</li>
+    <li>Theme keys only, <code>paddingX={1}</code> root, every hook ends in <code>.catch(($, e, next) =&gt; next(e))</code>: plan-progress.</li>
+    <li><b>Deviation:</b> first mod with <code>Button</code>s and <code>$.ui.focus</code>; and it needs Claude Code 2.1.299+ (<code>weight</code>, <code>underline</code>), stated in the README.</li>
+  </ul>
+</section>
+
+<section id="tests" class="space-y-3">
+  <h2 class="text-2xl font-bold">7. Test seams</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li><code>board.ts</code> - unit from fixture boards (copied from real <code>flow status --json</code>): parse and version check, labels, tones, marks, segments per state, cards per width (3 / 2 / 1 columns), card line (blocker, agent task or request), pills and rail per state, detail (last 3 decisions, 3-entry timeline window with older count), <code>+n</code> past 9 flows.</li>
+    <li><code>navigation.ts</code> - unit: digits, wrap of h/l, clamps of j/k, g, reconcile after a flow vanishes.</li>
+    <li><code>register.test.tsx</code> - engine tests with a fake <code>flow</code> process (<code>process.run</code> hook) and <code>mock.store</code>: toggle and remembered visibility, refresh, mounted band text for both tabs, digit and letter presses, problems (missing, failed, v2), stacking with a band hook beneath, hidden during a survey.</li>
+    <li>End to end: the real <code>flow</code> with the demo <code>FLOW_HOME</code> in a private tmux, keys pressed, screenshots of both tabs; plus <code>flow report</code> into a flow while the band is open.</li>
+  </ul>
+</section>
+
+<section id="assumptions" class="space-y-3">
+  <h2 class="text-2xl font-bold">8. Assumptions</h2>
+  <ol class="list-decimal pl-5 text-sm space-y-1.5">
+    <li>Polls <code>flow status --json</code> every 2 s only while the band is shown; ages come from the board's <code>now</code>.</li>
+    <li>The binary is <code>flowPath</code> (setting, default <code>flow</code>); a missing binary shows an install hint instead of the board.</li>
+    <li>Nine flows get a digit and a tab; more show as <code>+n</code> and are reached with <code>l</code>.</li>
+    <li>A flow's tab shows the last three decisions and three timeline entries, scrolled with <code>j</code>/<code>k</code>.</li>
+    <li>Pills, cards and colours as in "The look"; pill ends need a Nerd Font (yours has one; a setting could switch to square ends later).</li>
+    <li><code>o</code> opens the flow's merge request in the browser; <code>g</code> goes to the top.</li>
+    <li>The board yields to surveys; when the selected flow is cleared, its tab falls back to <code>All</code>.</li>
+    <li>Requires Claude Code 2.1.299+ and the <code>flow</code> binary; tested on the current version only.</li>
+  </ol>
+</section>
+
+<section id="questions" class="space-y-3">
+  <h2 class="text-2xl font-bold">9. Decided in review</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li><b>Command:</b> mod <code>flows</code>; <code>/flows</code> toggles the band, <code>/flows &lt;name&gt;</code> opens that flow's tab.</li>
+    <li><b>Visibility:</b> off until <code>/flows</code>, remembered across sessions (<code>$.store</code>).</li>
+    <li><b>Sharing the band:</b> the board on top, whatever is beneath (skill-usage) stacked under it.</li>
+    <li><b>Keys:</b> <code>0-9</code> jump; with the band focused <code>h/l</code> tabs, <code>j/k</code> cards or timeline, Enter opens, <code>g</code> top, <code>o</code> merge request.</li>
+    <li><b>Look:</b> cards and pills as in "The look", built and checked in real Claude Code.</li>
+  </ul>
+</section>
+
+</main>
+
+<script type="module">
+  import { File } from "https://esm.sh/@pierre/diffs@1.2.10?bundle";
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const options = { theme: { light: "github-light", dark: "github-dark" }, themeType: dark ? "dark" : "light", overflow: "wrap" };
+  for (const src of document.querySelectorAll('script[type="text/x-code"]')) {
+    const box = src.nextElementSibling;
+    new File(options).render({ containerWrapper: box, file: { name: src.dataset.name, contents: src.textContent.replace(/^\n/, "") } });
+  }
+</script>
+</body>
+</html>

@@ -21,7 +21,7 @@ ship-feature orchestrator skill (planned there, not written yet; see its plan pa
 | # | Piece | Where | Status |
 | --- | --- | --- | --- |
 | 1+2 | Event format + `flow` core (new, report, status, clear, home) | this repo | **done**, plan `.claude/plans/plan-flow-core.md` |
-| 3 | Board viewer mod: pane showing all flows with progress | `~/projects/claude-code-mods` (new mod, working name `flows`) | not designed |
+| 3 | Board viewer mod: tabbed board above the prompt | `~/projects/claude-code-mods` (new mod `flows`) | **designed**, plan `~/projects/claude-code-mods/.claude/plans/plan-flows-board.md` (local, gitignored there); design page `docs/design/board-implementation.html` |
 | 4 | Adapter mod: observes a Claude Code worker and calls `flow report` | same mod as 3 | not designed |
 | 5 | `flow start`: worktree + worker session in a tmux window | this repo | not designed |
 | 6 | Auto mode + optional report line in the skills, `flow setup` hook | `~/projects/agent-skills` (+ this repo for setup) | not designed |
@@ -147,7 +147,7 @@ quoting as the design expects.
 
 ## Notes for the next pieces
 
-**3 - board viewer (mod).** Start from plan-progress in `~/projects/claude-code-mods/plan-progress`:
+**3 - board viewer (mod).** Designed 2026-10-14: a band above the prompt, not a pane - tab row (`All` + one tab per flow), cards with state pills on All, a hero card with timeline and decisions on a flow's tab, digits plus vim keys (h/l tabs, j/k, Enter, g, o). Off until `/flows`, remembered; stacks above skill-usage. Prototype findings: per-phase colours collapse in some themes (colour by progress instead), `Box` has no `flexBasis`, pill ends need a Nerd Font. The notes below were the pre-design starting point. Original notes: Start from plan-progress in `~/projects/claude-code-mods/plan-progress`:
 store + 2 s poll + pure model (`hooks/pane.ts`) + drawing (`hooks/register.tsx`), dock at a
 third of the terminal (`dockColumns`, `terminalColumnsBesideDock`). The board runs
 `flow status --json` every 2 s while open (`$.process.run`), shows a clear "install flow"
