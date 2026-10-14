@@ -276,9 +276,12 @@ impl Sidebar<'_> {
             State::Done => Span::styled("done", theme.state.done),
             State::Ended => Span::styled("ended", theme.state.ended),
             State::NotResponding => Span::styled("not responding", theme.state.blocked),
-            _ => match flow.phase {
-                Some(phase) => Span::styled(phase.name(), theme.state(flow.state)),
-                None => Span::styled("starting", theme.ui.faint),
+            _ => match (flow.phase, flow.state) {
+                (Some(phase), state) => Span::styled(phase.name(), theme.state(state)),
+                (None, State::Working) => Span::styled("starting", theme.ui.faint),
+                (None, State::Waiting) => Span::styled("waiting", theme.state.waiting),
+                (None, State::Delegated) => Span::styled("delegated", theme.state.working),
+                (None, _) => Span::styled("blocked", theme.state.blocked),
             },
         }
     }
@@ -298,7 +301,10 @@ impl Sidebar<'_> {
         if let Some(delegate) = &flow.delegate {
             return Some((format!("agent: {delegate}"), theme.ui.faint));
         }
+        // The first entry only says the flow started, which the label already does.
         flow.timeline
+            .iter()
+            .skip(1)
             .last()
             .map(|entry| (entry.text.clone(), theme.ui.faint))
     }

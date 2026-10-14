@@ -848,4 +848,34 @@ mod tests {
             .count();
         assert_eq!(redraws, 2, "only for the ages, once a second");
     }
+
+    #[test]
+    fn names_the_state_of_a_flow_that_has_no_phase_yet() {
+        use crate::event::Mode::Auto;
+        let mut app = App::new(FLEET);
+        let flows = vec![
+            worker("fresh", Auto, 1, vec![]),
+            worker(
+                "asks",
+                Auto,
+                2,
+                vec![EventKind::Waiting {
+                    question: "ready".into(),
+                }],
+            ),
+        ];
+        app.on_server(ServerMsg::Board(fold::board(flows, NOW)));
+        app.on_tick(NOW);
+
+        let terminal = render_at(&app, FLEET);
+
+        assert_eq!(side(&terminal, 6).trim_end(), "     ○─○─○─○ waiting");
+        assert_eq!(side(&terminal, 7).trim_end(), "     ready");
+        assert_eq!(side(&terminal, 11).trim_end(), "     ○─○─○─○ starting");
+        assert_eq!(
+            side(&terminal, 12).trim_end(),
+            "",
+            "no note that it started"
+        );
+    }
 }
