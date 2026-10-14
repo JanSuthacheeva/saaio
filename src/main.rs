@@ -5,6 +5,8 @@ mod launch;
 mod output;
 #[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 mod proto;
+#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
+mod server;
 mod store;
 mod view;
 mod workspace;

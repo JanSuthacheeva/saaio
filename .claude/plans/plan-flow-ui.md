@@ -226,10 +226,13 @@ impl Host {
 impl Terminal {
     pub fn new(size: Size, history: usize) -> Terminal;
     pub fn feed(&mut self, bytes: &[u8]);
+    /// Ends a synchronized update the program left open past its timeout, so its screen shows.
+    pub fn expire_sync(&mut self);
     /// Answers the program asked for (device attributes, cursor position), drained.
     pub fn replies(&mut self) -> Vec<u8>;
     pub fn resize(&mut self, size: Size);
-    /// Screen rows changed since the last call.
+    /// Screen rows changed since the last call; the cursor's row is always among them,
+    /// so the server asks only after new output.
     pub fn damaged(&mut self) -> Vec<u16>;
     pub fn row(&self, row: u16, history: u32) -> Vec<Cell>;
     pub fn cursor(&self) -> Option<(u16, u16)>;
@@ -465,7 +468,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 ### Milestone 1: one pane through the server
 
 - [x] Add proto.rs (all message types, write_msg, read_msg) and derive Deserialize on view.rs types, with tests for round trips (incl. Board), split reads, oversize, garbage and clean EOF
-- [ ] Emulator spike: run a real `claude` session through vt100 and alacritty_terminal behind Terminal, compare fidelity (redraws, wide chars, colors, DA/DSR replies, scrollback, resize) and speed; record the result in the plan and keep the winner
+- [x] Emulator spike: run a real `claude` session through vt100 and alacritty_terminal behind Terminal, compare fidelity (redraws, wide chars, colors, DA/DSR replies, scrollback, resize) and speed; record the result in the plan and keep the winner
 - [ ] Add server/terminal.rs Terminal on the chosen crate with golden tests for feed, replies, damaged, row, cursor, modes and history
 - [ ] Add launch::PaneSpec, LaunchEnv, pane_env and the empty-argument rule in agent_argv, with tests
 - [ ] Add server/host.rs Host (open, fail, feed, write, resize, exited, close, frame, panes) with PTY tests on real `sh`
