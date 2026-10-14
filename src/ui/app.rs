@@ -5,6 +5,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
 
 use crate::proto::{ClientMsg, Modes, PaneInfo, PaneKey, PaneStatus, ServerMsg, Size};
+use crate::ui::board::{self, BoardState, BoardView};
 use crate::ui::input::{Command, Key, Routed};
 use crate::ui::layout::{self, Areas, Chrome};
 use crate::ui::peek::PeekLine;
@@ -19,6 +20,7 @@ const TICKS_PER_AGE: u32 = 10;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum View {
     Panes,
+    Board(BoardState),
     ConfirmStop,
 }
 
@@ -44,6 +46,8 @@ pub struct App {
     spin: usize,
     ticks: u32,
     home: Option<String>,
+    /// The local time zone's offset from UTC, for clock times.
+    offset_secs: i64,
     /// Where the master runs, as shown: ~/projects/shop · main.
     master: Option<String>,
 }
@@ -63,6 +67,7 @@ impl App {
             spin: 0,
             ticks: 0,
             home: None,
+            offset_secs: board::local_offset_secs(),
             master: None,
         }
     }
@@ -176,6 +181,26 @@ impl App {
     }
 
     pub fn draw(&self, frame: &mut TuiFrame, theme: &Theme, peek: &[PeekLine]) {
+        if let View::Board(state) = self.view {
+            let back = match &self.focus {
+                PaneKey::Master => "master".to_string(),
+                PaneKey::Flow(id) => self
+                    .workers()
+                    .into_iter()
+                    .find(|flow| &flow.id == id)
+                    .map_or(id.clone(), |flow| flow.name.clone()),
+            };
+            frame.render_widget(
+                BoardView {
+                    sidebar: self.sidebar(theme, &[]),
+                    state,
+                    back: &back,
+                    offset_secs: self.offset_secs,
+                },
+                frame.area(),
+            );
+            return;
+        }
         let areas = self.areas();
         frame.render_widget(self.border(theme), areas.frame);
         frame.render_widget(&self.screen, areas.pane);
@@ -193,6 +218,7 @@ impl App {
         }
         match self.view {
             View::ConfirmStop => draw_confirm_stop(frame, areas.pane, theme),
+            View::Board(_) => {}
             View::Panes => {
                 if let Some((col, row)) = self.screen.cursor
                     && self
@@ -226,6 +252,18 @@ impl App {
                 Some(id) => self.focus(PaneKey::Flow(id)),
                 None => vec![],
             },
+            Command::Board => {
+                let selected = match &self.focus {
+                    PaneKey::Master => 0,
+                    PaneKey::Flow(id) => self
+                        .workers()
+                        .iter()
+                        .position(|flow| &flow.id == id)
+                        .map_or(0, |at| at + 1),
+                };
+                self.view = View::Board(BoardState { selected });
+                vec![]
+            }
             Command::Focus(0) => self.focus(PaneKey::Master),
             Command::Focus(digit) => {
                 let Some(flow) = self.workers().get(digit as usize - 1).copied() else {
@@ -238,18 +276,70 @@ impl App {
     }
 
     fn on_keys(&mut self, keys: Vec<Key>) -> Vec<Effect> {
-        let Some(key) = keys.into_iter().next() else {
-            return vec![];
-        };
+        let mut effects = Vec::new();
+        for key in keys {
+            if !self.is_modal() {
+                break;
+            }
+            effects.extend(self.on_key(key));
+        }
+        effects
+    }
+
+    fn on_key(&mut self, key: Key) -> Vec<Effect> {
+        if let View::Board(state) = self.view {
+            return self.on_board_key(state, key);
+        }
         match self.view {
             View::ConfirmStop if key == Key::Char('y') => vec![
                 Effect::Send(ClientMsg::StopServer),
                 Effect::Quit("stopped the flow server and every session in it".to_string()),
             ],
-            View::ConfirmStop | View::Panes => {
+            View::ConfirmStop | View::Panes | View::Board(_) => {
                 self.view = View::Panes;
                 vec![]
             }
+        }
+    }
+
+    fn on_board_key(&mut self, state: BoardState, key: Key) -> Vec<Effect> {
+        let cards = self.workers().len() + 1;
+        let step = match key {
+            Key::Char(c) => BoardState::step(c),
+            Key::Left => Some(-1),
+            Key::Right => Some(1),
+            Key::Down => BoardState::step('j'),
+            Key::Up => BoardState::step('k'),
+            _ => None,
+        };
+        if let Some(step) = step {
+            self.view = View::Board(state.moved(step, cards));
+            return vec![];
+        }
+        match key {
+            Key::Char(digit @ '0'..='9') => {
+                let selected = digit as usize - '0' as usize;
+                if selected < cards {
+                    self.view = View::Board(BoardState { selected });
+                }
+                vec![]
+            }
+            Key::Enter => {
+                self.view = View::Panes;
+                let key = match state.selected.checked_sub(1) {
+                    None => PaneKey::Master,
+                    Some(at) => match self.workers().get(at) {
+                        Some(flow) => PaneKey::Flow(flow.id.clone()),
+                        None => return vec![],
+                    },
+                };
+                self.focus(key)
+            }
+            Key::Esc | Key::Char('q') | Key::Char('o') => {
+                self.view = View::Panes;
+                vec![]
+            }
+            _ => vec![],
         }
     }
 
@@ -1120,5 +1210,82 @@ mod tests {
         assert!(row(&sidebar, 0).starts_with("╭ ◎ master  ~/projects/shop · main ─"));
         assert_eq!(side(&sidebar, 3).trim_end(), "     ~/projects/shop · main");
         assert_eq!(side(&sidebar, 5).trim_end(), " NEEDS YOU");
+    }
+
+    fn board_app() -> App {
+        let mut app = with_fleet().with_home(Some("/Users/jan".into()));
+        app.offset_secs = 0;
+        app.on_server(ServerMsg::Master {
+            cwd: "/Users/jan/projects/shop".into(),
+            branch: Some("main".into()),
+        });
+        app
+    }
+
+    #[test]
+    fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
+        let mut app = board_app();
+        app.on_input(Routed::Command(Command::Focus(2)));
+
+        app.on_input(Routed::Command(Command::Board));
+        let terminal = render_at(&app, FLEET);
+
+        assert!(app.is_modal());
+        assert!(row(&terminal, 0).starts_with(" ≋ flow board "));
+        assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
+        assert!(row(&terminal, 3).contains("│ 0 ◎ master                              you  │"));
+        assert!(row(&terminal, 3).contains("│ 1 ✖ shop-221                        blocked  │"));
+        assert!(row(&terminal, 3).contains("│ 2 ◆ shop-230                waiting for you  │"));
+        assert!(row(&terminal, 4).contains("│   ~/projects/shop · main"));
+        assert!(
+            row(&terminal, 5).contains("│   ━━━━━━━━━━━━───────────────  4/9   29m ago │"),
+            "{}",
+            row(&terminal, 5)
+        );
+        assert!(row(&terminal, 10).contains("│ 3 ⠙ export-csv            reviewing · agent  │"));
+        assert!(
+            row(&terminal, 16)
+                .starts_with(" 2 shop-230  shop-230 · guided · flow/shop-230 · slot 1"),
+            "{}",
+            row(&terminal, 16)
+        );
+        assert!(
+            row(&terminal, 43)
+                .starts_with(" 0-9 select   h j k l move   enter jump in   esc back to shop-230")
+        );
+        let buffer = terminal.backend().buffer();
+        let accent = Theme::builtin().ui.accent.fg.unwrap();
+        assert_eq!(buffer[(101, 2)].fg, accent, "the selected card is outlined");
+        assert_eq!(
+            buffer[(52, 2)].fg,
+            Theme::builtin().state.blocked.fg.unwrap()
+        );
+    }
+
+    #[test]
+    fn moves_over_the_board_and_jumps_into_a_card() {
+        let mut app = board_app();
+        app.on_input(Routed::Command(Command::Board));
+
+        app.on_input(Routed::View(vec![Key::Char('l'), Key::Char('j')]));
+        assert_eq!(app.view, View::Board(BoardState { selected: 4 }));
+        app.on_input(Routed::View(vec![Key::Char('2')]));
+        let terminal = render_at(&app, FLEET);
+        assert!(
+            row(&terminal, 19).contains("16:09  ● started"),
+            "{}",
+            row(&terminal, 19)
+        );
+
+        assert_eq!(
+            app.on_input(Routed::View(vec![Key::Enter])),
+            vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
+                "shop-230".into()
+            )))]
+        );
+        assert_eq!(app.view, View::Panes);
+        app.on_input(Routed::Command(Command::Board));
+        assert_eq!(app.on_input(Routed::View(vec![Key::Esc])), vec![]);
+        assert!(!app.is_modal());
     }
 }

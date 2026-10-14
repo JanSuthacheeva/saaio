@@ -363,7 +363,10 @@ impl Sidebar<'_> {
     /// The pane a click on this row focuses.
     pub fn key_at(&self, row: u16, height: u16) -> Option<PaneKey>;
 }
-pub struct BoardView<'a> { pub board: &'a Board, pub state: &'a BoardState, pub theme: &'a Theme }
+pub struct BoardState { pub selected: usize }   // 0 master, n the nth worker; h j k l move, digits pick
+pub struct BoardView<'a> { pub sidebar: Sidebar<'a>, pub state: BoardState, pub back: &'a str, pub offset_secs: i64 }
+// full screen: header with counts, a 3-column grid of cards (pill, steps, task bar, age, note), the selected
+// flow's request / mode / branch / slot / age, its timeline (local HH:MM) beside its decisions and steps
 pub struct Rail<'a> { pub board: &'a Board, pub focus: &'a PaneKey, pub theme: &'a Theme }
 
 // newflow.rs

@@ -1,4 +1,5 @@
 pub mod app;
+pub mod board;
 pub mod input;
 pub mod layout;
 pub mod outer;

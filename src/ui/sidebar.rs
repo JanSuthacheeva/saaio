@@ -457,6 +457,8 @@ impl Sidebar<'_> {
             ])),
             plain(Line::from(vec![
                 Span::raw("         "),
+                key("o"),
+                hint(" board  "),
                 key("d"),
                 hint(" detach  "),
                 key("Q"),
@@ -487,7 +489,7 @@ fn plain(line: Line<'static>) -> Row {
 }
 
 /// `left` and `right` on one line of `width`, the left clipped when both do not fit.
-fn split(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: usize) -> Line<'static> {
+pub fn split(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: usize) -> Line<'static> {
     let right_width: usize = right.iter().map(Span::width).sum();
     let room = width.saturating_sub(right_width);
     let mut spans = Vec::new();
@@ -510,7 +512,7 @@ fn split(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: usize) -> L
 }
 
 /// Words of `text` on rows of at most `width` columns; a word longer than a row is clipped.
-fn wrap(text: &str, width: usize) -> Vec<String> {
+pub fn wrap(text: &str, width: usize) -> Vec<String> {
     let mut rows = Vec::new();
     for paragraph in text.lines().filter(|line| !line.trim().is_empty()) {
         let mut row = String::new();
@@ -537,7 +539,7 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
 }
 
 /// The text cut to `width` columns, ending in … when it was longer.
-fn clip(text: &str, width: usize) -> String {
+pub fn clip(text: &str, width: usize) -> String {
     if Span::raw(text).width() <= width {
         return text.to_string();
     }
