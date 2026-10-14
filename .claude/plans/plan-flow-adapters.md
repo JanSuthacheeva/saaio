@@ -127,7 +127,7 @@ Every event with `agent_id` (a subagent's) means nothing. Otherwise:
 - [x] Add fold::changes and output::Document::Silent with tests
 - [x] Add the hidden `flow hook <adapter>` command (main::hook) with tests/cli.rs cases: appends, silent, exit 0 without FLOW_ID, with garbage, for an unknown flow
 - [x] LaunchEnv.flow_exe; worker_spec inserts the adapter's wiring, fresh and resumed; reconcile fails an unknown adapter; tests
-- [ ] Docs: README (adapters, [phases], adapter key), CLAUDE.md module map, HANDOVER (piece 4 replaced)
+- [x] Docs: README (adapters, [phases], adapter key), CLAUDE.md module map, HANDOVER (piece 4 replaced)
 - [x] End-to-end check: a real Claude worker in flow ui with the flows mod's reporting off shows phase, delegated, the question, a permission wait and ended
-- [ ] Remove the "report to flow" blocks from the skills in ~/projects/agent-skills (design-code, implement-plan, review-changes, write-merge-request, ship-feature)
-- [ ] Remove the flows mod from ~/projects/claude-code-mods and uninstall it from Claude Code
+- [x] Remove the "report to flow" blocks from the skills in ~/projects/agent-skills (design-code, implement-plan, review-changes, write-merge-request, ship-feature)
+- [x] Remove the flows mod from ~/projects/claude-code-mods and uninstall it from Claude Code
