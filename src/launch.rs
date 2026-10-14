@@ -125,12 +125,13 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>> {
     )
 }
 
-/// The agent's command the first time, its resume command once window is HOSTED;
+/// The agent's command the first time, its resume command once it ran somewhere (window set:
+/// HOSTED, or a tmux window from before flow ui), since its session id is taken from then on;
 /// None when the flow has no workspace, or must resume and the agent has no resume template.
 #[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec> {
     let space = flow.workspace.as_ref()?;
-    let argv = if space.window.as_deref() == Some(HOSTED) {
+    let argv = if space.window.is_some() {
         resume_argv(agent, &flow.id, &flow.name)?
     } else {
         agent_argv(agent, &flow.id, &flow.name, &flow.request)
@@ -547,13 +548,15 @@ mod tests {
                 .contains(&("FLOW_ID".to_string(), "7f3c".to_string()))
         );
 
-        let old_tmux = worker_spec(&worker(Some("@12")), claude, &env).unwrap();
-        assert_eq!(old_tmux.argv, fresh.argv, "a tmux window opens fresh once");
-
         let resumed = worker_spec(&worker(Some(HOSTED)), claude, &env).unwrap();
         assert_eq!(
             resumed.argv,
             strings(&["claude", "-n", "shop-217", "--resume", "7f3c"])
+        );
+        let old_tmux = worker_spec(&worker(Some("@12")), claude, &env).unwrap();
+        assert_eq!(
+            old_tmux.argv, resumed.argv,
+            "a tmux worker already took its id"
         );
     }
 

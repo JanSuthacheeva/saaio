@@ -4,7 +4,7 @@ pub mod reconcile;
 pub mod terminal;
 pub mod watch;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::ErrorKind;
 use std::os::unix::fs::PermissionsExt;
@@ -17,11 +17,16 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 
 use crate::config::Config;
-use crate::launch::LaunchEnv;
+use crate::event::{Event as LogEvent, EventKind};
+use crate::fold;
+use crate::launch::{self, HOSTED, LaunchEnv, PaneSpec};
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, PaneStatus, Role, ServerMsg, Size};
 use crate::store::Store;
+use crate::view::{Board, FlowView};
 use host::{Host, HostEvent};
 use master::MasterRecord;
+use reconcile::{Wanted, reconcile};
+use watch::StoreWatch;
 
 /// The shortest time between two frames of the focused pane (60 a second).
 const FRAME_EVERY: Duration = Duration::from_millis(16);
@@ -32,6 +37,8 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(2);
 /// A resumed pane that fails within this time is started fresh instead: its agent never saved
 /// the session (Claude Code saves one only after the first message).
 const RESUME_GRACE: Duration = Duration::from_secs(5);
+/// How often the server looks at the store for new, changed and removed flows.
+const WATCH_EVERY: Duration = Duration::from_millis(500);
 /// The size panes start with before a UI says how big it is.
 const START_SIZE: Size = Size {
     cols: 120,
@@ -58,6 +65,13 @@ struct Conn {
 }
 
 struct Server {
+    store: Store,
+    clock: fn() -> u64,
+    watch: StoreWatch,
+    board: Board,
+    sent_board: Option<Board>,
+    known: HashSet<String>,
+    refreshed_at: Instant,
     config: Config,
     env: LaunchEnv,
     record: MasterRecord,
@@ -77,10 +91,10 @@ struct Server {
 /// Binds the socket (removing a stale one), opens the master, then loops until StopServer.
 pub fn run(
     paths: &ServerPaths,
-    _store: Store,
+    store: Store,
     config: Config,
     env: LaunchEnv,
-    _clock: fn() -> u64,
+    clock: fn() -> u64,
 ) -> Result<()> {
     let listener = bind(&paths.socket)?;
     let cwd = std::env::current_dir().context("could not read the current directory")?;
@@ -88,6 +102,13 @@ pub fn run(
     let (events, inbox) = mpsc::channel();
     let host = Host::new(START_SIZE, forward_host_events(events.clone()));
     let mut server = Server {
+        store,
+        clock,
+        watch: StoreWatch::default(),
+        board: fold::board(Vec::new(), clock()),
+        sent_board: None,
+        known: HashSet::new(),
+        refreshed_at: Instant::now(),
         config,
         env,
         record,
@@ -104,6 +125,7 @@ pub fn run(
         events: events.clone(),
     };
     server.open_master(fresh);
+    server.refresh();
     accept_in_background(listener, events);
 
     let result = server.serve(&inbox);
@@ -114,12 +136,13 @@ pub fn run(
 impl Server {
     fn serve(&mut self, inbox: &Receiver<Event>) -> Result<()> {
         loop {
-            let wait = FRAME_EVERY.saturating_sub(self.flushed_at.elapsed());
-            match inbox.recv_timeout(if self.dirty {
-                wait
+            let watch = WATCH_EVERY.saturating_sub(self.refreshed_at.elapsed());
+            let wait = if self.dirty {
+                watch.min(FRAME_EVERY.saturating_sub(self.flushed_at.elapsed()))
             } else {
-                Duration::from_secs(1)
-            }) {
+                watch
+            };
+            match inbox.recv_timeout(wait) {
                 Ok(event) => {
                     if !self.handle(event)? {
                         return self.stop(inbox);
@@ -127,6 +150,9 @@ impl Server {
                 }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => bail!("the server lost its event channel"),
+            }
+            if self.refreshed_at.elapsed() >= WATCH_EVERY {
+                self.refresh();
             }
             self.flush();
         }
@@ -149,9 +175,8 @@ impl Server {
                 let resumed_at = self.resumed.remove(&key);
                 let resume_failed =
                     code != Some(0) && resumed_at.is_some_and(|at| at.elapsed() < RESUME_GRACE);
-                if resume_failed && key == PaneKey::Master {
-                    eprintln!("resuming the master failed, starting it fresh");
-                    self.open_master(true);
+                if resume_failed {
+                    self.open_fresh(&key);
                 }
                 self.send_panes();
                 if key == self.focus {
@@ -224,9 +249,125 @@ impl Server {
             },
         );
         if self.attached == Some(conn) {
+            self.sent_board = None;
+            self.send_board();
             self.send_panes();
             self.send_full_frame();
         }
+    }
+
+    /// Re-folds when the store changed, reconciles, sends Board and Panes to the attached UI.
+    fn refresh(&mut self) {
+        self.refreshed_at = Instant::now();
+        let now = (self.clock)();
+        match self.watch.changed(&self.store, now) {
+            Ok(true) => {}
+            Ok(false) => return,
+            Err(error) => {
+                eprintln!("could not look at the flows: {error:#}");
+                return;
+            }
+        }
+        let (logs, warnings) = self.store.logs();
+        for warning in warnings {
+            eprintln!("{warning}");
+        }
+        self.board = fold::board(fold::views(logs, now), now);
+        let open: Vec<PaneKey> = self.host.panes().into_iter().map(|pane| pane.key).collect();
+        let wanted = reconcile(
+            &self.board.flows,
+            &open,
+            &self.known,
+            &self.config,
+            &self.env,
+        );
+        let panes_change = wanted != Wanted::default();
+        self.apply(wanted);
+        self.send_board();
+        if panes_change {
+            self.send_panes();
+        }
+    }
+
+    /// Opens and closes what reconcile asked for; marks new workers HOSTED in their log; Host::fail for failed.
+    fn apply(&mut self, wanted: Wanted) {
+        for key in &wanted.close {
+            self.host.close(key);
+        }
+        for (key, reason) in wanted.failed {
+            if let PaneKey::Flow(id) = &key {
+                self.known.insert(id.clone());
+            }
+            self.host.fail(key, reason);
+        }
+        for spec in wanted.open {
+            self.open_worker(spec);
+        }
+    }
+
+    fn open_worker(&mut self, spec: PaneSpec) {
+        let PaneKey::Flow(id) = spec.key.clone() else {
+            return;
+        };
+        self.known.insert(id.clone());
+        let Some(space) = self.flow(&id).and_then(|flow| flow.workspace.clone()) else {
+            return;
+        };
+        let key = spec.key.clone();
+        let now = (self.clock)();
+        let event = match self.host.open(spec) {
+            Ok(()) => {
+                if space.window.is_some() {
+                    self.resumed.insert(key, Instant::now());
+                }
+                if space.window.as_deref() == Some(HOSTED) {
+                    return;
+                }
+                EventKind::Workspace {
+                    path: space.path,
+                    branch: space.branch,
+                    slot: space.slot,
+                    window: Some(HOSTED.to_string()),
+                    agent: space.agent,
+                }
+            }
+            Err(error) => EventKind::Blocked {
+                reason: format!("could not start the agent: {error:#}"),
+            },
+        };
+        if let Err(error) = self.store.append(&id, &LogEvent::new(now, event)) {
+            eprintln!("{error:#}");
+        }
+    }
+
+    /// Opens a pane once more with the agent's first command: its resume failed before the agent
+    /// ever saved the session.
+    fn open_fresh(&mut self, key: &PaneKey) {
+        eprintln!("resuming {key:?} failed, starting it fresh");
+        let PaneKey::Flow(id) = key else {
+            self.open_master(true);
+            return;
+        };
+        let Some(mut flow) = self.flow(id).cloned() else {
+            return;
+        };
+        let Some(space) = flow.workspace.as_mut() else {
+            return;
+        };
+        space.window = None;
+        let spec = self
+            .config
+            .agent(Some(&space.agent))
+            .and_then(|(_, agent)| launch::worker_spec(&flow, agent, &self.env));
+        if let Some(spec) = spec
+            && let Err(error) = self.host.open(spec)
+        {
+            eprintln!("{error:#}");
+        }
+    }
+
+    fn flow(&self, id: &str) -> Option<&FlowView> {
+        self.board.flows.iter().find(|flow| flow.id == id)
     }
 
     fn open_master(&mut self, fresh: bool) {
@@ -277,6 +418,23 @@ impl Server {
         }
         self.dirty = false;
         self.flushed_at = Instant::now();
+    }
+
+    /// The board, when its flows changed since the attached UI last got it.
+    fn send_board(&mut self) {
+        let Some(conn) = self.attached else {
+            return;
+        };
+        if self
+            .sent_board
+            .as_ref()
+            .is_some_and(|sent| sent.flows == self.board.flows)
+        {
+            return;
+        }
+        let board = self.board.clone();
+        self.send_to(conn, &ServerMsg::Board(board.clone()));
+        self.sent_board = Some(board);
     }
 
     fn send_panes(&mut self) {
@@ -439,6 +597,13 @@ mod tests {
     }
 
     fn start_with(dir: &Path, agent: Agent) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
+        start_with_agents(dir, BTreeMap::from([("claude".to_string(), agent)]))
+    }
+
+    fn start_with_agents(
+        dir: &Path,
+        agents: BTreeMap<String, Agent>,
+    ) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
         let paths = ServerPaths {
             socket: dir.join("server.sock"),
             master: dir.join("master.json"),
@@ -450,7 +615,7 @@ mod tests {
         let store = Store::at(dir.to_path_buf());
         let config = Config {
             agent: "claude".into(),
-            agents: BTreeMap::from([("claude".to_string(), agent)]),
+            agents,
         };
         let handle =
             thread::spawn(move || run(&thread_paths, store, config, LaunchEnv::default(), || 0));
@@ -512,6 +677,10 @@ mod tests {
                 version: PROTOCOL_VERSION
             }
         );
+        let ServerMsg::Board(board) = recv(&mut ui) else {
+            panic!("expected the board");
+        };
+        assert_eq!(board.count, 0);
         let ServerMsg::Panes(panes) = recv(&mut ui) else {
             panic!("expected the panes");
         };
@@ -540,6 +709,115 @@ mod tests {
         handle.join().unwrap().unwrap();
         assert!(!paths.socket.exists());
         assert!(!paths.master.exists(), "a stop ends the master for good");
+    }
+
+    /// A flow with a worktree at dir/<name>, as `flow start` leaves it.
+    fn started_flow(store: &Store, dir: &Path, name: &str, agent: &str) -> String {
+        let id = store
+            .create(&LogEvent::new(
+                0,
+                EventKind::Started {
+                    name: name.into(),
+                    request: "x".into(),
+                    mode: crate::event::Mode::Auto,
+                },
+            ))
+            .unwrap();
+        let path = dir.join(name);
+        fs::create_dir_all(&path).unwrap();
+        let workspace = EventKind::Workspace {
+            path: path.display().to_string(),
+            branch: format!("flow/{name}"),
+            slot: 1,
+            window: None,
+            agent: agent.into(),
+        };
+        store.append(&id, &LogEvent::new(1, workspace)).unwrap();
+        id
+    }
+
+    fn status_of(panes: &[crate::proto::PaneInfo], id: &str) -> Option<PaneStatus> {
+        let key = PaneKey::Flow(id.to_string());
+        panes
+            .iter()
+            .find(|pane| pane.key == key)
+            .map(|pane| pane.status.clone())
+    }
+
+    #[test]
+    fn opens_a_pane_for_every_started_flow_and_marks_it_hosted() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let cat = Agent {
+            command: vec!["cat".into()],
+            prompt: String::new(),
+            resume: Some(vec!["cat".into()]),
+        };
+        let broken = Agent {
+            command: vec!["/nonexistent/flow-agent".into()],
+            prompt: String::new(),
+            resume: None,
+        };
+        let csv = started_flow(&store, dir.path(), "csv", "claude");
+        let odd = started_flow(&store, dir.path(), "odd", "codex");
+        let (paths, handle) = start_with_agents(
+            dir.path(),
+            BTreeMap::from([("claude".to_string(), cat), ("broken".to_string(), broken)]),
+        );
+        let mut ui = connect(
+            &paths.socket,
+            Role::Attach {
+                size: Size { cols: 30, rows: 4 },
+            },
+        );
+        let later = started_flow(&store, dir.path(), "later", "broken");
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut flows = 0;
+        let mut panes = Vec::new();
+        while !(flows == 3 && status_of(&panes, &later).is_some()) {
+            assert!(Instant::now() < deadline, "flows {flows}, panes {panes:?}");
+            match recv(&mut ui) {
+                ServerMsg::Board(board) => flows = board.count,
+                ServerMsg::Panes(update) => panes = update,
+                _ => {}
+            }
+        }
+
+        assert_eq!(status_of(&panes, &csv), Some(PaneStatus::Running));
+        assert_eq!(
+            status_of(&panes, &odd),
+            Some(PaneStatus::Failed {
+                reason: "no agent named codex".into()
+            })
+        );
+        assert!(matches!(
+            status_of(&panes, &later),
+            Some(PaneStatus::Failed { .. })
+        ));
+        let hosted = store.events(&csv).unwrap().into_iter().any(|event| {
+            matches!(event.kind, EventKind::Workspace { window: Some(ref w), .. } if w == HOSTED)
+        });
+        assert!(hosted, "an opened worker is marked hosted");
+        let blocked = store
+            .events(&later)
+            .unwrap()
+            .into_iter()
+            .any(|event| matches!(event.kind, EventKind::Blocked { .. }));
+        assert!(blocked, "a worker that cannot start blocks its flow");
+
+        proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(csv))).unwrap();
+        proto::write_msg(&mut ui, &ClientMsg::Input(b"csv here\r".to_vec())).unwrap();
+        let mut echoed = false;
+        while !echoed {
+            assert!(Instant::now() < deadline, "the worker never echoed");
+            if let ServerMsg::Frame(frame) = recv(&mut ui) {
+                echoed = (0..4).any(|row| text(&frame, row).contains("csv here"));
+            }
+        }
+
+        proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+        handle.join().unwrap().unwrap();
     }
 
     #[test]

@@ -135,8 +135,8 @@ pub const HOSTED: &str = "flow-ui";
 pub struct LaunchEnv { pub flow_home: Option<PathBuf> }
 pub struct PaneSpec { pub key: PaneKey, pub argv: Vec<String>, pub cwd: PathBuf, pub env: Vec<(String, String)> }
 
-/// The agent's command the first time, its resume command once window is HOSTED;
-/// None when the flow has no workspace, or must resume and the agent has no resume template.
+/// The agent's command the first time, its resume command once window is set (HOSTED or an old
+/// tmux window: the session id is taken); None when the flow has no workspace, or must resume and the agent has no resume template.
 pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec>;
 /// The agent's resume command with {id} and {name} filled in; None when it has none.
 pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>>;
@@ -398,7 +398,8 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 ## Stored data
 
 - `<store root>/master.json` `{"session": "<uuid>", "cwd": "..."}`; `server.sock`, `server.log` beside it.
-- `Workspace.window` is `"flow-ui"` once the server opened the worker. Old tmux ids still fold; such a flow opens fresh once.
+- `Workspace.window` is `"flow-ui"` once the server opened the worker. Old tmux ids still fold; such a
+  worker already used its session id, so it is resumed like a HOSTED one.
 - `--json` unchanged (`VIEW_VERSION` 1). The `flow start` TOON loses `window`, gains `pane`.
 
 ## Call chains
@@ -518,7 +519,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [x] Add server/watch.rs StoreWatch with tests for change, beat, removal and the 5 s refold
 - [x] Add launch::worker_spec and HOSTED with tests (fresh, resume, no resume template)
 - [x] Add server/reconcile.rs reconcile with table tests (open, known, close removed, failed)
-- [ ] Server::refresh and Server::apply: board broadcast, worker panes, HOSTED append, Host::fail and Blocked on failure; integration test with a `cat` agent
+- [x] Server::refresh and Server::apply: board broadcast, worker panes, HOSTED append, Host::fail and Blocked on failure; integration test with a `cat` agent
 - [ ] Add ui theme.rs Theme::builtin, sidebar.rs Sidebar, layout Sidebar chrome, App focus switching (0-9) and pane status; TestBackend tests against the fleet and worker screens
 
 ### Milestone 3: flow start, remove and clear through the server
