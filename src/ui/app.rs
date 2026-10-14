@@ -1999,4 +1999,28 @@ mod tests {
         app.on_input(Routed::View(vec![Key::Char('x')]));
         assert!(!app.is_modal());
     }
+
+    #[test]
+    fn keeps_what_a_new_flow_creates_inside_the_dialog() {
+        let mut app = board_app();
+        app.on_input(Routed::Command(Command::NewFlow));
+        app.on_input(Routed::View(
+            "List the files here with ls, then say done"
+                .chars()
+                .map(Key::Char)
+                .collect(),
+        ));
+
+        let terminal = render_at(&app, FLEET);
+        let creates = (10..24)
+            .map(|y| row(&terminal, y))
+            .find(|line| line.contains("creates"))
+            .unwrap();
+
+        assert!(
+            creates.contains("│ creates flow/list-the-files-here  ·  slot 2"),
+            "{creates}"
+        );
+        assert!(creates.contains("  │"), "{creates}");
+    }
 }

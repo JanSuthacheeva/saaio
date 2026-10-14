@@ -503,7 +503,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
       - some: `k -> StopServer`; `e -> EndFlows, StopServer`; `esc` back
       - `flow ui --stop` over Control sends `StopServer`
    4. `Server::handle(EndFlows)`: `Store::append(id, Ended)` for each unfinished flow; `Server::handle(StopServer)`:
-      flow; delete master.json; `Host::close` every pane (SIGHUP, SIGKILL after 3 s), wait, remove socket, exit
+      delete master.json; `Host::close` every pane (SIGHUP, SIGKILL after 3 s), wait, remove socket, exit
    - Panic in the UI: Outer's Drop/panic hook restores the terminal; server and panes keep running
 
 ## Test seams
@@ -569,7 +569,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [x] Add ui/newflow.rs NewFlowForm, C-space n and the `flow start` thread with App::on_ran, with tests
 - [x] Add ui/rail.rs Rail and C-space b
 - [x] History (C-space [, ClientMsg::History) through Host::frame
-- [ ] Help (C-space ?) and the stop dialog (C-space Q): unfinished workers listed, `k` keeps them, `e` ends them (EndFlows, then StopServer) and the UI prints each ended flow's branch and worktree as it quits, `y` when none; tests for each answer
+- [x] Help (C-space ?) and the stop dialog (C-space Q): unfinished workers listed, `k` keeps them, `e` ends them (EndFlows, then StopServer) and the UI prints each ended flow's branch and worktree as it quits, `y` when none; tests for each answer
 
 ### Milestone 5: restore and hardening
 

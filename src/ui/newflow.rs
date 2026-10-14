@@ -203,9 +203,12 @@ impl Widget for NewFlowView<'_> {
             let mut spans = vec![
                 Span::styled(" creates ", theme.ui.faint),
                 Span::styled(format!("flow/{name}"), theme.ui.text),
-                Span::styled("  ·  ", theme.ui.faint),
-                Span::styled(format!("{}/{name}", launch::WORKTREES_DIR), theme.ui.text),
             ];
+            let worktree = format!("{}/{name}", launch::WORKTREES_DIR);
+            if Line::from(spans.clone()).width() + worktree.len() + 20 <= width {
+                spans.push(Span::styled("  ·  ", theme.ui.faint));
+                spans.push(Span::styled(worktree, theme.ui.text));
+            }
             match launch::free_slot(self.flows) {
                 Some(slot) => {
                     spans.push(Span::styled("  ·  ", theme.ui.faint));

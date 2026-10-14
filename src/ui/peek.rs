@@ -8,8 +8,11 @@ use serde_json::Value;
 
 use crate::view::FlowView;
 
-/// How much of the end of a transcript the peek reads.
+/// How much of the end of a transcript the peek reads first; it doubles until it has enough lines,
+/// since Claude Code writes attachments of 100 KiB and more between a tool call and the answer.
 const TAIL_BYTES: u64 = 64 * 1024;
+/// The most it reads.
+const MAX_TAIL_BYTES: u64 = 4 * 1024 * 1024;
 /// How many transcript lines the peek keeps.
 pub const PEEK_LINES: usize = 12;
 
@@ -42,21 +45,32 @@ pub fn transcript(claude_home: &Path, id: &str) -> Option<PathBuf> {
         .find(|file| file.is_file())
 }
 
-/// The last `max` lines worth showing, read from the file's last 64 KiB.
+/// The last `max` lines worth showing, read from the end of the file: 64 KiB, more when that holds too few.
 pub fn tail(file: &Path, max: usize) -> Result<Vec<PeekLine>> {
     let mut handle =
         File::open(file).with_context(|| format!("could not open {}", file.display()))?;
     let len = handle.metadata()?.len();
-    let start = len.saturating_sub(TAIL_BYTES);
-    handle.seek(SeekFrom::Start(start))?;
-    let mut bytes = Vec::new();
-    handle.read_to_end(&mut bytes)?;
-    let text = String::from_utf8_lossy(&bytes);
+    let mut window = TAIL_BYTES;
+    loop {
+        let start = len.saturating_sub(window);
+        handle.seek(SeekFrom::Start(start))?;
+        let mut bytes = Vec::new();
+        handle.read_to_end(&mut bytes)?;
+        let mut peek = parse(&String::from_utf8_lossy(&bytes), start > 0);
+        if peek.len() >= max || start == 0 || window >= MAX_TAIL_BYTES {
+            let skip = peek.len().saturating_sub(max);
+            return Ok(peek.split_off(skip));
+        }
+        window *= 2;
+    }
+}
+
+/// The peek lines in a stretch of transcript; `cut` when its first line is the end of a longer one.
+fn parse(text: &str, cut: bool) -> Vec<PeekLine> {
     let mut lines = text.lines();
-    if start > 0 {
+    if cut {
         lines.next();
     }
-
     let mut peek = Vec::new();
     let mut running: HashMap<String, usize> = HashMap::new();
     for line in lines {
@@ -113,8 +127,7 @@ pub fn tail(file: &Path, max: usize) -> Result<Vec<PeekLine>> {
     {
         peek[at] = PeekLine::Now(call(name, target));
     }
-    let skip = peek.len().saturating_sub(max);
-    Ok(peek.split_off(skip))
+    peek
 }
 
 /// Name(target) as Claude Code shows a tool call.
@@ -334,9 +347,43 @@ mod tests {
         lines.push("{\"type\": \"assistant\", \"message\": {\"content\": [".to_string());
         let file = write(dir.path(), &lines);
 
+        assert_eq!(tail(&file, 1).unwrap(), vec![PeekLine::Text("kept".into())]);
+        assert_eq!(
+            tail(&file, 10).unwrap().len(),
+            2,
+            "reads on past the cut line"
+        );
+    }
+
+    #[test]
+    fn reads_further_back_past_a_large_attachment() {
+        let dir = TempDir::new().unwrap();
+        let attachment = line(serde_json::json!({
+            "type": "attachment",
+            "attachment": {"type": "prompt_snapshot", "text": "x".repeat(200_000)}
+        }));
+        let file = write(
+            dir.path(),
+            &[
+                assistant(serde_json::json!([
+                    {"type": "tool_use", "id": "a", "name": "Bash", "input": {"command": "ls"}},
+                ])),
+                result("a", serde_json::json!(".git")),
+                attachment,
+                assistant(serde_json::json!([{"type": "text", "text": "Done."}])),
+            ],
+        );
+
         assert_eq!(
             tail(&file, 10).unwrap(),
-            vec![PeekLine::Text("kept".into())]
+            vec![
+                PeekLine::Tool {
+                    name: "Bash".into(),
+                    target: "ls".into()
+                },
+                PeekLine::Result(".git".into()),
+                PeekLine::Text("Done.".into()),
+            ]
         );
     }
 
