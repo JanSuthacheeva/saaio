@@ -244,7 +244,11 @@ fn ui(store: &Store, stop: bool) -> Result<Document, Failure> {
     }
     let exe = env::current_exe().map_err(|error| Failure::from_io(error.into()))?;
     client::ensure_server(&socket, &exe, &[]).map_err(Failure::from_io)?;
-    let message = ui::run(&socket, Theme::builtin()).map_err(Failure::from_io)?;
+    let claude_home = env_path("CLAUDE_CONFIG_DIR")
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .or_else(|| env_path("HOME").map(|home| home.join(".claude")))
+        .unwrap_or_else(|| PathBuf::from(".claude"));
+    let message = ui::run(&socket, Theme::builtin(), claude_home).map_err(Failure::from_io)?;
     Ok(Document::Text(message))
 }
 

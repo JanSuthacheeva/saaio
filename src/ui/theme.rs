@@ -50,6 +50,9 @@ pub struct Glyphs {
     pub step_open: &'static str,
     pub step_join: &'static str,
     pub more: &'static str,
+    pub tool: &'static str,
+    pub result: &'static str,
+    pub dash: &'static str,
 }
 
 impl Theme {
@@ -92,6 +95,9 @@ impl Theme {
                 step_open: "○",
                 step_join: "─",
                 more: "…",
+                tool: "⏺",
+                result: "⎿",
+                dash: "╌",
             },
         }
     }

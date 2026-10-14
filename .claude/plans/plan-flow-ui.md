@@ -295,7 +295,7 @@ impl MasterRecord {
 // mod.rs
 /// Attaches (sizing the pane before the hello), then loops on stdin, server, resize, started-flow
 /// and tick events until detach; what to tell the user.
-pub fn run(socket: &Path, theme: Theme) -> Result<String>;
+pub fn run(socket: &Path, theme: Theme, claude_home: PathBuf) -> Result<String>;   // $CLAUDE_CONFIG_DIR or ~/.claude
 
 // app.rs
 pub enum View { Panes, Board(BoardState), NewFlow(NewFlowForm), History(u32), Help, Stop { unfinished: Vec<String> } }
@@ -351,7 +351,7 @@ pub fn areas(size: Size, chrome: Chrome) -> Areas;
 
 // sidebar.rs, board.rs, rail.rs, help.rs - widgets over the Board
 pub struct Sidebar<'a> { pub board: &'a Board, pub panes: &'a [PaneInfo], pub focus: &'a PaneKey, pub now: u64, pub spin: usize, pub theme: &'a Theme }
-// milestone 4 adds: pub cursor: Option<&'a str>, pub peek: &'a [PeekLine]
+// and: pub cursor: Option<&'a str>, pub peek: &'a [PeekLine] (the cursor flow's note row gives way to the peek)
 /// The flows with a workspace in board order (needs you, running, done); digit n focuses the nth.
 pub fn workers(board: &Board) -> Vec<&FlowView>;
 impl Sidebar<'_> {
@@ -371,14 +371,15 @@ impl NewFlowForm {
 }
 
 // peek.rs - reads Claude Code's transcript, never the PTY
-pub enum PeekLine { Tool { name: String, target: String }, Result(String), Text(String), Now(String) }
+pub enum PeekLine { Tool { name: String, target: String }, Result(String), Text(String), Now(String),
+                   Code { branch: String, worktree: String, exists: bool } }   // Code: first line for a finished flow
 /// ~/.claude/projects/*/<id>.jsonl
 pub fn transcript(claude_home: &Path, id: &str) -> Option<PathBuf>;
 /// The last `max` lines worth showing, read from the file's last 64 KiB.
 pub fn tail(file: &Path, max: usize) -> Result<Vec<PeekLine>>;
 impl PeekCache {
-    /// Re-reads only when the flow changed or its file grew.
-    pub fn refresh(&mut self, flow: Option<&FlowView>);
+    /// Re-reads only when the flow changed or its file grew; true when the lines changed.
+    pub fn refresh(&mut self, flow: Option<&FlowView>) -> bool;
     pub fn lines(&self) -> &[PeekLine];
 }
 

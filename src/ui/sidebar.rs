@@ -7,18 +7,26 @@ use ratatui::widgets::Widget;
 use crate::output::short_duration;
 use crate::proto::{PaneInfo, PaneKey, PaneStatus};
 use crate::ui::layout::SIDEBAR_WIDTH;
+use crate::ui::peek::PeekLine;
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, State, StepStatus};
 
 const WIDTH: usize = SIDEBAR_WIDTH as usize;
 /// Rows the key hints take at the bottom, with the rule above them.
 const FOOTER_ROWS: u16 = 3;
+/// The most rows a peek takes, with its rule and its hint.
+const PEEK_ROWS: usize = 14;
+/// Fewer rows than this and the peek is left out.
+const PEEK_MIN_ROWS: usize = 4;
 
 /// The right-hand overview: the master, then every worker grouped by what it needs.
 pub struct Sidebar<'a> {
     pub board: &'a Board,
     pub panes: &'a [PaneInfo],
     pub focus: &'a PaneKey,
+    /// The flow whose peek shows (C-space j/k).
+    pub cursor: Option<&'a str>,
+    pub peek: &'a [PeekLine],
     pub now: u64,
     pub spin: usize,
     pub theme: &'a Theme,
@@ -118,6 +126,25 @@ impl Sidebar<'_> {
         }
 
         let room = height.saturating_sub(FOOTER_ROWS) as usize;
+        let used = rows.len() + flows.iter().map(Vec::len).sum::<usize>();
+        let budget = room.saturating_sub(used).min(PEEK_ROWS);
+        let peeked = self.cursor.and_then(|id| {
+            workers(self.board)
+                .into_iter()
+                .position(|flow| flow.id == id)
+        });
+        if let Some(index) = peeked
+            && budget >= PEEK_MIN_ROWS
+        {
+            let flow = workers(self.board)[index];
+            let block = &mut flows[index];
+            let blank = block.pop();
+            if self.note(flow, self.status(flow)).is_some() {
+                block.pop();
+            }
+            block.extend(self.peek_rows(flow, budget));
+            block.extend(blank);
+        }
         let mut shown = 0;
         for block in &flows {
             if rows.len() + block.len() > room {
@@ -145,13 +172,9 @@ impl Sidebar<'_> {
         let theme = self.theme;
         let width = WIDTH;
         let key = PaneKey::Flow(flow.id.clone());
-        let selected = *self.focus == key;
+        let selected = *self.focus == key || self.cursor == Some(flow.id.as_str());
         let tone = theme.state(flow.state);
-        let status = self
-            .panes
-            .iter()
-            .find(|pane| pane.key == key)
-            .map(|pane| &pane.status);
+        let status = self.status(flow);
         let lead = |rest: &str| -> Vec<Span<'static>> {
             if selected {
                 vec![
@@ -223,6 +246,103 @@ impl Sidebar<'_> {
                 selected,
             });
         }
+        rows
+    }
+
+    fn status(&self, flow: &FlowView) -> Option<&PaneStatus> {
+        self.panes
+            .iter()
+            .find(|pane| pane.key == PaneKey::Flow(flow.id.clone()))
+            .map(|pane| &pane.status)
+    }
+
+    /// What the flow under the cursor did lately, newest at the bottom, in at most `budget` rows:
+    /// a dashed rule, the transcript lines, and how to jump in.
+    fn peek_rows(&self, flow: &FlowView, budget: usize) -> Vec<Row> {
+        let theme = self.theme;
+        let glyphs = &theme.glyphs;
+        let tone = theme.state(flow.state);
+        let text_width = WIDTH - 4;
+        let mut body: Vec<Vec<Span<'static>>> = Vec::new();
+        for line in self.peek {
+            match line {
+                PeekLine::Tool { name, target } => body.push(vec![
+                    Span::styled(format!(" {} ", glyphs.tool), theme.state.done),
+                    Span::styled(name.clone(), theme.ui.strong),
+                    Span::styled(
+                        format!(
+                            "({})",
+                            clip(target, text_width.saturating_sub(name.chars().count() + 3))
+                        ),
+                        theme.ui.text,
+                    ),
+                ]),
+                PeekLine::Result(text) => body.push(vec![Span::styled(
+                    format!("     {}  {}", glyphs.result, clip(text, text_width - 6)),
+                    theme.ui.faint,
+                )]),
+                PeekLine::Text(text) => {
+                    for (index, row) in wrap(text, text_width).into_iter().enumerate() {
+                        let mark = if index == 0 { glyphs.tool } else { " " };
+                        body.push(vec![
+                            Span::styled(format!(" {mark} "), theme.ui.strong),
+                            Span::styled(row, theme.ui.text),
+                        ]);
+                    }
+                }
+                PeekLine::Now(call) => body.push(vec![
+                    Span::raw(" "),
+                    Span::styled(glyphs.spinner[self.spin % glyphs.spinner.len()], tone),
+                    Span::styled(format!(" {}", clip(call, text_width)), theme.ui.muted),
+                ]),
+                PeekLine::Code {
+                    branch,
+                    worktree,
+                    exists,
+                } => {
+                    body.push(vec![
+                        Span::styled(" branch   ", theme.ui.faint),
+                        Span::styled(clip(branch, text_width - 6), theme.ui.muted),
+                    ]);
+                    let place = if *exists {
+                        clip(worktree, text_width - 6)
+                    } else {
+                        "gone".to_string()
+                    };
+                    body.push(vec![
+                        Span::styled(" worktree ", theme.ui.faint),
+                        Span::styled(place, theme.ui.muted),
+                    ]);
+                }
+            }
+        }
+        if body.is_empty() {
+            body.push(vec![Span::styled(" no transcript yet", theme.ui.faint)]);
+        }
+        let keep = budget.saturating_sub(2);
+        let body = body.split_off(body.len().saturating_sub(keep));
+
+        let lead = || Span::styled(glyphs.cursor, tone);
+        let key = Some(PaneKey::Flow(flow.id.clone()));
+        let row = |spans: Vec<Span<'static>>| Row {
+            line: Line::from(spans),
+            key: key.clone(),
+            selected: true,
+        };
+        let mut rows = vec![row(vec![
+            lead(),
+            Span::styled(format!(" {}", glyphs.dash.repeat(WIDTH - 3)), theme.ui.rule),
+        ])];
+        for spans in body {
+            let mut line = vec![lead()];
+            line.extend(spans);
+            rows.push(row(line));
+        }
+        rows.push(row(vec![
+            lead(),
+            Span::styled(" enter", theme.ui.key),
+            Span::styled(" jump in", theme.ui.faint),
+        ]));
         rows
     }
 
@@ -319,6 +439,8 @@ impl Sidebar<'_> {
                 Span::raw(" "),
                 key("C-space"),
                 Span::raw(" "),
+                key("j k"),
+                hint(" peek  "),
                 key("0-9"),
                 hint(" jump  "),
                 key("r"),
@@ -376,6 +498,33 @@ fn split(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: usize) -> L
     spans.push(Span::raw(" ".repeat(room.saturating_sub(used))));
     spans.extend(right);
     Line::from(spans)
+}
+
+/// Words of `text` on rows of at most `width` columns; a word longer than a row is clipped.
+fn wrap(text: &str, width: usize) -> Vec<String> {
+    let mut rows = Vec::new();
+    for paragraph in text.lines().filter(|line| !line.trim().is_empty()) {
+        let mut row = String::new();
+        for word in paragraph.split_whitespace() {
+            let next = if row.is_empty() {
+                word.to_string()
+            } else {
+                format!("{row} {word}")
+            };
+            if Span::raw(next.as_str()).width() <= width {
+                row = next;
+                continue;
+            }
+            if !row.is_empty() {
+                rows.push(row);
+            }
+            row = clip(word, width);
+        }
+        if !row.is_empty() {
+            rows.push(row);
+        }
+    }
+    rows
 }
 
 /// The text cut to `width` columns, ending in … when it was longer.

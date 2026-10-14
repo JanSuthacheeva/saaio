@@ -7,6 +7,7 @@ use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
 use crate::proto::{ClientMsg, Modes, PaneInfo, PaneKey, PaneStatus, ServerMsg, Size};
 use crate::ui::input::{Command, Key, Routed};
 use crate::ui::layout::{self, Areas, Chrome};
+use crate::ui::peek::PeekLine;
 use crate::ui::screen::Screen;
 use crate::ui::sidebar::{self, Sidebar};
 use crate::ui::theme::Theme;
@@ -35,6 +36,8 @@ pub struct App {
     board: Option<Board>,
     panes: Vec<PaneInfo>,
     focus: PaneKey,
+    /// The flow whose peek the sidebar shows.
+    cursor: Option<String>,
     view: View,
     mirrored: Modes,
     now: u64,
@@ -50,6 +53,7 @@ impl App {
             board: None,
             panes: Vec::new(),
             focus: PaneKey::Master,
+            cursor: None,
             view: View::Panes,
             mirrored: Modes::default(),
             now: 0,
@@ -146,7 +150,13 @@ impl App {
         vec![Effect::Send(ClientMsg::Resize(self.areas().pane_size()))]
     }
 
-    pub fn draw(&self, frame: &mut TuiFrame, theme: &Theme) {
+    /// The flow under the sidebar cursor, for the peek.
+    pub fn peeked(&self) -> Option<&FlowView> {
+        let id = self.cursor.as_deref()?;
+        self.workers().into_iter().find(|flow| flow.id == id)
+    }
+
+    pub fn draw(&self, frame: &mut TuiFrame, theme: &Theme, peek: &[PeekLine]) {
         let areas = self.areas();
         frame.render_widget(self.border(theme), areas.frame);
         frame.render_widget(&self.screen, areas.pane);
@@ -154,7 +164,7 @@ impl App {
             self.draw_bar(frame, bar, theme);
         }
         if let Some(side) = areas.side {
-            frame.render_widget(self.sidebar(theme), side);
+            frame.render_widget(self.sidebar(theme, peek), side);
         }
         match self.status(&self.focus) {
             Some(PaneStatus::Running) => {}
@@ -189,6 +199,14 @@ impl App {
                 vec![]
             }
             Command::Reopen => vec![Effect::Send(ClientMsg::Reopen(self.focus.clone()))],
+            Command::Cursor(step) => {
+                self.move_cursor(step);
+                vec![]
+            }
+            Command::Jump => match self.cursor.clone() {
+                Some(id) => self.focus(PaneKey::Flow(id)),
+                None => vec![],
+            },
             Command::Focus(0) => self.focus(PaneKey::Master),
             Command::Focus(digit) => {
                 let Some(flow) = self.workers().get(digit as usize - 1).copied() else {
@@ -222,7 +240,7 @@ impl App {
         };
         let inside = col >= side.x && col < side.x + side.width && row >= side.y;
         let theme = Theme::builtin();
-        match self.sidebar(&theme).key_at(row - side.y, side.height) {
+        match self.sidebar(&theme, &[]).key_at(row - side.y, side.height) {
             Some(key) if inside => self.focus(key),
             _ => vec![],
         }
@@ -233,8 +251,30 @@ impl App {
             return vec![];
         }
         self.focus = key.clone();
+        self.cursor = None;
         self.screen = Screen::default();
         vec![Effect::Send(ClientMsg::Focus(key))]
+    }
+
+    /// Moves the peek cursor over the workers not in view; past either end it goes away.
+    fn move_cursor(&mut self, step: i8) {
+        let ids: Vec<String> = self
+            .workers()
+            .into_iter()
+            .filter(|flow| self.focus != PaneKey::Flow(flow.id.clone()))
+            .map(|flow| flow.id.clone())
+            .collect();
+        let at = self
+            .cursor
+            .as_ref()
+            .and_then(|id| ids.iter().position(|other| other == id));
+        let next = match (at, step > 0) {
+            (None, true) => Some(0),
+            (None, false) => ids.len().checked_sub(1),
+            (Some(at), true) => Some(at + 1),
+            (Some(at), false) => at.checked_sub(1),
+        };
+        self.cursor = next.and_then(|index| ids.get(index)).cloned();
     }
 
     fn workers(&self) -> Vec<&FlowView> {
@@ -244,7 +284,7 @@ impl App {
             .unwrap_or_default()
     }
 
-    fn sidebar<'a>(&'a self, theme: &'a Theme) -> Sidebar<'a> {
+    fn sidebar<'a>(&'a self, theme: &'a Theme, peek: &'a [PeekLine]) -> Sidebar<'a> {
         static EMPTY: Board = Board {
             version: crate::view::VIEW_VERSION,
             now: 0,
@@ -256,6 +296,8 @@ impl App {
             board: self.board.as_ref().unwrap_or(&EMPTY),
             panes: &self.panes,
             focus: &self.focus,
+            cursor: self.cursor.as_deref(),
+            peek,
             now: self.now,
             spin: self.spin,
             theme,
@@ -278,7 +320,7 @@ impl App {
         let Some(flow) = self.workers().into_iter().find(|flow| &flow.id == id) else {
             return block.title(Line::styled(format!(" {id} "), theme.ui.strong));
         };
-        let sidebar = self.sidebar(theme);
+        let sidebar = self.sidebar(theme, &[]);
         let mut title = vec![
             Span::raw(" "),
             Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
@@ -465,7 +507,7 @@ mod tests {
     fn render(app: &App) -> Terminal<TestBackend> {
         let mut terminal = Terminal::new(TestBackend::new(SIZE.cols, SIZE.rows)).unwrap();
         terminal
-            .draw(|frame| app.draw(frame, &Theme::builtin()))
+            .draw(|frame| app.draw(frame, &Theme::builtin(), &[]))
             .unwrap();
         terminal
     }
@@ -697,7 +739,7 @@ mod tests {
     fn render_at(app: &App, size: Size) -> Terminal<TestBackend> {
         let mut terminal = Terminal::new(TestBackend::new(size.cols, size.rows)).unwrap();
         terminal
-            .draw(|frame| app.draw(frame, &Theme::builtin()))
+            .draw(|frame| app.draw(frame, &Theme::builtin(), &[]))
             .unwrap();
         terminal
     }
@@ -762,7 +804,7 @@ mod tests {
         assert_eq!(side(&terminal, 41), "─".repeat(40));
         assert_eq!(
             side(&terminal, 42).trim_end(),
-            " C-space 0-9 jump  r resume"
+            " C-space j k peek  0-9 jump  r resume"
         );
         let buffer = terminal.backend().buffer();
         assert_eq!(
@@ -900,5 +942,125 @@ mod tests {
             effects,
             vec![Effect::Send(ClientMsg::Focus(PaneKey::Master))]
         );
+    }
+
+    fn render_peek(app: &App, peek: &[PeekLine]) -> Terminal<TestBackend> {
+        let mut terminal = Terminal::new(TestBackend::new(FLEET.cols, FLEET.rows)).unwrap();
+        terminal
+            .draw(|frame| app.draw(frame, &Theme::builtin(), peek))
+            .unwrap();
+        terminal
+    }
+
+    #[test]
+    fn peeks_into_a_worker_under_the_cursor_and_jumps_in() {
+        let mut app = with_fleet();
+        app.on_input(Routed::Command(Command::Cursor(1)));
+        app.on_input(Routed::Command(Command::Cursor(1)));
+        app.on_input(Routed::Command(Command::Cursor(1)));
+        assert_eq!(
+            app.peeked().map(|flow| flow.name.as_str()),
+            Some("export-csv")
+        );
+        let peek = vec![
+            PeekLine::Tool {
+                name: "Update".into(),
+                target: "app/Http/Middleware/ThrottleExports.php".into(),
+            },
+            PeekLine::Result("Added 22 lines".into()),
+            PeekLine::Text(
+                "The limiter keys on the user id, so one export can't starve the rest.".into(),
+            ),
+            PeekLine::Now("Write(ThrottleExportTest.php)".into()),
+        ];
+
+        let terminal = render_peek(&app, &peek);
+
+        assert!(
+            side(&terminal, 14).starts_with("▌3 ⠙ export-csv"),
+            "{}",
+            side(&terminal, 14)
+        );
+        assert_eq!(
+            side(&terminal, 15).trim_end(),
+            "▌    ●─●─◉─○ review                 6/6"
+        );
+        assert_eq!(
+            side(&terminal, 16).trim_end(),
+            format!("▌ {}", "╌".repeat(37))
+        );
+        assert_eq!(
+            side(&terminal, 17).trim_end(),
+            "▌ ⏺ Update(app/Http/Middleware/Thrott…)"
+        );
+        assert_eq!(side(&terminal, 18).trim_end(), "▌     ⎿  Added 22 lines");
+        assert_eq!(
+            side(&terminal, 19).trim_end(),
+            "▌ ⏺ The limiter keys on the user id, so"
+        );
+        assert_eq!(
+            side(&terminal, 20).trim_end(),
+            "▌   one export can't starve the rest."
+        );
+        assert_eq!(
+            side(&terminal, 21).trim_end(),
+            "▌ ⠙ Write(ThrottleExportTest.php)"
+        );
+        assert_eq!(side(&terminal, 22).trim_end(), "▌ enter jump in");
+        assert_eq!(side(&terminal, 23).trim_end(), "");
+        assert_eq!(side(&terminal, 24).trim_end(), " DONE");
+        assert_eq!(
+            side(&terminal, 42).trim_end(),
+            " C-space j k peek  0-9 jump  r resume"
+        );
+
+        assert_eq!(
+            app.on_input(Routed::Command(Command::Jump)),
+            vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
+                "export-csv".into()
+            )))]
+        );
+        assert_eq!(app.peeked(), None);
+    }
+
+    #[test]
+    fn moves_the_cursor_past_the_ends_and_skips_the_flow_in_view() {
+        let mut app = with_fleet();
+        app.on_input(Routed::Command(Command::Focus(1)));
+
+        app.on_input(Routed::Command(Command::Cursor(1)));
+        assert_eq!(
+            app.peeked().map(|flow| flow.name.as_str()),
+            Some("shop-230")
+        );
+        app.on_input(Routed::Command(Command::Cursor(-1)));
+        assert_eq!(app.peeked(), None);
+        app.on_input(Routed::Command(Command::Cursor(-1)));
+        assert_eq!(
+            app.peeked().map(|flow| flow.name.as_str()),
+            Some("shop-198")
+        );
+    }
+
+    #[test]
+    fn peeks_at_where_an_ended_flows_code_is() {
+        let mut app = with_fleet();
+        for _ in 0..4 {
+            app.on_input(Routed::Command(Command::Cursor(1)));
+        }
+        assert_eq!(
+            app.peeked().map(|flow| flow.name.as_str()),
+            Some("shop-198")
+        );
+        let peek = vec![PeekLine::Code {
+            branch: "flow/shop-198".into(),
+            worktree: "/shop/.flow/worktrees/shop-198".into(),
+            exists: false,
+        }];
+
+        let terminal = render_peek(&app, &peek);
+
+        assert_eq!(side(&terminal, 22).trim_end(), "▌ branch   flow/shop-198");
+        assert_eq!(side(&terminal, 23).trim_end(), "▌ worktree gone");
     }
 }

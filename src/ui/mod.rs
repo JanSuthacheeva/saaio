@@ -2,12 +2,13 @@ pub mod app;
 pub mod input;
 pub mod layout;
 pub mod outer;
+pub mod peek;
 pub mod screen;
 pub mod sidebar;
 pub mod theme;
 
 use std::io::{self, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -23,6 +24,7 @@ use crate::proto::{Role, ServerMsg};
 use app::{App, Effect};
 use input::Router;
 use outer::Outer;
+use peek::PeekCache;
 use theme::Theme;
 
 enum Event {
@@ -35,9 +37,11 @@ enum Event {
 
 /// How often spinners turn.
 const TICK_EVERY: Duration = Duration::from_millis(100);
+/// Ticks between two looks at the peeked transcript.
+const TICKS_PER_PEEK: u32 = 10;
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
-pub fn run(socket: &Path, theme: Theme) -> Result<String> {
+pub fn run(socket: &Path, theme: Theme, claude_home: PathBuf) -> Result<String> {
     let mut outer = Outer::enter()?;
     // Before any thread reads stdin: creating the terminal asks for the cursor position.
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
@@ -58,6 +62,8 @@ pub fn run(socket: &Path, theme: Theme) -> Result<String> {
     tick(events);
 
     let mut router = Router::default();
+    let mut peek = PeekCache::new(claude_home);
+    let mut ticks: u32 = 0;
     app.on_tick(now_ms());
     loop {
         let mut effects = Vec::new();
@@ -83,6 +89,10 @@ pub fn run(socket: &Path, theme: Theme) -> Result<String> {
                 }
                 Event::Tick => {
                     redraw |= app.on_tick(now_ms());
+                    ticks = ticks.wrapping_add(1);
+                    if ticks.is_multiple_of(TICKS_PER_PEEK) {
+                        redraw |= peek.refresh(app.peeked());
+                    }
                     vec![]
                 }
             });
@@ -95,7 +105,8 @@ pub fn run(socket: &Path, theme: Theme) -> Result<String> {
             }
         }
         if redraw {
-            terminal.draw(|frame| app.draw(frame, &theme))?;
+            peek.refresh(app.peeked());
+            terminal.draw(|frame| app.draw(frame, &theme, peek.lines()))?;
         }
     }
 }
