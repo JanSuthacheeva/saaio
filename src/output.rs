@@ -417,9 +417,9 @@ pub fn removed(name: &str, window: &str, worktree: &str) -> Document {
         help: Vec<String>,
     }
     let mut help = Vec::new();
-    if worktree.starts_with("kept") {
+    if let Some(path) = worktree.strip_prefix("kept: ") {
         help.push(format!(
-            "Run `flow remove {name} --force` to discard the uncommitted work"
+            "Run `git worktree remove --force {path}` to discard what is left"
         ));
     }
     help.push("Run `flow` to see what is left".to_string());

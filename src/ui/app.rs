@@ -1,5 +1,6 @@
 use ratatui::Frame as TuiFrame;
 use ratatui::layout::{Alignment, Rect};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
 
@@ -100,10 +101,18 @@ impl App {
         if let Some(bar) = areas.bar {
             self.draw_bar(frame, bar, theme);
         }
+        if let Some(status) = self.status(&self.focus)
+            && *status != PaneStatus::Running
+        {
+            draw_not_running(frame, areas.pane, status, theme);
+        }
         match self.view {
             View::ConfirmStop => draw_confirm_stop(frame, areas.pane, theme),
             View::Panes => {
                 if let Some((col, row)) = self.screen.cursor
+                    && self
+                        .status(&self.focus)
+                        .is_none_or(|status| *status == PaneStatus::Running)
                     && self.screen.history.is_none()
                     && col < areas.pane.width
                     && row < areas.pane.height
@@ -199,15 +208,56 @@ impl App {
     }
 }
 
-fn draw_confirm_stop(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
-    let width = 54.min(pane.width);
-    let height = 5.min(pane.height);
+/// A notice over a pane whose process is gone, saying how to bring it back.
+fn draw_not_running(frame: &mut TuiFrame, pane: Rect, status: &PaneStatus, theme: &Theme) {
+    let (title, first, style) = match status {
+        PaneStatus::Exited { code } => (
+            " exited ",
+            match code {
+                Some(0) | None => "The session ended.".to_string(),
+                Some(code) => format!("The session ended with code {code}."),
+            },
+            theme.state.waiting,
+        ),
+        PaneStatus::Failed { reason } => (" could not start ", reason.clone(), theme.state.blocked),
+        PaneStatus::Running => return,
+    };
+    let text = vec![
+        Line::styled(first, theme.ui.text),
+        Line::from(vec![
+            Span::styled("C-space r", theme.ui.key),
+            Span::styled(" resumes it   ", theme.ui.muted),
+            Span::styled("C-space Q", theme.ui.key),
+            Span::styled(" stops flow", theme.ui.muted),
+        ]),
+    ];
+    draw_dialog(frame, pane, title, style, text);
+}
+
+fn draw_dialog(frame: &mut TuiFrame, pane: Rect, title: &str, border: Style, text: Vec<Line>) {
+    let inner = text.iter().map(Line::width).max().unwrap_or(0) as u16;
+    let width = (inner + 4).min(pane.width);
+    let height = (text.len() as u16 + 2).min(pane.height);
     let area = Rect::new(
         pane.x + (pane.width - width) / 2,
         pane.y + (pane.height - height) / 2,
         width,
         height,
     );
+    frame.render_widget(Clear, area);
+    frame.render_widget(
+        Paragraph::new(text).block(
+            Block::bordered()
+                .border_type(BorderType::Rounded)
+                .border_style(border)
+                .padding(Padding::horizontal(1))
+                .title(title),
+        ),
+        area,
+    );
+}
+
+fn draw_confirm_stop(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
     let text = vec![
         Line::styled(
             "Stop the flow server? Every session in it ends.",
@@ -218,17 +268,7 @@ fn draw_confirm_stop(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
             Span::styled(" stops it, any other key keeps it", theme.ui.muted),
         ]),
     ];
-    frame.render_widget(Clear, area);
-    frame.render_widget(
-        Paragraph::new(text).block(
-            Block::bordered()
-                .border_type(BorderType::Rounded)
-                .border_style(theme.ui.rule)
-                .padding(Padding::horizontal(1))
-                .title(" stop "),
-        ),
-        area,
-    );
+    draw_dialog(frame, pane, " stop ", theme.ui.rule, text);
 }
 
 #[cfg(test)]
@@ -370,6 +410,9 @@ mod tests {
         let terminal = render(&app);
 
         assert!(row(&terminal, 9).contains("exited - C-space r resumes it"));
+        let screen: String = (0..9).map(|y| row(&terminal, y)).collect();
+        assert!(screen.contains("The session ended."), "{screen}");
+        assert!(screen.contains("C-space r resumes it"), "{screen}");
         assert_eq!(
             app.on_input(Routed::Command(Command::Reopen)),
             vec![Effect::Send(ClientMsg::Reopen(PaneKey::Master))]

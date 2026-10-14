@@ -27,6 +27,9 @@ const FRAME_EVERY: Duration = Duration::from_millis(16);
 const STOP_WAIT: Duration = Duration::from_millis(3500);
 /// A UI that does not take a frame within this time is dropped, so it cannot stall the server.
 const WRITE_TIMEOUT: Duration = Duration::from_secs(2);
+/// A resumed pane that fails within this time is started fresh instead: its agent never saved
+/// the session (Claude Code saves one only after the first message).
+const RESUME_GRACE: Duration = Duration::from_secs(5);
 /// The size panes start with before a UI says how big it is.
 const START_SIZE: Size = Size {
     cols: 120,
@@ -62,6 +65,7 @@ struct Server {
     attached: Option<ConnId>,
     focus: PaneKey,
     history: Option<u32>,
+    resumed: HashMap<PaneKey, Instant>,
     dirty: bool,
     flushed_at: Instant,
     events: Sender<Event>,
@@ -90,6 +94,7 @@ pub fn run(
         attached: None,
         focus: PaneKey::Master,
         history: None,
+        resumed: HashMap::new(),
         dirty: false,
         flushed_at: Instant::now(),
         events: events.clone(),
@@ -137,6 +142,13 @@ impl Server {
             }
             Event::Host(HostEvent::Exited(key, code)) => {
                 self.host.exited(&key, code);
+                let resumed_at = self.resumed.remove(&key);
+                let resume_failed =
+                    code != Some(0) && resumed_at.is_some_and(|at| at.elapsed() < RESUME_GRACE);
+                if resume_failed && key == PaneKey::Master {
+                    eprintln!("resuming the master failed, starting it fresh");
+                    self.open_master(true);
+                }
                 self.send_panes();
                 if key == self.focus {
                     self.dirty = true;
@@ -220,11 +232,13 @@ impl Server {
             return;
         };
         match self.record.spec(fresh, agent, &self.env) {
-            Some(spec) => {
-                if let Err(error) = self.host.open(spec) {
-                    eprintln!("could not start the master: {error:#}");
+            Some(spec) => match self.host.open(spec) {
+                Ok(()) if !fresh => {
+                    self.resumed.insert(PaneKey::Master, Instant::now());
                 }
-            }
+                Ok(()) => {}
+                Err(error) => eprintln!("could not start the master: {error:#}"),
+            },
             None => self.host.fail(
                 PaneKey::Master,
                 format!("agent {name} cannot resume a session"),
@@ -405,6 +419,17 @@ mod tests {
 
     /// A server whose master is `cat`, run on its own thread.
     fn start(dir: &Path) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
+        start_with(
+            dir,
+            Agent {
+                command: vec!["cat".into()],
+                prompt: String::new(),
+                resume: Some(vec!["cat".into()]),
+            },
+        )
+    }
+
+    fn start_with(dir: &Path, agent: Agent) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
         let paths = ServerPaths {
             socket: dir.join("server.sock"),
             master: dir.join("master.json"),
@@ -416,14 +441,7 @@ mod tests {
         let store = Store::at(dir.to_path_buf());
         let config = Config {
             agent: "claude".into(),
-            agents: BTreeMap::from([(
-                "claude".to_string(),
-                Agent {
-                    command: vec!["cat".into()],
-                    prompt: String::new(),
-                    resume: Some(vec!["cat".into()]),
-                },
-            )]),
+            agents: BTreeMap::from([("claude".to_string(), agent)]),
         };
         let handle =
             thread::spawn(move || run(&thread_paths, store, config, LaunchEnv::default(), || 0));
@@ -545,6 +563,59 @@ mod tests {
         assert!(matches!(recv(&mut old), ServerMsg::Refused { .. }));
 
         proto::write_msg(&mut second, &ClientMsg::StopServer).unwrap();
+        handle.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn starts_the_master_fresh_when_its_session_cannot_be_resumed() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("master.json"),
+            r#"{"session": "5e55", "cwd": "/tmp"}"#,
+        )
+        .unwrap();
+        let (paths, handle) = start_with(
+            dir.path(),
+            Agent {
+                command: vec!["cat".into()],
+                prompt: String::new(),
+                resume: Some(vec![
+                    "sh".into(),
+                    "-c".into(),
+                    "echo No conversation found; exit 1".into(),
+                ]),
+            },
+        );
+        let mut ui = connect(
+            &paths.socket,
+            Role::Attach {
+                size: Size { cols: 30, rows: 4 },
+            },
+        );
+        thread::sleep(Duration::from_millis(500));
+
+        proto::write_msg(&mut ui, &ClientMsg::Input(b"again\r".to_vec())).unwrap();
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut running = false;
+        let mut echoed = false;
+        while !(running && echoed) {
+            assert!(
+                Instant::now() < deadline,
+                "running {running}, echoed {echoed}"
+            );
+            match recv(&mut ui) {
+                ServerMsg::Panes(panes) => running = panes[0].status == PaneStatus::Running,
+                ServerMsg::Frame(frame) => {
+                    echoed |= (0..4).any(|row| text(&frame, row).contains("again"));
+                    if !echoed {
+                        proto::write_msg(&mut ui, &ClientMsg::Input(b"again\r".to_vec())).unwrap();
+                    }
+                }
+                _ => {}
+            }
+        }
+        proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
         handle.join().unwrap().unwrap();
     }
 
