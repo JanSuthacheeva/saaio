@@ -1,4 +1,3 @@
-#[allow(dead_code)] // until worker_spec wires adapters (plan-flow-adapters.md)
 mod adapter;
 mod client;
 mod config;
@@ -385,6 +384,7 @@ fn server(store: Store) -> Result<Document, Failure> {
     };
     let env = launch::LaunchEnv {
         flow_home: env_path("FLOW_HOME"),
+        flow_exe: env::current_exe().map_err(|error| Failure::from_io(error.into()))?,
     };
     server::run(&paths, store, config, env, now_ms).map_err(Failure::from_io)?;
     Ok(Document::Text("flow server stopped".to_string()))

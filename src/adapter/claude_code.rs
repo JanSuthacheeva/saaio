@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use crate::adapter::{cut, phase_of};
+use crate::adapter::{Adapter, cut, phase_of};
 use crate::config::PhaseMap;
 use crate::event::EventKind;
 
@@ -26,7 +26,7 @@ pub fn settings(flow_exe: &Path) -> String {
     let handler = json!({
         "type": "command",
         "command": flow_exe.display().to_string(),
-        "args": ["hook", "claude-code"],
+        "args": ["hook", Adapter::ClaudeCode.name()],
         "timeout": HOOK_TIMEOUT_SECS,
     });
     let hooks: serde_json::Map<String, Value> = EVENTS

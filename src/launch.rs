@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::proto::PaneKey;
 use crate::view::{FlowView, Workspace};
@@ -9,10 +10,12 @@ pub const WORKTREES_DIR: &str = ".flow/worktrees";
 /// Workspace.window of a worker flow ui has opened once; its next open resumes it.
 pub const HOSTED: &str = "flow-ui";
 
-/// What the server passes on to every pane: FLOW_HOME, when it was set for the server.
+/// What the server passes on to every pane: FLOW_HOME, when it was set for the server, and the
+/// flow binary a worker's hooks run.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LaunchEnv {
     pub flow_home: Option<PathBuf>,
+    pub flow_exe: PathBuf,
 }
 
 /// Exactly what a pane runs: its command line, directory and environment.
@@ -117,14 +120,24 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>> {
 
 /// The agent's command the first time, its resume command once it ran somewhere (window set:
 /// HOSTED, or a tmux window from before flow ui), since its session id is taken from then on;
-/// None when the flow has no workspace, or must resume and the agent has no resume template.
+/// either way with the agent's adapter wired in right after the program. None when the flow has
+/// no workspace, must resume and the agent has no resume template, or the agent names an adapter
+/// flow does not know.
 pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec> {
     let space = flow.workspace.as_ref()?;
-    let argv = if space.window.is_some() {
+    let adapter = match &agent.adapter {
+        Some(name) => Some(Adapter::named(name)?),
+        None => None,
+    };
+    let mut argv = if space.window.is_some() {
         resume_argv(agent, &flow.id, &flow.name)?
     } else {
         agent_argv(agent, &flow.id, &flow.name, &flow.request)
     };
+    if let Some(adapter) = adapter {
+        let at = 1.min(argv.len());
+        argv.splice(at..at, adapter.wiring(&env.flow_exe));
+    }
     Some(PaneSpec {
         key: PaneKey::Flow(flow.id.clone()),
         argv,
@@ -396,6 +409,7 @@ mod tests {
     fn gives_every_pane_a_terminal_type_and_workers_their_flow() {
         let env = LaunchEnv {
             flow_home: Some(PathBuf::from("/state/flow")),
+            ..LaunchEnv::default()
         };
         let pairs = |items: &[(&str, &str)]| -> Vec<(String, String)> {
             items
@@ -463,7 +477,11 @@ mod tests {
     #[test]
     fn starts_a_worker_fresh_and_resumes_it_once_hosted() {
         let agents = crate::config::builtin_agents();
-        let claude = &agents["claude"];
+        let unwired = Agent {
+            adapter: None,
+            ..agents["claude"].clone()
+        };
+        let claude = &unwired;
         let env = LaunchEnv::default();
 
         let fresh = worker_spec(&worker(None), claude, &env).unwrap();
@@ -489,6 +507,30 @@ mod tests {
             old_tmux.argv, resumed.argv,
             "a tmux worker already took its id"
         );
+    }
+
+    #[test]
+    fn wires_the_agents_adapter_in_after_the_program_fresh_and_resumed() {
+        let agents = crate::config::builtin_agents();
+        let mut claude = agents["claude"].clone();
+        claude.adapter = Some("claude-code".into());
+        let env = LaunchEnv {
+            flow_exe: PathBuf::from("/bin/flow"),
+            ..LaunchEnv::default()
+        };
+
+        let fresh = worker_spec(&worker(None), &claude, &env).unwrap();
+        let resumed = worker_spec(&worker(Some(HOSTED)), &claude, &env).unwrap();
+
+        for spec in [&fresh, &resumed] {
+            assert_eq!(spec.argv[0], "claude");
+            assert_eq!(spec.argv[1], "--settings");
+            assert!(spec.argv[2].contains("\"/bin/flow\""), "{}", spec.argv[2]);
+        }
+        assert_eq!(&fresh.argv[3..5], ["-n", "shop-217"]);
+        assert_eq!(&resumed.argv[5..], ["--resume", "7f3c"]);
+        claude.adapter = Some("codex".into());
+        assert_eq!(worker_spec(&worker(None), &claude, &env), None);
     }
 
     #[test]

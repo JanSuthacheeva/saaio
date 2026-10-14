@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
-use crate::config::Config;
+use crate::adapter::Adapter;
+use crate::config::{Agent, Config};
 use crate::launch::{self, LaunchEnv, PaneSpec};
 use crate::proto::PaneKey;
 use crate::view::FlowView;
@@ -11,6 +12,16 @@ pub struct Wanted {
     pub open: Vec<PaneSpec>,
     pub close: Vec<PaneKey>,
     pub failed: Vec<(PaneKey, String)>,
+}
+
+/// Why worker_spec found no command for an agent: an adapter flow does not know, or no way to resume.
+pub fn unopenable(name: &str, agent: &Agent) -> String {
+    match &agent.adapter {
+        Some(adapter) if Adapter::named(adapter).is_none() => {
+            format!("agent {name} uses adapter {adapter}, which flow does not know")
+        }
+        _ => format!("agent {name} cannot resume a session"),
+    }
 }
 
 /// Opens every unfinished flow with a workspace not in known; closes worker panes whose flow is gone;
@@ -39,9 +50,7 @@ pub fn reconcile(
         };
         match launch::worker_spec(flow, agent, env) {
             Some(spec) => wanted.open.push(spec),
-            None => wanted
-                .failed
-                .push((key, format!("agent {name} cannot resume a session"))),
+            None => wanted.failed.push((key, unopenable(name, agent))),
         }
     }
     for key in open {
@@ -145,7 +154,7 @@ mod tests {
         );
 
         assert_eq!(keys(&wanted), vec![worker("new"), worker("hosted")]);
-        assert_eq!(wanted.open[1].argv[3], "--resume");
+        assert!(wanted.open[1].argv.contains(&"--resume".to_string()));
         assert!(wanted.close.is_empty());
         assert!(wanted.failed.is_empty());
     }
@@ -202,6 +211,12 @@ mod tests {
         );
 
         assert_eq!(keys(&wanted), vec![worker("fresh-aider")]);
+        let mut odd = builtin_agents()["claude"].clone();
+        odd.adapter = Some("codex".into());
+        assert_eq!(
+            unopenable("claude", &odd),
+            "agent claude uses adapter codex, which flow does not know"
+        );
         assert_eq!(
             wanted.failed,
             vec![
