@@ -406,19 +406,34 @@ pub fn skipped() -> Document {
     }))
 }
 
-/// cleared: n, names[n], help.
-pub fn cleared(names: &[String]) -> Document {
+/// cleared: n, names[n], kept[n]{name,path} for worktrees with uncommitted work, help.
+pub fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
+    #[derive(Serialize)]
+    struct Kept<'a> {
+        name: &'a str,
+        path: &'a str,
+    }
     #[derive(Serialize)]
     struct Cleared<'a> {
         cleared: usize,
         #[serde(skip_serializing_if = "<[String]>::is_empty")]
         names: &'a [String],
-        help: [&'static str; 1],
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        kept: Vec<Kept<'a>>,
+        help: Vec<&'static str>,
+    }
+    let mut help = vec!["Run `flow` to see what is left"];
+    if !kept.is_empty() {
+        help.push("Commit or discard the work in a kept worktree, then remove it with `git worktree remove <path>`");
     }
     Document::Toon(toon(&Cleared {
         cleared: names.len(),
         names,
-        help: ["Run `flow` to see what is left"],
+        kept: kept
+            .iter()
+            .map(|(name, path)| Kept { name, path })
+            .collect(),
+        help,
     }))
 }
 
@@ -744,11 +759,11 @@ mod tests {
     #[test]
     fn cleared_counts_and_names_the_removed_flows() {
         assert_eq!(
-            cleared(&["export-csv".into(), "shop-198".into()]).text(),
+            cleared(&["export-csv".into(), "shop-198".into()], &[]).text(),
             "cleared: 2\nnames[2]: export-csv,shop-198\nhelp[1]: Run `flow` to see what is left"
         );
         assert_eq!(
-            cleared(&[]).text(),
+            cleared(&[], &[]).text(),
             "cleared: 0\nhelp[1]: Run `flow` to see what is left"
         );
     }

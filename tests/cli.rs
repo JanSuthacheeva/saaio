@@ -521,3 +521,58 @@ fn start_says_when_every_slot_is_taken() {
         stdout(&output)
     );
 }
+
+#[test]
+fn clear_tears_down_and_removes_clean_worktrees_but_keeps_uncommitted_work() {
+    let lab = Lab::new();
+    lab.hook(
+        "teardown",
+        "#!/bin/sh\necho \"$FLOW_NAME\" >> \"$FLOW_REPO/torn-down\"\n",
+    );
+    assert!(lab.start(&["SHOP-1 clean one"], true).status.success());
+    assert!(lab.start(&["SHOP-2 dirty one"], true).status.success());
+    assert!(lab.start(&["SHOP-3 still running"], true).status.success());
+    let worktrees = lab.repo.join(".flow/worktrees");
+    fs::write(worktrees.join("shop-2/work.txt"), "unsaved").unwrap();
+    for name in ["shop-1", "shop-2"] {
+        assert!(
+            flow(&lab.home, &["report", "--flow", name, "ended"])
+                .status
+                .success()
+        );
+    }
+
+    let output = flow(&lab.home, &["clear"]);
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(text.starts_with("cleared: 2\n"), "{text}");
+    assert!(
+        text.contains(&format!(
+            "kept[1]{{name,path}}:\n  shop-2,{}",
+            worktrees.join("shop-2").display()
+        )),
+        "{text}"
+    );
+    assert!(!worktrees.join("shop-1").exists());
+    assert!(worktrees.join("shop-2").exists());
+    assert!(worktrees.join("shop-3").exists());
+    let torn: Vec<String> = fs::read_to_string(lab.repo.join("torn-down"))
+        .unwrap()
+        .lines()
+        .map(String::from)
+        .collect();
+    let mut torn = torn;
+    torn.sort();
+    assert_eq!(torn, vec!["shop-1", "shop-2"]);
+    let branches = Command::new("git")
+        .arg("-C")
+        .arg(&lab.repo)
+        .args(["branch", "--list", "flow/*"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(branches.stdout).unwrap().lines().count(),
+        3
+    );
+}

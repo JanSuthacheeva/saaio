@@ -106,6 +106,8 @@ fn start(store: &Store, config: &Config, cwd: &Path, in_tmux: bool, flow_home: O
          launch: Launch, now: u64) -> Result<Document, Failure>;
 fn append_workspace(store: &Store, id: &str, space: &view::Workspace, now: u64) -> Result<(), Failure>;
 fn clear(store: &Store, now: u64) -> Result<Document, Failure>;   // + teardown and worktree removal
+/// The repository above <repo>/.flow/worktrees/<name> (added while building).
+fn repo_of(space: &view::Workspace) -> Option<PathBuf>;
 ```
 
 ### event.rs, fold.rs, view.rs, output.rs (modified)
@@ -176,6 +178,6 @@ pub fn cleared(names: &[String], kept: &[(String, String)]) -> Document;
 - [x] Add `config.rs` with the `toml` crate (`Config::load`, `agent`, `builtin_agents`) with unit tests
 - [x] Add `workspace.rs` (`repo_root`, `create_worktree`, `run_hook`, `open_window`, `remove_worktree`) with tests on a temp git repo
 - [x] Add `flow start` (`start`, `output::started`) with tests/cli.rs cases using a fake tmux: start, outside tmux, outside a repo, failing hook, full slots
-- [ ] Extend `flow clear` with teardown and worktree removal (`output::cleared` with kept) with tests/cli.rs cases for clean and dirty worktrees
+- [x] Extend `flow clear` with teardown and worktree removal (`output::cleared` with kept) with tests/cli.rs cases for clean and dirty worktrees
 - [ ] Update README, CLAUDE.md and the handover: `flow start`, hooks, slots, a Docker hook example
 - [ ] End-to-end: in a real repo inside tmux, `flow start` a tiny request, watch the worker run /ship-feature with the board in the master, then finish or end it and `flow clear`

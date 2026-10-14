@@ -13,7 +13,6 @@ use crate::view::Workspace;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hook {
     Setup,
-    #[allow(dead_code)] // used by flow clear (next task)
     Teardown,
 }
 
@@ -74,7 +73,6 @@ pub fn open_window(argv: &[String]) -> Result<String> {
 }
 
 /// Removes a clean worktree; Ok(false) when git refuses (uncommitted work).
-#[allow(dead_code)] // used by flow clear (next task)
 pub fn remove_worktree(repo: &Path, workspace: &Workspace) -> Result<bool> {
     let argv = worktree_remove_argv(repo, workspace);
     let output = Command::new(&argv[0])

@@ -392,13 +392,33 @@ fn report(
 fn clear(store: &Store, now: u64) -> Result<Document, Failure> {
     let (flows, _) = views(store, now);
     let mut names = Vec::new();
+    let mut kept = Vec::new();
     for flow in flows.iter().filter(|flow| flow.is_finished()) {
+        if let Some(space) = &flow.workspace
+            && let Some(repo) = repo_of(space)
+            && Path::new(&space.path).exists()
+        {
+            let env = launch::hook_env(&flow.id, &flow.name, &repo, space);
+            let _ = workspace::run_hook(&repo, Hook::Teardown, space, &env);
+            if !workspace::remove_worktree(&repo, space).unwrap_or(false) {
+                kept.push((flow.name.clone(), space.path.clone()));
+            }
+        }
         store.remove(&flow.id).map_err(|error| {
             Failure::from_io(error.context(format!("could not clear {}", flow.name)))
         })?;
         names.push(flow.name.clone());
     }
-    Ok(output::cleared(&names))
+    Ok(output::cleared(&names, &kept))
+}
+
+/// The repository a flow worktree belongs to: the path above .flow/worktrees/<name>.
+fn repo_of(space: &view::Workspace) -> Option<PathBuf> {
+    let path = Path::new(&space.path);
+    let worktrees = path.parent()?;
+    worktrees
+        .ends_with(launch::WORKTREES_DIR)
+        .then(|| worktrees.parent()?.parent().map(Path::to_path_buf))?
 }
 
 fn status(
