@@ -181,7 +181,7 @@ install the ambient-context hook (AXI principle 7).
 
 ## Where things are
 
-- This repo: `~/projects/flow` (no remote yet). Plan: `.claude/plans/plan-flow-core.md`.
+- This repo: `~/projects/flow`, private on GitHub at https://github.com/JanSuthacheeva/flow. Plan: `.claude/plans/plan-flow-core.md`.
   Design pages: `docs/design/` (system approaches round 2, core approaches, core
   implementation) - open them in a browser or with `npx -y lavish-axi <file>`.
 - Mods: `~/projects/claude-code-mods` (plan-progress, skill-usage, merge-status), installed
