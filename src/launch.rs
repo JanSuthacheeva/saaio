@@ -6,10 +6,13 @@ use crate::view::{FlowView, Workspace};
 pub const MAX_SLOTS: u8 = 9;
 pub const WORKTREES_DIR: &str = ".flow/worktrees";
 
-/// Ticket key lowercased (SHOP-217 -> shop-217), else the first four words as a slug;
-/// -2, -3 ... when taken.
-pub fn flow_name(request: &str, taken: &[String]) -> String {
-    let base = ticket_key(request).unwrap_or_else(|| word_slug(request));
+/// The flow's name: an explicit name slugified whole, else the request's ticket key lowercased
+/// (SHOP-217 -> shop-217), else its first four words; -2, -3 ... when taken.
+pub fn flow_name(name: Option<&str>, request: &str, taken: &[String]) -> String {
+    let base = match name {
+        Some(name) => slugify(name, usize::MAX),
+        None => ticket_key(request).unwrap_or_else(|| slugify(request, 4)),
+    };
     if !taken.contains(&base) {
         return base;
     }
@@ -150,18 +153,14 @@ fn ticket_key(request: &str) -> Option<String> {
     is_key.then(|| first.to_ascii_lowercase())
 }
 
-/// The first four words, lowercased, letters and digits only, joined by dashes.
-fn word_slug(request: &str) -> String {
-    let words: Vec<String> = request
-        .split_whitespace()
-        .map(|word| {
-            word.chars()
-                .filter(|c| c.is_ascii_alphanumeric())
-                .collect::<String>()
-                .to_ascii_lowercase()
-        })
+/// Lowercase words of letters and digits, at most `max_words`, joined by single dashes;
+/// any other character separates words. "flow" when nothing is left.
+fn slugify(text: &str, max_words: usize) -> String {
+    let words: Vec<String> = text
+        .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|word| !word.is_empty())
-        .take(4)
+        .take(max_words)
+        .map(str::to_ascii_lowercase)
         .collect();
     if words.is_empty() {
         "flow".to_string()
@@ -210,22 +209,45 @@ mod tests {
     }
 
     #[test]
-    fn names_a_flow_after_its_ticket_or_its_first_words() {
-        assert_eq!(flow_name("SHOP-217 add CSV export", &[]), "shop-217");
+    fn slugifies_an_explicit_name_and_the_words_of_a_request() {
         assert_eq!(
-            flow_name("fix the rounding on all invoices", &[]),
+            flow_name(Some("skills-reporting"), "x", &[]),
+            "skills-reporting"
+        );
+        assert_eq!(
+            flow_name(Some("Skills Reporting"), "x", &[]),
+            "skills-reporting"
+        );
+        assert_eq!(flow_name(Some("  a / b__c.d  "), "x", &[]), "a-b-c-d");
+        assert_eq!(
+            flow_name(Some("one two three four five six"), "x", &[]),
+            "one-two-three-four-five-six"
+        );
+        assert_eq!(
+            flow_name(None, "look at docs/flow-handover.md and build it", &[]),
+            "look-at-docs-flow"
+        );
+        assert_eq!(flow_name(Some("SHOP-217"), "x", &[]), "shop-217");
+        assert_eq!(flow_name(Some("!!!"), "x", &[]), "flow");
+    }
+
+    #[test]
+    fn names_a_flow_after_its_ticket_or_its_first_words() {
+        assert_eq!(flow_name(None, "SHOP-217 add CSV export", &[]), "shop-217");
+        assert_eq!(
+            flow_name(None, "fix the rounding on all invoices", &[]),
             "fix-the-rounding-on"
         );
-        assert_eq!(flow_name("Add: CSV export!", &[]), "add-csv-export");
+        assert_eq!(flow_name(None, "Add: CSV export!", &[]), "add-csv-export");
         assert_eq!(
-            flow_name("SHOP-217 x", &strings(&["shop-217"])),
+            flow_name(None, "SHOP-217 x", &strings(&["shop-217"])),
             "shop-217-2"
         );
         assert_eq!(
-            flow_name("SHOP-217 x", &strings(&["shop-217", "shop-217-2"])),
+            flow_name(None, "SHOP-217 x", &strings(&["shop-217", "shop-217-2"])),
             "shop-217-3"
         );
-        assert_eq!(flow_name("!!!", &[]), "flow");
+        assert_eq!(flow_name(None, "!!!", &[]), "flow");
     }
 
     #[test]

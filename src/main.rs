@@ -293,7 +293,7 @@ fn start(
         .filter(|flow| !flow.is_finished())
         .map(|flow| flow.name.clone())
         .collect();
-    let name = launch::flow_name(launch.name.as_deref().unwrap_or(&launch.request), &taken);
+    let name = launch::flow_name(launch.name.as_deref(), &launch.request, &taken);
     let slot = launch::free_slot(&flows).ok_or_else(|| {
         Failure::error(
             format!("all {} slots are in use", launch::MAX_SLOTS),
