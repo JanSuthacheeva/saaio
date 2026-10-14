@@ -178,7 +178,8 @@ impl Host {
         });
     }
 
-    /// The pane's rows: all when full, else the damaged ones; scrolled back by history lines.
+    /// The pane's rows: all when full, else the damaged ones; scrolled back by history lines,
+    /// at most as far as the history goes (the frame says how far that was).
     pub fn frame(&mut self, key: &PaneKey, full: bool, history: Option<u32>) -> Option<Frame> {
         let pane = self.panes.get_mut(key)?;
         let damaged = pane.term.damaged();
@@ -187,6 +188,7 @@ impl Host {
         } else {
             damaged
         };
+        let history = history.map(|back| back.min(pane.term.history_len()));
         let back = history.unwrap_or(0);
         Some(Frame {
             key: key.clone(),
@@ -484,5 +486,26 @@ mod tests {
             .find(|(index, _)| *index == row)
             .map(|(_, cells)| cells.iter().map(|cell| cell.text.as_str()).collect())
             .unwrap_or_default()
+    }
+
+    #[test]
+    fn scrolls_back_no_further_than_the_history_goes() {
+        let (mut host, rx) = host();
+        let key = PaneKey::Master;
+        host.open(spec(key.clone(), "seq 1 40; read x")).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !screen(&mut host, &key).contains("40") && Instant::now() < deadline {
+            if let Ok(HostEvent::Output(key, bytes)) = rx.recv_timeout(Duration::from_millis(200)) {
+                host.feed(&key, &bytes);
+            }
+        }
+
+        let top = host.frame(&key, false, Some(u32::MAX)).unwrap();
+
+        let back = top.history.unwrap();
+        assert!(back > 0 && back < 40, "{back}");
+        assert_eq!(screen_row(&top, 0).trim(), "1");
+        assert!(top.full && top.cursor.is_none());
+        host.close(&key);
     }
 }

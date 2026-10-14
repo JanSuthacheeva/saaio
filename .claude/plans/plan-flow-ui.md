@@ -244,7 +244,8 @@ impl Host {
     pub fn exited(&mut self, key: &PaneKey, code: Option<u32>);
     /// SIGHUP to the child's process group, SIGKILL after 3 s; the pane is gone once it exits.
     pub fn close(&mut self, key: &PaneKey);
-    /// The pane's rows: all when full, else the damaged ones; scrolled back by history lines.
+    /// The pane's rows: all when full, else the damaged ones; scrolled back by history lines, at most as
+    /// far as the history goes; Frame.history says how far that was, so the UI's g (top) can ask for u32::MAX.
     pub fn frame(&mut self, key: &PaneKey, full: bool, history: Option<u32>) -> Option<Frame>;
     pub fn panes(&self) -> Vec<PaneInfo>;
     /// Ends synchronized updates their programs left open too long (Terminal::expire_sync).
@@ -564,7 +565,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [x] Add ui/peek.rs (transcript, tail, PeekCache) with fixture tests; sidebar peek, C-space j/k and enter; ended flows stay under DONE until `flow clear` and their peek shows branch and worktree
 - [x] Add ui/board.rs BoardView and C-space o, with TestBackend tests against the board screen
 - [x] Add ui/newflow.rs NewFlowForm, C-space n and the `flow start` thread with App::on_ran, with tests
-- [ ] Add ui/rail.rs Rail and C-space b
+- [x] Add ui/rail.rs Rail and C-space b
 - [ ] History (C-space [, ClientMsg::History) through Host::frame
 - [ ] Help (C-space ?) and the stop dialog (C-space Q): unfinished workers listed, `k` keeps them, `e` ends them (StopServer { end_flows }) and the UI prints each ended flow's branch and worktree as it quits, `y` when none; tests for each answer
 

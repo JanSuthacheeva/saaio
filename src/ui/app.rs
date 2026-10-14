@@ -28,6 +28,8 @@ pub enum View {
     Panes,
     Board(BoardState),
     NewFlow(NewFlowForm),
+    /// Scrolled back this many lines in the pane's history (C-space [).
+    History(u32),
     ConfirmStop,
 }
 
@@ -206,6 +208,9 @@ impl App {
                 if frame.key != self.focus {
                     return vec![];
                 }
+                if let (View::History(_), Some(back)) = (&self.view, frame.history) {
+                    self.view = View::History(back);
+                }
                 self.screen.apply(frame);
                 if self.screen.modes == self.mirrored {
                     return vec![];
@@ -294,6 +299,30 @@ impl App {
         match self.view {
             View::ConfirmStop => draw_confirm_stop(frame, areas.pane, theme),
             View::Board(_) => {}
+            View::History(back) => {
+                let hint = Line::from(vec![
+                    Span::styled(format!(" ↑ {back} lines back   "), theme.state.waiting),
+                    Span::styled("k j", theme.ui.key),
+                    Span::styled(" scroll  ", theme.ui.faint),
+                    Span::styled("g G", theme.ui.key),
+                    Span::styled(" ends  ", theme.ui.faint),
+                    Span::styled("q", theme.ui.key),
+                    Span::styled(" live ", theme.ui.faint),
+                ]);
+                let edge = Rect::new(
+                    areas.frame.x,
+                    areas.frame.y + areas.frame.height.saturating_sub(1),
+                    areas.frame.width,
+                    1,
+                );
+                frame.render_widget(
+                    Paragraph::new(hint).alignment(Alignment::Right),
+                    Rect {
+                        width: edge.width.saturating_sub(2),
+                        ..edge
+                    },
+                );
+            }
             View::NewFlow(ref form) => {
                 let flows: Vec<FlowView> = self.workers().into_iter().cloned().collect();
                 let repo = form.repo.display().to_string();
@@ -367,6 +396,10 @@ impl App {
                 }
                 vec![Effect::Send(ClientMsg::Resize(after.pane_size()))]
             }
+            Command::History => {
+                self.view = View::History(0);
+                vec![Effect::Send(ClientMsg::History(Some(0)))]
+            }
             Command::NewFlow => {
                 self.view = View::NewFlow(NewFlowForm::new(self.focused_repo()));
                 vec![]
@@ -397,6 +430,9 @@ impl App {
         if let View::Board(state) = self.view {
             return self.on_board_key(state, key);
         }
+        if let View::History(back) = self.view {
+            return self.on_history_key(back, key);
+        }
         if let View::NewFlow(form) = &mut self.view {
             return match form.on_key(key) {
                 FormAction::Edit => vec![],
@@ -417,11 +453,38 @@ impl App {
                 Effect::Send(ClientMsg::StopServer),
                 Effect::Quit("stopped the flow server and every session in it".to_string()),
             ],
-            View::ConfirmStop | View::Panes | View::Board(_) | View::NewFlow(_) => {
+            View::ConfirmStop
+            | View::Panes
+            | View::Board(_)
+            | View::NewFlow(_)
+            | View::History(_) => {
                 self.view = View::Panes;
                 vec![]
             }
         }
+    }
+
+    /// k j a line, C-u C-d half a page, C-b C-f a page, g G the ends, q or esc back to live.
+    fn on_history_key(&mut self, back: u32, key: Key) -> Vec<Effect> {
+        let page = self.areas().pane.height.max(2) as i64;
+        let step: i64 = match key {
+            Key::Char('k') | Key::Up => 1,
+            Key::Char('j') | Key::Down => -1,
+            Key::Ctrl('u') => page / 2,
+            Key::Ctrl('d') => -(page / 2),
+            Key::Ctrl('b') => page,
+            Key::Ctrl('f') => -page,
+            Key::Char('g') => i64::from(u32::MAX),
+            Key::Char('G') => -i64::from(u32::MAX),
+            Key::Char('q') | Key::Esc => {
+                self.view = View::Panes;
+                return vec![Effect::Send(ClientMsg::History(None))];
+            }
+            _ => return vec![],
+        };
+        let next = (i64::from(back) + step).clamp(0, i64::from(u32::MAX)) as u32;
+        self.view = View::History(next);
+        vec![Effect::Send(ClientMsg::History(Some(next)))]
     }
 
     fn on_board_key(&mut self, state: BoardState, key: Key) -> Vec<Effect> {
@@ -514,6 +577,9 @@ impl App {
         }
         self.focus = key.clone();
         self.cursor = None;
+        if matches!(self.view, View::History(_)) {
+            self.view = View::Panes;
+        }
         self.screen = Screen::default();
         vec![Effect::Send(ClientMsg::Focus(key))]
     }
@@ -1683,5 +1749,47 @@ mod tests {
                 rows: 42
             }))]
         );
+    }
+
+    #[test]
+    fn scrolls_the_history_and_goes_back_to_live() {
+        let mut app = App::new(SIZE);
+
+        assert_eq!(
+            app.on_input(Routed::Command(Command::History)),
+            vec![Effect::Send(ClientMsg::History(Some(0)))]
+        );
+        assert_eq!(
+            app.on_input(Routed::View(vec![Key::Char('k'), Key::Char('k')])),
+            vec![
+                Effect::Send(ClientMsg::History(Some(1))),
+                Effect::Send(ClientMsg::History(Some(2)))
+            ]
+        );
+        app.on_input(Routed::View(vec![Key::Char('g')]));
+        let mut top = frame_with("1", Modes::default());
+        top.history = Some(120);
+        app.on_server(ServerMsg::Frame(top));
+        assert_eq!(
+            app.view,
+            View::History(120),
+            "the server says where the history ends"
+        );
+        assert_eq!(
+            app.on_input(Routed::View(vec![Key::Ctrl('d')])),
+            vec![Effect::Send(ClientMsg::History(Some(117)))]
+        );
+
+        let terminal = render(&app);
+        assert!(
+            row(&terminal, 7).contains("↑ 117 lines back   k j scroll  g G ends  q live"),
+            "{}",
+            row(&terminal, 7)
+        );
+        assert_eq!(
+            app.on_input(Routed::View(vec![Key::Char('q')])),
+            vec![Effect::Send(ClientMsg::History(None))]
+        );
+        assert!(!app.is_modal());
     }
 }
