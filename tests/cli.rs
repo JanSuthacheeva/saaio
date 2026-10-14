@@ -341,6 +341,39 @@ impl Lab {
             .unwrap()
     }
 
+    /// The claude agent flow runs, as config.toml lines.
+    fn agent(&self, lines: &str) {
+        fs::create_dir_all(&self.home).unwrap();
+        fs::write(
+            self.home.join("no-config.toml"),
+            format!("[agents.claude]\n{lines}\n"),
+        )
+        .unwrap();
+    }
+
+    /// `flow server` in the repo, once it listens.
+    fn server(&self) -> std::process::Child {
+        let server = Command::new(env!("CARGO_BIN_EXE_flow"))
+            .arg("server")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .current_dir(&self.repo)
+            .env("FLOW_HOME", &self.home)
+            .env("FLOW_CONFIG", self.home.join("no-config.toml"))
+            .spawn()
+            .unwrap();
+        let socket = self.home.join("server.sock");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::os::unix::net::UnixStream::connect(&socket).is_err() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the server never listened"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        server
+    }
+
     fn hook(&self, name: &str, script: &str) {
         let dir = self.repo.join(".flow");
         fs::create_dir_all(&dir).unwrap();
@@ -395,30 +428,13 @@ fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_flow_ui() {
 #[test]
 fn start_hands_the_worker_to_a_running_flow_server() {
     let lab = Lab::new();
-    let config = lab.home.join("no-config.toml");
-    fs::create_dir_all(&lab.home).unwrap();
-    fs::write(
-        &config,
-        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
-    )
-    .unwrap();
-    let mut server = Command::new(env!("CARGO_BIN_EXE_flow"))
-        .arg("server")
-        .stdout(std::process::Stdio::null())
-        .current_dir(&lab.repo)
-        .env("FLOW_HOME", &lab.home)
-        .env("FLOW_CONFIG", &config)
-        .spawn()
-        .unwrap();
-    let socket = lab.home.join("server.sock");
+    lab.agent(
+        r#"command = ["cat"]
+prompt = ""
+resume = ["cat"]"#,
+    );
+    let mut server = lab.server();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while !socket.exists() {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the server never listened"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(20));
-    }
 
     let output = lab.start(&["SHOP-217 add CSV export"]);
 
@@ -478,6 +494,51 @@ fn status_says_where_a_flows_code_is_and_whether_its_worktree_is_left() {
     let gone = stdout(&lab.run(&["status", "shop-217"]));
     assert!(gone.contains("worktree_exists: false"), "{gone}");
     assert!(gone.contains("its commits stay on flow/shop-217"), "{gone}");
+}
+
+#[test]
+fn after_a_crash_the_server_resumes_the_master_and_every_worker() {
+    let lab = Lab::new();
+    let log = lab.home.join("agents.log");
+    lab.agent(&format!(
+        r#"command = ["sh", "-c", "echo fresh {{name}} >> {log}; exec cat"]
+prompt = ""
+resume = ["sh", "-c", "echo resumed {{name}} >> {log}; exec cat"]"#,
+        log = log.display()
+    ));
+    let lines = || {
+        let mut lines: Vec<String> = fs::read_to_string(&log)
+            .unwrap_or_default()
+            .lines()
+            .map(String::from)
+            .collect();
+        lines.sort();
+        lines
+    };
+    let wait_for = |count: usize| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while lines().len() < count {
+            assert!(std::time::Instant::now() < deadline, "{:?}", lines());
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    };
+    let mut server = lab.server();
+    assert!(lab.start(&["SHOP-1 first"]).status.success());
+    assert!(lab.start(&["SHOP-2 second"]).status.success());
+    wait_for(3);
+    assert_eq!(lines(), ["fresh master", "fresh shop-1", "fresh shop-2"]);
+
+    server.kill().unwrap();
+    server.wait().unwrap();
+    let mut again = lab.server();
+    wait_for(6);
+
+    assert_eq!(
+        lines()[3..],
+        ["resumed master", "resumed shop-1", "resumed shop-2"]
+    );
+    assert!(lab.run(&["ui", "--stop"]).status.success());
+    assert!(again.wait().unwrap().success());
 }
 
 #[test]
