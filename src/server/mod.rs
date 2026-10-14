@@ -256,6 +256,9 @@ impl Server {
                 self.send_to(old, &ServerMsg::Detached);
                 self.drop_conn(old);
             }
+            // A UI starts on the master, live; the server follows, whatever the last UI looked at.
+            self.focus = PaneKey::Master;
+            self.history = None;
             self.host.resize(size);
         }
         if let Some(entry) = self.conns.get_mut(&conn) {
@@ -1087,6 +1090,33 @@ mod tests {
         };
         assert_eq!(ends(&csv), 1);
         assert_eq!(ends(&done), 1, "a finished flow is left alone");
+    }
+
+    #[test]
+    fn a_ui_that_attaches_again_starts_on_the_master() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let csv = started_flow(&store, dir.path(), "csv", "claude");
+        let (paths, handle) = start(dir.path());
+        let size = Size { cols: 30, rows: 4 };
+        let mut first = connect(&paths.socket, Role::Attach { size });
+        let mut panes = Vec::new();
+        wait_for(&mut first, &mut panes, &csv, Some(PaneStatus::Running));
+        proto::write_msg(&mut first, &ClientMsg::Focus(PaneKey::Flow(csv.clone()))).unwrap();
+        proto::write_msg(&mut first, &ClientMsg::History(Some(3))).unwrap();
+        drop(first);
+
+        let mut again = connect(&paths.socket, Role::Attach { size });
+        let frame = loop {
+            if let ServerMsg::Frame(frame) = recv(&mut again) {
+                break frame;
+            }
+        };
+
+        assert_eq!(frame.key, PaneKey::Master);
+        assert_eq!(frame.history, None);
+        proto::write_msg(&mut again, &ClientMsg::StopServer).unwrap();
+        handle.join().unwrap().unwrap();
     }
 
     #[test]
