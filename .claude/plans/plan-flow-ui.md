@@ -436,7 +436,8 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
    6. `App::on_server(Frame) -> Screen::apply`; `Effect::Mirror(modes)` when they changed -> draw
    - Error: write to an exited pane -> Ok, nothing written; sidebar shows it exited
 3. The master runs flow start; the server opens the worker
-   1. `main::start -> create_worktree, Store::create(Started), Store::append(Workspace { window: None }), run_hook(Setup)`
+   1. `main::start -> create_worktree, Store::create(Started), run_hook(Setup), Store::append(Workspace { window: None })`
+      (the Workspace event last, so the server opens the worker only once setup is done)
    2. `main::start -> Client::connect(Control)`: Some -> `Opening::Running`, None -> `Opening::WhenUiRuns` -> `output::started`
    3. Tick -> `StoreWatch::changed(&store, now) -> Store::logs() -> fold::views -> fold::board`
    4. `Server::refresh -> reconcile(&flows, &open, &known, &config, &env): Wanted`
@@ -538,9 +539,9 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 
 ### Milestone 3: flow start, remove and clear through the server
 
-- [ ] main::start without tmux: no window, Opening via Client::connect(Control), output::started with pane; update tests/cli.rs
+- [x] main::start without tmux: no window, Opening via Client::connect(Control), output::started with pane; update tests/cli.rs
 - [ ] client::close_flow; main::remove and main::clear close panes first; output::removed with pane; tests
-- [ ] Remove window_argv, kill_window_argv, open_window, close_window and their tests
+- [ ] Remove kill_window_argv, close_window and their tests (window_argv and open_window went with 3.1)
 - [ ] Reopen exited panes and ended flows (C-space r, ClientMsg::Reopen: resume the flow's agent even when its flow is ended) with an integration test
 - [ ] `flow status <name>` shows the worktree path, the branch and whether the worktree still exists, for every flow with a workspace; tests/cli.rs
 

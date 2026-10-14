@@ -66,12 +66,6 @@ pub fn run_hook(
     Ok(true)
 }
 
-/// Opens the worker window; returns its id (@14).
-pub fn open_window(argv: &[String]) -> Result<String> {
-    let stdout = run(argv)?;
-    Ok(stdout.trim().to_string())
-}
-
 /// Closes a worker's tmux window; Ok(false) when it is already gone.
 pub fn close_window(window: &str) -> Result<bool> {
     Ok(run(&kill_window_argv(window)).is_ok())
@@ -275,20 +269,6 @@ mod tests {
         let error = run_hook(&repo, Hook::Setup, &workspace, &[]).unwrap_err();
 
         assert_eq!(error.to_string(), "port 8001 is taken");
-    }
-
-    #[test]
-    fn returns_the_window_id_tmux_prints() {
-        let argv: Vec<String> = ["sh", "-c", "echo @14"].map(String::from).to_vec();
-
-        assert_eq!(open_window(&argv).unwrap(), "@14");
-        let failing: Vec<String> = ["sh", "-c", "echo 'no server running' >&2; exit 1"]
-            .map(String::from)
-            .to_vec();
-        assert_eq!(
-            open_window(&failing).unwrap_err().to_string(),
-            "no server running"
-        );
     }
 
     #[test]

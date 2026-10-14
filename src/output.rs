@@ -306,8 +306,15 @@ fn name_of<T: Serialize>(value: &T) -> String {
     }
 }
 
-/// flow, id, worktree, branch, slot, setup (ran / none / failed: ...), agent, window, help.
-pub fn started(flow: &FlowView, setup: &str) -> Document {
+/// Whether flow ui opens a started worker now or once it runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Opening {
+    Running,
+    WhenUiRuns,
+}
+
+/// flow, id, worktree, branch, slot, setup (ran / none / failed: ...), agent, pane, help.
+pub fn started(flow: &FlowView, setup: &str, opening: Opening) -> Document {
     #[derive(Serialize)]
     struct Started<'a> {
         flow: &'a str,
@@ -317,14 +324,23 @@ pub fn started(flow: &FlowView, setup: &str) -> Document {
         slot: u8,
         setup: &'a str,
         agent: &'a str,
-        window: &'a str,
+        pane: &'a str,
         help: Vec<String>,
     }
     let workspace = flow
         .workspace
         .as_ref()
         .expect("a started flow has a workspace");
-    let window = workspace.window.as_deref().unwrap_or("");
+    let (pane, watch) = match opening {
+        Opening::Running => (
+            "opening",
+            format!("flow ui opens {} in its sidebar", flow.name),
+        ),
+        Opening::WhenUiRuns => (
+            "when flow ui runs",
+            "Run `flow ui` to open the worker".to_string(),
+        ),
+    };
     Document::Toon(toon(&Started {
         flow: &flow.name,
         id: &flow.id,
@@ -333,11 +349,8 @@ pub fn started(flow: &FlowView, setup: &str) -> Document {
         slot: workspace.slot,
         setup,
         agent: &workspace.agent,
-        window,
-        help: vec![
-            format!("Run `tmux select-window -t {window}` to watch it"),
-            "Run `flow` for all flows".to_string(),
-        ],
+        pane,
+        help: vec![watch, "Run `flow` for all flows".to_string()],
     }))
 }
 

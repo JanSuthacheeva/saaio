@@ -26,7 +26,7 @@ use clap::{Parser, Subcommand};
 use client::Client;
 use config::Config;
 use event::{Event, EventKind, Mode, Phase};
-use output::{Document, Failure};
+use output::{Document, Failure, Opening};
 use proto::{ClientMsg, Role};
 use store::Store;
 use ui::theme::Theme;
@@ -214,13 +214,10 @@ fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure> {
             )
             .map_err(Failure::from_io)?;
             let cwd = env::current_dir().map_err(|error| Failure::from_io(error.into()))?;
-            let in_tmux = env::var_os("TMUX").is_some_and(|value| !value.is_empty());
             start(
                 store,
                 &config,
                 &cwd,
-                in_tmux,
-                env_path("FLOW_HOME"),
                 Launch {
                     request,
                     name,
@@ -325,12 +322,10 @@ fn start(
     store: &Store,
     config: &Config,
     cwd: &Path,
-    in_tmux: bool,
-    flow_home: Option<PathBuf>,
     launch: Launch,
     now: u64,
 ) -> Result<Document, Failure> {
-    let Some((agent_name, agent)) = config.agent(launch.agent.as_deref()) else {
+    let Some((agent_name, _)) = config.agent(launch.agent.as_deref()) else {
         let known: Vec<&str> = config.agents.keys().map(String::as_str).collect();
         return Err(Failure::error(
             format!(
@@ -340,12 +335,6 @@ fn start(
             vec![format!("Agents: {}", known.join(", "))],
         ));
     };
-    if !in_tmux {
-        return Err(Failure::error(
-            "flow start opens the worker in a tmux window - run it inside tmux",
-            vec!["Start tmux, then run `flow start <request>` again".to_string()],
-        ));
-    }
     let repo = workspace::repo_root(cwd).map_err(|_| {
         Failure::error(
             "flow start needs a git repository",
@@ -365,7 +354,7 @@ fn start(
             vec!["Run `flow clear` after finished flows".to_string()],
         )
     })?;
-    let mut space = launch::workspace_for(&repo, &name, slot, agent_name);
+    let space = launch::workspace_for(&repo, &name, slot, agent_name);
     workspace::create_worktree(&repo, &space).map_err(Failure::from_io)?;
 
     let first = Event::new(
@@ -377,7 +366,6 @@ fn start(
         },
     );
     let id = store.create(&first).map_err(Failure::from_io)?;
-    append_workspace(store, &id, &space, now)?;
 
     let setup = match workspace::run_hook(
         &repo,
@@ -396,28 +384,16 @@ fn start(
         }
     };
 
-    let mut env = vec![("FLOW_ID".to_string(), id.clone())];
-    if let Some(home) = flow_home {
-        env.push(("FLOW_HOME".to_string(), home.display().to_string()));
-    }
-    let agent_argv = launch::agent_argv(agent, &id, &name, &launch.request);
-    match workspace::open_window(&launch::window_argv(&space, &name, &env, &agent_argv)) {
-        Ok(window) => space.window = Some(window),
-        Err(error) => {
-            store
-                .append(&id, &Event::new(now, EventKind::Ended))
-                .map_err(Failure::from_io)?;
-            return Err(Failure::error(
-                format!("could not open the worker window: {error}"),
-                vec![format!("The worktree stays at {}", space.path)],
-            ));
-        }
-    }
+    // Only now, so flow server opens the worker once setup is done.
     append_workspace(store, &id, &space, now)?;
 
     let events = store.events(&id).map_err(Failure::from_io)?;
     let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");
-    Ok(output::started(&flow, &setup))
+    let opening = match Client::connect(&client::socket_path(store), Role::Control) {
+        Ok(None) => Opening::WhenUiRuns,
+        Ok(Some(_)) | Err(_) => Opening::Running,
+    };
+    Ok(output::started(&flow, &setup, opening))
 }
 
 fn append_workspace(

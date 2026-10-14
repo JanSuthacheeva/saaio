@@ -159,36 +159,6 @@ pub fn pane_env(id: Option<&str>, env: &LaunchEnv) -> Vec<(String, String)> {
     vars
 }
 
-/// tmux new-window -d -P -F '#{window_id}' -n <name> -c <path> -e K=V ... -- <agent argv>
-pub fn window_argv(
-    workspace: &Workspace,
-    name: &str,
-    env: &[(String, String)],
-    agent: &[String],
-) -> Vec<String> {
-    let mut argv: Vec<String> = [
-        "tmux",
-        "new-window",
-        "-d",
-        "-P",
-        "-F",
-        "#{window_id}",
-        "-n",
-        name,
-        "-c",
-        &workspace.path,
-    ]
-    .map(String::from)
-    .to_vec();
-    for (key, value) in env {
-        argv.push("-e".to_string());
-        argv.push(format!("{key}={value}"));
-    }
-    argv.push("--".to_string());
-    argv.extend(agent.iter().cloned());
-    argv
-}
-
 /// FLOW_ID, FLOW_NAME, FLOW_SLOT, FLOW_WORKTREE, FLOW_REPO for the hooks.
 pub fn hook_env(id: &str, name: &str, repo: &Path, workspace: &Workspace) -> Vec<(String, String)> {
     [
@@ -459,32 +429,6 @@ mod tests {
         assert_eq!(
             pane_env(None, &LaunchEnv::default()),
             pairs(&[("TERM", "xterm-256color"), ("COLORTERM", "truecolor")])
-        );
-    }
-
-    #[test]
-    fn opens_the_worker_in_a_background_tmux_window_with_its_environment() {
-        let env = vec![("FLOW_ID".to_string(), "7f3c".to_string())];
-
-        assert_eq!(
-            window_argv(&shop(), "shop-217", &env, &strings(&["claude", "go"])),
-            strings(&[
-                "tmux",
-                "new-window",
-                "-d",
-                "-P",
-                "-F",
-                "#{window_id}",
-                "-n",
-                "shop-217",
-                "-c",
-                "/repo/.flow/worktrees/shop-217",
-                "-e",
-                "FLOW_ID=7f3c",
-                "--",
-                "claude",
-                "go",
-            ])
         );
     }
 

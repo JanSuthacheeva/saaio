@@ -324,7 +324,7 @@ impl Lab {
         fs::write(
             &tmux,
             format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$@\" > {root}/tmux-args\nprintf '%s\\n' \"$*\" >> {root}/tmux-log\necho @14\n",
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {root}/tmux-log\necho @14\n",
                 root = root.display()
             ),
         )
@@ -338,7 +338,7 @@ impl Lab {
         }
     }
 
-    fn start(&self, args: &[&str], in_tmux: bool) -> Output {
+    fn start(&self, args: &[&str]) -> Output {
         let path = format!(
             "{}:{}",
             self.bin.display(),
@@ -352,12 +352,8 @@ impl Lab {
             .env("FLOW_HOME", &self.home)
             .env("FLOW_CONFIG", self.home.join("no-config.toml"))
             .env("PATH", path)
-            .env_remove("FLOW_ID");
-        if in_tmux {
-            command.env("TMUX", "/tmp/tmux-test,1,0");
-        } else {
-            command.env_remove("TMUX");
-        }
+            .env_remove("FLOW_ID")
+            .env_remove("TMUX");
         command.output().unwrap()
     }
 
@@ -388,14 +384,6 @@ impl Lab {
             .collect()
     }
 
-    fn tmux_args(&self) -> Vec<String> {
-        fs::read_to_string(self.bin.parent().unwrap().join("tmux-args"))
-            .unwrap_or_default()
-            .lines()
-            .map(String::from)
-            .collect()
-    }
-
     fn hook(&self, name: &str, script: &str) {
         let dir = self.repo.join(".flow");
         fs::create_dir_all(&dir).unwrap();
@@ -410,11 +398,11 @@ fn set_executable(file: &Path) {
 }
 
 #[test]
-fn start_makes_a_worktree_runs_setup_and_opens_the_worker_window() {
+fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_flow_ui() {
     let lab = Lab::new();
     lab.hook("setup", "#!/bin/sh\necho \"slot $FLOW_SLOT\" > setup-ran\n");
 
-    let output = lab.start(&["SHOP-217 add CSV export"], true);
+    let output = lab.start(&["SHOP-217 add CSV export"]);
 
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
@@ -425,73 +413,93 @@ fn start_makes_a_worktree_runs_setup_and_opens_the_worker_window() {
         "{text}"
     );
     assert!(
-        text.contains("branch: flow/shop-217\nslot: 1\nsetup: ran\nagent: claude\nwindow: @14"),
+        text.contains(
+            "branch: flow/shop-217\nslot: 1\nsetup: ran\nagent: claude\npane: when flow ui runs"
+        ),
         "{text}"
     );
+    assert!(text.contains("Run `flow ui` to open the worker"), "{text}");
     assert_eq!(
         fs::read_to_string(worktree.join("setup-ran"))
             .unwrap()
             .trim(),
         "slot 1"
     );
-
-    let args = lab.tmux_args();
-    assert_eq!(
-        &args[..8],
-        [
-            "new-window",
-            "-d",
-            "-P",
-            "-F",
-            "#{window_id}",
-            "-n",
-            "shop-217",
-            "-c"
-        ]
-    );
-    assert!(
-        args.iter().any(|arg| arg.starts_with("FLOW_ID=")),
-        "{args:?}"
-    );
-    assert!(
-        args.iter()
-            .any(|arg| *arg == format!("FLOW_HOME={}", lab.home.display())),
-        "{args:?}"
-    );
-    let agent = &args[args.iter().position(|arg| arg == "--").unwrap() + 1..];
-    assert_eq!(agent[0], "claude");
-    assert_eq!(
-        agent.last().unwrap(),
-        "/ship-feature SHOP-217 add CSV export"
-    );
+    assert!(lab.tmux_log().is_empty(), "{:?}", lab.tmux_log());
 
     let board: serde_json::Value =
         serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
-    assert_eq!(board["flows"][0]["workspace"]["window"], "@14");
+    assert_eq!(
+        board["flows"][0]["workspace"]["window"],
+        serde_json::Value::Null
+    );
     assert_eq!(board["flows"][0]["workspace"]["slot"], 1);
 }
 
 #[test]
-fn start_refuses_outside_tmux_and_outside_a_repository() {
+fn start_hands_the_worker_to_a_running_flow_server() {
     let lab = Lab::new();
+    let config = lab.home.join("no-config.toml");
+    fs::create_dir_all(&lab.home).unwrap();
+    fs::write(
+        &config,
+        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
+    )
+    .unwrap();
+    let mut server = Command::new(env!("CARGO_BIN_EXE_flow"))
+        .arg("server")
+        .current_dir(&lab.repo)
+        .env("FLOW_HOME", &lab.home)
+        .env("FLOW_CONFIG", &config)
+        .spawn()
+        .unwrap();
+    let socket = lab.home.join("server.sock");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !socket.exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the server never listened"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
 
-    let outside_tmux = lab.start(&["x"], false);
-    assert_eq!(outside_tmux.status.code(), Some(1));
+    let output = lab.start(&["SHOP-217 add CSV export"]);
+
+    let text = stdout(&output);
+    assert!(text.contains("pane: opening"), "{text}");
     assert!(
-        stdout(&outside_tmux).contains("run it inside tmux"),
-        "{}",
-        stdout(&outside_tmux)
+        text.contains("flow ui opens shop-217 in its sidebar"),
+        "{text}"
     );
+    let hosted = || {
+        let board: serde_json::Value =
+            serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+        board["flows"][0]["workspace"]["window"] == "flow-ui"
+    };
+    while !hosted() {
+        assert!(
+            std::time::Instant::now() < deadline + std::time::Duration::from_secs(5),
+            "the server never opened the worker"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert!(lab.run(&["ui", "--stop"]).status.success());
+    assert!(server.wait().unwrap().success());
+}
 
+#[test]
+fn start_refuses_outside_a_repository() {
+    let lab = Lab::new();
     let elsewhere = TempDir::new().unwrap();
+
     let output = Command::new(env!("CARGO_BIN_EXE_flow"))
         .args(["start", "x"])
         .current_dir(elsewhere.path())
         .env("FLOW_HOME", &lab.home)
         .env("FLOW_CONFIG", lab.home.join("no-config.toml"))
-        .env("TMUX", "/tmp/tmux-test,1,0")
         .output()
         .unwrap();
+
     assert_eq!(output.status.code(), Some(1));
     assert!(
         stdout(&output).contains("needs a git repository"),
@@ -501,14 +509,14 @@ fn start_refuses_outside_tmux_and_outside_a_repository() {
 }
 
 #[test]
-fn a_failing_setup_marks_the_flow_blocked_but_still_opens_the_window() {
+fn a_failing_setup_marks_the_flow_blocked_but_still_records_the_worker() {
     let lab = Lab::new();
     lab.hook(
         "setup",
         "#!/bin/sh\necho 'port 8001 is taken' >&2\nexit 1\n",
     );
 
-    let output = lab.start(&["SHOP-218 fix totals"], true);
+    let output = lab.start(&["SHOP-218 fix totals"]);
 
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
@@ -516,7 +524,7 @@ fn a_failing_setup_marks_the_flow_blocked_but_still_opens_the_window() {
         text.contains("setup: \"failed: port 8001 is taken\""),
         "{text}"
     );
-    assert!(!lab.tmux_args().is_empty());
+    assert!(text.contains("pane: when flow ui runs"), "{text}");
     let board: serde_json::Value =
         serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
     assert_eq!(board["flows"][0]["state"], "blocked");
@@ -544,7 +552,7 @@ fn start_says_when_every_slot_is_taken() {
         );
     }
 
-    let output = lab.start(&["one more"], true);
+    let output = lab.start(&["one more"]);
 
     assert_eq!(output.status.code(), Some(1));
     assert!(
@@ -561,9 +569,9 @@ fn clear_tears_down_and_removes_clean_worktrees_but_keeps_uncommitted_work() {
         "teardown",
         "#!/bin/sh\necho \"$FLOW_NAME\" >> \"$FLOW_REPO/torn-down\"\n",
     );
-    assert!(lab.start(&["SHOP-1 clean one"], true).status.success());
-    assert!(lab.start(&["SHOP-2 dirty one"], true).status.success());
-    assert!(lab.start(&["SHOP-3 still running"], true).status.success());
+    assert!(lab.start(&["SHOP-1 clean one"]).status.success());
+    assert!(lab.start(&["SHOP-2 dirty one"]).status.success());
+    assert!(lab.start(&["SHOP-3 still running"]).status.success());
     let worktrees = lab.repo.join(".flow/worktrees");
     fs::write(worktrees.join("shop-2/work.txt"), "unsaved").unwrap();
     for name in ["shop-1", "shop-2"] {
@@ -616,21 +624,16 @@ fn remove_closes_the_window_tears_down_and_forgets_a_running_flow() {
         "teardown",
         "#!/bin/sh\necho \"$FLOW_NAME\" >> \"$FLOW_REPO/torn-down\"\n",
     );
-    assert!(lab.start(&["SHOP-1 first try"], true).status.success());
-    assert!(lab.start(&["SHOP-2 keep me"], true).status.success());
+    assert!(lab.start(&["SHOP-1 first try"]).status.success());
+    assert!(lab.start(&["SHOP-2 keep me"]).status.success());
 
     let output = lab.run(&["remove", "shop-1"]);
 
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
     assert!(
-        text.starts_with("removed: shop-1\nwindow: closed\nworktree: removed\n"),
+        text.starts_with("removed: shop-1\nwindow: none\nworktree: removed\n"),
         "{text}"
-    );
-    assert!(
-        lab.tmux_log().contains(&"kill-window -t @14".to_string()),
-        "{:?}",
-        lab.tmux_log()
     );
     assert!(!lab.repo.join(".flow/worktrees/shop-1").exists());
     assert_eq!(
@@ -649,7 +652,7 @@ fn remove_closes_the_window_tears_down_and_forgets_a_running_flow() {
 #[test]
 fn remove_refuses_uncommitted_work_unless_forced() {
     let lab = Lab::new();
-    assert!(lab.start(&["SHOP-1 dirty"], true).status.success());
+    assert!(lab.start(&["SHOP-1 dirty"]).status.success());
     let worktree = lab.repo.join(".flow/worktrees/shop-1");
     fs::write(worktree.join("work.txt"), "unsaved").unwrap();
 
