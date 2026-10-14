@@ -211,6 +211,14 @@ The vision below is built as `flow ui`, see README and `.claude/plans/plan-flow-
   - the sidebar and board do not say which repo a flow belongs to; show it on the flow's second
     line and on its card, grouped by repo once there are flows in more than one;
   - `flow start --repo <path>`, so the master and scripts need no `cd`.
+- **The master asks a worker, the worker answers.** `flow ask <flow> "<question>"` stores the question;
+  delivery needs no model decision: a busy worker gets it from its own `Stop` hook ("continue with
+  this question from the master"), an idle one gets it typed into its prompt by flow server. The
+  worker's next `Stop` carries its last message, which flow records as the answer. `flow ask` returns
+  the answer to the master's Bash call, or "asked, no answer yet" after a timeout, the answer then
+  arriving as a message in the master's session. The sidebar shows "asked by master", the timeline
+  the exchange. To settle: hooks for the master too, a question arriving while you type in that pane,
+  loops; start with master -> worker only.
 - **Extensions:** glab and ClickUp as data sources (ticket as the request, MR and pipeline status
   per flow); the new-flow dialog's "from ClickUp" list in the design waits for this.
 - **Theme file:** the colours are already named tokens (`ui::theme::Theme`); load overrides from a
