@@ -179,6 +179,42 @@ skills: "if a `flow` command exists, report each phase, decision and stop". Need
 prove auto picks sensibly and really stops on the expensive cases. A `flow setup` command can
 install the ambient-context hook (AXI principle 7).
 
+## Long-term vision: `flow` as its own TUI
+
+Jan's picture (2026-10-14): `flow` becomes a terminal UI of its own - one big master pane
+with the worker sessions as small tabs, integrated with glab and ClickUp - instead of a
+board inside Claude Code plus tmux windows.
+
+Why the current design carries over:
+- The board is just another reader. Every flow's state is already in the event logs and
+  `flow status --json`; a full-screen `flow` UI reads the same data the Claude Code band
+  reads, so nothing in pieces 1-5 is wasted.
+- Starting sessions is already planned. `flow start` (piece 5) launches workers; in the TUI
+  it would start them inside `flow` instead of in tmux windows.
+
+What it would take, in Rust:
+- A TUI layer, such as `ratatui`.
+- Pseudo-terminals for the Claude sessions, such as `portable-pty`.
+- Terminal emulation to draw each session inside a tab, such as `vt100` or `wezterm-term`.
+
+That is a small tmux of its own: the master pane, the other sessions as tabs, focus
+switching and input routing. Embedding a full TUI like Claude Code is the hard part:
+resizing, scrollback, mouse and key handling.
+
+Alternatives to weigh before building it:
+- tmux as the engine, `flow` as the brain: `flow` drives tmux in control mode and draws
+  its dashboard around it. Less to build, less design control.
+- Headless sessions through the Agent SDK: `flow` renders the conversations itself. Full
+  design control, but the workers lose Claude Code's own UI and the mods.
+
+Integrations as data sources:
+- ClickUp tickets become the flow request ("ship SHOP-217" already plans to read the
+  ticket). `~/projects/clickup-cli` is a Go CLI (a clone of `iamcommee/clickup-cli`) that
+  lists assigned tasks and shows task details, with a Claude Code skill; `flow` could call
+  it or talk to the ClickUp API directly.
+- glab / gh give each flow its merge request and pipeline status, as the merge-status mod
+  does today (`~/projects/claude-code-mods/merge-status`).
+
 ## Where things are
 
 - This repo: `~/projects/flow`, private on GitHub at https://github.com/JanSuthacheeva/flow. Plan: `.claude/plans/plan-flow-core.md`.
