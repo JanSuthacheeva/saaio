@@ -1,24 +1,181 @@
 #[allow(dead_code)]
 mod event;
-#[allow(dead_code)]
 mod fold;
 #[allow(dead_code)]
 mod output;
 #[allow(dead_code)]
 mod store;
-#[allow(dead_code)]
 mod view;
 
+use std::env;
+use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use clap::Parser;
+use clap::error::ErrorKind;
+use clap::{Parser, Subcommand};
+
+use output::{Document, Failure};
+use store::Store;
+use view::FlowView;
 
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 #[derive(Debug, Parser)]
 #[command(version, about)]
-struct Cli {}
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Every flow, or one flow with its phases, timeline and decisions
+    Status {
+        /// Flow name or id
+        flow: Option<String>,
+        /// Print the versioned JSON programs read, instead of TOON
+        #[arg(long)]
+        json: bool,
+        /// Do not truncate long texts
+        #[arg(long)]
+        full: bool,
+    },
+}
 
 fn main() -> ExitCode {
-    Cli::parse();
-    ExitCode::SUCCESS
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error)
+            if matches!(
+                error.kind(),
+                ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
+            ) =>
+        {
+            let _ = error.print();
+            return ExitCode::SUCCESS;
+        }
+        Err(error) => return fail(&Failure::usage(&error)),
+    };
+    let store = match Store::locate(
+        env_path("FLOW_HOME"),
+        env_path("XDG_STATE_HOME"),
+        env_path("HOME"),
+    ) {
+        Ok(store) => store,
+        Err(_) => {
+            return fail(&Failure::error(
+                "cannot find a state directory",
+                vec!["Set FLOW_HOME to a directory".to_string()],
+            ));
+        }
+    };
+    match run(cli, &store, now_ms()) {
+        Ok(document) => {
+            println!("{}", document.text());
+            ExitCode::SUCCESS
+        }
+        Err(failure) => fail(&failure),
+    }
+}
+
+fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure> {
+    match cli.command {
+        None => home(store, now),
+        Some(Command::Status { flow, json, full }) => status(store, flow, json, full, now),
+    }
+}
+
+fn home(store: &Store, now: u64) -> Result<Document, Failure> {
+    let (flows, warnings) = views(store, now);
+    Ok(output::home(
+        &fold::board(flows, now),
+        &bin_path(),
+        &warnings,
+    ))
+}
+
+fn status(
+    store: &Store,
+    flow: Option<String>,
+    json: bool,
+    full: bool,
+    now: u64,
+) -> Result<Document, Failure> {
+    let (flows, warnings) = views(store, now);
+    let Some(name) = flow else {
+        let board = fold::board(flows, now);
+        return Ok(if json {
+            Document::Json(board.to_json())
+        } else {
+            output::status_list(&board, &warnings, full)
+        });
+    };
+    let one = fold::resolve(&flows, &name)
+        .cloned()
+        .ok_or_else(|| no_flow(&name))?;
+    Ok(if json {
+        Document::Json(fold::board(vec![one], now).to_json())
+    } else {
+        output::status_detail(&one, now, full)
+    })
+}
+
+/// Every flow folded; unreadable ones become warnings so the rest still shows.
+fn views(store: &Store, now: u64) -> (Vec<FlowView>, Vec<String>) {
+    let ids = match store.ids() {
+        Ok(ids) => ids,
+        Err(error) => return (Vec::new(), vec![format!("{error:#}")]),
+    };
+    let mut flows = Vec::new();
+    let mut warnings = Vec::new();
+    for id in ids {
+        let folded = store
+            .events(&id)
+            .and_then(|events| Ok((events, store.last_beat(&id)?)))
+            .map(|(events, beat)| fold::fold(&id, &events, beat, now));
+        match folded {
+            Ok(Some(view)) => flows.push(view),
+            Ok(None) => {}
+            Err(error) => warnings.push(format!("cannot read {id}: {error:#}")),
+        }
+    }
+    (flows, warnings)
+}
+
+fn no_flow(name: &str) -> Failure {
+    Failure::error(
+        format!("no flow named {name}"),
+        vec![
+            "Run `flow` to list the flows".to_string(),
+            format!("Run `flow new --name {name} --request <text>` to start it"),
+        ],
+    )
+}
+
+fn fail(failure: &Failure) -> ExitCode {
+    println!("{}", failure.to_toon());
+    ExitCode::from(failure.code)
+}
+
+fn env_path(name: &str) -> Option<PathBuf> {
+    env::var_os(name).map(PathBuf::from)
+}
+
+fn bin_path() -> String {
+    let bin = env::current_exe()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|_| "flow".to_string());
+    match env::var("HOME") {
+        Ok(home) if !home.is_empty() && bin.starts_with(&home) => {
+            format!("~{}", &bin[home.len()..])
+        }
+        _ => bin,
+    }
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
