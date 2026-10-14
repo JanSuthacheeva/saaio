@@ -32,6 +32,11 @@ System context: `docs/HANDOVER.md`.
   reboot resumes the master. Workers are resumed either way: they are unfinished work.
 - The master runs the default agent, name `master`, no prompt, in the directory of the first `flow ui`,
   remembered with its session id in `<store root>/master.json`.
+- The master gets orchestrator instructions of its own, never through a CLAUDE.md (it runs in a user's repo):
+  config.toml gets a `master` entry with its own command (`--append-system-prompt-file
+  ~/.config/flow/master.md`), and flow ships a default master.md (flow status is the truth, how to start and
+  size flows, when to send you to a worker, keep its own context small). Workers only report to the log; the
+  master learns about them when it runs `flow status`.
 - Once usable, `flow ui` is home and the Claude Code board mod is retired; the CLI and `--json` stay.
 - Reliable and lightweight first: one thread owns all server state, only the focused pane streams
   (changed rows, at most 60 frames/s), no async runtime.
@@ -553,5 +558,6 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [ ] Restore integration test: start flows, kill the server, start flow ui again, workers and master resume
 - [ ] Measure idle CPU and memory of server and ui with five panes; fix anything above near zero idle
 - [ ] Remove the `#[allow(dead_code)]` the new modules carry in main.rs until they are wired
+- [ ] Master instructions: config `master` agent entry, the builtin master command appends `~/.config/flow/master.md` (written with a default on first use, never overwritten), MasterRecord::spec uses it; config and master tests
 - [ ] Update CLAUDE.md architecture and docs/HANDOVER.md (flow ui, board mod retired, tmux path gone)
 - [ ] End-to-end check: a real Claude master starts two workers from flow ui, peek, answer a question in a worker, detach, reattach, kill the server, restart, everything resumes
