@@ -9,14 +9,12 @@ pub const WORKTREES_DIR: &str = ".flow/worktrees";
 /// Workspace.window of a worker flow ui has opened once; its next open resumes it.
 pub const HOSTED: &str = "flow-ui";
 
-#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 /// What the server passes on to every pane: FLOW_HOME, when it was set for the server.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LaunchEnv {
     pub flow_home: Option<PathBuf>,
 }
 
-#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 /// Exactly what a pane runs: its command line, directory and environment.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaneSpec {
@@ -106,7 +104,6 @@ pub fn agent_argv(agent: &Agent, id: &str, name: &str, request: &str) -> Vec<Str
 }
 
 /// The agent's resume command with {id} and {name} filled in; None when it has none.
-#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>> {
     let resume = agent.resume.as_ref()?;
     Some(
@@ -121,7 +118,6 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>> {
 /// The agent's command the first time, its resume command once it ran somewhere (window set:
 /// HOSTED, or a tmux window from before flow ui), since its session id is taken from then on;
 /// None when the flow has no workspace, or must resume and the agent has no resume template.
-#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec> {
     let space = flow.workspace.as_ref()?;
     let argv = if space.window.is_some() {
@@ -137,7 +133,6 @@ pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<Pa
     })
 }
 
-#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 /// FLOW_ID (workers only), FLOW_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
 pub fn pane_env(id: Option<&str>, env: &LaunchEnv) -> Vec<(String, String)> {
     let mut vars = Vec::new();

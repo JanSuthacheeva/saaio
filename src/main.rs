@@ -1,16 +1,12 @@
-#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 mod client;
 mod config;
 mod event;
 mod fold;
 mod launch;
 mod output;
-#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 mod proto;
-#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 mod server;
 mod store;
-#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 mod ui;
 mod view;
 mod workspace;

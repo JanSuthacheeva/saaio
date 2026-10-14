@@ -51,7 +51,6 @@ impl Store {
     }
 
     /// The state directory itself, for server.sock, server.log and master.json.
-    #[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -135,7 +134,6 @@ impl Store {
     }
 
     /// Size and modification time of each log and heartbeat file, by flow id.
-    #[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
     pub fn stamps(&self) -> Result<Vec<(String, Stamp)>> {
         let mut stamps = Vec::new();
         for id in self.ids()? {
