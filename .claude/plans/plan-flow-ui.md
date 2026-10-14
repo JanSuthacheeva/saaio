@@ -517,7 +517,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [x] Add Store::root, Store::logs, Store::stamps and fold::views; replace main::views; tests
 - [x] Add server/watch.rs StoreWatch with tests for change, beat, removal and the 5 s refold
 - [x] Add launch::worker_spec and HOSTED with tests (fresh, resume, no resume template)
-- [ ] Add server/reconcile.rs reconcile with table tests (open, known, close removed, failed)
+- [x] Add server/reconcile.rs reconcile with table tests (open, known, close removed, failed)
 - [ ] Server::refresh and Server::apply: board broadcast, worker panes, HOSTED append, Host::fail and Blocked on failure; integration test with a `cat` agent
 - [ ] Add ui theme.rs Theme::builtin, sidebar.rs Sidebar, layout Sidebar chrome, App focus switching (0-9) and pane status; TestBackend tests against the fleet and worker screens
 

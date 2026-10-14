@@ -1,5 +1,6 @@
 pub mod host;
 pub mod master;
+pub mod reconcile;
 pub mod terminal;
 pub mod watch;
 
