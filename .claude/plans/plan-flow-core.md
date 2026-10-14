@@ -417,7 +417,7 @@ duration runs until `now`. Repeated reports fold to the same view.
 
 - [x] Add event.rs: `Event`, `EventKind`, `Phase`, `Mode`, `Event::new`, `to_line`, `from_line`, with unit tests for round trips, the 500-char cut and broken, version-2 and unknown-kind lines
 - [x] Add store.rs: `Store::locate`, `at`, `create`, `append`, `events`, `ids`, with unit tests on a TempDir including append to a missing flow and locate precedence
-- [ ] Add `Store::beat`, `last_beat`, `remove` with unit tests
+- [x] Add `Store::beat`, `last_beat`, `remove` with unit tests
 
 ### Fold
 

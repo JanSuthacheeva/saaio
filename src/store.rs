@@ -1,6 +1,7 @@
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 use uuid::Uuid;
@@ -90,8 +91,56 @@ impl Store {
         Ok(ids)
     }
 
+    /// Touches <id>.alive; its mtime is the last heartbeat.
+    pub fn beat(&self, id: &str) -> Result<()> {
+        if !self.log(id).exists() {
+            bail!("no flow {id}");
+        }
+        let alive = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(self.alive(id))
+            .with_context(|| format!("could not mark flow {id} alive"))?;
+        alive
+            .set_modified(SystemTime::now())
+            .with_context(|| format!("could not mark flow {id} alive"))
+    }
+
+    /// Unix ms of the last heartbeat; None when the flow never sent one.
+    pub fn last_beat(&self, id: &str) -> Result<Option<u64>> {
+        let modified = match fs::metadata(self.alive(id)) {
+            Ok(metadata) => metadata.modified()?,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+            Err(error) => {
+                return Err(error).with_context(|| format!("could not read heartbeat of {id}"));
+            }
+        };
+        let since_epoch = modified.duration_since(UNIX_EPOCH).unwrap_or_default();
+        Ok(Some(since_epoch.as_millis() as u64))
+    }
+
+    /// Deletes the log and the heartbeat file.
+    pub fn remove(&self, id: &str) -> Result<()> {
+        match fs::remove_file(self.log(id)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => bail!("no flow {id}"),
+            Err(error) => return Err(error).with_context(|| format!("could not remove flow {id}")),
+        }
+        match fs::remove_file(self.alive(id)) {
+            Err(error) if error.kind() != ErrorKind::NotFound => {
+                Err(error).with_context(|| format!("could not remove heartbeat of {id}"))
+            }
+            _ => Ok(()),
+        }
+    }
+
     fn log(&self, id: &str) -> PathBuf {
         self.root.join("flows").join(format!("{id}.jsonl"))
+    }
+
+    fn alive(&self, id: &str) -> PathBuf {
+        self.root.join("flows").join(format!("{id}.alive"))
     }
 }
 
@@ -187,6 +236,55 @@ mod tests {
         fs::write(&log, text).unwrap();
 
         assert_eq!(store.events(&id).unwrap(), vec![started()]);
+    }
+
+    #[test]
+    fn remembers_the_last_heartbeat_of_a_flow() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let id = store.create(&started()).unwrap();
+        assert_eq!(store.last_beat(&id).unwrap(), None);
+
+        let before = now_ms();
+        store.beat(&id).unwrap();
+        let beat = store.last_beat(&id).unwrap().unwrap();
+
+        assert!(
+            beat + 1_000 >= before && beat <= now_ms() + 1_000,
+            "{beat} vs {before}"
+        );
+    }
+
+    #[test]
+    fn refuses_a_heartbeat_for_a_flow_that_does_not_exist() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+
+        assert_eq!(store.beat("nope").unwrap_err().to_string(), "no flow nope");
+    }
+
+    #[test]
+    fn removes_the_log_and_the_heartbeat() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let id = store.create(&started()).unwrap();
+        store.beat(&id).unwrap();
+
+        store.remove(&id).unwrap();
+
+        assert_eq!(store.ids().unwrap(), Vec::<String>::new());
+        assert_eq!(store.last_beat(&id).unwrap(), None);
+        assert_eq!(
+            store.remove(&id).unwrap_err().to_string(),
+            format!("no flow {id}")
+        );
+    }
+
+    fn now_ms() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
     }
 
     #[test]
