@@ -10,6 +10,8 @@ mod proto;
 #[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 mod server;
 mod store;
+#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
+mod ui;
 mod view;
 mod workspace;
 
