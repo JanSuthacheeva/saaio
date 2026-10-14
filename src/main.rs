@@ -1,3 +1,6 @@
+#[allow(dead_code)]
+mod event;
+
 use std::process::ExitCode;
 
 use clap::Parser;
