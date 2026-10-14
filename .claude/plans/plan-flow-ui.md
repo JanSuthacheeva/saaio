@@ -272,14 +272,18 @@ impl MasterRecord {
 
 ```rust
 // mod.rs
-/// Attaches, then loops on stdin, server, resize, started-flow and tick events until detach.
-pub fn run(client: Client, exe: &Path, theme: Theme) -> Result<()>;
+/// Attaches (sizing the pane before the hello), then loops on stdin, server, resize, started-flow
+/// and tick events until detach; what to tell the user.
+pub fn run(socket: &Path, theme: Theme) -> Result<String>;
 
 // app.rs
 pub enum View { Panes, Board(BoardState), NewFlow(NewFlowForm), History(u32), Help, ConfirmStop }
 pub enum Effect { Send(ClientMsg), StartFlow(NewFlowForm), Mirror(Modes), Quit(String) }
 impl App {
     pub fn new(size: Size) -> App;
+    pub fn areas(&self) -> Areas;
+    /// True while a dialog takes the keys instead of the pane.
+    pub fn is_modal(&self) -> bool;
     pub fn on_server(&mut self, message: ServerMsg) -> Vec<Effect>;
     pub fn on_input(&mut self, routed: Routed) -> Vec<Effect>;
     pub fn on_resize(&mut self, size: Size) -> Vec<Effect>;
@@ -476,9 +480,9 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [x] Add server/terminal.rs Terminal on the chosen crate with golden tests for feed, replies, damaged, row, cursor, modes and history
 - [x] Add launch::PaneSpec, LaunchEnv, pane_env and the empty-argument rule in agent_argv, with tests
 - [x] Add server/host.rs Host (open, fail, feed, write, resize, exited, close, frame, panes) with PTY tests on real `sh`
-- [ ] Add config Agent.resume (builtin claude `--resume {id}`) and server/master.rs MasterRecord (load_or_create, spec) with tests
-- [ ] Add server/mod.rs run and Server (handle, flush; master pane only, Hello/Welcome/Refused, Input, Resize, Focus, StopServer, stale socket) with an integration test over a real socket and a `cat` master
-- [ ] Add client.rs (Client::connect, send, recv, try_clone, socket_path, ensure_server) with tests against a test server
+- [x] Add config Agent.resume (builtin claude `--resume {id}`) and server/master.rs MasterRecord (load_or_create, spec) with tests
+- [x] Add server/mod.rs run and Server (handle, flush; master pane only, Hello/Welcome/Refused, Input, Resize, Focus, StopServer, stale socket) with an integration test over a real socket and a `cat` master
+- [x] Add client.rs (Client::connect, send, recv, try_clone, socket_path, ensure_server) with tests against a test server
 - [ ] Add ui outer.rs, input.rs Router, screen.rs Screen, layout.rs (Solo), app.rs App (pane + bottom bar) and ui::run, with Router, layout and App tests
 - [ ] Add `flow ui [--stop]` and hidden `flow server` to main.rs
 - [ ] End-to-end check of milestone 1: real claude master in flow ui, type and scroll, detach and reattach, kill the ui and see claude still running
