@@ -370,7 +370,8 @@ pub struct BoardState { pub selected: usize }   // 0 master, n the nth worker; h
 pub struct BoardView<'a> { pub sidebar: Sidebar<'a>, pub state: BoardState, pub back: &'a str, pub offset_secs: i64 }
 // full screen: header with counts, a 3-column grid of cards (pill, steps, task bar, age, note), the selected
 // flow's request / mode / branch / slot / age, its timeline (local HH:MM) beside its decisions and steps
-pub struct Rail<'a> { pub board: &'a Board, pub focus: &'a PaneKey, pub theme: &'a Theme }
+pub struct Rail<'a> { pub sidebar: Sidebar<'a> }   // a digit and a glyph per session; the pane's top edge then
+                                                // names the next flow that needs you and "C-space b sidebar"
 
 // newflow.rs
 pub struct NewFlowForm { pub request: String, pub mode: Mode, pub repo: PathBuf, field: Field }
@@ -562,7 +563,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 
 - [x] Add ui/peek.rs (transcript, tail, PeekCache) with fixture tests; sidebar peek, C-space j/k and enter; ended flows stay under DONE until `flow clear` and their peek shows branch and worktree
 - [x] Add ui/board.rs BoardView and C-space o, with TestBackend tests against the board screen
-- [ ] Add ui/newflow.rs NewFlowForm, C-space n and the `flow start` thread with App::on_ran, with tests
+- [x] Add ui/newflow.rs NewFlowForm, C-space n and the `flow start` thread with App::on_ran, with tests
 - [ ] Add ui/rail.rs Rail and C-space b
 - [ ] History (C-space [, ClientMsg::History) through Host::frame
 - [ ] Help (C-space ?) and the stop dialog (C-space Q): unfinished workers listed, `k` keeps them, `e` ends them (StopServer { end_flows }) and the UI prints each ended flow's branch and worktree as it quits, `y` when none; tests for each answer

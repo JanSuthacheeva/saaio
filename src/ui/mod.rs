@@ -5,6 +5,7 @@ pub mod layout;
 pub mod newflow;
 pub mod outer;
 pub mod peek;
+pub mod rail;
 pub mod screen;
 pub mod sidebar;
 pub mod theme;

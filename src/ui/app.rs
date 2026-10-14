@@ -14,6 +14,7 @@ use crate::ui::input::{Command, Key, Routed};
 use crate::ui::layout::{self, Areas, Chrome};
 use crate::ui::newflow::{FormAction, NewFlowForm, NewFlowView};
 use crate::ui::peek::PeekLine;
+use crate::ui::rail::Rail;
 use crate::ui::screen::Screen;
 use crate::ui::sidebar::{self, Sidebar};
 use crate::ui::theme::Theme;
@@ -103,6 +104,8 @@ pub struct App {
     master_cwd: Option<String>,
     /// A one-line message, such as why a flow command failed, until the next key.
     notice: Option<String>,
+    /// The sidebar folded to a rail (C-space b).
+    rail: bool,
 }
 
 impl App {
@@ -124,6 +127,7 @@ impl App {
             master: None,
             master_cwd: None,
             notice: None,
+            rail: false,
         }
     }
 
@@ -137,6 +141,8 @@ impl App {
     pub fn areas(&self) -> Areas {
         let chrome = if self.workers().is_empty() {
             Chrome::Solo
+        } else if self.rail {
+            Chrome::Rail
         } else {
             Chrome::Sidebar
         };
@@ -268,7 +274,16 @@ impl App {
             self.draw_bar(frame, bar, theme);
         }
         if let Some(side) = areas.side {
-            frame.render_widget(self.sidebar(theme, peek), side);
+            if self.rail {
+                frame.render_widget(
+                    Rail {
+                        sidebar: self.sidebar(theme, &[]),
+                    },
+                    side,
+                );
+            } else {
+                frame.render_widget(self.sidebar(theme, peek), side);
+            }
         }
         match self.status(&self.focus) {
             Some(PaneStatus::Running) => {}
@@ -341,6 +356,16 @@ impl App {
                 };
                 self.view = View::Board(BoardState { selected });
                 vec![]
+            }
+            Command::Rail => {
+                let before = self.areas().pane;
+                self.rail = !self.rail;
+                self.cursor = None;
+                let after = self.areas();
+                if after.pane == before {
+                    return vec![];
+                }
+                vec![Effect::Send(ClientMsg::Resize(after.pane_size()))]
             }
             Command::NewFlow => {
                 self.view = View::NewFlow(NewFlowForm::new(self.focused_repo()));
@@ -467,10 +492,19 @@ impl App {
             return vec![];
         };
         let inside = col >= side.x && col < side.x + side.width && row >= side.y;
+        if !inside {
+            return vec![];
+        }
         let theme = Theme::builtin();
-        match self.sidebar(&theme, &[]).key_at(row - side.y, side.height) {
-            Some(key) if inside => self.focus(key),
-            _ => vec![],
+        let sidebar = self.sidebar(&theme, &[]);
+        let key = if self.rail {
+            Rail { sidebar }.key_at(row - side.y, side.height)
+        } else {
+            sidebar.key_at(row - side.y, side.height)
+        };
+        match key {
+            Some(key) => self.focus(key),
+            None => vec![],
         }
     }
 
@@ -596,7 +630,11 @@ impl App {
             if let Some(place) = &self.master {
                 title.push(Span::styled(format!(" {place} "), theme.ui.faint));
             }
-            return block.title(Line::from(title));
+            let block = block.title(Line::from(title));
+            return match self.border_hint(theme) {
+                Some(hint) => block.title(hint.right_aligned()),
+                None => block,
+            };
         };
         let Some(flow) = self.workers().into_iter().find(|flow| &flow.id == id) else {
             return block.title(Line::styled(format!(" {id} "), theme.ui.strong));
@@ -619,13 +657,60 @@ impl App {
                 theme.ui.faint,
             ));
         }
-        block.title(Line::from(title)).title(
-            Line::from(vec![
-                Span::styled(" C-space 0", theme.ui.key),
-                Span::styled(" back to master ", theme.ui.faint),
-            ])
-            .right_aligned(),
-        )
+        let block = block.title(Line::from(title));
+        match self.border_hint(theme) {
+            Some(hint) => block.title(hint.right_aligned()),
+            None => block,
+        }
+    }
+
+    /// The right of the pane's top edge: with the rail, the next flow that needs you and the way back
+    /// to the sidebar; with the sidebar, the way back to the master.
+    fn border_hint(&self, theme: &Theme) -> Option<Line<'static>> {
+        if !self.rail {
+            return match self.focus {
+                PaneKey::Master => None,
+                PaneKey::Flow(_) => Some(Line::from(vec![
+                    Span::styled(" C-space 0", theme.ui.key),
+                    Span::styled(" back to master ", theme.ui.faint),
+                ])),
+            };
+        }
+        if self.workers().is_empty() {
+            return None;
+        }
+        let sidebar = self.sidebar(theme, &[]);
+        let mut spans = Vec::new();
+        let next = self
+            .workers()
+            .into_iter()
+            .enumerate()
+            .find(|(_, flow)| flow.needs_you() && self.focus != PaneKey::Flow(flow.id.clone()));
+        if let Some((index, flow)) = next {
+            let what = match flow.state {
+                State::Waiting => "is waiting",
+                State::NotResponding => "is not responding",
+                _ => "is blocked",
+            };
+            spans.push(Span::styled(
+                format!(
+                    " {} {} {} {what}",
+                    sidebar.glyph(flow.state),
+                    index + 1,
+                    flow.name
+                ),
+                theme.state(flow.state),
+            ));
+            spans.push(Span::styled(
+                format!("  {}  ", theme.glyphs.separator),
+                theme.ui.rule,
+            ));
+        } else {
+            spans.push(Span::raw(" "));
+        }
+        spans.push(Span::styled("C-space b", theme.ui.key));
+        spans.push(Span::styled(" sidebar ", theme.ui.faint));
+        Some(Line::from(spans))
     }
 
     fn status(&self, key: &PaneKey) -> Option<&PaneStatus> {
@@ -1558,6 +1643,45 @@ mod tests {
         assert_eq!(
             outcome(false, "error: all 9 slots are in use\nhelp[1]: ..."),
             Err("all 9 slots are in use".into())
+        );
+    }
+
+    #[test]
+    fn folds_the_sidebar_to_a_rail_and_back() {
+        let mut app = board_app();
+        app.on_input(Routed::Command(Command::Focus(1)));
+
+        assert_eq!(
+            app.on_input(Routed::Command(Command::Rail)),
+            vec![Effect::Send(ClientMsg::Resize(Size {
+                cols: 141,
+                rows: 42
+            }))]
+        );
+        let terminal = render_at(&app, FLEET);
+        let rail = |y| row(&terminal, y).chars().skip(144).collect::<String>();
+
+        assert!(
+            row(&terminal, 0).ends_with(" ◆ 2 shop-230 is waiting  │  C-space b sidebar ╮  ≋    ")
+        );
+        assert_eq!(rail(2), " 0 ◎  ");
+        assert_eq!(rail(4), "▌1 ✖  ");
+        assert_eq!(rail(5), " 2 ◆  ");
+        assert_eq!(rail(7), " 3 ⠙  ");
+        assert_eq!(rail(9), " 4 ✔  ");
+        assert_eq!(rail(43), " C-␣  ");
+        assert_eq!(
+            app.on_input(Routed::Click { col: 146, row: 5 }),
+            vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
+                "shop-230".into()
+            )))]
+        );
+        assert_eq!(
+            app.on_input(Routed::Command(Command::Rail)),
+            vec![Effect::Send(ClientMsg::Resize(Size {
+                cols: 107,
+                rows: 42
+            }))]
         );
     }
 }
