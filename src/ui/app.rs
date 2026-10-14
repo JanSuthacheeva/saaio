@@ -774,18 +774,23 @@ impl App {
                 Span::styled(crate::ui::sidebar::clip(&doing, 44), theme.ui.muted),
             ]));
         }
+        let (them, they) = if count == 1 {
+            ("it", "it resumes")
+        } else {
+            ("them", "they resume")
+        };
         text.push(Line::raw(""));
         text.push(Line::from(vec![
             Span::styled("k", theme.ui.key),
             Span::styled(
-                " keep them; they resume the next time flow ui starts",
+                format!(" keep {them}; {they} the next time flow ui starts"),
                 theme.ui.muted,
             ),
         ]));
         text.push(Line::from(vec![
             Span::styled("e", theme.ui.key),
             Span::styled(
-                " end them; branches and worktrees stay until flow clear",
+                format!(" end {them}; branches and worktrees stay until flow clear"),
                 theme.ui.muted,
             ),
         ]));
