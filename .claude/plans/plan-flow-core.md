@@ -439,5 +439,5 @@ duration runs until `now`. Repeated reports fold to the same view.
 
 - [x] Wire main.rs: `try_parse` with `Failure::usage` and exit 2, `Store::locate`, `run`, `home`, `status` (TOON and `--json`), `views`, with tests/cli.rs cases for home, status, `--json` and an unknown flag
 - [x] Add `new_flow` (idempotent), `report` (events, heartbeat, skipped) and `clear`, with tests/cli.rs cases for each and the missing-flow error
-- [ ] Write README.md: install, commands, the TOON views, the `--json` contract
+- [x] Write README.md: install, commands, the TOON views, the `--json` contract
 - [ ] End-to-end: `cargo install --path .`, two shells reporting into one flow at once, `flow` and `flow status --json` in a third; then a fresh agent session told only "use `flow` to report your progress" drives it from the home view and help lines alone
