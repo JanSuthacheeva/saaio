@@ -643,31 +643,37 @@ fn remove_closes_the_window_tears_down_and_forgets_a_running_flow() {
 }
 
 #[test]
-fn remove_keeps_uncommitted_work_unless_forced() {
+fn remove_refuses_uncommitted_work_unless_forced() {
     let lab = Lab::new();
     assert!(lab.start(&["SHOP-1 dirty"], true).status.success());
     let worktree = lab.repo.join(".flow/worktrees/shop-1");
     fs::write(worktree.join("work.txt"), "unsaved").unwrap();
 
-    let kept = lab.run(&["remove", "shop-1"]);
-    let text = stdout(&kept);
+    let refused = lab.run(&["remove", "shop-1"]);
+    let text = stdout(&refused);
+    assert_eq!(refused.status.code(), Some(1), "{text}");
     assert!(
-        text.contains(&format!("worktree: \"kept: {}\"", worktree.display())),
+        text.starts_with("error: shop-1 has uncommitted work"),
         "{text}"
     );
     assert!(text.contains("flow remove shop-1 --force"), "{text}");
     assert!(worktree.exists());
+    assert!(
+        !lab.tmux_log()
+            .iter()
+            .any(|line| line.starts_with("kill-window")),
+        "{:?}",
+        lab.tmux_log()
+    );
+    assert!(stdout(&lab.run(&[])).contains("shop-1"));
 
-    assert!(lab.start(&["SHOP-2 dirty too"], true).status.success());
-    let other = lab.repo.join(".flow/worktrees/shop-2");
-    fs::write(other.join("work.txt"), "unsaved").unwrap();
-    let forced = lab.run(&["remove", "shop-2", "--force"]);
+    let forced = lab.run(&["remove", "shop-1", "--force"]);
     assert!(
         stdout(&forced).contains("worktree: removed"),
         "{}",
         stdout(&forced)
     );
-    assert!(!other.exists());
+    assert!(!worktree.exists());
 }
 
 #[test]
