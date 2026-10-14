@@ -1,6 +1,7 @@
 pub mod host;
 pub mod master;
 pub mod terminal;
+pub mod watch;
 
 use std::collections::HashMap;
 use std::fs;
