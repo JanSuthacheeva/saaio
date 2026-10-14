@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en" data-theme="nord" data-lavish-annotate="on">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flow ui - implementation</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge) { overflow-wrap: anywhere; }
+  svg { max-width: 100%; height: auto; }
+  code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  .fig text { font: 12px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .fig .small { font-size: 10px; opacity: .7; }
+  .fig .new rect { fill: color-mix(in oklab, var(--color-success) 18%, transparent); stroke: var(--color-success); stroke-width: 1.5; }
+  .fig .mod rect { fill: color-mix(in oklab, var(--color-warning) 18%, transparent); stroke: var(--color-warning); stroke-width: 1.5; }
+  .fig .old rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .fig .zone rect { fill: none; stroke: color-mix(in oklab, var(--color-base-content) 25%, transparent); stroke-dasharray: 5 4; }
+  .fig .edge { stroke: color-mix(in oklab, var(--color-base-content) 50%, transparent); stroke-width: 1.2; fill: none; marker-end: url(#arrow); }
+  .seq .life { stroke: color-mix(in oklab, var(--color-base-content) 20%, transparent); stroke-dasharray: 3 4; }
+  .seq .call { stroke: var(--color-primary); stroke-width: 1.3; fill: none; marker-end: url(#arrow); }
+  .seq .err { stroke: var(--color-error); stroke-width: 1; stroke-dasharray: 4 3; fill: none; marker-end: url(#arrow-err); opacity: .8; }
+  .seq text { font: 11px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .seq .actor rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .seq .errtext { fill: var(--color-error); }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; margin-right: 1rem; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  pre.sig { background: var(--color-base-200); border-radius: 8px; padding: .75rem 1rem; font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+  ol.steps { font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  ol.steps li.e { color: var(--color-error); }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: color-mix(in oklab, var(--color-base-content) 55%, transparent)"/></marker>
+<marker id="arrow-err" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--color-error)"/></marker>
+</defs></svg>
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-12">
+
+<header class="space-y-2">
+  <p class="text-sm opacity-60">design-code / phase 3 - review the implementation</p>
+  <h1 class="text-3xl font-bold">flow ui: a session server that owns the terminals, and a client that draws them</h1>
+  <p class="opacity-80">Screens: <a class="link" href="https://claude.ai/artifact/68Ff2wJP6BcYX6qy4hppXp">design canvas</a>. Approaches: <code>.lavish/tui-approaches.html</code>. No method bodies here, only units, signatures and the order of calls.</p>
+  <div class="legend text-sm pt-1">
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-success) 40%,transparent)"></i>new</span>
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-warning) 40%,transparent)"></i>modified</span>
+    <span><i class="sw" style="background:var(--color-base-300)"></i>unchanged</span>
+  </div>
+</header>
+
+<section id="recap" class="space-y-3">
+  <h2 class="text-xl font-bold">1. Decision recap</h2>
+  <p class="text-sm"><code>flow server</code> is a small background process that owns every pseudo-terminal, its terminal emulator and the Claude process inside it, and opens panes for what the log says should run. <code>flow ui</code> is a client that sends keys and sizes over a Unix socket and draws the screens, the sidebar and the views; when it crashes or you close the window, the agents keep running.</p>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li>Approach C, with A's rule: the log is the only way a pane gets opened. <code>flow start</code> records; the server's reconciler opens. Start and restore are one code path.</li>
+    <li><code>flow ui</code> is the command; bare <code>flow</code> stays the agent home. One UI shows the flows of all repos.</li>
+    <li>The tmux path goes: no tmux check, no window, no <code>tmux kill-window</code>.</li>
+    <li>Reliable and lightweight beats build cost. Once usable, <code>flow ui</code> is home and the Claude Code board mod is retired; the CLI and <code>--json</code> stay for agents.</li>
+    <li>Extensions and the theme file come later; colors are named tokens now.</li>
+  </ul>
+</section>
+
+<section id="overview" class="space-y-3">
+  <h2 class="text-xl font-bold">2. Structure overview</h2>
+  <svg class="fig" viewBox="0 0 900 520" role="img" aria-label="Units of flow ui grouped by process">
+    <title>Units of flow ui grouped by process</title>
+    <g class="zone" id="z-cli"><rect x="10" y="10" width="200" height="250" rx="8"/><text x="22" y="28" class="small">flow CLI (short-lived)</text></g>
+    <g class="zone" id="z-shared"><rect x="10" y="280" width="880" height="230" rx="8"/><text x="22" y="298" class="small">shared modules</text></g>
+    <g class="zone" id="z-server"><rect x="230" y="10" width="300" height="250" rx="8"/><text x="242" y="28" class="small">flow server (daemon)</text></g>
+    <g class="zone" id="z-ui"><rect x="550" y="10" width="340" height="250" rx="8"/><text x="562" y="28" class="small">flow ui (client)</text></g>
+
+    <g class="mod" id="u-main"><title>main.rs</title><rect x="30" y="45" width="160" height="40" rx="6"/><text x="42" y="63">main.rs</text><text x="42" y="77" class="small">ui, server; start, remove</text></g>
+    <g class="new" id="u-client"><title>client.rs</title><rect x="30" y="110" width="160" height="40" rx="6"/><text x="42" y="128">client.rs</text><text x="42" y="142" class="small">connect, ensure, close_flow</text></g>
+    <g class="mod" id="u-workspace"><title>workspace.rs</title><rect x="30" y="175" width="160" height="40" rx="6"/><text x="42" y="193">workspace.rs</text><text x="42" y="207" class="small">tmux functions removed</text></g>
+
+    <g class="new" id="u-server"><title>server/mod.rs</title><rect x="250" y="45" width="125" height="40" rx="6"/><text x="262" y="63">server::Server</text><text x="262" y="77" class="small">event loop</text></g>
+    <g class="new" id="u-host"><title>server/host.rs</title><rect x="390" y="45" width="125" height="40" rx="6"/><text x="402" y="63">Host</text><text x="402" y="77" class="small">PTYs, children</text></g>
+    <g class="new" id="u-terminal"><title>server/terminal.rs</title><rect x="390" y="110" width="125" height="40" rx="6"/><text x="402" y="128">Terminal</text><text x="402" y="142" class="small">emulator wrapper</text></g>
+    <g class="new" id="u-reconcile"><title>server/reconcile.rs</title><rect x="250" y="110" width="125" height="40" rx="6"/><text x="262" y="128">reconcile</text><text x="262" y="142" class="small">pure: board → panes</text></g>
+    <g class="new" id="u-watch"><title>server/watch.rs</title><rect x="250" y="175" width="125" height="40" rx="6"/><text x="262" y="193">StoreWatch</text><text x="262" y="207" class="small">log changed?</text></g>
+    <g class="new" id="u-master"><title>server/master.rs</title><rect x="390" y="175" width="125" height="40" rx="6"/><text x="402" y="193">MasterRecord</text><text x="402" y="207" class="small">session, cwd</text></g>
+
+    <g class="new" id="u-app"><title>ui/app.rs</title><rect x="570" y="45" width="140" height="40" rx="6"/><text x="582" y="63">App</text><text x="582" y="77" class="small">state, effects, draw</text></g>
+    <g class="new" id="u-input"><title>ui/input.rs</title><rect x="730" y="45" width="140" height="40" rx="6"/><text x="742" y="63">Router</text><text x="742" y="77" class="small">prefix, raw bytes</text></g>
+    <g class="new" id="u-outer"><title>ui/outer.rs</title><rect x="730" y="110" width="140" height="40" rx="6"/><text x="742" y="128">Outer</text><text x="742" y="142" class="small">raw mode, mode mirror</text></g>
+    <g class="new" id="u-screen"><title>ui/screen.rs</title><rect x="570" y="110" width="140" height="40" rx="6"/><text x="582" y="128">Screen</text><text x="582" y="142" class="small">focused pane grid</text></g>
+    <g class="new" id="u-views"><title>ui views</title><rect x="570" y="175" width="140" height="40" rx="6"/><text x="582" y="193">views</text><text x="582" y="207" class="small">sidebar, board, rail…</text></g>
+    <g class="new" id="u-peek"><title>ui/peek.rs</title><rect x="730" y="175" width="140" height="40" rx="6"/><text x="742" y="193">peek</text><text x="742" y="207" class="small">transcript tail</text></g>
+
+    <g class="new" id="u-proto"><title>proto.rs</title><rect x="30" y="320" width="160" height="40" rx="6"/><text x="42" y="338">proto.rs</text><text x="42" y="352" class="small">messages, framing</text></g>
+    <g class="mod" id="u-launch"><title>launch.rs</title><rect x="210" y="320" width="160" height="40" rx="6"/><text x="222" y="338">launch.rs</text><text x="222" y="352" class="small">PaneSpec, worker_spec</text></g>
+    <g class="mod" id="u-config"><title>config.rs</title><rect x="390" y="320" width="160" height="40" rx="6"/><text x="402" y="338">config.rs</text><text x="402" y="352" class="small">Agent.resume</text></g>
+    <g class="mod" id="u-store"><title>store.rs</title><rect x="570" y="320" width="140" height="40" rx="6"/><text x="582" y="338">store.rs</text><text x="582" y="352" class="small">logs, stamps, root</text></g>
+    <g class="mod" id="u-fold"><title>fold.rs</title><rect x="730" y="320" width="140" height="40" rx="6"/><text x="742" y="338">fold.rs</text><text x="742" y="352" class="small">views()</text></g>
+    <g class="mod" id="u-view"><title>view.rs</title><rect x="570" y="400" width="140" height="40" rx="6"/><text x="582" y="418">view.rs</text><text x="582" y="432" class="small">+ Deserialize</text></g>
+    <g class="mod" id="u-output"><title>output.rs</title><rect x="30" y="400" width="160" height="40" rx="6"/><text x="42" y="418">output.rs</text><text x="42" y="432" class="small">started, removed</text></g>
+    <g class="new" id="u-theme"><title>ui/theme.rs</title><rect x="730" y="400" width="140" height="40" rx="6"/><text x="742" y="418">Theme</text><text x="742" y="432" class="small">named tokens</text></g>
+    <g class="old" id="u-event"><title>event.rs</title><rect x="390" y="400" width="160" height="40" rx="6"/><text x="402" y="418">event.rs</text><text x="402" y="432" class="small">unchanged</text></g>
+
+    <path class="edge" d="M110,85 L110,108"/>
+    <path class="edge" d="M190,130 C215,130 230,60 248,62"/>
+    <path class="edge" d="M375,65 L388,65"/>
+    <path class="edge" d="M452,85 L452,108"/>
+    <path class="edge" d="M312,85 L312,108"/>
+    <path class="edge" d="M312,150 L312,173"/>
+    <path class="edge" d="M710,65 L728,65"/>
+    <path class="edge" d="M640,85 L640,108"/>
+    <path class="edge" d="M640,150 L640,173"/>
+    <path class="edge" d="M710,195 L728,195"/>
+    <path class="edge" d="M800,85 L800,108"/>
+    <path class="edge" d="M568,62 C545,62 545,62 532,62"/>
+    <path class="edge" d="M312,215 C312,290 640,280 640,318"/>
+    <path class="edge" d="M290,150 C250,250 290,290 290,318"/>
+    <path class="edge" d="M110,150 L110,318"/>
+  </svg>
+  <p class="text-sm opacity-75">The UI never touches a PTY, and the server never draws. Both sides speak only <code>proto.rs</code>; the server reads the store, the UI reads only Claude transcripts for peek. The arrow from App to Server is the socket.</p>
+</section>
+
+<section id="units" class="space-y-6">
+  <h2 class="text-xl font-bold">3. Units</h2>
+
+  <h3 class="font-semibold opacity-70">Shared</h3>
+  <div class="card bg-base-100 border border-base-300"><div class="card-body p-5 space-y-2">
+    <div class="flex flex-wrap items-center gap-2"><code>src/proto.rs</code><span class="badge badge-success badge-sm">new</span><span class="badge badge-ghost badge-sm">shared, pure + framing I/O</span></div>
+    <p class="text-sm">The messages between <code>flow ui</code>, the CLI and <code>flow server</code>, and how they cross the socket. Depends on: <code>view::Board</code>, serde, postcard.</p>
+<pre class="sig">pub const PROTOCOL_VERSION: u32 = 1;
+pub const MAX_MESSAGE: usize = 8 &lt;&lt; 20;
+
+/// Each message as a u32 length followed by its postcard bytes.
+pub fn write_msg&lt;W: Write, T: Serialize&gt;(writer: &amp;mut W, message: &amp;T) -&gt; Result&lt;()&gt;;
+/// The next message; None on a clean end of stream; Err on a message over MAX_MESSAGE or bytes that do not decode.
+pub fn read_msg&lt;R: Read, T: DeserializeOwned&gt;(reader: &amp;mut R) -&gt; Result&lt;Option&lt;T&gt;&gt;;</pre>
+    <p class="text-xs opacity-70">The types themselves are under Data.</p>
+  </div></div>
+
+  <div class="card bg-base-100 border border-base-300"><div class="card-body p-5 space-y-2">
+    <div class="flex flex-wrap items-center gap-2"><code>src/client.rs</code><span class="badge badge-success badge-sm">new</span><span class="badge badge-ghost badge-sm">I/O, used by ui and the CLI</span></div>
+    <p class="text-sm">Finds, starts and talks to the server. Depends on: <code>proto</code>, <code>std::os::unix::net</code>.</p>
+<pre class="sig">pub struct Client { stream: UnixStream }
+
+impl Client {
+    /// Connects and says hello; None when no server listens; Err when it refuses (another protocol version).
+    pub fn connect(socket: &amp;Path, role: Role) -&gt; Result&lt;Option&lt;Client&gt;&gt;;
+    pub fn send(&amp;mut self, message: &amp;ClientMsg) -&gt; Result&lt;()&gt;;
+    /// The next server message; None when the server closed the connection.
+    pub fn recv(&amp;mut self) -&gt; Result&lt;Option&lt;ServerMsg&gt;&gt;;
+    /// A second handle on the same socket, so one thread reads while another writes.
+    pub fn try_clone(&amp;self) -&gt; Result&lt;Client&gt;;
+}
+
+/// &lt;store root&gt;/server.sock
+pub fn socket_path(store: &amp;Store) -&gt; PathBuf;
+/// Starts `&lt;exe&gt; server` in its own session with output to server.log unless one listens; waits up to 2 s for the socket.
+pub fn ensure_server(socket: &amp;Path, exe: &amp;Path, env: &amp;[(String, String)]) -&gt; Result&lt;()&gt;;
+/// Asks a running server to end a flow's pane and waits for it; the outcome when there is no server or no pane.
+pub fn close_flow(socket: &amp;Path, id: &amp;str, timeout: Duration) -&gt; Result&lt;Closing&gt;;</pre>
+  </div></div>
+
+  <div class="card bg-base-100 border border-base-300"><div class="card-body p-5 space-y-2">
+    <div class="flex flex-wrap items-center gap-2"><code>src/launch.rs</code><span class="badge badge-warning badge-sm">modified</span><span class="badge badge-ghost badge-sm">pure</span></div>
+    <p class="text-sm">Still "what to run, exactly": now a <code>PaneSpec</code> instead of a tmux command line.</p>
+<pre class="sig">/// Workspace.window of a worker flow ui has opened once; its next open resumes it.
+pub const HOSTED: &amp;str = "flow-ui";
+
+/// FLOW_HOME to pass on, when it was set for the server.
+pub struct LaunchEnv { pub flow_home: Option&lt;PathBuf&gt; }
+
+/// The worker's spec: the agent's command the first time, its resume command once window is HOSTED;
+/// None when it must resume and the agent has no resume template.
+pub fn worker_spec(flow: &amp;FlowView, agent: &amp;Agent, env: &amp;LaunchEnv) -&gt; Option&lt;PaneSpec&gt;;
+/// FLOW_ID (workers only), FLOW_HOME, TERM=xterm-256color, COLORTERM=truecolor.
+pub fn pane_env(id: Option&lt;&amp;str&gt;, env: &amp;LaunchEnv) -&gt; Vec&lt;(String, String)&gt;;
+
+// removed: window_argv, kill_window_argv
+// unchanged: flow_name, free_slot, workspace_for, worktree_*_argv, agent_argv, hook_env</pre>
+  </div></div>
+
+  <div class="card bg-base-100 border border-base-300"><div class="card-body p-5 space-y-2">
+    <div class="flex flex-wrap items-center gap-2"><code>src/config.rs</code> <code>src/store.rs</code> <code>src/fold.rs</code> <code>src/view.rs</code> <code>src/output.rs</code> <code>src/workspace.rs</code><span class="badge badge-warning badge-sm">modified</span></div>
+<pre class="sig">// config.rs - an agent can say how to resume a session
+pub struct Agent { pub command: Vec&lt;String&gt;, pub prompt: String, #[serde(default)] pub resume: Option&lt;Vec&lt;String&gt;&gt; }
+// builtin claude: resume = ["claude", "--resume", "{id}"]
+
+// store.rs - the server reads every log and watches for changes
+pub struct FlowLog { pub id: String, pub events: Vec&lt;Event&gt;, pub beat: Option&lt;u64&gt; }
+pub struct Stamp { pub modified: SystemTime, pub len: u64 }
+impl Store {
+    /// The state directory itself, for server.sock, server.log and master.json.
+    pub fn root(&amp;self) -&gt; &amp;Path;
+    /// Every readable flow log, and a warning per log that could not be read (was main::views).
+    pub fn logs(&amp;self) -&gt; (Vec&lt;FlowLog&gt;, Vec&lt;String&gt;);
+    /// Size and modification time of each log and heartbeat file, by flow id.
+    pub fn stamps(&amp;self) -&gt; Result&lt;Vec&lt;(String, Stamp)&gt;&gt;;
+}
+
+// fold.rs - pure, replaces the folding half of main::views
+pub fn views(logs: Vec&lt;FlowLog&gt;, now: u64) -&gt; Vec&lt;FlowView&gt;;
+
+// view.rs - Board and everything in it also derive Deserialize (sent to the UI)
+
+// output.rs
+pub enum Opening { Running, WhenUiRuns }          // started: "opens in flow ui" / "opens when flow ui runs"
+pub fn started(flow: &amp;FlowView, setup: &amp;str, opening: Opening) -&gt; Document;   // window field and tmux help go
+pub fn removed(name: &amp;str, pane: &amp;str, worktree: &amp;str) -&gt; Document;            // pane: closed / none / timed out
+
+// workspace.rs - removed: open_window, close_window</pre>
+  </div></div>
+
+  <div class="card bg-base-100 border border-base-300"><div class="card-body p-5 space-y-2">
+    <div class="flex flex-wrap items-center gap-2"><code>src/main.rs</code><span class="badge badge-warning badge-sm">modified</span><span class="badge badge-ghost badge-sm">entry, env, clock</span></div>
+<pre class="sig">enum Command {
+    // ... New, Report, Status, Start, Remove, Clear as today
+    /// Open the terminal UI: the master, every worker and the board
+    Ui {
+        /// Stop the server and every session in it
+        #[arg(long)]
+        stop: bool,
+    },
+    /// The session server flow ui starts on its own
+    #[command(hide = true)]
+    Server,
+}
+
+fn ui(store: &amp;Store) -&gt; Result&lt;Document, Failure&gt;;      // ensure_server, then ui::run; Document::Empty on detach
+fn server(store: Store, config: Config) -&gt; Result&lt;Document, Failure&gt;;
+// start: no tmux check; no window; Opening from Client::connect(Control)
+// remove / clear: client::close_flow before retire_worktree</pre>
+  </div></div>
+
+  <h3 class="font-semibold opacity-70 pt-2">Server (<code>src/server/</code>)</h3>
+  <div class="card bg-base-100 border border-base-300"><div class="card-body p-5 space-y-2">
+    <div class="flex flex-wrap items-center gap-2"><code>src/server/mod.rs</code><span class="badge badge-success badge-sm">new</span><span class="badge badge-ghost badge-sm">I/O, one owning thread</span></div>
+    <p class="text-sm">Runs the event loop: one thread owns the <code>Host</code> and all state, other threads only feed it events. Depends on: Store, Config, Host, StoreWatch, reconcile, MasterRecord, proto.</p>
+<pre class="sig">pub struct ServerPaths { pub socket: PathBuf, pub master: PathBuf }
+
+/// Binds the socket (removing a stale one), opens the master, then loops until StopServer.
+pub fn run(paths: &amp;ServerPaths, store: Store, config: Config, env: LaunchEnv, clock: fn() -&gt; u64) -&gt; Result&lt;()&gt;;
+
+enum Event { Accepted(UnixStream), Message(ConnId, ClientMsg), Gone(ConnId), Host(HostEvent), Tick }
+
+impl Server {
+    /// One event; Ok(false) once the server should stop.
+    fn handle(&amp;mut self, event: Event) -&gt; Result&lt;bool&gt;;
+    /// Re-folds when the store changed, reconciles, sends Board and Panes to the attached UI.
+    fn refresh(&amp;mut self) -&gt; Result&lt;()&gt;;
+    /// Opens and closes what reconcile asked for; marks new workers HOSTED in their log.
+    fn apply(&amp;mut self, wanted: Wanted) -&gt; Result&lt;()&gt;;
+    /// Sends the focused pane's changed rows, at most 60 times a second.
+    fn flush(&amp;mut self) -&gt; Result&lt;()&gt;;
+}</pre>
+  </div></div>
+
+  <div class="card bg-base-100 border border-base-300"><div class="card-body p-5 space-y-2">
+    <div class="flex flex-wrap items-center gap-2"><code>src/server/host.rs</code><span class="badge badge-success badge-sm">new</span><span class="badge badge-ghost badge-sm">I/O</span></div>
+    <p class="text-sm">Owns the panes: a PTY, the child process and its Terminal each. The seam a remote host could implement later. Depends on: portable-pty, Terminal.</p>
+<pre class="sig">pub enum HostEvent { Output(PaneKey, Vec&lt;u8&gt;), Exited(PaneKey, Option&lt;u32&gt;) }
+
+impl Host {
+    pub fn new(size: Size, events: Sender&lt;HostEvent&gt;) -&gt; Host;
+    /// Spawns the child in a new PTY with a reader and a waiter thread; on Err the pane is kept as Failed.
+    pub fn open(&amp;mut self, spec: PaneSpec) -&gt; Result&lt;()&gt;;
+    /// Keeps a pane that could not be opened, with the reason shown in it.
+    pub fn fail(&amp;mut self, key: PaneKey, reason: String);
+    /// Feeds output into the pane's Terminal and writes the Terminal's replies (DA, DSR) back to the PTY.
+    pub fn feed(&amp;mut self, key: &amp;PaneKey, bytes: &amp;[u8]);
+    /// Writes input to a running pane; Ok without writing to an exited one.
+    pub fn write(&amp;mut self, key: &amp;PaneKey, bytes: &amp;[u8]) -&gt; Result&lt;()&gt;;
+    /// Every pane to the same size, PTY and Terminal.
+    pub fn resize(&amp;mut self, size: Size);
+    pub fn exited(&amp;mut self, key: &amp;PaneKey, code: Option&lt;u32&gt;);
+    /// SIGHUP to the child's process group, SIGKILL after 3 s; the pane is gone once it exits.
+    pub fn close(&amp;mut self, key: &amp;PaneKey);
+    /// The pane's rows: all when full, else the damaged ones; scrolled back by history lines.
+    pub fn frame(&amp;mut self, key: &amp;PaneKey, full: bool, history: Option&lt;u32&gt;) -&gt; Option&lt;Frame&gt;;
+    pub fn panes(&amp;self) -&gt; Vec&lt;PaneInfo&gt;;
+}</pre>
+  </div></div>
+
+  <div class="card bg-base-100 border border-base-300"><div class="card-body p-5 space-y-2">
+    <div class="flex flex-wrap items-center gap-2"><code>src/server/terminal.rs</code><span class="badge badge-success badge-sm">new</span><span class="badge badge-ghost badge-sm">pure, wraps the emulator crate</span></div>
+    <p class="text-sm">The only file that knows which emulator crate milestone 1 picked; everything else sees <code>proto::Cell</code>.</p>
+<pre class="sig">impl Terminal {
+    pub fn new(size: Size, history: usize) -&gt; Terminal;
+    pub fn feed(&amp;mut self, bytes: &amp;[u8]);
+    /// Answers the program asked for (device attributes, cursor position), drained.
+    pub fn replies(&amp;mut self) -&gt; Vec&lt;u8&gt;;
+    pub fn resize(&amp;mut self, size: Size);
+    /// Screen rows changed since the last call.
+    pub fn damaged(&amp;mut self) -&gt; Vec&lt;u16&gt;;
+    pub fn row(&amp;self, row: u16, history: u32) -&gt; Vec&lt;Cell&gt;;
+    pub fn cursor(&amp;self) -&gt; Option&lt;(u16, u16)&gt;;
+    pub fn modes(&amp;self) -&gt; Modes;
+    pub fn history_len(&amp;self) -&gt; u32;
+}</pre>
+  </div></div>
+
+  <div class="card bg-base-100 border border-base-300"><div class="card-body p-5 space-y-2">
+    <div class="flex flex-wrap items-center gap-2"><code>src/server/reconcile.rs</code> <code>src/server/watch.rs</code> <code>src/server/master.rs</code><span class="badge badge-success badge-sm">new</span></div>
+<pre class="sig">// reconcile.rs - pure
+pub struct Wanted { pub open: Vec&lt;PaneSpec&gt;, pub close: Vec&lt;PaneKey&gt;, pub failed: Vec&lt;(PaneKey, String)&gt; }
+/// Opens every unfinished flow with a workspace the server has not opened this run (known);
+/// closes worker panes whose flow is no longer in the store; failed: flows it cannot build a spec for
+/// (unknown agent, no resume template), with the reason.
+pub fn reconcile(flows: &amp;[FlowView], open: &amp;[PaneKey], known: &amp;HashSet&lt;String&gt;, config: &amp;Config, env: &amp;LaunchEnv) -&gt; Wanted;
+
+// watch.rs
+pub struct StoreWatch { stamps: HashMap&lt;String, Stamp&gt;, folded_at: u64 }
+impl StoreWatch {
+    /// True when a log or heartbeat changed, a flow came or went, or 5 s passed since the last fold.
+    pub fn changed(&amp;mut self, store: &amp;Store, now: u64) -&gt; Result&lt;bool&gt;;
+}
+
+// master.rs
+pub struct MasterRecord { pub session: String, pub cwd: PathBuf }
+impl MasterRecord {
+    /// The record in master.json, or a new one (fresh session id, cwd) written there; true when new.
+    pub fn load_or_create(file: &amp;Path, cwd: &amp;Path) -&gt; Result&lt;(MasterRecord, bool)&gt;;
+    /// The agent's command (name master, no prompt) when new, its resume command after;
+    /// None when it must resume and the agent has no resume template.
+    pub fn spec(&amp;self, fresh: bool, agent: &amp;Agent, env: &amp;LaunchEnv) -&gt; Option&lt;PaneSpec&gt;;
+}</pre>
+  </div></div>
+
+  <h3 class="font-semibold opacity-70 pt-2">UI (<code>src/ui/</code>)</h3>
+  <div class="card bg-base-100 border border-base-300"><div class="card-body p-5 space-y-2">
+    <div class="flex flex-wrap items-center gap-2"><code>src/ui/mod.rs</code> <code>src/ui/app.rs</code><span class="badge badge-success badge-sm">new</span></div>
+    <p class="text-sm"><code>run</code> wires threads to one loop; <code>App</code> is the state machine: input and server messages in, effects out, no I/O of its own. Depends on: Client, Router, Outer, Screen, views, PeekCache, Theme.</p>
+<pre class="sig">/// Attaches, then loops on stdin, server, resize, started-flow and tick events until detach.
+pub fn run(client: Client, exe: &amp;Path, theme: Theme) -&gt; Result&lt;()&gt;;
+
+pub enum View { Panes, Board(BoardState), NewFlow(NewFlowForm), History(u32), Help, ConfirmStop }
+pub enum Effect { Send(ClientMsg), StartFlow(NewFlowForm), Mirror(Modes), Quit(String) }
+
+impl App {
+    pub fn new(size: Size) -&gt; App;
+    pub fn on_server(&amp;mut self, message: ServerMsg) -&gt; Vec&lt;Effect&gt;;
+    pub fn on_input(&amp;mut self, routed: Routed) -&gt; Vec&lt;Effect&gt;;
+    pub fn on_resize(&amp;mut self, size: Size) -&gt; Vec&lt;Effect&gt;;
+    /// The `flow start` the dialog ran: the flow's name, or the error it printed.
+    pub fn on_started(&amp;mut self, result: Result&lt;String, String&gt;);
+    /// The flow under the sidebar cursor, for the peek.
+    pub fn peeked(&amp;self) -&gt; Option&lt;&amp;FlowView&gt;;
+    pub fn draw(&amp;self, frame: &amp;mut ratatui::Frame, theme: &amp;Theme, peek: &amp;PeekCache);
+}</pre>
+  </div></div>
+
+  <div class="card bg-base-100 border border-base-300"><div class="card-body p-5 space-y-2">
+    <div class="flex flex-wrap items-center gap-2"><code>src/ui/input.rs</code> <code>src/ui/outer.rs</code> <code>src/ui/screen.rs</code> <code>src/ui/layout.rs</code><span class="badge badge-success badge-sm">new</span></div>
+<pre class="sig">// input.rs - pure: raw stdin bytes go to the pane untouched, except the prefix
+pub enum Routed { Pane(Vec&lt;u8&gt;), Command(Command), View(Vec&lt;Key&gt;) }
+pub enum Command { Focus(u8), Cursor(i8), Jump, Reopen, NewFlow, Board, Rail, History, Help, Detach, StopServer }
+impl Router {
+    /// Splits bytes at C-space (NUL or CSI 32;5u): the next key is a Command, C-space twice sends one.
+    /// In a modal view every key is decoded for the view instead.
+    pub fn route(&amp;mut self, bytes: &amp;[u8], modal: bool) -&gt; Vec&lt;Routed&gt;;
+}
+pub fn decode(bytes: &amp;[u8]) -&gt; Vec&lt;Key&gt;;
+
+// outer.rs - the real terminal flow ui runs in
+impl Outer {
+    /// Raw mode and the alternate screen; restored on Drop, also on panic.
+    pub fn enter() -&gt; Result&lt;Outer&gt;;
+    /// Turns paste, mouse, cursor-key and focus modes on or off to match the focused pane.
+    pub fn mirror(&amp;mut self, modes: &amp;Modes) -&gt; Result&lt;()&gt;;
+    pub fn size(&amp;self) -&gt; Result&lt;Size&gt;;
+}
+
+// screen.rs - the client's copy of the focused pane
+impl Screen {
+    pub fn apply(&amp;mut self, frame: Frame);
+}
+impl Widget for &amp;Screen;
+
+// layout.rs - pure
+pub enum Chrome { Solo, Sidebar, Rail }
+pub struct Areas { pub header: Rect, pub pane: Rect, pub side: Option&lt;Rect&gt;, pub bar: Option&lt;Rect&gt; }
+/// Solo: pane + bottom bar; Sidebar: 40 columns on the right; Rail: 6.
+pub fn areas(size: Size, chrome: Chrome) -&gt; Areas;</pre>
+  </div></div>
+
+  <div class="card bg-base-100 border border-base-300"><div class="card-body p-5 space-y-2">
+    <div class="flex flex-wrap items-center gap-2"><code>src/ui/sidebar.rs</code> <code>board.rs</code> <code>rail.rs</code> <code>newflow.rs</code> <code>help.rs</code> <code>peek.rs</code> <code>theme.rs</code><span class="badge badge-success badge-sm">new</span></div>
+<pre class="sig">// sidebar.rs, board.rs, rail.rs, help.rs - ratatui widgets over the Board; no state of their own
+pub struct Sidebar&lt;'a&gt; { pub board: &amp;'a Board, pub panes: &amp;'a [PaneInfo], pub focus: &amp;'a PaneKey, pub cursor: Option&lt;&amp;'a str&gt;, pub peek: &amp;'a [PeekLine], pub theme: &amp;'a Theme }
+pub struct BoardView&lt;'a&gt; { pub board: &amp;'a Board, pub state: &amp;'a BoardState, pub theme: &amp;'a Theme }
+pub struct Rail&lt;'a&gt; { pub board: &amp;'a Board, pub focus: &amp;'a PaneKey, pub theme: &amp;'a Theme }
+
+// newflow.rs
+pub struct NewFlowForm { pub request: String, pub mode: Mode, pub repo: PathBuf, field: Field }
+pub enum FormAction { Edit, Submit, Cancel }
+impl NewFlowForm {
+    /// Prefilled with the focused pane's repo.
+    pub fn new(repo: PathBuf) -&gt; NewFlowForm;
+    pub fn on_key(&amp;mut self, key: Key) -&gt; FormAction;
+}
+
+// peek.rs - reads Claude Code's transcript, never the PTY
+pub enum PeekLine { Tool { name: String, target: String }, Result(String), Text(String), Now(String) }
+/// ~/.claude/projects/*/&lt;id&gt;.jsonl
+pub fn transcript(claude_home: &amp;Path, id: &amp;str) -&gt; Option&lt;PathBuf&gt;;
+/// The last `max` lines worth showing, read from the file's last 64 KiB.
+pub fn tail(file: &amp;Path, max: usize) -&gt; Result&lt;Vec&lt;PeekLine&gt;&gt;;
+impl PeekCache {
+    /// Re-reads only when the flow changed or its file grew.
+    pub fn refresh(&amp;mut self, flow: Option&lt;&amp;FlowView&gt;);
+    pub fn lines(&amp;self) -&gt; &amp;[PeekLine];
+}
+
+// theme.rs - named tokens now, a theme file later
+pub struct Theme { pub ui: UiTokens, pub state: StateTokens, pub glyphs: Glyphs }
+impl Theme {
+    /// ANSI colors 0-15, so flow takes on the terminal's own palette.
+    pub fn builtin() -&gt; Theme;
+    pub fn state(&amp;self, state: State) -&gt; Style;
+}</pre>
+  </div></div>
+</section>
+
+<section id="data" class="space-y-3">
+  <h2 class="text-xl font-bold">4. Data</h2>
+  <div class="grid md:grid-cols-2 gap-4">
+<pre class="sig">// proto.rs - crosses the socket (server ⇄ ui, CLI → server)
+pub enum PaneKey { Master, Flow(String) }
+pub struct Size { pub cols: u16, pub rows: u16 }
+pub enum Role { Attach { size: Size }, Control }
+
+pub enum ClientMsg {
+    Hello { version: u32, role: Role },
+    Focus(PaneKey),
+    Input(Vec&lt;u8&gt;),
+    Resize(Size),
+    History(Option&lt;u32&gt;),   // lines back; None = live
+    Reopen(PaneKey),
+    CloseFlow(String),      // Control role
+    StopServer,
+}
+
+pub enum ServerMsg {
+    Welcome { version: u32 },
+    Refused { reason: String },
+    Board(Board),
+    Panes(Vec&lt;PaneInfo&gt;),
+    Frame(Frame),
+    Closed(String),
+    Detached,               // another flow ui attached
+}</pre>
+<pre class="sig">pub struct PaneInfo { pub key: PaneKey, pub status: PaneStatus }
+pub enum PaneStatus { Running, Exited { code: Option&lt;u32&gt; }, Failed { reason: String } }
+
+pub struct Frame {
+    pub key: PaneKey,
+    pub full: bool,
+    pub rows: Vec&lt;(u16, Vec&lt;Cell&gt;)&gt;,
+    pub cursor: Option&lt;(u16, u16)&gt;,
+    pub modes: Modes,
+    pub history: Option&lt;u32&gt;,
+}
+pub struct Cell { pub text: String, pub fg: Color, pub bg: Color, pub flags: Flags }
+pub enum Color { Default, Indexed(u8), Rgb(u8, u8, u8) }
+pub struct Flags(u8);   // bold dim italic underline reverse strike wide spacer
+pub struct Modes { pub paste: bool, pub mouse: Mouse, pub sgr_mouse: bool,
+                   pub app_cursor: bool, pub focus: bool }
+pub enum Mouse { Off, Press, Drag, Motion }
+
+// launch.rs - server-internal
+pub struct PaneSpec { pub key: PaneKey, pub argv: Vec&lt;String&gt;,
+                      pub cwd: PathBuf, pub env: Vec&lt;(String, String)&gt; }
+// client.rs
+pub enum Closing { Closed, NoServer, NoPane, TimedOut }</pre>
+  </div>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li><b>Stored, new:</b> <code>&lt;store root&gt;/master.json</code> <code>{"session": "&lt;uuid&gt;", "cwd": "/Users/…"}</code>; <code>server.sock</code> and <code>server.log</code> next to it.</li>
+    <li><b>Stored, changed meaning:</b> <code>Workspace.window</code> in the log is <code>"flow-ui"</code> once the server opened the worker. Old tmux ids (<code>@14</code>) still fold; such a flow opens fresh once.</li>
+    <li><b>--json contract:</b> unchanged; <code>VIEW_VERSION</code> stays 1. The <code>flow start</code> TOON loses <code>window</code> and gains <code>pane</code>.</li>
+  </ul>
+</section>
+
+<section id="chains" class="space-y-8">
+  <h2 class="text-xl font-bold">5. Call chains</h2>
+  <div id="chains-root" class="space-y-10"></div>
+</section>
+
+<section id="conventions" class="space-y-3">
+  <h2 class="text-xl font-bold">6. Conventions followed</h2>
+  <div class="overflow-x-auto"><table class="table table-sm">
+    <thead><tr><th>Pattern</th><th>Mirrors</th></tr></thead>
+    <tbody>
+      <tr><td>Pure planning beside an I/O module: <code>reconcile</code>, <code>layout</code>, <code>input</code>, <code>App</code> decide; <code>Host</code>, <code>Outer</code>, <code>run</code> act</td><td><code>launch.rs:1</code> (pure argv) beside <code>workspace.rs:1</code> (runs them)</td></tr>
+      <tr><td>What to launch stays in <code>launch.rs</code>, filled from agent templates</td><td><code>launch.rs:82</code> <code>agent_argv</code>, <code>config.rs:63</code></td></tr>
+      <tr><td><code>anyhow::Result</code> with context in I/O; <code>Failure</code> with <code>help[]</code> only at the CLI edge</td><td><code>workspace.rs:20</code>, <code>main.rs:286</code></td></tr>
+      <tr><td>Paths under the state directory, overridable with <code>FLOW_HOME</code></td><td><code>store.rs:17</code></td></tr>
+      <tr><td>Doc comment on every pub fn saying what it returns</td><td><code>launch.rs:9</code>, <code>workspace.rs:39</code></td></tr>
+      <tr><td>Integration tests through the built binary and a temp <code>FLOW_HOME</code></td><td><code>tests/cli.rs:7</code></td></tr>
+      <tr><td>Real processes in tests instead of mocks (git, hooks) → real <code>sh</code> in a PTY</td><td><code>workspace.rs</code> tests</td></tr>
+    </tbody>
+  </table></div>
+  <div class="alert alert-warning text-sm"><div><b>Deviations.</b> <code>main.rs</code> is no longer the only place that writes to the terminal or reads the clock: <code>ui::run</code> draws to the real terminal and <code>server::run</code> writes the socket and its log. Both get the clock passed in from <code>main.rs</code>, and env is still read only there. New dependencies: <code>ratatui</code>, <code>crossterm</code>, <code>portable-pty</code>, <code>postcard</code>, <code>signal-hook</code>, and the emulator crate.</div></div>
+</section>
+
+<section id="tests" class="space-y-3">
+  <h2 class="text-xl font-bold">7. Test seams</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li><code>proto</code>: round trip of every message; split reads; oversize and garbage are errors, clean EOF is None.</li>
+    <li><code>Terminal</code>: byte sequences in, rows, cursor, modes and replies out (golden), incl. wide chars, scroll regions, DA/DSR.</li>
+    <li><code>Host</code>: real <code>sh</code> in a PTY: output arrives, <code>stty size</code> follows resize, exit code arrives, close kills a process group that ignores SIGHUP.</li>
+    <li><code>reconcile</code>, <code>worker_spec</code>, <code>MasterRecord::spec</code>, <code>layout::areas</code>, <code>Router::route</code>: pure table tests.</li>
+    <li><code>StoreWatch</code>: temp store; append, beat, remove, and the 5 s refold.</li>
+    <li><code>App</code>: messages and inputs in, effects out; drawing with ratatui's <code>TestBackend</code> against the canvas screens.</li>
+    <li><code>peek::tail</code>: fixture transcripts, including a truncated last line.</li>
+    <li>Server: integration test with a temp <code>FLOW_HOME</code>, a <code>cat</code> agent from config.toml, a real socket: attach, type, see frames; <code>flow start</code> opens a pane; kill and restart resumes it.</li>
+    <li>End to end, by hand: a real Claude master and two workers, detach, reattach, kill the server, restart.</li>
+  </ul>
+</section>
+
+<section id="assumptions" class="space-y-3">
+  <h2 class="text-xl font-bold">8. Assumptions</h2>
+  <ol class="list-decimal pl-5 text-sm space-y-1">
+    <li>Plain threads and channels; one thread owns the Host. No async runtime.</li>
+    <li>Wire format: u32 length + postcard. Smaller and faster than JSON lines.</li>
+    <li>Only the focused pane streams: changed rows only, at most 60 frames a second. Every pane has the size of the pane area.</li>
+    <li>The server checks the store every 500 ms by size and mtime, and refolds at least every 5 s so heartbeat ages stay right.</li>
+    <li>An exited pane keeps its last screen and is not reopened on its own; <code>C-space r</code> resumes it.</li>
+    <li>Keys reach the pane as raw bytes; the outer terminal mirrors the pane's paste, mouse and cursor-key modes.</li>
+    <li><code>flow start</code> without a running server records the flow and says it opens when <code>flow ui</code> runs.</li>
+    <li>One UI attached at a time: a new <code>flow ui</code> takes over and the old one exits with "attached elsewhere".</li>
+    <li><code>flow remove</code> waits up to 5 s for the pane to close, then tears down the worktree anyway and reports "timed out".</li>
+  </ol>
+</section>
+
+<section id="questions" class="space-y-3">
+  <h2 class="text-xl font-bold">9. Decided in review</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li>The server stops with <code>C-space Q</code> in the UI (with a confirm) or <code>flow ui --stop</code>; never on its own.</li>
+    <li>The master runs in the directory of the first <code>flow ui</code>, remembered in <code>master.json</code>.</li>
+    <li>The master uses the default agent from config with the name <code>master</code> and no prompt, so tests can swap it for <code>cat</code>.</li>
+  </ul>
+</section>
+
+</main>
+
+<script>
+const chains = [
+  { id: 'c-attach', title: 'Open flow ui (starts the server when none runs)', actors: ['main', 'client', 'flow server', 'ui::run', 'App'],
+    steps: [
+      ['main', 'client', 'ensure_server', 'main::ui -> client::ensure_server(socket, exe, env): Result<()>'],
+      ['client', 'flow server', 'spawn `flow server`', 'client::ensure_server -> spawn `<exe> server` in a new session, stdout/stderr to server.log'],
+      ['flow server', 'flow server', 'run: bind, master', 'server::run -> MasterRecord::load_or_create(master, cwd) -> Host::open(record.spec(fresh, agent, env)) -> refresh()'],
+      ['main', 'client', 'connect(Attach)', 'main::ui -> Client::connect(socket, Role::Attach { size }): Result<Option<Client>>'],
+      ['client', 'flow server', 'Hello', 'Client -> ClientMsg::Hello { version, role }'],
+      ['flow server', 'ui::run', 'Welcome, Board, Panes, Frame', 'Server::handle(Message) -> ServerMsg::Welcome, Board, Panes, Frame { full: true }'],
+      ['ui::run', 'App', 'on_server', 'ui::run -> App::on_server(message): Vec<Effect> -> Outer::mirror(modes) -> App::draw'],
+      ['client', 'main', 'no socket after 2 s', 'ensure_server: Err("flow server did not start, see <root>/server.log") -> Failure, exit 1', 1],
+      ['flow server', 'main', 'Refused (version)', 'Client::connect: Err("flow server runs protocol N; run `flow ui --stop` and start again") -> Failure, exit 1', 1],
+    ] },
+  { id: 'c-keys', title: 'A key reaches the focused pane, its output comes back', actors: ['stdin', 'Router', 'App', 'Server', 'Host', 'Terminal'],
+    steps: [
+      ['stdin', 'Router', 'route(bytes)', 'stdin thread -> Router::route(bytes, modal: false): Vec<Routed::Pane(bytes)>'],
+      ['Router', 'App', 'on_input', 'ui::run -> App::on_input(Routed::Pane(bytes)): vec![Effect::Send(ClientMsg::Input(bytes))]'],
+      ['App', 'Server', 'Input', 'ui::run -> Client::send(Input(bytes)) -> Server::handle(Message(conn, Input))'],
+      ['Server', 'Host', 'write(focus)', 'Server::handle -> Host::write(&focus, bytes): Result<()> -> PTY master'],
+      ['Host', 'Server', 'Output', 'pane reader thread -> HostEvent::Output(key, bytes) -> Server::handle(Host(Output))'],
+      ['Server', 'Terminal', 'feed', 'Server::handle -> Host::feed(&key, bytes) -> Terminal::feed(bytes); Terminal::replies() written back to the PTY'],
+      ['Server', 'App', 'Frame (≤60/s)', 'Server::flush -> Host::frame(&focus, false, history): Option<Frame> -> ServerMsg::Frame'],
+      ['App', 'App', 'apply, draw', 'App::on_server(Frame) -> Screen::apply(frame); Effect::Mirror(modes) when they changed -> App::draw'],
+      ['Host', 'Server', 'write to exited pane', 'Host::write on an exited pane: Ok, nothing written; the sidebar already shows it as exited', 1],
+    ] },
+  { id: 'c-start', title: 'The master runs flow start; the server opens the worker', actors: ['flow start', 'Store', 'Server', 'reconcile', 'Host', 'App'],
+    steps: [
+      ['flow start', 'Store', 'create, Workspace', 'main::start -> workspace::create_worktree, Store::create(Started), Store::append(Workspace { window: None }), workspace::run_hook(Setup)'],
+      ['flow start', 'Server', 'connect(Control)?', 'main::start -> Client::connect(socket, Role::Control): Some -> Opening::Running, None -> Opening::WhenUiRuns -> output::started'],
+      ['Server', 'Store', 'changed? logs', 'Tick -> StoreWatch::changed(&store, now): true -> Store::logs() -> fold::views(logs, now) -> fold::board(views, now)'],
+      ['Server', 'reconcile', 'reconcile', 'Server::refresh -> reconcile(&flows, &open, &known, &config, &env): Wanted { open: [worker spec], close: [] }'],
+      ['Server', 'Host', 'open(spec)', 'Server::apply -> Host::open(spec): Result<()> (spec from launch::worker_spec, agent argv with FLOW_ID)'],
+      ['Server', 'Store', 'Workspace HOSTED', 'Server::apply -> Store::append(id, Workspace { window: Some(HOSTED), .. }); known.insert(id)'],
+      ['Server', 'App', 'Board, Panes', 'Server::refresh -> ServerMsg::Board(board), ServerMsg::Panes(host.panes()) -> sidebar shows the worker'],
+      ['Host', 'Server', 'spawn fails', 'Host::open: Err -> pane kept as Failed { reason }; Store::append(Blocked { reason: "could not start the agent: …" }) -> it shows under NEEDS YOU', 1],
+      ['reconcile', 'Server', 'unknown agent', 'reconcile: no Config::agent(workspace.agent) -> Wanted.failed (key, "no agent named X") -> Server::apply -> Host::fail(key, reason)', 1],
+    ] },
+  { id: 'c-restore', title: 'The server starts again after a crash or reboot', actors: ['flow ui', 'Server', 'MasterRecord', 'reconcile', 'Host'],
+    steps: [
+      ['flow ui', 'Server', 'ensure_server', 'main::ui -> client::ensure_server: the socket is stale -> spawn `flow server`'],
+      ['Server', 'Server', 'remove stale socket', 'server::run: bind fails, no one answers connect -> remove server.sock -> bind'],
+      ['Server', 'MasterRecord', 'load_or_create', 'server::run -> MasterRecord::load_or_create(master, cwd): (record, false) -> Host::open(record.spec(false, agent, env)) = claude --resume <session>'],
+      ['Server', 'reconcile', 'known is empty', 'Server::refresh -> reconcile(&flows, &[Master], &{}, ..): every unfinished flow with a workspace'],
+      ['reconcile', 'Host', 'resume specs', 'launch::worker_spec(flow, agent, env): window == HOSTED -> agent.resume argv -> Host::open(spec)'],
+      ['reconcile', 'Server', 'no resume template', 'worker_spec: None -> Wanted.failed (key, "agent X cannot resume") -> Host::fail(key, reason)', 1],
+    ] },
+  { id: 'c-exit', title: 'A worker exits; you resume it', actors: ['claude', 'Host', 'Server', 'App'],
+    steps: [
+      ['claude', 'Host', 'exit', 'waiter thread: child.wait() -> HostEvent::Exited(key, code)'],
+      ['Host', 'Server', 'Exited', 'Server::handle(Host(Exited)) -> Host::exited(&key, code) -> ServerMsg::Panes'],
+      ['Server', 'App', 'Panes', 'App::on_server(Panes): the sidebar row shows "exited", the pane keeps its last screen'],
+      ['App', 'Server', 'Reopen', 'C-space r -> Router: Command::Reopen -> App::on_input: Effect::Send(Reopen(focus))'],
+      ['Server', 'Host', 'open(resume)', 'Server::handle(Reopen) -> launch::worker_spec(flow, agent, env) -> Host::open(spec)'],
+    ] },
+  { id: 'c-remove', title: 'flow remove or flow clear ends a pane before the worktree goes', actors: ['flow remove', 'client', 'Server', 'Host'],
+    steps: [
+      ['flow remove', 'client', 'close_flow', 'main::remove -> client::close_flow(socket, id, 5 s): Result<Closing>'],
+      ['client', 'Server', 'CloseFlow', 'Client::connect(Control) -> ClientMsg::CloseFlow(id)'],
+      ['Server', 'Host', 'close', 'Server::handle(CloseFlow) -> Host::close(&PaneKey::Flow(id)): SIGHUP, SIGKILL after 3 s'],
+      ['Host', 'Server', 'Exited', 'HostEvent::Exited -> Server::handle -> pane dropped -> ServerMsg::Closed(id) to the Control connection'],
+      ['client', 'flow remove', 'Closing::Closed', 'close_flow: Closed -> retire_worktree(flow, force) -> Store::remove(id) -> output::removed(name, "closed", worktree)'],
+      ['client', 'flow remove', 'NoServer / TimedOut', 'close_flow: NoServer -> pane "none"; TimedOut -> pane "timed out", the worktree is retired anyway', 1],
+    ] },
+  { id: 'c-peek', title: 'Peek at a worker from the sidebar', actors: ['Router', 'App', 'PeekCache', 'peek', 'Sidebar'],
+    steps: [
+      ['Router', 'App', 'Cursor(+1)', 'C-space j -> Router::route: Command::Cursor(1) -> App::on_input: cursor moves to the next flow'],
+      ['App', 'PeekCache', 'refresh', 'ui::run (after each event and every second) -> PeekCache::refresh(app.peeked())'],
+      ['PeekCache', 'peek', 'transcript, tail', 'peek::transcript(claude_home, id): Option<PathBuf> -> peek::tail(file, max): Result<Vec<PeekLine>>'],
+      ['App', 'Sidebar', 'draw', 'App::draw -> Sidebar { cursor, peek: peek.lines(), .. } renders the expanded entry'],
+      ['peek', 'PeekCache', 'no transcript', 'transcript: None (not Claude, or not written yet) -> no peek lines, the entry shows only its flow line', 1],
+    ] },
+  { id: 'c-newflow', title: 'Start a flow from the dialog', actors: ['Router', 'App', 'ui::run', 'flow start', 'Server'],
+    steps: [
+      ['Router', 'App', 'NewFlow', 'C-space n -> Command::NewFlow -> App: View::NewFlow(NewFlowForm::new(repo of the focused pane))'],
+      ['Router', 'App', 'keys → form', 'Router::route(bytes, modal: true): Routed::View(keys) -> NewFlowForm::on_key(key): FormAction'],
+      ['App', 'ui::run', 'StartFlow', 'FormAction::Submit -> Effect::StartFlow(form)'],
+      ['ui::run', 'flow start', 'spawn thread', 'ui::run: thread runs `<exe> start <request> --mode <mode>` in form.repo -> Event::Started(Ok(name))'],
+      ['flow start', 'Server', 'as chain 3', 'the pane appears through the log, exactly as when the master runs flow start'],
+      ['flow start', 'ui::run', 'fails', '`flow start` exits 1 -> Event::Started(Err(error line)) -> App::on_started: a toast with the error, the form reopens with its text', 1],
+    ] },
+  { id: 'c-detach', title: 'Detach, take over, stop', actors: ['App', 'Outer', 'Server', 'Host'],
+    steps: [
+      ['App', 'Outer', 'Quit', 'C-space d -> Command::Detach -> Effect::Quit("detached") -> Outer dropped, terminal restored, exit 0'],
+      ['Outer', 'Server', 'Gone', 'socket closes -> Server::handle(Gone(conn)): attached = None; panes keep running'],
+      ['Server', 'App', 'Detached', 'a second flow ui attaches -> ServerMsg::Detached to the old one -> Effect::Quit("attached elsewhere")'],
+      ['App', 'Server', 'StopServer', 'C-space Q -> View::ConfirmStop -> y -> Effect::Send(StopServer)'],
+      ['Server', 'Host', 'close all', 'Server::handle(StopServer) -> Host::close for every pane, wait up to 3 s -> remove server.sock -> exit'],
+      ['Outer', 'App', 'panic in ui', 'a panic in the UI: Outer restores the terminal in its Drop/panic hook; the server and every pane keep running', 1],
+    ] },
+];
+
+function render(chain, root) {
+  const n = chain.actors.length, colW = 150, padX = 20, rowH = 30, top = 50;
+  const width = padX * 2 + colW * n, height = top + chain.steps.length * rowH + 20;
+  const x = (a) => padX + colW * chain.actors.indexOf(a) + colW / 2;
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('class', 'seq');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', chain.title);
+  const add = (tag, attrs, text) => { const el = document.createElementNS(ns, tag); for (const k in attrs) el.setAttribute(k, attrs[k]); if (text) el.textContent = text; svg.appendChild(el); return el; };
+  chain.actors.forEach((a) => {
+    const g = document.createElementNS(ns, 'g'); g.setAttribute('class', 'actor'); svg.appendChild(g);
+    const r = document.createElementNS(ns, 'rect'); Object.entries({ x: x(a) - 62, y: 8, width: 124, height: 24, rx: 5 }).forEach(([k, v]) => r.setAttribute(k, v)); g.appendChild(r);
+    const t = document.createElementNS(ns, 'text'); t.setAttribute('x', x(a)); t.setAttribute('y', 24); t.setAttribute('text-anchor', 'middle'); t.textContent = a; g.appendChild(t);
+    add('line', { x1: x(a), y1: 32, x2: x(a), y2: height - 6, class: 'life' });
+  });
+  chain.steps.forEach(([from, to, label, , err], i) => {
+    const y = top + i * rowH + 10;
+    const cls = err ? 'err' : 'call';
+    if (from === to) {
+      add('path', { d: `M${x(from)},${y - 6} h26 v12 h-24`, class: cls });
+      add('text', { x: x(from) + 32, y: y + 4, class: err ? 'errtext' : '' }, `${i + 1}. ${label}`);
+    } else {
+      add('line', { x1: x(from), y1: y, x2: x(to) + (x(to) > x(from) ? -4 : 4), y2: y, class: cls });
+      const mid = (x(from) + x(to)) / 2;
+      add('text', { x: mid, y: y - 5, 'text-anchor': 'middle', class: err ? 'errtext' : '' }, `${i + 1}. ${label}`);
+    }
+  });
+  const sec = document.createElement('div');
+  sec.id = chain.id;
+  sec.className = 'space-y-3';
+  const h = document.createElement('h3'); h.className = 'font-semibold'; h.textContent = chain.title; sec.appendChild(h);
+  const box = document.createElement('div'); box.className = 'overflow-x-auto'; svg.style.minWidth = Math.min(width, 640) + 'px'; box.appendChild(svg); sec.appendChild(box);
+  const ol = document.createElement('ol'); ol.className = 'steps list-decimal pl-6 space-y-0.5';
+  chain.steps.forEach(([, , , full, err]) => { const li = document.createElement('li'); if (err) li.className = 'e'; li.textContent = full; ol.appendChild(li); });
+  sec.appendChild(ol);
+  root.appendChild(sec);
+}
+const root = document.getElementById('chains-root');
+chains.forEach((c) => render(c, root));
+</script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en" data-theme="nord" data-lavish-annotate="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flow ui - approaches</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge) { overflow-wrap: anywhere; }
+  svg { max-width: 100%; height: auto; }
+  code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  .fig text { font: 12px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .fig .small { font-size: 10px; opacity: .7; }
+  .fig .new rect { fill: color-mix(in oklab, var(--color-success) 18%, transparent); stroke: var(--color-success); stroke-width: 1.5; }
+  .fig .mod rect { fill: color-mix(in oklab, var(--color-warning) 18%, transparent); stroke: var(--color-warning); stroke-width: 1.5; }
+  .fig .old rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .fig .zone rect { fill: none; stroke: color-mix(in oklab, var(--color-base-content) 25%, transparent); stroke-dasharray: 5 4; }
+  .fig line, .fig path { stroke: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke-width: 1.3; fill: none; marker-end: url(#arrow); }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; margin-right: 1rem; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .cost { border-left: 0; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke: none; marker-end: none"/></marker></defs></svg>
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-10">
+
+<header class="space-y-2">
+  <p class="text-sm opacity-60">design-code / phase 2 - pick an approach</p>
+  <h1 class="text-3xl font-bold">flow ui: who opens a worker's pane, and who owns the terminals?</h1>
+  <p class="opacity-80">All three approaches build the same screens (<a class="link" href="https://claude.ai/artifact/68Ff2wJP6BcYX6qy4hppXp">design canvas</a>) with the same crates. They differ in how a <code>flow start</code> run inside the master pane gets a new pane opened, and in which process owns the pseudo-terminals.</p>
+  <div class="legend text-sm pt-1">
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-success) 40%,transparent)"></i>new</span>
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-warning) 40%,transparent)"></i>modified</span>
+    <span><i class="sw" style="background:var(--color-base-300)"></i>unchanged</span>
+  </div>
+</header>
+
+<section class="space-y-3" id="today">
+  <h2 class="text-xl font-bold">What exists today, and what is decided</h2>
+  <div class="grid md:grid-cols-2 gap-4 text-sm">
+    <ul class="list-disc pl-5 space-y-1.5">
+      <li><code>flow start</code> refuses outside tmux (<code>main.rs:277</code>), makes the worktree, runs <code>.flow/setup</code>, then opens a tmux window and records its id as <code>Workspace.window</code> (<code>main.rs:324-338</code>, <code>workspace.rs:69</code>, <code>launch.rs:97</code>).</li>
+      <li>The worker command comes from an agent template; Claude Code is <code>claude -n {name} --session-id {id} {prompt}</code> (<code>config.rs:63</code>). The flow id is the Claude session id, so <code>claude --resume {id}</code> can bring a worker back.</li>
+      <li>State reaches flow only through the log: workers call <code>flow report</code>, readers fold it (<code>fold::board</code>, <code>fold.rs:36</code>). The board mod polls <code>flow status --json</code> every 2 s.</li>
+      <li>The store is global, one log per flow under <code>$FLOW_HOME</code> (<code>store.rs:17</code>). <code>main.rs</code> is the only place that touches env, clock and stdout.</li>
+    </ul>
+    <ul class="list-disc pl-5 space-y-1.5">
+      <li><b>Decided:</b> own multiplexer in this crate, not herdr or tmux. The master stays, as one Claude session that coordinates through the flow CLI.</li>
+      <li><b>Decided:</b> the TUI is <code>flow ui</code>; bare <code>flow</code> stays the agent home.</li>
+      <li><b>Decided:</b> the tmux path is replaced: workers always run inside <code>flow ui</code>.</li>
+      <li><b>Decided:</b> one <code>flow ui</code> shows the flows of all repos.</li>
+      <li>Extensions and the theme file come later; colors are named tokens from day one.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="space-y-4" id="shared">
+  <h2 class="text-xl font-bold">The same in every approach</h2>
+  <ul class="list-disc pl-5 space-y-1.5 text-sm">
+    <li>Crates: <code>ratatui</code> + <code>crossterm</code> to draw, <code>portable-pty</code> for the pseudo-terminals, a terminal emulator chosen by a spike in milestone 1 (<code>vt100</code> + <code>tui-term</code> against <code>alacritty_terminal</code>, both run against a real Claude session).</li>
+    <li>The sidebar, board and status line read the same <code>fold::board</code> the CLI prints; peek reads the worker's Claude transcript file, independent of the emulator.</li>
+    <li>Build order: one pane with the bottom bar, then several panes and the sidebar, then workers from <code>flow start</code>, then peek, board, new flow and rail, then restore after a restart.</li>
+  </ul>
+</section>
+
+<section class="space-y-4" id="a">
+  <h2 class="text-xl font-bold">A. One process; flow ui opens panes for what the log says should run</h2>
+  <p class="text-sm opacity-85"><code>flow start</code> stops opening anything: it records the flow and its workspace, as it does today, minus the window. Inside <code>flow ui</code> a reconciler looks at the board and opens a pane for every unfinished flow that has a workspace and no live pane: a fresh agent the first time, <code>claude --resume {id}</code> after a restart. The pane host owns the PTYs behind a narrow interface, so it can move into a daemon later without touching the UI.</p>
+  <svg class="fig" viewBox="0 0 720 230" role="img" aria-label="Approach A components">
+    <title>Approach A components</title>
+    <g class="zone" id="a-zone"><rect x="200" y="10" width="510" height="210" rx="8"/><text x="212" y="28" class="small">flow ui (one process)</text></g>
+    <g class="new" id="a-app"><title>App: event loop, input routing, drawing</title><rect x="220" y="40" width="140" height="44" rx="6"/><text x="234" y="60">App</text><text x="234" y="75" class="small">loop, keys, layout</text></g>
+    <g class="new" id="a-rec"><title>Reconciler: board to wanted panes</title><rect x="220" y="140" width="140" height="44" rx="6"/><text x="234" y="160">Reconciler</text><text x="234" y="175" class="small">board → open / resume</text></g>
+    <g class="new" id="a-host"><title>Host: owns PTYs and emulators</title><rect x="420" y="40" width="140" height="44" rx="6"/><text x="434" y="60">Host</text><text x="434" y="75" class="small">PTYs + emulators</text></g>
+    <g class="old" id="a-fold"><title>fold::board</title><rect x="420" y="140" width="140" height="44" rx="6"/><text x="434" y="160">fold + Store</text><text x="434" y="175" class="small">existing</text></g>
+    <g class="old" id="a-agents"><title>Claude sessions</title><rect x="600" y="40" width="100" height="44" rx="6"/><text x="612" y="60">claude</text><text x="612" y="75" class="small">master, workers</text></g>
+    <g class="mod" id="a-start"><title>flow start: no tmux, records the workspace only</title><rect x="20" y="140" width="140" height="44" rx="6"/><text x="34" y="160">flow start</text><text x="34" y="175" class="small">records, opens nothing</text></g>
+    <line x1="360" y1="62" x2="418" y2="62"/>
+    <line x1="290" y1="140" x2="290" y2="86"/>
+    <line x1="360" y1="162" x2="418" y2="162"/>
+    <line x1="560" y1="62" x2="598" y2="62"/>
+    <path d="M160,170 C180,215 470,215 480,186"/>
+  </svg>
+  <div class="grid md:grid-cols-2 gap-4 text-sm">
+    <div><h3 class="font-semibold mb-1">Touches</h3><ul class="list-disc pl-5 space-y-1"><li>new <code>src/ui/</code> (app, host, reconciler, sidebar, board, peek, theme tokens)</li><li><code>main.rs</code>: <code>Ui</code> subcommand; <code>start</code> loses the tmux check and the window</li><li><code>launch.rs</code>/<code>workspace.rs</code>: tmux argv and window functions go</li><li><code>Workspace.window</code> stops being written; old logs still fold</li></ul></div>
+    <div><h3 class="font-semibold mb-1">Fit</h3><ul class="list-disc pl-5 space-y-1"><li>Same rule as today: everything goes through the log, readers fold it (<code>CLAUDE.md</code> data flow).</li><li>Start and restore are one code path: "unfinished, has a workspace, no pane".</li><li>No protocol between the CLI and the UI to design or version.</li></ul></div>
+  </div>
+  <div class="alert alert-warning text-sm"><div><b>Costs.</b> <code>flow start</code> cannot say "pane opened" - it says "recorded; flow ui opens it", and a pane appears within the poll interval (about half a second). A failure to spawn shows in the UI, not in the CLI output. If <code>flow ui</code> crashes, every session dies with it until it restarts and resumes them. Without <code>flow ui</code> running, nothing starts.</div></div>
+</section>
+
+<section class="space-y-4" id="b">
+  <h2 class="text-xl font-bold">B. One process with a control socket, like $TMUX</h2>
+  <p class="text-sm opacity-85"><code>flow ui</code> listens on a Unix socket and sets <code>FLOW_UI</code> in every pane. <code>flow start</code> finds the socket, asks the UI to open the pane and records the pane id the way it records a tmux window id today.</p>
+  <svg class="fig" viewBox="0 0 720 230" role="img" aria-label="Approach B components">
+    <title>Approach B components</title>
+    <g class="zone"><rect x="200" y="10" width="510" height="210" rx="8"/><text x="212" y="28" class="small">flow ui (one process)</text></g>
+    <g class="new" id="b-app"><rect x="220" y="40" width="140" height="44" rx="6"/><text x="234" y="60">App</text><text x="234" y="75" class="small">loop, keys, layout</text></g>
+    <g class="new" id="b-sock"><title>Control socket server</title><rect x="220" y="140" width="140" height="44" rx="6"/><text x="234" y="160">Control</text><text x="234" y="175" class="small">socket: open, focus</text></g>
+    <g class="new" id="b-host"><rect x="420" y="40" width="140" height="44" rx="6"/><text x="434" y="60">Host</text><text x="434" y="75" class="small">PTYs + emulators</text></g>
+    <g class="old"><rect x="420" y="140" width="140" height="44" rx="6"/><text x="434" y="160">fold + Store</text><text x="434" y="175" class="small">existing</text></g>
+    <g class="old"><rect x="600" y="40" width="100" height="44" rx="6"/><text x="612" y="60">claude</text><text x="612" y="75" class="small">master, workers</text></g>
+    <g class="mod" id="b-start"><rect x="20" y="140" width="140" height="44" rx="6"/><text x="34" y="160">flow start</text><text x="34" y="175" class="small">client of the socket</text></g>
+    <line x1="360" y1="62" x2="418" y2="62"/>
+    <line x1="290" y1="140" x2="290" y2="86"/>
+    <line x1="160" y1="162" x2="218" y2="162"/>
+    <line x1="560" y1="62" x2="598" y2="62"/>
+    <line x1="360" y1="162" x2="418" y2="162"/>
+  </svg>
+  <div class="grid md:grid-cols-2 gap-4 text-sm">
+    <div><h3 class="font-semibold mb-1">Touches</h3><ul class="list-disc pl-5 space-y-1"><li>everything in A, plus a socket server, a client in <code>flow start</code> and a small request/response format</li><li><code>Workspace.window</code> becomes the pane id</li></ul></div>
+    <div><h3 class="font-semibold mb-1">Fit</h3><ul class="list-disc pl-5 space-y-1"><li>Closest to today's shape: <code>start</code> opens, gets an id, records it (<code>main.rs:331</code>).</li><li><code>flow start</code> reports a spawn failure right away.</li></ul></div>
+  </div>
+  <div class="alert alert-warning text-sm"><div><b>Costs.</b> A second channel next to the log, with its own format to keep compatible. Restore after a restart still needs A's "open what should run" logic, so there are two ways a pane gets opened. <code>flow start</code> outside <code>flow ui</code> must fail or fall back to recording only - which is A again. Same crash exposure as A.</div></div>
+</section>
+
+<section class="space-y-4" id="c">
+  <div class="flex items-center gap-3"><h2 class="text-xl font-bold">C. A server owns the sessions now; flow ui is a client</h2><span class="badge badge-success">recommended</span></div>
+  <p class="text-sm opacity-85"><code>flow server</code> runs in the background, owns every PTY and emulator, and streams screen updates to <code>flow ui</code> over a Unix socket. Panes open the A way: the server's reconciler opens what the log says should run, so <code>flow start</code> still only records. Closing or crashing the UI leaves the sessions running; you reattach later, also over SSH.</p>
+  <svg class="fig" viewBox="0 0 720 230" role="img" aria-label="Approach C components">
+    <title>Approach C components</title>
+    <g class="zone"><rect x="10" y="10" width="250" height="210" rx="8"/><text x="22" y="28" class="small">flow ui (client)</text></g>
+    <g class="zone"><rect x="300" y="10" width="410" height="210" rx="8"/><text x="312" y="28" class="small">flow server (daemon)</text></g>
+    <g class="new"><rect x="30" y="40" width="140" height="44" rx="6"/><text x="44" y="60">App</text><text x="44" y="75" class="small">draws server screens</text></g>
+    <g class="new" id="c-proto"><title>Screen protocol</title><rect x="320" y="40" width="140" height="44" rx="6"/><text x="334" y="60">Session server</text><text x="334" y="75" class="small">screens, input, resize</text></g>
+    <g class="new"><rect x="320" y="140" width="140" height="44" rx="6"/><text x="334" y="160">Host + Reconciler</text><text x="334" y="175" class="small">as in A</text></g>
+    <g class="old"><rect x="500" y="140" width="140" height="44" rx="6"/><text x="514" y="160">fold + Store</text><text x="514" y="175" class="small">existing</text></g>
+    <g class="old"><rect x="560" y="40" width="100" height="44" rx="6"/><text x="572" y="60">claude</text><text x="572" y="75" class="small">master, workers</text></g>
+    <line x1="170" y1="62" x2="318" y2="62"/>
+    <line x1="390" y1="84" x2="390" y2="138"/>
+    <line x1="460" y1="162" x2="498" y2="162"/>
+    <line x1="460" y1="62" x2="558" y2="62"/>
+  </svg>
+  <div class="grid md:grid-cols-2 gap-4 text-sm">
+    <div><h3 class="font-semibold mb-1">Touches</h3><ul class="list-disc pl-5 space-y-1"><li>everything in A, plus a daemon lifecycle (start, find, stop, stale sockets) and a screen protocol: cell diffs, input, resize, focus</li></ul></div>
+    <div><h3 class="font-semibold mb-1">Fit</h3><ul class="list-disc pl-5 space-y-1"><li>The most robust: sessions survive the UI.</li><li>Opens the door to remote use later.</li></ul></div>
+  </div>
+  <div class="alert alert-warning text-sm"><div><b>Costs.</b> The largest by far: a daemon lifecycle and a screen protocol, and every bug has two processes to look at. Resource use stays small if the server sends only the focused pane's changed cells and the client asks for nothing it does not draw; idle panes cost only the emulator parsing their output.</div></div>
+</section>
+
+<section class="space-y-3" id="rec">
+  <h2 class="text-xl font-bold">Recommendation: C, opening panes the A way</h2>
+  <p class="text-sm opacity-85">You asked for the most reliable and lightweight result, whatever the build cost. In A, one panic in drawing or key handling kills every agent mid-tool-call; <code>--resume</code> brings back the conversation but not a running test or a half-applied edit. C keeps that risky code in the client and leaves the server small: PTYs, emulators, the reconciler and a socket. It is the split tmux has proven for decades, and closing the terminal window no longer ends your agents. From A it keeps the log as the only way a pane gets opened, so <code>flow start</code>, the agents and <code>--json</code> keep their contracts and start and restore stay one code path. B adds a second channel without the crash isolation.</p>
+  <p class="text-sm opacity-85">Milestone 1 still starts with one pane, but already split: <code>flow server</code> plus <code>flow ui</code>, so the protocol is proven on the emulator spike rather than added later.</p>
+</section>
+
+<section class="card bg-base-200" id="decide">
+  <form class="card-body space-y-3" data-lavish-question="approach" onsubmit="event.preventDefault(); const f = new FormData(event.currentTarget); const choice = f.get('approach'); const notes = (f.get('notes') || '').trim(); if (choice) window.lavish.queuePrompt('Use approach ' + choice + ' for flow ui.' + (notes ? ' Notes: ' + notes : ''), { tag: 'choice', text: 'Approach: ' + choice, element: event.currentTarget, data: { question: 'approach', answer: choice, notes } });">
+    <h2 class="card-title">Which approach?</h2>
+    <label class="flex gap-2 items-start"><input type="radio" class="radio radio-sm mt-0.5" name="approach" value="A - one process, reconciler opens panes from the log"> <span><b>A</b> - one process; flow ui opens panes for what the log says should run</span></label>
+    <label class="flex gap-2 items-start"><input type="radio" class="radio radio-sm mt-0.5" name="approach" value="B - one process with a control socket"> <span><b>B</b> - one process with a control socket</span></label>
+    <label class="flex gap-2 items-start"><input type="radio" class="radio radio-sm mt-0.5" name="approach" value="C - session server now, flow ui as client, panes opened from the log by the server's reconciler" checked> <span><b>C</b> - a server owns the sessions now</span></label>
+    <label class="form-control"><span class="text-sm opacity-70">Notes or a mix (optional)</span><textarea class="textarea textarea-bordered w-full" name="notes" rows="3"></textarea></label>
+    <div><button class="btn btn-primary btn-sm" type="submit">Queue this answer</button></div>
+  </form>
+</section>
+
+</main>
+</body>
+</html>
