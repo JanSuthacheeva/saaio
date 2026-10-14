@@ -21,9 +21,10 @@ ship-feature orchestrator skill (planned there, not written yet; see its plan pa
 | # | Piece | Where | Status |
 | --- | --- | --- | --- |
 | 1+2 | Event format + `flow` core (new, report, status, clear, home) | this repo | **done**, plan `.claude/plans/plan-flow-core.md` |
-| 3 | Board viewer mod: tabbed board above the prompt | `~/projects/claude-code-mods` (new mod `flows`) | **built** (claude-code-mods main, marked experimental), plan `~/projects/claude-code-mods/.claude/plans/plan-flows-board.md` (local, gitignored there); design page `docs/design/board-implementation.html` |
-| 4 | Adapter: the flows mod reports a Claude Code worker into `flow report` | same mod as 3 | **built** (claude-code-mods main), plan `~/projects/claude-code-mods/.claude/plans/plan-flows-adapter.md` (local); page `docs/design/adapter-implementation.html`. Typed skills raise no skill.prompt, so phases also come from the submitted `/skill` prompt |
-| 5 | `flow start`: worktree, slot, setup hook, worker in a tmux window; `flow clear` tears down | this repo | **built**, plan `.claude/plans/plan-flow-start.md`, page `docs/design/start-implementation.html` |
+| 3 | Board viewer mod: tabbed board above the prompt | `~/projects/claude-code-mods` (new mod `flows`) | **retired** by flow ui (its sidebar and board replace it); was built (claude-code-mods main, marked experimental), plan `~/projects/claude-code-mods/.claude/plans/plan-flows-board.md` (local, gitignored there); design page `docs/design/board-implementation.html` |
+| 4 | Adapter: the flows mod reports a Claude Code worker into `flow report` | same mod as 3 | **built** (claude-code-mods main; reports `ended` only on `/exit`, so a hangup leaves the flow resumable), plan `~/projects/claude-code-mods/.claude/plans/plan-flows-adapter.md` (local); page `docs/design/adapter-implementation.html`. Typed skills raise no skill.prompt, so phases also come from the submitted `/skill` prompt |
+| 5 | `flow start`: worktree, slot, setup hook, worker; `flow clear` tears down | this repo | **built**, plan `.claude/plans/plan-flow-start.md`, page `docs/design/start-implementation.html`; since flow ui the worker opens there, the tmux path is gone |
+| 7 | `flow ui`: session server owning every Claude session, master + workers, sidebar, peek, board, new flow, rail, restore | this repo | **built**, plan `.claude/plans/plan-flow-ui.md`, pages `docs/design/ui-approaches.html`, `docs/design/ui-implementation.html`, screens https://claude.ai/artifact/68Ff2wJP6BcYX6qy4hppXp |
 | 6 | Auto mode + optional report line in the skills, `flow setup` hook | `~/projects/agent-skills` (+ this repo for setup) | not designed |
 
 Each piece gets its own design-code round (approaches page, implementation page, plan)
@@ -73,7 +74,7 @@ Answered open questions:
 
 Earlier answers from round 1 that still hold for pieces 3-5:
 - Only sessions started by the master appear on the board (recommended, not re-confirmed).
-- `flow start` outside tmux: refuse with a hint (recommended, not re-confirmed).
+- ~~`flow start` outside tmux: refuse with a hint~~ - superseded: flow ui hosts the workers, no tmux.
 - Finished flows stay until `flow clear` (implemented).
 - Workers run in your default permission mode (recommended, not re-confirmed).
 
@@ -161,7 +162,8 @@ starting (design-code -> design, implement-plan -> implement, review-changes -> 
 write-merge-request -> merge-request), Agent tool start/end (delegated / working), an
 AskUserQuestion (waiting), a main-loop `turn.complete` (waiting), plan-progress reports
 (tasks, blocked), `gh pr create` / `glab mr create` succeeding (merge-request), `session.end`
-(ended), and `heartbeat` every 30 s. The flow id comes from `$FLOW_ID` set by `flow start`.
+from `/exit` (ended; a hangup is not an end, so flow ui can resume the worker), and `heartbeat`
+every 30 s. The flow id comes from `$FLOW_ID` set by `flow start`.
 Background subagents should not count as delegated.
 
 **5 - `flow start`.** `flow new`, then `tmux new-window -d -P -F '#{window_id}' -n <name> -c <repo> -- claude -w <name> --session-id <flow id> -n <name> "/ship-feature <request>"` with `FLOW_ID` in the
@@ -178,6 +180,21 @@ user-visible behaviour) stops the flow even in auto. One optional, agent-agnosti
 skills: "if a `flow` command exists, report each phase, decision and stop". Needs evals that
 prove auto picks sensibly and really stops on the expensive cases. A `flow setup` command can
 install the ambient-context hook (AXI principle 7).
+
+## flow ui (built 2026-10-14)
+
+The vision below is built as `flow ui`, see README and `.claude/plans/plan-flow-ui.md`. Decisions:
+- Our own multiplexer, not tmux or herdr: `flow server` (started by `flow ui`, a new session via
+  setsid) owns every PTY and its terminal emulator (alacritty_terminal, kitty keyboard off so
+  C-space stays a NUL byte); `flow ui` is a client over a Unix socket. Sessions survive the UI.
+- The log is the only way a pane opens: the server reconciles every unfinished flow with a
+  workspace; once opened it records `Workspace.window = "flow-ui"`, so later opens resume.
+- One thread owns all server state; only the focused pane streams (changed rows, at most 60/s).
+  Idle: about 0.15 % CPU and 3-5 MB each for server and UI.
+- The master keeps its session across crashes (master.json), starts fresh after a stop, and runs
+  the built-in `master` agent with `master.md` appended to its system prompt.
+- `C-space Q` keeps or ends unfinished flows; ended flows keep branch and worktree until `flow clear`.
+- Later: extensions (glab, ClickUp) and a theme file; colours are already named tokens.
 
 ## Long-term vision: `flow` as its own TUI
 
@@ -217,7 +234,7 @@ Integrations as data sources:
 
 ## Where things are
 
-- This repo: `~/projects/flow`, private on GitHub at https://github.com/JanSuthacheeva/flow. Plan: `.claude/plans/plan-flow-core.md`.
+- This repo: `~/projects/flow`, private on GitHub at https://github.com/JanSuthacheeva/flow. Plans: `.claude/plans/plan-flow-core.md`, `plan-flow-start.md`, `plan-flow-ui.md` (branch `flow-ui`).
   Design pages: `docs/design/` (system approaches round 2, core approaches, core
   implementation) - open them in a browser or with `npx -y lavish-axi <file>`.
 - Mods: `~/projects/claude-code-mods` (plan-progress, skill-usage, merge-status), installed
