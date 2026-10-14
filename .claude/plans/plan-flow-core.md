@@ -429,7 +429,7 @@ duration runs until `now`. Repeated reports fold to the same view.
 
 ### Output
 
-- [ ] Add output.rs `Document`, `Failure` (error, usage, from_io, to_toon), `truncated`, `short_duration`, with unit tests; confirm `serde_toon_format` encodes tabular arrays as in the plan, else add the fallback encoder
+- [x] Add output.rs `Document`, `Failure` (error, usage, from_io, to_toon), `truncated`, `short_duration`, with unit tests; confirm `serde_toon_format` encodes tabular arrays as in the plan, else add the fallback encoder
 - [ ] Add `output::home`, `status_list`, `status_detail` with exact TOON tests, including the empty state, truncation hint and warnings
 - [ ] Add `output::created`, `reported`, `skipped`, `cleared` with exact TOON tests
 
