@@ -1,10 +1,28 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::config::Agent;
+use crate::proto::PaneKey;
 use crate::view::{FlowView, Workspace};
 
 pub const MAX_SLOTS: u8 = 9;
 pub const WORKTREES_DIR: &str = ".flow/worktrees";
+
+#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
+/// What the server passes on to every pane: FLOW_HOME, when it was set for the server.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LaunchEnv {
+    pub flow_home: Option<PathBuf>,
+}
+
+#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
+/// Exactly what a pane runs: its command line, directory and environment.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PaneSpec {
+    pub key: PaneKey,
+    pub argv: Vec<String>,
+    pub cwd: PathBuf,
+    pub env: Vec<(String, String)>,
+}
 
 /// The flow's name: an explicit name slugified whole, else the request's ticket key lowercased
 /// (SHOP-217 -> shop-217), else its first four words; -2, -3 ... when taken.
@@ -80,14 +98,31 @@ pub fn kill_window_argv(window: &str) -> Vec<String> {
         .to_vec()
 }
 
-/// The agent's command with {id}, {name}, {prompt}, {request} filled in ({prompt} itself filled first).
+/// The agent's command with {id}, {name}, {prompt}, {request} filled in ({prompt} itself filled first);
+/// an argument that fills to nothing is dropped, so an agent without a prompt gets no empty one.
 pub fn agent_argv(agent: &Agent, id: &str, name: &str, request: &str) -> Vec<String> {
     let prompt = fill(&agent.prompt, id, name, request, "");
     agent
         .command
         .iter()
         .map(|part| fill(part, id, name, request, &prompt))
+        .filter(|part| !part.is_empty())
         .collect()
+}
+
+#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
+/// FLOW_ID (workers only), FLOW_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
+pub fn pane_env(id: Option<&str>, env: &LaunchEnv) -> Vec<(String, String)> {
+    let mut vars = Vec::new();
+    if let Some(id) = id {
+        vars.push(("FLOW_ID".to_string(), id.to_string()));
+    }
+    if let Some(home) = &env.flow_home {
+        vars.push(("FLOW_HOME".to_string(), home.display().to_string()));
+    }
+    vars.push(("TERM".to_string(), "xterm-256color".to_string()));
+    vars.push(("COLORTERM".to_string(), "truecolor".to_string()));
+    vars
 }
 
 /// tmux new-window -d -P -F '#{window_id}' -n <name> -c <path> -e K=V ... -- <agent argv>
@@ -332,6 +367,46 @@ mod tests {
                 "7f3c",
                 "/ship-feature SHOP-217 add CSV export"
             ])
+        );
+    }
+
+    #[test]
+    fn drops_an_argument_that_fills_to_nothing() {
+        let agent = Agent {
+            command: strings(&["claude", "-n", "{name}", "{prompt}"]),
+            prompt: String::new(),
+        };
+
+        assert_eq!(
+            agent_argv(&agent, "7f3c", "master", ""),
+            strings(&["claude", "-n", "master"])
+        );
+    }
+
+    #[test]
+    fn gives_every_pane_a_terminal_type_and_workers_their_flow() {
+        let env = LaunchEnv {
+            flow_home: Some(PathBuf::from("/state/flow")),
+        };
+        let pairs = |items: &[(&str, &str)]| -> Vec<(String, String)> {
+            items
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect()
+        };
+
+        assert_eq!(
+            pane_env(Some("7f3c"), &env),
+            pairs(&[
+                ("FLOW_ID", "7f3c"),
+                ("FLOW_HOME", "/state/flow"),
+                ("TERM", "xterm-256color"),
+                ("COLORTERM", "truecolor"),
+            ])
+        );
+        assert_eq!(
+            pane_env(None, &LaunchEnv::default()),
+            pairs(&[("TERM", "xterm-256color"), ("COLORTERM", "truecolor")])
         );
     }
 
