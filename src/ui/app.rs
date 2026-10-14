@@ -1,13 +1,18 @@
+use std::path::{Path, PathBuf};
+
 use ratatui::Frame as TuiFrame;
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
 
+use crate::event::Mode;
+use crate::launch::WORKTREES_DIR;
 use crate::proto::{ClientMsg, Modes, PaneInfo, PaneKey, PaneStatus, ServerMsg, Size};
 use crate::ui::board::{self, BoardState, BoardView};
 use crate::ui::input::{Command, Key, Routed};
 use crate::ui::layout::{self, Areas, Chrome};
+use crate::ui::newflow::{FormAction, NewFlowForm, NewFlowView};
 use crate::ui::peek::PeekLine;
 use crate::ui::screen::Screen;
 use crate::ui::sidebar::{self, Sidebar};
@@ -21,14 +26,59 @@ const TICKS_PER_AGE: u32 = 10;
 pub enum View {
     Panes,
     Board(BoardState),
+    NewFlow(NewFlowForm),
     ConfirmStop,
+}
+
+/// A flow command flow ui runs in the background.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Job {
+    Start(NewFlowForm),
+    Remove(String),
+}
+
+impl Job {
+    /// The arguments after the flow binary.
+    pub fn args(&self) -> Vec<String> {
+        match self {
+            Job::Start(form) => vec![
+                "start".to_string(),
+                form.request.trim().to_string(),
+                "--mode".to_string(),
+                match form.mode {
+                    Mode::Auto => "auto".to_string(),
+                    Mode::Guided => "guided".to_string(),
+                },
+            ],
+            Job::Remove(name) => vec!["remove".to_string(), name.clone()],
+        }
+    }
+
+    /// Where it runs: the repo a flow starts in.
+    pub fn dir(&self) -> Option<&Path> {
+        match self {
+            Job::Start(form) => Some(&form.repo),
+            Job::Remove(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     Send(ClientMsg),
     Mirror(Modes),
+    Run(Job),
     Quit(String),
+}
+
+/// What a flow command printed: its first line when it worked, the error without "error: " when not.
+pub fn outcome(success: bool, stdout: &str) -> Result<String, String> {
+    let first = stdout.lines().next().unwrap_or("").trim();
+    if success {
+        Ok(first.to_string())
+    } else {
+        Err(first.strip_prefix("error: ").unwrap_or(first).to_string())
+    }
 }
 
 /// What flow ui shows and what it does with input; no I/O of its own.
@@ -50,6 +100,9 @@ pub struct App {
     offset_secs: i64,
     /// Where the master runs, as shown: ~/projects/shop · main.
     master: Option<String>,
+    master_cwd: Option<String>,
+    /// A one-line message, such as why a flow command failed, until the next key.
+    notice: Option<String>,
 }
 
 impl App {
@@ -69,6 +122,8 @@ impl App {
             home: None,
             offset_secs: board::local_offset_secs(),
             master: None,
+            master_cwd: None,
+            notice: None,
         }
     }
 
@@ -113,6 +168,7 @@ impl App {
             ServerMsg::Welcome { .. } | ServerMsg::Closed(_) | ServerMsg::NotOpen(_) => vec![],
             ServerMsg::Master { cwd, branch } => {
                 let place = self.tilde(&cwd);
+                self.master_cwd = Some(cwd);
                 self.master = Some(match branch {
                     Some(branch) => format!("{place} · {branch}"),
                     None => place,
@@ -158,6 +214,9 @@ impl App {
     }
 
     pub fn on_input(&mut self, routed: Routed) -> Vec<Effect> {
+        if !matches!(routed, Routed::Pane(_)) {
+            self.notice = None;
+        }
         match routed {
             Routed::Pane(bytes) if self.view == View::Panes => {
                 vec![Effect::Send(ClientMsg::Input(bytes))]
@@ -196,6 +255,7 @@ impl App {
                     state,
                     back: &back,
                     offset_secs: self.offset_secs,
+                    notice: self.notice.as_deref(),
                 },
                 frame.area(),
             );
@@ -219,6 +279,24 @@ impl App {
         match self.view {
             View::ConfirmStop => draw_confirm_stop(frame, areas.pane, theme),
             View::Board(_) => {}
+            View::NewFlow(ref form) => {
+                let flows: Vec<FlowView> = self.workers().into_iter().cloned().collect();
+                let repo = form.repo.display().to_string();
+                let screen = frame.area();
+                frame.buffer_mut().set_style(screen, Modifier::DIM);
+                frame.render_widget(
+                    NewFlowView {
+                        form,
+                        flows: &flows,
+                        place: &self.tilde(&repo),
+                        theme,
+                    },
+                    areas.frame,
+                );
+                if let Some(cursor) = form.cursor(areas.frame) {
+                    frame.set_cursor_position(cursor);
+                }
+            }
             View::Panes => {
                 if let Some((col, row)) = self.screen.cursor
                     && self
@@ -264,6 +342,10 @@ impl App {
                 self.view = View::Board(BoardState { selected });
                 vec![]
             }
+            Command::NewFlow => {
+                self.view = View::NewFlow(NewFlowForm::new(self.focused_repo()));
+                vec![]
+            }
             Command::Focus(0) => self.focus(PaneKey::Master),
             Command::Focus(digit) => {
                 let Some(flow) = self.workers().get(digit as usize - 1).copied() else {
@@ -290,12 +372,27 @@ impl App {
         if let View::Board(state) = self.view {
             return self.on_board_key(state, key);
         }
+        if let View::NewFlow(form) = &mut self.view {
+            return match form.on_key(key) {
+                FormAction::Edit => vec![],
+                FormAction::Cancel => {
+                    self.view = View::Panes;
+                    vec![]
+                }
+                FormAction::Submit => {
+                    let job = Job::Start(form.clone());
+                    self.view = View::Panes;
+                    self.notice = Some("starting the flow…".to_string());
+                    vec![Effect::Run(job)]
+                }
+            };
+        }
         match self.view {
             View::ConfirmStop if key == Key::Char('y') => vec![
                 Effect::Send(ClientMsg::StopServer),
                 Effect::Quit("stopped the flow server and every session in it".to_string()),
             ],
-            View::ConfirmStop | View::Panes | View::Board(_) => {
+            View::ConfirmStop | View::Panes | View::Board(_) | View::NewFlow(_) => {
                 self.view = View::Panes;
                 vec![]
             }
@@ -339,6 +436,28 @@ impl App {
                 self.view = View::Panes;
                 vec![]
             }
+            Key::Char('n') => {
+                self.view = View::NewFlow(NewFlowForm::new(self.focused_repo()));
+                vec![]
+            }
+            Key::Char('x') => {
+                let flow = state
+                    .selected
+                    .checked_sub(1)
+                    .and_then(|at| self.workers().get(at).copied());
+                match flow {
+                    Some(flow) if flow.is_finished() => {
+                        let job = Job::Remove(flow.name.clone());
+                        self.notice = Some(format!("clearing {}…", flow.name));
+                        self.view = View::Board(BoardState { selected: 0 });
+                        vec![Effect::Run(job)]
+                    }
+                    _ => {
+                        self.notice = Some("only a finished flow can be cleared".to_string());
+                        vec![]
+                    }
+                }
+            }
             _ => vec![],
         }
     }
@@ -363,6 +482,40 @@ impl App {
         self.cursor = None;
         self.screen = Screen::default();
         vec![Effect::Send(ClientMsg::Focus(key))]
+    }
+
+    /// What a background flow command printed: the flow it started, or why it failed.
+    pub fn on_ran(&mut self, job: Job, result: Result<String, String>) {
+        self.notice = None;
+        match (job, result) {
+            (Job::Start(_), Ok(_)) | (Job::Remove(_), Ok(_)) => {}
+            (Job::Start(mut form), Err(error)) => {
+                form.error = Some(error);
+                self.view = View::NewFlow(form);
+            }
+            (Job::Remove(_), Err(error)) => self.notice = Some(error),
+        }
+    }
+
+    /// The repository of the pane in view: the master's directory, or the repo a worker's worktree is in.
+    fn focused_repo(&self) -> PathBuf {
+        let worktree = match &self.focus {
+            PaneKey::Master => None,
+            PaneKey::Flow(id) => self
+                .workers()
+                .into_iter()
+                .find(|flow| &flow.id == id)
+                .and_then(|flow| flow.workspace.as_ref())
+                .map(|space| space.path.clone()),
+        };
+        let repo = worktree.and_then(|path| {
+            let marker = format!("/{WORKTREES_DIR}/");
+            path.find(&marker).map(|at| path[..at].to_string())
+        });
+        PathBuf::from(
+            repo.or_else(|| self.master_cwd.clone())
+                .unwrap_or_else(|| ".".to_string()),
+        )
     }
 
     fn tilde(&self, path: &str) -> String {
@@ -428,9 +581,12 @@ impl App {
     /// The rounded border around the focused pane: its name in the top edge, and for a worker
     /// its steps, branch and slot, and the way back to the master on the right.
     fn border(&self, theme: &Theme) -> Block<'static> {
-        let block = Block::bordered()
+        let mut block = Block::bordered()
             .border_type(BorderType::Rounded)
             .border_style(theme.ui.rule);
+        if let Some(notice) = &self.notice {
+            block = block.title_bottom(Line::styled(format!(" {notice} "), theme.state.waiting));
+        }
         let PaneKey::Flow(id) = &self.focus else {
             let mut title = vec![
                 Span::raw(" "),
@@ -502,21 +658,29 @@ impl App {
             }
             _ => {}
         }
-        let right = Line::from(vec![
+        let keys = vec![
             Span::styled("C-space", theme.ui.key),
-            Span::styled(" then ", theme.ui.faint),
+            Span::styled(" then  ", theme.ui.faint),
+            Span::styled("n", theme.ui.key),
+            Span::styled(" new flow   ", theme.ui.muted),
             Span::styled("d", theme.ui.key),
-            Span::styled(" detach  ", theme.ui.muted),
-            Span::styled("r", theme.ui.key),
-            Span::styled(" resume  ", theme.ui.muted),
+            Span::styled(" detach   ", theme.ui.muted),
             Span::styled("Q", theme.ui.key),
             Span::styled(" stop ", theme.ui.muted),
-        ]);
+        ];
+        let mut full = vec![
+            Span::styled("no workers yet", theme.ui.faint),
+            Span::styled(format!("   {}  ", glyphs.separator), theme.ui.rule),
+        ];
+        full.extend(keys.clone());
         let left = Line::from(left);
-        let fits = left.width() + right.width() < area.width as usize;
+        let room = (area.width as usize).saturating_sub(left.width() + 1);
+        let right = [Line::from(full), Line::from(keys)]
+            .into_iter()
+            .find(|line| line.width() <= room);
         frame.render_widget(Block::default().style(theme.ui.bar), area);
         frame.render_widget(Paragraph::new(left), area);
-        if fits {
+        if let Some(right) = right {
             frame.render_widget(Paragraph::new(right).alignment(Alignment::Right), area);
         }
     }
@@ -737,7 +901,7 @@ mod tests {
         let bar = row(&terminal, 9);
         assert!(bar.contains("≋ flow"), "{bar}");
         assert!(bar.contains("◎ master"), "{bar}");
-        assert!(bar.contains("C-space then d detach"), "{bar}");
+        assert!(bar.contains("C-space then  n new flow   d detach"), "{bar}");
         let buffer = terminal.backend().buffer();
         assert!(
             (0..SIZE.cols).all(|x| buffer[(x, 9)].bg == Theme::builtin().ui.bar.bg.unwrap()),
@@ -932,7 +1096,7 @@ mod tests {
         assert_eq!(side(&terminal, 41), "─".repeat(40));
         assert_eq!(
             side(&terminal, 42).trim_end(),
-            " C-space j k peek  0-9 jump  r resume"
+            " C-space j k peek  0-9 jump  n new"
         );
         let buffer = terminal.backend().buffer();
         assert_eq!(
@@ -1139,7 +1303,7 @@ mod tests {
         assert_eq!(side(&terminal, 24).trim_end(), " DONE");
         assert_eq!(
             side(&terminal, 42).trim_end(),
-            " C-space j k peek  0-9 jump  r resume"
+            " C-space j k peek  0-9 jump  n new"
         );
 
         assert_eq!(
@@ -1207,6 +1371,16 @@ mod tests {
         let sidebar = render_at(&fleet, FLEET);
 
         assert!(bar.contains("◎ master  ~/projects/shop · main"), "{bar}");
+        let mut wide = App::new(FLEET);
+        wide.on_server(ServerMsg::Master {
+            cwd: "/shop".into(),
+            branch: None,
+        });
+        let wide = row(&render_at(&wide, FLEET), 43);
+        assert!(
+            wide.ends_with("no workers yet   │  C-space then  n new flow   d detach   Q stop "),
+            "{wide}"
+        );
         assert!(row(&sidebar, 0).starts_with("╭ ◎ master  ~/projects/shop · main ─"));
         assert_eq!(side(&sidebar, 3).trim_end(), "     ~/projects/shop · main");
         assert_eq!(side(&sidebar, 5).trim_end(), " NEEDS YOU");
@@ -1251,7 +1425,7 @@ mod tests {
         );
         assert!(
             row(&terminal, 43)
-                .starts_with(" 0-9 select   h j k l move   enter jump in   esc back to shop-230")
+                .starts_with(" 0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   esc back to shop-230")
         );
         let buffer = terminal.backend().buffer();
         let accent = Theme::builtin().ui.accent.fg.unwrap();
@@ -1287,5 +1461,103 @@ mod tests {
         app.on_input(Routed::Command(Command::Board));
         assert_eq!(app.on_input(Routed::View(vec![Key::Esc])), vec![]);
         assert!(!app.is_modal());
+    }
+
+    #[test]
+    fn starts_a_flow_from_the_dialog_in_the_repo_in_view() {
+        let mut app = board_app();
+        app.on_input(Routed::Command(Command::NewFlow));
+        app.on_input(Routed::View(
+            "SHOP-240 rate-limit the export endpoint"
+                .chars()
+                .map(Key::Char)
+                .collect(),
+        ));
+
+        let terminal = render_at(&app, FLEET);
+        let dialog: String = (10..24).map(|y| row(&terminal, y) + "\n").collect();
+        assert!(
+            dialog.contains(
+                "│ new flow                                                in ~/projects/shop │"
+            ),
+            "{dialog}"
+        );
+        assert!(
+            dialog.contains("│ │ SHOP-240 rate-limit the export endpoint"),
+            "{dialog}"
+        );
+        assert!(
+            dialog.contains("│ creates flow/shop-240  ·  .flow/worktrees/shop-240  ·  slot 2"),
+            "{dialog}"
+        );
+        assert!(
+            terminal.backend().buffer()[(0, 30)]
+                .modifier
+                .contains(Modifier::DIM)
+        );
+
+        let effects = app.on_input(Routed::View(vec![Key::Enter]));
+        let [Effect::Run(job)] = &effects[..] else {
+            panic!("expected a job: {effects:?}");
+        };
+        assert_eq!(
+            job.args(),
+            [
+                "start",
+                "SHOP-240 rate-limit the export endpoint",
+                "--mode",
+                "auto"
+            ]
+        );
+        assert_eq!(job.dir(), Some(Path::new("/Users/jan/projects/shop")));
+        assert!(!app.is_modal());
+
+        app.on_ran(job.clone(), Err("all 9 slots are in use".into()));
+        let View::NewFlow(form) = &app.view else {
+            panic!("the dialog comes back");
+        };
+        assert_eq!(form.request, "SHOP-240 rate-limit the export endpoint");
+        assert_eq!(form.error.as_deref(), Some("all 9 slots are in use"));
+    }
+
+    #[test]
+    fn starts_from_a_workers_repo_and_clears_only_finished_flows() {
+        let mut app = board_app();
+        app.on_input(Routed::Command(Command::Focus(1)));
+        app.on_input(Routed::Command(Command::NewFlow));
+        let View::NewFlow(form) = &app.view else {
+            panic!("expected the dialog");
+        };
+        assert_eq!(form.repo, PathBuf::from("/shop"));
+        app.on_input(Routed::View(vec![Key::Esc]));
+
+        app.on_input(Routed::Command(Command::Board));
+        app.on_input(Routed::View(vec![Key::Char('1'), Key::Char('x')]));
+        assert_eq!(
+            app.notice.as_deref(),
+            Some("only a finished flow can be cleared")
+        );
+        let effects = app.on_input(Routed::View(vec![Key::Char('4'), Key::Char('x')]));
+        assert_eq!(effects, vec![Effect::Run(Job::Remove("shop-198".into()))]);
+        app.on_ran(
+            Job::Remove("shop-198".into()),
+            Err("shop-198 has uncommitted work in /shop".into()),
+        );
+        assert_eq!(
+            app.notice.as_deref(),
+            Some("shop-198 has uncommitted work in /shop")
+        );
+    }
+
+    #[test]
+    fn reads_what_a_flow_command_printed() {
+        assert_eq!(
+            outcome(true, "flow: shop-240\nid: x\n"),
+            Ok("flow: shop-240".into())
+        );
+        assert_eq!(
+            outcome(false, "error: all 9 slots are in use\nhelp[1]: ..."),
+            Err("all 9 slots are in use".into())
+        );
     }
 }

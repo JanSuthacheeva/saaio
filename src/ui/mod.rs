@@ -2,6 +2,7 @@ pub mod app;
 pub mod board;
 pub mod input;
 pub mod layout;
+pub mod newflow;
 pub mod outer;
 pub mod peek;
 pub mod screen;
@@ -22,7 +23,7 @@ use signal_hook::iterator::Signals;
 
 use crate::client::Client;
 use crate::proto::{Role, ServerMsg};
-use app::{App, Effect};
+use app::{App, Effect, Job};
 use input::Router;
 use outer::Outer;
 use peek::PeekCache;
@@ -34,6 +35,7 @@ enum Event {
     ServerGone,
     Resize,
     Tick,
+    Ran(Job, Result<String, String>),
 }
 
 /// How often spinners turn.
@@ -45,6 +47,8 @@ const TICKS_PER_PEEK: u32 = 10;
 pub struct UiEnv {
     pub claude_home: PathBuf,
     pub home: Option<PathBuf>,
+    /// This flow binary, for the flow commands the UI runs (start, remove).
+    pub exe: PathBuf,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
@@ -64,6 +68,7 @@ pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String> {
     .context("no flow server answers")?;
     let mut writer = client.try_clone()?;
     let (events, inbox) = mpsc::channel();
+    let jobs = events.clone();
     read_stdin(events.clone());
     read_server(client, events.clone());
     watch_resize(events.clone())?;
@@ -95,6 +100,10 @@ pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String> {
                     terminal.autoresize()?;
                     app.on_resize(size)
                 }
+                Event::Ran(job, result) => {
+                    app.on_ran(job, result);
+                    vec![]
+                }
                 Event::Tick => {
                     redraw |= app.on_tick(now_ms());
                     ticks = ticks.wrapping_add(1);
@@ -109,6 +118,7 @@ pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String> {
             match effect {
                 Effect::Send(message) => writer.send(&message)?,
                 Effect::Mirror(modes) => outer.mirror(&modes)?,
+                Effect::Run(job) => run_job(&env.exe, job, jobs.clone()),
                 Effect::Quit(message) => return Ok(message),
             }
         }
@@ -117,6 +127,28 @@ pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String> {
             terminal.draw(|frame| app.draw(frame, &theme, peek.lines()))?;
         }
     }
+}
+
+/// Runs a flow command on its own thread; what it printed comes back as Event::Ran.
+fn run_job(exe: &Path, job: Job, events: Sender<Event>) {
+    let mut command = std::process::Command::new(exe);
+    command
+        .args(job.args())
+        .env_remove("FLOW_ID")
+        .stdin(std::process::Stdio::null());
+    if let Some(dir) = job.dir() {
+        command.current_dir(dir);
+    }
+    thread::spawn(move || {
+        let result = match command.output() {
+            Ok(output) => app::outcome(
+                output.status.success(),
+                &String::from_utf8_lossy(&output.stdout),
+            ),
+            Err(error) => Err(format!("could not run flow: {error}")),
+        };
+        let _ = events.send(Event::Ran(job, result));
+    });
 }
 
 fn now_ms() -> u64 {

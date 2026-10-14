@@ -304,7 +304,10 @@ pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String>;
 
 // app.rs
 pub enum View { Panes, Board(BoardState), NewFlow(NewFlowForm), History(u32), Help, Stop { unfinished: Vec<String> } }
-pub enum Effect { Send(ClientMsg), StartFlow(NewFlowForm), Mirror(Modes), Quit(String) }
+pub enum Effect { Send(ClientMsg), Run(Job), Mirror(Modes), Quit(String) }
+/// A flow command the UI runs on a thread (`<exe> start <request> --mode <mode>` in the form's repo,
+/// `<exe> remove <name>` for x on the board); its first stdout line comes back through App::on_ran.
+pub enum Job { Start(NewFlowForm), Remove(String) }
 impl App {
     pub fn new(size: Size) -> App;
     pub fn areas(&self) -> Areas;
@@ -315,8 +318,8 @@ impl App {
     pub fn on_resize(&mut self, size: Size) -> Vec<Effect>;
     /// Every 100 ms with the time ages count to; true when a spinner turned or a second passed.
     pub fn on_tick(&mut self, now: u64) -> bool;
-    /// The `flow start` the dialog ran: the flow's name, or the error it printed.
-    pub fn on_started(&mut self, result: Result<String, String>);
+    /// What a job printed: on a failed start the dialog comes back with the error; a failed remove is a notice.
+    pub fn on_ran(&mut self, job: Job, result: Result<String, String>);
     /// The flow under the sidebar cursor, for the peek.
     pub fn peeked(&self) -> Option<&FlowView>;
     pub fn draw(&self, frame: &mut ratatui::Frame, theme: &Theme, peek: &PeekCache);
@@ -484,9 +487,10 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 8. New flow dialog
    1. `C-space n -> View::NewFlow(NewFlowForm::new(repo of focused pane))`
    2. `Router::route(bytes, true, pane) -> Routed::View(keys) -> NewFlowForm::on_key: FormAction`
-   3. `Submit -> Effect::StartFlow(form)` -> thread runs `<exe> start <request> --mode <mode>` in form.repo -> `Event::Started`
+   3. `Submit -> Effect::Run(Job::Start(form))` -> thread runs `<exe> start <request> --mode <mode>` in form.repo -> `Event::Ran`
    4. the pane appears through chain 3
-   - `flow start` exits 1 -> `App::on_started(Err(line))`: toast, form reopens with its text
+   - `flow start` exits 1 -> `App::on_ran(job, Err(line))`: the form reopens with its text and the error
+   - no C-enter (start and jump in): without the kitty keyboard protocol it reads as enter
 9. Detach, take over, stop
    1. `C-space d -> Effect::Quit("detached")` -> Outer restores the terminal; server sees `Gone`, panes keep running
    2. second `flow ui` attaches -> `Detached` to the old one -> `Quit("attached elsewhere")`
@@ -557,8 +561,8 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 ### Milestone 4: views
 
 - [x] Add ui/peek.rs (transcript, tail, PeekCache) with fixture tests; sidebar peek, C-space j/k and enter; ended flows stay under DONE until `flow clear` and their peek shows branch and worktree
-- [ ] Add ui/board.rs BoardView and C-space o, with TestBackend tests against the board screen
-- [ ] Add ui/newflow.rs NewFlowForm, C-space n and the `flow start` thread with App::on_started, with tests
+- [x] Add ui/board.rs BoardView and C-space o, with TestBackend tests against the board screen
+- [ ] Add ui/newflow.rs NewFlowForm, C-space n and the `flow start` thread with App::on_ran, with tests
 - [ ] Add ui/rail.rs Rail and C-space b
 - [ ] History (C-space [, ClientMsg::History) through Host::frame
 - [ ] Help (C-space ?) and the stop dialog (C-space Q): unfinished workers listed, `k` keeps them, `e` ends them (StopServer { end_flows }) and the UI prints each ended flow's branch and worktree as it quits, `y` when none; tests for each answer

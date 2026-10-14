@@ -56,6 +56,8 @@ pub struct BoardView<'a> {
     pub back: &'a str,
     /// The local time zone's offset from UTC, for the timeline's clock times.
     pub offset_secs: i64,
+    /// Shown in place of the keys, such as why clearing a flow failed.
+    pub notice: Option<&'a str>,
 }
 
 impl BoardView<'_> {
@@ -483,6 +485,9 @@ impl BoardView<'_> {
 
     fn footer(&self) -> Line<'static> {
         let theme = self.theme();
+        if let Some(notice) = self.notice {
+            return Line::styled(format!(" {notice}"), theme.state.waiting);
+        }
         let key = |text: &'static str| Span::styled(text, theme.ui.key);
         let hint = |text: String| Span::styled(text, theme.ui.faint);
         Line::from(vec![
@@ -493,6 +498,10 @@ impl BoardView<'_> {
             hint(" move   ".into()),
             key("enter"),
             hint(" jump in   ".into()),
+            key("n"),
+            hint(" new flow   ".into()),
+            key("x"),
+            hint(" clear finished flow   ".into()),
             key("esc"),
             hint(format!(" back to {}", self.back)),
         ])

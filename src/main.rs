@@ -249,6 +249,7 @@ fn ui(store: &Store, stop: bool) -> Result<Document, Failure> {
         .or_else(|| env_path("HOME").map(|home| home.join(".claude")))
         .unwrap_or_else(|| PathBuf::from(".claude"));
     let env = ui::UiEnv {
+        exe: exe.clone(),
         claude_home,
         home: env_path("HOME").filter(|home| !home.as_os_str().is_empty()),
     };
