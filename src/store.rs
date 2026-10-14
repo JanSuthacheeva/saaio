@@ -8,6 +8,21 @@ use uuid::Uuid;
 
 use crate::event::Event;
 
+/// One flow's events and its last heartbeat, as read from disk.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FlowLog {
+    pub id: String,
+    pub events: Vec<Event>,
+    pub beat: Option<u64>,
+}
+
+/// What tells whether a flow's files changed: the log's size and the newest change of log or heartbeat.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Stamp {
+    pub modified: SystemTime,
+    pub len: u64,
+}
+
 #[derive(Debug, Clone)]
 pub struct Store {
     root: PathBuf, // holds flows/<id>.jsonl and flows/<id>.alive
@@ -99,6 +114,53 @@ impl Store {
         Ok(ids)
     }
 
+    /// Every readable flow log, and a warning per log that could not be read.
+    pub fn logs(&self) -> (Vec<FlowLog>, Vec<String>) {
+        let ids = match self.ids() {
+            Ok(ids) => ids,
+            Err(error) => return (Vec::new(), vec![format!("{error:#}")]),
+        };
+        let mut logs = Vec::new();
+        let mut warnings = Vec::new();
+        for id in ids {
+            match self
+                .events(&id)
+                .and_then(|events| Ok((events, self.last_beat(&id)?)))
+            {
+                Ok((events, beat)) => logs.push(FlowLog { id, events, beat }),
+                Err(error) => warnings.push(format!("cannot read {id}: {error:#}")),
+            }
+        }
+        (logs, warnings)
+    }
+
+    /// Size and modification time of each log and heartbeat file, by flow id.
+    #[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
+    pub fn stamps(&self) -> Result<Vec<(String, Stamp)>> {
+        let mut stamps = Vec::new();
+        for id in self.ids()? {
+            let log = match fs::metadata(self.log(&id)) {
+                Ok(log) => log,
+                Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                Err(error) => {
+                    return Err(error).with_context(|| format!("could not read flow {id}"));
+                }
+            };
+            let mut modified = log.modified()?;
+            if let Ok(alive) = fs::metadata(self.alive(&id)) {
+                modified = modified.max(alive.modified()?);
+            }
+            stamps.push((
+                id,
+                Stamp {
+                    modified,
+                    len: log.len(),
+                },
+            ));
+        }
+        Ok(stamps)
+    }
+
     /// Touches <id>.alive; its mtime is the last heartbeat.
     pub fn beat(&self, id: &str) -> Result<()> {
         if !self.log(id).exists() {
@@ -170,6 +232,43 @@ mod tests {
                 mode: Mode::Guided,
             },
         )
+    }
+
+    #[test]
+    fn reads_every_log_with_its_heartbeat() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let first = store.create(&started()).unwrap();
+        let second = store.create(&started()).unwrap();
+        store.beat(&second).unwrap();
+
+        let (logs, warnings) = store.logs();
+
+        assert!(warnings.is_empty());
+        assert_eq!(logs.len(), 2);
+        let log = |id: &str| logs.iter().find(|log| log.id == id).unwrap();
+        assert_eq!(log(&first).events, vec![started()]);
+        assert_eq!(log(&first).beat, None);
+        assert!(log(&second).beat.is_some());
+    }
+
+    #[test]
+    fn a_stamp_changes_with_an_event_or_a_heartbeat() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let id = store.create(&started()).unwrap();
+        let stamp = |store: &Store| store.stamps().unwrap()[0].1;
+
+        let before = stamp(&store);
+        store.append(&id, &started()).unwrap();
+        let appended = stamp(&store);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        store.beat(&id).unwrap();
+        let beaten = stamp(&store);
+
+        assert!(appended.len > before.len);
+        assert!(beaten.modified > appended.modified);
+        assert_eq!(beaten.len, appended.len);
     }
 
     #[test]

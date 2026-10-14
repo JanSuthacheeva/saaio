@@ -1,4 +1,5 @@
 use crate::event::{Event, EventKind, Mode, Phase};
+use crate::store::FlowLog;
 use crate::view::{
     Board, FlowView, ReviewCount, State, Step, StepStatus, Tasks, TimelineEntry, Tone,
     VIEW_VERSION, Workspace,
@@ -30,6 +31,13 @@ pub fn fold(id: &str, events: &[Event], last_beat: Option<u64>, now: u64) -> Opt
         view.state = State::NotResponding;
     }
     Some(view)
+}
+
+/// Every log that names its flow, folded at `now`.
+pub fn views(logs: Vec<FlowLog>, now: u64) -> Vec<FlowView> {
+    logs.into_iter()
+        .filter_map(|log| fold(&log.id, &log.events, log.beat, now))
+        .collect()
 }
 
 /// Sorted: needs you, running, finished; newest change first within each group.

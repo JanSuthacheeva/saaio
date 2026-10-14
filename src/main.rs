@@ -566,24 +566,8 @@ fn status(
 
 /// Every flow folded; unreadable ones become warnings so the rest still shows.
 fn views(store: &Store, now: u64) -> (Vec<FlowView>, Vec<String>) {
-    let ids = match store.ids() {
-        Ok(ids) => ids,
-        Err(error) => return (Vec::new(), vec![format!("{error:#}")]),
-    };
-    let mut flows = Vec::new();
-    let mut warnings = Vec::new();
-    for id in ids {
-        let folded = store
-            .events(&id)
-            .and_then(|events| Ok((events, store.last_beat(&id)?)))
-            .map(|(events, beat)| fold::fold(&id, &events, beat, now));
-        match folded {
-            Ok(Some(view)) => flows.push(view),
-            Ok(None) => {}
-            Err(error) => warnings.push(format!("cannot read {id}: {error:#}")),
-        }
-    }
-    (flows, warnings)
+    let (logs, warnings) = store.logs();
+    (fold::views(logs, now), warnings)
 }
 
 fn no_flow(name: &str) -> Failure {
