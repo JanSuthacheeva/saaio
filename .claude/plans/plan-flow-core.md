@@ -411,7 +411,7 @@ duration runs until `now`. Repeated reports fold to the same view.
 
 ### Skeleton
 
-- [ ] Create the crate: Cargo.toml with the dependencies, src/main.rs with an empty `Cli`, .gitignore, CLAUDE.md (build/test commands, module map); `cargo build`, `cargo clippy -- -D warnings`, `cargo fmt --check` pass
+- [x] Create the crate: Cargo.toml with the dependencies, src/main.rs with an empty `Cli`, .gitignore, CLAUDE.md (build/test commands, module map); `cargo build`, `cargo clippy -- -D warnings`, `cargo fmt --check` pass
 
 ### Events and store
 
