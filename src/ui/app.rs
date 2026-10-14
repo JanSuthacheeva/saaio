@@ -97,6 +97,7 @@ impl App {
 
     pub fn draw(&self, frame: &mut TuiFrame, theme: &Theme) {
         let areas = self.areas();
+        frame.render_widget(self.border(theme), areas.frame);
         frame.render_widget(&self.screen, areas.pane);
         if let Some(bar) = areas.bar {
             self.draw_bar(frame, bar, theme);
@@ -162,6 +163,22 @@ impl App {
         vec![Effect::Send(ClientMsg::Focus(key))]
     }
 
+    /// The rounded border around the focused pane, its name in the top edge.
+    fn border(&self, theme: &Theme) -> Block<'static> {
+        let title = match &self.focus {
+            PaneKey::Master => Line::from(vec![
+                Span::raw(" "),
+                Span::styled(theme.glyphs.master, theme.ui.accent),
+                Span::styled(" master ", theme.ui.strong),
+            ]),
+            PaneKey::Flow(id) => Line::from(Span::styled(format!(" {id} "), theme.ui.strong)),
+        };
+        Block::bordered()
+            .border_type(BorderType::Rounded)
+            .border_style(theme.ui.rule)
+            .title(title)
+    }
+
     fn status(&self, key: &PaneKey) -> Option<&PaneStatus> {
         self.panes
             .iter()
@@ -201,6 +218,7 @@ impl App {
         ]);
         let left = Line::from(left);
         let fits = left.width() + right.width() < area.width as usize;
+        frame.render_widget(Block::default().style(theme.ui.bar), area);
         frame.render_widget(Paragraph::new(left), area);
         if fits {
             frame.render_widget(Paragraph::new(right).alignment(Alignment::Right), area);
@@ -349,10 +367,7 @@ mod tests {
                 cols: 100,
                 rows: 30
             }),
-            vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 100,
-                rows: 29
-            }))]
+            vec![Effect::Send(ClientMsg::Resize(Size { cols: 98, rows: 26 }))]
         );
     }
 
@@ -391,12 +406,32 @@ mod tests {
 
         let mut terminal = render(&app);
 
-        assert!(row(&terminal, 0).starts_with("hello"));
+        assert!(
+            row(&terminal, 0).starts_with("╭ ◎ master ─"),
+            "{}",
+            row(&terminal, 0)
+        );
+        assert!(
+            row(&terminal, 1).starts_with("│hello"),
+            "{}",
+            row(&terminal, 1)
+        );
+        assert!(row(&terminal, 7).starts_with("╰─"));
+        assert_eq!(
+            row(&terminal, 8).trim(),
+            "",
+            "a blank row between session and bar"
+        );
         let bar = row(&terminal, 9);
         assert!(bar.contains("≋ flow"), "{bar}");
         assert!(bar.contains("◎ master"), "{bar}");
         assert!(bar.contains("C-space then d detach"), "{bar}");
-        terminal.backend_mut().assert_cursor_position((5, 0));
+        let buffer = terminal.backend().buffer();
+        assert!(
+            (0..SIZE.cols).all(|x| buffer[(x, 9)].bg == Theme::builtin().ui.bar.bg.unwrap()),
+            "the whole bar has the panel background"
+        );
+        terminal.backend_mut().assert_cursor_position((6, 1));
     }
 
     #[test]

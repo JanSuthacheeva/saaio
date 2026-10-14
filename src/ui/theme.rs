@@ -20,6 +20,8 @@ pub struct UiTokens {
     pub rule: Style,
     pub selection: Style,
     pub key: Style,
+    /// The bottom bar: a dark panel row with light text on it.
+    pub bar: Style,
 }
 
 #[derive(Debug, Clone)]
@@ -45,7 +47,8 @@ pub struct Glyphs {
 }
 
 impl Theme {
-    /// ANSI colors 0-15, so flow takes on the terminal's own palette; the accent is 256-color clay.
+    /// ANSI colors 0-15, so flow takes on the terminal's own palette; the accent (clay) and the bar's
+    /// dark panel are 256-color.
     pub fn builtin() -> Theme {
         let plain = Style::default();
         Theme {
@@ -58,6 +61,7 @@ impl Theme {
                 rule: plain.fg(Color::DarkGray),
                 selection: plain.add_modifier(Modifier::REVERSED),
                 key: plain.add_modifier(Modifier::BOLD),
+                bar: plain.bg(Color::Indexed(235)).fg(Color::Indexed(252)),
             },
             state: StateTokens {
                 working: plain.fg(Color::Blue),

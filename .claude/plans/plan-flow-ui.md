@@ -330,8 +330,10 @@ impl Widget for &Screen;
 
 // layout.rs (pure)
 pub enum Chrome { Solo, Sidebar, Rail }
-pub struct Areas { pub header: Rect, pub pane: Rect, pub side: Option<Rect>, pub bar: Option<Rect> }
-/// Solo: pane + bottom bar; Sidebar: 40 columns on the right; Rail: 6.
+/// frame: the rounded border around the pane, its top edge names the session.
+pub struct Areas { pub frame: Rect, pub pane: Rect, pub side: Option<Rect>, pub bar: Option<Rect> }
+/// Solo: the framed pane, a blank row, the bottom bar (dark panel background); Sidebar: 40 columns
+/// on the right; Rail: 6.
 pub fn areas(size: Size, chrome: Chrome) -> Areas;
 
 // sidebar.rs, board.rs, rail.rs, help.rs - widgets over the Board
