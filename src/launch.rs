@@ -6,6 +6,8 @@ use crate::view::{FlowView, Workspace};
 
 pub const MAX_SLOTS: u8 = 9;
 pub const WORKTREES_DIR: &str = ".flow/worktrees";
+/// Workspace.window of a worker flow ui has opened once; its next open resumes it.
+pub const HOSTED: &str = "flow-ui";
 
 #[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 /// What the server passes on to every pane: FLOW_HOME, when it was set for the server.
@@ -121,6 +123,24 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>> {
             .filter(|part| !part.is_empty())
             .collect(),
     )
+}
+
+/// The agent's command the first time, its resume command once window is HOSTED;
+/// None when the flow has no workspace, or must resume and the agent has no resume template.
+#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
+pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec> {
+    let space = flow.workspace.as_ref()?;
+    let argv = if space.window.as_deref() == Some(HOSTED) {
+        resume_argv(agent, &flow.id, &flow.name)?
+    } else {
+        agent_argv(agent, &flow.id, &flow.name, &flow.request)
+    };
+    Some(PaneSpec {
+        key: PaneKey::Flow(flow.id.clone()),
+        argv,
+        cwd: PathBuf::from(&space.path),
+        env: pane_env(Some(&flow.id), env),
+    })
 }
 
 #[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
@@ -482,5 +502,74 @@ mod tests {
                 ("FLOW_REPO".to_string(), "/repo".to_string()),
             ]
         );
+    }
+
+    fn worker(window: Option<&str>) -> FlowView {
+        let events = [
+            Event::new(
+                0,
+                EventKind::Started {
+                    name: "shop-217".into(),
+                    request: "SHOP-217 add CSV export".into(),
+                    mode: Mode::Auto,
+                },
+            ),
+            Event::new(
+                1,
+                EventKind::Workspace {
+                    path: "/repo/.flow/worktrees/shop-217".into(),
+                    branch: "flow/shop-217".into(),
+                    slot: 2,
+                    window: window.map(String::from),
+                    agent: "claude".into(),
+                },
+            ),
+        ];
+        fold::fold("7f3c", &events, None, 2).unwrap()
+    }
+
+    #[test]
+    fn starts_a_worker_fresh_and_resumes_it_once_hosted() {
+        let agents = crate::config::builtin_agents();
+        let claude = &agents["claude"];
+        let env = LaunchEnv::default();
+
+        let fresh = worker_spec(&worker(None), claude, &env).unwrap();
+        assert_eq!(fresh.key, PaneKey::Flow("7f3c".into()));
+        assert_eq!(fresh.cwd, PathBuf::from("/repo/.flow/worktrees/shop-217"));
+        assert_eq!(
+            fresh.argv,
+            agent_argv(claude, "7f3c", "shop-217", "SHOP-217 add CSV export")
+        );
+        assert!(
+            fresh
+                .env
+                .contains(&("FLOW_ID".to_string(), "7f3c".to_string()))
+        );
+
+        let old_tmux = worker_spec(&worker(Some("@12")), claude, &env).unwrap();
+        assert_eq!(old_tmux.argv, fresh.argv, "a tmux window opens fresh once");
+
+        let resumed = worker_spec(&worker(Some(HOSTED)), claude, &env).unwrap();
+        assert_eq!(
+            resumed.argv,
+            strings(&["claude", "-n", "shop-217", "--resume", "7f3c"])
+        );
+    }
+
+    #[test]
+    fn cannot_resume_a_worker_whose_agent_has_no_resume_template() {
+        let agent = Agent {
+            command: strings(&["aider"]),
+            prompt: String::new(),
+            resume: None,
+        };
+        let env = LaunchEnv::default();
+
+        assert!(worker_spec(&worker(None), &agent, &env).is_some());
+        assert_eq!(worker_spec(&worker(Some(HOSTED)), &agent, &env), None);
+        let mut bare = worker(None);
+        bare.workspace = None;
+        assert_eq!(worker_spec(&bare, &agent, &env), None);
     }
 }
