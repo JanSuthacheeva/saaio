@@ -40,6 +40,7 @@ fn new_flow(home: &Path, name: &str) -> String {
         .lines()
         .find_map(|line| line.strip_prefix("id: "))
         .expect("new prints the id")
+        .trim_matches('"')
         .to_string()
 }
 
