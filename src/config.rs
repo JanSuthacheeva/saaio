@@ -6,11 +6,14 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-/// How to launch one agent: its command line and the first prompt it gets.
+/// How to launch one agent: its command line, the first prompt it gets, and how to resume it.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Agent {
     pub command: Vec<String>,
     pub prompt: String,
+    /// The command that continues session {id}; an agent without one is started fresh by hand.
+    #[serde(default)]
+    pub resume: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,13 +63,19 @@ impl Config {
     }
 }
 
-/// claude: ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"], prompt "/ship-feature {request}".
+/// claude: ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"], prompt "/ship-feature {request}",
+/// resumed with ["claude", "-n", "{name}", "--resume", "{id}"].
 pub fn builtin_agents() -> BTreeMap<String, Agent> {
     let claude = Agent {
         command: ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
             .map(String::from)
             .to_vec(),
         prompt: "/ship-feature {request}".to_string(),
+        resume: Some(
+            ["claude", "-n", "{name}", "--resume", "{id}"]
+                .map(String::from)
+                .to_vec(),
+        ),
     };
     BTreeMap::from([("claude".to_string(), claude)])
 }
@@ -104,6 +113,10 @@ mod tests {
             vec!["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
         );
         assert_eq!(agent.prompt, "/ship-feature {request}");
+        assert_eq!(
+            agent.resume.as_deref(),
+            Some(&["claude", "-n", "{name}", "--resume", "{id}"].map(String::from)[..])
+        );
         assert!(config.agent(Some("codex")).is_none());
     }
 
@@ -119,6 +132,7 @@ agent = "codex"
 [agents.codex]
 command = ["codex", "{prompt}"]
 prompt = "{request}"
+resume = ["codex", "resume", "{id}"]
 
 [agents.claude]
 command = ["claude", "{prompt}"]
@@ -130,6 +144,15 @@ prompt = "/design-code {request}"
         let config = Config::load(Some(file), None, None).unwrap();
 
         assert_eq!(config.agent(None).map(|(name, _)| name), Some("codex"));
+        assert_eq!(
+            config.agent(None).unwrap().1.resume,
+            Some(vec![
+                "codex".to_string(),
+                "resume".to_string(),
+                "{id}".to_string()
+            ])
+        );
+        assert_eq!(config.agent(Some("claude")).unwrap().1.resume, None);
         assert_eq!(
             config.agent(Some("claude")).unwrap().1.prompt,
             "/design-code {request}"

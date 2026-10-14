@@ -122,6 +122,8 @@ pub struct PaneSpec { pub key: PaneKey, pub argv: Vec<String>, pub cwd: PathBuf,
 /// The agent's command the first time, its resume command once window is HOSTED;
 /// None when it must resume and the agent has no resume template.
 pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec>;
+/// The agent's resume command with {id} and {name} filled in; None when it has none.
+pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>>;
 /// FLOW_ID (workers only), FLOW_HOME, TERM=xterm-256color, COLORTERM=truecolor.
 pub fn pane_env(id: Option<&str>, env: &LaunchEnv) -> Vec<(String, String)>;
 // agent_argv: an argument that fills to "" is dropped (the master has no prompt).
@@ -133,7 +135,7 @@ pub fn pane_env(id: Option<&str>, env: &LaunchEnv) -> Vec<(String, String)>;
 ```rust
 // config.rs
 pub struct Agent { pub command: Vec<String>, pub prompt: String, #[serde(default)] pub resume: Option<Vec<String>> }
-// builtin claude: resume = ["claude", "--resume", "{id}"]
+// builtin claude: resume = ["claude", "-n", "{name}", "--resume", "{id}"]
 
 // store.rs
 pub struct FlowLog { pub id: String, pub events: Vec<Event>, pub beat: Option<u64> }
@@ -473,7 +475,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [x] Emulator spike: run a real `claude` session through vt100 and alacritty_terminal behind Terminal, compare fidelity (redraws, wide chars, colors, DA/DSR replies, scrollback, resize) and speed; record the result in the plan and keep the winner
 - [x] Add server/terminal.rs Terminal on the chosen crate with golden tests for feed, replies, damaged, row, cursor, modes and history
 - [x] Add launch::PaneSpec, LaunchEnv, pane_env and the empty-argument rule in agent_argv, with tests
-- [ ] Add server/host.rs Host (open, fail, feed, write, resize, exited, close, frame, panes) with PTY tests on real `sh`
+- [x] Add server/host.rs Host (open, fail, feed, write, resize, exited, close, frame, panes) with PTY tests on real `sh`
 - [ ] Add config Agent.resume (builtin claude `--resume {id}`) and server/master.rs MasterRecord (load_or_create, spec) with tests
 - [ ] Add server/mod.rs run and Server (handle, flush; master pane only, Hello/Welcome/Refused, Input, Resize, Focus, StopServer, stale socket) with an integration test over a real socket and a `cat` master
 - [ ] Add client.rs (Client::connect, send, recv, try_clone, socket_path, ensure_server) with tests against a test server

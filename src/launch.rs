@@ -110,6 +110,19 @@ pub fn agent_argv(agent: &Agent, id: &str, name: &str, request: &str) -> Vec<Str
         .collect()
 }
 
+/// The agent's resume command with {id} and {name} filled in; None when it has none.
+#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
+pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>> {
+    let resume = agent.resume.as_ref()?;
+    Some(
+        resume
+            .iter()
+            .map(|part| fill(part, id, name, "", ""))
+            .filter(|part| !part.is_empty())
+            .collect(),
+    )
+}
+
 #[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
 /// FLOW_ID (workers only), FLOW_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
 pub fn pane_env(id: Option<&str>, env: &LaunchEnv) -> Vec<(String, String)> {
@@ -355,6 +368,7 @@ mod tests {
         let agent = Agent {
             command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
             prompt: "/ship-feature {request}".into(),
+            resume: None,
         };
 
         assert_eq!(
@@ -375,12 +389,29 @@ mod tests {
         let agent = Agent {
             command: strings(&["claude", "-n", "{name}", "{prompt}"]),
             prompt: String::new(),
+            resume: None,
         };
 
         assert_eq!(
             agent_argv(&agent, "7f3c", "master", ""),
             strings(&["claude", "-n", "master"])
         );
+    }
+
+    #[test]
+    fn fills_the_resume_command_when_the_agent_has_one() {
+        let mut agent = Agent {
+            command: strings(&["claude"]),
+            prompt: String::new(),
+            resume: Some(strings(&["claude", "-n", "{name}", "--resume", "{id}"])),
+        };
+
+        assert_eq!(
+            resume_argv(&agent, "7f3c", "shop-217"),
+            Some(strings(&["claude", "-n", "shop-217", "--resume", "7f3c"]))
+        );
+        agent.resume = None;
+        assert_eq!(resume_argv(&agent, "7f3c", "shop-217"), None);
     }
 
     #[test]
