@@ -284,12 +284,13 @@ impl App {
 }
 
 // input.rs (pure)
-pub enum Routed { Pane(Vec<u8>), Command(Command), View(Vec<Key>) }
+pub enum Routed { Pane(Vec<u8>), Command(Command), View(Vec<Key>), Click { col: u16, row: u16 } }
 pub enum Command { Focus(u8), Cursor(i8), Jump, Reopen, NewFlow, Board, Rail, History, Help, Detach, StopServer }
 impl Router {
     /// Splits bytes at C-space (NUL or CSI 32;5u): the next key is a Command, C-space twice sends one.
-    /// In a modal view every key is decoded for the view instead.
-    pub fn route(&mut self, bytes: &[u8], modal: bool) -> Vec<Routed>;
+    /// In a modal view every key is decoded for the view instead. SGR mouse events inside `pane`
+    /// are rewritten to pane coordinates; outside it they become Routed::Click for the UI.
+    pub fn route(&mut self, bytes: &[u8], modal: bool, pane: Rect) -> Vec<Routed>;
 }
 pub fn decode(bytes: &[u8]) -> Vec<Key>;
 
@@ -347,6 +348,24 @@ impl Theme {
 }
 ```
 
+## Emulator spike result (task 1.2)
+
+A real `claude --model haiku` session (120x40, trust prompt, one answer with 界面, the board mod band,
+Nerd Font glyphs) was recorded in a private tmux and fed to both crates:
+
+- Fidelity: vt100 0.16 and alacritty_terminal 0.26 produce identical screens; both match tmux on 36 of 40
+  rows, the other 4 are the live board band that changed between the last recorded byte and the capture.
+- Speed: both parse about 7 MB in 45 ms (release).
+- What Claude Code sends: the alternate screen (1049), mouse 1000/1002/1003 + SGR 1006, focus 1004,
+  bracketed paste 2004, kitty keyboard push/pop (`>5u`/`<u`) and query (`?u`), DA1 (`[c`, 4 times),
+  DECRQM for synchronized output (`?2026$p`), XTVERSION (`>0q`), OSC 8 hyperlinks.
+- alacritty_terminal answers DA1 and DECRQM itself (`PtyWrite`), buffers synchronized updates, tracks
+  damaged rows and lets the kitty keyboard protocol be switched off; vt100 answers nothing and has no damage.
+
+Chosen: **alacritty_terminal**, with `kitty_keyboard: false`, so Claude falls back to legacy key
+encoding and C-space stays a NUL byte. Because Claude turns mouse reporting on, `Router::route` also
+takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside the pane go to the UI.
+
 ## Stored data
 
 - `<store root>/master.json` `{"session": "<uuid>", "cwd": "..."}`; `server.sock`, `server.log` beside it.
@@ -365,7 +384,7 @@ impl Theme {
    - Error: no socket after 2 s -> `Err("flow server did not start, see <root>/server.log")` -> Failure, exit 1
    - Error: `Refused` (version) -> `Err("flow server runs protocol N; run flow ui --stop and start again")` -> exit 1
 2. A key reaches the focused pane, output comes back
-   1. stdin thread -> `Router::route(bytes, false): Vec<Routed::Pane(bytes)>`
+   1. stdin thread -> `Router::route(bytes, false, pane): Vec<Routed::Pane(bytes)>`
    2. `App::on_input(Routed::Pane) -> Effect::Send(Input(bytes))` -> `Client::send`
    3. `Server::handle(Message(Input)) -> Host::write(&focus, bytes)`
    4. reader thread -> `HostEvent::Output(key, bytes) -> Host::feed(&key, bytes) -> Terminal::feed`; `Terminal::replies()` written back to the PTY
@@ -408,7 +427,7 @@ impl Theme {
    - No transcript -> no peek lines
 8. New flow dialog
    1. `C-space n -> View::NewFlow(NewFlowForm::new(repo of focused pane))`
-   2. `Router::route(bytes, true) -> Routed::View(keys) -> NewFlowForm::on_key: FormAction`
+   2. `Router::route(bytes, true, pane) -> Routed::View(keys) -> NewFlowForm::on_key: FormAction`
    3. `Submit -> Effect::StartFlow(form)` -> thread runs `<exe> start <request> --mode <mode>` in form.repo -> `Event::Started`
    4. the pane appears through chain 3
    - `flow start` exits 1 -> `App::on_started(Err(line))`: toast, form reopens with its text
