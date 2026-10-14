@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en" data-theme="nord">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flow start - implementation</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge, dd) { overflow-wrap: anywhere; }
+  svg { max-width: 100%; height: auto; }
+  :not(pre) > code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  .codebox { border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent); border-radius: 8px; overflow: hidden; font-size: 13px; }
+  .fig text { font: 12px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .fig .small { font-size: 10px; opacity: .7; }
+  .fig .new rect { fill: color-mix(in oklab, var(--color-success) 18%, transparent); stroke: var(--color-success); stroke-width: 1.5; }
+  .fig .mod rect { fill: color-mix(in oklab, var(--color-warning) 18%, transparent); stroke: var(--color-warning); stroke-width: 1.5; }
+  .fig .old rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .fig .edge { stroke: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke-width: 1.3; fill: none; marker-end: url(#arr); }
+  .fig .err { stroke: var(--color-error); stroke-width: 1.1; stroke-dasharray: 5 4; fill: none; marker-end: url(#arrErr); opacity: .8; }
+  .fig .life { stroke: color-mix(in oklab, var(--color-base-content) 25%, transparent); stroke-dasharray: 3 4; }
+  .fig .lane rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 25%, transparent); }
+  .fig .errtext { fill: var(--color-error); font-size: 10.5px; }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; margin-right: 1rem; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  ol.steps { list-style: decimal; padding-left: 1.4rem; }
+  ol.steps li { margin: .2rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  ol.steps li.e { color: var(--color-error); }
+  nav a { white-space: nowrap; }
+  pre.term { background: #1e1e1e; color: #e6e6e6; border-radius: 8px; padding: .8rem 1rem; font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-x: auto; margin: 0; }
+  .t-sub { color: #8a8a8a; } .t-key { color: #88c0d0; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-12">
+
+<header class="space-y-3">
+  <p class="text-sm opacity-60">design-code / phase 3 - piece 5 of 6: flow start</p>
+  <h1 class="text-3xl font-bold"><code>flow start</code>: a flow, a worktree, a stack slot and a worker window</h1>
+  <nav class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+    <a class="link" href="#recap">1 Recap</a><a class="link" href="#overview">2 Structure</a><a class="link" href="#units">3 Units</a><a class="link" href="#data">4 Data</a><a class="link" href="#chains">5 Call chains</a><a class="link" href="#conventions">6 Conventions</a><a class="link" href="#tests">7 Test seams</a><a class="link" href="#assumptions">8 Assumptions</a><a class="link" href="#questions">9 Decided</a>
+  </nav>
+</header>
+
+<section id="recap" class="space-y-4">
+  <h2 class="text-2xl font-bold">1. Decision recap</h2>
+  <p>Approach A: <code>flow start</code> creates the flow, a git worktree of its own and a port slot, runs the repo's optional setup hook in the worktree, then opens a tmux window there running the worker agent from a launch template, with <code>FLOW_ID</code> set. <code>flow clear</code> runs the repo's teardown hook and removes the worktree of a finished flow.</p>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li>Decided: <code>flow</code> makes the worktree; an agent is a command template (Claude Code built in, others in config); <code>flow</code> stays agent- and Docker-agnostic.</li>
+    <li>Docker (your note, tests run inside the container): every worktree gets its own stack. <code>flow</code> hands the setup hook a <b>slot</b> (1-9); the repo's hook turns it into ports (<code>HTTP_PORT=8000+slot</code>), starts the stack and migrates. Compose names a project after its folder, so <code>docker compose exec php ...</code> run in a worktree reaches that worktree's stack. Each project once needs its ports from variables (<code>"${HTTP_PORT:-80}:80"</code>).</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4 items-start">
+<pre class="term"><span class="t-sub">$ cd ~/projects/php/buzzwoo-ai</span>
+<span class="t-sub">$</span> flow start "SHOP-217 add CSV export"
+<span class="t-key">flow:</span> shop-217
+<span class="t-key">id:</span> 7f3c...e21a
+<span class="t-key">worktree:</span> ~/projects/php/buzzwoo-ai/.flow/worktrees/shop-217
+<span class="t-key">branch:</span> flow/shop-217
+<span class="t-key">slot:</span> 1
+<span class="t-key">setup:</span> ran .flow/setup
+<span class="t-key">agent:</span> claude
+<span class="t-key">window:</span> "@14"
+<span class="t-key">help[2]:</span> Run `tmux select-window -t @14` to watch it,Run `flow` for all flows</pre>
+<pre class="term"><span class="t-sub"># .flow/setup in the repo (committed), example</span>
+#!/bin/sh
+set -e
+export HTTP_PORT=$((8000 + FLOW_SLOT))
+export DB_PORT=$((33060 + FLOW_SLOT))
+docker compose up -d
+docker compose exec -T php php artisan migrate --seed
+
+<span class="t-sub"># .flow/teardown</span>
+#!/bin/sh
+docker compose down -v</pre>
+  </div>
+</section>
+
+<section id="overview" class="space-y-3">
+  <h2 class="text-2xl font-bold">2. Structure overview</h2>
+  <div class="legend text-sm">
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-success) 40%,transparent)"></i>new</span>
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-warning) 40%,transparent)"></i>modified</span>
+    <span><i class="sw" style="background:var(--color-base-300)"></i>existing</span>
+  </div>
+  <svg class="fig" viewBox="0 0 860 300" role="img" aria-label="Structure overview">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" stroke="none"/></marker>
+      <marker id="arrErr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--color-error)" stroke="none"/></marker>
+    </defs>
+    <g class="mod" id="o-main"><title>src/main.rs: Command::Start, start(), clear()</title><rect x="330" y="20" width="200" height="50" rx="6"/><text x="430" y="42" text-anchor="middle">src/main.rs</text><text x="430" y="58" text-anchor="middle" class="small">start, clear (+ teardown)</text></g>
+    <g class="new" id="o-launch"><title>src/launch.rs: names, slots, templates, argv (pure)</title><rect x="140" y="130" width="180" height="50" rx="6"/><text x="230" y="152" text-anchor="middle">src/launch.rs</text><text x="230" y="168" text-anchor="middle" class="small">plan, argv (pure)</text></g>
+    <g class="new" id="o-workspace"><title>src/workspace.rs: git, hooks, tmux (I/O)</title><rect x="360" y="130" width="180" height="50" rx="6"/><text x="450" y="152" text-anchor="middle">src/workspace.rs</text><text x="450" y="168" text-anchor="middle" class="small">git, hooks, tmux (I/O)</text></g>
+    <g class="new" id="o-config"><title>src/config.rs: agent templates</title><rect x="580" y="130" width="160" height="50" rx="6"/><text x="660" y="152" text-anchor="middle">src/config.rs</text><text x="660" y="168" text-anchor="middle" class="small">agents (TOML)</text></g>
+    <g class="mod" id="o-core"><title>event.rs, fold.rs, view.rs, output.rs</title><rect x="20" y="230" width="260" height="50" rx="6"/><text x="150" y="252" text-anchor="middle">event, fold, view, output</text><text x="150" y="268" text-anchor="middle" class="small">Workspace event and fields, started document</text></g>
+    <g class="old" id="o-tools"><title>git, tmux, repo hooks, the agent</title><rect x="360" y="230" width="380" height="50" rx="6"/><text x="550" y="252" text-anchor="middle">git worktree, .flow/setup + teardown, tmux, claude</text><text x="550" y="268" text-anchor="middle" class="small">processes</text></g>
+    <path class="edge" d="M380,70 L250,128"/><path class="edge" d="M430,70 L450,128"/><path class="edge" d="M480,70 L640,128"/><path class="edge" d="M350,70 C250,120 180,190 160,228"/><path class="edge" d="M450,180 L500,228"/>
+  </svg>
+</section>
+
+<section id="units" class="space-y-6">
+  <h2 class="text-2xl font-bold">3. Units</h2>
+
+  <article class="card card-border bg-base-100" id="u-launch">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">src/launch.rs</h3><span class="badge badge-success">new</span><span class="badge badge-ghost">pure</span></div>
+      <p class="text-sm"><b>Responsibility:</b> decides what a start creates: name, slot, worktree path, branch and the exact command lines.</p>
+      <script type="text/x-code" data-name="src/launch.rs">pub const MAX_SLOTS: u8 = 9;
+pub const WORKTREES_DIR: &str = ".flow/worktrees";
+
+/// The ticket key in lower case (SHOP-217 -> shop-217), else the first four words as a slug;
+/// -2, -3 ... when an unfinished flow already has the name.
+pub fn flow_name(request: &str, taken: &[String]) -> String;
+
+/// The lowest slot 1..=MAX_SLOTS no unfinished flow holds; None when all are taken.
+pub fn free_slot(flows: &[FlowView]) -> Option<u8>;
+
+/// <repo>/.flow/worktrees/<name> and branch flow/<name>.
+pub fn workspace_for(repo: &Path, name: &str, slot: u8) -> Workspace;
+
+/// git -C <repo> worktree add -b <branch> <path>
+pub fn worktree_add_argv(repo: &Path, workspace: &Workspace) -> Vec<String>;
+
+/// git -C <repo> worktree remove <path> (no --force: a dirty worktree is kept)
+pub fn worktree_remove_argv(repo: &Path, workspace: &Workspace) -> Vec<String>;
+
+/// The agent's command with {id}, {name}, {prompt}, {request} filled in.
+pub fn agent_argv(agent: &Agent, id: &str, name: &str, request: &str) -> Vec<String>;
+
+/// tmux new-window -d -P -F '#{window_id}' -n <name> -c <path> -e FLOW_ID=<id> [-e FLOW_HOME=..] -- <agent argv>
+pub fn window_argv(workspace: &Workspace, name: &str, env: &[(String, String)], agent: &[String]) -> Vec<String>;
+
+/// FLOW_ID, FLOW_NAME, FLOW_SLOT, FLOW_WORKTREE, FLOW_REPO for the hooks.
+pub fn hook_env(id: &str, name: &str, repo: &Path, workspace: &Workspace) -> Vec<(String, String)>;</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-workspace">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">src/workspace.rs</h3><span class="badge badge-success">new</span><span class="badge badge-ghost">I/O</span></div>
+      <p class="text-sm"><b>Responsibility:</b> runs the processes a start and a clear need, and reports what they did.</p>
+      <p class="text-sm"><b>Collaborators:</b> <code>std::process::Command</code>, <code>launch.rs</code>. Errors are <code>anyhow</code> with the tool's own first line as context.</p>
+      <script type="text/x-code" data-name="src/workspace.rs">/// The repository the current directory is in (git rev-parse --show-toplevel).
+pub fn repo_root(cwd: &Path) -> Result<PathBuf>;
+
+/// Creates the worktree and branch, and keeps .flow/worktrees/ out of git status
+/// by adding it to .git/info/exclude once.
+pub fn create_worktree(repo: &Path, workspace: &Workspace) -> Result<()>;
+
+/// Runs <repo>/.flow/<hook> in the worktree with the hook env when it exists and is executable;
+/// Ok(false) when there is none.
+pub fn run_hook(repo: &Path, hook: Hook, workspace: &Workspace, env: &[(String, String)]) -> Result<bool>;
+
+/// Opens the worker's tmux window; returns its window id (@14). Needs $TMUX.
+pub fn open_window(argv: &[String]) -> Result<String>;
+
+/// Removes the worktree when it is clean; Ok(false) when git refuses (uncommitted work).
+pub fn remove_worktree(repo: &Path, workspace: &Workspace) -> Result<bool>;</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-config">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">src/config.rs</h3><span class="badge badge-success">new</span></div>
+      <p class="text-sm"><b>Responsibility:</b> knows the agents a worker can run: built-in Claude Code plus any in <code>~/.config/flow/config.toml</code>.</p>
+      <script type="text/x-code" data-name="src/config.rs">#[derive(Debug, Clone, Deserialize)]
+pub struct Agent {
+    pub command: Vec<String>,   // e.g. ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
+    pub prompt: String,         // e.g. "/ship-feature {request}"
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Config {
+    #[serde(default = "default_agent_name")]
+    pub agent: String,                       // the default agent, "claude"
+    #[serde(default)]
+    pub agents: BTreeMap<String, Agent>,     // merged over the built-in ones
+}
+
+impl Config {
+    /// $FLOW_CONFIG, else $XDG_CONFIG_HOME/flow/config.toml, else ~/.config/flow/config.toml;
+    /// the built-in agents alone when there is no file.
+    pub fn load(flow_config: Option<PathBuf>, xdg_config: Option<PathBuf>, home: Option<PathBuf>) -> Result<Config>;
+
+    /// The named agent, or the default one.
+    pub fn agent(&self, name: Option<&str>) -> Option<(&str, &Agent)>;
+}
+
+/// claude: command ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"], prompt "/ship-feature {request}".
+pub fn builtin_agents() -> BTreeMap<String, Agent>;</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-main">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">src/main.rs, event.rs, fold.rs, view.rs, output.rs</h3><span class="badge badge-warning">modified</span></div>
+      <p class="text-sm"><b>Changes:</b> a <code>Start</code> command and <code>start()</code>; <code>clear()</code> also tears down; <code>EventKind::Workspace</code> (fold copies it onto the view); <code>FlowView.workspace</code> in the <code>--json</code> contract (additive, still v1); <code>output::started</code> and a <code>workspace</code> block in the detail view.</p>
+      <script type="text/x-code" data-name="src/main.rs (added)">enum Command {
+    // ...
+    /// Start a worker: a flow, a worktree, the setup hook and an agent in a tmux window
+    Start {
+        request: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long, value_enum, default_value = "guided")]
+        mode: Mode,
+        /// Agent from the config [default: the config's agent, claude]
+        #[arg(long)]
+        agent: Option<String>,
+    },
+}
+
+fn start(store: &Store, config: &Config, cwd: &Path, request: String, name: Option<String>,
+         mode: Mode, agent: Option<String>, now: u64) -> Result<Document, Failure>;
+
+/// Finished flows: teardown hook, worktree removed when clean, then the log (existing removal).
+fn clear(store: &Store, now: u64) -> Result<Document, Failure>;</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+</section>
+
+<section id="data" class="space-y-4">
+  <h2 class="text-2xl font-bold">4. Data</h2>
+  <p class="text-sm"><b>Workspace</b> is a new event in the private log and a new optional field in the <code>--json</code> board (programs ignore unknown fields; an older <code>flow</code> skips the unknown event). <b>Config</b> is read from the user's config dir, never written.</p>
+  <script type="text/x-code" data-name="src/event.rs, src/view.rs (added)">// event.rs
+pub enum EventKind {
+    // ...
+    /// {"kind":"workspace","path":"...","branch":"flow/shop-217","slot":1,"window":"@14","agent":"claude"}
+    Workspace { path: String, branch: String, slot: u8, window: Option<String>, agent: String },
+}
+
+// view.rs
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Workspace {
+    pub path: String,
+    pub branch: String,
+    pub slot: u8,
+    pub window: Option<String>,
+    pub agent: String,
+}
+
+pub struct FlowView {
+    // ...
+    pub workspace: Option<Workspace>,   // the last Workspace event
+}
+
+pub enum Hook { Setup, Teardown }        // .flow/setup, .flow/teardown</script>
+  <div class="codebox"></div>
+</section>
+
+<section id="chains" class="space-y-10">
+  <h2 class="text-2xl font-bold">5. Call chains</h2>
+  <div class="space-y-3" id="chain-start">
+    <h3 class="text-lg font-semibold">5.1 <code>flow start "SHOP-217 add CSV export"</code></h3>
+    <svg class="fig" viewBox="0 0 860 330" role="img" aria-label="Start sequence">
+      <g class="lane"><rect x="20" y="10" width="120" height="30" rx="5"/><text x="80" y="30" text-anchor="middle">main.rs</text></g>
+      <g class="lane"><rect x="200" y="10" width="120" height="30" rx="5"/><text x="260" y="30" text-anchor="middle">launch.rs</text></g>
+      <g class="lane"><rect x="380" y="10" width="140" height="30" rx="5"/><text x="450" y="30" text-anchor="middle">workspace.rs</text></g>
+      <g class="lane"><rect x="580" y="10" width="110" height="30" rx="5"/><text x="635" y="30" text-anchor="middle">store.rs</text></g>
+      <g class="lane"><rect x="740" y="10" width="110" height="30" rx="5"/><text x="795" y="30" text-anchor="middle">git / tmux</text></g>
+      <line class="life" x1="80" y1="40" x2="80" y2="325"/><line class="life" x1="260" y1="40" x2="260" y2="325"/><line class="life" x1="450" y1="40" x2="450" y2="325"/><line class="life" x1="635" y1="40" x2="635" y2="325"/><line class="life" x1="795" y1="40" x2="795" y2="325"/>
+      <path class="edge" d="M80,60 L448,60"/><text x="260" y="55" text-anchor="middle">repo_root(cwd)</text>
+      <path class="edge" d="M80,90 L258,90"/><text x="170" y="85" text-anchor="middle">flow_name, free_slot, workspace_for</text>
+      <path class="err" d="M258,103 L82,103"/><text x="170" y="116" text-anchor="middle" class="errtext">no slot: "9 flows running"</text>
+      <path class="edge" d="M80,140 L448,140"/><text x="260" y="135" text-anchor="middle">create_worktree</text>
+      <path class="edge" d="M450,152 L793,152"/><text x="620" y="148" text-anchor="middle" class="small">git worktree add -b flow/name</text>
+      <path class="edge" d="M80,185 L633,185"/><text x="360" y="180" text-anchor="middle">create Started + Workspace</text>
+      <path class="edge" d="M80,215 L448,215"/><text x="260" y="210" text-anchor="middle">run_hook(Setup)</text>
+      <path class="err" d="M448,228 L82,228"/><text x="260" y="241" text-anchor="middle" class="errtext">hook fails: blocked "setup failed: ..."</text>
+      <path class="edge" d="M80,270 L448,270"/><text x="260" y="265" text-anchor="middle">open_window(window_argv)</text>
+      <path class="edge" d="M450,282 L793,282"/><text x="620" y="278" text-anchor="middle" class="small">tmux new-window ... claude</text>
+      <path class="edge" d="M80,310 L633,310"/><text x="360" y="305" text-anchor="middle">append Workspace with window -> output::started</text>
+    </svg>
+    <ol class="steps">
+      <li>main -> Command::Start -> Config::load(env FLOW_CONFIG, XDG_CONFIG_HOME, HOME) -> config.agent(--agent)</li>
+      <li class="e">unknown agent -> Failure "no agent named x", help "Agents: claude, ..."; config unreadable -> Failure naming the file and the TOML error</li>
+      <li class="e">$TMUX unset -> Failure "flow start opens the worker in a tmux window - run it inside tmux"</li>
+      <li>workspace::repo_root(cwd) -> repo</li>
+      <li class="e">not a git repository -> Failure "flow start needs a git repository", exit 1</li>
+      <li>views(store) -> launch::flow_name(request or --name, unfinished names); launch::free_slot(views) -> slot</li>
+      <li class="e">no slot -> Failure "all 9 slots are in use", help "Run `flow clear` after finished flows"</li>
+      <li>launch::workspace_for(repo, name, slot) -> workspace::create_worktree(repo, &amp;workspace)</li>
+      <li class="e">branch or path exists, git error -> Failure with git's line; nothing recorded</li>
+      <li>store.create(Started) -> id; store.append(id, Workspace { window: None })</li>
+      <li>workspace::run_hook(repo, Setup, &amp;workspace, launch::hook_env(...)) -> ran / none</li>
+      <li class="e">hook exits non-zero -> append Blocked "setup failed: &lt;last stderr line&gt;", the window still opens so you can look (assumption 5)</li>
+      <li>launch::agent_argv(agent, id, name, request) -> launch::window_argv(workspace, name, [FLOW_ID, FLOW_HOME?], agent_argv) -> workspace::open_window -> "@14"</li>
+      <li class="e">tmux fails -> append Ended, Failure with tmux's line (worktree kept)</li>
+      <li>store.append(id, Workspace { window: Some("@14") }) -> output::started(flow, setup_ran) -> TOON with help "Run `tmux select-window -t @14` to watch it"</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-clear">
+    <h3 class="text-lg font-semibold">5.2 <code>flow clear</code> with worktrees</h3>
+    <ol class="steps">
+      <li>clear -> for each finished flow with a workspace: repo = parent of WORKTREES_DIR in the path</li>
+      <li>workspace::run_hook(repo, Teardown, &amp;workspace, env) (failures noted, clear goes on)</li>
+      <li>workspace::remove_worktree(repo, &amp;workspace) -> false (uncommitted work) -> kept[n] in the answer with its path</li>
+      <li>store.remove(id) as today -> output::cleared(names, kept)</li>
+      <li>the branch stays: it carries the MR</li>
+    </ol>
+  </div>
+</section>
+
+<section id="conventions" class="space-y-3">
+  <h2 class="text-2xl font-bold">6. Conventions followed</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li>Pure planning module and one I/O module, like <code>fold.rs</code> / <code>store.rs</code>; env lookups passed in as arguments, like <code>Store::locate</code> (<code>src/store.rs</code>).</li>
+    <li>AXI output: TOON document with <code>help[]</code>, errors as <code>Failure</code> on stdout (<code>src/output.rs</code>).</li>
+    <li>Additive log and contract changes: unknown kinds are skipped by older folds (<code>Event::from_line</code>), new optional JSON fields leave v1 readers working.</li>
+    <li><b>New dependency:</b> <code>toml</code> for the config (Q4).</li>
+  </ul>
+</section>
+
+<section id="tests" class="space-y-3">
+  <h2 class="text-2xl font-bold">7. Test seams</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li><code>launch.rs</code> unit: names (ticket, words, collisions), slots (lowest free, finished flows free theirs, full), paths, every argv exactly, template filling, hook env.</li>
+    <li><code>config.rs</code> unit: built-in only, a file adding an agent and overriding claude's prompt, a broken file.</li>
+    <li><code>fold.rs</code> unit: workspace on the view, the last one wins.</li>
+    <li><code>tests/cli.rs</code>: a real temp git repo, a fake <code>tmux</code> on <code>PATH</code> (prints <code>@14</code>, records its argv), a <code>.flow/setup</code> that writes a file: start, start outside tmux, outside a repo, hook failing, clear removing a clean worktree and keeping a dirty one.</li>
+    <li>End to end: your trial - a real repo in tmux, <code>flow start</code> on a tiny request, the board with <code>/flows</code> in the master, the worker reporting, <code>flow clear</code>.</li>
+  </ul>
+</section>
+
+<section id="assumptions" class="space-y-3">
+  <h2 class="text-2xl font-bold">8. Assumptions</h2>
+  <ol class="list-decimal pl-5 text-sm space-y-1.5">
+    <li>Worktrees live in <code>&lt;repo&gt;/.flow/worktrees/&lt;name&gt;</code> on branch <code>flow/&lt;name&gt;</code>, branched from the current HEAD; <code>.flow/worktrees/</code> goes into <code>.git/info/exclude</code>, never a tracked file.</li>
+    <li>Hooks are <code>.flow/setup</code> and <code>.flow/teardown</code> in the repo (committable), run in the worktree with <code>FLOW_ID</code>, <code>FLOW_NAME</code>, <code>FLOW_SLOT</code>, <code>FLOW_WORKTREE</code>, <code>FLOW_REPO</code>.</li>
+    <li>Nine slots, so at most nine running flows per machine.</li>
+    <li>The worker window opens in the current tmux session, in the background (<code>-d</code>); <code>FLOW_HOME</code> is passed on when set.</li>
+    <li>A failed setup hook marks the flow blocked but still opens the window, so you can see and fix it.</li>
+    <li>Workers run in your default permission mode.</li>
+    <li><code>flow clear</code> keeps a worktree with uncommitted work and always keeps the branch.</li>
+    <li>The name follows the board's rule: ticket key, else the first four words.</li>
+  </ol>
+</section>
+
+<section id="questions" class="space-y-3">
+  <h2 class="text-2xl font-bold">9. Decided in review</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li><b>First prompt:</b> <code>/ship-feature {request}</code> (ship-feature exists in agent-skills). It must be installed for Claude Code first: there is no <code>~/.claude/skills/ship-feature</code> link yet - a prerequisite of the end-to-end trial, asked before it.</li>
+    <li><b>Command:</b> <code>flow start &lt;request&gt; [--name] [--mode] [--agent]</code> in a git repo inside tmux; <code>flow clear</code> also tears worktrees down.</li>
+    <li><b>Location:</b> worktrees in <code>.flow/worktrees/</code>, hooks <code>.flow/setup</code> and <code>.flow/teardown</code>, all in the repo.</li>
+    <li><b>Config:</b> TOML at <code>~/.config/flow/config.toml</code>, with the <code>toml</code> crate.</li>
+  </ul>
+</section>
+
+</main>
+
+<script type="module">
+  import { File } from "https://esm.sh/@pierre/diffs@1.2.10?bundle";
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const options = { theme: { light: "github-light", dark: "github-dark" }, themeType: dark ? "dark" : "light", overflow: "wrap" };
+  for (const src of document.querySelectorAll('script[type="text/x-code"]')) {
+    const box = src.nextElementSibling;
+    new File(options).render({ containerWrapper: box, file: { name: src.dataset.name, contents: src.textContent.replace(/^\n/, "") } });
+  }
+</script>
+</body>
+</html>
