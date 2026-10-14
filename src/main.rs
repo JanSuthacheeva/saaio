@@ -3,6 +3,8 @@ mod event;
 mod fold;
 mod launch;
 mod output;
+#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
+mod proto;
 mod store;
 mod view;
 mod workspace;

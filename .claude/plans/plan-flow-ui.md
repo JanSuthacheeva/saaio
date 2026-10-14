@@ -445,7 +445,7 @@ impl Theme {
 
 ### Milestone 1: one pane through the server
 
-- [ ] Add proto.rs (all message types, write_msg, read_msg) with tests for round trips, split reads, oversize, garbage and clean EOF
+- [x] Add proto.rs (all message types, write_msg, read_msg) and derive Deserialize on view.rs types, with tests for round trips (incl. Board), split reads, oversize, garbage and clean EOF
 - [ ] Emulator spike: run a real `claude` session through vt100 and alacritty_terminal behind Terminal, compare fidelity (redraws, wide chars, colors, DA/DSR replies, scrollback, resize) and speed; record the result in the plan and keep the winner
 - [ ] Add server/terminal.rs Terminal on the chosen crate with golden tests for feed, replies, damaged, row, cursor, modes and history
 - [ ] Add launch::PaneSpec, LaunchEnv, pane_env and the empty-argument rule in agent_argv, with tests
@@ -460,7 +460,6 @@ impl Theme {
 ### Milestone 2: workers and the sidebar
 
 - [ ] Add Store::root, Store::logs, Store::stamps and fold::views; replace main::views; tests
-- [ ] Derive Deserialize on view.rs types; test a Board round trip over proto
 - [ ] Add server/watch.rs StoreWatch with tests for change, beat, removal and the 5 s refold
 - [ ] Add launch::worker_spec and HOSTED with tests (fresh, resume, no resume template)
 - [ ] Add server/reconcile.rs reconcile with table tests (open, known, close removed, failed)
@@ -487,5 +486,6 @@ impl Theme {
 
 - [ ] Restore integration test: start flows, kill the server, start flow ui again, workers and master resume
 - [ ] Measure idle CPU and memory of server and ui with five panes; fix anything above near zero idle
+- [ ] Remove the `#[allow(dead_code)]` the new modules carry in main.rs until they are wired
 - [ ] Update CLAUDE.md architecture and docs/HANDOVER.md (flow ui, board mod retired, tmux path gone)
 - [ ] End-to-end check: a real Claude master starts two workers from flow ui, peek, answer a question in a worker, detach, reattach, kill the server, restart, everything resumes
