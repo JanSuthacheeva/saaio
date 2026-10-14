@@ -33,6 +33,33 @@ pub fn fold(id: &str, events: &[Event], last_beat: Option<u64>, now: u64) -> Opt
     Some(view)
 }
 
+/// True when appending `kind` changes what the flow shows: its state, phase, blocker, delegate,
+/// tasks, review, merge request or decisions. Adapters skip the rest, so a log does not grow by a
+/// line for every tool call.
+pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
+    let Some(before) = fold(id, events, None, now) else {
+        return true;
+    };
+    let mut after_events = events.to_vec();
+    after_events.push(Event::new(now, kind.clone()));
+    let Some(after) = fold(id, &after_events, None, now) else {
+        return true;
+    };
+    let shown = |view: &FlowView| {
+        (
+            view.state,
+            view.phase,
+            view.blocker.clone(),
+            view.delegate.clone(),
+            view.tasks,
+            view.review,
+            view.merge_request.clone(),
+            view.decisions.clone(),
+        )
+    };
+    shown(&before) != shown(&after)
+}
+
 /// Every log that names its flow, folded at `now`.
 pub fn views(logs: Vec<FlowLog>, now: u64) -> Vec<FlowView> {
     logs.into_iter()
@@ -321,6 +348,47 @@ mod tests {
             .iter()
             .map(|step| (step.status, step.duration_ms))
             .collect()
+    }
+
+    #[test]
+    fn says_whether_an_event_changes_what_the_flow_shows() {
+        let started = Event::new(
+            0,
+            EventKind::Started {
+                name: "csv".into(),
+                request: "x".into(),
+                mode: Mode::Auto,
+            },
+        );
+        let waiting = Event::new(
+            1,
+            EventKind::Waiting {
+                question: "Which?".into(),
+            },
+        );
+        let events = vec![started.clone(), waiting.clone()];
+
+        assert!(
+            !changes("id", &events, &waiting.kind, 2),
+            "the same question again"
+        );
+        assert!(changes("id", &events, &EventKind::Working, 2));
+        assert!(
+            !changes("id", std::slice::from_ref(&started), &EventKind::Working, 2),
+            "it already works"
+        );
+        assert!(changes(
+            "id",
+            &[started],
+            &EventKind::Phase {
+                phase: Phase::Design
+            },
+            2
+        ));
+        assert!(
+            changes("id", &[], &EventKind::Working, 2),
+            "a log without a start"
+        );
     }
 
     #[test]

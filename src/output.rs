@@ -14,6 +14,8 @@ pub enum Document {
     Toon(String),
     Json(String),
     Text(String),
+    /// Nothing at all: what `flow hook` answers, since a hook's stdout can reach the model.
+    Silent,
 }
 
 /// An error an agent can act on: a message and next steps, printed as TOON on stdout.
@@ -28,6 +30,7 @@ impl Document {
     pub fn text(&self) -> &str {
         match self {
             Document::Toon(text) | Document::Json(text) | Document::Text(text) => text,
+            Document::Silent => "",
         }
     }
 }
