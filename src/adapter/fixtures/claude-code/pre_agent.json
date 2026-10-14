@@ -1,0 +1,15 @@
+{
+ "session_id": "7f3c0000-0000-4000-8000-000000000000",
+ "transcript_path": "/home/dev/.claude/projects/-repo/7f3c.jsonl",
+ "cwd": "/repo",
+ "permission_mode": "default",
+ "hook_event_name": "PreToolUse",
+ "tool_name": "Agent",
+ "tool_input": {
+  "description": "Review the changes",
+  "prompt": "Review the branch.",
+  "subagent_type": "general-purpose",
+  "model": "haiku"
+ },
+ "tool_use_id": "toolu_01ArstpGMTj5gYEXA"
+}

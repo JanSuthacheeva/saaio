@@ -1,3 +1,5 @@
+#[allow(dead_code)] // until flow hook uses it (plan-flow-adapters.md)
+mod adapter;
 mod client;
 mod config;
 mod event;

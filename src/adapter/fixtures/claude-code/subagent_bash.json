@@ -1,0 +1,23 @@
+{
+ "session_id": "7f3c0000-0000-4000-8000-000000000000",
+ "transcript_path": "/home/dev/.claude/projects/-repo/7f3c.jsonl",
+ "cwd": "/repo",
+ "permission_mode": "default",
+ "agent_id": "a3f30320a8186fa17",
+ "agent_type": "general-purpose",
+ "hook_event_name": "PostToolUse",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "ls",
+  "description": "List files"
+ },
+ "tool_response": {
+  "stdout": "",
+  "stderr": "",
+  "interrupted": false,
+  "isImage": false,
+  "noOutputExpected": false
+ },
+ "tool_use_id": "toolu_01J3Z5kmsYAraGAEuv8g3pUq",
+ "duration_ms": 33
+}

@@ -6,6 +6,11 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
+use crate::event::Phase;
+
+/// Skill name -> the phase it starts, for adapters that see skills start.
+pub type PhaseMap = BTreeMap<String, Phase>;
+
 /// How to launch one agent: its command line, the first prompt it gets, and how to resume it.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Agent {
