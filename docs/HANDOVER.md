@@ -22,7 +22,7 @@ ship-feature orchestrator skill (planned there, not written yet; see its plan pa
 | --- | --- | --- | --- |
 | 1+2 | Event format + `flow` core (new, report, status, clear, home) | this repo | **done**, plan `.claude/plans/plan-flow-core.md` |
 | 3 | Board viewer mod: tabbed board above the prompt | `~/projects/claude-code-mods` (new mod `flows`) | **designed**, plan `~/projects/claude-code-mods/.claude/plans/plan-flows-board.md` (local, gitignored there); design page `docs/design/board-implementation.html` |
-| 4 | Adapter mod: observes a Claude Code worker and calls `flow report` | same mod as 3 | not designed |
+| 4 | Adapter: the flows mod reports a Claude Code worker into `flow report` | same mod as 3 | **designed**, plan `~/projects/claude-code-mods/.claude/plans/plan-flows-adapter.md` (local); page `docs/design/adapter-implementation.html` |
 | 5 | `flow start`: worktree + worker session in a tmux window | this repo | not designed |
 | 6 | Auto mode + optional report line in the skills, `flow setup` hook | `~/projects/agent-skills` (+ this repo for setup) | not designed |
 

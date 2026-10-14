@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en" data-theme="nord">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flows adapter - implementation</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge, dd) { overflow-wrap: anywhere; }
+  svg { max-width: 100%; height: auto; }
+  :not(pre) > code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  .codebox { border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent); border-radius: 8px; overflow: hidden; font-size: 13px; }
+  .fig text { font: 12px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .fig .small { font-size: 10px; opacity: .7; }
+  .fig .new rect { fill: color-mix(in oklab, var(--color-success) 18%, transparent); stroke: var(--color-success); stroke-width: 1.5; }
+  .fig .mod rect { fill: color-mix(in oklab, var(--color-warning) 18%, transparent); stroke: var(--color-warning); stroke-width: 1.5; }
+  .fig .old rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .fig .edge { stroke: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke-width: 1.3; fill: none; marker-end: url(#arr); }
+  .fig .err { stroke: var(--color-error); stroke-width: 1.1; stroke-dasharray: 5 4; fill: none; marker-end: url(#arrErr); opacity: .8; }
+  .fig .life { stroke: color-mix(in oklab, var(--color-base-content) 25%, transparent); stroke-dasharray: 3 4; }
+  .fig .lane rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 25%, transparent); }
+  .fig .errtext { fill: var(--color-error); font-size: 10.5px; }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; margin-right: 1rem; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  ol.steps { list-style: decimal; padding-left: 1.4rem; }
+  ol.steps li { margin: .2rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  ol.steps li.e { color: var(--color-error); }
+  nav a { white-space: nowrap; }
+  table.rules td, table.rules th { font-size: 12.5px; vertical-align: top; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-12">
+
+<header class="space-y-3">
+  <p class="text-sm opacity-60">design-code / phase 3 - piece 4 of 6: the adapter</p>
+  <h1 class="text-3xl font-bold">flows reporter: Claude Code events into <code>flow report</code></h1>
+  <nav class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+    <a class="link" href="#recap">1 Recap</a><a class="link" href="#overview">2 Structure</a><a class="link" href="#units">3 Units</a><a class="link" href="#data">4 Data</a><a class="link" href="#chains">5 Call chains</a><a class="link" href="#conventions">6 Conventions</a><a class="link" href="#tests">7 Test seams</a><a class="link" href="#assumptions">8 Assumptions</a><a class="link" href="#questions">9 Decided</a>
+  </nav>
+</header>
+
+<section id="recap" class="space-y-3">
+  <h2 class="text-2xl font-bold">1. Decision recap</h2>
+  <p>Approach A: the <code>flows</code> mod gains a reporter. A pure <code>reporter.ts</code> maps each Claude Code event to the arguments of one <code>flow report</code> call; <code>register.tsx</code> hooks the events and runs the calls in order. It does nothing unless the session has a flow id (<code>FLOW_ID</code>).</p>
+  <div class="alert alert-soft alert-info text-sm"><span><b>Just an adapter (your note):</b> the mod keeps no flow state and makes no flow decisions. It only translates what Claude Code shows into <code>flow</code>'s agent-neutral events (phase, working, delegated, waiting, blocked, tasks, merge-request, ended, heartbeat); <code>flow</code> folds them, as it would for any other harness. The only Claude Code knowledge lives in <code>reporter.ts</code>, and the one piece of in-session bookkeeping is a counter of running subagents, so a subagent's turn does not read as the worker's.</span></div>
+</section>
+
+<section id="overview" class="space-y-3">
+  <h2 class="text-2xl font-bold">2. Structure overview</h2>
+  <div class="legend text-sm">
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-success) 40%,transparent)"></i>new</span>
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-warning) 40%,transparent)"></i>modified</span>
+    <span><i class="sw" style="background:var(--color-base-300)"></i>existing</span>
+  </div>
+  <svg class="fig" viewBox="0 0 860 240" role="img" aria-label="Structure overview">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" stroke="none"/></marker>
+      <marker id="arrErr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--color-error)" stroke="none"/></marker>
+    </defs>
+    <g class="old" id="o-events"><title>engine events</title><rect x="20" y="30" width="170" height="60" rx="6"/><text x="105" y="52" text-anchor="middle">engine events</text><text x="105" y="68" text-anchor="middle" class="small">skill.prompt, tool.call,</text><text x="105" y="80" text-anchor="middle" class="small">turn.*, session.end, clock</text></g>
+    <g class="mod" id="o-register"><title>flows/hooks/register.tsx</title><rect x="250" y="30" width="200" height="60" rx="6"/><text x="350" y="55" text-anchor="middle">hooks/register.tsx</text><text x="350" y="72" text-anchor="middle" class="small">reporter hooks + report queue</text></g>
+    <g class="new" id="o-reporter"><title>flows/hooks/reporter.ts</title><rect x="250" y="140" width="200" height="54" rx="6"/><text x="350" y="162" text-anchor="middle">hooks/reporter.ts</text><text x="350" y="178" text-anchor="middle" class="small">event -> report args (pure)</text></g>
+    <g class="old" id="o-flow"><title>flow report</title><rect x="510" y="30" width="150" height="60" rx="6"/><text x="585" y="56" text-anchor="middle">flow report</text><text x="585" y="72" text-anchor="middle" class="small">--flow $FLOW_ID</text></g>
+    <g class="old" id="o-board"><title>board and flow status</title><rect x="700" y="30" width="140" height="60" rx="6"/><text x="770" y="56" text-anchor="middle">board, flow status</text><text x="770" y="72" text-anchor="middle" class="small">anywhere</text></g>
+    <g class="mod" id="o-docs"><title>README, CHANGELOG, types</title><rect x="510" y="140" width="150" height="54" rx="6"/><text x="585" y="162" text-anchor="middle">README, CHANGELOG</text><text x="585" y="178" text-anchor="middle" class="small">types/index.d.ts</text></g>
+    <path class="edge" d="M190,60 L248,60"/><path class="edge" d="M350,90 L350,138"/><path class="edge" d="M450,60 L508,60"/><path class="edge" d="M660,60 L698,60"/>
+  </svg>
+</section>
+
+<section id="units" class="space-y-6">
+  <h2 class="text-2xl font-bold">3. Units</h2>
+
+  <article class="card card-border bg-base-100" id="u-reporter">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">flows/hooks/reporter.ts</h3><span class="badge badge-success">new</span><span class="badge badge-ghost">pure</span></div>
+      <p class="text-sm"><b>Responsibility:</b> says which <code>flow report</code> event, if any, a Claude Code observation means.</p>
+      <p class="text-sm"><b>Collaborators:</b> types only. Rules in <a class="link" href="#rules">4. Data - mapping</a>.</p>
+      <script type="text/x-code" data-name="flows/hooks/reporter.ts">import type { Observation, Phase } from '../types'
+
+/** The skills whose start means a flow entered a phase; any other skill reports nothing. */
+export const phaseBySkill: Readonly<Record<string, Phase>> = {
+  'design-code': 'design',
+  'implement-plan': 'implement',
+  'review-changes': 'review',
+  'write-merge-request': 'merge-request',
+}
+
+/** Longest text sent as a waiting question or block reason; flow cuts at 500 anyway. */
+export const reportTextLimit = 200
+
+/** The arguments after `flow report --flow <id>` for one observation, or null for none. */
+export function reportArgs(observation: Observation): string[] | null
+
+/** A skill's phase, also for a plugin-prefixed name (buzzwoo-standard:design-code). */
+export function phaseOfSkill(skill: string): Phase | null
+
+/** The question a turn ended on: the last non-empty line of the answer, cut to the limit. */
+export function waitingQuestion(answer: string): string | null
+
+/** "4/9 done" or "all 9 done" in a plan-progress report result. */
+export function taskCounts(result: string): { done: number; total: number } | null
+
+/** The MR or PR URL a gh pr create / glab mr create printed, when the command was one. */
+export function createdMergeRequest(command: string, stdout: string): string | null</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-register">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">flows/hooks/register.tsx</h3><span class="badge badge-warning">modified</span></div>
+      <p class="text-sm"><b>Responsibility (added):</b> feeds observations to <code>reporter.ts</code> and runs the resulting reports in order.</p>
+      <p class="text-sm"><b>Collaborators:</b> <code>reporter.ts</code>, <code>$.env</code>, <code>$.process</code>, <code>$.clock</code>, <code>$.ui.toast</code>. Module variables (in-session only): <code>flowId</code>, <code>reportQueue</code>, <code>runningAgents</code>, <code>hasWarned</code>. The board parts are unchanged.</p>
+      <script type="text/x-code" data-name="flows/hooks/register.tsx (added)">const heartbeatIntervalMs = 30_000
+const reportTimeoutMs = 5_000
+
+let flowId: string | null = null           // $FLOW_ID, read at session.start
+let reportQueue: Promise<void> = Promise.resolve()
+let runningAgents = 0                       // foreground subagents now running
+let hasWarned = false                       // one toast per session when flow fails
+
+/** Feeds one observation through reportArgs; no-op without a flow id or a report. */
+function observe($: EngineInterface, observation: Observation): void
+
+/** Appends one flow report call to the queue, so reports reach flow in event order. */
+function enqueueReport($: EngineInterface, args: readonly string[]): void
+
+/** /flows join <name>: looks the flow up with flow status and starts reporting to it. */
+async function joinFlow($: EngineInterface, name: string): Promise<string>
+
+/** Runs flow report --flow <flowId> ...args; a failure toasts once and is otherwise dropped. */
+async function runReport($: EngineInterface, args: readonly string[]): Promise<void>
+
+// added to register(on, options):
+//   session.start            flowId = $.env.get('FLOW_ID'); clock.every(30 s) -> observe heartbeat
+//   skill.prompt             observe { kind: 'skill', skill }                       then next(e)
+//   tool.call Agent          foreground: runningAgents++, observe delegated; result = await next(e);
+//                            runningAgents--, observe agent-done; return result
+//   tool.call AskUserQuestion observe question (first question); result = await next(e); observe answered
+//   tool.call mcp__plan-progress__report  result = await next(e); observe plan-report { status, item, note, result }
+//   tool.call Bash           result = await next(e); observe command { command, stdout }
+//   turn.start               observe turn-start (skipped while runningAgents > 0)
+//   turn.complete            main loop only (no agentId): observe turn-end { answer }
+//   session.end              observe session-end { reason }</script>
+      <div class="codebox"></div>
+    </div>
+  </article>
+
+  <article class="card card-border bg-base-100" id="u-docs">
+    <div class="card-body space-y-2">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="card-title font-mono text-base">flows/types/index.d.ts, README.md, CHANGELOG.md</h3><span class="badge badge-warning">modified</span></div>
+      <p class="text-sm"><code>Observation</code> joins the types. The README gets a "Reporting from a worker" section: set <code>FLOW_ID</code>, what is reported when; the description in <code>plugin.json</code> and the marketplace mention both roles.</p>
+    </div>
+  </article>
+</section>
+
+<section id="data" class="space-y-4">
+  <h2 class="text-2xl font-bold">4. Data</h2>
+  <p class="text-sm"><b>Observation</b> crosses hooks -> <code>reporter.ts</code> and is never stored. The output crosses the process boundary as <code>flow report</code> argv; nothing new is stored by the mod.</p>
+  <script type="text/x-code" data-name="flows/types/index.d.ts (added)">/** What a Claude Code worker session did, as the reporter sees it. */
+export type Observation =
+  | { kind: 'skill'; skill: string }
+  | { kind: 'delegated'; description: string }
+  | { kind: 'agent-done' }
+  | { kind: 'question'; text: string }
+  | { kind: 'answered' }
+  | { kind: 'plan-report'; status: 'doing' | 'done' | 'blocked'; item: string; note: string | null; result: string }
+  | { kind: 'command'; command: string; stdout: string }
+  | { kind: 'turn-start' }
+  | { kind: 'turn-end'; answer: string }
+  | { kind: 'session-end'; reason: string }
+  | { kind: 'heartbeat' }</script>
+  <div class="codebox"></div>
+  <h3 class="text-lg font-semibold pt-2" id="rules">Mapping in <code>reportArgs</code></h3>
+  <div class="overflow-x-auto">
+    <table class="table table-sm rules">
+      <thead><tr><th>Observation</th><th><code>flow report --flow $FLOW_ID ...</code></th></tr></thead>
+      <tbody>
+        <tr><td>skill <code>design-code</code> (or <code>*:design-code</code>)</td><td><code>phase design</code> (implement-plan, review-changes, write-merge-request likewise); other skills: nothing</td></tr>
+        <tr><td>delegated</td><td><code>delegated "&lt;Agent description&gt;"</code></td></tr>
+        <tr><td>agent-done, answered, turn-start</td><td><code>working</code></td></tr>
+        <tr><td>question</td><td><code>waiting "&lt;first question&gt;"</code></td></tr>
+        <tr><td>turn-end</td><td><code>waiting "&lt;last line of the answer&gt;"</code>; an empty answer: <code>waiting "turn ended"</code></td></tr>
+        <tr><td>plan-report blocked</td><td><code>blocked "&lt;item&gt;: &lt;note&gt;"</code></td></tr>
+        <tr><td>plan-report doing / done</td><td><code>tasks &lt;done&gt; &lt;total&gt;</code> from the result's "4/9 done"; none found: nothing</td></tr>
+        <tr><td>command <code>gh pr create</code> / <code>glab mr create</code> with a URL in stdout</td><td><code>merge-request &lt;url&gt;</code>; other commands: nothing</td></tr>
+        <tr><td>session-end, reason not <code>clear</code></td><td><code>ended</code></td></tr>
+        <tr><td>heartbeat</td><td><code>heartbeat</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="text-sm opacity-80">Repeats are harmless: <code>flow</code> folds a repeated phase, waiting question or block into the same view (core plan, "Fold rules").</p>
+</section>
+
+<section id="chains" class="space-y-10">
+  <h2 class="text-2xl font-bold">5. Call chains</h2>
+
+  <div class="space-y-3" id="chain-skill">
+    <h3 class="text-lg font-semibold">5.1 A phase skill starts</h3>
+    <svg class="fig" viewBox="0 0 860 190" role="img" aria-label="Skill sequence">
+      <g class="lane"><rect x="20" y="10" width="140" height="30" rx="5"/><text x="90" y="30" text-anchor="middle">engine</text></g>
+      <g class="lane"><rect x="230" y="10" width="160" height="30" rx="5"/><text x="310" y="30" text-anchor="middle">register.tsx</text></g>
+      <g class="lane"><rect x="460" y="10" width="140" height="30" rx="5"/><text x="530" y="30" text-anchor="middle">reporter.ts</text></g>
+      <g class="lane"><rect x="680" y="10" width="160" height="30" rx="5"/><text x="760" y="30" text-anchor="middle">flow (process)</text></g>
+      <line class="life" x1="90" y1="40" x2="90" y2="185"/><line class="life" x1="310" y1="40" x2="310" y2="185"/><line class="life" x1="530" y1="40" x2="530" y2="185"/><line class="life" x1="760" y1="40" x2="760" y2="185"/>
+      <path class="edge" d="M90,65 L308,65"/><text x="200" y="60" text-anchor="middle">skill.prompt design-code</text>
+      <path class="err" d="M308,82 L92,82"/><text x="200" y="96" text-anchor="middle" class="errtext">no flow id -> next(e) only</text>
+      <path class="edge" d="M310,115 L528,115"/><text x="420" y="110" text-anchor="middle">reportArgs({ kind: 'skill' })</text>
+      <path class="edge" d="M310,145 L758,145"/><text x="535" y="140" text-anchor="middle">queued: flow report --flow id phase design</text>
+      <path class="err" d="M758,165 L312,165"/><text x="535" y="180" text-anchor="middle" class="errtext">fails -> one toast per session, dropped</text>
+    </svg>
+    <ol class="steps">
+      <li>skill.prompt { skill: 'design-code' } -> observe($, { kind: 'skill', skill }) -> return next(e)</li>
+      <li class="e">flowId null -> observe returns; nothing runs</li>
+      <li>reporter.reportArgs(observation): ['phase', 'design'] -> enqueueReport($, args)</li>
+      <li>reportQueue = reportQueue.then(() =&gt; runReport($, args)) -> $.process.run([flowPath, 'report', '--flow', flowId, ...args], { timeoutMs: 5_000 })</li>
+      <li class="e">rejects or exit != 0 -> !hasWarned: $.ui.toast('flows: could not report to flow - &lt;first line&gt;'), hasWarned = true; the queue goes on</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-agent">
+    <h3 class="text-lg font-semibold">5.2 A subagent runs (implement-plan in a fresh agent)</h3>
+    <ol class="steps">
+      <li>tool.call Agent { description, run_in_background } -> background: return next(e) unobserved</li>
+      <li>runningAgents++ -> observe({ kind: 'delegated', description }) -> 'delegated "implement plan"'</li>
+      <li>result = await next(e) (the subagent's own turn.start / skill.prompt fire meanwhile: turn-start is skipped while runningAgents &gt; 0; its skill.prompt still reports the phase)</li>
+      <li>finally runningAgents-- -> observe({ kind: 'agent-done' }) -> 'working' -> return result</li>
+      <li class="e">next(e) throws -> the finally still runs; the error passes on unchanged</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-turn">
+    <h3 class="text-lg font-semibold">5.3 Waiting: a question, or the turn ends</h3>
+    <ol class="steps">
+      <li>tool.call AskUserQuestion { questions } -> observe question(questions[0].question) -> 'waiting "Which approach...?"'; result = await next(e); observe answered -> 'working'</li>
+      <li>turn.complete { answer, agentId: undefined } -> observe turn-end -> reporter.waitingQuestion(answer) -> 'waiting "Approve the implementation page?"'</li>
+      <li>turn.complete with an agentId -> ignored (a subagent's turn)</li>
+      <li>turn.start (the person answers) -> observe turn-start -> 'working'</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-tools">
+    <h3 class="text-lg font-semibold">5.4 plan-progress reports and the MR</h3>
+    <ol class="steps">
+      <li>tool.call mcp__plan-progress__report -> result = await next(e) -> denied: nothing; else observe plan-report { status, item, note, result: text of the result }</li>
+      <li>status blocked -> 'blocked "5: migration needs a default"'; doing / done -> reporter.taskCounts(result) -> 'tasks 4 9'</li>
+      <li>tool.call Bash -> result = await next(e) -> observe command { command, stdout } -> reporter.createdMergeRequest(command, stdout) -> 'merge-request https://gitlab.com/.../88'</li>
+      <li class="e">no URL in stdout (the create failed) -> nothing</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-join">
+    <h3 class="text-lg font-semibold">5.6 <code>/flows join shop-221</code></h3>
+    <ol class="steps">
+      <li>command.run { args: 'join shop-221' } -> joinFlow($, 'shop-221')</li>
+      <li>$.process.run([flowPath, 'status', 'shop-221', '--json']) -> parseBoard(stdout) -> board.flows[0].id</li>
+      <li class="e">exit != 0, unparsable or empty -> answer 'No flow named shop-221.'; flow missing -> the install hint</li>
+      <li>flowId = id -> observe({ kind: 'turn-start' }) -> 'working' -> answer 'Reporting to shop-221.'</li>
+      <li>/flows join with no name -> answer 'Usage: /flows join &lt;name&gt;'</li>
+    </ol>
+  </div>
+
+  <div class="space-y-3" id="chain-life">
+    <h3 class="text-lg font-semibold">5.5 Start, heartbeat, end</h3>
+    <ol class="steps">
+      <li>session.start -> flowId = (await $.env.get('FLOW_ID'))?.trim() || null</li>
+      <li>clock.every(30_000) -> observe heartbeat -> 'heartbeat'</li>
+      <li>session.end { reason } -> reason 'clear' -> nothing (same worker, new conversation); else 'ended', and the queue is awaited before next(e)</li>
+    </ol>
+  </div>
+</section>
+
+<section id="conventions" class="space-y-3">
+  <h2 class="text-2xl font-bold">6. Conventions followed</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li>Pure mapping module + hooks in <code>register.tsx</code>: <code>flows/hooks/board.ts</code> / <code>register.tsx</code>.</li>
+    <li>Tool hooks that act after <code>await next(e)</code> and pass the result on: <code>plan-progress/hooks/register.tsx</code> (report tool), merge-status's git trigger.</li>
+    <li>MR creation pattern: <code>merge-status/hooks/git.ts:17</code> (<code>(glab mr|gh pr) (create|new)</code>).</li>
+    <li><code>$.env.get</code> for host variables: <code>merge-status/hooks/register.tsx:56</code>; processes with a timeout through one path: <code>flows/hooks/register.tsx</code> (<code>readBoard</code>).</li>
+    <li>Every hook ends in <code>.catch(($, e, next) =&gt; next(e))</code>, except tool hooks after their <code>next(e)</code> ran: there <code>observe</code> never throws, so <code>next</code> never runs twice.</li>
+  </ul>
+</section>
+
+<section id="tests" class="space-y-3">
+  <h2 class="text-2xl font-bold">7. Test seams</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li><code>reporter.ts</code> - unit: every row of the mapping, prefixed skill names, waiting question (last line, cut, empty), task counts ("4/9 done", "all 9 done", none), MR detection (gh, glab, other commands, no URL).</li>
+    <li><code>register.test.tsx</code> - engine tests with a fake <code>flow</code> recording argv and <code>mock.env</code> for <code>FLOW_ID</code>: nothing without a flow id; a skill, an Agent call (and background skipped), AskUserQuestion, a plan-progress report, a Bash MR, a main and a subagent <code>turn.complete</code>, heartbeat, session end (clear and not) produce the expected calls in order; a failing flow toasts once.</li>
+    <li>End to end: a real Claude session with <code>FLOW_ID</code> of a flow made by <code>flow new</code>, asked to run <code>/design-code</code> on a tiny change; <code>flow status</code> and the board show the phases and waits as they happen.</li>
+  </ul>
+</section>
+
+<section id="assumptions" class="space-y-3">
+  <h2 class="text-2xl font-bold">8. Assumptions</h2>
+  <ol class="list-decimal pl-5 text-sm space-y-1.5">
+    <li>The four phase skills are matched by name, also with a plugin prefix; any other skill reports nothing.</li>
+    <li>Background subagents (<code>run_in_background</code>) are not reported as delegated.</li>
+    <li>The waiting question is the last non-empty line of Claude's answer, cut to 200 characters.</li>
+    <li>Task counts come from plan-progress's result text ("4/9 done"); a format change there silently stops them (both live in this repo, covered by a test here).</li>
+    <li>Heartbeat every 30 s; <code>flow</code> marks a worker not responding after 90 s without one.</li>
+    <li>A failing <code>flow</code> shows one toast per session, then reports are dropped quietly so the worker is never disturbed.</li>
+    <li>Reports run in event order through one queue; the session end waits for it.</li>
+    <li><code>/clear</code> is not an end; the worker keeps its flow id.</li>
+  </ol>
+</section>
+
+<section id="questions" class="space-y-3">
+  <h2 class="text-2xl font-bold">9. Decided in review</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li><b>Turn ends:</b> every end of Claude's main turn reports <code>waiting</code> with the answer's last line.</li>
+    <li><b>Becoming a worker:</b> <code>FLOW_ID</code> at start, or <code>/flows join &lt;name&gt;</code> in a running session (chain 5.6). <code>join</code> is a reserved word, not a flow name.</li>
+    <li><b>Decisions:</b> not from the adapter; piece 6 reports them from the skills.</li>
+  </ul>
+</section>
+
+</main>
+
+<script type="module">
+  import { File } from "https://esm.sh/@pierre/diffs@1.2.10?bundle";
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const options = { theme: { light: "github-light", dark: "github-dark" }, themeType: dark ? "dark" : "light", overflow: "wrap" };
+  for (const src of document.querySelectorAll('script[type="text/x-code"]')) {
+    const box = src.nextElementSibling;
+    new File(options).render({ containerWrapper: box, file: { name: src.dataset.name, contents: src.textContent.replace(/^\n/, "") } });
+  }
+</script>
+</body>
+</html>
