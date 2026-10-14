@@ -1,5 +1,7 @@
 #[allow(dead_code)]
 mod event;
+#[allow(dead_code)]
+mod store;
 
 use std::process::ExitCode;
 
