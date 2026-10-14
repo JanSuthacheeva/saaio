@@ -728,7 +728,7 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     );
     assert!(server.wait().unwrap().success());
     assert!(!socket.exists());
-    assert!(home.path().join("master.json").exists());
+    assert!(!home.path().join("master.json").exists());
 }
 
 #[test]

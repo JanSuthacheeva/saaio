@@ -15,7 +15,9 @@ System context: `docs/HANDOVER.md`.
   worker is resumed (`claude --resume {id}`) instead of started fresh.
 - `flow ui` is the command; bare `flow` stays the agent home. One UI shows the flows of all repos.
 - The tmux path goes (no tmux check, no window, no kill-window).
-- The server stops only with `C-space Q` (confirm) or `flow ui --stop`.
+- The server stops only with `C-space Q` (confirm) or `flow ui --stop`. A stop also forgets the master
+  (deletes master.json), so the next `flow ui` starts a new master where it runs; only a crash or a
+  reboot resumes the master. Workers are resumed either way: they are unfinished work.
 - The master runs the default agent, name `master`, no prompt, in the directory of the first `flow ui`,
   remembered with its session id in `<store root>/master.json`.
 - Once usable, `flow ui` is home and the Claude Code board mod is retired; the CLI and `--json` stay.

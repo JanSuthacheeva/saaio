@@ -59,6 +59,7 @@ struct Server {
     config: Config,
     env: LaunchEnv,
     record: MasterRecord,
+    master_file: PathBuf,
     host: Host,
     conns: HashMap<ConnId, Conn>,
     next_conn: ConnId,
@@ -88,6 +89,7 @@ pub fn run(
         config,
         env,
         record,
+        master_file: paths.master.clone(),
         host,
         conns: HashMap::new(),
         next_conn: 0,
@@ -312,8 +314,13 @@ impl Server {
         }
     }
 
-    /// Closes every pane and waits for them to exit.
+    /// Closes every pane and waits for them to exit; forgets the master, so the next start is a new one.
     fn stop(&mut self, inbox: &Receiver<Event>) -> Result<()> {
+        if let Err(error) = fs::remove_file(&self.master_file)
+            && error.kind() != ErrorKind::NotFound
+        {
+            eprintln!("could not forget the master: {error}");
+        }
         let keys: Vec<PaneKey> = self.host.panes().into_iter().map(|pane| pane.key).collect();
         for key in &keys {
             self.host.close(key);
@@ -530,7 +537,7 @@ mod tests {
         proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
         handle.join().unwrap().unwrap();
         assert!(!paths.socket.exists());
-        assert!(paths.master.exists());
+        assert!(!paths.master.exists(), "a stop ends the master for good");
     }
 
     #[test]
