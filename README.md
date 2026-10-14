@@ -123,6 +123,39 @@ prompt = "{request}"
 Placeholders: `{id}`, `{name}`, `{request}`, `{prompt}`, and `{instructions}` (the master's
 `master.md`). An agent without `resume` starts fresh once and is not resumed after a restart.
 
+### How a worker reports
+
+A worker reports through its harness's own hooks; neither the model nor the skills take part.
+When flow ui starts a worker whose agent names an `adapter`, it adds the adapter's wiring to the
+command line. For Claude Code (`adapter = "claude-code"`, the built-in agents' default) that is
+`--settings` with hooks that run `flow hook claude-code` on each event; they run beside your own
+hooks and install nothing. `flow hook` reads the event, turns it into flow events and appends
+only what changes the flow:
+
+| Claude Code event | Reported |
+| --- | --- |
+| a prompt | `working` (and the phase of a typed `/skill`) |
+| the Skill tool | `phase`, from the `[phases]` map |
+| the Agent tool | `delegated <description>` |
+| AskUserQuestion | `waiting <the question>` |
+| a permission prompt | `waiting permission: Bash(rm -rf build)` |
+| a tool finishing | `working`; plan-progress task counts and blocks; a merge request `gh` / `glab` created |
+| the end of a turn | `waiting <the question in Claude's last line>` |
+| `/exit` | `ended` (a hangup is not an end; flow ui resumes the worker) |
+
+A subagent's own events are ignored. A custom agent replaces the built-in one, so give it
+`adapter = "claude-code"` when it runs Claude Code. Which skill starts which phase:
+
+```toml
+[phases]                      # the built-in map, extend or override it
+design-code = "design"
+implement-plan = "implement"
+review-changes = "review"
+write-merge-request = "merge-request"
+```
+
+`flow report` stays for scripts and other tools.
+
 ### Hooks, slots and Docker
 
 A repo can commit two executable hooks; `flow` runs them in the worktree with `FLOW_ID`,

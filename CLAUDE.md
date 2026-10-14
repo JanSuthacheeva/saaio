@@ -26,6 +26,7 @@ cargo install --path .         # install the flow binary
 - **view.rs** - the derived types; serialised as the `--json` contract (`VIEW_VERSION`).
 - **launch.rs** - what `flow start` creates and what a pane runs: name, slot, worktree path, branch, git command lines, agent and resume argv, pane environment (pure).
 - **workspace.rs** - the processes `flow start` and `flow clear` run: git worktrees, the repo's `.flow/setup` and `.flow/teardown` hooks; the branch a folder is on.
+- **adapter/** - how flow observes a harness through its own hooks: `mod.rs` (`Adapter`: the wiring a launch adds, `translate` of one hook event, the skill-to-phase lookup), `claude_code.rs` (Claude Code's `--settings` hooks and its events -> flow events, pure; fixtures are recorded hook payloads). `flow hook <adapter>` (main.rs) runs it, silently, appending only what changes the flow (`fold::changes`).
 - **proto.rs** - the messages between `flow ui` and `flow server`: length-prefixed postcard over a Unix socket.
 - **client.rs** - connecting to the server, starting it (`ensure_server`), closing a flow's pane for remove and clear.
 - **server/** - `flow server`, one thread owning every session: `host.rs` (PTYs and processes), `terminal.rs` (the only file that knows alacritty_terminal), `master.rs` (master.json, master.md), `watch.rs` (when to refold), `reconcile.rs` (which flows need a pane, pure), `mod.rs` (the event loop).
