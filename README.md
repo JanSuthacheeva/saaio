@@ -118,8 +118,8 @@ Compose names a project after its folder, so each worktree runs its own stack an
 `docker compose exec ...` inside a worktree reaches that stack.
 
 `flow remove <name>` does the same for one flow at any state: it closes the worker's tmux
-window, runs the teardown hook, removes the worktree (`--force` also discards uncommitted
-work) and forgets the flow.
+window, runs the teardown hook, removes the worktree and forgets the flow. With uncommitted
+work in the worktree it refuses and touches nothing; `--force` discards that work.
 
 `flow clear` keeps a worktree with uncommitted work (listed under `kept`) and always keeps the
 branch, which carries the merge request.
