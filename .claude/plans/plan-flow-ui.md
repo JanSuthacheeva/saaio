@@ -21,7 +21,13 @@ System context: `docs/HANDOVER.md`.
   - some unfinished: `k` keeps them for later (they resume on the next `flow ui`), `e` ends them
     (each gets an Ended event, so it never reopens; worktrees, branches and transcripts stay until
     `flow clear`), `esc` cancels.
-  Either way every pane gets SIGHUP and up to 3 s to exit before SIGKILL. `flow ui --stop` keeps them. A stop also forgets the master
+  Either way every pane gets SIGHUP and up to 3 s to exit before SIGKILL. `flow ui --stop` keeps them.
+- An ended flow's code is never lost and always findable: commits on `flow/<name>`, uncommitted work in
+  `<repo>/.flow/worktrees/<name>` (`flow clear` keeps a dirty worktree), the conversation in Claude's
+  transcript for the flow id. `flow status <name>` shows worktree, branch and whether the worktree still
+  exists; after `e` the stop dialog names each flow's branch and worktree; in flow ui ended flows stay in
+  the sidebar under DONE until `flow clear`, peek shows their branch and worktree, and `C-space r` on one
+  resumes its Claude session. A stop also forgets the master
   (deletes master.json), so the next `flow ui` starts a new master where it runs; only a crash or a
   reboot resumes the master. Workers are resumed either way: they are unfinished work.
 - The master runs the default agent, name `master`, no prompt, in the directory of the first `flow ui`,
@@ -520,16 +526,17 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [ ] main::start without tmux: no window, Opening via Client::connect(Control), output::started with pane; update tests/cli.rs
 - [ ] client::close_flow; main::remove and main::clear close panes first; output::removed with pane; tests
 - [ ] Remove window_argv, kill_window_argv, open_window, close_window and their tests
-- [ ] Reopen exited panes (C-space r, ClientMsg::Reopen) with an integration test
+- [ ] Reopen exited panes and ended flows (C-space r, ClientMsg::Reopen: resume the flow's agent even when its flow is ended) with an integration test
+- [ ] `flow status <name>` shows the worktree path, the branch and whether the worktree still exists, for every flow with a workspace; tests/cli.rs
 
 ### Milestone 4: views
 
-- [ ] Add ui/peek.rs (transcript, tail, PeekCache) with fixture tests; sidebar peek, C-space j/k and enter
+- [ ] Add ui/peek.rs (transcript, tail, PeekCache) with fixture tests; sidebar peek, C-space j/k and enter; ended flows stay under DONE until `flow clear` and their peek shows branch and worktree
 - [ ] Add ui/board.rs BoardView and C-space o, with TestBackend tests against the board screen
 - [ ] Add ui/newflow.rs NewFlowForm, C-space n and the `flow start` thread with App::on_started, with tests
 - [ ] Add ui/rail.rs Rail and C-space b
 - [ ] History (C-space [, ClientMsg::History) through Host::frame
-- [ ] Help (C-space ?) and the stop dialog (C-space Q): unfinished workers listed, `k` keeps them, `e` ends them (StopServer { end_flows }), `y` when none; tests for each answer
+- [ ] Help (C-space ?) and the stop dialog (C-space Q): unfinished workers listed, `k` keeps them, `e` ends them (StopServer { end_flows }) and the UI prints each ended flow's branch and worktree as it quits, `y` when none; tests for each answer
 
 ### Milestone 5: restore and hardening
 
