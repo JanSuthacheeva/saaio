@@ -346,7 +346,7 @@ impl Lab {
         fs::create_dir_all(&self.home).unwrap();
         fs::write(
             self.home.join("no-config.toml"),
-            format!("[agents.claude]\n{lines}\n"),
+            format!("[agents.claude]\n{lines}\n[agents.master]\n{lines}\n"),
         )
         .unwrap();
     }
@@ -750,7 +750,7 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     let config = home.path().join("config.toml");
     fs::write(
         &config,
-        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
+        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n\n[agents.master]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
     )
     .unwrap();
     let socket = home.path().join("server.sock");

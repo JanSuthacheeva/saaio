@@ -12,6 +12,20 @@ use crate::proto::PaneKey;
 
 /// The name the master session gets.
 pub const MASTER_NAME: &str = "master";
+/// What flow writes to master.md the first time: how the master works with flow.
+pub const DEFAULT_INSTRUCTIONS: &str = include_str!("master.md");
+
+/// Writes the default instructions to `file` unless it exists; an edited file is never overwritten.
+pub fn ensure_instructions(file: &Path) -> Result<()> {
+    if file.exists() {
+        return Ok(());
+    }
+    if let Some(dir) = file.parent() {
+        fs::create_dir_all(dir).with_context(|| format!("could not create {}", dir.display()))?;
+    }
+    fs::write(file, DEFAULT_INSTRUCTIONS)
+        .with_context(|| format!("could not write {}", file.display()))
+}
 
 /// The master's session id and the directory it runs in, kept across server restarts.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -47,9 +61,15 @@ impl MasterRecord {
         }
     }
 
-    /// The agent's command (name master, no prompt) when new, its resume command after;
-    /// None when it must resume and the agent has no resume template.
-    pub fn spec(&self, fresh: bool, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec> {
+    /// The agent's command (name master, no prompt) when new, its resume command after, with
+    /// {instructions} filled in; None when it must resume and the agent has no resume template.
+    pub fn spec(
+        &self,
+        fresh: bool,
+        agent: &Agent,
+        env: &LaunchEnv,
+        instructions: &Path,
+    ) -> Option<PaneSpec> {
         let argv = if fresh {
             let bare = Agent {
                 prompt: String::new(),
@@ -59,6 +79,11 @@ impl MasterRecord {
         } else {
             launch::resume_argv(agent, &self.session, MASTER_NAME)?
         };
+        let instructions = instructions.display().to_string();
+        let argv = argv
+            .into_iter()
+            .map(|part| part.replace("{instructions}", &instructions))
+            .collect();
         Some(PaneSpec {
             key: PaneKey::Master,
             argv,
@@ -110,8 +135,13 @@ mod tests {
         let agents = builtin_agents();
         let claude = &agents["claude"];
 
-        let fresh = record.spec(true, claude, &LaunchEnv::default()).unwrap();
-        let resumed = record.spec(false, claude, &LaunchEnv::default()).unwrap();
+        let md = Path::new("/cfg/master.md");
+        let fresh = record
+            .spec(true, claude, &LaunchEnv::default(), md)
+            .unwrap();
+        let resumed = record
+            .spec(false, claude, &LaunchEnv::default(), md)
+            .unwrap();
 
         assert_eq!(fresh.key, PaneKey::Master);
         assert_eq!(
@@ -128,6 +158,53 @@ mod tests {
             resume: None,
             ..claude.clone()
         };
-        assert_eq!(record.spec(false, &plain, &LaunchEnv::default()), None);
+        assert_eq!(record.spec(false, &plain, &LaunchEnv::default(), md), None);
+    }
+
+    #[test]
+    fn gives_the_master_agent_its_instructions_fresh_and_resumed() {
+        let record = MasterRecord {
+            session: "5e55".into(),
+            cwd: PathBuf::from("/work"),
+        };
+        let agents = builtin_agents();
+        let master = &agents[crate::config::MASTER_AGENT];
+        let md = Path::new("/cfg/master.md");
+
+        let fresh = record
+            .spec(true, master, &LaunchEnv::default(), md)
+            .unwrap();
+        let resumed = record
+            .spec(false, master, &LaunchEnv::default(), md)
+            .unwrap();
+
+        assert_eq!(
+            fresh.argv,
+            [
+                "claude",
+                "-n",
+                "master",
+                "--session-id",
+                "5e55",
+                "--append-system-prompt-file",
+                "/cfg/master.md"
+            ]
+            .map(String::from)
+        );
+        assert_eq!(&resumed.argv[3..5], ["--resume", "5e55"]);
+        assert_eq!(resumed.argv.last().unwrap(), "/cfg/master.md");
+    }
+
+    #[test]
+    fn writes_the_default_instructions_once_and_keeps_an_edited_file() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("flow/master.md");
+
+        ensure_instructions(&file).unwrap();
+        assert_eq!(fs::read_to_string(&file).unwrap(), DEFAULT_INSTRUCTIONS);
+        fs::write(&file, "mine").unwrap();
+        ensure_instructions(&file).unwrap();
+
+        assert_eq!(fs::read_to_string(&file).unwrap(), "mine");
     }
 }

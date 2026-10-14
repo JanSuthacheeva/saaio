@@ -161,6 +161,9 @@ pub fn pane_env(id: Option<&str>, env: &LaunchEnv) -> Vec<(String, String)>;
 // config.rs
 pub struct Agent { pub command: Vec<String>, pub prompt: String, #[serde(default)] pub resume: Option<Vec<String>> }
 // builtin claude: resume = ["claude", "-n", "{name}", "--resume", "{id}"]
+// builtin master (MASTER_AGENT): claude with "--append-system-prompt-file", "{instructions}", fresh and resumed;
+// the server falls back to the default agent when no master agent is configured
+pub fn config_file(flow_config, xdg_config, home) -> Option<PathBuf>;   // what Config::load reads
 
 // store.rs
 pub struct FlowLog { pub id: String, pub events: Vec<Event>, pub beat: Option<u64> }
@@ -214,7 +217,7 @@ fn server(store: Store, config: Config) -> Result<Document, Failure>;
 
 ```rust
 // mod.rs
-pub struct ServerPaths { pub socket: PathBuf, pub master: PathBuf }
+pub struct ServerPaths { pub socket: PathBuf, pub master: PathBuf, pub instructions: PathBuf }   // master.md beside config.toml
 /// Binds the socket (removing a stale one), opens the master, then loops until StopServer.
 pub fn run(paths: &ServerPaths, store: Store, config: Config, env: LaunchEnv, clock: fn() -> u64) -> Result<()>;
 enum Event { Accepted(UnixStream), Message(ConnId, ClientMsg), Gone(ConnId), Host(HostEvent), Tick }
@@ -292,8 +295,11 @@ impl MasterRecord {
     pub fn load_or_create(file: &Path, cwd: &Path) -> Result<(MasterRecord, bool)>;
     /// The agent's command (name master, no prompt) when new, its resume command after;
     /// None when it must resume and the agent has no resume template.
-    pub fn spec(&self, fresh: bool, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec>;
+    pub fn spec(&self, fresh: bool, agent: &Agent, env: &LaunchEnv, instructions: &Path) -> Option<PaneSpec>;
 }
+/// src/server/master.md, compiled in; written to master.md when it is missing, never over an edited one.
+pub const DEFAULT_INSTRUCTIONS: &str;
+pub fn ensure_instructions(file: &Path) -> Result<()>;
 ```
 
 ### src/ui/ (new)
@@ -583,8 +589,8 @@ Release build, 150x44, 60 s idle after the sessions settled, CPU time from `ps`:
 ### Milestone 5: restore and hardening
 
 - [x] Restore integration test: start flows, kill the server, start flow ui again, workers and master resume
-- [ ] Measure idle CPU and memory of server and ui with five panes; fix anything above near zero idle
-- [ ] Remove the `#[allow(dead_code)]` the new modules carry in main.rs until they are wired
+- [x] Measure idle CPU and memory of server and ui with five panes; fix anything above near zero idle
+- [x] Remove the `#[allow(dead_code)]` the new modules carry in main.rs until they are wired
 - [ ] Master instructions: config `master` agent entry, the builtin master command appends `~/.config/flow/master.md` (written with a default on first use, never overwritten), MasterRecord::spec uses it; config and master tests
 - [ ] Update CLAUDE.md architecture and docs/HANDOVER.md (flow ui, board mod retired, tmux path gone)
 - [ ] End-to-end check: a real Claude master starts two workers from flow ui, peek, answer a question in a worker, detach, reattach, kill the server, restart, everything resumes

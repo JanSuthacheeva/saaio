@@ -48,6 +48,8 @@ const START_SIZE: Size = Size {
 pub struct ServerPaths {
     pub socket: PathBuf,
     pub master: PathBuf,
+    /// The master's orchestrator instructions, master.md beside config.toml.
+    pub instructions: PathBuf,
 }
 
 type ConnId = u64;
@@ -77,6 +79,7 @@ struct Server {
     env: LaunchEnv,
     record: MasterRecord,
     master_file: PathBuf,
+    instructions: PathBuf,
     host: Host,
     conns: HashMap<ConnId, Conn>,
     next_conn: ConnId,
@@ -100,6 +103,9 @@ pub fn run(
     clock: fn() -> u64,
 ) -> Result<()> {
     let listener = bind(&paths.socket)?;
+    if let Err(error) = master::ensure_instructions(&paths.instructions) {
+        eprintln!("{error:#}");
+    }
     let cwd = std::env::current_dir().context("could not read the current directory")?;
     let (record, fresh) = MasterRecord::load_or_create(&paths.master, &cwd)?;
     let (events, inbox) = mpsc::channel();
@@ -117,6 +123,7 @@ pub fn run(
         env,
         record,
         master_file: paths.master.clone(),
+        instructions: paths.instructions.clone(),
         host,
         conns: HashMap::new(),
         next_conn: 0,
@@ -469,12 +476,19 @@ impl Server {
     }
 
     fn open_master(&mut self, fresh: bool) {
-        let Some((name, agent)) = self.config.agent(None) else {
+        let master = self
+            .config
+            .agent(Some(crate::config::MASTER_AGENT))
+            .or_else(|| self.config.agent(None));
+        let Some((name, agent)) = master else {
             let reason = format!("no agent named {}", self.config.agent);
             self.host.fail(PaneKey::Master, reason);
             return;
         };
-        match self.record.spec(fresh, agent, &self.env) {
+        match self
+            .record
+            .spec(fresh, agent, &self.env, &self.instructions)
+        {
             Some(spec) => match self.host.open(spec) {
                 Ok(()) if !fresh => {
                     self.resumed.insert(PaneKey::Master, Instant::now());
@@ -721,10 +735,12 @@ mod tests {
         let paths = ServerPaths {
             socket: dir.join("server.sock"),
             master: dir.join("master.json"),
+            instructions: dir.join("master.md"),
         };
         let thread_paths = ServerPaths {
             socket: paths.socket.clone(),
             master: paths.master.clone(),
+            instructions: paths.instructions.clone(),
         };
         let store = Store::at(dir.to_path_buf());
         let config = Config {

@@ -274,9 +274,17 @@ fn server(store: Store) -> Result<Document, Failure> {
         env_path("HOME"),
     )
     .map_err(Failure::from_io)?;
+    let config_dir = config::config_file(
+        env_path("FLOW_CONFIG"),
+        env_path("XDG_CONFIG_HOME"),
+        env_path("HOME"),
+    )
+    .and_then(|file| file.parent().map(Path::to_path_buf))
+    .unwrap_or_else(|| store.root().to_path_buf());
     let paths = server::ServerPaths {
         socket: client::socket_path(&store),
         master: store.root().join("master.json"),
+        instructions: config_dir.join("master.md"),
     };
     let env = launch::LaunchEnv {
         flow_home: env_path("FLOW_HOME"),

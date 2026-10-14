@@ -32,11 +32,7 @@ impl Config {
         xdg_config: Option<PathBuf>,
         home: Option<PathBuf>,
     ) -> Result<Config> {
-        let set = |path: Option<PathBuf>| path.filter(|path| !path.as_os_str().is_empty());
-        let file = set(flow_config)
-            .or_else(|| set(xdg_config).map(|dir| dir.join("flow/config.toml")))
-            .or_else(|| set(home).map(|dir| dir.join(".config/flow/config.toml")));
-        let mut config = match file {
+        let mut config = match config_file(flow_config, xdg_config, home) {
             None => Config::empty(),
             Some(file) => match fs::read_to_string(&file) {
                 Ok(text) => toml::from_str::<Config>(&text)
@@ -63,8 +59,24 @@ impl Config {
     }
 }
 
+/// $FLOW_CONFIG, else $XDG_CONFIG_HOME/flow/config.toml, else ~/.config/flow/config.toml.
+pub fn config_file(
+    flow_config: Option<PathBuf>,
+    xdg_config: Option<PathBuf>,
+    home: Option<PathBuf>,
+) -> Option<PathBuf> {
+    let set = |path: Option<PathBuf>| path.filter(|path| !path.as_os_str().is_empty());
+    set(flow_config)
+        .or_else(|| set(xdg_config).map(|dir| dir.join("flow/config.toml")))
+        .or_else(|| set(home).map(|dir| dir.join(".config/flow/config.toml")))
+}
+
+/// The agent flow ui runs as its master when there is one; else the default agent.
+pub const MASTER_AGENT: &str = "master";
+
 /// claude: ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"], prompt "/ship-feature {request}",
-/// resumed with ["claude", "-n", "{name}", "--resume", "{id}"].
+/// resumed with ["claude", "-n", "{name}", "--resume", "{id}"]; master: claude with the orchestrator
+/// instructions appended to its system prompt ({instructions}, the master.md beside config.toml).
 pub fn builtin_agents() -> BTreeMap<String, Agent> {
     let claude = Agent {
         command: ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
@@ -77,7 +89,32 @@ pub fn builtin_agents() -> BTreeMap<String, Agent> {
                 .to_vec(),
         ),
     };
-    BTreeMap::from([("claude".to_string(), claude)])
+    let strings = |parts: &[&str]| parts.iter().map(|part| part.to_string()).collect();
+    let master = Agent {
+        command: strings(&[
+            "claude",
+            "-n",
+            "{name}",
+            "--session-id",
+            "{id}",
+            "--append-system-prompt-file",
+            "{instructions}",
+        ]),
+        prompt: String::new(),
+        resume: Some(strings(&[
+            "claude",
+            "-n",
+            "{name}",
+            "--resume",
+            "{id}",
+            "--append-system-prompt-file",
+            "{instructions}",
+        ])),
+    };
+    BTreeMap::from([
+        ("claude".to_string(), claude),
+        (MASTER_AGENT.to_string(), master),
+    ])
 }
 
 impl Config {
@@ -118,6 +155,13 @@ mod tests {
             Some(&["claude", "-n", "{name}", "--resume", "{id}"].map(String::from)[..])
         );
         assert!(config.agent(Some("codex")).is_none());
+        let (_, master) = config.agent(Some(MASTER_AGENT)).unwrap();
+        assert!(
+            master
+                .command
+                .ends_with(&["--append-system-prompt-file", "{instructions}"].map(String::from))
+        );
+        assert_eq!(master.prompt, "");
     }
 
     #[test]
