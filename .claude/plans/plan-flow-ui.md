@@ -15,7 +15,13 @@ System context: `docs/HANDOVER.md`.
   worker is resumed (`claude --resume {id}`) instead of started fresh.
 - `flow ui` is the command; bare `flow` stays the agent home. One UI shows the flows of all repos.
 - The tmux path goes (no tmux check, no window, no kill-window).
-- The server stops only with `C-space Q` (confirm) or `flow ui --stop`. A stop also forgets the master
+- The server stops only with `C-space Q` or `flow ui --stop`. `C-space Q` lists the unfinished workers
+  (working, delegated, waiting, blocked, not responding) with what each is doing:
+  - none unfinished: "Stop flow? y stops it, any other key keeps it";
+  - some unfinished: `k` keeps them for later (they resume on the next `flow ui`), `e` ends them
+    (each gets an Ended event, so it never reopens; worktrees, branches and transcripts stay until
+    `flow clear`), `esc` cancels.
+  Either way every pane gets SIGHUP and up to 3 s to exit before SIGKILL. `flow ui --stop` keeps them. A stop also forgets the master
   (deletes master.json), so the next `flow ui` starts a new master where it runs; only a crash or a
   reboot resumes the master. Workers are resumed either way: they are unfinished work.
 - The master runs the default agent, name `master`, no prompt, in the directory of the first `flow ui`,
@@ -57,7 +63,8 @@ pub enum ClientMsg {
     History(Option<u32>),   // lines back; None = live
     Reopen(PaneKey),
     CloseFlow(String),      // Control role
-    StopServer,
+    /// end_flows: append Ended to every unfinished flow first, so none reopens.
+    StopServer { end_flows: bool },
 }
 pub enum ServerMsg {
     Welcome { version: u32 },
@@ -280,7 +287,7 @@ impl MasterRecord {
 pub fn run(socket: &Path, theme: Theme) -> Result<String>;
 
 // app.rs
-pub enum View { Panes, Board(BoardState), NewFlow(NewFlowForm), History(u32), Help, ConfirmStop }
+pub enum View { Panes, Board(BoardState), NewFlow(NewFlowForm), History(u32), Help, Stop { unfinished: Vec<String> } }
 pub enum Effect { Send(ClientMsg), StartFlow(NewFlowForm), Mirror(Modes), Quit(String) }
 impl App {
     pub fn new(size: Size) -> App;
@@ -450,7 +457,12 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 9. Detach, take over, stop
    1. `C-space d -> Effect::Quit("detached")` -> Outer restores the terminal; server sees `Gone`, panes keep running
    2. second `flow ui` attaches -> `Detached` to the old one -> `Quit("attached elsewhere")`
-   3. `C-space Q -> ConfirmStop -> y -> StopServer` (or `flow ui --stop` over Control) -> `Host::close` all, wait up to 3 s, remove socket, exit
+   3. `C-space Q -> View::Stop { unfinished }` (names of the unfinished flows on the board)
+      - none: `y -> StopServer { end_flows: false }`
+      - some: `k -> StopServer { end_flows: false }`; `e -> StopServer { end_flows: true }`; `esc` back
+      - `flow ui --stop` over Control sends `StopServer { end_flows: false }`
+   4. `Server::handle(StopServer { end_flows })`: when end_flows, `Store::append(id, Ended)` for each unfinished
+      flow; delete master.json; `Host::close` every pane (SIGHUP, SIGKILL after 3 s), wait, remove socket, exit
    - Panic in the UI: Outer's Drop/panic hook restores the terminal; server and panes keep running
 
 ## Test seams
@@ -515,7 +527,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [ ] Add ui/newflow.rs NewFlowForm, C-space n and the `flow start` thread with App::on_started, with tests
 - [ ] Add ui/rail.rs Rail and C-space b
 - [ ] History (C-space [, ClientMsg::History) through Host::frame
-- [ ] Help (C-space ?), ConfirmStop (C-space Q) and takeover (ServerMsg::Detached)
+- [ ] Help (C-space ?) and the stop dialog (C-space Q): unfinished workers listed, `k` keeps them, `e` ends them (StopServer { end_flows }), `y` when none; tests for each answer
 
 ### Milestone 5: restore and hardening
 
