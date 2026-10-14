@@ -1,6 +1,6 @@
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
@@ -32,6 +32,12 @@ impl Store {
     #[cfg(test)]
     pub fn at(root: PathBuf) -> Store {
         Store { root }
+    }
+
+    /// The state directory itself, for server.sock, server.log and master.json.
+    #[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
+    pub fn root(&self) -> &Path {
+        &self.root
     }
 
     /// A new flow with a fresh UUID v4 and its first event; returns the id.

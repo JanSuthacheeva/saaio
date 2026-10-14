@@ -1,3 +1,5 @@
+#[allow(dead_code)] // until flow ui uses it (plan-flow-ui.md)
+mod client;
 mod config;
 mod event;
 mod fold;
