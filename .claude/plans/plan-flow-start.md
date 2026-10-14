@@ -169,7 +169,7 @@ pub fn cleared(names: &[String], kept: &[(String, String)]) -> Document;
 
 - [x] Add `EventKind::Workspace`, `view::Workspace`, `FlowView.workspace` and fold it, with unit tests (last one wins, JSON shape)
 - [x] Add `launch.rs` (`flow_name`, `free_slot`, `workspace_for`, `worktree_add_argv`, `worktree_remove_argv`, `agent_argv`, `window_argv`, `hook_env`) with unit tests
-- [ ] Add `config.rs` with the `toml` crate (`Config::load`, `agent`, `builtin_agents`) with unit tests
+- [x] Add `config.rs` with the `toml` crate (`Config::load`, `agent`, `builtin_agents`) with unit tests
 - [ ] Add `workspace.rs` (`repo_root`, `create_worktree`, `run_hook`, `open_window`, `remove_worktree`) with tests on a temp git repo
 - [ ] Add `flow start` (`start`, `output::started`) with tests/cli.rs cases using a fake tmux: start, outside tmux, outside a repo, failing hook, full slots
 - [ ] Extend `flow clear` with teardown and worktree removal (`output::cleared` with kept) with tests/cli.rs cases for clean and dirty worktrees
