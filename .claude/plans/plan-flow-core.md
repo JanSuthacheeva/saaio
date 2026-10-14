@@ -425,7 +425,7 @@ duration runs until `now`. Repeated reports fold to the same view.
 
 - [x] Add view.rs types, `Board::to_json`, `FlowView::needs_you` and `is_finished`, with a test for the JSON shape (camelCase, version first)
 - [x] Add `fold::fold` with a unit test per fold rule, idempotent repeats and phase durations
-- [ ] Add not-responding, `fold::board` ordering and `fold::resolve`, with unit tests
+- [x] Add not-responding, `fold::board` ordering and `fold::resolve`, with unit tests
 
 ### Output
 

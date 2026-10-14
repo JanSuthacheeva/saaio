@@ -1,5 +1,10 @@
 use crate::event::{Event, EventKind, Mode, Phase};
-use crate::view::{FlowView, ReviewCount, State, Step, StepStatus, Tasks, TimelineEntry, Tone};
+use crate::view::{
+    Board, FlowView, ReviewCount, State, Step, StepStatus, Tasks, TimelineEntry, Tone, VIEW_VERSION,
+};
+
+/// A flow with a heartbeat older than this, not done or ended, is not responding.
+pub const SILENT_AFTER_MS: u64 = 90_000;
 
 /// One flow's view at `now`; None when the log has no Started event to name it.
 pub fn fold(id: &str, events: &[Event], last_beat: Option<u64>, now: u64) -> Option<FlowView> {
@@ -18,8 +23,49 @@ pub fn fold(id: &str, events: &[Event], last_beat: Option<u64>, now: u64) -> Opt
     for event in &events[start + 1..] {
         folding.apply(event);
     }
-    let _ = last_beat;
-    Some(folding.finish(now))
+    let mut view = folding.finish(now);
+    let is_silent = last_beat.is_some_and(|beat| now.saturating_sub(beat) > SILENT_AFTER_MS);
+    if is_silent && !view.is_finished() {
+        view.state = State::NotResponding;
+    }
+    Some(view)
+}
+
+/// Sorted: needs you, running, finished; newest change first within each group.
+pub fn board(mut flows: Vec<FlowView>, now: u64) -> Board {
+    flows.sort_by_key(|flow| (group(flow), std::cmp::Reverse(flow.changed_at)));
+    Board {
+        version: VIEW_VERSION,
+        now,
+        count: flows.len(),
+        needs_you: flows.iter().filter(|flow| flow.needs_you()).count(),
+        flows,
+    }
+}
+
+/// The flow a name or id means: an exact id, else the unfinished flow of that name,
+/// else the most recent finished one of that name.
+pub fn resolve<'a>(flows: &'a [FlowView], name_or_id: &str) -> Option<&'a FlowView> {
+    let named = || flows.iter().filter(|flow| flow.name == name_or_id);
+    flows
+        .iter()
+        .find(|flow| flow.id == name_or_id)
+        .or_else(|| {
+            named()
+                .filter(|flow| !flow.is_finished())
+                .max_by_key(|flow| flow.changed_at)
+        })
+        .or_else(|| named().max_by_key(|flow| flow.changed_at))
+}
+
+fn group(flow: &FlowView) -> u8 {
+    if flow.needs_you() {
+        0
+    } else if flow.is_finished() {
+        2
+    } else {
+        1
+    }
 }
 
 struct Folding {
@@ -600,6 +646,95 @@ mod tests {
             3,
         );
         assert_eq!(done.state, State::Done);
+    }
+
+    #[test]
+    fn a_silent_heartbeat_means_not_responding_unless_finished() {
+        let running = [started(0), phase(0, Phase::Implement)];
+        let beat = Some(10 * MIN);
+
+        assert_eq!(
+            fold("a", &running, beat, 10 * MIN + SILENT_AFTER_MS)
+                .unwrap()
+                .state,
+            State::Working
+        );
+        assert_eq!(
+            fold("a", &running, beat, 10 * MIN + SILENT_AFTER_MS + 1)
+                .unwrap()
+                .state,
+            State::NotResponding
+        );
+        assert_eq!(
+            fold("a", &running, None, 99 * MIN).unwrap().state,
+            State::Working
+        );
+
+        let ended = [started(0), at(1, EventKind::Ended)];
+        assert_eq!(
+            fold("a", &ended, beat, 99 * MIN).unwrap().state,
+            State::Ended
+        );
+    }
+
+    fn flow_in(name: &str, state: State, changed_at: u64) -> FlowView {
+        let mut flow = view(&[started(0)], 1);
+        flow.id = format!("{name}-{changed_at}");
+        flow.name = name.to_string();
+        flow.state = state;
+        flow.changed_at = changed_at;
+        flow
+    }
+
+    #[test]
+    fn the_board_puts_flows_needing_you_first_then_running_then_finished() {
+        let board = board(
+            vec![
+                flow_in("done-old", State::Done, 1),
+                flow_in("working-old", State::Working, 2),
+                flow_in("blocked", State::Blocked, 3),
+                flow_in("done-new", State::Done, 4),
+                flow_in("working-new", State::Delegated, 5),
+                flow_in("silent", State::NotResponding, 6),
+                flow_in("ended", State::Ended, 7),
+                flow_in("waiting", State::Waiting, 0),
+            ],
+            100,
+        );
+
+        let names: Vec<&str> = board.flows.iter().map(|flow| flow.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "silent",
+                "blocked",
+                "waiting",
+                "working-new",
+                "working-old",
+                "ended",
+                "done-new",
+                "done-old"
+            ]
+        );
+        assert_eq!(board.version, VIEW_VERSION);
+        assert_eq!(board.now, 100);
+        assert_eq!(board.count, 8);
+        assert_eq!(board.needs_you, 3);
+    }
+
+    #[test]
+    fn resolves_an_id_then_the_unfinished_flow_then_the_newest_finished_one() {
+        let flows = vec![
+            flow_in("shop-221", State::Done, 1),
+            flow_in("shop-221", State::Done, 5),
+            flow_in("shop-230", State::Done, 2),
+            flow_in("shop-230", State::Working, 1),
+        ];
+
+        assert_eq!(resolve(&flows, "shop-221-1").unwrap().changed_at, 1);
+        assert_eq!(resolve(&flows, "shop-221").unwrap().changed_at, 5);
+        assert_eq!(resolve(&flows, "shop-230").unwrap().state, State::Working);
+        assert_eq!(resolve(&flows, "shop-999"), None);
     }
 
     #[test]
