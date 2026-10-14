@@ -591,6 +591,6 @@ Release build, 150x44, 60 s idle after the sessions settled, CPU time from `ps`:
 - [x] Restore integration test: start flows, kill the server, start flow ui again, workers and master resume
 - [x] Measure idle CPU and memory of server and ui with five panes; fix anything above near zero idle
 - [x] Remove the `#[allow(dead_code)]` the new modules carry in main.rs until they are wired
-- [ ] Master instructions: config `master` agent entry, the builtin master command appends `~/.config/flow/master.md` (written with a default on first use, never overwritten), MasterRecord::spec uses it; config and master tests
-- [ ] Update CLAUDE.md architecture and docs/HANDOVER.md (flow ui, board mod retired, tmux path gone)
-- [ ] End-to-end check: a real Claude master starts two workers from flow ui, peek, answer a question in a worker, detach, reattach, kill the server, restart, everything resumes
+- [x] Master instructions: config `master` agent entry, the builtin master command appends `~/.config/flow/master.md` (written with a default on first use, never overwritten), MasterRecord::spec uses it; config and master tests
+- [x] Update CLAUDE.md architecture and docs/HANDOVER.md (flow ui, board mod retired, tmux path gone)
+- [x] End-to-end check: a real Claude master starts two workers from flow ui, peek, answer a question in a worker, detach, reattach, kill the server, restart, everything resumes
