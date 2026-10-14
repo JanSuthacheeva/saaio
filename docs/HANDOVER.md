@@ -219,6 +219,12 @@ The vision below is built as `flow ui`, see README and `.claude/plans/plan-flow-
   arriving as a message in the master's session. The sidebar shows "asked by master", the timeline
   the exchange. To settle: hooks for the master too, a question arriving while you type in that pane,
   loops; start with master -> worker only.
+- **One flow per project (in use since 2026-10-15).** The tmux sessionizer gives each project
+  session its own `FLOW_HOME` (`~/.local/state/flow/projects/<session>`), so `flow ui` there has its
+  own server, master in that project and flows. To improve:
+  - slots are counted per state folder, so two projects can both hand out slot 1 and their ports
+    clash; count slots across every state folder (or give each folder its own slot range);
+  - an overview across all projects' state folders, read-only, for when you want everything at once.
 - **Extensions:** glab and ClickUp as data sources (ticket as the request, MR and pipeline status
   per flow); the new-flow dialog's "from ClickUp" list in the design waits for this.
 - **Theme file:** the colours are already named tokens (`ui::theme::Theme`); load overrides from a
