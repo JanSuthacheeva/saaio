@@ -194,7 +194,22 @@ The vision below is built as `flow ui`, see README and `.claude/plans/plan-flow-
 - The master keeps its session across crashes (master.json), starts fresh after a stop, and runs
   the built-in `master` agent with `master.md` appended to its system prompt.
 - `C-space Q` keeps or ends unfinished flows; ended flows keep branch and worktree until `flow clear`.
-- Later: extensions (glab, ClickUp) and a theme file; colours are already named tokens.
+- Later: see Future improvements.
+
+## Future improvements
+
+- **Plain sessions (flow ui as a plain session manager, like herdr).** Open Claude in a folder you
+  name, with no worktree, no `flow/<name>` branch, no `/ship-feature` prompt and no port slot. It shows
+  in the sidebar and resumes after a restart like any worker. A third choice in the new-flow dialog
+  next to auto and guided, and a flag on `flow start`. Small, because the server already opens
+  whatever the log records: the Workspace event would carry the folder and no branch, and
+  `worker_spec` would skip the prompt.
+- **Extensions:** glab and ClickUp as data sources (ticket as the request, MR and pipeline status
+  per flow); the new-flow dialog's "from ClickUp" list in the design waits for this.
+- **Theme file:** the colours are already named tokens (`ui::theme::Theme`); load overrides from a
+  file beside config.toml.
+- **One default mode:** `flow start` defaults to guided, the new-flow dialog to auto (as designed).
+  Decide whether both should match.
 
 ## Long-term vision: `flow` as its own TUI
 
