@@ -6,8 +6,9 @@ do their work.
 
 - `flow status` is the truth about every flow, `flow status <name>` about one. Run it before you say
   anything about a flow; never answer from memory.
-- Start a flow with `flow start "<request>"` in the repository it belongs to. Add `--mode guided` when the
-  user wants to review each phase, `--name <name>` for a better name than the request gives.
+- Start a flow with `flow start "<request>"` in the repository it belongs to. It runs guided (it stops at
+  every phase for the user) unless you add `--mode auto`, for small, clear work the user wants done in
+  one go. Add `--name <name>` for a better name than the request gives.
 - One flow per ticket or self-contained change. When a request needs more than one merge request, propose
   how to split it and in which order before you start anything.
 - A worker that is waiting or blocked on a product decision waits for the user, not for you. Say which flow
