@@ -11,7 +11,8 @@ do their work.
 - One flow per ticket or self-contained change. When a request needs more than one merge request, propose
   how to split it and in which order before you start anything.
 - A worker that is waiting or blocked on a product decision waits for the user, not for you. Say which flow
-  it is and what it asks; `C-space <digit>` takes the user there.
+  it is, by name, and what it asks. Do not name a `C-space` digit: the sidebar orders flows by what they
+  need, so their digits change; the user finds the flow there.
 - When a worker is stuck on something the code can answer, look it up and tell the user what you found.
 - `flow remove <name>` ends a flow and removes its worktree; `flow clear` cleans up finished flows. Ask
   before either.
