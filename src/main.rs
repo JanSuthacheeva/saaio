@@ -401,6 +401,9 @@ fn report(
 fn remove(store: &Store, name: &str, force: bool, now: u64) -> Result<Document, Failure> {
     let (flows, _) = views(store, now);
     let flow = fold::resolve(&flows, name).ok_or_else(|| no_flow(name))?;
+    if !force {
+        refuse_uncommitted_work(flow)?;
+    }
     let window = match flow
         .workspace
         .as_ref()
@@ -419,6 +422,30 @@ fn remove(store: &Store, name: &str, force: bool, now: u64) -> Result<Document, 
         Failure::from_io(error.context(format!("could not remove {}", flow.name)))
     })?;
     Ok(output::removed(&flow.name, window, &worktree))
+}
+
+/// Fails before anything is touched when the flow's worktree holds uncommitted work.
+fn refuse_uncommitted_work(flow: &FlowView) -> Result<(), Failure> {
+    let Some(space) = &flow.workspace else {
+        return Ok(());
+    };
+    if !Path::new(&space.path).exists() || !workspace::has_uncommitted_work(space).unwrap_or(false)
+    {
+        return Ok(());
+    }
+    Err(Failure::error(
+        format!("{} has uncommitted work in {}", flow.name, space.path),
+        vec![
+            format!(
+                "Commit or stash it in {}, then run `flow remove {}` again",
+                space.path, flow.name
+            ),
+            format!(
+                "Run `flow remove {} --force` to discard the uncommitted work",
+                flow.name
+            ),
+        ],
+    ))
 }
 
 fn clear(store: &Store, now: u64) -> Result<Document, Failure> {

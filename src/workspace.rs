@@ -87,6 +87,18 @@ pub fn remove_worktree(repo: &Path, workspace: &Workspace, force: bool) -> Resul
     Ok(output.status.success())
 }
 
+/// Whether the worktree has changes or untracked files git would refuse to remove it over.
+pub fn has_uncommitted_work(workspace: &Workspace) -> Result<bool> {
+    let status = run(&[
+        "git".to_string(),
+        "-C".to_string(),
+        workspace.path.clone(),
+        "status".to_string(),
+        "--porcelain".to_string(),
+    ])?;
+    Ok(!status.trim().is_empty())
+}
+
 /// Runs a command; its stdout, or an error with the last line it printed.
 fn run(argv: &[String]) -> Result<String> {
     let (program, args) = argv.split_first().context("empty command")?;
