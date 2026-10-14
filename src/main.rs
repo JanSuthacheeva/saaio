@@ -23,10 +23,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
 
+use client::Client;
 use config::Config;
 use event::{Event, EventKind, Mode, Phase};
 use output::{Document, Failure};
+use proto::{ClientMsg, Role};
 use store::Store;
+use ui::theme::Theme;
 use view::FlowView;
 use workspace::Hook;
 
@@ -91,6 +94,15 @@ enum Command {
     },
     /// Forget flows that are done or ended
     Clear,
+    /// Open the terminal UI: the master, every worker and the board
+    Ui {
+        /// Stop the server and every session in it
+        #[arg(long)]
+        stop: bool,
+    },
+    /// The session server flow ui starts on its own
+    #[command(hide = true)]
+    Server,
 }
 
 #[derive(Debug, Subcommand)]
@@ -220,7 +232,52 @@ fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure> {
         }
         Some(Command::Remove { flow, force }) => remove(store, &flow, force, now),
         Some(Command::Clear) => clear(store, now),
+        Some(Command::Ui { stop }) => ui(store, stop),
+        Some(Command::Server) => server(store.clone()),
     }
+}
+
+fn ui(store: &Store, stop: bool) -> Result<Document, Failure> {
+    let socket = client::socket_path(store);
+    if stop {
+        return stop_server(&socket);
+    }
+    let exe = env::current_exe().map_err(|error| Failure::from_io(error.into()))?;
+    client::ensure_server(&socket, &exe, &[]).map_err(Failure::from_io)?;
+    let message = ui::run(&socket, Theme::builtin()).map_err(Failure::from_io)?;
+    Ok(Document::Text(message))
+}
+
+fn stop_server(socket: &Path) -> Result<Document, Failure> {
+    let Some(mut control) = Client::connect(socket, Role::Control).map_err(Failure::from_io)?
+    else {
+        return Ok(Document::Text("no flow server runs".to_string()));
+    };
+    control
+        .send(&ClientMsg::StopServer)
+        .map_err(Failure::from_io)?;
+    while let Ok(Some(_)) = control.recv() {}
+    Ok(Document::Text(
+        "stopped the flow server and every session in it".to_string(),
+    ))
+}
+
+fn server(store: Store) -> Result<Document, Failure> {
+    let config = Config::load(
+        env_path("FLOW_CONFIG"),
+        env_path("XDG_CONFIG_HOME"),
+        env_path("HOME"),
+    )
+    .map_err(Failure::from_io)?;
+    let paths = server::ServerPaths {
+        socket: client::socket_path(&store),
+        master: store.root().join("master.json"),
+    };
+    let env = launch::LaunchEnv {
+        flow_home: env_path("FLOW_HOME"),
+    };
+    server::run(&paths, store, config, env, now_ms).map_err(Failure::from_io)?;
+    Ok(Document::Text("flow server stopped".to_string()))
 }
 
 fn home(store: &Store, now: u64) -> Result<Document, Failure> {

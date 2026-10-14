@@ -104,6 +104,7 @@ pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Res
     let mut command = Command::new(exe);
     command
         .arg("server")
+        .env_remove("FLOW_ID")
         .envs(env.iter().map(|(key, value)| (key, value)))
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)

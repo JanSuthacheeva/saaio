@@ -8,11 +8,12 @@ pub const DESCRIPTION: &str =
 /// List views cut long texts to this many chars, with a hint; --full lifts it.
 pub const LIST_TEXT_LIMIT: usize = 80;
 
-/// What a successful command prints: TOON for agents or JSON for programs.
+/// What a successful command prints: TOON for agents, JSON for programs, a line for people (flow ui).
 #[derive(Debug, PartialEq)]
 pub enum Document {
     Toon(String),
     Json(String),
+    Text(String),
 }
 
 /// An error an agent can act on: a message and next steps, printed as TOON on stdout.
@@ -26,7 +27,7 @@ pub struct Failure {
 impl Document {
     pub fn text(&self) -> &str {
         match self {
-            Document::Toon(text) | Document::Json(text) => text,
+            Document::Toon(text) | Document::Json(text) | Document::Text(text) => text,
         }
     }
 }

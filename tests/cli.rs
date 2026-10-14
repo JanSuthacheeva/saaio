@@ -683,3 +683,54 @@ fn remove_says_when_there_is_no_such_flow() {
         stdout(&output)
     );
 }
+
+#[test]
+fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
+    let home = TempDir::new().unwrap();
+    let config = home.path().join("config.toml");
+    fs::write(
+        &config,
+        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
+    )
+    .unwrap();
+    let socket = home.path().join("server.sock");
+
+    let none = flow(home.path(), &["ui", "--stop"]);
+    assert!(none.status.success());
+    assert_eq!(stdout(&none).trim(), "no flow server runs");
+
+    let mut server = Command::new(env!("CARGO_BIN_EXE_flow"))
+        .arg("server")
+        .env("FLOW_HOME", home.path())
+        .env("FLOW_CONFIG", &config)
+        .spawn()
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !socket.exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the server never listened"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+
+    let stopped = flow(home.path(), &["ui", "--stop"]);
+
+    assert_eq!(
+        stdout(&stopped).trim(),
+        "stopped the flow server and every session in it"
+    );
+    assert!(server.wait().unwrap().success());
+    assert!(!socket.exists());
+    assert!(home.path().join("master.json").exists());
+}
+
+#[test]
+fn the_server_command_stays_out_of_the_help() {
+    let home = TempDir::new().unwrap();
+
+    let help = stdout(&flow(home.path(), &["--help"]));
+
+    assert!(help.contains("ui"), "{help}");
+    assert!(!help.contains("server"), "{help}");
+}

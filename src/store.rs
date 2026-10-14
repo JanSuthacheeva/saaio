@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::event::Event;
 
+#[derive(Debug, Clone)]
 pub struct Store {
     root: PathBuf, // holds flows/<id>.jsonl and flows/<id>.alive
 }
