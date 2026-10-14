@@ -1,5 +1,9 @@
+#[allow(dead_code)]
+mod config;
 mod event;
 mod fold;
+#[allow(dead_code)]
+mod launch;
 mod output;
 mod store;
 mod view;
