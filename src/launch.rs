@@ -93,13 +93,6 @@ pub fn worktree_remove_argv(repo: &Path, workspace: &Workspace, force: bool) -> 
     argv
 }
 
-/// tmux kill-window -t <window>
-pub fn kill_window_argv(window: &str) -> Vec<String> {
-    ["tmux", "kill-window", "-t", window]
-        .map(String::from)
-        .to_vec()
-}
-
 /// The agent's command with {id}, {name}, {prompt}, {request} filled in ({prompt} itself filled first);
 /// an argument that fills to nothing is dropped, so an agent without a prompt gets no empty one.
 pub fn agent_argv(agent: &Agent, id: &str, name: &str, request: &str) -> Vec<String> {
@@ -347,10 +340,6 @@ mod tests {
                 "--force",
                 "/repo/.flow/worktrees/shop-217"
             ])
-        );
-        assert_eq!(
-            kill_window_argv("@14"),
-            strings(&["tmux", "kill-window", "-t", "@14"])
         );
     }
 

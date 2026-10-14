@@ -6,7 +6,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
-use crate::launch::{WORKTREES_DIR, kill_window_argv, worktree_add_argv, worktree_remove_argv};
+use crate::launch::{WORKTREES_DIR, worktree_add_argv, worktree_remove_argv};
 use crate::view::Workspace;
 
 /// The repo's own hooks: .flow/setup after the worktree exists, .flow/teardown before it goes.
@@ -64,11 +64,6 @@ pub fn run_hook(
         bail!("{}", last_line(&output.stderr, &output.stdout));
     }
     Ok(true)
-}
-
-/// Closes a worker's tmux window; Ok(false) when it is already gone.
-pub fn close_window(window: &str) -> Result<bool> {
-    Ok(run(&kill_window_argv(window)).is_ok())
 }
 
 /// Removes a worktree; without force Ok(false) when git refuses (uncommitted work).

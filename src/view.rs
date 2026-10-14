@@ -36,7 +36,8 @@ pub struct FlowView {
     pub workspace: Option<Workspace>,
 }
 
-/// Where a started flow's worker runs: its worktree, branch, port slot, tmux window and agent.
+/// Where a started flow's worker runs: its worktree, branch, port slot, window (flow-ui once
+/// flow ui opened it; a tmux window id from before) and agent.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
