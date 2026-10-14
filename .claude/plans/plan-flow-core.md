@@ -163,6 +163,8 @@ impl Event {
 impl Phase {
     /// design, implement, review, merge-request - in flow order.
     pub const ALL: [Phase; 4];
+    /// The name the command line and the logs use (added while building the fold).
+    pub fn name(self) -> &'static str;
 }
 ```
 
@@ -422,7 +424,7 @@ duration runs until `now`. Repeated reports fold to the same view.
 ### Fold
 
 - [x] Add view.rs types, `Board::to_json`, `FlowView::needs_you` and `is_finished`, with a test for the JSON shape (camelCase, version first)
-- [ ] Add `fold::fold` with a unit test per fold rule, idempotent repeats and phase durations
+- [x] Add `fold::fold` with a unit test per fold rule, idempotent repeats and phase durations
 - [ ] Add not-responding, `fold::board` ordering and `fold::resolve`, with unit tests
 
 ### Output

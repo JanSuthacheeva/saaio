@@ -1,6 +1,8 @@
 #[allow(dead_code)]
 mod event;
 #[allow(dead_code)]
+mod fold;
+#[allow(dead_code)]
 mod store;
 #[allow(dead_code)]
 mod view;

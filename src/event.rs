@@ -134,6 +134,16 @@ impl Phase {
         Phase::Review,
         Phase::MergeRequest,
     ];
+
+    /// The name the command line and the logs use: design, implement, review, merge-request.
+    pub fn name(self) -> &'static str {
+        match self {
+            Phase::Design => "design",
+            Phase::Implement => "implement",
+            Phase::Review => "review",
+            Phase::MergeRequest => "merge-request",
+        }
+    }
 }
 
 #[cfg(test)]
