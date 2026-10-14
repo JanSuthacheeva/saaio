@@ -103,7 +103,8 @@ impl Client {
     /// A second handle on the same socket, so one thread reads while another writes.
     pub fn try_clone(&self) -> Result<Client>;
 }
-/// <store root>/server.sock
+/// <store root>/server.sock; when that is too long for a socket (macOS: 104 bytes),
+/// /tmp/flow-<uid>/<fnv1a of the root>.sock in a 0700 directory. The log sits beside it (.log).
 pub fn socket_path(store: &Store) -> PathBuf;
 /// Starts `<exe> server` in its own session with output to server.log unless one listens; waits up to 2 s for the socket.
 pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Result<()>;
@@ -483,8 +484,8 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [x] Add config Agent.resume (builtin claude `--resume {id}`) and server/master.rs MasterRecord (load_or_create, spec) with tests
 - [x] Add server/mod.rs run and Server (handle, flush; master pane only, Hello/Welcome/Refused, Input, Resize, Focus, StopServer, stale socket) with an integration test over a real socket and a `cat` master
 - [x] Add client.rs (Client::connect, send, recv, try_clone, socket_path, ensure_server) with tests against a test server
-- [ ] Add ui outer.rs, input.rs Router, screen.rs Screen, layout.rs (Solo), app.rs App (pane + bottom bar) and ui::run, with Router, layout and App tests
-- [ ] Add `flow ui [--stop]` and hidden `flow server` to main.rs
+- [x] Add ui outer.rs, input.rs Router, screen.rs Screen, layout.rs (Solo), app.rs App (pane + bottom bar) and ui::run, with Router, layout and App tests
+- [x] Add `flow ui [--stop]` and hidden `flow server` to main.rs
 - [ ] End-to-end check of milestone 1: real claude master in flow ui, type and scroll, detach and reattach, kill the ui and see claude still running
 
 ### Milestone 2: workers and the sidebar

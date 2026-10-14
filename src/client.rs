@@ -1,5 +1,6 @@
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -80,9 +81,32 @@ impl Client {
     }
 }
 
-/// <store root>/server.sock
+/// Unix sockets paths must be shorter than this (104 bytes on macOS, 108 on Linux).
+const SOCKET_PATH_LIMIT: usize = 100;
+
+/// <store root>/server.sock; when that is too long for a socket, /tmp/flow-<uid>/<hash of the root>.sock.
 pub fn socket_path(store: &Store) -> PathBuf {
-    store.root().join("server.sock")
+    socket_path_for(store.root(), Path::new("/tmp"))
+}
+
+fn socket_path_for(root: &Path, tmp: &Path) -> PathBuf {
+    let near = root.join("server.sock");
+    if near.as_os_str().len() < SOCKET_PATH_LIMIT {
+        return near;
+    }
+    // SAFETY: getuid cannot fail and touches no memory.
+    let uid = unsafe { libc::getuid() };
+    tmp.join(format!("flow-{uid}")).join(format!(
+        "{:016x}.sock",
+        fnv1a(root.as_os_str().as_encoded_bytes())
+    ))
+}
+
+/// A hash that stays the same across builds, so every flow finds the same socket.
+fn fnv1a(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf29ce484222325, |hash, byte| {
+        (hash ^ *byte as u64).wrapping_mul(0x100000001b3)
+    })
 }
 
 /// Starts `<exe> server` in its own session with output to server.log unless one listens;
@@ -91,10 +115,12 @@ pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Res
     if UnixStream::connect(socket).is_ok() {
         return Ok(());
     }
-    let log_path = socket.with_file_name("server.log");
-    if let Some(dir) = log_path.parent() {
+    let log_path = socket.with_extension("log");
+    if let Some(dir) = socket.parent() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("could not create {}", dir.display()))?;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+            .with_context(|| format!("could not restrict {}", dir.display()))?;
     }
     let log = OpenOptions::new()
         .create(true)
@@ -207,6 +233,35 @@ mod tests {
         let error = ensure_server(&silent, Path::new("/usr/bin/true"), &[]).unwrap_err();
         assert!(error.to_string().contains("server.log"), "{error}");
         assert!(dir.path().join("other/server.log").exists());
+        let mode = std::fs::metadata(dir.path().join("other"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o700);
+    }
+
+    #[test]
+    fn moves_a_socket_whose_path_is_too_long_into_a_private_tmp_directory() {
+        let long = PathBuf::from(format!("/state/{}", "deep/".repeat(30)));
+
+        let socket = socket_path_for(&long, Path::new("/tmp"));
+
+        assert!(socket.as_os_str().len() < SOCKET_PATH_LIMIT);
+        assert!(socket.starts_with("/tmp"), "{}", socket.display());
+        assert!(
+            socket
+                .parent()
+                .unwrap()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("flow-")
+        );
+        assert_eq!(socket, socket_path_for(&long, Path::new("/tmp")));
+        assert_ne!(
+            socket,
+            socket_path_for(&long.join("other"), Path::new("/tmp"))
+        );
     }
 
     #[test]
