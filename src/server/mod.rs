@@ -218,7 +218,11 @@ impl Server {
                 self.send_full_frame();
             }
             ClientMsg::CloseFlow(id) => self.close_flow(conn, id),
-            ClientMsg::Reopen(PaneKey::Flow(_)) => {}
+            ClientMsg::Reopen(PaneKey::Flow(id)) => {
+                self.reopen_worker(&id);
+                self.send_panes();
+                self.send_full_frame();
+            }
             ClientMsg::StopServer => return false,
         }
         true
@@ -342,6 +346,36 @@ impl Server {
         };
         if let Err(error) = self.store.append(&id, &LogEvent::new(now, event)) {
             eprintln!("{error:#}");
+        }
+    }
+
+    /// Resumes a worker whose pane exited or never opened, also one whose flow ended.
+    fn reopen_worker(&mut self, id: &str) {
+        let key = PaneKey::Flow(id.to_string());
+        let running = self
+            .host
+            .panes()
+            .iter()
+            .any(|pane| pane.key == key && pane.status == PaneStatus::Running);
+        let Some(flow) = self.flow(id).cloned() else {
+            return;
+        };
+        let Some(space) = &flow.workspace else {
+            return;
+        };
+        if running {
+            return;
+        }
+        let Some((name, agent)) = self.config.agent(Some(&space.agent)) else {
+            self.host
+                .fail(key, format!("no agent named {}", space.agent));
+            return;
+        };
+        match launch::worker_spec(&flow, agent, &self.env) {
+            Some(spec) => self.open_worker(spec),
+            None => self
+                .host
+                .fail(key, format!("agent {name} cannot resume a session")),
         }
     }
 
@@ -896,6 +930,66 @@ mod tests {
             crate::client::close_flow(&paths.socket, &csv, Duration::from_secs(1)).unwrap(),
             crate::client::Closing::NoServer
         );
+    }
+
+    /// Reads messages until the UI's pane list shows `want` for the flow.
+    fn wait_for(
+        ui: &mut UnixStream,
+        panes: &mut Vec<crate::proto::PaneInfo>,
+        id: &str,
+        want: Option<PaneStatus>,
+    ) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while status_of(panes, id) != want {
+            assert!(
+                Instant::now() < deadline,
+                "{id} never became {want:?}: {panes:?}"
+            );
+            if let ServerMsg::Panes(update) = recv(ui) {
+                *panes = update;
+            }
+        }
+    }
+
+    #[test]
+    fn reopens_an_exited_worker_and_one_whose_flow_ended() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let csv = started_flow(&store, dir.path(), "csv", "claude");
+        let old = started_flow(&store, dir.path(), "old", "claude");
+        store
+            .append(&old, &LogEvent::new(2, EventKind::Ended))
+            .unwrap();
+        let (paths, handle) = start(dir.path());
+        let mut ui = connect(
+            &paths.socket,
+            Role::Attach {
+                size: Size { cols: 30, rows: 4 },
+            },
+        );
+        let mut panes = Vec::new();
+        wait_for(&mut ui, &mut panes, &csv, Some(PaneStatus::Running));
+        assert_eq!(
+            status_of(&panes, &old),
+            None,
+            "an ended flow does not open by itself"
+        );
+
+        proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(csv.clone()))).unwrap();
+        proto::write_msg(&mut ui, &ClientMsg::Input(b"\x04".to_vec())).unwrap();
+        wait_for(
+            &mut ui,
+            &mut panes,
+            &csv,
+            Some(PaneStatus::Exited { code: Some(0) }),
+        );
+        proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(csv.clone()))).unwrap();
+        wait_for(&mut ui, &mut panes, &csv, Some(PaneStatus::Running));
+        proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(old.clone()))).unwrap();
+        wait_for(&mut ui, &mut panes, &old, Some(PaneStatus::Running));
+
+        proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+        handle.join().unwrap().unwrap();
     }
 
     #[test]

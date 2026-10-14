@@ -383,8 +383,10 @@ fn draw_no_session(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
     let text = vec![
         Line::styled("flow ui has no session for this flow.", theme.ui.text),
         Line::from(vec![
+            Span::styled("C-space r", theme.ui.key),
+            Span::styled(" resumes it   ", theme.ui.muted),
             Span::styled("C-space 0", theme.ui.key),
-            Span::styled(" goes back to the master", theme.ui.muted),
+            Span::styled(" back to the master", theme.ui.muted),
         ]),
     ];
     draw_dialog(frame, pane, " not open ", theme.ui.rule, text);
