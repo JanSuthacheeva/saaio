@@ -36,10 +36,14 @@ fn new_flow(home: &Path, name: &str) -> String {
         ],
     );
     assert!(output.status.success(), "{}", stdout(&output));
-    stdout(&output)
-        .lines()
+    id_in(&stdout(&output))
+}
+
+/// The id a document prints; TOON quotes one that starts like a number (02e1...).
+fn id_in(text: &str) -> String {
+    text.lines()
         .find_map(|line| line.strip_prefix("id: "))
-        .expect("new prints the id")
+        .expect("the document prints an id")
         .trim_matches('"')
         .to_string()
 }
@@ -164,7 +168,7 @@ fn new_creates_a_flow_once_and_returns_it_again_while_unfinished() {
     );
 
     let text = stdout(&again);
-    assert!(text.contains(&format!("id: {id}")), "{text}");
+    assert_eq!(id_in(&text), id, "{text}");
     assert!(text.contains("existing: true"), "{text}");
     assert!(stdout(&flow(home.path(), &["status"])).contains("count: 1"));
 }
