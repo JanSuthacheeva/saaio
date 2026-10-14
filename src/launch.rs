@@ -58,6 +58,7 @@ pub fn worktree_add_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
 }
 
 /// git -C <repo> worktree remove <path> (no --force: a dirty worktree is kept)
+#[allow(dead_code)] // used by flow clear (next task)
 pub fn worktree_remove_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
     let repo = repo.display().to_string();
     ["git", "-C", &repo, "worktree", "remove", &workspace.path]

@@ -99,8 +99,12 @@ New dependency: `toml`.
 /// Start a worker: a flow, a worktree, the setup hook and an agent in a tmux window
 Start { request: String, #[arg(long)] name: Option<String>, #[arg(long, value_enum, default_value = "guided")] mode: Mode, #[arg(long)] agent: Option<String> },
 
+/// What flow start was asked for (bundled while building, instead of four parameters).
+struct Launch { request: String, name: Option<String>, mode: Mode, agent: Option<String> }
+
 fn start(store: &Store, config: &Config, cwd: &Path, in_tmux: bool, flow_home: Option<PathBuf>,
-         request: String, name: Option<String>, mode: Mode, agent: Option<String>, now: u64) -> Result<Document, Failure>;
+         launch: Launch, now: u64) -> Result<Document, Failure>;
+fn append_workspace(store: &Store, id: &str, space: &view::Workspace, now: u64) -> Result<(), Failure>;
 fn clear(store: &Store, now: u64) -> Result<Document, Failure>;   // + teardown and worktree removal
 ```
 
@@ -171,7 +175,7 @@ pub fn cleared(names: &[String], kept: &[(String, String)]) -> Document;
 - [x] Add `launch.rs` (`flow_name`, `free_slot`, `workspace_for`, `worktree_add_argv`, `worktree_remove_argv`, `agent_argv`, `window_argv`, `hook_env`) with unit tests
 - [x] Add `config.rs` with the `toml` crate (`Config::load`, `agent`, `builtin_agents`) with unit tests
 - [x] Add `workspace.rs` (`repo_root`, `create_worktree`, `run_hook`, `open_window`, `remove_worktree`) with tests on a temp git repo
-- [ ] Add `flow start` (`start`, `output::started`) with tests/cli.rs cases using a fake tmux: start, outside tmux, outside a repo, failing hook, full slots
+- [x] Add `flow start` (`start`, `output::started`) with tests/cli.rs cases using a fake tmux: start, outside tmux, outside a repo, failing hook, full slots
 - [ ] Extend `flow clear` with teardown and worktree removal (`output::cleared` with kept) with tests/cli.rs cases for clean and dirty worktrees
 - [ ] Update README, CLAUDE.md and the handover: `flow start`, hooks, slots, a Docker hook example
 - [ ] End-to-end: in a real repo inside tmux, `flow start` a tiny request, watch the worker run /ship-feature with the board in the master, then finish or end it and `flow clear`

@@ -273,3 +273,251 @@ fn clear_forgets_finished_flows_only() {
         "{list}"
     );
 }
+
+/// A temp git repo with one commit, a fake tmux on PATH that records its argv and prints @14,
+/// and a state folder.
+struct Lab {
+    _dir: TempDir,
+    repo: std::path::PathBuf,
+    home: std::path::PathBuf,
+    bin: std::path::PathBuf,
+}
+
+impl Lab {
+    fn new() -> Lab {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let repo = root.join("repo");
+        let home = root.join("state");
+        let bin = root.join("bin");
+        fs::create_dir_all(&repo).unwrap();
+        fs::create_dir_all(&bin).unwrap();
+        let git = |args: &[&str]| {
+            assert!(
+                Command::new("git")
+                    .arg("-C")
+                    .arg(&repo)
+                    .args(args)
+                    .status()
+                    .unwrap()
+                    .success()
+            )
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&[
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ]);
+        let tmux = bin.join("tmux");
+        fs::write(
+            &tmux,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}/tmux-args\necho @14\n",
+                root.display()
+            ),
+        )
+        .unwrap();
+        set_executable(&tmux);
+        Lab {
+            _dir: dir,
+            repo,
+            home,
+            bin,
+        }
+    }
+
+    fn start(&self, args: &[&str], in_tmux: bool) -> Output {
+        let path = format!(
+            "{}:{}",
+            self.bin.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        let mut command = Command::new(env!("CARGO_BIN_EXE_flow"));
+        command
+            .arg("start")
+            .args(args)
+            .current_dir(&self.repo)
+            .env("FLOW_HOME", &self.home)
+            .env("FLOW_CONFIG", self.home.join("no-config.toml"))
+            .env("PATH", path)
+            .env_remove("FLOW_ID");
+        if in_tmux {
+            command.env("TMUX", "/tmp/tmux-test,1,0");
+        } else {
+            command.env_remove("TMUX");
+        }
+        command.output().unwrap()
+    }
+
+    fn tmux_args(&self) -> Vec<String> {
+        fs::read_to_string(self.bin.parent().unwrap().join("tmux-args"))
+            .unwrap_or_default()
+            .lines()
+            .map(String::from)
+            .collect()
+    }
+
+    fn hook(&self, name: &str, script: &str) {
+        let dir = self.repo.join(".flow");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(name), script).unwrap();
+        set_executable(&dir.join(name));
+    }
+}
+
+fn set_executable(file: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(file, fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+#[test]
+fn start_makes_a_worktree_runs_setup_and_opens_the_worker_window() {
+    let lab = Lab::new();
+    lab.hook("setup", "#!/bin/sh\necho \"slot $FLOW_SLOT\" > setup-ran\n");
+
+    let output = lab.start(&["SHOP-217 add CSV export"], true);
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    let worktree = lab.repo.join(".flow/worktrees/shop-217");
+    assert!(text.starts_with("flow: shop-217\n"), "{text}");
+    assert!(
+        text.contains(&format!("worktree: {}", worktree.display())),
+        "{text}"
+    );
+    assert!(
+        text.contains("branch: flow/shop-217\nslot: 1\nsetup: ran\nagent: claude\nwindow: @14"),
+        "{text}"
+    );
+    assert_eq!(
+        fs::read_to_string(worktree.join("setup-ran"))
+            .unwrap()
+            .trim(),
+        "slot 1"
+    );
+
+    let args = lab.tmux_args();
+    assert_eq!(
+        &args[..8],
+        [
+            "new-window",
+            "-d",
+            "-P",
+            "-F",
+            "#{window_id}",
+            "-n",
+            "shop-217",
+            "-c"
+        ]
+    );
+    assert!(
+        args.iter().any(|arg| arg.starts_with("FLOW_ID=")),
+        "{args:?}"
+    );
+    assert!(
+        args.iter()
+            .any(|arg| *arg == format!("FLOW_HOME={}", lab.home.display())),
+        "{args:?}"
+    );
+    let agent = &args[args.iter().position(|arg| arg == "--").unwrap() + 1..];
+    assert_eq!(agent[0], "claude");
+    assert_eq!(
+        agent.last().unwrap(),
+        "/ship-feature SHOP-217 add CSV export"
+    );
+
+    let board: serde_json::Value =
+        serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+    assert_eq!(board["flows"][0]["workspace"]["window"], "@14");
+    assert_eq!(board["flows"][0]["workspace"]["slot"], 1);
+}
+
+#[test]
+fn start_refuses_outside_tmux_and_outside_a_repository() {
+    let lab = Lab::new();
+
+    let outside_tmux = lab.start(&["x"], false);
+    assert_eq!(outside_tmux.status.code(), Some(1));
+    assert!(
+        stdout(&outside_tmux).contains("run it inside tmux"),
+        "{}",
+        stdout(&outside_tmux)
+    );
+
+    let elsewhere = TempDir::new().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_flow"))
+        .args(["start", "x"])
+        .current_dir(elsewhere.path())
+        .env("FLOW_HOME", &lab.home)
+        .env("FLOW_CONFIG", lab.home.join("no-config.toml"))
+        .env("TMUX", "/tmp/tmux-test,1,0")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stdout(&output).contains("needs a git repository"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn a_failing_setup_marks_the_flow_blocked_but_still_opens_the_window() {
+    let lab = Lab::new();
+    lab.hook(
+        "setup",
+        "#!/bin/sh\necho 'port 8001 is taken' >&2\nexit 1\n",
+    );
+
+    let output = lab.start(&["SHOP-218 fix totals"], true);
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(
+        text.contains("setup: \"failed: port 8001 is taken\""),
+        "{text}"
+    );
+    assert!(!lab.tmux_args().is_empty());
+    let board: serde_json::Value =
+        serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+    assert_eq!(board["flows"][0]["state"], "blocked");
+    assert_eq!(
+        board["flows"][0]["blocker"],
+        "setup failed: port 8001 is taken"
+    );
+}
+
+#[test]
+fn start_says_when_every_slot_is_taken() {
+    let lab = Lab::new();
+    for slot in 1..=9 {
+        seed(
+            &lab.home,
+            &format!("f{slot}"),
+            &[
+                &format!(
+                    r#"{{"v":1,"at":1,"kind":"started","name":"f{slot}","request":"x","mode":"guided"}}"#
+                ),
+                &format!(
+                    r#"{{"v":1,"at":2,"kind":"workspace","path":"/p{slot}","branch":"b","slot":{slot},"window":null,"agent":"claude"}}"#
+                ),
+            ],
+        );
+    }
+
+    let output = lab.start(&["one more"], true);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stdout(&output).contains("all 9 slots are in use"),
+        "{}",
+        stdout(&output)
+    );
+}

@@ -305,6 +305,41 @@ fn name_of<T: Serialize>(value: &T) -> String {
     }
 }
 
+/// flow, id, worktree, branch, slot, setup (ran / none / failed: ...), agent, window, help.
+pub fn started(flow: &FlowView, setup: &str) -> Document {
+    #[derive(Serialize)]
+    struct Started<'a> {
+        flow: &'a str,
+        id: &'a str,
+        worktree: &'a str,
+        branch: &'a str,
+        slot: u8,
+        setup: &'a str,
+        agent: &'a str,
+        window: &'a str,
+        help: Vec<String>,
+    }
+    let workspace = flow
+        .workspace
+        .as_ref()
+        .expect("a started flow has a workspace");
+    let window = workspace.window.as_deref().unwrap_or("");
+    Document::Toon(toon(&Started {
+        flow: &flow.name,
+        id: &flow.id,
+        worktree: &workspace.path,
+        branch: &workspace.branch,
+        slot: workspace.slot,
+        setup,
+        agent: &workspace.agent,
+        window,
+        help: vec![
+            format!("Run `tmux select-window -t {window}` to watch it"),
+            "Run `flow` for all flows".to_string(),
+        ],
+    }))
+}
+
 /// flow, id, existing (true when `new` found the unfinished flow of that name), how to use it.
 pub fn created(flow: &FlowView, existing: bool) -> Document {
     #[derive(Serialize)]

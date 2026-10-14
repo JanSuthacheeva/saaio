@@ -1,27 +1,26 @@
-#[allow(dead_code)]
 mod config;
 mod event;
 mod fold;
-#[allow(dead_code)]
 mod launch;
 mod output;
 mod store;
 mod view;
-#[allow(dead_code)]
 mod workspace;
 
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
 
+use config::Config;
 use event::{Event, EventKind, Mode, Phase};
 use output::{Document, Failure};
 use store::Store;
 use view::FlowView;
+use workspace::Hook;
 
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 #[derive(Debug, Parser)]
@@ -60,6 +59,19 @@ enum Command {
         /// Do not truncate long texts
         #[arg(long)]
         full: bool,
+    },
+    /// Start a worker: a flow, a worktree, the setup hook and an agent in a tmux window
+    Start {
+        /// What to build, e.g. "SHOP-217 add CSV export"
+        request: String,
+        /// Flow name [default: from the ticket key or the first words]
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long, value_enum, default_value = "guided")]
+        mode: Mode,
+        /// Agent from the config [default: the config's agent, claude]
+        #[arg(long)]
+        agent: Option<String>,
     },
     /// Forget flows that are done or ended
     Clear,
@@ -161,6 +173,35 @@ fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure> {
         }) => new_flow(store, name, request, mode, now),
         Some(Command::Report { flow, event }) => report(store, flow, event, now),
         Some(Command::Status { flow, json, full }) => status(store, flow, json, full, now),
+        Some(Command::Start {
+            request,
+            name,
+            mode,
+            agent,
+        }) => {
+            let config = Config::load(
+                env_path("FLOW_CONFIG"),
+                env_path("XDG_CONFIG_HOME"),
+                env_path("HOME"),
+            )
+            .map_err(Failure::from_io)?;
+            let cwd = env::current_dir().map_err(|error| Failure::from_io(error.into()))?;
+            let in_tmux = env::var_os("TMUX").is_some_and(|value| !value.is_empty());
+            start(
+                store,
+                &config,
+                &cwd,
+                in_tmux,
+                env_path("FLOW_HOME"),
+                Launch {
+                    request,
+                    name,
+                    mode,
+                    agent,
+                },
+                now,
+            )
+        }
         Some(Command::Clear) => clear(store, now),
     }
 }
@@ -196,6 +237,131 @@ fn new_flow(
     let id = store.create(&first).map_err(Failure::from_io)?;
     let created = fold::fold(&id, &[first], None, now).expect("a started flow folds");
     Ok(output::created(&created, false))
+}
+
+/// What `flow start` was asked for.
+struct Launch {
+    request: String,
+    name: Option<String>,
+    mode: Mode,
+    agent: Option<String>,
+}
+
+fn start(
+    store: &Store,
+    config: &Config,
+    cwd: &Path,
+    in_tmux: bool,
+    flow_home: Option<PathBuf>,
+    launch: Launch,
+    now: u64,
+) -> Result<Document, Failure> {
+    let Some((agent_name, agent)) = config.agent(launch.agent.as_deref()) else {
+        let known: Vec<&str> = config.agents.keys().map(String::as_str).collect();
+        return Err(Failure::error(
+            format!(
+                "no agent named {}",
+                launch.agent.as_deref().unwrap_or(&config.agent)
+            ),
+            vec![format!("Agents: {}", known.join(", "))],
+        ));
+    };
+    if !in_tmux {
+        return Err(Failure::error(
+            "flow start opens the worker in a tmux window - run it inside tmux",
+            vec!["Start tmux, then run `flow start <request>` again".to_string()],
+        ));
+    }
+    let repo = workspace::repo_root(cwd).map_err(|_| {
+        Failure::error(
+            "flow start needs a git repository",
+            vec!["Run it inside the repository the flow works on".to_string()],
+        )
+    })?;
+    let (flows, _) = views(store, now);
+    let taken: Vec<String> = flows
+        .iter()
+        .filter(|flow| !flow.is_finished())
+        .map(|flow| flow.name.clone())
+        .collect();
+    let name = launch::flow_name(launch.name.as_deref().unwrap_or(&launch.request), &taken);
+    let slot = launch::free_slot(&flows).ok_or_else(|| {
+        Failure::error(
+            format!("all {} slots are in use", launch::MAX_SLOTS),
+            vec!["Run `flow clear` after finished flows".to_string()],
+        )
+    })?;
+    let mut space = launch::workspace_for(&repo, &name, slot, agent_name);
+    workspace::create_worktree(&repo, &space).map_err(Failure::from_io)?;
+
+    let first = Event::new(
+        now,
+        EventKind::Started {
+            name: name.clone(),
+            request: launch.request.clone(),
+            mode: launch.mode,
+        },
+    );
+    let id = store.create(&first).map_err(Failure::from_io)?;
+    append_workspace(store, &id, &space, now)?;
+
+    let setup = match workspace::run_hook(
+        &repo,
+        Hook::Setup,
+        &space,
+        &launch::hook_env(&id, &name, &repo, &space),
+    ) {
+        Ok(true) => "ran".to_string(),
+        Ok(false) => "none".to_string(),
+        Err(error) => {
+            let reason = format!("setup failed: {error}");
+            store
+                .append(&id, &Event::new(now, EventKind::Blocked { reason }))
+                .map_err(Failure::from_io)?;
+            format!("failed: {error}")
+        }
+    };
+
+    let mut env = vec![("FLOW_ID".to_string(), id.clone())];
+    if let Some(home) = flow_home {
+        env.push(("FLOW_HOME".to_string(), home.display().to_string()));
+    }
+    let agent_argv = launch::agent_argv(agent, &id, &name, &launch.request);
+    match workspace::open_window(&launch::window_argv(&space, &name, &env, &agent_argv)) {
+        Ok(window) => space.window = Some(window),
+        Err(error) => {
+            store
+                .append(&id, &Event::new(now, EventKind::Ended))
+                .map_err(Failure::from_io)?;
+            return Err(Failure::error(
+                format!("could not open the worker window: {error}"),
+                vec![format!("The worktree stays at {}", space.path)],
+            ));
+        }
+    }
+    append_workspace(store, &id, &space, now)?;
+
+    let events = store.events(&id).map_err(Failure::from_io)?;
+    let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");
+    Ok(output::started(&flow, &setup))
+}
+
+fn append_workspace(
+    store: &Store,
+    id: &str,
+    space: &view::Workspace,
+    now: u64,
+) -> Result<(), Failure> {
+    let kind = EventKind::Workspace {
+        path: space.path.clone(),
+        branch: space.branch.clone(),
+        slot: space.slot,
+        window: space.window.clone(),
+        agent: space.agent.clone(),
+    };
+    store
+        .append(id, &Event::new(now, kind))
+        .map_err(Failure::from_io)
 }
 
 fn report(
