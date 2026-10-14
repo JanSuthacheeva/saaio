@@ -90,16 +90,22 @@ impl App {
 
     pub fn on_server(&mut self, message: ServerMsg) -> Vec<Effect> {
         match message {
-            ServerMsg::Welcome { .. } | ServerMsg::Closed(_) => vec![],
+            ServerMsg::Welcome { .. } | ServerMsg::Closed(_) | ServerMsg::NotOpen(_) => vec![],
             ServerMsg::Board(board) => {
                 let before = self.areas().pane;
                 self.now = self.now.max(board.now);
                 self.board = Some(board);
+                let mut effects = Vec::new();
                 let after = self.areas();
-                if after.pane == before {
-                    return vec![];
+                if after.pane != before {
+                    effects.push(Effect::Send(ClientMsg::Resize(after.pane_size())));
                 }
-                vec![Effect::Send(ClientMsg::Resize(after.pane_size()))]
+                if let PaneKey::Flow(id) = &self.focus
+                    && !self.workers().iter().any(|flow| &flow.id == id)
+                {
+                    effects.extend(self.focus(PaneKey::Master));
+                }
+                effects
             }
             ServerMsg::Refused { reason } => vec![Effect::Quit(reason)],
             ServerMsg::Panes(panes) => {
@@ -876,6 +882,21 @@ mod tests {
             side(&terminal, 12).trim_end(),
             "",
             "no note that it started"
+        );
+    }
+
+    #[test]
+    fn goes_back_to_the_master_when_the_focused_flow_is_removed() {
+        let mut app = with_fleet();
+        app.on_input(Routed::Command(Command::Focus(1)));
+        let mut board = fleet();
+        board.flows.retain(|flow| flow.name != "shop-221");
+
+        let effects = app.on_server(ServerMsg::Board(board));
+
+        assert_eq!(
+            effects,
+            vec![Effect::Send(ClientMsg::Focus(PaneKey::Master))]
         );
     }
 }

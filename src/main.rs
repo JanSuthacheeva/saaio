@@ -23,7 +23,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
 
-use client::Client;
+use client::{Client, Closing};
 use config::Config;
 use event::{Event, EventKind, Mode, Phase};
 use output::{Document, Failure, Opening};
@@ -32,6 +32,9 @@ use store::Store;
 use ui::theme::Theme;
 use view::FlowView;
 use workspace::Hook;
+
+/// How long `flow remove` and `flow clear` wait for a flow's session to end (SIGKILL comes after 3 s).
+const CLOSE_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 #[derive(Debug, Parser)]
@@ -445,14 +448,10 @@ fn remove(store: &Store, name: &str, force: bool, now: u64) -> Result<Document, 
     if !force {
         refuse_uncommitted_work(flow)?;
     }
-    let window = match flow
-        .workspace
-        .as_ref()
-        .and_then(|space| space.window.as_deref())
-    {
-        None => "none",
-        Some(window) if workspace::close_window(window).unwrap_or(false) => "closed",
-        Some(_) => "gone",
+    let pane = match close_pane(store, flow)? {
+        Closing::Closed => "closed",
+        Closing::NoServer | Closing::NoPane => "none",
+        Closing::TimedOut => "timed out",
     };
     let worktree = match retire_worktree(flow, force) {
         Retired::None => "none".to_string(),
@@ -462,7 +461,12 @@ fn remove(store: &Store, name: &str, force: bool, now: u64) -> Result<Document, 
     store.remove(&flow.id).map_err(|error| {
         Failure::from_io(error.context(format!("could not remove {}", flow.name)))
     })?;
-    Ok(output::removed(&flow.name, window, &worktree))
+    Ok(output::removed(&flow.name, pane, &worktree))
+}
+
+/// Ends the flow's session in flow ui before its worktree goes.
+fn close_pane(store: &Store, flow: &FlowView) -> Result<Closing, Failure> {
+    client::close_flow(&client::socket_path(store), &flow.id, CLOSE_WAIT).map_err(Failure::from_io)
 }
 
 /// Fails before anything is touched when the flow's worktree holds uncommitted work.
@@ -494,6 +498,7 @@ fn clear(store: &Store, now: u64) -> Result<Document, Failure> {
     let mut names = Vec::new();
     let mut kept = Vec::new();
     for flow in flows.iter().filter(|flow| flow.is_finished()) {
+        close_pane(store, flow)?;
         if let Retired::Kept(path) = retire_worktree(flow, false) {
             kept.push((flow.name.clone(), path));
         }

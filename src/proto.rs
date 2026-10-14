@@ -56,9 +56,12 @@ pub enum ServerMsg {
     Board(Board),
     Panes(Vec<PaneInfo>),
     Frame(Frame),
+    /// The flow's pane exited after CloseFlow.
     Closed(String),
     /// Another flow ui attached.
     Detached,
+    /// CloseFlow found no pane for the flow.
+    NotOpen(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -283,6 +286,7 @@ mod tests {
             }),
             ServerMsg::Closed("a".into()),
             ServerMsg::Detached,
+            ServerMsg::NotOpen("b".into()),
         ]
     }
 

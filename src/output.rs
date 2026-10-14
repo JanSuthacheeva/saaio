@@ -421,11 +421,12 @@ pub fn skipped() -> Document {
 }
 
 /// removed: name, window (closed / gone / none), worktree (removed / kept: path / none), help.
-pub fn removed(name: &str, window: &str, worktree: &str) -> Document {
+/// removed, pane (closed / none / timed out), worktree, help.
+pub fn removed(name: &str, pane: &str, worktree: &str) -> Document {
     #[derive(Serialize)]
     struct Removed<'a> {
         removed: &'a str,
-        window: &'a str,
+        pane: &'a str,
         worktree: &'a str,
         help: Vec<String>,
     }
@@ -438,7 +439,7 @@ pub fn removed(name: &str, window: &str, worktree: &str) -> Document {
     help.push("Run `flow` to see what is left".to_string());
     Document::Toon(toon(&Removed {
         removed: name,
-        window,
+        pane,
         worktree,
         help,
     }))

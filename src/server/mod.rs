@@ -83,6 +83,8 @@ struct Server {
     focus: PaneKey,
     history: Option<u32>,
     resumed: HashMap<PaneKey, Instant>,
+    /// The connections waiting for a pane to close, by pane.
+    closing: HashMap<PaneKey, Vec<ConnId>>,
     dirty: bool,
     flushed_at: Instant,
     events: Sender<Event>,
@@ -120,6 +122,7 @@ pub fn run(
         focus: PaneKey::Master,
         history: None,
         resumed: HashMap::new(),
+        closing: HashMap::new(),
         dirty: false,
         flushed_at: Instant::now(),
         events: events.clone(),
@@ -178,6 +181,7 @@ impl Server {
                 if resume_failed {
                     self.open_fresh(&key);
                 }
+                self.tell_closed(&key);
                 self.send_panes();
                 if key == self.focus {
                     self.dirty = true;
@@ -213,7 +217,8 @@ impl Server {
                 self.send_panes();
                 self.send_full_frame();
             }
-            ClientMsg::Reopen(PaneKey::Flow(_)) | ClientMsg::CloseFlow(_) => {}
+            ClientMsg::CloseFlow(id) => self.close_flow(conn, id),
+            ClientMsg::Reopen(PaneKey::Flow(_)) => {}
             ClientMsg::StopServer => return false,
         }
         true
@@ -364,6 +369,39 @@ impl Server {
         {
             eprintln!("{error:#}");
         }
+    }
+
+    /// Hangs up a flow's pane for `flow remove` or `flow clear`; the connection hears Closed once
+    /// it exited, NotOpen when there is no pane.
+    fn close_flow(&mut self, conn: ConnId, id: String) {
+        let key = PaneKey::Flow(id.clone());
+        self.known.insert(id.clone());
+        let Some(pane) = self.host.panes().into_iter().find(|pane| pane.key == key) else {
+            self.send_to(conn, &ServerMsg::NotOpen(id));
+            return;
+        };
+        self.closing.entry(key.clone()).or_default().push(conn);
+        self.host.close(&key);
+        if pane.status != PaneStatus::Running {
+            self.tell_closed(&key);
+        }
+    }
+
+    /// Tells everyone waiting for this pane that it is gone, once it is.
+    fn tell_closed(&mut self, key: &PaneKey) {
+        let gone = !self.host.panes().iter().any(|pane| &pane.key == key);
+        if !gone {
+            return;
+        }
+        let Some(waiting) = self.closing.remove(key) else {
+            return;
+        };
+        if let PaneKey::Flow(id) = key {
+            for conn in waiting {
+                self.send_to(conn, &ServerMsg::Closed(id.clone()));
+            }
+        }
+        self.send_panes();
     }
 
     fn flow(&self, id: &str) -> Option<&FlowView> {
@@ -818,6 +856,46 @@ mod tests {
 
         proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
         handle.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn closes_a_flow_pane_on_request_and_says_when_there_is_none() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let csv = started_flow(&store, dir.path(), "csv", "claude");
+        let (paths, handle) = start(dir.path());
+        let mut ui = connect(
+            &paths.socket,
+            Role::Attach {
+                size: Size { cols: 30, rows: 4 },
+            },
+        );
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut panes = Vec::new();
+        while status_of(&panes, &csv) != Some(PaneStatus::Running) {
+            assert!(Instant::now() < deadline, "the worker never opened");
+            if let ServerMsg::Panes(update) = recv(&mut ui) {
+                panes = update;
+            }
+        }
+
+        let closed = crate::client::close_flow(&paths.socket, &csv, Duration::from_secs(5));
+        let none = crate::client::close_flow(&paths.socket, "nope", Duration::from_secs(5));
+
+        assert_eq!(closed.unwrap(), crate::client::Closing::Closed);
+        assert_eq!(none.unwrap(), crate::client::Closing::NoPane);
+        while status_of(&panes, &csv).is_some() {
+            assert!(Instant::now() < deadline, "the ui still lists the pane");
+            if let ServerMsg::Panes(update) = recv(&mut ui) {
+                panes = update;
+            }
+        }
+        proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+        handle.join().unwrap().unwrap();
+        assert_eq!(
+            crate::client::close_flow(&paths.socket, &csv, Duration::from_secs(1)).unwrap(),
+            crate::client::Closing::NoServer
+        );
     }
 
     #[test]

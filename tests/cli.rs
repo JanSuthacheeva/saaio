@@ -279,13 +279,11 @@ fn clear_forgets_finished_flows_only() {
     );
 }
 
-/// A temp git repo with one commit, a fake tmux on PATH that records its argv and prints @14,
-/// and a state folder.
+/// A temp git repo with one commit and a state folder.
 struct Lab {
     _dir: TempDir,
     repo: std::path::PathBuf,
     home: std::path::PathBuf,
-    bin: std::path::PathBuf,
 }
 
 impl Lab {
@@ -294,9 +292,7 @@ impl Lab {
         let root = dir.path().canonicalize().unwrap();
         let repo = root.join("repo");
         let home = root.join("state");
-        let bin = root.join("bin");
         fs::create_dir_all(&repo).unwrap();
-        fs::create_dir_all(&bin).unwrap();
         let git = |args: &[&str]| {
             assert!(
                 Command::new("git")
@@ -320,68 +316,29 @@ impl Lab {
             "-m",
             "init",
         ]);
-        let tmux = bin.join("tmux");
-        fs::write(
-            &tmux,
-            format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {root}/tmux-log\necho @14\n",
-                root = root.display()
-            ),
-        )
-        .unwrap();
-        set_executable(&tmux);
         Lab {
             _dir: dir,
             repo,
             home,
-            bin,
         }
     }
 
     fn start(&self, args: &[&str]) -> Output {
-        let path = format!(
-            "{}:{}",
-            self.bin.display(),
-            std::env::var("PATH").unwrap_or_default()
-        );
-        let mut command = Command::new(env!("CARGO_BIN_EXE_flow"));
-        command
-            .arg("start")
-            .args(args)
-            .current_dir(&self.repo)
-            .env("FLOW_HOME", &self.home)
-            .env("FLOW_CONFIG", self.home.join("no-config.toml"))
-            .env("PATH", path)
-            .env_remove("FLOW_ID")
-            .env_remove("TMUX");
-        command.output().unwrap()
+        let mut all = vec!["start"];
+        all.extend_from_slice(args);
+        self.run(&all)
     }
 
-    /// Runs flow with the fake tmux on PATH and inside "tmux".
+    /// Runs flow in the repo with the lab's state.
     fn run(&self, args: &[&str]) -> Output {
-        let path = format!(
-            "{}:{}",
-            self.bin.display(),
-            std::env::var("PATH").unwrap_or_default()
-        );
         Command::new(env!("CARGO_BIN_EXE_flow"))
             .args(args)
             .current_dir(&self.repo)
             .env("FLOW_HOME", &self.home)
             .env("FLOW_CONFIG", self.home.join("no-config.toml"))
-            .env("PATH", path)
-            .env("TMUX", "/tmp/tmux-test,1,0")
             .env_remove("FLOW_ID")
             .output()
             .unwrap()
-    }
-
-    fn tmux_log(&self) -> Vec<String> {
-        fs::read_to_string(self.bin.parent().unwrap().join("tmux-log"))
-            .unwrap_or_default()
-            .lines()
-            .map(String::from)
-            .collect()
     }
 
     fn hook(&self, name: &str, script: &str) {
@@ -425,7 +382,6 @@ fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_flow_ui() {
             .trim(),
         "slot 1"
     );
-    assert!(lab.tmux_log().is_empty(), "{:?}", lab.tmux_log());
 
     let board: serde_json::Value =
         serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
@@ -618,7 +574,7 @@ fn clear_tears_down_and_removes_clean_worktrees_but_keeps_uncommitted_work() {
 }
 
 #[test]
-fn remove_closes_the_window_tears_down_and_forgets_a_running_flow() {
+fn remove_tears_down_and_forgets_a_running_flow() {
     let lab = Lab::new();
     lab.hook(
         "teardown",
@@ -632,7 +588,7 @@ fn remove_closes_the_window_tears_down_and_forgets_a_running_flow() {
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
     assert!(
-        text.starts_with("removed: shop-1\nwindow: none\nworktree: removed\n"),
+        text.starts_with("removed: shop-1\npane: none\nworktree: removed\n"),
         "{text}"
     );
     assert!(!lab.repo.join(".flow/worktrees/shop-1").exists());
@@ -665,13 +621,6 @@ fn remove_refuses_uncommitted_work_unless_forced() {
     );
     assert!(text.contains("flow remove shop-1 --force"), "{text}");
     assert!(worktree.exists());
-    assert!(
-        !lab.tmux_log()
-            .iter()
-            .any(|line| line.starts_with("kill-window")),
-        "{:?}",
-        lab.tmux_log()
-    );
     assert!(stdout(&lab.run(&[])).contains("shop-1"));
 
     let forced = lab.run(&["remove", "shop-1", "--force"]);

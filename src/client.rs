@@ -18,6 +18,15 @@ const START_WAIT: Duration = Duration::from_secs(2);
 /// How long the server gets to answer a hello.
 const HELLO_WAIT: Duration = Duration::from_secs(5);
 
+/// What became of a flow's pane when `flow remove` or `flow clear` asked the server to close it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Closing {
+    Closed,
+    NoServer,
+    NoPane,
+    TimedOut,
+}
+
 /// One connection to the session server.
 pub struct Client {
     stream: UnixStream,
@@ -79,6 +88,37 @@ impl Client {
             stream: self.stream.try_clone()?,
         })
     }
+}
+
+/// Asks a running server to end a flow's pane and waits for it; the outcome when there is no server or no pane.
+pub fn close_flow(socket: &Path, id: &str, timeout: Duration) -> Result<Closing> {
+    let Some(mut client) = Client::connect(socket, Role::Control)? else {
+        return Ok(Closing::NoServer);
+    };
+    client.send(&ClientMsg::CloseFlow(id.to_string()))?;
+    let deadline = Instant::now() + timeout;
+    loop {
+        let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+            return Ok(Closing::TimedOut);
+        };
+        client.stream.set_read_timeout(Some(left))?;
+        match client.recv() {
+            Ok(Some(ServerMsg::Closed(closed))) if closed == id => return Ok(Closing::Closed),
+            Ok(Some(ServerMsg::NotOpen(open))) if open == id => return Ok(Closing::NoPane),
+            Ok(Some(_)) => {}
+            Ok(None) => return Ok(Closing::Closed),
+            Err(error) if timed_out(&error) => return Ok(Closing::TimedOut),
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+fn timed_out(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|io| matches!(io.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut))
+    })
 }
 
 /// Unix sockets paths must be shorter than this (104 bytes on macOS, 108 on Linux).
