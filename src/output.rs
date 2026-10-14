@@ -319,8 +319,14 @@ pub fn created(flow: &FlowView, existing: bool) -> Document {
         id: &flow.id,
         existing,
         help: vec![
-            format!("Run `export FLOW_ID={}` in the worker", flow.id),
-            "Run `flow report phase design` when design starts".to_string(),
+            format!(
+                "Run `flow report --flow {} phase design` when design starts",
+                flow.name
+            ),
+            format!(
+                "Or set FLOW_ID={} in the worker's environment and leave out --flow",
+                flow.id
+            ),
         ],
     }))
 }
@@ -629,7 +635,7 @@ mod tests {
                 "flow: shop-221",
                 "id: shop-221-id",
                 "existing: false",
-                "help[2]: Run `export FLOW_ID=shop-221-id` in the worker,Run `flow report phase design` when design starts",
+                "help[2]: Run `flow report --flow shop-221 phase design` when design starts,Or set FLOW_ID=shop-221-id in the worker's environment and leave out --flow",
             ]
             .join("\n")
         );

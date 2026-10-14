@@ -310,7 +310,8 @@ pub fn status_list(board: &Board, warnings: &[String], full: bool) -> Document;
 /// name, request, mode, state, phase, blocker, tasks, review, merge_request,
 /// steps[4]{phase,status,duration}, decisions[n], timeline[n]{ago,text}, help. Absent values are left out, not null.
 pub fn status_detail(flow: &FlowView, now: u64, full: bool) -> Document;
-/// flow, id, existing, help with `export FLOW_ID=<the real id>` so it can be copied as is.
+/// flow, id, existing, help: `flow report --flow <name> ...` first (an agent's shell does not keep exports
+/// between commands, seen in the end-to-end run), then FLOW_ID for a worker's environment.
 pub fn created(flow: &FlowView, existing: bool) -> Document;
 /// flow, state, phase, next step for the new state.
 pub fn reported(flow: &FlowView) -> Document;
@@ -440,4 +441,4 @@ duration runs until `now`. Repeated reports fold to the same view.
 - [x] Wire main.rs: `try_parse` with `Failure::usage` and exit 2, `Store::locate`, `run`, `home`, `status` (TOON and `--json`), `views`, with tests/cli.rs cases for home, status, `--json` and an unknown flag
 - [x] Add `new_flow` (idempotent), `report` (events, heartbeat, skipped) and `clear`, with tests/cli.rs cases for each and the missing-flow error
 - [x] Write README.md: install, commands, the TOON views, the `--json` contract
-- [ ] End-to-end: `cargo install --path .`, two shells reporting into one flow at once, `flow` and `flow status --json` in a third; then a fresh agent session told only "use `flow` to report your progress" drives it from the home view and help lines alone
+- [x] End-to-end: `cargo install --path .`, two shells reporting into one flow at once, `flow` and `flow status --json` in a third; then a fresh agent session told only "use `flow` to report your progress" drives it from the home view and help lines alone
