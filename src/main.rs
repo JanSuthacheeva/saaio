@@ -1,9 +1,6 @@
-#[allow(dead_code)]
 mod event;
 mod fold;
-#[allow(dead_code)]
 mod output;
-#[allow(dead_code)]
 mod store;
 mod view;
 
@@ -15,6 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
 
+use event::{Event, EventKind, Mode, Phase};
 use output::{Document, Failure};
 use store::Store;
 use view::FlowView;
@@ -29,6 +27,23 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Track a new flow, or return the unfinished flow of that name
+    New {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        request: String,
+        #[arg(long, value_enum, default_value = "guided")]
+        mode: Mode,
+    },
+    /// Append one event to a flow
+    Report {
+        /// Flow name or id [default: $FLOW_ID]
+        #[arg(long, env = "FLOW_ID")]
+        flow: Option<String>,
+        #[command(subcommand)]
+        event: ReportEvent,
+    },
     /// Every flow, or one flow with its phases, timeline and decisions
     Status {
         /// Flow name or id
@@ -40,6 +55,58 @@ enum Command {
         #[arg(long)]
         full: bool,
     },
+    /// Forget flows that are done or ended
+    Clear,
+}
+
+#[derive(Debug, Subcommand)]
+enum ReportEvent {
+    /// The flow entered a phase
+    Phase { phase: Phase },
+    /// Work goes on, after a stop or a subagent
+    Working,
+    /// A subagent works on the flow
+    Delegated { description: String },
+    /// The flow waits for the person's answer
+    Waiting { question: String },
+    /// The flow cannot go on
+    Blocked { reason: String },
+    /// A decision made on the person's behalf
+    Decision { text: String },
+    /// Tasks done out of the plan's total
+    Tasks { done: u32, total: u32 },
+    /// Review findings fixed and still open
+    Review {
+        #[arg(long)]
+        fixed: u32,
+        #[arg(long)]
+        open: u32,
+    },
+    /// The merge request is open
+    MergeRequest { url: String },
+    /// The worker session ended
+    Ended,
+    /// Mark the flow alive without adding an event
+    Heartbeat,
+}
+
+impl ReportEvent {
+    /// The event to append; None for Heartbeat.
+    fn into_kind(self) -> Option<EventKind> {
+        Some(match self {
+            ReportEvent::Phase { phase } => EventKind::Phase { phase },
+            ReportEvent::Working => EventKind::Working,
+            ReportEvent::Delegated { description } => EventKind::Delegated { description },
+            ReportEvent::Waiting { question } => EventKind::Waiting { question },
+            ReportEvent::Blocked { reason } => EventKind::Blocked { reason },
+            ReportEvent::Decision { text } => EventKind::Decision { text },
+            ReportEvent::Tasks { done, total } => EventKind::Tasks { done, total },
+            ReportEvent::Review { fixed, open } => EventKind::Review { fixed, open },
+            ReportEvent::MergeRequest { url } => EventKind::MergeRequest { url },
+            ReportEvent::Ended => EventKind::Ended,
+            ReportEvent::Heartbeat => return None,
+        })
+    }
 }
 
 fn main() -> ExitCode {
@@ -81,7 +148,14 @@ fn main() -> ExitCode {
 fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure> {
     match cli.command {
         None => home(store, now),
+        Some(Command::New {
+            name,
+            request,
+            mode,
+        }) => new_flow(store, name, request, mode, now),
+        Some(Command::Report { flow, event }) => report(store, flow, event, now),
         Some(Command::Status { flow, json, full }) => status(store, flow, json, full, now),
+        Some(Command::Clear) => clear(store, now),
     }
 }
 
@@ -92,6 +166,67 @@ fn home(store: &Store, now: u64) -> Result<Document, Failure> {
         &bin_path(),
         &warnings,
     ))
+}
+
+fn new_flow(
+    store: &Store,
+    name: String,
+    request: String,
+    mode: Mode,
+    now: u64,
+) -> Result<Document, Failure> {
+    let (flows, _) = views(store, now);
+    if let Some(existing) = fold::resolve(&flows, &name).filter(|flow| !flow.is_finished()) {
+        return Ok(output::created(existing, true));
+    }
+    let first = Event::new(
+        now,
+        EventKind::Started {
+            name,
+            request,
+            mode,
+        },
+    );
+    let id = store.create(&first).map_err(Failure::from_io)?;
+    let created = fold::fold(&id, &[first], None, now).expect("a started flow folds");
+    Ok(output::created(&created, false))
+}
+
+fn report(
+    store: &Store,
+    flow: Option<String>,
+    event: ReportEvent,
+    now: u64,
+) -> Result<Document, Failure> {
+    let Some(name) = flow.filter(|name| !name.is_empty()) else {
+        return Ok(output::skipped());
+    };
+    let (flows, _) = views(store, now);
+    let id = fold::resolve(&flows, &name)
+        .ok_or_else(|| no_flow(&name))?
+        .id
+        .clone();
+    match event.into_kind() {
+        Some(kind) => store.append(&id, &Event::new(now, kind)),
+        None => store.beat(&id),
+    }
+    .map_err(Failure::from_io)?;
+    let events = store.events(&id).map_err(Failure::from_io)?;
+    let beat = store.last_beat(&id).map_err(Failure::from_io)?;
+    let reported = fold::fold(&id, &events, beat, now).expect("a resolved flow folds");
+    Ok(output::reported(&reported))
+}
+
+fn clear(store: &Store, now: u64) -> Result<Document, Failure> {
+    let (flows, _) = views(store, now);
+    let mut names = Vec::new();
+    for flow in flows.iter().filter(|flow| flow.is_finished()) {
+        store.remove(&flow.id).map_err(|error| {
+            Failure::from_io(error.context(format!("could not clear {}", flow.name)))
+        })?;
+        names.push(flow.name.clone());
+    }
+    Ok(output::cleared(&names))
 }
 
 fn status(

@@ -29,6 +29,7 @@ impl Store {
         }
     }
 
+    #[cfg(test)]
     pub fn at(root: PathBuf) -> Store {
         Store { root }
     }

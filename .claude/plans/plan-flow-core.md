@@ -178,6 +178,7 @@ pub struct Store {
 impl Store {
     /// $FLOW_HOME, else $XDG_STATE_HOME/flow, else $HOME/.local/state/flow.
     pub fn locate(flow_home: Option<PathBuf>, xdg_state: Option<PathBuf>, home: Option<PathBuf>) -> Result<Store>;
+    #[cfg(test)] // only tests build a store from a path
     pub fn at(root: PathBuf) -> Store;
     /// New flow with a fresh UUID v4 and its first event; returns the id.
     pub fn create(&self, first: &Event) -> Result<String>;
@@ -437,6 +438,6 @@ duration runs until `now`. Repeated reports fold to the same view.
 ### Commands
 
 - [x] Wire main.rs: `try_parse` with `Failure::usage` and exit 2, `Store::locate`, `run`, `home`, `status` (TOON and `--json`), `views`, with tests/cli.rs cases for home, status, `--json` and an unknown flag
-- [ ] Add `new_flow` (idempotent), `report` (events, heartbeat, skipped) and `clear`, with tests/cli.rs cases for each and the missing-flow error
+- [x] Add `new_flow` (idempotent), `report` (events, heartbeat, skipped) and `clear`, with tests/cli.rs cases for each and the missing-flow error
 - [ ] Write README.md: install, commands, the TOON views, the `--json` contract
 - [ ] End-to-end: `cargo install --path .`, two shells reporting into one flow at once, `flow` and `flow status --json` in a third; then a fresh agent session told only "use `flow` to report your progress" drives it from the home view and help lines alone
