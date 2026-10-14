@@ -305,6 +305,82 @@ fn name_of<T: Serialize>(value: &T) -> String {
     }
 }
 
+/// flow, id, existing (true when `new` found the unfinished flow of that name), how to use it.
+pub fn created(flow: &FlowView, existing: bool) -> Document {
+    #[derive(Serialize)]
+    struct Created<'a> {
+        flow: &'a str,
+        id: &'a str,
+        existing: bool,
+        help: Vec<String>,
+    }
+    Document::Toon(toon(&Created {
+        flow: &flow.name,
+        id: &flow.id,
+        existing,
+        help: vec![
+            format!("Run `export FLOW_ID={}` in the worker", flow.id),
+            "Run `flow report phase design` when design starts".to_string(),
+        ],
+    }))
+}
+
+/// flow, state, phase, and the next step that fits the new state.
+pub fn reported(flow: &FlowView) -> Document {
+    #[derive(Serialize)]
+    struct Reported<'a> {
+        flow: &'a str,
+        state: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        phase: Option<&'static str>,
+        help: Vec<String>,
+    }
+    let next = match flow.state {
+        State::Blocked => "Run `flow report working` once the block is resolved".to_string(),
+        State::Waiting => "Run `flow report working` once answered".to_string(),
+        State::Done => "Run `flow clear` after the MR is merged".to_string(),
+        _ => format!(
+            "Run `flow status {}` for its phases and timeline",
+            flow.name
+        ),
+    };
+    Document::Toon(toon(&Reported {
+        flow: &flow.name,
+        state: name_of(&flow.state),
+        phase: flow.phase.map(|phase| phase.name()),
+        help: vec![next],
+    }))
+}
+
+/// skipped: no flow id, and how to give one.
+pub fn skipped() -> Document {
+    #[derive(Serialize)]
+    struct Skipped {
+        skipped: &'static str,
+        help: [&'static str; 1],
+    }
+    Document::Toon(toon(&Skipped {
+        skipped: "no flow id",
+        help: ["Set FLOW_ID or pass --flow <name>"],
+    }))
+}
+
+/// cleared: n, names[n], help.
+pub fn cleared(names: &[String]) -> Document {
+    #[derive(Serialize)]
+    struct Cleared<'a> {
+        cleared: usize,
+        #[serde(skip_serializing_if = "<[String]>::is_empty")]
+        names: &'a [String],
+        help: [&'static str; 1],
+    }
+    Document::Toon(toon(&Cleared {
+        cleared: names.len(),
+        names,
+        help: ["Run `flow` to see what is left"],
+    }))
+}
+
 /// 45s, 12m, 3h, 2d.
 pub fn short_duration(ms: u64) -> String {
     let seconds = ms / 1_000;
@@ -540,6 +616,99 @@ mod tests {
                 "help[2]: Run `flow report --flow shop-221 working` once the block is resolved,Run `flow` for all flows",
             ]
             .join("\n")
+        );
+    }
+
+    #[test]
+    fn created_names_the_flow_and_how_to_report_into_it() {
+        let flow = flow("shop-221", vec![], MIN);
+
+        assert_eq!(
+            created(&flow, false).text(),
+            [
+                "flow: shop-221",
+                "id: shop-221-id",
+                "existing: false",
+                "help[2]: Run `export FLOW_ID=shop-221-id` in the worker,Run `flow report phase design` when design starts",
+            ]
+            .join("\n")
+        );
+        assert!(created(&flow, true).text().contains("existing: true"));
+    }
+
+    #[test]
+    fn reported_answers_with_the_new_state_and_what_comes_next() {
+        let blocked = flow(
+            "shop-221",
+            vec![
+                EventKind::Phase {
+                    phase: Phase::Implement,
+                },
+                EventKind::Blocked { reason: "x".into() },
+            ],
+            MIN,
+        );
+        assert_eq!(
+            reported(&blocked).text(),
+            [
+                "flow: shop-221",
+                "state: blocked",
+                "phase: implement",
+                "help[1]: Run `flow report working` once the block is resolved",
+            ]
+            .join("\n")
+        );
+
+        let waiting = flow(
+            "shop-221",
+            vec![EventKind::Waiting {
+                question: "ok?".into(),
+            }],
+            MIN,
+        );
+        assert!(
+            reported(&waiting)
+                .text()
+                .ends_with("help[1]: Run `flow report working` once answered")
+        );
+
+        let done = flow(
+            "shop-221",
+            vec![EventKind::MergeRequest {
+                url: "https://x/1".into(),
+            }],
+            MIN,
+        );
+        assert!(
+            reported(&done)
+                .text()
+                .ends_with("help[1]: Run `flow clear` after the MR is merged")
+        );
+
+        let working = flow("shop-221", vec![], MIN);
+        assert_eq!(
+            reported(&working).text(),
+            "flow: shop-221\nstate: working\nhelp[1]: Run `flow status shop-221` for its phases and timeline"
+        );
+    }
+
+    #[test]
+    fn skipped_says_why_and_how_to_give_a_flow() {
+        assert_eq!(
+            skipped().text(),
+            "skipped: no flow id\nhelp[1]: Set FLOW_ID or pass --flow <name>"
+        );
+    }
+
+    #[test]
+    fn cleared_counts_and_names_the_removed_flows() {
+        assert_eq!(
+            cleared(&["export-csv".into(), "shop-198".into()]).text(),
+            "cleared: 2\nnames[2]: export-csv,shop-198\nhelp[1]: Run `flow` to see what is left"
+        );
+        assert_eq!(
+            cleared(&[]).text(),
+            "cleared: 0\nhelp[1]: Run `flow` to see what is left"
         );
     }
 

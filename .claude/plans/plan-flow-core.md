@@ -309,7 +309,7 @@ pub fn status_list(board: &Board, warnings: &[String], full: bool) -> Document;
 /// name, request, mode, state, phase, blocker, tasks, review, merge_request,
 /// steps[4]{phase,status,duration}, decisions[n], timeline[n]{ago,text}, help. Absent values are left out, not null.
 pub fn status_detail(flow: &FlowView, now: u64, full: bool) -> Document;
-/// flow, id, existing, help with `export FLOW_ID=<id>`.
+/// flow, id, existing, help with `export FLOW_ID=<the real id>` so it can be copied as is.
 pub fn created(flow: &FlowView, existing: bool) -> Document;
 /// flow, state, phase, next step for the new state.
 pub fn reported(flow: &FlowView) -> Document;
@@ -432,7 +432,7 @@ duration runs until `now`. Repeated reports fold to the same view.
 
 - [x] Add output.rs `Document`, `Failure` (error, usage, from_io, to_toon), `truncated`, `short_duration`, with unit tests; confirm `serde_toon_format` encodes tabular arrays as in the plan, else add the fallback encoder
 - [x] Add `output::home`, `status_list`, `status_detail` with exact TOON tests, including the empty state, truncation hint and warnings
-- [ ] Add `output::created`, `reported`, `skipped`, `cleared` with exact TOON tests
+- [x] Add `output::created`, `reported`, `skipped`, `cleared` with exact TOON tests
 
 ### Commands
 
