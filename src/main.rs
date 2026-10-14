@@ -2,6 +2,8 @@
 mod event;
 #[allow(dead_code)]
 mod store;
+#[allow(dead_code)]
+mod view;
 
 use std::process::ExitCode;
 

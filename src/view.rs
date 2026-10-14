@@ -1,0 +1,207 @@
+use serde::Serialize;
+
+use crate::event::{Mode, Phase};
+
+pub const VIEW_VERSION: u32 = 1;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Board {
+    pub version: u32,
+    pub now: u64,
+    pub count: usize,
+    pub needs_you: usize,
+    pub flows: Vec<FlowView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowView {
+    pub id: String,
+    pub name: String,
+    pub request: String,
+    pub mode: Mode,
+    pub phase: Option<Phase>,
+    pub state: State,
+    pub blocker: Option<String>,
+    pub delegate: Option<String>,
+    pub tasks: Option<Tasks>,
+    pub review: Option<ReviewCount>,
+    pub merge_request: Option<String>,
+    pub decisions: Vec<String>,
+    pub steps: Vec<Step>,
+    pub timeline: Vec<TimelineEntry>,
+    pub started_at: u64,
+    pub changed_at: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum State {
+    Working,
+    Delegated,
+    Waiting,
+    Blocked,
+    NotResponding,
+    Done,
+    Ended,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Step {
+    pub phase: Phase,
+    pub status: StepStatus,
+    pub duration_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StepStatus {
+    Done,
+    Current,
+    Open,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Tasks {
+    pub done: u32,
+    pub total: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct ReviewCount {
+    pub fixed: u32,
+    pub open: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TimelineEntry {
+    pub at: u64,
+    pub text: String,
+    pub tone: Tone,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Tone {
+    Neutral,
+    Progress,
+    Attention,
+    Problem,
+    Success,
+}
+
+impl Board {
+    /// Pretty JSON with camelCase keys, `version` first, nothing truncated.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).expect("a board always serialises")
+    }
+}
+
+impl FlowView {
+    /// Waiting, blocked or not responding.
+    pub fn needs_you(&self) -> bool {
+        matches!(
+            self.state,
+            State::Waiting | State::Blocked | State::NotResponding
+        )
+    }
+
+    /// Done or ended.
+    pub fn is_finished(&self) -> bool {
+        matches!(self.state, State::Done | State::Ended)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn flow(state: State) -> FlowView {
+        FlowView {
+            id: "7f3c".into(),
+            name: "shop-221".into(),
+            request: "SHOP-221 add CSV export".into(),
+            mode: Mode::Auto,
+            phase: Some(Phase::MergeRequest),
+            state,
+            blocker: None,
+            delegate: None,
+            tasks: Some(Tasks { done: 4, total: 9 }),
+            review: None,
+            merge_request: None,
+            decisions: vec![],
+            steps: vec![Step {
+                phase: Phase::Design,
+                status: StepStatus::Done,
+                duration_ms: Some(540_000),
+            }],
+            timeline: vec![TimelineEntry {
+                at: 1,
+                text: "started".into(),
+                tone: Tone::Neutral,
+            }],
+            started_at: 1,
+            changed_at: 2,
+        }
+    }
+
+    #[test]
+    fn serialises_the_board_with_version_first_and_camel_case_keys() {
+        let board = Board {
+            version: VIEW_VERSION,
+            now: 9,
+            count: 1,
+            needs_you: 1,
+            flows: vec![flow(State::NotResponding)],
+        };
+
+        let json = board.to_json();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert!(
+            json.trim_start().starts_with("{\n  \"version\": 1,"),
+            "{json}"
+        );
+        assert_eq!(value["needsYou"], 1);
+        let flow = &value["flows"][0];
+        assert_eq!(flow["state"], "not-responding");
+        assert_eq!(flow["phase"], "merge-request");
+        assert_eq!(flow["mergeRequest"], serde_json::Value::Null);
+        assert_eq!(flow["startedAt"], 1);
+        assert_eq!(flow["tasks"]["total"], 9);
+        assert_eq!(flow["steps"][0]["durationMs"], 540_000);
+        assert_eq!(flow["steps"][0]["status"], "done");
+        assert_eq!(flow["timeline"][0]["tone"], "neutral");
+    }
+
+    #[test]
+    fn needs_you_while_waiting_blocked_or_silent() {
+        let needing: Vec<State> = [
+            State::Working,
+            State::Delegated,
+            State::Waiting,
+            State::Blocked,
+            State::NotResponding,
+            State::Done,
+            State::Ended,
+        ]
+        .into_iter()
+        .filter(|state| flow(*state).needs_you())
+        .collect();
+
+        assert_eq!(
+            needing,
+            vec![State::Waiting, State::Blocked, State::NotResponding]
+        );
+    }
+
+    #[test]
+    fn is_finished_when_done_or_ended() {
+        assert!(flow(State::Done).is_finished());
+        assert!(flow(State::Ended).is_finished());
+        assert!(!flow(State::Blocked).is_finished());
+        assert!(!flow(State::Working).is_finished());
+    }
+}
