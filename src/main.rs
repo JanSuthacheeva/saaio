@@ -568,7 +568,11 @@ fn status(
     Ok(if json {
         Document::Json(fold::board(vec![one], now).to_json())
     } else {
-        output::status_detail(&one, now, full)
+        let worktree_exists = one
+            .workspace
+            .as_ref()
+            .map(|space| Path::new(&space.path).exists());
+        output::status_detail(&one, now, full, worktree_exists)
     })
 }
 

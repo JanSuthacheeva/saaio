@@ -191,8 +191,14 @@ fn list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool) -> Do
     }))
 }
 
-/// One flow with its steps, decisions and timeline.
-pub fn status_detail(flow: &FlowView, now: u64, full: bool) -> Document {
+/// One flow with its steps, decisions and timeline, and for a started flow where its code is:
+/// branch, worktree and whether the worktree is still there (`worktree_exists`).
+pub fn status_detail(
+    flow: &FlowView,
+    now: u64,
+    full: bool,
+    worktree_exists: Option<bool>,
+) -> Document {
     #[derive(Serialize)]
     struct DetailDocument {
         name: String,
@@ -212,6 +218,12 @@ pub fn status_detail(flow: &FlowView, now: u64, full: bool) -> Document {
         review: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         merge_request: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        branch: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        worktree: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        worktree_exists: Option<bool>,
         steps: Vec<StepRow>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         decisions: Vec<String>,
@@ -247,6 +259,9 @@ pub fn status_detail(flow: &FlowView, now: u64, full: bool) -> Document {
             .review
             .map(|review| format!("{} fixed, {} open", review.fixed, review.open)),
         merge_request: flow.merge_request.clone(),
+        branch: flow.workspace.as_ref().map(|space| space.branch.clone()),
+        worktree: flow.workspace.as_ref().map(|space| space.path.clone()),
+        worktree_exists: flow.workspace.as_ref().and(worktree_exists),
         steps: flow
             .steps
             .iter()
@@ -269,13 +284,24 @@ pub fn status_detail(flow: &FlowView, now: u64, full: bool) -> Document {
                 text: cut(&entry.text),
             })
             .collect(),
-        help: detail_help(flow),
+        help: detail_help(flow, worktree_exists),
     };
     Document::Toon(toon(&document))
 }
 
-fn detail_help(flow: &FlowView) -> Vec<String> {
+fn detail_help(flow: &FlowView, worktree_exists: Option<bool>) -> Vec<String> {
     let mut help = Vec::new();
+    if let Some(space) = &flow.workspace
+        && flow.state == State::Ended
+    {
+        help.push("C-space r in flow ui resumes it".to_string());
+        if worktree_exists == Some(false) {
+            help.push(format!(
+                "Its worktree is gone; its commits stay on {}",
+                space.branch
+            ));
+        }
+    }
     match flow.state {
         State::Blocked => help.push(format!(
             "Run `flow report --flow {} working` once the block is resolved",
@@ -686,7 +712,7 @@ mod tests {
         );
 
         assert_eq!(
-            status_detail(&flow, 10 * MIN, false).text(),
+            status_detail(&flow, 10 * MIN, false, None).text(),
             [
                 "name: shop-221",
                 "id: shop-221-id",

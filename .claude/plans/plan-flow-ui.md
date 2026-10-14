@@ -543,7 +543,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 - [x] client::close_flow; main::remove and main::clear close panes first; output::removed with pane; tests
 - [x] Remove kill_window_argv, close_window and their tests (window_argv and open_window went with 3.1)
 - [x] Reopen exited panes and ended flows (C-space r, ClientMsg::Reopen: resume the flow's agent even when its flow is ended) with an integration test
-- [ ] `flow status <name>` shows the worktree path, the branch and whether the worktree still exists, for every flow with a workspace; tests/cli.rs
+- [x] `flow status <name>` shows the worktree path, the branch and whether the worktree still exists, for every flow with a workspace; tests/cli.rs
 
 ### Milestone 4: views
 

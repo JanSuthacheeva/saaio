@@ -404,6 +404,7 @@ fn start_hands_the_worker_to_a_running_flow_server() {
     .unwrap();
     let mut server = Command::new(env!("CARGO_BIN_EXE_flow"))
         .arg("server")
+        .stdout(std::process::Stdio::null())
         .current_dir(&lab.repo)
         .env("FLOW_HOME", &lab.home)
         .env("FLOW_CONFIG", &config)
@@ -441,6 +442,42 @@ fn start_hands_the_worker_to_a_running_flow_server() {
     }
     assert!(lab.run(&["ui", "--stop"]).status.success());
     assert!(server.wait().unwrap().success());
+}
+
+#[test]
+fn status_says_where_a_flows_code_is_and_whether_its_worktree_is_left() {
+    let lab = Lab::new();
+    assert!(lab.start(&["SHOP-217 add CSV export"]).status.success());
+    let worktree = lab.repo.join(".flow/worktrees/shop-217");
+    assert!(
+        lab.run(&["report", "--flow", "shop-217", "ended"])
+            .status
+            .success()
+    );
+
+    let ended = stdout(&lab.run(&["status", "shop-217"]));
+
+    assert!(
+        ended.contains(&format!(
+            "branch: flow/shop-217\nworktree: {}\nworktree_exists: true\n",
+            worktree.display()
+        )),
+        "{ended}"
+    );
+    assert!(ended.contains("C-space r in flow ui resumes it"), "{ended}");
+    assert!(
+        Command::new("git")
+            .arg("-C")
+            .arg(&lab.repo)
+            .args(["worktree", "remove"])
+            .arg(&worktree)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let gone = stdout(&lab.run(&["status", "shop-217"]));
+    assert!(gone.contains("worktree_exists: false"), "{gone}");
+    assert!(gone.contains("its commits stay on flow/shop-217"), "{gone}");
 }
 
 #[test]
@@ -663,6 +700,7 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
 
     let mut server = Command::new(env!("CARGO_BIN_EXE_flow"))
         .arg("server")
+        .stdout(std::process::Stdio::null())
         .env("FLOW_HOME", home.path())
         .env("FLOW_CONFIG", &config)
         .spawn()
