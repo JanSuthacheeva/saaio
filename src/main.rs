@@ -248,7 +248,11 @@ fn ui(store: &Store, stop: bool) -> Result<Document, Failure> {
         .filter(|dir| !dir.as_os_str().is_empty())
         .or_else(|| env_path("HOME").map(|home| home.join(".claude")))
         .unwrap_or_else(|| PathBuf::from(".claude"));
-    let message = ui::run(&socket, Theme::builtin(), claude_home).map_err(Failure::from_io)?;
+    let env = ui::UiEnv {
+        claude_home,
+        home: env_path("HOME").filter(|home| !home.as_os_str().is_empty()),
+    };
+    let message = ui::run(&socket, Theme::builtin(), env).map_err(Failure::from_io)?;
     Ok(Document::Text(message))
 }
 

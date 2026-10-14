@@ -62,6 +62,11 @@ pub enum ServerMsg {
     Detached,
     /// CloseFlow found no pane for the flow.
     NotOpen(String),
+    /// Where the master runs: its directory and the branch checked out there.
+    Master {
+        cwd: String,
+        branch: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -287,6 +292,10 @@ mod tests {
             ServerMsg::Closed("a".into()),
             ServerMsg::Detached,
             ServerMsg::NotOpen("b".into()),
+            ServerMsg::Master {
+                cwd: "/shop".into(),
+                branch: Some("main".into()),
+            },
         ]
     }
 

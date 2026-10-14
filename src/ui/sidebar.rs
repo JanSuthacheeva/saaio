@@ -27,6 +27,8 @@ pub struct Sidebar<'a> {
     /// The flow whose peek shows (C-space j/k).
     pub cursor: Option<&'a str>,
     pub peek: &'a [PeekLine],
+    /// Where the master runs: ~/projects/shop · main.
+    pub master: Option<&'a str>,
     pub now: u64,
     pub spin: usize,
     pub theme: &'a Theme,
@@ -103,6 +105,13 @@ impl Sidebar<'_> {
             key: Some(PaneKey::Master),
             selected: false,
         });
+        if let Some(place) = self.master {
+            rows.push(Row {
+                line: Line::styled(format!("     {}", clip(place, width - 6)), theme.ui.faint),
+                key: Some(PaneKey::Master),
+                selected: false,
+            });
+        }
         rows.push(plain(Line::raw("")));
 
         let mut group = "";

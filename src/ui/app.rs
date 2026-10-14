@@ -43,6 +43,9 @@ pub struct App {
     now: u64,
     spin: usize,
     ticks: u32,
+    home: Option<String>,
+    /// Where the master runs, as shown: ~/projects/shop · main.
+    master: Option<String>,
 }
 
 impl App {
@@ -59,7 +62,15 @@ impl App {
             now: 0,
             spin: 0,
             ticks: 0,
+            home: None,
+            master: None,
         }
+    }
+
+    /// Paths under `home` show as ~/...
+    pub fn with_home(mut self, home: Option<String>) -> App {
+        self.home = home;
+        self
     }
 
     /// The bottom bar while the master is alone, the sidebar once there are workers.
@@ -95,6 +106,14 @@ impl App {
     pub fn on_server(&mut self, message: ServerMsg) -> Vec<Effect> {
         match message {
             ServerMsg::Welcome { .. } | ServerMsg::Closed(_) | ServerMsg::NotOpen(_) => vec![],
+            ServerMsg::Master { cwd, branch } => {
+                let place = self.tilde(&cwd);
+                self.master = Some(match branch {
+                    Some(branch) => format!("{place} · {branch}"),
+                    None => place,
+                });
+                vec![]
+            }
             ServerMsg::Board(board) => {
                 let before = self.areas().pane;
                 self.now = self.now.max(board.now);
@@ -256,6 +275,17 @@ impl App {
         vec![Effect::Send(ClientMsg::Focus(key))]
     }
 
+    fn tilde(&self, path: &str) -> String {
+        match self
+            .home
+            .as_deref()
+            .and_then(|home| path.strip_prefix(home))
+        {
+            Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("~{rest}"),
+            _ => path.to_string(),
+        }
+    }
+
     /// Moves the peek cursor over the workers not in view; past either end it goes away.
     fn move_cursor(&mut self, step: i8) {
         let ids: Vec<String> = self
@@ -298,6 +328,7 @@ impl App {
             focus: &self.focus,
             cursor: self.cursor.as_deref(),
             peek,
+            master: self.master.as_deref(),
             now: self.now,
             spin: self.spin,
             theme,
@@ -311,11 +342,15 @@ impl App {
             .border_type(BorderType::Rounded)
             .border_style(theme.ui.rule);
         let PaneKey::Flow(id) = &self.focus else {
-            return block.title(Line::from(vec![
+            let mut title = vec![
                 Span::raw(" "),
                 Span::styled(theme.glyphs.master, theme.ui.accent),
                 Span::styled(" master ", theme.ui.strong),
-            ]));
+            ];
+            if let Some(place) = &self.master {
+                title.push(Span::styled(format!(" {place} "), theme.ui.faint));
+            }
+            return block.title(Line::from(title));
         };
         let Some(flow) = self.workers().into_iter().find(|flow| &flow.id == id) else {
             return block.title(Line::styled(format!(" {id} "), theme.ui.strong));
@@ -364,6 +399,9 @@ impl App {
             Span::styled(glyphs.master, theme.ui.accent),
             Span::styled(" master", theme.ui.text),
         ];
+        if let Some(place) = &self.master {
+            left.push(Span::styled(format!("  {place}"), theme.ui.faint));
+        }
         match self.status(&PaneKey::Master) {
             Some(PaneStatus::Exited { .. }) => left.push(Span::styled(
                 "  exited - C-space r resumes it",
@@ -1062,5 +1100,25 @@ mod tests {
 
         assert_eq!(side(&terminal, 22).trim_end(), "▌ branch   flow/shop-198");
         assert_eq!(side(&terminal, 23).trim_end(), "▌ worktree gone");
+    }
+
+    #[test]
+    fn shows_where_the_master_runs_with_home_as_a_tilde() {
+        let master = ServerMsg::Master {
+            cwd: "/Users/jan/projects/shop".into(),
+            branch: Some("main".into()),
+        };
+        let mut solo = App::new(SIZE).with_home(Some("/Users/jan".into()));
+        solo.on_server(master.clone());
+        let mut fleet = with_fleet().with_home(Some("/Users/jan".into()));
+        fleet.on_server(master);
+
+        let bar = row(&render(&solo), 9);
+        let sidebar = render_at(&fleet, FLEET);
+
+        assert!(bar.contains("◎ master  ~/projects/shop · main"), "{bar}");
+        assert!(row(&sidebar, 0).starts_with("╭ ◎ master  ~/projects/shop · main ─"));
+        assert_eq!(side(&sidebar, 3).trim_end(), "     ~/projects/shop · main");
+        assert_eq!(side(&sidebar, 5).trim_end(), " NEEDS YOU");
     }
 }

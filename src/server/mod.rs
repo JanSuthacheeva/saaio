@@ -70,6 +70,7 @@ struct Server {
     watch: StoreWatch,
     board: Board,
     sent_board: Option<Board>,
+    sent_master: Option<ServerMsg>,
     known: HashSet<String>,
     refreshed_at: Instant,
     config: Config,
@@ -109,6 +110,7 @@ pub fn run(
         watch: StoreWatch::default(),
         board: fold::board(Vec::new(), clock()),
         sent_board: None,
+        sent_master: None,
         known: HashSet::new(),
         refreshed_at: Instant::now(),
         config,
@@ -259,6 +261,8 @@ impl Server {
         );
         if self.attached == Some(conn) {
             self.sent_board = None;
+            self.sent_master = None;
+            self.send_master();
             self.send_board();
             self.send_panes();
             self.send_full_frame();
@@ -268,6 +272,7 @@ impl Server {
     /// Re-folds when the store changed, reconciles, sends Board and Panes to the attached UI.
     fn refresh(&mut self) {
         self.refreshed_at = Instant::now();
+        self.send_master();
         let now = (self.clock)();
         match self.watch.changed(&self.store, now) {
             Ok(true) => {}
@@ -490,6 +495,22 @@ impl Server {
         }
         self.dirty = false;
         self.flushed_at = Instant::now();
+    }
+
+    /// Where the master runs, when that changed since the attached UI last heard it.
+    fn send_master(&mut self) {
+        let Some(conn) = self.attached else {
+            return;
+        };
+        let master = ServerMsg::Master {
+            cwd: self.record.cwd.display().to_string(),
+            branch: crate::workspace::current_branch(&self.record.cwd),
+        };
+        if self.sent_master.as_ref() == Some(&master) {
+            return;
+        }
+        self.send_to(conn, &master);
+        self.sent_master = Some(master);
     }
 
     /// The board, when its flows changed since the attached UI last got it.
@@ -749,6 +770,10 @@ mod tests {
                 version: PROTOCOL_VERSION
             }
         );
+        let ServerMsg::Master { cwd, .. } = recv(&mut ui) else {
+            panic!("expected where the master runs");
+        };
+        assert_eq!(cwd, std::env::current_dir().unwrap().display().to_string());
         let ServerMsg::Board(board) = recv(&mut ui) else {
             panic!("expected the board");
         };

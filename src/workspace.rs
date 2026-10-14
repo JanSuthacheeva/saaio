@@ -32,6 +32,31 @@ pub fn repo_root(cwd: &Path) -> Result<PathBuf> {
     ))
 }
 
+/// The branch checked out in `dir` or the repository above it, read from git's HEAD file so it is
+/// cheap to ask often; None when HEAD is detached or there is no repository.
+pub fn current_branch(dir: &Path) -> Option<String> {
+    let mut here = Some(dir);
+    while let Some(at) = here {
+        let dot_git = at.join(".git");
+        let head = if dot_git.is_dir() {
+            dot_git.join("HEAD")
+        } else if dot_git.is_file() {
+            let link = fs::read_to_string(&dot_git).ok()?;
+            at.join(link.trim().strip_prefix("gitdir:")?.trim())
+                .join("HEAD")
+        } else {
+            here = at.parent();
+            continue;
+        };
+        let text = fs::read_to_string(head).ok()?;
+        return text
+            .trim()
+            .strip_prefix("ref: refs/heads/")
+            .map(String::from);
+    }
+    None
+}
+
 /// Creates the worktree and branch; adds .flow/worktrees/ to .git/info/exclude once.
 pub fn create_worktree(repo: &Path, workspace: &Workspace) -> Result<()> {
     run(&worktree_add_argv(repo, workspace))?;
@@ -264,6 +289,23 @@ mod tests {
         let error = run_hook(&repo, Hook::Setup, &workspace, &[]).unwrap_err();
 
         assert_eq!(error.to_string(), "port 8001 is taken");
+    }
+
+    #[test]
+    fn reads_the_branch_of_a_repo_a_subfolder_and_a_worktree() {
+        let (_dir, repo) = repo();
+        let sub = repo.join("src/deep");
+        fs::create_dir_all(&sub).unwrap();
+        let worker = workspace_for(&repo, "csv", 1, "claude");
+        create_worktree(&repo, &worker).unwrap();
+
+        assert_eq!(current_branch(&repo).as_deref(), Some("main"));
+        assert_eq!(current_branch(&sub).as_deref(), Some("main"));
+        assert_eq!(
+            current_branch(Path::new(&worker.path)).as_deref(),
+            Some("flow/csv")
+        );
+        assert_eq!(current_branch(Path::new("/")), None);
     }
 
     #[test]

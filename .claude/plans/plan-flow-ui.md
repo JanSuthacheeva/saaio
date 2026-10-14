@@ -85,6 +85,8 @@ pub enum ServerMsg {
     Frame(Frame),
     Closed(String),
     Detached,               // another flow ui attached
+    NotOpen(String),        // CloseFlow found no pane
+    Master { cwd: String, branch: Option<String> },   // on attach and when the branch changes
 }
 pub struct PaneInfo { pub key: PaneKey, pub status: PaneStatus }
 pub enum PaneStatus { Running, Exited { code: Option<u32> }, Failed { reason: String } }
@@ -180,7 +182,9 @@ pub enum Opening { Running, WhenUiRuns }
 pub fn started(flow: &FlowView, setup: &str, opening: Opening) -> Document;   // window field and tmux help go, pane added
 pub fn removed(name: &str, pane: &str, worktree: &str) -> Document;            // pane: closed / none / timed out
 
-// workspace.rs: removed open_window, close_window
+// workspace.rs: removed open_window, close_window; added
+/// The branch in `dir` or the repo above it, read from git's HEAD file (cheap to ask every 500 ms).
+pub fn current_branch(dir: &Path) -> Option<String>;
 ```
 
 ### src/main.rs (modified)
@@ -295,7 +299,8 @@ impl MasterRecord {
 // mod.rs
 /// Attaches (sizing the pane before the hello), then loops on stdin, server, resize, started-flow
 /// and tick events until detach; what to tell the user.
-pub fn run(socket: &Path, theme: Theme, claude_home: PathBuf) -> Result<String>;   // $CLAUDE_CONFIG_DIR or ~/.claude
+pub struct UiEnv { pub claude_home: PathBuf, pub home: Option<PathBuf> }   // $CLAUDE_CONFIG_DIR or ~/.claude; $HOME for ~
+pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String>;
 
 // app.rs
 pub enum View { Panes, Board(BoardState), NewFlow(NewFlowForm), History(u32), Help, Stop { unfinished: Vec<String> } }
@@ -548,7 +553,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 
 ### Milestone 4: views
 
-- [ ] Add ui/peek.rs (transcript, tail, PeekCache) with fixture tests; sidebar peek, C-space j/k and enter; ended flows stay under DONE until `flow clear` and their peek shows branch and worktree
+- [x] Add ui/peek.rs (transcript, tail, PeekCache) with fixture tests; sidebar peek, C-space j/k and enter; ended flows stay under DONE until `flow clear` and their peek shows branch and worktree
 - [ ] Add ui/board.rs BoardView and C-space o, with TestBackend tests against the board screen
 - [ ] Add ui/newflow.rs NewFlowForm, C-space n and the `flow start` thread with App::on_started, with tests
 - [ ] Add ui/rail.rs Rail and C-space b

@@ -40,13 +40,20 @@ const TICK_EVERY: Duration = Duration::from_millis(100);
 /// Ticks between two looks at the peeked transcript.
 const TICKS_PER_PEEK: u32 = 10;
 
+/// What flow ui reads from where it runs: Claude's home for the peek, the user's home for ~.
+pub struct UiEnv {
+    pub claude_home: PathBuf,
+    pub home: Option<PathBuf>,
+}
+
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
-pub fn run(socket: &Path, theme: Theme, claude_home: PathBuf) -> Result<String> {
+pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String> {
     let mut outer = Outer::enter()?;
     // Before any thread reads stdin: creating the terminal asks for the cursor position.
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     terminal.clear()?;
-    let mut app = App::new(outer.size()?);
+    let home = env.home.map(|home| home.display().to_string());
+    let mut app = App::new(outer.size()?).with_home(home);
     let client = Client::connect(
         socket,
         Role::Attach {
@@ -62,7 +69,7 @@ pub fn run(socket: &Path, theme: Theme, claude_home: PathBuf) -> Result<String> 
     tick(events);
 
     let mut router = Router::default();
-    let mut peek = PeekCache::new(claude_home);
+    let mut peek = PeekCache::new(env.claude_home);
     let mut ticks: u32 = 0;
     app.on_tick(now_ms());
     loop {
