@@ -319,8 +319,8 @@ impl Lab {
         fs::write(
             &tmux,
             format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}/tmux-args\necho @14\n",
-                root.display()
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > {root}/tmux-args\nprintf '%s\\n' \"$*\" >> {root}/tmux-log\necho @14\n",
+                root = root.display()
             ),
         )
         .unwrap();
@@ -354,6 +354,33 @@ impl Lab {
             command.env_remove("TMUX");
         }
         command.output().unwrap()
+    }
+
+    /// Runs flow with the fake tmux on PATH and inside "tmux".
+    fn run(&self, args: &[&str]) -> Output {
+        let path = format!(
+            "{}:{}",
+            self.bin.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        Command::new(env!("CARGO_BIN_EXE_flow"))
+            .args(args)
+            .current_dir(&self.repo)
+            .env("FLOW_HOME", &self.home)
+            .env("FLOW_CONFIG", self.home.join("no-config.toml"))
+            .env("PATH", path)
+            .env("TMUX", "/tmp/tmux-test,1,0")
+            .env_remove("FLOW_ID")
+            .output()
+            .unwrap()
+    }
+
+    fn tmux_log(&self) -> Vec<String> {
+        fs::read_to_string(self.bin.parent().unwrap().join("tmux-log"))
+            .unwrap_or_default()
+            .lines()
+            .map(String::from)
+            .collect()
     }
 
     fn tmux_args(&self) -> Vec<String> {
@@ -574,5 +601,84 @@ fn clear_tears_down_and_removes_clean_worktrees_but_keeps_uncommitted_work() {
     assert_eq!(
         String::from_utf8(branches.stdout).unwrap().lines().count(),
         3
+    );
+}
+
+#[test]
+fn remove_closes_the_window_tears_down_and_forgets_a_running_flow() {
+    let lab = Lab::new();
+    lab.hook(
+        "teardown",
+        "#!/bin/sh\necho \"$FLOW_NAME\" >> \"$FLOW_REPO/torn-down\"\n",
+    );
+    assert!(lab.start(&["SHOP-1 first try"], true).status.success());
+    assert!(lab.start(&["SHOP-2 keep me"], true).status.success());
+
+    let output = lab.run(&["remove", "shop-1"]);
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(
+        text.starts_with("removed: shop-1\nwindow: closed\nworktree: removed\n"),
+        "{text}"
+    );
+    assert!(
+        lab.tmux_log().contains(&"kill-window -t @14".to_string()),
+        "{:?}",
+        lab.tmux_log()
+    );
+    assert!(!lab.repo.join(".flow/worktrees/shop-1").exists());
+    assert_eq!(
+        fs::read_to_string(lab.repo.join("torn-down"))
+            .unwrap()
+            .trim(),
+        "shop-1"
+    );
+    let list = stdout(&flow(&lab.home, &["status"]));
+    assert!(
+        list.contains("count: 1") && list.contains("shop-2"),
+        "{list}"
+    );
+}
+
+#[test]
+fn remove_keeps_uncommitted_work_unless_forced() {
+    let lab = Lab::new();
+    assert!(lab.start(&["SHOP-1 dirty"], true).status.success());
+    let worktree = lab.repo.join(".flow/worktrees/shop-1");
+    fs::write(worktree.join("work.txt"), "unsaved").unwrap();
+
+    let kept = lab.run(&["remove", "shop-1"]);
+    let text = stdout(&kept);
+    assert!(
+        text.contains(&format!("worktree: \"kept: {}\"", worktree.display())),
+        "{text}"
+    );
+    assert!(text.contains("flow remove shop-1 --force"), "{text}");
+    assert!(worktree.exists());
+
+    assert!(lab.start(&["SHOP-2 dirty too"], true).status.success());
+    let other = lab.repo.join(".flow/worktrees/shop-2");
+    fs::write(other.join("work.txt"), "unsaved").unwrap();
+    let forced = lab.run(&["remove", "shop-2", "--force"]);
+    assert!(
+        stdout(&forced).contains("worktree: removed"),
+        "{}",
+        stdout(&forced)
+    );
+    assert!(!other.exists());
+}
+
+#[test]
+fn remove_says_when_there_is_no_such_flow() {
+    let lab = Lab::new();
+
+    let output = lab.run(&["remove", "shop-999"]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stdout(&output).starts_with("error: no flow named shop-999"),
+        "{}",
+        stdout(&output)
     );
 }

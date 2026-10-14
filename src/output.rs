@@ -406,6 +406,30 @@ pub fn skipped() -> Document {
     }))
 }
 
+/// removed: name, window (closed / gone / none), worktree (removed / kept: path / none), help.
+pub fn removed(name: &str, window: &str, worktree: &str) -> Document {
+    #[derive(Serialize)]
+    struct Removed<'a> {
+        removed: &'a str,
+        window: &'a str,
+        worktree: &'a str,
+        help: Vec<String>,
+    }
+    let mut help = Vec::new();
+    if worktree.starts_with("kept") {
+        help.push(format!(
+            "Run `flow remove {name} --force` to discard the uncommitted work"
+        ));
+    }
+    help.push("Run `flow` to see what is left".to_string());
+    Document::Toon(toon(&Removed {
+        removed: name,
+        window,
+        worktree,
+        help,
+    }))
+}
+
 /// cleared: n, names[n], kept[n]{name,path} for worktrees with uncommitted work, help.
 pub fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
     #[derive(Serialize)]

@@ -57,10 +57,22 @@ pub fn worktree_add_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
     .to_vec()
 }
 
-/// git -C <repo> worktree remove <path> (no --force: a dirty worktree is kept)
-pub fn worktree_remove_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
+/// git -C <repo> worktree remove [--force] <path>; without force a dirty worktree is kept.
+pub fn worktree_remove_argv(repo: &Path, workspace: &Workspace, force: bool) -> Vec<String> {
     let repo = repo.display().to_string();
-    ["git", "-C", &repo, "worktree", "remove", &workspace.path]
+    let mut argv: Vec<String> = ["git", "-C", &repo, "worktree", "remove"]
+        .map(String::from)
+        .to_vec();
+    if force {
+        argv.push("--force".to_string());
+    }
+    argv.push(workspace.path.clone());
+    argv
+}
+
+/// tmux kill-window -t <window>
+pub fn kill_window_argv(window: &str) -> Vec<String> {
+    ["tmux", "kill-window", "-t", window]
         .map(String::from)
         .to_vec()
 }
@@ -253,7 +265,7 @@ mod tests {
             ])
         );
         assert_eq!(
-            worktree_remove_argv(Path::new("/repo"), &workspace),
+            worktree_remove_argv(Path::new("/repo"), &workspace, false),
             strings(&[
                 "git",
                 "-C",
@@ -262,6 +274,22 @@ mod tests {
                 "remove",
                 "/repo/.flow/worktrees/shop-217"
             ])
+        );
+        assert_eq!(
+            worktree_remove_argv(Path::new("/repo"), &workspace, true),
+            strings(&[
+                "git",
+                "-C",
+                "/repo",
+                "worktree",
+                "remove",
+                "--force",
+                "/repo/.flow/worktrees/shop-217"
+            ])
+        );
+        assert_eq!(
+            kill_window_argv("@14"),
+            strings(&["tmux", "kill-window", "-t", "@14"])
         );
     }
 

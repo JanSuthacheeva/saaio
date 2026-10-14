@@ -22,6 +22,7 @@ flow start <request> [--name <name>] [--mode guided|auto] [--agent <name>]
 flow new --name <name> --request <text> [--mode guided|auto]
 flow report [--flow <name|id>] <event>  the flow comes from --flow or $FLOW_ID
 flow status [<name|id>] [--json] [--full]
+flow remove <name|id> [--force]         stop a flow's worker, tear down its worktree, forget it
 flow clear                              forget finished flows, tear down their worktrees
 ```
 
@@ -115,6 +116,10 @@ docker compose down -v
 
 Compose names a project after its folder, so each worktree runs its own stack and
 `docker compose exec ...` inside a worktree reaches that stack.
+
+`flow remove <name>` does the same for one flow at any state: it closes the worker's tmux
+window, runs the teardown hook, removes the worktree (`--force` also discards uncommitted
+work) and forgets the flow.
 
 `flow clear` keeps a worktree with uncommitted work (listed under `kept`) and always keeps the
 branch, which carries the merge request.

@@ -6,7 +6,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
-use crate::launch::{WORKTREES_DIR, worktree_add_argv, worktree_remove_argv};
+use crate::launch::{WORKTREES_DIR, kill_window_argv, worktree_add_argv, worktree_remove_argv};
 use crate::view::Workspace;
 
 /// The repo's own hooks: .flow/setup after the worktree exists, .flow/teardown before it goes.
@@ -72,9 +72,14 @@ pub fn open_window(argv: &[String]) -> Result<String> {
     Ok(stdout.trim().to_string())
 }
 
-/// Removes a clean worktree; Ok(false) when git refuses (uncommitted work).
-pub fn remove_worktree(repo: &Path, workspace: &Workspace) -> Result<bool> {
-    let argv = worktree_remove_argv(repo, workspace);
+/// Closes a worker's tmux window; Ok(false) when it is already gone.
+pub fn close_window(window: &str) -> Result<bool> {
+    Ok(run(&kill_window_argv(window)).is_ok())
+}
+
+/// Removes a worktree; without force Ok(false) when git refuses (uncommitted work).
+pub fn remove_worktree(repo: &Path, workspace: &Workspace, force: bool) -> Result<bool> {
+    let argv = worktree_remove_argv(repo, workspace, force);
     let output = Command::new(&argv[0])
         .args(&argv[1..])
         .output()
@@ -283,9 +288,9 @@ mod tests {
         create_worktree(&repo, &dirty).unwrap();
         fs::write(Path::new(&dirty.path).join("work.txt"), "unsaved").unwrap();
 
-        assert!(remove_worktree(&repo, &clean).unwrap());
+        assert!(remove_worktree(&repo, &clean, false).unwrap());
         assert!(!Path::new(&clean.path).exists());
-        assert!(!remove_worktree(&repo, &dirty).unwrap());
-        assert!(Path::new(&dirty.path).exists());
+        assert!(!remove_worktree(&repo, &dirty, false).unwrap());
+        assert!(remove_worktree(&repo, &dirty, true).unwrap());
     }
 }

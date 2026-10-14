@@ -73,6 +73,14 @@ enum Command {
         #[arg(long)]
         agent: Option<String>,
     },
+    /// Stop a flow's worker, tear down its worktree and forget it
+    Remove {
+        /// Flow name or id
+        flow: String,
+        /// Also remove a worktree with uncommitted work
+        #[arg(long)]
+        force: bool,
+    },
     /// Forget flows that are done or ended
     Clear,
 }
@@ -202,6 +210,7 @@ fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure> {
                 now,
             )
         }
+        Some(Command::Remove { flow, force }) => remove(store, &flow, force, now),
         Some(Command::Clear) => clear(store, now),
     }
 }
@@ -389,20 +398,36 @@ fn report(
     Ok(output::reported(&reported))
 }
 
+fn remove(store: &Store, name: &str, force: bool, now: u64) -> Result<Document, Failure> {
+    let (flows, _) = views(store, now);
+    let flow = fold::resolve(&flows, name).ok_or_else(|| no_flow(name))?;
+    let window = match flow
+        .workspace
+        .as_ref()
+        .and_then(|space| space.window.as_deref())
+    {
+        None => "none",
+        Some(window) if workspace::close_window(window).unwrap_or(false) => "closed",
+        Some(_) => "gone",
+    };
+    let worktree = match retire_worktree(flow, force) {
+        Retired::None => "none".to_string(),
+        Retired::Removed => "removed".to_string(),
+        Retired::Kept(path) => format!("kept: {path}"),
+    };
+    store.remove(&flow.id).map_err(|error| {
+        Failure::from_io(error.context(format!("could not remove {}", flow.name)))
+    })?;
+    Ok(output::removed(&flow.name, window, &worktree))
+}
+
 fn clear(store: &Store, now: u64) -> Result<Document, Failure> {
     let (flows, _) = views(store, now);
     let mut names = Vec::new();
     let mut kept = Vec::new();
     for flow in flows.iter().filter(|flow| flow.is_finished()) {
-        if let Some(space) = &flow.workspace
-            && let Some(repo) = repo_of(space)
-            && Path::new(&space.path).exists()
-        {
-            let env = launch::hook_env(&flow.id, &flow.name, &repo, space);
-            let _ = workspace::run_hook(&repo, Hook::Teardown, space, &env);
-            if !workspace::remove_worktree(&repo, space).unwrap_or(false) {
-                kept.push((flow.name.clone(), space.path.clone()));
-            }
+        if let Retired::Kept(path) = retire_worktree(flow, false) {
+            kept.push((flow.name.clone(), path));
         }
         store.remove(&flow.id).map_err(|error| {
             Failure::from_io(error.context(format!("could not clear {}", flow.name)))
@@ -410,6 +435,33 @@ fn clear(store: &Store, now: u64) -> Result<Document, Failure> {
         names.push(flow.name.clone());
     }
     Ok(output::cleared(&names, &kept))
+}
+
+/// What happened to a flow's worktree when it was cleared or removed.
+enum Retired {
+    None,
+    Removed,
+    Kept(String),
+}
+
+/// Runs the teardown hook and removes the flow's worktree; keeps it with uncommitted work unless forced.
+fn retire_worktree(flow: &FlowView, force: bool) -> Retired {
+    let Some(space) = &flow.workspace else {
+        return Retired::None;
+    };
+    let Some(repo) = repo_of(space) else {
+        return Retired::None;
+    };
+    if !Path::new(&space.path).exists() {
+        return Retired::None;
+    }
+    let env = launch::hook_env(&flow.id, &flow.name, &repo, space);
+    let _ = workspace::run_hook(&repo, Hook::Teardown, space, &env);
+    if workspace::remove_worktree(&repo, space, force).unwrap_or(false) {
+        Retired::Removed
+    } else {
+        Retired::Kept(space.path.clone())
+    }
 }
 
 /// The repository a flow worktree belongs to: the path above .flow/worktrees/<name>.
