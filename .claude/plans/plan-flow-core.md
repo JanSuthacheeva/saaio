@@ -301,12 +301,13 @@ impl Failure {
     pub fn to_toon(&self) -> String;                                        // error: ..., help[n]: ...
 }
 
-/// bin, description, count, needs_you, flows[n]{name,state,phase,tasks,age}, blocked[n]{name,blocker}, warnings, help.
+/// bin, description, count, needs_you, flows[n]{name,state,phase,tasks,age}, blockers[n]{name,blocker}, warnings, help.
+/// blockers lists the open question or block reason of every flow that needs you (renamed from blocked while building).
 pub fn home(board: &Board, bin: &str, warnings: &[String]) -> Document;
 /// count, needs_you, flows table, blockers, warnings, help; "flows: none tracked" when empty.
 pub fn status_list(board: &Board, warnings: &[String], full: bool) -> Document;
 /// name, request, mode, state, phase, blocker, tasks, review, merge_request,
-/// steps[4]{phase,status,duration}, decisions[n], timeline[n]{at,text}, help.
+/// steps[4]{phase,status,duration}, decisions[n], timeline[n]{ago,text}, help. Absent values are left out, not null.
 pub fn status_detail(flow: &FlowView, now: u64, full: bool) -> Document;
 /// flow, id, existing, help with `export FLOW_ID=<id>`.
 pub fn created(flow: &FlowView, existing: bool) -> Document;
@@ -430,7 +431,7 @@ duration runs until `now`. Repeated reports fold to the same view.
 ### Output
 
 - [x] Add output.rs `Document`, `Failure` (error, usage, from_io, to_toon), `truncated`, `short_duration`, with unit tests; confirm `serde_toon_format` encodes tabular arrays as in the plan, else add the fallback encoder
-- [ ] Add `output::home`, `status_list`, `status_detail` with exact TOON tests, including the empty state, truncation hint and warnings
+- [x] Add `output::home`, `status_list`, `status_detail` with exact TOON tests, including the empty state, truncation hint and warnings
 - [ ] Add `output::created`, `reported`, `skipped`, `cleared` with exact TOON tests
 
 ### Commands
