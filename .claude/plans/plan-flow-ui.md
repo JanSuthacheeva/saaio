@@ -425,6 +425,15 @@ Chosen: **alacritty_terminal**, with `kitty_keyboard: false`, so Claude falls ba
 encoding and C-space stays a NUL byte. Because Claude turns mouse reporting on, `Router::route` also
 takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside the pane go to the UI.
 
+## Idle cost (task 5.2)
+
+Release build, 150x44, 60 s idle after the sessions settled, CPU time from `ps`:
+
+- Five `cat` sessions, no flow working: server 0.04 s and UI 0.05 s per 30 s (~0.15 %), 4 MB each.
+- Four flows working: the UI spends ~0.8 % on the sidebar spinners (10 frames a second); the server stays at ~0.1 %.
+- Four real Claude workers (Haiku), idle at the prompt: server 0.09 s and UI 0.08 s per minute (~0.15 %),
+  3.2 MB and 4.3 MB. Each Claude process itself takes ~1 s per minute and ~250 MB.
+
 ## Stored data
 
 - `<store root>/master.json` `{"session": "<uuid>", "cwd": "..."}`; `server.sock`, `server.log` beside it.
@@ -573,7 +582,7 @@ takes the pane's area and rewrites SGR mouse coordinates into it; clicks outside
 
 ### Milestone 5: restore and hardening
 
-- [ ] Restore integration test: start flows, kill the server, start flow ui again, workers and master resume
+- [x] Restore integration test: start flows, kill the server, start flow ui again, workers and master resume
 - [ ] Measure idle CPU and memory of server and ui with five panes; fix anything above near zero idle
 - [ ] Remove the `#[allow(dead_code)]` the new modules carry in main.rs until they are wired
 - [ ] Master instructions: config `master` agent entry, the builtin master command appends `~/.config/flow/master.md` (written with a default on first use, never overwritten), MasterRecord::spec uses it; config and master tests
