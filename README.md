@@ -80,6 +80,27 @@ Keys, after the prefix `C-space` (`C-space C-space` sends one through):
 start. After a crash or a reboot the next `flow ui` resumes the master and every worker
 (`claude --resume`); after a stop the master starts fresh.
 
+### Themes
+
+flow ui reads `theme.toml` beside `config.toml` (`~/.config/flow/theme.toml`) and repaints within a
+second when it, or the theme it extends, changes. Without it flow uses the terminal's own colors.
+
+```toml
+# Colors: "#rrggbb", an ANSI index, "default" (the terminal's), or another key.
+extends = "flow"        # terminal | flow | flow-light | a file in themes/, without .toml
+[ui]
+accent = "#d9825b"
+[state]
+ended = "faint"
+```
+
+Keys: `[ui]` background, panel, selection, rule, text, strong, muted, faint, accent; `[state]`
+working, waiting, blocked, done, ended. A key left out keeps the base's value. `flow` and
+`flow-light` are the design's dark and light colors. A tool can keep a theme in
+`~/.config/flow/themes/<name>.toml` for `extends` to name; a Noctalia template that writes
+`themes/noctalia.toml` makes flow follow Noctalia live. A broken file keeps the last theme and
+says why in the border.
+
 ## Starting a worker
 
 Run `flow start` inside the repository, usually from the master:
