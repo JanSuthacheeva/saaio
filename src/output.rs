@@ -544,12 +544,19 @@ pub fn skipped() -> Document {
 
 /// removed: name, window (closed / gone / none), worktree (removed / kept: path / none), help.
 /// removed, pane (closed / none / timed out), worktree, help.
-pub fn removed(name: &str, pane: &str, worktree: &str) -> Document {
+/// How `flow remove` says a branch has work no other branch has; flow ui asks before deleting it.
+pub const UNMERGED: &str = "on no other branch";
+/// How `flow remove` says a worktree has uncommitted work; flow ui asks before discarding it.
+pub const UNCOMMITTED: &str = "has uncommitted work";
+
+/// removed, pane, worktree, branch (deleted, kept or none), help.
+pub fn removed(name: &str, pane: &str, worktree: &str, branch: &str) -> Document {
     #[derive(Serialize)]
     struct Removed<'a> {
         removed: &'a str,
         pane: &'a str,
         worktree: &'a str,
+        branch: &'a str,
         help: Vec<String>,
     }
     let mut help = Vec::new();
@@ -563,6 +570,7 @@ pub fn removed(name: &str, pane: &str, worktree: &str) -> Document {
         removed: name,
         pane,
         worktree,
+        branch,
         help,
     }))
 }
