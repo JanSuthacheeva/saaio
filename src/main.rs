@@ -680,7 +680,7 @@ fn retire_worktree(flow: &FlowView, force: bool) -> Retired {
     let Some(space) = &flow.workspace else {
         return Retired::None;
     };
-    let Some(repo) = repo_of(space) else {
+    let Some(repo) = launch::repo_of(space) else {
         return Retired::None;
     };
     if !Path::new(&space.path).exists() {
@@ -693,15 +693,6 @@ fn retire_worktree(flow: &FlowView, force: bool) -> Retired {
     } else {
         Retired::Kept(space.path.clone())
     }
-}
-
-/// The repository a flow worktree belongs to: the path above .flow/worktrees/<name>.
-fn repo_of(space: &view::Workspace) -> Option<PathBuf> {
-    let path = Path::new(&space.path);
-    let worktrees = path.parent()?;
-    worktrees
-        .ends_with(launch::WORKTREES_DIR)
-        .then(|| worktrees.parent()?.parent().map(Path::to_path_buf))?
 }
 
 fn status(

@@ -166,6 +166,9 @@ A repo can commit two executable hooks; `flow` runs them in the worktree with `F
   marked blocked with its last error line and the worker still opens so you can look.
 - `.flow/teardown` when `flow clear` removes a finished flow's worktree.
 
+The worker's session gets the same variables, so it can reach its own stack, for example on port
+`$((8000 + FLOW_SLOT))`.
+
 `FLOW_SLOT` is 1 to 20, unique among unfinished flows in every project, for anything that must not collide, such as
 ports. For a Docker Compose project whose tests run in the containers, read the ports from
 variables in `compose.yaml` (`"${HTTP_PORT:-80}:80"`, `"${DB_PORT:-3306}:3306"`), then:

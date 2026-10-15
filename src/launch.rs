@@ -148,8 +148,28 @@ pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<Pa
         key: PaneKey::Flow(flow.id.clone()),
         argv,
         cwd: PathBuf::from(&space.path),
-        env: pane_env(Some(&flow.id), env),
+        env: worker_env(flow, space, env),
     })
+}
+
+/// What a worker's session knows of its flow: the hooks' variables, so it can find its own ports
+/// from FLOW_SLOT, then pane_env's.
+fn worker_env(flow: &FlowView, space: &Workspace, env: &LaunchEnv) -> Vec<(String, String)> {
+    let mut vars = match repo_of(space) {
+        Some(repo) => hook_env(&flow.id, &flow.name, &repo, space),
+        None => vec![("FLOW_ID".to_string(), flow.id.clone())],
+    };
+    vars.extend(pane_env(None, env));
+    vars
+}
+
+/// The repository a flow worktree belongs to: the path above .flow/worktrees/<name>.
+pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
+    let path = Path::new(&space.path);
+    let worktrees = path.parent()?;
+    worktrees
+        .ends_with(WORKTREES_DIR)
+        .then(|| worktrees.parent()?.parent().map(Path::to_path_buf))?
 }
 
 /// FLOW_ID (workers only), FLOW_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
@@ -503,10 +523,11 @@ mod tests {
             fresh.argv,
             agent_argv(claude, "7f3c", "shop-217", "SHOP-217 add CSV export")
         );
-        assert!(
-            fresh
-                .env
-                .contains(&("FLOW_ID".to_string(), "7f3c".to_string()))
+        let mut expected = hook_env("7f3c", "shop-217", Path::new("/repo"), &shop());
+        expected.extend(pane_env(None, &env));
+        assert_eq!(
+            fresh.env, expected,
+            "FLOW_SLOT and the rest, as the hooks get them"
         );
 
         let resumed = worker_spec(&worker(Some(HOSTED)), claude, &env).unwrap();
@@ -519,6 +540,16 @@ mod tests {
             old_tmux.argv, resumed.argv,
             "a tmux worker already took its id"
         );
+    }
+
+    #[test]
+    fn finds_the_repo_above_the_worktrees_folder_only() {
+        assert_eq!(repo_of(&shop()), Some(PathBuf::from("/repo")));
+        let elsewhere = Workspace {
+            path: "/somewhere/shop-217".into(),
+            ..shop()
+        };
+        assert_eq!(repo_of(&elsewhere), None);
     }
 
     #[test]
