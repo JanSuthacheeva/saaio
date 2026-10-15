@@ -24,7 +24,8 @@ flow new --name <name> --request <text> [--mode guided|auto]
 flow report [--flow <name|id>] <event>  the flow comes from --flow or $FLOW_ID
 flow status [<name|id>] [--json] [--full]
 flow status --all [--json] [--full]     every project's flows, with their project
-flow remove <name|id> [--force]         end a flow's worker, tear down its worktree, forget it
+flow remove <name|id> [--force] [--delete-unmerged]
+                                        end a flow's worker, tear down its worktree and branch, forget it
 flow clear                              forget finished flows, tear down their worktrees
 ```
 
@@ -71,6 +72,10 @@ Keys, after the prefix `C-space` (`C-space C-space` sends one through):
 | `o` | the board: a card per session and the selected flow's timeline, decisions and steps; `a` there shows every project's flows (read-only for other projects) |
 | `b` | fold the sidebar to a rail and back |
 | `r` | resume a session that exited, or an ended flow |
+
+When a worker's session ends, its pane offers `x` to clean the flow up (worktree, branch, flow;
+it asks first before discarding uncommitted changes or commits on no other branch), `r` to resume
+it and `esc` to go back to the master.
 | `[` | scroll back through the session's history |
 | `d` | detach |
 | `Q` | stop: lists unfinished workers; `k` keeps them for the next `flow ui`, `e` ends them |
@@ -213,11 +218,13 @@ Compose names a project after its folder, so each worktree runs its own stack an
 `docker compose exec ...` inside a worktree reaches that stack.
 
 `flow remove <name>` does the same for one flow at any state: it ends the worker's session in
-flow ui, runs the teardown hook, removes the worktree and forgets the flow. With uncommitted
-work in the worktree it refuses and touches nothing; `--force` discards that work.
+flow ui, runs the teardown hook, removes the worktree, deletes the branch and forgets the flow.
+It refuses and touches nothing when the worktree has uncommitted work (`--force` discards it) or
+the branch has commits on no other branch, local or pushed (`--delete-unmerged` deletes them).
 
-`flow clear` keeps a worktree with uncommitted work (listed under `kept`) and always keeps the
-branch, which carries the merge request. `flow status <name>` shows a flow's `branch`, `worktree`
+`flow clear` keeps a worktree with uncommitted work (listed under `kept`), and deletes a
+finished flow's branch only when its commits are on another branch; a pushed branch with its
+merge request stays on the remote. `flow status <name>` shows a flow's `branch`, `worktree`
 and whether that worktree is still there.
 
 ## Output

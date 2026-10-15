@@ -97,6 +97,9 @@ enum Command {
         /// Also remove a worktree with uncommitted work
         #[arg(long)]
         force: bool,
+        /// Also delete the flow's branch when it has commits on no other branch
+        #[arg(long)]
+        delete_unmerged: bool,
     },
     /// Forget flows that are done or ended
     Clear,
@@ -261,7 +264,11 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
                 now,
             )
         }
-        Some(Command::Remove { flow, force }) => remove(store, &flow, force, now),
+        Some(Command::Remove {
+            flow,
+            force,
+            delete_unmerged,
+        }) => remove(store, &flow, force, delete_unmerged, now),
         Some(Command::Clear) => clear(store, now),
         Some(Command::Ui { stop }) => ui(store, stop),
         Some(Command::Server) => server(store.clone()),
@@ -606,18 +613,32 @@ fn report(
     Ok(output::reported(&reported))
 }
 
-fn remove(store: &Store, name: &str, force: bool, now: u64) -> Result<Document, Failure> {
+fn remove(
+    store: &Store,
+    name: &str,
+    force: bool,
+    delete_unmerged: bool,
+    now: u64,
+) -> Result<Document, Failure> {
     let (flows, _) = views(store, now);
     let flow = fold::resolve(&flows, name).ok_or_else(|| no_flow(name))?;
     if !force {
         refuse_uncommitted_work(flow)?;
+    }
+    if !delete_unmerged {
+        refuse_unmerged_commits(flow)?;
     }
     let pane = match close_pane(store, flow)? {
         Closing::Closed => "closed",
         Closing::NoServer | Closing::NoPane => "none",
         Closing::TimedOut => "timed out",
     };
-    let worktree = match retire_worktree(flow, force) {
+    let retired = retire_worktree(flow, force);
+    let branch = match retired {
+        Retired::Kept(_) => "kept",
+        Retired::None | Retired::Removed => drop_branch(flow, delete_unmerged),
+    };
+    let worktree = match retired {
         Retired::None => "none".to_string(),
         Retired::Removed => "removed".to_string(),
         Retired::Kept(path) => format!("kept: {path}"),
@@ -625,7 +646,58 @@ fn remove(store: &Store, name: &str, force: bool, now: u64) -> Result<Document, 
     store.remove(&flow.id).map_err(|error| {
         Failure::from_io(error.context(format!("could not remove {}", flow.name)))
     })?;
-    Ok(output::removed(&flow.name, pane, &worktree))
+    Ok(output::removed(&flow.name, pane, &worktree, branch))
+}
+
+/// Fails before anything is touched when the flow's branch has commits on no other branch.
+fn refuse_unmerged_commits(flow: &FlowView) -> Result<(), Failure> {
+    let Some((repo, branch)) = branch_of(flow) else {
+        return Ok(());
+    };
+    match workspace::commits_only_on(&repo, &branch) {
+        Ok(Some(count)) if count > 0 => Err(Failure::error(
+            format!(
+                "{branch} has {count} commit{} {}",
+                if count == 1 { "" } else { "s" },
+                output::UNMERGED
+            ),
+            vec![
+                format!(
+                    "Merge or push {branch}, then run `flow remove {}` again",
+                    flow.name
+                ),
+                format!(
+                    "Run `flow remove {} --delete-unmerged` to delete it with its commits",
+                    flow.name
+                ),
+            ],
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// Deletes the flow's branch once its worktree is gone: always with `unmerged`, else only when all
+/// its commits are on another branch. deleted, kept or none.
+fn drop_branch(flow: &FlowView, unmerged: bool) -> &'static str {
+    let Some((repo, branch)) = branch_of(flow) else {
+        return "none";
+    };
+    match workspace::commits_only_on(&repo, &branch) {
+        Ok(None) => "none",
+        Ok(Some(0)) => deleted(workspace::delete_branch(&repo, &branch)),
+        Ok(Some(_)) if unmerged => deleted(workspace::delete_branch(&repo, &branch)),
+        Ok(Some(_)) | Err(_) => "kept",
+    }
+}
+
+fn deleted(result: anyhow::Result<()>) -> &'static str {
+    if result.is_ok() { "deleted" } else { "kept" }
+}
+
+/// The repository and branch of a started flow.
+fn branch_of(flow: &FlowView) -> Option<(PathBuf, String)> {
+    let space = flow.workspace.as_ref()?;
+    Some((launch::repo_of(space)?, space.branch.clone()))
 }
 
 /// Ends the flow's session in flow ui before its worktree goes.
@@ -643,7 +715,7 @@ fn refuse_uncommitted_work(flow: &FlowView) -> Result<(), Failure> {
         return Ok(());
     }
     Err(Failure::error(
-        format!("{} has uncommitted work in {}", flow.name, space.path),
+        format!("{} {} in {}", flow.name, output::UNCOMMITTED, space.path),
         vec![
             format!(
                 "Commit or stash it in {}, then run `flow remove {}` again",
@@ -663,8 +735,11 @@ fn clear(store: &Store, now: u64) -> Result<Document, Failure> {
     let mut kept = Vec::new();
     for flow in flows.iter().filter(|flow| flow.is_finished()) {
         close_pane(store, flow)?;
-        if let Retired::Kept(path) = retire_worktree(flow, false) {
-            kept.push((flow.name.clone(), path));
+        match retire_worktree(flow, false) {
+            Retired::Kept(path) => kept.push((flow.name.clone(), path)),
+            Retired::None | Retired::Removed => {
+                drop_branch(flow, false);
+            }
         }
         store.remove(&flow.id).map_err(|error| {
             Failure::from_io(error.context(format!("could not clear {}", flow.name)))

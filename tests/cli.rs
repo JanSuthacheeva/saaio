@@ -383,6 +383,50 @@ impl Lab {
         server
     }
 
+    /// The flow branches in the repo, sorted.
+    fn branches(&self) -> Vec<String> {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(&self.repo)
+            .args(["branch", "--list", "flow/*", "--format=%(refname:short)"])
+            .output()
+            .unwrap();
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect()
+    }
+
+    /// A commit in the flow's worktree, on its branch only.
+    fn commit_in(&self, name: &str) {
+        let worktree = self.repo.join(".flow/worktrees").join(name);
+        fs::write(worktree.join("work.txt"), "done").unwrap();
+        for args in [
+            vec!["add", "work.txt"],
+            vec![
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-q",
+                "-m",
+                "work",
+            ],
+        ] {
+            assert!(
+                Command::new("git")
+                    .arg("-C")
+                    .arg(&worktree)
+                    .args(&args)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+        }
+    }
+
     fn hook(&self, name: &str, script: &str) {
         let dir = self.repo.join(".flow");
         fs::create_dir_all(&dir).unwrap();
@@ -802,15 +846,10 @@ fn clear_tears_down_and_removes_clean_worktrees_but_keeps_uncommitted_work() {
     let mut torn = torn;
     torn.sort();
     assert_eq!(torn, vec!["shop-1", "shop-2"]);
-    let branches = Command::new("git")
-        .arg("-C")
-        .arg(&lab.repo)
-        .args(["branch", "--list", "flow/*"])
-        .output()
-        .unwrap();
     assert_eq!(
-        String::from_utf8(branches.stdout).unwrap().lines().count(),
-        3
+        lab.branches(),
+        vec!["flow/shop-2", "flow/shop-3"],
+        "a cleared flow's branch goes when no commit of it is lost"
     );
 }
 
@@ -829,7 +868,7 @@ fn remove_tears_down_and_forgets_a_running_flow() {
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
     assert!(
-        text.starts_with("removed: shop-1\npane: none\nworktree: removed\n"),
+        text.starts_with("removed: shop-1\npane: none\nworktree: removed\nbranch: deleted\n"),
         "{text}"
     );
     assert!(!lab.repo.join(".flow/worktrees/shop-1").exists());
@@ -844,6 +883,38 @@ fn remove_tears_down_and_forgets_a_running_flow() {
         list.contains("count: 1") && list.contains("shop-2"),
         "{list}"
     );
+}
+
+#[test]
+fn remove_keeps_a_branch_with_its_own_commits_unless_told() {
+    let lab = Lab::new();
+    assert!(lab.start(&["SHOP-1 first try"]).status.success());
+    lab.commit_in("shop-1");
+
+    let refused = lab.run(&["remove", "shop-1"]);
+
+    let text = stdout(&refused);
+    assert_eq!(refused.status.code(), Some(1), "{text}");
+    assert!(
+        text.contains("flow/shop-1 has 1 commit on no other branch"),
+        "{text}"
+    );
+    assert!(
+        text.contains("flow remove shop-1 --delete-unmerged"),
+        "{text}"
+    );
+    assert!(
+        lab.repo.join(".flow/worktrees/shop-1").exists(),
+        "nothing touched"
+    );
+    assert!(stdout(&lab.run(&[])).contains("shop-1"));
+
+    let deleted = lab.run(&["remove", "shop-1", "--delete-unmerged"]);
+
+    let text = stdout(&deleted);
+    assert!(deleted.status.success(), "{text}");
+    assert!(text.contains("branch: deleted"), "{text}");
+    assert!(lab.branches().is_empty());
 }
 
 #[test]

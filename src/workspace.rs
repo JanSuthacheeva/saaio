@@ -114,6 +114,51 @@ pub fn has_uncommitted_work(workspace: &Workspace) -> Result<bool> {
 }
 
 /// Runs a command; its stdout, or an error with the last line it printed.
+/// How many commits of `branch` are on no other branch, local or remote; None when there is no such
+/// branch.
+pub fn commits_only_on(repo: &Path, branch: &str) -> Result<Option<u32>> {
+    let git = |args: &[&str]| -> Vec<String> {
+        ["git", "-C", &repo.display().to_string()]
+            .iter()
+            .chain(args)
+            .map(|part| part.to_string())
+            .collect()
+    };
+    let full = format!("refs/heads/{branch}");
+    if run(&git(&["show-ref", "--verify", "--quiet", &full])).is_err() {
+        return Ok(None);
+    }
+    // With --branches, --exclude names the branch without refs/heads/.
+    let exclude = format!("--exclude={branch}");
+    let count = run(&git(&[
+        "rev-list",
+        "--count",
+        &full,
+        "--not",
+        &exclude,
+        "--branches",
+        "--remotes",
+    ]))?;
+    count
+        .trim()
+        .parse()
+        .map(Some)
+        .with_context(|| format!("git counted {count}"))
+}
+
+/// git branch -D <branch>: the flow's branch once its worktree is gone.
+pub fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
+    run(&[
+        "git".to_string(),
+        "-C".to_string(),
+        repo.display().to_string(),
+        "branch".to_string(),
+        "-D".to_string(),
+        branch.to_string(),
+    ])
+    .map(|_| ())
+}
+
 fn run(argv: &[String]) -> Result<String> {
     let (program, args) = argv.split_first().context("empty command")?;
     let output = Command::new(program)
