@@ -417,6 +417,12 @@ impl App {
             if let Some(joint) = line.get_mut(1) {
                 *joint = Line::styled(theme.glyphs.rule_joint, theme.ui.rule);
             }
+            if self.rail {
+                let foot = line.len().saturating_sub(2);
+                if let Some(joint) = line.get_mut(foot) {
+                    *joint = Line::styled(theme.glyphs.rule_joint, theme.ui.rule);
+                }
+            }
             frame.render_widget(Paragraph::new(line), rule);
         }
         frame.render_widget(
@@ -1155,11 +1161,7 @@ impl App {
     fn title_line(&self, theme: &Theme, width: u16, right: usize) -> Line<'static> {
         let room = |used: usize| (width as usize).saturating_sub(right + 2 + used);
         let PaneKey::Flow(id) = &self.focus else {
-            let mut title = vec![
-                Span::raw(" "),
-                Span::styled(theme.glyphs.master, theme.ui.accent),
-                Span::styled(" master", theme.ui.strong),
-            ];
+            let mut title = vec![Span::styled(" master", theme.ui.strong)];
             // The sidebar says where the master runs; alone, the title says it.
             let place = match (&self.master, self.areas().side) {
                 (Some(place), Some(_)) => place
@@ -1195,7 +1197,7 @@ impl App {
         title.push(sidebar.label(flow));
         if let Some(space) = &flow.workspace {
             let place = format!("{} · slot {}", space.branch, space.slot);
-            let lead = format!("  {} ", theme.glyphs.separator);
+            let lead = "  · ".to_string();
             let used = Line::from(title.clone()).width() + lead.chars().count();
             let fitted = clip(&place, room(used));
             if !fitted.is_empty() {
@@ -1263,8 +1265,7 @@ impl App {
             Span::styled(glyphs.mark, theme.ui.accent),
             Span::styled(" flow ", theme.ui.strong),
             Span::styled(format!(" {} ", glyphs.separator), theme.ui.rule),
-            Span::styled(glyphs.master, theme.ui.accent),
-            Span::styled(" master", theme.ui.text),
+            Span::styled("master", theme.ui.text),
         ];
         if let Some(place) = &self.master {
             let room = (area.width as usize).saturating_sub(Line::from(left.clone()).width() + 3);
@@ -1551,7 +1552,7 @@ mod tests {
         let mut terminal = render(&app);
 
         assert!(
-            row(&terminal, 0).starts_with(" ● master "),
+            row(&terminal, 0).starts_with(" master "),
             "{}",
             row(&terminal, 0)
         );
@@ -1568,7 +1569,7 @@ mod tests {
         );
         let bar = row(&terminal, 7);
         assert!(bar.contains("▚▄▞ flow"), "{bar}");
-        assert!(bar.contains("● master"), "{bar}");
+        assert!(bar.contains("│ master"), "{bar}");
         assert!(bar.contains("C-space then  n new flow   ? keys"), "{bar}");
         let buffer = terminal.backend().buffer();
         assert!(
@@ -1846,16 +1847,16 @@ mod tests {
 
         assert_eq!(
             side(&terminal, 0),
-            " ▚▄▞ flow                    2 need you "
+            " ▚▄▞ flow                               "
         );
         assert_eq!(
             side(&terminal, 2),
-            " 0 ● master                   ◂ in view "
+            "▌0   master                             "
         );
         assert_eq!(side(&terminal, 4).trim_end(), " NEEDS YOU 2");
         assert_eq!(
             side(&terminal, 5),
-            " 1 ✖ shop-221                       29m "
+            " 1 ● shop-221                       29m "
         );
         assert_eq!(
             side(&terminal, 6),
@@ -1870,7 +1871,7 @@ mod tests {
             "     ●───○───○───○ design        guided "
         );
         assert_eq!(side(&terminal, 13).trim_end(), " RUNNING 1");
-        assert!(side(&terminal, 14).starts_with(" 3 ⠙ export-csv"));
+        assert!(side(&terminal, 14).starts_with(" 3 ◓ export-csv"));
         assert_eq!(side(&terminal, 16).trim_end(), "     agent: review changes");
         assert_eq!(side(&terminal, 18).trim_end(), " DONE 1");
         assert_eq!(
@@ -1900,18 +1901,18 @@ mod tests {
         let terminal = render_at(&app, FLEET);
         let title = row(&terminal, 0);
         assert!(
-            title.starts_with("▌◆ shop-230  ●───○───○───○ design  │ flow/shop-230 · slot 1 "),
+            title.starts_with("▌● shop-230  ●───○───○───○ design  · flow/shop-230 · slot 1 "),
             "{title}"
         );
         assert!(
-            title.ends_with("  │ ▚▄▞ flow                    2 need you "),
+            title.ends_with("  │ ▚▄▞ flow                               "),
             "{title}"
         );
         assert_eq!(
             side(&terminal, 2),
-            " 0 ● master                         you "
+            " 0   master                             "
         );
-        assert!(side(&terminal, 9).starts_with("▌2 ◆ shop-230"));
+        assert!(side(&terminal, 9).starts_with("▌2 ● shop-230"));
         let buffer = terminal.backend().buffer();
         let selection = Theme::builtin().ui.selection.bg.unwrap();
         assert!((109..149).all(|x| buffer[(x, 11)].bg == selection));
@@ -2054,7 +2055,7 @@ mod tests {
         let terminal = render_peek(&app, &peek);
 
         assert!(
-            side(&terminal, 14).starts_with("▌3 ⠙ export-csv"),
+            side(&terminal, 14).starts_with("▌3 ◓ export-csv"),
             "{}",
             side(&terminal, 14)
         );
@@ -2064,7 +2065,7 @@ mod tests {
         );
         assert_eq!(
             side(&terminal, 16).trim_end(),
-            format!("▌ {}", "╌".repeat(37))
+            format!("▌ {}", "─".repeat(37))
         );
         assert_eq!(
             side(&terminal, 17).trim_end(),
@@ -2081,7 +2082,7 @@ mod tests {
         );
         assert_eq!(
             side(&terminal, 21).trim_end(),
-            "▌ ⠙ Write(ThrottleExportTest.php)"
+            "▌ ◓ Write(ThrottleExportTest.php)"
         );
         assert_eq!(side(&terminal, 22).trim_end(), "▌ enter jump in");
         assert_eq!(side(&terminal, 23).trim_end(), "");
@@ -2178,7 +2179,7 @@ mod tests {
         let bar = row(&render(&solo), 7);
         let sidebar = render_at(&fleet, FLEET);
 
-        assert!(bar.contains("● master  ~/projects/shop · main"), "{bar}");
+        assert!(bar.contains("│ master  ~/projects/shop · main"), "{bar}");
         let mut wide = App::new(FLEET);
         wide.on_server(ServerMsg::Master {
             cwd: "/shop".into(),
@@ -2190,7 +2191,7 @@ mod tests {
             "{wide}"
         );
         assert!(
-            row(&sidebar, 0).starts_with(" ● master  main "),
+            row(&sidebar, 0).starts_with(" master  main "),
             "the sidebar says where it runs: {}",
             row(&sidebar, 0)
         );
@@ -2220,14 +2221,14 @@ mod tests {
         assert!(row(&terminal, 0).starts_with(" ▚▄▞ flow board "));
         assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
         assert!(
-            row(&terminal, 3).starts_with("   0 ● master                              you "),
+            row(&terminal, 3).starts_with("   0   master                              you "),
             "only the selected card is outlined"
         );
-        assert!(row(&terminal, 3).contains(" 1 ✖ shop-221                        blocked "));
-        assert!(row(&terminal, 3).contains("│ 2 ◆ shop-230                waiting for you │"));
+        assert!(row(&terminal, 3).contains(" 1 ● shop-221                        blocked "));
+        assert!(row(&terminal, 3).contains("│ 2 ● shop-230                waiting for you │"));
         assert!(row(&terminal, 4).contains("     ~/projects/shop · main"));
         assert!(
-            row(&terminal, 5).contains("   ━━━━━━━━━━━━───────────────  4/9  29m ago "),
+            row(&terminal, 5).contains("   4/9 tasks"),
             "{}",
             row(&terminal, 5)
         );
@@ -2240,7 +2241,7 @@ mod tests {
             shop_230.trim_start() == "31m ago ",
             "a flow without tasks draws no bar: {shop_230:?}"
         );
-        assert!(row(&terminal, 10).contains(" 3 ⠙ export-csv            reviewing · agent "));
+        assert!(row(&terminal, 10).contains(" 3 ◓ export-csv            reviewing · agent "));
         assert!(
             row(&terminal, 16)
                 .starts_with(" 2 shop-230  shop-230 · guided · flow/shop-230 · slot 1"),
@@ -2392,15 +2393,6 @@ mod tests {
         );
         assert_eq!(buffer[(x + 4, y)].fg, blocked, "current");
         assert_eq!(buffer[(x + 8, y)].fg, faint, "open");
-
-        let mut board = board_app();
-        board.on_input(Routed::Command(Command::Board));
-        let terminal = render_at(&board, FLEET);
-        let buffer = terminal.backend().buffer();
-        let bar = (0..FLEET.cols)
-            .find(|&x| buffer[(x, 6)].symbol() == "━")
-            .expect("shop-221's task bar");
-        assert_eq!(buffer[(bar, 6)].fg, blocked, "the filled bar");
     }
 
     #[test]
@@ -2448,12 +2440,12 @@ mod tests {
         );
         assert_eq!(rows[at + 2].trim_end(), "  needs you");
         assert!(
-            rows[at + 3].starts_with("  ✖ shop-221  migration needs a default value"),
+            rows[at + 3].starts_with("  ● shop-221  migration needs a default value"),
             "{}",
             rows[at + 3]
         );
         assert!(
-            rows[at + 4].starts_with("  ◆ shop-230  Which approach: a channel column"),
+            rows[at + 4].starts_with("  ● shop-230  Which approach: a channel column"),
             "{}",
             rows[at + 4]
         );
@@ -2768,15 +2760,15 @@ mod tests {
         let rail = |y| row(&terminal, y).chars().skip(142).collect::<String>();
 
         assert!(
-            row(&terminal, 0).ends_with(" ◆ 2 shop-230 is waiting  │  C-space b sidebar │ ▚▄▞  "),
+            row(&terminal, 0).ends_with(" ● 2 shop-230 is waiting  │  C-space b sidebar │ ▚▄▞  "),
             "{}",
             row(&terminal, 0)
         );
-        assert_eq!(rail(2), " 0 ●  ");
-        assert_eq!(rail(4), "▌1 ✖  ");
-        assert_eq!(rail(5), " 2 ◆  ");
-        assert_eq!(rail(7), " 3 ⠙  ");
-        assert_eq!(rail(9), " 4 ✔  ");
+        assert_eq!(rail(2), " 0    ");
+        assert_eq!(rail(4), "▌1 ●  ");
+        assert_eq!(rail(5), " 2 ●  ");
+        assert_eq!(rail(7), " 3 ◓  ");
+        assert_eq!(rail(9), " 4 ✓  ");
         assert_eq!(rail(41), " C-␣  ");
         assert_eq!(
             app.on_input(Routed::Click { col: 146, row: 6 }),
@@ -2843,7 +2835,7 @@ mod tests {
         let dialog: String = (0..42).map(|y| row(&terminal, y) + "\n").collect();
         assert!(dialog.contains("3 flows are not finished:"), "{dialog}");
         assert!(
-            dialog.contains("✖ shop-221    migration needs a default value"),
+            dialog.contains("● shop-221    migration needs a default value"),
             "{dialog}"
         );
         assert!(
