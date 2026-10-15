@@ -61,7 +61,7 @@ pub fn load(dir: &Path) -> (Result<Theme>, Vec<PathBuf>) {
             .map_or(DEFAULT_BASE, |file| file.extends.as_str());
         let mut palette = Palette::named(base).expect("a chain ends in a built-in theme");
         for file in chain.iter().rev() {
-            apply(file, &mut palette).with_context(|| format!("{}", file.path.display()))?;
+            apply(file, &mut palette).with_context(|| file.path.display().to_string())?;
         }
         Ok(Theme::from_palette(palette))
     });
@@ -73,10 +73,10 @@ fn read(path: &Path) -> Result<Option<ThemeFile>> {
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error).with_context(|| format!("{}", path.display())),
+        Err(error) => return Err(error).with_context(|| path.display().to_string()),
     };
     parse(path, &text)
-        .with_context(|| format!("{}", path.display()))
+        .with_context(|| path.display().to_string())
         .map(Some)
 }
 
@@ -112,10 +112,7 @@ fn apply(file: &ThemeFile, palette: &mut Palette) -> Result<()> {
         match value {
             Value::String(name) if palette.get(name).is_some() => references.push((key, name)),
             value => {
-                palette.set(
-                    key,
-                    color(value, palette).with_context(|| format!("{key}"))?,
-                );
+                palette.set(key, color(value, palette).with_context(|| key.clone())?);
             }
         }
     }
@@ -265,8 +262,8 @@ mod tests {
             "extends = \"flow-light\"\n[ui]\naccent = \"#cb9168\"\nfaint = \"#746965\"\n",
         );
 
-        let (theme, files) = load(dir.path());
-        let palette = theme.unwrap().palette;
+        let (loaded, files) = load(dir.path());
+        let palette = loaded.unwrap().palette;
 
         assert_eq!(palette.accent, Color::Rgb(0xcb, 0x91, 0x68));
         assert_eq!(palette.muted, palette.accent);
