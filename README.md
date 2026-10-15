@@ -56,8 +56,8 @@ to the same state, so retries are harmless.
 beside it. It starts a session server (`flow server`) when none runs; the server owns every
 session, so closing the terminal, a crash of the UI or `C-space d` leaves them running, and the
 next `flow ui` attaches again. The master runs in the folder of the first `flow ui` with the
-orchestrator instructions in `master.md` beside `config.toml` (flow writes a default once and
-never overwrites your edits).
+orchestrator instructions in `master.md` beside `config.toml` (flow writes the default and
+updates it with flow while you have not edited it; your edits are never overwritten).
 
 Every unfinished flow with a worktree gets its own session: `flow start` records the flow and
 the server opens it within half a second. The sidebar on the right groups the workers under

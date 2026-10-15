@@ -12,13 +12,23 @@ use crate::proto::PaneKey;
 
 /// The name the master session gets.
 pub const MASTER_NAME: &str = "master";
-/// What flow writes to master.md the first time: how the master works with flow.
+/// What flow writes to master.md: how the master works with flow.
 pub const DEFAULT_INSTRUCTIONS: &str = include_str!("master.md");
+/// Earlier defaults: a master.md still holding one of them was never edited, so it gets the current one.
+const PREVIOUS_DEFAULTS: [&str; 1] = [include_str!("master-v1.md")];
 
-/// Writes the default instructions to `file` unless it exists; an edited file is never overwritten.
+/// Writes the default instructions to `file` when it is missing or still an earlier default; an edited
+/// file is never overwritten.
 pub fn ensure_instructions(file: &Path) -> Result<()> {
-    if file.exists() {
-        return Ok(());
+    match fs::read_to_string(file) {
+        Ok(text) if text == DEFAULT_INSTRUCTIONS || !PREVIOUS_DEFAULTS.contains(&text.as_str()) => {
+            return Ok(());
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error).with_context(|| format!("could not read {}", file.display()));
+        }
     }
     if let Some(dir) = file.parent() {
         fs::create_dir_all(dir).with_context(|| format!("could not create {}", dir.display()))?;
@@ -207,5 +217,17 @@ mod tests {
         ensure_instructions(&file).unwrap();
 
         assert_eq!(fs::read_to_string(&file).unwrap(), "mine");
+    }
+
+    #[test]
+    fn replaces_an_earlier_default_nobody_edited() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("master.md");
+        fs::write(&file, PREVIOUS_DEFAULTS[0]).unwrap();
+
+        ensure_instructions(&file).unwrap();
+
+        assert_eq!(fs::read_to_string(&file).unwrap(), DEFAULT_INSTRUCTIONS);
+        assert_ne!(PREVIOUS_DEFAULTS[0], DEFAULT_INSTRUCTIONS);
     }
 }
