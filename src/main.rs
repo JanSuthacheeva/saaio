@@ -6,7 +6,9 @@ mod fold;
 mod launch;
 mod output;
 mod proto;
+mod registry;
 mod server;
+mod slots;
 mod store;
 mod ui;
 mod view;
@@ -463,7 +465,7 @@ fn start(
     let name = launch::flow_name(launch.name.as_deref(), &launch.request, &taken);
     let slot = launch::free_slot(&flows).ok_or_else(|| {
         Failure::error(
-            format!("all {} slots are in use", launch::MAX_SLOTS),
+            format!("all {} slots are in use", slots::MAX_SLOTS),
             vec!["Run `flow clear` after finished flows".to_string()],
         )
     })?;
