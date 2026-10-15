@@ -391,7 +391,11 @@ impl App {
             return;
         }
         let areas = self.areas();
-        frame.render_widget(self.border(theme, areas.frame.width), areas.frame);
+        self.draw_title(frame, areas.title, theme);
+        if let Some(rule) = areas.rule {
+            let line = vec![Line::styled(theme.glyphs.rule_v, theme.ui.rule); rule.height as usize];
+            frame.render_widget(Paragraph::new(line), rule);
+        }
         frame.render_widget(
             ScreenView {
                 screen: &self.screen,
@@ -461,18 +465,13 @@ impl App {
                     Span::styled(" live ", theme.ui.faint),
                 ]);
                 let edge = Rect::new(
-                    areas.frame.x,
-                    areas.frame.y + areas.frame.height.saturating_sub(1),
-                    areas.frame.width,
+                    areas.pane.x,
+                    areas.pane.y + areas.pane.height.saturating_sub(1),
+                    areas.pane.width,
                     1,
                 );
-                frame.render_widget(
-                    Paragraph::new(hint).alignment(Alignment::Right),
-                    Rect {
-                        width: edge.width.saturating_sub(2),
-                        ..edge
-                    },
-                );
+                frame.render_widget(Clear, edge);
+                frame.render_widget(Paragraph::new(hint).alignment(Alignment::Right), edge);
             }
             View::NewFlow(ref form) => {
                 let flows: Vec<FlowView> = self.workers().into_iter().cloned().collect();
@@ -486,9 +485,9 @@ impl App {
                         place: &self.tilde(&repo),
                         theme,
                     },
-                    areas.frame,
+                    areas.session(),
                 );
-                if let Some(cursor) = form.cursor(areas.frame) {
+                if let Some(cursor) = form.cursor(areas.session()) {
                     frame.set_cursor_position(cursor);
                 }
             }
@@ -1106,24 +1105,30 @@ impl App {
         draw_dialog(frame, pane, theme, " stop ", theme.state.waiting, text);
     }
 
-    /// The frame around the pane in view, named on its top edge. The title is fitted to `width`,
-    /// so the place loses folders from its middle and the edge keeps its corner.
-    fn border(&self, theme: &Theme, width: u16) -> Block<'static> {
-        let mut block = Block::bordered()
-            .border_type(BorderType::Rounded)
-            .border_style(theme.ui.rule);
-        if let Some(notice) = &self.notice {
-            block = block.title_bottom(Line::styled(format!(" {notice} "), theme.state.waiting));
+    /// The row above the pane that names the session, on the panel color: what is in view on the
+    /// left, a notice or the rail's hint on the right. The left is fitted so the right stays.
+    fn draw_title(&self, frame: &mut TuiFrame, area: Rect, theme: &Theme) {
+        let right = match &self.notice {
+            Some(notice) => Some(Line::styled(format!(" {notice} "), theme.state.waiting)),
+            None => self.border_hint(theme),
+        };
+        let left = self.title_line(theme, area.width, right.as_ref().map_or(0, Line::width));
+        frame.render_widget(Block::default().style(theme.ui.bar), area);
+        frame.render_widget(Paragraph::new(left), area);
+        if let Some(right) = right {
+            frame.render_widget(Paragraph::new(right).alignment(Alignment::Right), area);
         }
-        let hint = self.border_hint(theme);
-        // The corners and at least two rule characters before the closing one.
-        let edge = 4 + hint.as_ref().map_or(0, Line::width);
-        let room = |used: usize| (width as usize).saturating_sub(edge + used);
+    }
+
+    /// The session in view: the master and its branch, or a worker's glyph, name, steps, phase and
+    /// branch; a worker that needs you leads with a bar in its state's color.
+    fn title_line(&self, theme: &Theme, width: u16, right: usize) -> Line<'static> {
+        let room = |used: usize| (width as usize).saturating_sub(right + 2 + used);
         let PaneKey::Flow(id) = &self.focus else {
             let mut title = vec![
                 Span::raw(" "),
                 Span::styled(theme.glyphs.master, theme.ui.accent),
-                Span::styled(" master ", theme.ui.strong),
+                Span::styled(" master", theme.ui.strong),
             ];
             // The sidebar says where the master runs; alone, the title says it.
             let place = match (&self.master, self.areas().side) {
@@ -1136,25 +1141,22 @@ impl App {
             if let Some(place) = place {
                 let fitted = clip_place(&place, room(Line::from(title.clone()).width() + 2));
                 if !fitted.is_empty() {
-                    title.push(Span::styled(format!(" {fitted} "), theme.ui.faint));
+                    title.push(Span::styled(format!("  {fitted}"), theme.ui.faint));
                 }
             }
-            let block = block.title(Line::from(title));
-            return match hint {
-                Some(hint) => block.title(hint.right_aligned()),
-                None => block,
-            };
+            return Line::from(title);
         };
         let Some(flow) = self.workers().into_iter().find(|flow| &flow.id == id) else {
-            return block.title(Line::styled(format!(" {id} "), theme.ui.strong));
+            return Line::styled(format!(" {id}"), theme.ui.strong);
         };
-        // A worker that needs you is framed in its state's color, so you see it from inside.
-        if flow.needs_you() {
-            block = block.border_style(theme.state(flow.state));
-        }
         let sidebar = self.sidebar(theme, &[]);
+        let lead = if flow.needs_you() {
+            Span::styled(theme.glyphs.cursor, theme.state(flow.state))
+        } else {
+            Span::raw(" ")
+        };
         let mut title = vec![
-            Span::raw(" "),
+            lead,
             Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
             Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
         ];
@@ -1164,17 +1166,13 @@ impl App {
         if let Some(space) = &flow.workspace {
             let place = format!("{} · slot {}", space.branch, space.slot);
             let lead = format!("  {} ", theme.glyphs.separator);
-            let used = Line::from(title.clone()).width() + lead.chars().count() + 1;
+            let used = Line::from(title.clone()).width() + lead.chars().count();
             let fitted = clip(&place, room(used));
             if !fitted.is_empty() {
-                title.push(Span::styled(format!("{lead}{fitted} "), theme.ui.faint));
+                title.push(Span::styled(format!("{lead}{fitted}"), theme.ui.faint));
             }
         }
-        let block = block.title(Line::from(title));
-        match hint {
-            Some(hint) => block.title(hint.right_aligned()),
-            None => block,
-        }
+        Line::from(title)
     }
 
     /// The right of the pane's top edge: with the rail, the next flow that needs you and the way back
@@ -1483,7 +1481,7 @@ mod tests {
                 cols: 100,
                 rows: 30
             }),
-            vec![Effect::Send(ClientMsg::Resize(Size { cols: 96, rows: 24 }))]
+            vec![Effect::Send(ClientMsg::Resize(Size { cols: 98, rows: 25 }))]
         );
     }
 
@@ -1523,16 +1521,16 @@ mod tests {
         let mut terminal = render(&app);
 
         assert!(
-            row(&terminal, 0).starts_with("╭ ● master ─"),
+            row(&terminal, 0).starts_with(" ● master "),
             "{}",
             row(&terminal, 0)
         );
         assert!(
-            row(&terminal, 1).starts_with("│hello"),
+            row(&terminal, 1).starts_with("hello"),
             "{}",
             row(&terminal, 1)
         );
-        assert!(row(&terminal, 5).starts_with("╰─"));
+        assert!(row(&terminal, 5).trim().is_empty(), "no box under the pane");
         assert_eq!(
             row(&terminal, 6).trim(),
             "",
@@ -1547,7 +1545,7 @@ mod tests {
             (1..SIZE.cols - 1).all(|x| buffer[(x, 8)].bg == Theme::builtin().ui.bar.bg.unwrap()),
             "the whole bar has the panel background"
         );
-        terminal.backend_mut().assert_cursor_position((7, 2));
+        terminal.backend_mut().assert_cursor_position((6, 2));
     }
 
     #[test]
@@ -1805,8 +1803,8 @@ mod tests {
         assert_eq!(
             app.on_server(ServerMsg::Board(fleet())),
             vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 105,
-                rows: 40
+                cols: 107,
+                rows: 41
             }))]
         );
         assert_eq!(app.on_server(ServerMsg::Board(fleet())), vec![]);
@@ -1868,11 +1866,11 @@ mod tests {
         let terminal = render_at(&app, FLEET);
         let title = row(&terminal, 0);
         assert!(
-            title.starts_with("╭ ◆ shop-230  ●───○───○───○ design  │ flow/shop-230 · slot 1 ─"),
+            title.starts_with("▌◆ shop-230  ●───○───○───○ design  │ flow/shop-230 · slot 1 "),
             "{title}"
         );
         assert!(
-            title.ends_with("──╮  ▚▄▞ flow                    2 need you "),
+            title.ends_with("  │ ▚▄▞ flow                    2 need you "),
             "{title}"
         );
         assert_eq!(
@@ -2122,9 +2120,8 @@ mod tests {
         });
         let solo = render_at(&solo, narrow);
         let top = row(&solo, 0);
-        let pane_edge = top.split('╮').next().unwrap();
-        assert!(pane_edge.contains("/private/…/"), "{top}");
-        assert!(pane_edge.contains("/repo · main ─"), "{top}");
+        assert!(top.contains("/private/…/"), "{top}");
+        assert!(top.trim_end().ends_with("/repo · main"), "{top}");
 
         let screen = render_at(&fleet, FLEET);
         assert_eq!(
@@ -2159,7 +2156,7 @@ mod tests {
             "{wide}"
         );
         assert!(
-            row(&sidebar, 0).starts_with("╭ ● master  main ─"),
+            row(&sidebar, 0).starts_with(" ● master  main "),
             "the sidebar says where it runs: {}",
             row(&sidebar, 0)
         );
@@ -2318,26 +2315,30 @@ mod tests {
     }
 
     #[test]
-    fn a_worker_that_needs_you_is_framed_in_its_state_color() {
+    fn a_worker_that_needs_you_leads_its_title_with_its_state_color() {
         let theme = Theme::builtin();
-        let corner = |app: &App| render_at(app, FLEET).backend().buffer()[(1, 1)].fg;
+        let lead = |app: &App| {
+            let terminal = render_at(app, FLEET);
+            let cell = terminal.backend().buffer()[(1, 1)].clone();
+            (cell.symbol().to_string(), cell.fg)
+        };
         let mut app = with_fleet();
 
-        assert_eq!(corner(&app), theme.ui.rule.fg.unwrap(), "the master");
+        assert_eq!(lead(&app).0, " ", "the master");
         app.on_input(Routed::Command(Command::Focus(1)));
         assert_eq!(
-            corner(&app),
-            theme.state.blocked.fg.unwrap(),
+            lead(&app),
+            ("▌".to_string(), theme.state.blocked.fg.unwrap()),
             "shop-221 is blocked"
         );
         app.on_input(Routed::Command(Command::Focus(2)));
         assert_eq!(
-            corner(&app),
-            theme.state.waiting.fg.unwrap(),
+            lead(&app),
+            ("▌".to_string(), theme.state.waiting.fg.unwrap()),
             "shop-230 waits"
         );
         app.on_input(Routed::Command(Command::Focus(3)));
-        assert_eq!(corner(&app), theme.ui.rule.fg.unwrap(), "export-csv runs");
+        assert_eq!(lead(&app).0, " ", "export-csv runs");
     }
 
     #[test]
@@ -2670,15 +2671,17 @@ mod tests {
         assert_eq!(
             app.on_input(Routed::Command(Command::Rail)),
             vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 139,
-                rows: 40
+                cols: 141,
+                rows: 41
             }))]
         );
         let terminal = render_at(&app, FLEET);
         let rail = |y| row(&terminal, y).chars().skip(142).collect::<String>();
 
         assert!(
-            row(&terminal, 0).ends_with(" ◆ 2 shop-230 is waiting  │  C-space b sidebar ╮  ▚▄▞  ")
+            row(&terminal, 0).ends_with(" ◆ 2 shop-230 is waiting  │  C-space b sidebar │ ▚▄▞  "),
+            "{}",
+            row(&terminal, 0)
         );
         assert_eq!(rail(2), " 0 ●  ");
         assert_eq!(rail(4), "▌1 ✖  ");
@@ -2695,8 +2698,8 @@ mod tests {
         assert_eq!(
             app.on_input(Routed::Command(Command::Rail)),
             vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 105,
-                rows: 40
+                cols: 107,
+                rows: 41
             }))]
         );
     }

@@ -110,7 +110,7 @@ it the mark is a goose in flight, `▚▄▞`, in block characters every font ha
 `●`. The mark takes the theme's accent either way. `flow` and `flow-light` are the design's dark
 and light colors. A tool can keep a theme in `~/.config/flow/themes/<name>.toml` for `extends` to
 name; a Noctalia template that writes `themes/noctalia.toml` makes flow follow Noctalia live. A
-broken file keeps the last theme and says why in the border.
+broken file keeps the last theme and says why in the title row.
 
 ## Starting a worker
 
