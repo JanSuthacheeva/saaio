@@ -2,16 +2,137 @@ use ratatui::style::{Color, Modifier, Style};
 
 use crate::view::State;
 
-/// Every color and symbol flow ui draws with, by name, so a theme file can replace them later.
+/// The colors a theme file names, by its keys; Color::Reset is "default", the terminal's own.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Palette {
+    pub background: Color,
+    pub panel: Color,
+    pub selection: Color,
+    pub rule: Color,
+    pub text: Color,
+    pub strong: Color,
+    pub muted: Color,
+    pub faint: Color,
+    pub accent: Color,
+    pub working: Color,
+    pub waiting: Color,
+    pub blocked: Color,
+    pub done: Color,
+    pub ended: Color,
+}
+
+impl Palette {
+    /// "terminal" (ANSI, so flow takes on the terminal's palette), "flow" (the design's dark colors),
+    /// "flow-light" (the design's light ones); None for another name.
+    pub fn named(name: &str) -> Option<Palette> {
+        match name {
+            "terminal" => Some(Palette {
+                background: Color::Reset,
+                panel: Color::Indexed(235),
+                selection: Color::Indexed(236),
+                rule: Color::DarkGray,
+                text: Color::Reset,
+                strong: Color::Reset,
+                muted: Color::Gray,
+                faint: Color::DarkGray,
+                accent: Color::Indexed(173),
+                working: Color::Blue,
+                waiting: Color::Yellow,
+                blocked: Color::Red,
+                done: Color::Green,
+                ended: Color::DarkGray,
+            }),
+            "flow" => Some(Palette {
+                background: hex(0x141418),
+                panel: hex(0x1f1f26),
+                selection: hex(0x26262e),
+                rule: hex(0x34343d),
+                text: hex(0xc8c8d0),
+                strong: hex(0xf0f0f4),
+                muted: hex(0x9a9aa6),
+                faint: hex(0x6c6c78),
+                accent: hex(0xe07a52),
+                working: hex(0x7aa7ff),
+                waiting: hex(0xe5b45a),
+                blocked: hex(0xf0717f),
+                done: hex(0x93c46d),
+                ended: hex(0x6c6c78),
+            }),
+            "flow-light" => Some(Palette {
+                background: hex(0xf6f5f1),
+                panel: hex(0xecebe5),
+                selection: hex(0xe2e0d8),
+                rule: hex(0xcfcdc4),
+                text: hex(0x2b2b30),
+                strong: hex(0x111114),
+                muted: hex(0x5d5d66),
+                faint: hex(0x73737c),
+                accent: hex(0xb8532f),
+                working: hex(0x2f5fd0),
+                waiting: hex(0x9a6a00),
+                blocked: hex(0xc2283f),
+                done: hex(0x3d7a22),
+                ended: hex(0x73737c),
+            }),
+            _ => None,
+        }
+    }
+
+    /// The color of one key ("accent", "working", ...); None for a key flow does not know.
+    pub fn get(&self, key: &str) -> Option<Color> {
+        let mut copy = *self;
+        Self::slot(&mut copy, key).copied()
+    }
+
+    /// Sets one key; false for a key flow does not know.
+    pub fn set(&mut self, key: &str, color: Color) -> bool {
+        match Self::slot(self, key) {
+            Some(slot) => {
+                *slot = color;
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn slot<'a>(palette: &'a mut Palette, key: &str) -> Option<&'a mut Color> {
+        Some(match key {
+            "background" => &mut palette.background,
+            "panel" => &mut palette.panel,
+            "selection" => &mut palette.selection,
+            "rule" => &mut palette.rule,
+            "text" => &mut palette.text,
+            "strong" => &mut palette.strong,
+            "muted" => &mut palette.muted,
+            "faint" => &mut palette.faint,
+            "accent" => &mut palette.accent,
+            "working" => &mut palette.working,
+            "waiting" => &mut palette.waiting,
+            "blocked" => &mut palette.blocked,
+            "done" => &mut palette.done,
+            "ended" => &mut palette.ended,
+            _ => return None,
+        })
+    }
+}
+
+fn hex(rgb: u32) -> Color {
+    Color::Rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
+}
+
+/// Every color and symbol flow ui draws with, by name; a theme file sets them through its Palette.
 #[derive(Debug, Clone)]
 pub struct Theme {
     pub ui: UiTokens,
     pub state: StateTokens,
     pub glyphs: Glyphs,
+    pub palette: Palette,
 }
 
 #[derive(Debug, Clone)]
 pub struct UiTokens {
+    /// The ground every cell flow ui draws is painted on.
+    pub background: Style,
     pub text: Style,
     pub strong: Style,
     pub muted: Style,
@@ -56,28 +177,46 @@ pub struct Glyphs {
 }
 
 impl Theme {
-    /// ANSI colors 0-15, so flow takes on the terminal's own palette; the accent (clay), the bar's
-    /// dark panel and the selection's slightly lighter one are 256-color.
+    /// The terminal theme: today's look.
     pub fn builtin() -> Theme {
+        Theme::from_palette(Palette::named("terminal").expect("terminal is built in"))
+    }
+
+    /// The styles widgets draw with, from a palette's colors; "default" leaves a color to the terminal.
+    pub fn from_palette(palette: Palette) -> Theme {
         let plain = Style::default();
+        let fg = |color: Color| match color {
+            Color::Reset => plain,
+            color => plain.fg(color),
+        };
+        let bg = |color: Color| match color {
+            Color::Reset => plain,
+            color => plain.bg(color),
+        };
+        // The terminal's own text may be dark, which the terminal theme's dark panel would swallow.
+        let on_panel = match palette.text {
+            Color::Reset => Color::Indexed(252),
+            text => text,
+        };
         Theme {
             ui: UiTokens {
-                text: plain,
-                strong: plain.add_modifier(Modifier::BOLD),
-                muted: plain.fg(Color::Gray),
-                faint: plain.fg(Color::DarkGray),
-                accent: plain.fg(Color::Indexed(173)),
-                rule: plain.fg(Color::DarkGray),
-                selection: plain.bg(Color::Indexed(236)),
-                key: plain.add_modifier(Modifier::BOLD),
-                bar: plain.bg(Color::Indexed(235)).fg(Color::Indexed(252)),
+                background: bg(palette.background),
+                text: fg(palette.text),
+                strong: fg(palette.strong).add_modifier(Modifier::BOLD),
+                muted: fg(palette.muted),
+                faint: fg(palette.faint),
+                accent: fg(palette.accent),
+                rule: fg(palette.rule),
+                selection: bg(palette.selection),
+                key: fg(palette.strong).add_modifier(Modifier::BOLD),
+                bar: bg(palette.panel).fg(on_panel),
             },
             state: StateTokens {
-                working: plain.fg(Color::Blue),
-                waiting: plain.fg(Color::Yellow),
-                blocked: plain.fg(Color::Red),
-                done: plain.fg(Color::Green),
-                ended: plain.fg(Color::DarkGray),
+                working: fg(palette.working),
+                waiting: fg(palette.waiting),
+                blocked: fg(palette.blocked),
+                done: fg(palette.done),
+                ended: fg(palette.ended),
             },
             glyphs: Glyphs {
                 mark: "≋",
@@ -99,6 +238,15 @@ impl Theme {
                 result: "⎿",
                 dash: "╌",
             },
+            palette,
+        }
+    }
+
+    /// Text on a solid pill: the background, or black where the background is the terminal's.
+    pub fn on_solid(&self) -> Color {
+        match self.palette.background {
+            Color::Reset => Color::Black,
+            background => background,
         }
     }
 
@@ -116,6 +264,49 @@ impl Theme {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_terminal_theme_looks_as_flow_always_did() {
+        let theme = Theme::builtin();
+        let plain = Style::default();
+
+        assert_eq!(theme.ui.text, plain);
+        assert_eq!(theme.ui.background, plain);
+        assert_eq!(theme.ui.strong, plain.add_modifier(Modifier::BOLD));
+        assert_eq!(theme.ui.accent, plain.fg(Color::Indexed(173)));
+        assert_eq!(theme.ui.selection, plain.bg(Color::Indexed(236)));
+        assert_eq!(
+            theme.ui.bar,
+            plain.bg(Color::Indexed(235)).fg(Color::Indexed(252))
+        );
+        assert_eq!(theme.state.working, plain.fg(Color::Blue));
+        assert_eq!(theme.on_solid(), Color::Black);
+    }
+
+    #[test]
+    fn builds_the_designs_dark_theme() {
+        let theme = Theme::from_palette(Palette::named("flow").unwrap());
+
+        assert_eq!(theme.ui.background, Style::default().bg(hex(0x141418)));
+        assert_eq!(theme.ui.text, Style::default().fg(hex(0xc8c8d0)));
+        assert_eq!(
+            theme.ui.bar,
+            Style::default().bg(hex(0x1f1f26)).fg(hex(0xc8c8d0))
+        );
+        assert_eq!(theme.on_solid(), hex(0x141418));
+        assert!(Palette::named("flow-light").is_some());
+        assert_eq!(Palette::named("solarized"), None);
+    }
+
+    #[test]
+    fn gets_and_sets_colors_by_their_key() {
+        let mut palette = Palette::named("terminal").unwrap();
+
+        assert!(palette.set("accent", Color::Indexed(5)));
+        assert_eq!(palette.get("accent"), Some(Color::Indexed(5)));
+        assert!(!palette.set("acent", Color::Red));
+        assert_eq!(palette.get("acent"), None);
+    }
 
     #[test]
     fn gives_each_state_a_color_that_tells_it_apart() {
