@@ -62,7 +62,7 @@ Start { .., #[arg(long = "type")] kind: Option<String> }
 ## Tasks
 
 - [x] branching.rs (Branching::load, pick_type, branch_name) and launch::ticket/slug with tests
-- [ ] workspace::branch_exists; workspace_for takes the branch; flow start --type with tests/cli.rs cases
+- [x] workspace::branch_exists; workspace_for takes the branch; flow start --type with tests/cli.rs cases
 - [ ] new-flow dialog: type row, LoadBranching, preview, --type in Job::Start; tests
 - [ ] Docs: README, CLAUDE.md, HANDOVER
 - [ ] End-to-end check: a repo with .flow/config.toml; flow start --type and the dialog create the right branch

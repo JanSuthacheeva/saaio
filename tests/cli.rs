@@ -886,6 +886,72 @@ fn remove_tears_down_and_forgets_a_running_flow() {
 }
 
 #[test]
+fn start_names_the_branch_after_the_repos_convention() {
+    let lab = Lab::new();
+    fs::create_dir_all(lab.repo.join(".flow")).unwrap();
+    fs::write(
+        lab.repo.join(".flow/config.toml"),
+        "[branch]\nname = \"{type}/{ticket}-{slug}\"\ntypes = [\"feature\", \"bugfix\"]\n",
+    )
+    .unwrap();
+    let git = |args: &[&str]| {
+        assert!(
+            Command::new("git")
+                .arg("-C")
+                .arg(&lab.repo)
+                .args(args)
+                .status()
+                .unwrap()
+                .success()
+        )
+    };
+    git(&["branch", "feature/SHOP-2-export-orders"]);
+
+    let bugfix = lab.start(&["SHOP-1 fix totals", "--type", "bugfix"]);
+    let feature = lab.start(&["SHOP-2 export orders"]);
+    let unknown = lab.start(&["SHOP-3 x", "--type", "hotfix"]);
+
+    assert!(
+        stdout(&bugfix).contains("branch: bugfix/SHOP-1-fix-totals"),
+        "{}",
+        stdout(&bugfix)
+    );
+    assert!(
+        stdout(&feature).contains("branch: feature/SHOP-2-export-orders-2"),
+        "a taken branch gets -2: {}",
+        stdout(&feature)
+    );
+    assert!(
+        lab.repo.join(".flow/worktrees/shop-1").exists(),
+        "worktrees keep the flow's name"
+    );
+    assert_eq!(unknown.status.code(), Some(1));
+    assert!(
+        stdout(&unknown).contains("no branch type hotfix; this repo has feature, bugfix"),
+        "{}",
+        stdout(&unknown)
+    );
+    assert!(
+        !stdout(&lab.run(&[])).contains("shop-3"),
+        "nothing was created"
+    );
+}
+
+#[test]
+fn start_refuses_a_type_in_a_repo_without_types() {
+    let lab = Lab::new();
+
+    let output = lab.start(&["SHOP-1 x", "--type", "bugfix"]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stdout(&output).contains("no .flow/config.toml"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
 fn remove_keeps_a_branch_with_its_own_commits_unless_told() {
     let lab = Lab::new();
     assert!(lab.start(&["SHOP-1 first try"]).status.success());

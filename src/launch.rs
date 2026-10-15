@@ -59,11 +59,11 @@ pub fn free_slot(flows: &[FlowView]) -> Option<u8> {
     (1..=MAX_SLOTS).find(|slot| !held.contains(slot))
 }
 
-/// <repo>/.flow/worktrees/<name> and branch flow/<name>.
-pub fn workspace_for(repo: &Path, name: &str, slot: u8, agent: &str) -> Workspace {
+/// <repo>/.flow/worktrees/<name> on `branch`.
+pub fn workspace_for(repo: &Path, name: &str, branch: String, slot: u8, agent: &str) -> Workspace {
     Workspace {
         path: repo.join(WORKTREES_DIR).join(name).display().to_string(),
-        branch: format!("flow/{name}"),
+        branch,
         slot,
         window: None,
         agent: agent.to_string(),
@@ -289,7 +289,13 @@ mod tests {
     }
 
     fn shop() -> Workspace {
-        workspace_for(Path::new("/repo"), "shop-217", 2, "claude")
+        workspace_for(
+            Path::new("/repo"),
+            "shop-217",
+            "flow/shop-217".into(),
+            2,
+            "claude",
+        )
     }
 
     #[test]

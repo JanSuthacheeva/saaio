@@ -90,6 +90,9 @@ enum Command {
         /// Agent from the config [default: the config's agent, claude]
         #[arg(long)]
         agent: Option<String>,
+        /// Branch type from the repo's .flow/config.toml [default: its first]
+        #[arg(long = "type")]
+        kind: Option<String>,
     },
     /// Stop a flow's worker, tear down its worktree and forget it
     Remove {
@@ -243,6 +246,7 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
             name,
             mode,
             agent,
+            kind,
         }) => {
             let config = Config::load(
                 env_path("FLOW_CONFIG"),
@@ -261,6 +265,7 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
                     name,
                     mode,
                     agent,
+                    kind,
                 },
                 now,
             )
@@ -468,6 +473,8 @@ struct Launch {
     name: Option<String>,
     mode: Mode,
     agent: Option<String>,
+    /// The branch type, from the repo's .flow/config.toml.
+    kind: Option<String>,
 }
 
 fn start(
@@ -492,6 +499,24 @@ fn start(
         Failure::error(
             "flow start needs a git repository",
             vec!["Run it inside the repository the flow works on".to_string()],
+        )
+    })?;
+    let branching = branching::Branching::load(&repo).map_err(Failure::from_io)?;
+    let kind = match &branching {
+        Some(rules) => rules.pick_type(launch.kind.as_deref()),
+        None if launch.kind.is_some() => Err(anyhow::anyhow!(
+            "this repo has no {}, so no branch types",
+            branching::CONFIG_FILE
+        )),
+        None => Ok(None),
+    }
+    .map_err(|error| {
+        Failure::error(
+            format!("{error:#}"),
+            vec![format!(
+                "Name the types in {}: [branch] types = [\"feature\", \"bugfix\"]",
+                branching::CONFIG_FILE
+            )],
         )
     })?;
     let (flows, _) = views(store, now);
@@ -535,7 +560,12 @@ fn start(
             return Err(Failure::from_io(error));
         }
     };
-    let space = launch::workspace_for(&repo, &name, slot, agent_name);
+    let base = branching::branch_name(branching.as_ref(), kind.as_deref(), &launch.request, &name);
+    let branch = std::iter::once(base.clone())
+        .chain((2..).map(|number| format!("{base}-{number}")))
+        .find(|branch| !workspace::branch_exists(&repo, branch))
+        .expect("an unused suffix always exists");
+    let space = launch::workspace_for(&repo, &name, branch, slot, agent_name);
     if let Err(error) = workspace::create_worktree(&repo, &space) {
         let _ = Slots::at(registry).release(slot, &claim);
         let _ = store.remove(&id);
