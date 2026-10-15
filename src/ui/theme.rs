@@ -256,14 +256,6 @@ impl Theme {
         }
     }
 
-    /// Text on a solid pill: the background, or black where the background is the terminal's.
-    pub fn on_solid(&self) -> Color {
-        match self.palette.background {
-            Color::Reset => Color::Black,
-            background => background,
-        }
-    }
-
     pub fn state(&self, state: State) -> Style {
         match state {
             State::Working | State::Delegated => self.state.working,
@@ -295,7 +287,6 @@ mod tests {
             plain.bg(Color::Indexed(235)).fg(Color::Indexed(252))
         );
         assert_eq!(theme.state.working, plain.fg(Color::Blue));
-        assert_eq!(theme.on_solid(), Color::Black);
     }
 
     #[test]
@@ -308,7 +299,6 @@ mod tests {
             theme.ui.bar,
             Style::default().bg(hex(0x1f1f26)).fg(hex(0xc8c8d0))
         );
-        assert_eq!(theme.on_solid(), hex(0x141418));
         assert!(Palette::named("flow-light").is_some());
         assert_eq!(Palette::named("solarized"), None);
     }

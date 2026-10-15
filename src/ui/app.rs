@@ -2185,25 +2185,28 @@ mod tests {
         assert!(app.is_modal());
         assert!(row(&terminal, 0).starts_with(" ▚▄▞ flow board "));
         assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
-        assert!(row(&terminal, 3).contains("│ 0 ● master                             you  │"));
-        assert!(row(&terminal, 3).contains("│ 1 ✖ shop-221                       blocked  │"));
-        assert!(row(&terminal, 3).contains("│ 2 ◆ shop-230               waiting for you  │"));
-        assert!(row(&terminal, 4).contains("│   ~/projects/shop · main"));
         assert!(
-            row(&terminal, 5).contains("│   ━━━━━━━━━━━━───────────────  4/9  29m ago │"),
+            row(&terminal, 3).starts_with("   0 ● master                              you "),
+            "only the selected card is outlined"
+        );
+        assert!(row(&terminal, 3).contains(" 1 ✖ shop-221                        blocked "));
+        assert!(row(&terminal, 3).contains("│ 2 ◆ shop-230                waiting for you │"));
+        assert!(row(&terminal, 4).contains("     ~/projects/shop · main"));
+        assert!(
+            row(&terminal, 5).contains("   ━━━━━━━━━━━━───────────────  4/9  29m ago "),
             "{}",
             row(&terminal, 5)
         );
         let shop_230 = row(&terminal, 5)
             .split('│')
-            .nth(5)
+            .nth(1)
             .unwrap_or_default()
             .to_string();
         assert!(
             shop_230.trim_start() == "31m ago ",
             "a flow without tasks draws no bar: {shop_230:?}"
         );
-        assert!(row(&terminal, 10).contains("│ 3 ⠙ export-csv           reviewing · agent  │"));
+        assert!(row(&terminal, 10).contains(" 3 ⠙ export-csv            reviewing · agent "));
         assert!(
             row(&terminal, 16)
                 .starts_with(" 2 shop-230  shop-230 · guided · flow/shop-230 · slot 1"),
@@ -2217,9 +2220,21 @@ mod tests {
         let buffer = terminal.backend().buffer();
         let accent = Theme::builtin().ui.accent.fg.unwrap();
         assert_eq!(buffer[(100, 3)].fg, accent, "the selected card is outlined");
+        let blocked_at = row(&terminal, 2 + 1).find("blocked").unwrap();
+        let blocked_x = row(&terminal, 3)[..blocked_at].chars().count() as u16 + layout::MARGIN;
         assert_eq!(
-            buffer[(51, 3)].fg,
-            Theme::builtin().state.blocked.fg.unwrap()
+            buffer[(blocked_x, 3 + layout::MARGIN)].fg,
+            Theme::builtin().state.blocked.fg.unwrap(),
+            "the state in its color"
+        );
+        assert_eq!(
+            buffer[(blocked_x, 3 + layout::MARGIN)].bg,
+            Theme::builtin()
+                .ui
+                .background
+                .bg
+                .unwrap_or(ratatui::style::Color::Reset),
+            "no fill"
         );
     }
 
