@@ -1076,3 +1076,85 @@ fn the_server_command_stays_out_of_the_help() {
     assert!(help.contains("ui"), "{help}");
     assert!(!help.contains("server"), "{help}");
 }
+
+fn seed_worker(home: &Path, id: &str, name: &str, last: &str) {
+    let started = format!(
+        r#"{{"v":1,"at":1000,"kind":"started","name":"{name}","request":"x","mode":"auto"}}"#
+    );
+    let workspace = format!(
+        r#"{{"v":1,"at":1500,"kind":"workspace","path":"/repo/.flow/worktrees/{name}","branch":"flow/{name}","slot":1,"window":"flow-ui","agent":"claude"}}"#
+    );
+    seed(home, id, &[&started, &workspace, last]);
+}
+
+#[test]
+fn send_puts_the_masters_message_into_the_flows_log() {
+    let home = TempDir::new().unwrap();
+    seed_worker(
+        home.path(),
+        "7f3c",
+        "shop-217",
+        r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
+    );
+
+    let output = flow(home.path(), &["send", "shop-217", "Semicolons."]);
+
+    assert!(output.status.success(), "{}", stdout(&output));
+    assert!(stdout(&output).starts_with("sent: shop-217\nstate: waiting\n"));
+    let log = fs::read_to_string(home.path().join("flows/7f3c.jsonl")).unwrap();
+    assert!(
+        log.lines()
+            .last()
+            .unwrap()
+            .contains(r#""kind":"message","text":"Semicolons.""#),
+        "{log}"
+    );
+    let detail = stdout(&flow(home.path(), &["status", "shop-217"]));
+    assert!(detail.contains("master: Semicolons."), "{detail}");
+}
+
+#[test]
+fn send_refuses_what_has_no_worker_to_read_it() {
+    let home = TempDir::new().unwrap();
+    seed_worker(
+        home.path(),
+        "aaaa",
+        "shipped",
+        r#"{"v":1,"at":2000,"kind":"ended"}"#,
+    );
+    seed(
+        home.path(),
+        "bbbb",
+        &[r#"{"v":1,"at":1000,"kind":"started","name":"tracked","request":"x","mode":"auto"}"#],
+    );
+    seed_worker(
+        home.path(),
+        "cccc",
+        "live",
+        r#"{"v":1,"at":2000,"kind":"working"}"#,
+    );
+
+    let refused = |args: &[&str], from: Option<&str>| {
+        let output = match from {
+            Some(id) => flow_in(home.path(), id, args),
+            None => flow(home.path(), args),
+        };
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "{args:?}: {}",
+            stdout(&output)
+        );
+        stdout(&output)
+    };
+
+    assert!(refused(&["send", "nobody", "hi"], None).contains("no flow named nobody"));
+    assert!(refused(&["send", "shipped", "hi"], None).contains("shipped is finished"));
+    assert!(refused(&["send", "tracked", "hi"], None).contains("tracked has no worker"));
+    assert!(refused(&["send", "live", "  "], None).contains("nothing to send"));
+    let long = "x".repeat(4001);
+    assert!(refused(&["send", "live", &long], None).contains("over 4000"));
+    assert!(refused(&["send", "live", "hi"], Some("cccc")).contains("only the master sends"));
+    let log = fs::read_to_string(home.path().join("flows/cccc.jsonl")).unwrap();
+    assert!(!log.contains("message"), "{log}");
+}

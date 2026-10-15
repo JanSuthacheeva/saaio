@@ -534,7 +534,6 @@ pub fn reported(flow: &FlowView) -> Document {
 }
 
 /// sent, the flow's state, and who wakes whom now.
-#[allow(dead_code)] // until flow send and flow wait use it
 pub fn sent(flow: &FlowView) -> Document {
     #[derive(Serialize)]
     struct Sent<'a> {

@@ -28,7 +28,7 @@ use clap::{Parser, Subcommand};
 
 use client::{Client, Closing};
 use config::Config;
-use event::{Event, EventKind, Mode, Phase};
+use event::{Event, EventKind, LONG_TEXT_LIMIT, Mode, Phase};
 use output::{Document, Failure, Opening};
 use proto::{ClientMsg, Role};
 use registry::Registry;
@@ -107,6 +107,13 @@ enum Command {
         /// Also delete the flow's branch when it has commits on no other branch
         #[arg(long)]
         delete_unmerged: bool,
+    },
+    /// Tell a flow's worker something: an answer, an instruction, a correction
+    Send {
+        /// Flow name or id
+        flow: String,
+        /// What to tell it
+        text: String,
     },
     /// Forget flows that are done or ended
     Clear,
@@ -281,6 +288,15 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
             force,
             delete_unmerged,
         }) => remove(store, &flow, force, delete_unmerged, now),
+        Some(Command::Send { flow, text }) => {
+            if env::var("FLOW_ID").is_ok_and(|id| !id.is_empty()) {
+                return Err(Failure::error(
+                    "only the master sends",
+                    vec!["End your turn with the question; flow wakes the master".to_string()],
+                ));
+            }
+            send(store, &flow, &text, now)
+        }
         Some(Command::Clear) => clear(store, now),
         Some(Command::Ui { stop }) => ui(store, stop),
         Some(Command::Server) => server(store.clone()),
@@ -648,6 +664,45 @@ fn report(
     let beat = store.last_beat(&id).map_err(Failure::from_io)?;
     let reported = fold::fold(&id, &events, beat, now).expect("a resolved flow folds");
     Ok(output::reported(&reported))
+}
+
+/// Appends the master's message to a flow its worker reads when flow wakes it.
+fn send(store: &Store, name: &str, text: &str, now: u64) -> Result<Document, Failure> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Err(Failure::error("nothing to send", Vec::new()));
+    }
+    let length = text.chars().count();
+    if length > LONG_TEXT_LIMIT {
+        return Err(Failure::error(
+            format!("the message is {length} chars, over {LONG_TEXT_LIMIT}"),
+            vec!["Say it shorter, or point to a file in the worktree".to_string()],
+        ));
+    }
+    let (flows, _) = views(store, now);
+    let flow = fold::resolve(&flows, name).ok_or_else(|| no_flow(name))?;
+    if flow.is_finished() {
+        return Err(Failure::error(
+            format!("{} is finished", flow.name),
+            vec!["Run `flow` for the flows still running".to_string()],
+        ));
+    }
+    if flow.workspace.is_none() {
+        return Err(Failure::error(
+            format!(
+                "{} has no worker; it was not started with flow start",
+                flow.name
+            ),
+            Vec::new(),
+        ));
+    }
+    let message = EventKind::Message {
+        text: text.to_string(),
+    };
+    store
+        .append(&flow.id, &Event::new(now, message))
+        .map_err(Failure::from_io)?;
+    Ok(output::sent(flow))
 }
 
 fn remove(

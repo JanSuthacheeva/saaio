@@ -107,7 +107,7 @@ pub fn news_for_master(flows: &[&FlowView]) -> String; // changed[n]{name,state,
    2. `views -> fold::resolve`.
    3. `Store::append(id, Message{text})`.
    4. `output::sent`.
-   - Errors: no flow -> exit 1 "no flow X". A finished flow -> exit 1. No workspace -> exit 1 "has no worker". `$FLOW_ID` set -> exit 1 "only the master sends". Empty or too long -> exit 2.
+   - Errors, all exit 1: no flow -> "no flow named X"; a finished flow; no workspace -> "has no worker"; `$FLOW_ID` set -> "only the master sends"; empty -> "nothing to send"; over LONG_TEXT_LIMIT.
 2. Worker delivery:
    1. `wait loop -> Store::events(id) -> wake::undelivered(events, Store::delivered(id))`.
    2. Non-empty and `Store::waiter == own pid` -> `Store::set_delivered(id, n)`.
@@ -170,8 +170,8 @@ pub fn news_for_master(flows: &[&FlowView]) -> String; // changed[n]{name,state,
 
 - [x] event.rs Message and Answer; fold.rs/view.rs: timeline entry, FlowView.answer, changes(); tests
 - [x] wake.rs: Seen, undelivered, changed_flows, mark_seen, first_seen with unit tests
-- [ ] store.rs: Waiter, claim_waiter/waiter, delivered/set_delivered, seen/set_seen, remove cleans waits/; tests
-- [ ] output.rs: sent, news_for_worker, news_for_master, answer in status_detail; tests
+- [x] store.rs: Waiter, claim_waiter/waiter, delivered/set_delivered, seen/set_seen, remove cleans waits/; tests
+- [x] output.rs: sent, news_for_worker, news_for_master, answer in status_detail; tests
 - [ ] main.rs: flow send with its refusals; tests/cli.rs cases
 - [ ] main.rs: flow wait (loop, replace, settle, exit 2 on stderr), drop the dead_code allowances; tests/cli.rs process tests
 - [ ] claude_code.rs: waiter hooks in settings, master_settings, Answer on Stop; Adapter::master_wiring; tests
