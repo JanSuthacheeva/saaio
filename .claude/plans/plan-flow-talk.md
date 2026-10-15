@@ -90,6 +90,9 @@ const WAIT_EVERY: Duration = Duration::from_millis(500);
 const SETTLE: Duration = Duration::from_secs(2);
 fn send(store: &Store, flow: &str, text: &str, now: u64) -> Result<Document, Failure>;
 fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String>;
+fn worker_news(store: &Store, id: &str, now: u64) -> Option<Option<String>>;  // None: finished or gone
+fn master_news(store: &Store, clock: fn() -> u64, is_mine: &dyn Fn() -> bool) -> Option<String>;
+fn run_wait(master: bool) -> ExitCode;
 // main(): Command::Wait handled before the stdout path, like Hook: Some(news) -> eprint, exit 2;
 // None -> exit 0; never stdout.
 
@@ -172,7 +175,7 @@ pub fn news_for_master(flows: &[&FlowView]) -> String; // changed[n]{name,state,
 - [x] wake.rs: Seen, undelivered, changed_flows, mark_seen, first_seen with unit tests
 - [x] store.rs: Waiter, claim_waiter/waiter, delivered/set_delivered, seen/set_seen, remove cleans waits/; tests
 - [x] output.rs: sent, news_for_worker, news_for_master, answer in status_detail; tests
-- [ ] main.rs: flow send with its refusals; tests/cli.rs cases
+- [x] main.rs: flow send with its refusals; tests/cli.rs cases
 - [ ] main.rs: flow wait (loop, replace, settle, exit 2 on stderr), drop the dead_code allowances; tests/cli.rs process tests
 - [ ] claude_code.rs: waiter hooks in settings, master_settings, Answer on Stop; Adapter::master_wiring; tests
 - [ ] config.rs MasterConfig; master.rs spec(.., wake) wiring; server passes config.master.wake; tests

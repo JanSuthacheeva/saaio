@@ -10,18 +10,17 @@ mod proto;
 mod registry;
 mod server;
 mod slots;
-#[allow(dead_code)] // until flow wait uses the waiter files
 mod store;
 mod ui;
 mod view;
-#[allow(dead_code)] // until flow wait uses it
 mod wake;
 mod workspace;
 
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
@@ -33,12 +32,17 @@ use output::{Document, Failure, Opening};
 use proto::{ClientMsg, Role};
 use registry::Registry;
 use slots::{Claim, Slots};
-use store::Store;
+use store::{Store, Waiter};
 use view::FlowView;
 use workspace::Hook;
 
 /// How long `flow remove` and `flow clear` wait for a flow's session to end (SIGKILL comes after 3 s).
-const CLOSE_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+const CLOSE_WAIT: Duration = Duration::from_secs(5);
+/// How often `flow wait` looks for news, as often as the server looks at the store.
+const WAIT_EVERY: Duration = Duration::from_millis(500);
+/// How long the master's wait keeps collecting after the first change, so flows that stop
+/// together wake it once.
+const SETTLE: Duration = Duration::from_secs(2);
 
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 #[derive(Debug, Parser)]
@@ -123,6 +127,13 @@ enum Command {
         #[arg(long)]
         stop: bool,
     },
+    /// What a session's asyncRewake hook runs: sleeps until there is news for it, prints it, exits 2
+    #[command(hide = true)]
+    Wait {
+        /// The master's news: flows that changed [default: $FLOW_ID's messages]
+        #[arg(long)]
+        master: bool,
+    },
     /// The session server flow ui starts on its own
     #[command(hide = true)]
     Server,
@@ -204,6 +215,9 @@ fn main() -> ExitCode {
     if let Some(Command::Hook { adapter }) = &cli.command {
         run_hook(adapter);
         return ExitCode::SUCCESS;
+    }
+    if let Some(Command::Wait { master }) = &cli.command {
+        return run_wait(*master);
     }
     let store = match Store::locate(
         env_path("FLOW_HOME"),
@@ -300,7 +314,7 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
         Some(Command::Clear) => clear(store, now),
         Some(Command::Ui { stop }) => ui(store, stop),
         Some(Command::Server) => server(store.clone()),
-        Some(Command::Hook { .. }) => Ok(Document::Silent),
+        Some(Command::Hook { .. } | Command::Wait { .. }) => Ok(Document::Silent),
     }
 }
 
@@ -329,6 +343,86 @@ fn run_hook(adapter: &str) {
     }
     let flow = env::var("FLOW_ID").ok();
     hook(&store, &config, adapter, flow, &payload, now_ms());
+}
+
+/// `flow wait`: the news on stderr and exit 2, which makes Claude Code wake the session with it;
+/// exit 0 and nothing at all when the wait ends without news. Never prints to stdout.
+fn run_wait(master: bool) -> ExitCode {
+    let Ok(store) = Store::locate(
+        env_path("FLOW_HOME"),
+        env_path("XDG_STATE_HOME"),
+        env_path("HOME"),
+    ) else {
+        return ExitCode::SUCCESS;
+    };
+    let waiter = match env::var("FLOW_ID") {
+        _ if master => Waiter::Master,
+        Ok(id) if !id.is_empty() => Waiter::Flow(id),
+        _ => return ExitCode::SUCCESS,
+    };
+    match wait(&store, &waiter, now_ms) {
+        Some(news) => {
+            eprintln!("{news}");
+            ExitCode::from(2)
+        }
+        None => ExitCode::SUCCESS,
+    }
+}
+
+/// Sleeps until there is news for the session; None once another waiter took over, the session
+/// ended (the parent changed), or a worker's flow is finished or gone.
+fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
+    let me = std::process::id();
+    store.claim_waiter(waiter, me).ok()?;
+    let parent = std::os::unix::process::parent_id();
+    let is_mine =
+        || store.waiter(waiter) == Some(me) && std::os::unix::process::parent_id() == parent;
+    while is_mine() {
+        let news = match waiter {
+            Waiter::Flow(id) => worker_news(store, id, clock())?,
+            Waiter::Master => master_news(store, clock, &is_mine),
+        };
+        if news.is_some() {
+            return news;
+        }
+        thread::sleep(WAIT_EVERY);
+    }
+    None
+}
+
+/// Some(None) while there is nothing to deliver; None when the flow is finished or gone.
+fn worker_news(store: &Store, id: &str, now: u64) -> Option<Option<String>> {
+    let events = store.events(id).ok()?;
+    if fold::fold(id, &events, None, now).is_none_or(|flow| flow.is_finished()) {
+        return None;
+    }
+    let delivered = store.delivered(id);
+    let messages = wake::undelivered(&events, delivered);
+    if messages.is_empty() {
+        return Some(None);
+    }
+    store.set_delivered(id, delivered + messages.len()).ok()?;
+    Some(Some(output::news_for_worker(&messages)))
+}
+
+/// The flows that stopped since the master last saw them, collected for SETTLE so several arrive
+/// as one wake.
+fn master_news(store: &Store, clock: fn() -> u64, is_mine: &dyn Fn() -> bool) -> Option<String> {
+    let flows = views(store, clock()).0;
+    let seen = store.seen().unwrap_or_else(|| wake::first_seen(&flows));
+    if wake::changed_flows(&flows, &seen).is_empty() {
+        return None;
+    }
+    thread::sleep(SETTLE);
+    let flows = views(store, clock()).0;
+    let changed = wake::changed_flows(&flows, &seen);
+    if changed.is_empty() || !is_mine() {
+        return None;
+    }
+    let mut marked = seen.clone();
+    wake::mark_seen(&mut marked, &changed);
+    store.set_seen(&marked).ok()?;
+    Some(output::news_for_master(&changed))
 }
 
 /// Translates one hook event with the named adapter and appends what changes the flow.

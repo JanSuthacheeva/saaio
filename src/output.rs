@@ -552,7 +552,6 @@ pub fn sent(flow: &FlowView) -> Document {
 }
 
 /// What a worker reads when flow wakes it: each of the master's messages, indented.
-#[allow(dead_code)] // until flow send and flow wait use it
 pub fn news_for_worker(messages: &[&str]) -> String {
     messages
         .iter()
@@ -566,7 +565,6 @@ pub fn news_for_worker(messages: &[&str]) -> String {
 
 /// What the master reads when flow wakes it: changed[n]{name,state,mode,says}, and who answers
 /// by the flows' modes.
-#[allow(dead_code)] // until flow send and flow wait use it
 pub fn news_for_master(flows: &[&FlowView]) -> String {
     #[derive(Serialize)]
     struct Changed {
