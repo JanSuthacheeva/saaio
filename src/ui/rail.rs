@@ -34,10 +34,7 @@ impl Rail<'_> {
             ),
             (Line::styled("─".repeat(width), theme.ui.rule), None, false),
             (
-                Line::from(vec![
-                    Span::styled(" 0 ", theme.ui.faint),
-                    Span::styled(theme.glyphs.master, theme.ui.accent),
-                ]),
+                Line::from(vec![Span::styled(" 0", theme.ui.accent)]),
                 Some(PaneKey::Master),
                 false,
             ),

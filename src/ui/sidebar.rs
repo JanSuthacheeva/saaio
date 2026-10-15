@@ -70,13 +70,7 @@ impl Sidebar<'_> {
                     Span::styled(theme.glyphs.mark, theme.ui.accent),
                     Span::styled(" flow", theme.ui.strong),
                 ],
-                match self.board.needs_you {
-                    0 => vec![],
-                    count => vec![Span::styled(
-                        format!("{count} need you "),
-                        theme.state.waiting,
-                    )],
-                },
+                vec![],
                 width,
             )),
             plain(Line::styled("─".repeat(width), theme.ui.rule)),
@@ -85,10 +79,21 @@ impl Sidebar<'_> {
         rows.push(Row {
             line: split(
                 vec![
-                    Span::styled(" 0 ", theme.ui.faint),
-                    Span::styled(theme.glyphs.master, theme.ui.accent),
+                    if master {
+                        Span::styled(theme.glyphs.cursor, theme.ui.accent)
+                    } else {
+                        Span::raw(" ")
+                    },
                     Span::styled(
-                        " master",
+                        "0   ",
+                        if master {
+                            theme.ui.strong
+                        } else {
+                            theme.ui.faint
+                        },
+                    ),
+                    Span::styled(
+                        "master",
                         if master {
                             theme.ui.strong
                         } else {
@@ -96,18 +101,11 @@ impl Sidebar<'_> {
                         },
                     ),
                 ],
-                if master {
-                    vec![Span::styled(
-                        format!("{} in view ", theme.glyphs.in_view),
-                        theme.ui.accent,
-                    )]
-                } else {
-                    vec![Span::styled("you ", theme.ui.faint)]
-                },
+                vec![],
                 width,
             ),
             key: Some(PaneKey::Master),
-            selected: false,
+            selected: master,
         });
         if let Some(place) = self.master {
             rows.push(Row {
@@ -432,7 +430,7 @@ impl Sidebar<'_> {
             State::Ended => Span::styled("ended", theme.state.ended),
             State::NotResponding => Span::styled("not responding", theme.state.blocked),
             _ => match (flow.phase, flow.state) {
-                (Some(phase), state) => Span::styled(phase.name(), theme.state(state)),
+                (Some(phase), _) => Span::styled(phase.name(), theme.ui.text),
                 (None, State::Working) => Span::styled("starting", theme.ui.faint),
                 (None, State::Waiting) => Span::styled("waiting", theme.state.waiting),
                 (None, State::Idle) => Span::styled("idle", theme.ui.muted),

@@ -1,5 +1,5 @@
 
-  ● master  ~/projects/shop · main
+  master  ~/projects/shop · main
 
 
 
@@ -40,5 +40,5 @@
 
 
 
-  ▚▄▞ flow  │ ● master  ~/projects/shop · main                                                 no workers yet   │  C-space then  n new flow   ? keys
+  ▚▄▞ flow  │ master  ~/projects/shop · main                                                   no workers yet   │  C-space then  n new flow   ? keys
 

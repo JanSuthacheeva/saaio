@@ -159,13 +159,10 @@ pub const MARK: &str = "▚▄▞";
 /// flow's mark with a Nerd Font: Font Awesome's kiwi bird, in the theme's accent like any mark.
 /// Terminals draw Nerd Font icons wider than their one cell, so it brings a space of its own.
 pub const KIWI: &str = "\u{edff} ";
-/// The master with a Nerd Font: a crown, for the one that leads the flock; a space of its own too.
-pub const CROWN: &str = "\u{f01a5} ";
 
 #[derive(Debug, Clone)]
 pub struct Glyphs {
     pub mark: &'static str,
-    pub master: &'static str,
     pub waiting: &'static str,
     /// A worker whose turn ended without a question.
     pub idle: &'static str,
@@ -178,7 +175,6 @@ pub struct Glyphs {
     /// The line between the pane and the sidebar, and where the sidebar's header rule meets it.
     pub rule_v: &'static str,
     pub rule_joint: &'static str,
-    pub in_view: &'static str,
     pub step_done: &'static str,
     pub step_current: &'static str,
     pub step_open: &'static str,
@@ -233,18 +229,16 @@ impl Theme {
             },
             glyphs: Glyphs {
                 mark: MARK,
-                master: "●",
-                waiting: "◆",
-                idle: "◌",
-                blocked: "✖",
-                done: "✔",
+                waiting: "●",
+                idle: "○",
+                blocked: "●",
+                done: "✓",
                 ended: "○",
-                spinner: &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+                spinner: &["◐", "◓", "◑", "◒"],
                 cursor: "▌",
                 separator: "│",
                 rule_v: "│",
                 rule_joint: "├",
-                in_view: "◂",
                 step_done: "●",
                 step_current: "●",
                 step_open: "○",
@@ -252,7 +246,7 @@ impl Theme {
                 more: "…",
                 tool: "⏺",
                 result: "⎿",
-                dash: "╌",
+                dash: "─",
             },
             palette,
         }

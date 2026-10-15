@@ -15,7 +15,6 @@ use crate::view::{Board, FlowView, Project, Projects, State, StepStatus, Tone};
 /// Cards per row.
 const COLUMNS: usize = 3;
 /// The longest task bar on a card.
-const BAR_WIDTH: usize = 27;
 /// A card's rows: its four lines inside a border.
 const CARD_ROWS: u16 = 6;
 /// Rows every project's cards leave for the selected flow's detail.
@@ -205,9 +204,8 @@ impl BoardView<'_> {
         };
         [
             Line::from(vec![
-                Span::styled(" 0 ", theme.ui.faint),
-                Span::styled(theme.glyphs.master, theme.ui.accent),
-                Span::styled(" master", theme.ui.strong),
+                Span::styled(" 0   ", theme.ui.faint),
+                Span::styled("master", theme.ui.strong),
             ]),
             Line::styled(format!("   {place}"), theme.ui.faint),
             Line::styled(
@@ -261,19 +259,12 @@ impl BoardView<'_> {
                 .map(|tasks| (tasks.done, tasks.total))
                 .filter(|(_, total)| *total > 0);
             let progress = match tasks {
-                // Nothing to measure yet: no bar, only the age.
+                // Nothing to measure yet: only the age.
                 None => vec![Span::raw("   ")],
                 Some((done, total)) => {
-                    let count = format!("{done}/{total}");
-                    let bar = width
-                        .saturating_sub(3 + 2 + count.chars().count() + ago.chars().count() + 1)
-                        .min(BAR_WIDTH);
-                    let filled = (bar as u32 * done.min(total) / total) as usize;
                     vec![
                         Span::raw("   "),
-                        Span::styled("━".repeat(filled), theme.state(flow.state)),
-                        Span::styled("─".repeat(bar - filled), theme.ui.faint),
-                        Span::styled(format!("  {count}"), theme.ui.text),
+                        Span::styled(format!("{done}/{total} tasks"), theme.ui.faint),
                     ]
                 }
             };
