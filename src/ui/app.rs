@@ -406,8 +406,10 @@ impl App {
                 frame.render_widget(self.sidebar(theme, peek), side);
             }
         }
+        let asking = matches!(self.view, View::Confirm { .. });
         match self.status(&self.focus) {
             Some(PaneStatus::Running) => {}
+            Some(_) if asking => {}
             Some(status) => draw_not_running(
                 frame,
                 areas.pane,
