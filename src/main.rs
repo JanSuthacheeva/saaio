@@ -13,6 +13,8 @@ mod slots;
 mod store;
 mod ui;
 mod view;
+#[allow(dead_code)] // until flow wait uses it
+mod wake;
 mod workspace;
 
 use std::env;
