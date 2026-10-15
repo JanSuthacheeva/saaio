@@ -9,6 +9,7 @@ pub mod rail;
 pub mod screen;
 pub mod sidebar;
 pub mod theme;
+pub mod theme_file;
 
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
