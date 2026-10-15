@@ -1213,6 +1213,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let socket = dir.path().join("server.sock");
         drop(UnixListener::bind(&socket).unwrap());
+        // A process another test forks right now holds the listener until it execs.
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while UnixStream::connect(&socket).is_ok() && std::time::Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(5));
+        }
 
         let listener = bind(&socket).unwrap();
 
