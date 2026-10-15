@@ -1843,11 +1843,8 @@ mod tests {
         assert_eq!(side(&terminal, 16).trim_end(), "     agent: review changes");
         assert_eq!(side(&terminal, 18).trim_end(), " DONE 1");
         assert_eq!(side(&terminal, 20).trim_end(), "     ●───●───●───● MR !418");
-        assert_eq!(side(&terminal, 39), "─".repeat(40));
-        assert_eq!(
-            side(&terminal, 40).trim_end(),
-            " C-space j k peek  0-9 jump  n new"
-        );
+        assert_eq!(side(&terminal, 40).trim_end(), "", "no rule above the hint");
+        assert_eq!(side(&terminal, 41).trim_end(), " C-space ? keys");
         let buffer = terminal.backend().buffer();
         assert_eq!(
             buffer[(112, 6)].fg,
@@ -2054,10 +2051,7 @@ mod tests {
         assert_eq!(side(&terminal, 22).trim_end(), "▌ enter jump in");
         assert_eq!(side(&terminal, 23).trim_end(), "");
         assert_eq!(side(&terminal, 24).trim_end(), " DONE 1");
-        assert_eq!(
-            side(&terminal, 40).trim_end(),
-            " C-space j k peek  0-9 jump  n new"
-        );
+        assert_eq!(side(&terminal, 41).trim_end(), " C-space ? keys");
 
         assert_eq!(
             app.on_input(Routed::Command(Command::Jump)),
@@ -2802,10 +2796,7 @@ mod tests {
             help.contains("  b        fold the sidebar to a rail and back"),
             "{help}"
         );
-        assert_eq!(
-            side(&terminal, 41).trim_end(),
-            "         o board  b rail  ? all keys"
-        );
+        assert_eq!(side(&terminal, 41).trim_end(), " C-space ? keys");
 
         app.on_input(Routed::View(vec![Key::Char('x')]));
         assert!(!app.is_modal());

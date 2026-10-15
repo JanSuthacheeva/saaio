@@ -12,8 +12,8 @@ use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, State, StepStatus};
 
 const WIDTH: usize = SIDEBAR_WIDTH as usize;
-/// Rows the key hints take at the bottom, with the rule above them.
-const FOOTER_ROWS: u16 = 3;
+/// Rows the key hint takes at the bottom.
+const FOOTER_ROWS: u16 = 1;
 /// The most rows a peek takes, with its rule and its hint.
 const PEEK_ROWS: usize = 14;
 /// Fewer rows than this and the peek is left out.
@@ -183,7 +183,7 @@ impl Sidebar<'_> {
         }
         rows.truncate(room);
         rows.resize_with(room, || plain(Line::raw("")));
-        rows.extend(self.footer(width));
+        rows.extend(self.footer());
         rows
     }
 
@@ -450,33 +450,16 @@ impl Sidebar<'_> {
         last_note(flow).map(|note| (note, theme.ui.faint))
     }
 
-    fn footer(&self, width: usize) -> Vec<Row> {
+    /// One quiet line at the foot: the prefix and the key that lists the rest.
+    fn footer(&self) -> Vec<Row> {
         let theme = self.theme;
-        let key = |text: &'static str| Span::styled(text, theme.ui.key);
-        let hint = |text: &'static str| Span::styled(text, theme.ui.faint);
-        vec![
-            plain(Line::styled("─".repeat(width), theme.ui.rule)),
-            plain(Line::from(vec![
-                Span::raw(" "),
-                key("C-space"),
-                Span::raw(" "),
-                key("j k"),
-                hint(" peek  "),
-                key("0-9"),
-                hint(" jump  "),
-                key("n"),
-                hint(" new"),
-            ])),
-            plain(Line::from(vec![
-                Span::raw("         "),
-                key("o"),
-                hint(" board  "),
-                key("b"),
-                hint(" rail  "),
-                key("?"),
-                hint(" all keys"),
-            ])),
-        ]
+        vec![plain(Line::from(vec![
+            Span::raw(" "),
+            Span::styled("C-space", theme.ui.key),
+            Span::raw(" "),
+            Span::styled("?", theme.ui.key),
+            Span::styled(" keys", theme.ui.faint),
+        ]))]
     }
 }
 
