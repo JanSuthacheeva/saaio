@@ -1536,7 +1536,7 @@ mod tests {
             "a blank row between session and bar"
         );
         let bar = row(&terminal, 7);
-        assert!(bar.contains("≋ flow"), "{bar}");
+        assert!(bar.contains("▚▄▞ flow"), "{bar}");
         assert!(bar.contains("◎ master"), "{bar}");
         assert!(bar.contains("C-space then  n new flow   ? keys"), "{bar}");
         let buffer = terminal.backend().buffer();
@@ -1815,7 +1815,7 @@ mod tests {
 
         assert_eq!(
             side(&terminal, 0),
-            " ≋ flow                      2 need you "
+            " ▚▄▞ flow                    2 need you "
         );
         assert_eq!(
             side(&terminal, 2),
@@ -1872,7 +1872,7 @@ mod tests {
             "{title}"
         );
         assert!(
-            title.ends_with(" C-space 0 back to master ╮  ≋ flow                      2 need you "),
+            title.ends_with(" C-space 0 back to master ╮  ▚▄▞ flow                    2 need you "),
             "{title}"
         );
         assert_eq!(
@@ -2178,7 +2178,7 @@ mod tests {
         let terminal = render_at(&app, FLEET);
 
         assert!(app.is_modal());
-        assert!(row(&terminal, 0).starts_with(" ≋ flow board "));
+        assert!(row(&terminal, 0).starts_with(" ▚▄▞ flow board "));
         assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
         assert!(row(&terminal, 3).contains("│ 0 ◎ master                             you  │"));
         assert!(row(&terminal, 3).contains("│ 1 ✖ shop-221                       blocked  │"));
@@ -2613,7 +2613,7 @@ mod tests {
         let rail = |y| row(&terminal, y).chars().skip(142).collect::<String>();
 
         assert!(
-            row(&terminal, 0).ends_with(" ◆ 2 shop-230 is waiting  │  C-space b sidebar ╮  ≋    ")
+            row(&terminal, 0).ends_with(" ◆ 2 shop-230 is waiting  │  C-space b sidebar ╮  ▚▄▞  ")
         );
         assert_eq!(rail(2), " 0 ◎  ");
         assert_eq!(rail(4), "▌1 ✖  ");

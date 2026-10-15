@@ -154,6 +154,8 @@ pub struct StateTokens {
     pub ended: Style,
 }
 
+/// flow's mark: a goose in flight, in block characters every font has.
+pub const MARK: &str = "▚▄▞";
 /// flow's mark with a Nerd Font: Font Awesome's kiwi bird, in the theme's accent like any mark.
 pub const KIWI: &str = "\u{edff}";
 
@@ -224,7 +226,7 @@ impl Theme {
                 ended: fg(palette.ended),
             },
             glyphs: Glyphs {
-                mark: "≋",
+                mark: MARK,
                 master: "◎",
                 waiting: "◆",
                 idle: "◌",

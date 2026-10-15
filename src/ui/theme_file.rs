@@ -7,6 +7,8 @@ use ratatui::style::Color;
 use toml::{Table, Value};
 
 use crate::store::Stamp;
+#[cfg(test)]
+use crate::ui::theme::MARK;
 use crate::ui::theme::{KIWI, Palette, Theme};
 
 pub const THEME_FILE: &str = "theme.toml";
@@ -267,7 +269,7 @@ mod tests {
     fn a_nerd_font_turns_the_mark_into_the_kiwi() {
         let dir = TempDir::new().unwrap();
         write(&dir, "theme.toml", "extends = \"flow\"\n");
-        assert_eq!(theme(&dir).glyphs.mark, "≋", "every font has it");
+        assert_eq!(theme(&dir).glyphs.mark, MARK, "every font has it");
 
         write(&dir, "theme.toml", "extends = \"mine\"\nnerd_font = true\n");
         write(&dir, "themes/mine.toml", "extends = \"flow\"\n");
@@ -286,7 +288,7 @@ mod tests {
             "theme.toml",
             "extends = \"mine\"\nnerd_font = false\n",
         );
-        assert_eq!(theme(&dir).glyphs.mark, "≋", "the nearer file wins");
+        assert_eq!(theme(&dir).glyphs.mark, MARK, "the nearer file wins");
 
         write(&dir, "theme.toml", "nerd_font = \"yes\"\n");
         let error = load(dir.path()).0.unwrap_err();
