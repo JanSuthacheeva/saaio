@@ -360,6 +360,7 @@ impl Sidebar<'_> {
         match state {
             State::Working | State::Delegated => glyphs.spinner[self.spin % glyphs.spinner.len()],
             State::Waiting => glyphs.waiting,
+            State::Idle => glyphs.idle,
             State::Blocked | State::NotResponding => glyphs.blocked,
             State::Done => glyphs.done,
             State::Ended => glyphs.ended,
@@ -409,6 +410,7 @@ impl Sidebar<'_> {
                 (Some(phase), state) => Span::styled(phase.name(), theme.state(state)),
                 (None, State::Working) => Span::styled("starting", theme.ui.faint),
                 (None, State::Waiting) => Span::styled("waiting", theme.state.waiting),
+                (None, State::Idle) => Span::styled("idle", theme.ui.muted),
                 (None, State::Delegated) => Span::styled("delegated", theme.state.working),
                 (None, _) => Span::styled("blocked", theme.state.blocked),
             },

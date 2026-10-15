@@ -54,6 +54,8 @@ pub enum State {
     Working,
     Delegated,
     Waiting,
+    /// The turn ended without a question: nothing to do for the person.
+    Idle,
     Blocked,
     NotResponding,
     Done,

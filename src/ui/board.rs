@@ -110,6 +110,7 @@ impl BoardView<'_> {
                 theme.state.waiting,
             ),
             (count(&[State::Working]), "running", theme.ui.faint),
+            (count(&[State::Idle]), "idle", theme.ui.faint),
             (count(&[State::Delegated]), "delegated", theme.ui.faint),
             (count(&[State::Done]), "done", theme.ui.faint),
             (count(&[State::Ended]), "ended", theme.ui.faint),
@@ -292,7 +293,7 @@ impl BoardView<'_> {
                 flow.delegate.as_ref().map(|text| format!("agent: {text}")),
                 theme.ui.faint,
             ),
-            State::Working => (
+            State::Working | State::Idle => (
                 flow.timeline
                     .iter()
                     .skip(1)
@@ -330,6 +331,7 @@ impl BoardView<'_> {
             State::NotResponding => ("not responding".to_string(), solid(tone)),
             State::Waiting => ("waiting for you".to_string(), solid(tone)),
             State::Working => ("working".to_string(), soft(tone)),
+            State::Idle => ("idle".to_string(), soft(tone)),
             State::Delegated => (
                 format!("{} · agent", flow.phase.map_or("working", gerund)),
                 soft(tone),

@@ -159,6 +159,8 @@ pub struct Glyphs {
     pub mark: &'static str,
     pub master: &'static str,
     pub waiting: &'static str,
+    /// A worker whose turn ended without a question.
+    pub idle: &'static str,
     pub blocked: &'static str,
     pub done: &'static str,
     pub ended: &'static str,
@@ -222,6 +224,7 @@ impl Theme {
                 mark: "≋",
                 master: "◎",
                 waiting: "◆",
+                idle: "◌",
                 blocked: "✖",
                 done: "✔",
                 ended: "○",
@@ -254,6 +257,7 @@ impl Theme {
         match state {
             State::Working | State::Delegated => self.state.working,
             State::Waiting => self.state.waiting,
+            State::Idle => self.ui.muted,
             State::Blocked | State::NotResponding => self.state.blocked,
             State::Done => self.state.done,
             State::Ended => self.state.ended,

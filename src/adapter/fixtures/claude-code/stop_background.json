@@ -1,0 +1,24 @@
+{
+ "session_id": "7f3c0000-0000-4000-8000-000000000000",
+ "transcript_path": "/home/dev/.claude/projects/-repo/7f3c.jsonl",
+ "cwd": "/repo",
+ "scratchpad_dir": "/tmp/claude/scratchpad",
+ "prompt_id": "3f021685-4785-4092-8d09-855b1fd6761e",
+ "permission_mode": "bypassPermissions",
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "Stop",
+ "stop_hook_active": false,
+ "last_assistant_message": "The sleeper is still running.",
+ "background_tasks": [
+  {
+   "id": "adfb26396b14a6b82",
+   "type": "subagent",
+   "status": "running",
+   "description": "background sleeper",
+   "agent_type": "general-purpose"
+  }
+ ],
+ "session_crons": []
+}

@@ -37,6 +37,7 @@ Events for `flow report`:
 | `working` | work goes on, after a stop or a subagent |
 | `delegated <description>` | a subagent works on the flow |
 | `waiting <question>` | the flow waits for the person's answer |
+| `idle <note>` | the turn ended without a question; nothing for the person to do |
 | `blocked <reason>` | the flow cannot go on |
 | `decision <text>` | a decision made on the person's behalf |
 | `tasks <done> <total>` | plan tasks done |
@@ -294,8 +295,9 @@ error: no flow named shop-999
 help[2]: Run `flow` to list the flows,Run `flow new --name shop-999 --request <text>` to start it
 ```
 
-States: `working`, `delegated`, `waiting`, `blocked`, `not-responding` (a flow that sent
-heartbeats and stopped for 90 seconds), `done`, `ended`.
+States: `working`, `delegated`, `waiting` (asks you something), `idle` (its turn ended without
+a question; not under NEEDS YOU), `blocked`, `not-responding` (a flow that sent heartbeats and
+stopped for 90 seconds), `done`, `ended`.
 
 ## The `--json` contract
 

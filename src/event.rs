@@ -31,6 +31,10 @@ pub enum EventKind {
     Waiting {
         question: String,
     },
+    /// The turn ended without asking anything: the worker waits, but not on the person.
+    Idle {
+        note: String,
+    },
     Blocked {
         reason: String,
     },
@@ -116,6 +120,7 @@ impl EventKind {
             EventKind::Waiting { question } => EventKind::Waiting {
                 question: cut(question),
             },
+            EventKind::Idle { note } => EventKind::Idle { note: cut(note) },
             EventKind::Blocked { reason } => EventKind::Blocked {
                 reason: cut(reason),
             },

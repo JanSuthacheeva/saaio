@@ -102,6 +102,16 @@ way from the home view and hints, created a flow, reported phase and tasks, and 
 
 ## Verified facts the next pieces build on
 
+Claude Code hooks (2.1.300, recorded):
+- `Stop` carries `background_tasks`: `[{"id", "type": "subagent", "status": "running",
+  "description", "agent_type"}]` while background work is in flight, `[]` otherwise. flow reads a
+  running or pending task as `delegated` (fixture `stop_background.json`).
+- A subagent's hooks fire with `agent_id` set; a phase skill it starts (`review-changes` in a
+  fresh agent) reaches PreToolUse Skill only when the skill exists (an unknown skill is refused
+  before any hook).
+- When the background agent finishes, the main agent resumes on its own and its next `Stop`
+  follows.
+
 Claude Code mods (2.1.296 / 2.1.299):
 - A mod's `$.store` is shared live between simultaneous sessions (probe mod in two
   sessions: each read the other's writes at once; 2 x 200 concurrent writes to distinct keys,
