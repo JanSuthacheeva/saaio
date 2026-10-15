@@ -1804,7 +1804,7 @@ mod tests {
             side(&terminal, 2),
             " 0 ◎ master                   ◂ in view "
         );
-        assert_eq!(side(&terminal, 4).trim_end(), " NEEDS YOU");
+        assert_eq!(side(&terminal, 4).trim_end(), " NEEDS YOU 2");
         assert_eq!(
             side(&terminal, 5),
             " 1 ✖ shop-221                       29m "
@@ -1821,10 +1821,10 @@ mod tests {
             side(&terminal, 10),
             "     ◉─○─○─○ design              guided "
         );
-        assert_eq!(side(&terminal, 13).trim_end(), " RUNNING");
+        assert_eq!(side(&terminal, 13).trim_end(), " RUNNING 1");
         assert!(side(&terminal, 14).starts_with(" 3 ⠙ export-csv"));
         assert_eq!(side(&terminal, 16).trim_end(), "     agent: review changes");
-        assert_eq!(side(&terminal, 18).trim_end(), " DONE");
+        assert_eq!(side(&terminal, 18).trim_end(), " DONE 1");
         assert_eq!(side(&terminal, 20).trim_end(), "     ●─●─●─● MR !418");
         assert_eq!(side(&terminal, 41), "─".repeat(40));
         assert_eq!(
@@ -2033,7 +2033,7 @@ mod tests {
         );
         assert_eq!(side(&terminal, 22).trim_end(), "▌ enter jump in");
         assert_eq!(side(&terminal, 23).trim_end(), "");
-        assert_eq!(side(&terminal, 24).trim_end(), " DONE");
+        assert_eq!(side(&terminal, 24).trim_end(), " DONE 1");
         assert_eq!(
             side(&terminal, 42).trim_end(),
             " C-space j k peek  0-9 jump  n new"
@@ -2136,7 +2136,7 @@ mod tests {
         );
         assert!(row(&sidebar, 0).starts_with("╭ ◎ master  ~/projects/shop · main ─"));
         assert_eq!(side(&sidebar, 3).trim_end(), "     ~/projects/shop · main");
-        assert_eq!(side(&sidebar, 5).trim_end(), " NEEDS YOU");
+        assert_eq!(side(&sidebar, 5).trim_end(), " NEEDS YOU 2");
     }
 
     fn board_app() -> App {

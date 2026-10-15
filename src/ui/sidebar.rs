@@ -117,20 +117,27 @@ impl Sidebar<'_> {
         }
         rows.push(plain(Line::raw("")));
 
+        let listed = workers(self.board);
         let mut group = "";
         let mut flows = Vec::new();
-        for (index, flow) in workers(self.board).into_iter().enumerate() {
-            let heading = if flow.needs_you() {
-                "NEEDS YOU"
-            } else if flow.is_finished() {
-                "DONE"
-            } else {
-                "RUNNING"
-            };
+        for (index, flow) in listed.iter().copied().enumerate() {
+            let heading = group_of(flow);
             let mut block = Vec::new();
             if heading != group {
                 group = heading;
-                block.push(plain(Line::styled(format!(" {heading}"), theme.ui.faint)));
+                let count = listed
+                    .iter()
+                    .filter(|other| group_of(other) == heading)
+                    .count();
+                let tone = if heading == "NEEDS YOU" {
+                    theme.state.waiting
+                } else {
+                    theme.ui.faint
+                };
+                block.push(plain(Line::from(vec![
+                    Span::styled(format!(" {heading} "), theme.ui.faint),
+                    Span::styled(count.to_string(), tone),
+                ])));
             }
             block.extend(self.flow_rows(flow, index));
             block.push(plain(Line::raw("")));
@@ -555,6 +562,17 @@ pub fn clip(text: &str, width: usize) -> String {
     }
     kept.push('…');
     kept
+}
+
+/// The sidebar section a flow is listed under.
+fn group_of(flow: &FlowView) -> &'static str {
+    if flow.needs_you() {
+        "NEEDS YOU"
+    } else if flow.is_finished() {
+        "DONE"
+    } else {
+        "RUNNING"
+    }
 }
 
 /// What a flow last said that its row does not already show: its last timeline entry, without
