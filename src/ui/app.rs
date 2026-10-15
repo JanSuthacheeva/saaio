@@ -1140,6 +1140,10 @@ impl App {
         let Some(flow) = self.workers().into_iter().find(|flow| &flow.id == id) else {
             return block.title(Line::styled(format!(" {id} "), theme.ui.strong));
         };
+        // A worker that needs you is framed in its state's color, so you see it from inside.
+        if flow.needs_you() {
+            block = block.border_style(theme.state(flow.state));
+        }
         let sidebar = self.sidebar(theme, &[]);
         let mut title = vec![
             Span::raw(" "),
@@ -2196,6 +2200,29 @@ mod tests {
             buffer[(52, 2)].fg,
             Theme::builtin().state.blocked.fg.unwrap()
         );
+    }
+
+    #[test]
+    fn a_worker_that_needs_you_is_framed_in_its_state_color() {
+        let theme = Theme::builtin();
+        let corner = |app: &App| render_at(app, FLEET).backend().buffer()[(0, 0)].fg;
+        let mut app = with_fleet();
+
+        assert_eq!(corner(&app), theme.ui.rule.fg.unwrap(), "the master");
+        app.on_input(Routed::Command(Command::Focus(1)));
+        assert_eq!(
+            corner(&app),
+            theme.state.blocked.fg.unwrap(),
+            "shop-221 is blocked"
+        );
+        app.on_input(Routed::Command(Command::Focus(2)));
+        assert_eq!(
+            corner(&app),
+            theme.state.waiting.fg.unwrap(),
+            "shop-230 waits"
+        );
+        app.on_input(Routed::Command(Command::Focus(3)));
+        assert_eq!(corner(&app), theme.ui.rule.fg.unwrap(), "export-csv runs");
     }
 
     #[test]
