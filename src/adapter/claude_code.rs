@@ -43,14 +43,20 @@ pub fn settings(flow_exe: &Path) -> String {
     json!({ "hooks": hooks }).to_string()
 }
 
-/// The flow events one Claude Code hook payload means. A subagent's events (agent_id set) mean
-/// nothing; the flow follows the main agent only.
+/// The flow events one Claude Code hook payload means. Of a subagent's events (agent_id set) only
+/// a phase skill counts, as when a review runs in a fresh agent; the rest follows the main agent.
 pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
-    if payload.get("agent_id").is_some() {
-        return Vec::new();
-    }
     let tool = payload["tool_name"].as_str().unwrap_or("");
     let input = &payload["tool_input"];
+    if payload.get("agent_id").is_some() {
+        let starts_skill = payload["hook_event_name"] == "PreToolUse" && tool == "Skill";
+        return match input["skill"].as_str() {
+            Some(skill) if starts_skill => phase_of(skill, phases)
+                .map(|phase| vec![EventKind::Phase { phase }])
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+    }
     match payload["hook_event_name"].as_str().unwrap_or("") {
         "UserPromptSubmit" => {
             let mut kinds = vec![EventKind::Working];
@@ -104,10 +110,13 @@ pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
             }]
         }
         "Stop" if payload["stop_hook_active"] != Value::Bool(true) => {
+            if let Some(task) = running_background_task(&payload["background_tasks"]) {
+                return vec![EventKind::Delegated {
+                    description: cut(task),
+                }];
+            }
             let answer = payload["last_assistant_message"].as_str().unwrap_or("");
-            vec![EventKind::Waiting {
-                question: waiting_question(answer).unwrap_or_else(|| "turn ended".to_string()),
-            }]
+            vec![turn_end(answer)]
         }
         "SessionEnd" if payload["reason"] == "prompt_input_exit" => vec![EventKind::Ended],
         _ => Vec::new(),
@@ -148,22 +157,38 @@ fn text_of(response: &Value) -> String {
     }
 }
 
-/// The last sentence ending in "?" of the answer's last non-empty line, else its last sentence.
-fn waiting_question(answer: &str) -> Option<String> {
-    let last = answer
-        .lines()
-        .map(str::trim)
-        .rfind(|line| !line.is_empty())?;
+/// What a turn ending with background work in flight waits for: the first running or pending
+/// task's description.
+fn running_background_task(tasks: &Value) -> Option<&str> {
+    tasks.as_array()?.iter().find_map(|task| {
+        let busy = matches!(task["status"].as_str(), Some("running" | "pending"));
+        busy.then(|| task["description"].as_str().unwrap_or("background work"))
+    })
+}
+
+/// Waiting with the last sentence of the answer's last non-empty line that asks (ends in "?", or
+/// starts "Let me know" or "Tell me"); else idle, with its last sentence: only a question needs
+/// the person.
+fn turn_end(answer: &str) -> EventKind {
+    let Some(last) = answer.lines().map(str::trim).rfind(|line| !line.is_empty()) else {
+        return EventKind::Idle {
+            note: "turn ended".to_string(),
+        };
+    };
     let plain = plain(last);
     let sentences = sentences(&plain);
-    let question = sentences
-        .iter()
-        .rev()
-        .find(|sentence| sentence.ends_with('?'))
-        .or_else(|| sentences.last())
-        .map(|sentence| sentence.to_string())
-        .unwrap_or_else(|| last.to_string());
-    Some(cut(&question))
+    let asks = |sentence: &&String| {
+        let lower = sentence.to_lowercase();
+        sentence.ends_with('?') || lower.starts_with("let me know") || lower.starts_with("tell me")
+    };
+    match sentences.iter().rev().find(asks) {
+        Some(question) => EventKind::Waiting {
+            question: cut(question),
+        },
+        None => EventKind::Idle {
+            note: cut(sentences.last().map_or(last, |sentence| sentence.as_str())),
+        },
+    }
 }
 
 /// A Markdown line as plain text: no list marker, no emphasis or code ticks.
@@ -336,8 +361,31 @@ mod tests {
     }
 
     #[test]
-    fn a_subagents_own_events_mean_nothing() {
+    fn of_a_subagents_events_only_a_phase_skill_counts() {
         assert_eq!(events("subagent_bash"), vec![]);
+        let review = json!({
+            "agent_id": "a939a6772fbea50e7",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Skill",
+            "tool_input": {"skill": "review-changes"}
+        });
+        let phases = PhaseMap::from([("review-changes".to_string(), Phase::Review)]);
+        assert_eq!(
+            translate(&review, &phases),
+            vec![EventKind::Phase {
+                phase: Phase::Review
+            }]
+        );
+    }
+
+    #[test]
+    fn a_turn_that_ends_with_background_work_running_is_delegated() {
+        assert_eq!(
+            events("stop_background"),
+            vec![EventKind::Delegated {
+                description: "background sleeper".into()
+            }]
+        );
     }
 
     #[test]
@@ -404,10 +452,7 @@ mod tests {
         let [EventKind::Waiting { question }] = &events("stop")[..] else {
             panic!("expected waiting");
         };
-        assert!(
-            question.starts_with("Let me know if you still want it"),
-            "{question}"
-        );
+        assert_eq!(question, "Let me know if you still want it.");
         assert_eq!(events("session_end_exit"), vec![EventKind::Ended]);
         assert_eq!(events("session_end_hangup"), vec![], "a hangup resumes");
     }
@@ -430,20 +475,27 @@ mod tests {
     }
 
     #[test]
-    fn takes_the_question_from_the_last_line_of_an_answer() {
+    fn waits_for_the_person_only_when_the_last_line_asks() {
+        let waiting = |question: &str| EventKind::Waiting {
+            question: question.into(),
+        };
+        let idle = |note: &str| EventKind::Idle { note: note.into() };
+
         assert_eq!(
-            waiting_question("Done.\n\n- **Which** approach: `A` or B? I lean A."),
-            Some("Which approach: A or B?".into())
+            turn_end("Done.\n\n- **Which** approach: `A` or B? I lean A."),
+            waiting("Which approach: A or B?")
         );
+        assert_eq!(turn_end("1. Shall I go on?"), waiting("Shall I go on?"));
         assert_eq!(
-            waiting_question("All set. Tests pass."),
-            Some("Tests pass.".into())
+            turn_end("Tests pass. Tell me which one to keep."),
+            waiting("Tell me which one to keep.")
         );
+        assert_eq!(turn_end("All set. Tests pass."), idle("Tests pass."));
         assert_eq!(
-            waiting_question("1. Shall I go on?"),
-            Some("Shall I go on?".into())
+            turn_end("Started the review.\n\nThe review is still running."),
+            idle("The review is still running.")
         );
-        assert_eq!(waiting_question("  \n"), None);
+        assert_eq!(turn_end("  \n"), idle("turn ended"));
     }
 
     #[test]
