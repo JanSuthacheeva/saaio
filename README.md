@@ -23,6 +23,7 @@ flow start <request> [--name <name>] [--mode guided|auto] [--agent <name>]
 flow new --name <name> --request <text> [--mode guided|auto]
 flow report [--flow <name|id>] <event>  the flow comes from --flow or $FLOW_ID
 flow status [<name|id>] [--json] [--full]
+flow status --all [--json] [--full]     every project's flows, with their project
 flow remove <name|id> [--force]         end a flow's worker, tear down its worktree, forget it
 flow clear                              forget finished flows, tear down their worktrees
 ```
@@ -67,7 +68,7 @@ Keys, after the prefix `C-space` (`C-space C-space` sends one through):
 | `0`-`9` | jump to a session; 0 is the master, 1 the top of the sidebar |
 | `j` `k`, `enter` | move the peek over the workers (their latest tool calls and text, read from Claude's transcript), jump in |
 | `n` | start a flow: request, mode, what it creates |
-| `o` | the board: a card per session and the selected flow's timeline, decisions and steps |
+| `o` | the board: a card per session and the selected flow's timeline, decisions and steps; `a` there shows every project's flows (read-only for other projects) |
 | `b` | fold the sidebar to a rail and back |
 | `r` | resume a session that exited, or an ended flow |
 | `[` | scroll back through the session's history |
@@ -165,7 +166,7 @@ A repo can commit two executable hooks; `flow` runs them in the worktree with `F
   marked blocked with its last error line and the worker still opens so you can look.
 - `.flow/teardown` when `flow clear` removes a finished flow's worktree.
 
-`FLOW_SLOT` is 1 to 9, unique among running flows, for anything that must not collide, such as
+`FLOW_SLOT` is 1 to 20, unique among unfinished flows in every project, for anything that must not collide, such as
 ports. For a Docker Compose project whose tests run in the containers, read the ports from
 variables in `compose.yaml` (`"${HTTP_PORT:-80}:80"`, `"${DB_PORT:-3306}:3306"`), then:
 
@@ -297,3 +298,17 @@ Timeline tones: `neutral`, `progress`, `attention`, `problem`, `success`.
 `flows/<id>.jsonl` per flow, and `flows/<id>.alive` whose modification time is the last
 heartbeat. Beside them flow ui keeps `server.sock` (readable only by you), `server.log` and
 `master.json` (the master's session id and folder).
+
+### Several projects
+
+Give each project its own `FLOW_HOME` (for example per tmux session,
+`~/.local/state/flow/projects/<name>`) and each gets its own server, master and flows. They share
+the default folder (`$XDG_STATE_HOME/flow`, else `~/.local/state/flow`, whatever `FLOW_HOME` says):
+
+- `stores/<hash>`: every flow command registers its folder there, so `flow status --all` and the
+  board's `a` find every project; a folder that is gone is dropped.
+- `slots/<n>`: `flow start` claims its slot there before setup runs, so no two unfinished flows in
+  any project share a slot. A claim only counts while its flow is unfinished.
+
+`flow status --all --json` prints `{"version", "now", "projects": [{"name", "root", "board"}]}`,
+each board as `flow status --json` prints it. A project is named after its folder.

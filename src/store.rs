@@ -45,7 +45,7 @@ impl Store {
         }
     }
 
-    #[cfg(test)]
+    /// The store in this folder, as the registry lists it.
     pub fn at(root: PathBuf) -> Store {
         Store { root }
     }

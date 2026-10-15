@@ -18,10 +18,12 @@ use crate::ui::rail::Rail;
 use crate::ui::screen::Screen;
 use crate::ui::sidebar::{self, Sidebar};
 use crate::ui::theme::Theme;
-use crate::view::{Board, FlowView, State};
+use crate::view::{Board, FlowView, Projects, State};
 
 /// Ticks between redraws that only refresh how long ago things changed.
 const TICKS_PER_AGE: u32 = 10;
+/// How often the board asks `flow status --all` again while every project is in view.
+const OVERVIEW_EVERY_MS: u64 = 2_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum View {
@@ -41,6 +43,8 @@ pub enum View {
 pub enum Job {
     Start(NewFlowForm),
     Remove(String),
+    /// `flow status --all --json`: every project's board.
+    Overview,
 }
 
 impl Job {
@@ -57,6 +61,11 @@ impl Job {
                 },
             ],
             Job::Remove(name) => vec!["remove".to_string(), name.clone()],
+            Job::Overview => vec![
+                "status".to_string(),
+                "--all".to_string(),
+                "--json".to_string(),
+            ],
         }
     }
 
@@ -64,7 +73,7 @@ impl Job {
     pub fn dir(&self) -> Option<&Path> {
         match self {
             Job::Start(form) => Some(&form.repo),
-            Job::Remove(_) => None,
+            Job::Remove(_) | Job::Overview => None,
         }
     }
 }
@@ -75,6 +84,18 @@ pub enum Effect {
     Mirror(Modes),
     Run(Job),
     Quit(String),
+}
+
+/// h j k l and the arrows on a board.
+fn board_step(key: &Key) -> Option<isize> {
+    match key {
+        Key::Char(c) => BoardState::step(*c),
+        Key::Left => Some(-1),
+        Key::Right => Some(1),
+        Key::Down => BoardState::step('j'),
+        Key::Up => BoardState::step('k'),
+        _ => None,
+    }
 }
 
 /// What a flow command printed: its first line when it worked, the error without "error: " when not.
@@ -111,6 +132,13 @@ pub struct App {
     notice: Option<String>,
     /// The sidebar folded to a rail (C-space b).
     rail: bool,
+    /// This project's store, to tell its flows from other projects'.
+    here: Option<String>,
+    /// Every project's flows, this project first, from the last `flow status --all`.
+    projects: Option<Projects>,
+    /// When the board last asked for them, and whether that answer is still out.
+    overview_at: u64,
+    overview_running: bool,
 }
 
 impl App {
@@ -133,7 +161,17 @@ impl App {
             master_cwd: None,
             notice: None,
             rail: false,
+            here: None,
+            projects: None,
+            overview_at: 0,
+            overview_running: false,
         }
+    }
+
+    /// The store this flow ui belongs to, as `flow status --all` names its root.
+    pub fn with_store(mut self, root: String) -> App {
+        self.here = Some(root);
+        self
     }
 
     /// Paths under `home` show as ~/...
@@ -167,6 +205,21 @@ impl App {
             self.spin = self.spin.wrapping_add(1);
         }
         spinning || self.ticks.is_multiple_of(TICKS_PER_AGE)
+    }
+
+    /// Job::Overview when every project is in view and the last answer is older than 2 s.
+    pub fn overview_due(&mut self) -> Vec<Effect> {
+        let all = matches!(self.view, View::Board(BoardState { all: true, .. }));
+        if !all || self.overview_running || self.now < self.overview_at + OVERVIEW_EVERY_MS {
+            return vec![];
+        }
+        self.ask_overview()
+    }
+
+    fn ask_overview(&mut self) -> Vec<Effect> {
+        self.overview_at = self.now;
+        self.overview_running = true;
+        vec![Effect::Run(Job::Overview)]
     }
 
     /// True while a dialog takes the keys instead of the pane.
@@ -270,6 +323,8 @@ impl App {
                     back: &back,
                     offset_secs: self.offset_secs,
                     notice: self.notice.as_deref(),
+                    projects: self.projects.as_ref(),
+                    here: self.here.as_deref(),
                 },
                 frame.area(),
             );
@@ -393,7 +448,10 @@ impl App {
                         .position(|flow| &flow.id == id)
                         .map_or(0, |at| at + 1),
                 };
-                self.view = View::Board(BoardState { selected });
+                self.view = View::Board(BoardState {
+                    selected,
+                    all: false,
+                });
                 vec![]
             }
             Command::Rail => {
@@ -543,16 +601,11 @@ impl App {
     }
 
     fn on_board_key(&mut self, state: BoardState, key: Key) -> Vec<Effect> {
+        if state.all {
+            return self.on_all_key(state, key);
+        }
         let cards = self.workers().len() + 1;
-        let step = match key {
-            Key::Char(c) => BoardState::step(c),
-            Key::Left => Some(-1),
-            Key::Right => Some(1),
-            Key::Down => BoardState::step('j'),
-            Key::Up => BoardState::step('k'),
-            _ => None,
-        };
-        if let Some(step) = step {
+        if let Some(step) = board_step(&key) {
             self.view = View::Board(state.moved(step, cards));
             return vec![];
         }
@@ -560,7 +613,7 @@ impl App {
             Key::Char(digit @ '0'..='9') => {
                 let selected = digit as usize - '0' as usize;
                 if selected < cards {
-                    self.view = View::Board(BoardState { selected });
+                    self.view = View::Board(BoardState { selected, ..state });
                 }
                 vec![]
             }
@@ -575,6 +628,73 @@ impl App {
                 };
                 self.focus(key)
             }
+            Key::Char('a') => {
+                self.view = View::Board(BoardState {
+                    selected: 0,
+                    all: true,
+                });
+                if self.overview_running {
+                    return vec![];
+                }
+                self.ask_overview()
+            }
+            Key::Char('x') => {
+                let flow = state
+                    .selected
+                    .checked_sub(1)
+                    .and_then(|at| self.workers().get(at).copied())
+                    .cloned();
+                self.clear(flow)
+            }
+            _ => self.on_any_board_key(key),
+        }
+    }
+
+    /// Keys on every project's board: the cards of other projects are only shown.
+    fn on_all_key(&mut self, state: BoardState, key: Key) -> Vec<Effect> {
+        let flows: Vec<(String, String, FlowView)> = self
+            .projects
+            .as_ref()
+            .map(|projects| {
+                board::every_flow(projects)
+                    .into_iter()
+                    .map(|(project, flow)| {
+                        (project.name.clone(), project.root.clone(), flow.clone())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if let Some(step) = board_step(&key) {
+            self.view = View::Board(state.moved(step, flows.len()));
+            return vec![];
+        }
+        let enter = key == Key::Enter;
+        match key {
+            Key::Char('a') => {
+                self.view = View::Board(BoardState::default());
+                vec![]
+            }
+            Key::Enter | Key::Char('x') => {
+                let Some((project, root, flow)) = flows.get(state.selected) else {
+                    return vec![];
+                };
+                if self.here.as_ref() != Some(root) {
+                    self.notice = Some(format!("{} runs in project {project}", flow.name));
+                    return vec![];
+                }
+                if !enter {
+                    return self.clear(Some(flow.clone()));
+                }
+                self.view = View::Panes;
+                self.focus(PaneKey::Flow(flow.id.clone()))
+            }
+            other => self.on_any_board_key(other),
+        }
+    }
+
+    /// Esc, q, o and n do the same on either board.
+    fn on_any_board_key(&mut self, key: Key) -> Vec<Effect> {
+        match key {
             Key::Esc | Key::Char('q') | Key::Char('o') => {
                 self.view = View::Panes;
                 vec![]
@@ -583,25 +703,25 @@ impl App {
                 self.view = View::NewFlow(NewFlowForm::new(self.focused_repo()));
                 vec![]
             }
-            Key::Char('x') => {
-                let flow = state
-                    .selected
-                    .checked_sub(1)
-                    .and_then(|at| self.workers().get(at).copied());
-                match flow {
-                    Some(flow) if flow.is_finished() => {
-                        let job = Job::Remove(flow.name.clone());
-                        self.notice = Some(format!("clearing {}…", flow.name));
-                        self.view = View::Board(BoardState { selected: 0 });
-                        vec![Effect::Run(job)]
-                    }
-                    _ => {
-                        self.notice = Some("only a finished flow can be cleared".to_string());
-                        vec![]
-                    }
-                }
-            }
             _ => vec![],
+        }
+    }
+
+    /// Removes a finished flow of this project in the background; says so for any other.
+    fn clear(&mut self, flow: Option<FlowView>) -> Vec<Effect> {
+        match flow {
+            Some(flow) if flow.is_finished() => {
+                let job = Job::Remove(flow.name.clone());
+                self.notice = Some(format!("clearing {}…", flow.name));
+                if let View::Board(state) = &mut self.view {
+                    state.selected = 0;
+                }
+                vec![Effect::Run(job)]
+            }
+            _ => {
+                self.notice = Some("only a finished flow can be cleared".to_string());
+                vec![]
+            }
         }
     }
 
@@ -641,8 +761,19 @@ impl App {
 
     /// What a background flow command printed: the flow it started, or why it failed.
     pub fn on_ran(&mut self, job: Job, result: Result<String, String>) {
+        if job == Job::Overview {
+            self.overview_running = false;
+            match result.and_then(|json| {
+                serde_json::from_str::<Projects>(&json).map_err(|error| error.to_string())
+            }) {
+                Ok(projects) => self.projects = Some(self.here_first(projects)),
+                Err(error) => self.notice = Some(format!("cannot read every project: {error}")),
+            }
+            return;
+        }
         self.notice = None;
         match (job, result) {
+            (Job::Overview, _) => {}
             (Job::Start(_), Ok(_)) | (Job::Remove(_), Ok(_)) => {}
             (Job::Start(mut form), Err(error)) => {
                 form.error = Some(error);
@@ -650,6 +781,18 @@ impl App {
             }
             (Job::Remove(_), Err(error)) => self.notice = Some(error),
         }
+    }
+
+    fn here_first(&self, mut projects: Projects) -> Projects {
+        if let Some(at) = projects
+            .projects
+            .iter()
+            .position(|project| self.here.as_ref() == Some(&project.root))
+        {
+            let here = projects.projects.remove(at);
+            projects.projects.insert(0, here);
+        }
+        projects
     }
 
     /// The repository of the pane in view: the master's directory, or the repo a worker's worktree is in.
@@ -1712,7 +1855,7 @@ mod tests {
         );
         assert!(
             row(&terminal, 43)
-                .starts_with(" 0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   esc back to shop-230")
+                .starts_with(" 0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   a every project   esc back to shop-230")
         );
         let buffer = terminal.backend().buffer();
         let accent = Theme::builtin().ui.accent.fg.unwrap();
@@ -1729,7 +1872,13 @@ mod tests {
         app.on_input(Routed::Command(Command::Board));
 
         app.on_input(Routed::View(vec![Key::Char('l'), Key::Char('j')]));
-        assert_eq!(app.view, View::Board(BoardState { selected: 4 }));
+        assert_eq!(
+            app.view,
+            View::Board(BoardState {
+                selected: 4,
+                all: false
+            })
+        );
         app.on_input(Routed::View(vec![Key::Char('2')]));
         let terminal = render_at(&app, FLEET);
         assert!(
@@ -1799,12 +1948,12 @@ mod tests {
         assert_eq!(job.dir(), Some(Path::new("/Users/jan/projects/shop")));
         assert!(!app.is_modal());
 
-        app.on_ran(job.clone(), Err("all 9 slots are in use".into()));
+        app.on_ran(job.clone(), Err("all 20 slots are in use".into()));
         let View::NewFlow(form) = &app.view else {
             panic!("the dialog comes back");
         };
         assert_eq!(form.request, "SHOP-240 rate-limit the export endpoint");
-        assert_eq!(form.error.as_deref(), Some("all 9 slots are in use"));
+        assert_eq!(form.error.as_deref(), Some("all 20 slots are in use"));
     }
 
     #[test]
@@ -1836,6 +1985,107 @@ mod tests {
         );
     }
 
+    fn every_project() -> Projects {
+        let api = worker("api-7", crate::event::Mode::Auto, 5, vec![]);
+        Projects {
+            version: 1,
+            now: NOW,
+            projects: vec![
+                crate::view::Project {
+                    name: "api".into(),
+                    root: "/state/projects/api".into(),
+                    board: fold::board(vec![api], NOW),
+                },
+                crate::view::Project {
+                    name: "shop".into(),
+                    root: "/state/projects/shop".into(),
+                    board: fleet(),
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn shows_every_project_and_jumps_only_into_this_ones_flows() {
+        let mut app = board_app().with_store("/state/projects/shop".into());
+        app.on_input(Routed::Command(Command::Board));
+
+        let effects = app.on_input(Routed::View(vec![Key::Char('a')]));
+        assert_eq!(effects, vec![Effect::Run(Job::Overview)]);
+        assert_eq!(Job::Overview.args(), ["status", "--all", "--json"]);
+        assert!(row(&render_at(&app, FLEET), 2).contains("reading every project…"));
+
+        let json = serde_json::to_string(&every_project()).unwrap();
+        app.on_ran(Job::Overview, Ok(json));
+        let terminal = render_at(&app, FLEET);
+        assert!(
+            row(&terminal, 0).contains("flow board · every project"),
+            "{}",
+            row(&terminal, 0)
+        );
+        assert!(
+            row(&terminal, 0).contains("2 projects · 5 flows · 2 need you"),
+            "{}",
+            row(&terminal, 0)
+        );
+        assert!(
+            row(&terminal, 2).starts_with(" shop  4 flows · 2 need you"),
+            "{}",
+            row(&terminal, 2)
+        );
+        assert!(row(&terminal, 2).ends_with("this project "));
+        let api = (0..44).find(|y| row(&terminal, *y).starts_with(" api  1 flow"));
+        assert!(api.is_some(), "this project comes first, then api");
+        assert!(
+            row(&terminal, 43).starts_with(" h j k l move   enter jump in   n new flow   x clear finished flow   a this project"),
+            "{}",
+            row(&terminal, 43)
+        );
+
+        let first = fleet().flows[0].id.clone();
+        assert_eq!(
+            app.on_input(Routed::View(vec![Key::Enter])),
+            vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(first)))]
+        );
+        app.on_input(Routed::Command(Command::Board));
+        app.on_input(Routed::View(vec![Key::Char('a')]));
+        let keys = vec![Key::Char('l'); 4];
+        app.on_input(Routed::View(keys));
+        assert_eq!(app.on_input(Routed::View(vec![Key::Enter])), vec![]);
+        assert_eq!(app.notice.as_deref(), Some("api-7 runs in project api"));
+        assert!(app.is_modal());
+
+        app.on_input(Routed::View(vec![Key::Char('a')]));
+        assert_eq!(app.view, View::Board(BoardState::default()));
+    }
+
+    #[test]
+    fn asks_for_every_project_again_every_two_seconds_while_in_view() {
+        let mut app = board_app().with_store("/state/projects/shop".into());
+        app.on_input(Routed::Command(Command::Board));
+        app.on_input(Routed::View(vec![Key::Char('a')]));
+
+        app.on_tick(NOW + 2_500);
+        assert_eq!(app.overview_due(), vec![], "the first answer is still out");
+        app.on_ran(Job::Overview, Err("cannot find a state directory".into()));
+        assert_eq!(
+            app.notice.as_deref(),
+            Some("cannot read every project: cannot find a state directory")
+        );
+        app.on_tick(NOW + 2_500);
+        assert_eq!(app.overview_due(), vec![Effect::Run(Job::Overview)]);
+        app.on_ran(
+            Job::Overview,
+            Ok(serde_json::to_string(&every_project()).unwrap()),
+        );
+        app.on_tick(NOW + 3_000);
+        assert_eq!(app.overview_due(), vec![]);
+
+        app.on_input(Routed::View(vec![Key::Esc]));
+        app.on_tick(NOW + 9_000);
+        assert_eq!(app.overview_due(), vec![], "not once the board is gone");
+    }
+
     #[test]
     fn reads_what_a_flow_command_printed() {
         assert_eq!(
@@ -1843,8 +2093,8 @@ mod tests {
             Ok("flow: shop-240".into())
         );
         assert_eq!(
-            outcome(false, "error: all 9 slots are in use\nhelp[1]: ..."),
-            Err("all 9 slots are in use".into())
+            outcome(false, "error: all 20 slots are in use\nhelp[1]: ..."),
+            Err("all 20 slots are in use".into())
         );
     }
 

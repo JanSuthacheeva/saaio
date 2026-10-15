@@ -8,6 +8,7 @@ fn flow(home: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_flow"))
         .args(args)
         .env("FLOW_HOME", home)
+        .env("XDG_STATE_HOME", shared(home))
         .env_remove("FLOW_ID")
         .output()
         .expect("the flow binary runs")
@@ -17,6 +18,7 @@ fn flow_in(home: &Path, flow_id: &str, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_flow"))
         .args(args)
         .env("FLOW_HOME", home)
+        .env("XDG_STATE_HOME", shared(home))
         .env("FLOW_ID", flow_id)
         .output()
         .expect("the flow binary runs")
@@ -46,6 +48,11 @@ fn id_in(text: &str) -> String {
         .expect("the document prints an id")
         .trim_matches('"')
         .to_string()
+}
+
+/// The shared folder every project registers in: inside the test's home, never the real one.
+fn shared(home: &Path) -> std::path::PathBuf {
+    home.join("shared")
 }
 
 fn stdout(output: &Output) -> String {
@@ -335,6 +342,7 @@ impl Lab {
             .args(args)
             .current_dir(&self.repo)
             .env("FLOW_HOME", &self.home)
+            .env("XDG_STATE_HOME", shared(&self.home))
             .env("FLOW_CONFIG", self.home.join("no-config.toml"))
             .env_remove("FLOW_ID")
             .output()
@@ -359,6 +367,7 @@ impl Lab {
             .stderr(std::process::Stdio::null())
             .current_dir(&self.repo)
             .env("FLOW_HOME", &self.home)
+            .env("XDG_STATE_HOME", shared(&self.home))
             .env("FLOW_CONFIG", self.home.join("no-config.toml"))
             .spawn()
             .unwrap();
@@ -548,6 +557,7 @@ fn hook(home: &Path, flow_id: Option<&str>, payload: &str) -> Output {
     command
         .args(["hook", "claude-code"])
         .env("FLOW_HOME", home)
+        .env("XDG_STATE_HOME", shared(home))
         .env("FLOW_CONFIG", home.join("no-config.toml"))
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -629,6 +639,7 @@ fn start_refuses_outside_a_repository() {
         .args(["start", "x"])
         .current_dir(elsewhere.path())
         .env("FLOW_HOME", &lab.home)
+        .env("XDG_STATE_HOME", shared(&lab.home))
         .env("FLOW_CONFIG", lab.home.join("no-config.toml"))
         .output()
         .unwrap();
@@ -670,7 +681,7 @@ fn a_failing_setup_marks_the_flow_blocked_but_still_records_the_worker() {
 #[test]
 fn start_says_when_every_slot_is_taken() {
     let lab = Lab::new();
-    for slot in 1..=9 {
+    for slot in 1..=20 {
         seed(
             &lab.home,
             &format!("f{slot}"),
@@ -689,10 +700,63 @@ fn start_says_when_every_slot_is_taken() {
 
     assert_eq!(output.status.code(), Some(1));
     assert!(
-        stdout(&output).contains("all 9 slots are in use"),
+        stdout(&output).contains("all 20 slots are in use"),
         "{}",
         stdout(&output)
     );
+}
+
+#[test]
+fn projects_never_share_a_slot_and_show_up_together() {
+    let shop = Lab::new();
+    let mut api = Lab::new();
+    api.home = shop._dir.path().join("projects/api");
+    let shared_with_shop = |lab: &Lab, args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_flow"))
+            .args(args)
+            .current_dir(&lab.repo)
+            .env("FLOW_HOME", &lab.home)
+            .env("XDG_STATE_HOME", shared(&shop.home))
+            .env("FLOW_CONFIG", lab.home.join("no-config.toml"))
+            .env_remove("FLOW_ID")
+            .output()
+            .unwrap()
+    };
+
+    let first = shared_with_shop(&shop, &["start", "SHOP-1 one"]);
+    let second = shared_with_shop(&api, &["start", "API-1 one"]);
+
+    assert!(stdout(&first).contains("slot: 1"), "{}", stdout(&first));
+    assert!(stdout(&second).contains("slot: 2"), "{}", stdout(&second));
+    let all = stdout(&shared_with_shop(&shop, &["status", "--all"]));
+    assert!(all.contains("count: 2"), "{all}");
+    assert!(all.contains("  api,api-1,"), "{all}");
+    let json: serde_json::Value =
+        serde_json::from_slice(&shared_with_shop(&api, &["status", "--all", "--json"]).stdout)
+            .unwrap();
+    let names: Vec<&str> = json["projects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|project| project["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names.len(), 2, "{json}");
+    assert!(names.contains(&"api"), "{json}");
+}
+
+#[test]
+fn a_failed_start_gives_its_slot_back() {
+    let lab = Lab::new();
+    fs::create_dir_all(lab.repo.join(".flow/worktrees/shop-1")).unwrap();
+    fs::write(lab.repo.join(".flow/worktrees/shop-1/x"), "in the way").unwrap();
+
+    let failed = lab.start(&["SHOP-1 one"]);
+    let next = lab.start(&["SHOP-2 two"]);
+
+    assert_eq!(failed.status.code(), Some(1), "{}", stdout(&failed));
+    assert!(stdout(&next).contains("slot: 1"), "{}", stdout(&next));
+    let list = stdout(&lab.run(&["status"]));
+    assert!(!list.contains("shop-1,"), "{list}");
 }
 
 #[test]
@@ -842,6 +906,7 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
         .arg("server")
         .stdout(std::process::Stdio::null())
         .env("FLOW_HOME", home.path())
+        .env("XDG_STATE_HOME", shared(home.path()))
         .env("FLOW_CONFIG", &config)
         .spawn()
         .unwrap();

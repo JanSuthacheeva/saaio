@@ -1,6 +1,6 @@
 # Harness adapters: a worker reports through Claude Code's own hooks
 
-Implementation page (review surface): `.lavish/adapters-implementation.html`; approaches: `.lavish/adapters-approaches.html`.
+Implementation page (review surface): `docs/design/adapters-implementation.html`; approaches: `docs/design/adapters-approaches.html`.
 
 ## Decision
 

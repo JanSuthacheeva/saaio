@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, Role, ServerMsg};
+use crate::registry;
 use crate::store::Store;
 
 /// How long a new server gets to start listening.
@@ -138,15 +139,8 @@ fn socket_path_for(root: &Path, tmp: &Path) -> PathBuf {
     let uid = unsafe { libc::getuid() };
     tmp.join(format!("flow-{uid}")).join(format!(
         "{:016x}.sock",
-        fnv1a(root.as_os_str().as_encoded_bytes())
+        registry::fnv1a(root.as_os_str().as_encoded_bytes())
     ))
-}
-
-/// A hash that stays the same across builds, so every flow finds the same socket.
-fn fnv1a(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf29ce484222325, |hash, byte| {
-        (hash ^ *byte as u64).wrapping_mul(0x100000001b3)
-    })
 }
 
 /// Starts `<exe> server` in its own session with output to server.log unless one listens;

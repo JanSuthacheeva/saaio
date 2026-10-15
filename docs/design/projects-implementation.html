@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en" data-theme="nord" data-lavish-annotate="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flow per project - implementation</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge) { overflow-wrap: anywhere; }
+  svg { max-width: 100%; height: auto; }
+  code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  pre { background: var(--color-base-200); border-radius: 6px; padding: .75rem; overflow-x: auto; font-size: .78rem; line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  .fig text { font: 12px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .fig .small { font-size: 10px; opacity: .7; }
+  .fig .new rect { fill: color-mix(in oklab, var(--color-success) 18%, transparent); stroke: var(--color-success); stroke-width: 1.5; }
+  .fig .mod rect { fill: color-mix(in oklab, var(--color-warning) 18%, transparent); stroke: var(--color-warning); stroke-width: 1.5; }
+  .fig .old rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .fig line, .fig path { stroke: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke-width: 1.3; fill: none; marker-end: url(#arrow); }
+  .fig .err { stroke: var(--color-error); stroke-dasharray: 4 3; }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; margin-right: 1rem; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke: none; marker-end: none"/></marker></defs></svg>
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-10">
+
+<header class="space-y-2">
+  <p class="text-sm opacity-60">design-code / phase 3 - review the implementation</p>
+  <h1 class="text-3xl font-bold">One flow per project: shared slots and an overview of every project</h1>
+  <div class="legend text-sm">
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-success) 40%,transparent)"></i>new</span>
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-warning) 40%,transparent)"></i>modified</span>
+    <span><i class="sw" style="background:var(--color-base-300)"></i>unchanged</span>
+  </div>
+</header>
+
+<section class="space-y-2" id="recap">
+  <h2 class="text-xl font-bold">1. Decision recap</h2>
+  <p>Approach <b>A</b>: every store registers itself in the shared folder <code>~/.local/state/flow</code>; <code>flow start</code> claims its slot as a file in <code>~/.local/state/flow/slots/</code> under a lock held for milliseconds, before setup, and a claim only counts while its flow is unfinished.</p>
+  <p class="text-sm opacity-80">Decided: a registry (stores can live anywhere), 20 slots across all projects, the overview in <code>flow status --all</code> and in flow ui's board.</p>
+</section>
+
+<section class="space-y-3" id="overview">
+  <h2 class="text-xl font-bold">2. Structure overview</h2>
+  <svg class="fig" viewBox="0 0 900 250" role="img" aria-label="Units">
+    <g class="mod"><rect x="20" y="20" width="200" height="44" rx="6"/><text x="120" y="40" text-anchor="middle">main::start / status / run</text><text class="small" x="120" y="55" text-anchor="middle">register, claim, --all</text></g>
+    <g class="new"><rect x="280" y="20" width="180" height="44" rx="6"/><text x="370" y="40" text-anchor="middle">registry::Registry</text><text class="small" x="370" y="55" text-anchor="middle">stores/&lt;hash&gt; -&gt; root</text></g>
+    <g class="new"><rect x="280" y="100" width="180" height="44" rx="6"/><text x="370" y="120" text-anchor="middle">slots::Slots</text><text class="small" x="370" y="135" text-anchor="middle">slots/&lt;n&gt;, slots/.lock</text></g>
+    <g class="old"><rect x="520" y="60" width="160" height="44" rx="6"/><text x="600" y="87" text-anchor="middle">Store (each project)</text></g>
+    <g class="mod"><rect x="520" y="140" width="160" height="44" rx="6"/><text x="600" y="160" text-anchor="middle">output::status_all</text><text class="small" x="600" y="175" text-anchor="middle">+ view::Projects</text></g>
+    <g class="mod"><rect x="20" y="180" width="200" height="44" rx="6"/><text x="120" y="200" text-anchor="middle">ui: BoardView, Job::Overview</text><text class="small" x="120" y="215" text-anchor="middle">a: all projects</text></g>
+    <g class="mod"><rect x="730" y="100" width="150" height="44" rx="6"/><text x="805" y="120" text-anchor="middle">launch</text><text class="small" x="805" y="135" text-anchor="middle">MAX_SLOTS 20, taken_slots</text></g>
+    <line x1="220" y1="42" x2="278" y2="42"/><line x1="220" y1="55" x2="278" y2="118"/><line x1="460" y1="42" x2="518" y2="75"/><line x1="460" y1="122" x2="518" y2="90"/><line x1="220" y1="62" x2="518" y2="155"/><path d="M120,180 L120,240 L600,240 L600,186"/><line x1="460" y1="130" x2="728" y2="122"/>
+    <text class="small" x="260" y="236">flow ui runs `flow status --all --json` as a job</text>
+  </svg>
+</section>
+
+<section class="space-y-4" id="units">
+  <h2 class="text-xl font-bold">3. Units</h2>
+
+  <div class="card bg-base-200"><div class="card-body space-y-2">
+    <h3 class="card-title text-base"><code>src/registry.rs</code> <span class="badge badge-success badge-sm">new</span></h3>
+    <p class="text-sm">Which stores exist: one file per store in the shared folder, named by a hash of its root, holding the root.</p>
+<pre><code>/// The shared folder: $XDG_STATE_HOME/flow or ~/.local/state/flow, whatever FLOW_HOME says.
+pub struct Registry { root: PathBuf }
+impl Registry {
+    pub fn locate(xdg_state: Option&lt;PathBuf&gt;, home: Option&lt;PathBuf&gt;) -> Result&lt;Registry&gt;;
+    pub fn root(&amp;self) -> &amp;Path;
+    /// Writes stores/&lt;fnv1a of the root&gt; when it is missing; cheap enough for every command.
+    pub fn register(&amp;self, store: &amp;Store) -> Result&lt;()&gt;;
+    /// Every registered store whose folder still exists, sorted by its project name; a vanished one is dropped.
+    pub fn stores(&amp;self) -> Vec&lt;Store&gt;;
+}
+/// A store's project name: its folder's name (".../projects/shop" -> "shop"), "default" for the shared root.
+pub fn project_name(store: &amp;Store, registry: &amp;Registry) -> String;</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body space-y-2">
+    <h3 class="card-title text-base"><code>src/slots.rs</code> <span class="badge badge-success badge-sm">new</span></h3>
+    <p class="text-sm">Hands out slots 1-20 so no two unfinished flows in any project share one.</p>
+<pre><code>pub const MAX_SLOTS: u8 = 20;   // moved from launch.rs, raised from 9
+
+/// slots/&lt;n&gt;: which flow in which store took slot n.
+#[derive(Serialize, Deserialize)]
+pub struct Claim { pub store: PathBuf, pub flow: String }
+
+pub struct Slots { dir: PathBuf }   // &lt;registry root&gt;/slots
+impl Slots {
+    pub fn at(registry: &amp;Registry) -> Slots;
+    /// Under an exclusive flock on slots/.lock (released on return): the lowest slot that is neither in
+    /// `held` nor claimed by a flow `live` says is unfinished, written as this flow's claim; None when all
+    /// 20 are taken.
+    pub fn claim(&amp;self, claim: &amp;Claim, held: &amp;[u8], live: impl Fn(&amp;Claim) -> bool) -> Result&lt;Option&lt;u8&gt;&gt;;
+    /// Gives a claim back when flow start fails after claiming.
+    pub fn release(&amp;self, slot: u8, claim: &amp;Claim) -> Result&lt;()&gt;;
+}</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body space-y-2">
+    <h3 class="card-title text-base"><code>src/main.rs</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+<pre><code>// run(): Registry::register(store) for every command (after Store::locate); a failure is ignored.
+Status { flow, json, full,
+    /// Every project's flows, from every registered store
+    #[arg(long, conflicts_with = "flow")] all: bool }
+
+/// start, reordered: name -> Store::create (the id) -> Slots::claim -> workspace_for -> create_worktree
+/// -> setup hook -> Workspace event. A failed worktree removes the log and releases the claim.
+fn start(store: &amp;Store, registry: &amp;Registry, config: &amp;Config, cwd: &amp;Path, launch: Launch, now: u64) -> Result&lt;Document, Failure&gt;;
+/// Whether a claim's flow is still unfinished in its store.
+fn claim_is_live(claim: &amp;Claim, now: u64) -> bool;
+/// The slots unfinished flows hold in every registered store (flows started before claims existed).
+fn held_slots(registry: &amp;Registry, now: u64) -> Vec&lt;u8&gt;;
+fn status_all(registry: &amp;Registry, json: bool, full: bool, now: u64) -> Result&lt;Document, Failure&gt;;</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body space-y-2">
+    <h3 class="card-title text-base"><code>src/view.rs</code>, <code>src/output.rs</code>, <code>src/launch.rs</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+<pre><code>// view.rs
+/// What flow status --all --json prints: a board per project.
+pub struct Projects { pub version: u32, pub now: u64, pub projects: Vec&lt;Project&gt; }
+pub struct Project { pub name: String, pub root: String, pub board: Board }
+
+// output.rs
+/// count, needs_you, flows[n]{project,name,state,phase,tasks,age}, blockers[n]{project,name,blocker}, help.
+pub fn status_all(projects: &amp;Projects, full: bool) -> Document;
+
+// launch.rs
+// MAX_SLOTS moves to slots.rs; free_slot(flows) becomes the dialog's preview only:
+/// The slots unfinished flows hold.
+pub fn taken_slots(flows: &amp;[FlowView]) -> Vec&lt;u8&gt;;</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body space-y-2">
+    <h3 class="card-title text-base"><code>src/ui/app.rs</code>, <code>src/ui/board.rs</code>, <code>src/ui/mod.rs</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+<pre><code>// app.rs
+pub enum Job { Start(NewFlowForm), Remove(String), Overview }   // Overview: `flow status --all --json`
+// View::Board(BoardState) where BoardState gains `all: bool`; `a` on the board toggles it.
+// While all: App asks for Job::Overview when it opens and every 2 s; on_ran parses Projects.
+// Other projects' cards are read-only: enter/x/n say "<name> runs in project <p>".
+
+// board.rs
+pub struct BoardView&lt;'a&gt; { /* as now */ pub projects: Option&lt;&amp;'a Projects&gt; }
+// with projects: a row per project ("shop  3 flows · 1 needs you") above its cards, this project first.</code></pre>
+  </div></div>
+</section>
+
+<section class="space-y-3" id="data">
+  <h2 class="text-xl font-bold">4. Data</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li><code>~/.local/state/flow/stores/&lt;16 hex&gt;</code> - the store's root path, one line. Written by any flow command.</li>
+    <li><code>~/.local/state/flow/slots/&lt;n&gt;</code> - <code>{"store": "...", "flow": "&lt;id&gt;"}</code>; <code>slots/.lock</code> - empty, only flocked.</li>
+    <li><code>flow status --all --json</code>: <code>{"version": 1, "now": ..., "projects": [{"name": "shop", "root": "...", "board": {&lt;the existing Board&gt;}}]}</code>. The single-project <code>--json</code> is unchanged.</li>
+    <li>Flow logs: unchanged. The slot still lives in the Workspace event.</li>
+  </ul>
+</section>
+
+<section class="space-y-6" id="chains">
+  <h2 class="text-xl font-bold">5. Call chains</h2>
+  <div class="space-y-2">
+    <h3 class="font-semibold">a. flow start takes a slot</h3>
+    <svg class="fig" viewBox="0 0 900 140" role="img" aria-label="Claim">
+      <g class="mod"><rect x="10" y="30" width="130" height="40" rx="6"/><text x="75" y="55" text-anchor="middle">main::start</text></g>
+      <g class="old"><rect x="180" y="30" width="130" height="40" rx="6"/><text x="245" y="55" text-anchor="middle">Store::create</text></g>
+      <g class="new"><rect x="350" y="30" width="150" height="40" rx="6"/><text x="425" y="55" text-anchor="middle">Slots::claim</text></g>
+      <g class="old"><rect x="540" y="30" width="150" height="40" rx="6"/><text x="615" y="55" text-anchor="middle">worktree, setup</text></g>
+      <g class="old"><rect x="730" y="30" width="160" height="40" rx="6"/><text x="810" y="55" text-anchor="middle">Workspace event</text></g>
+      <line x1="140" y1="50" x2="178" y2="50"/><line x1="310" y1="50" x2="348" y2="50"/><line x1="500" y1="50" x2="538" y2="50"/><line x1="690" y1="50" x2="728" y2="50"/>
+      <path class="err" d="M425,70 L425,110 L300,110"/><text class="small" x="120" y="114">none free: remove the log, "all 20 slots are in use"</text>
+      <path class="err" d="M615,70 L615,110 L660,110"/><text class="small" x="665" y="114">worktree fails: release, remove log</text>
+    </svg>
+    <ol class="list-decimal pl-5 text-sm space-y-0.5">
+      <li><code>main::start -&gt; launch::flow_name(...)</code>, then <code>Store::create(Started): id</code></li>
+      <li><code>start -&gt; held_slots(registry, now): Vec&lt;u8&gt;</code> (every store's unfinished flows)</li>
+      <li><code>start -&gt; Slots::claim(&amp;Claim { store, flow: id }, &amp;held, |c| claim_is_live(c, now)): Option&lt;u8&gt;</code> - flock, scan slots 1-20, write <code>slots/&lt;n&gt;</code>, unlock</li>
+      <li><code>start -&gt; launch::workspace_for(repo, name, slot, agent) -&gt; workspace::create_worktree -&gt; run_hook(Setup) -&gt; Store::append(Workspace)</code></li>
+      <li class="opacity-80">None free: <code>Store::remove(id)</code>, Failure "all 20 slots are in use" (help: <code>flow status --all</code>, <code>flow clear</code> in the project that holds them). Worktree fails: <code>Slots::release</code>, <code>Store::remove(id)</code>, the git error.</li>
+    </ol>
+  </div>
+  <div class="space-y-2">
+    <h3 class="font-semibold">b. The overview</h3>
+    <ol class="list-decimal pl-5 text-sm space-y-0.5">
+      <li><code>flow status --all -&gt; Registry::stores() -&gt;</code> per store <code>Store::logs -&gt; fold::views -&gt; fold::board</code> -&gt; <code>view::Projects</code></li>
+      <li><code>-&gt; output::status_all(&amp;projects, full)</code> (TOON) or <code>Projects</code> as JSON</li>
+      <li>flow ui: <code>a</code> on the board -&gt; <code>Effect::Run(Job::Overview)</code> -&gt; thread runs <code>&lt;exe&gt; status --all --json</code> -&gt; <code>App::on_ran</code> parses <code>Projects</code> -&gt; <code>BoardView { projects: Some(..) }</code>; again every 2 s while open</li>
+      <li class="opacity-80">An unreadable store becomes a warning line, the others still show; a failed job keeps the last overview and shows a notice.</li>
+    </ol>
+  </div>
+</section>
+
+<section class="space-y-3" id="conventions">
+  <h2 class="text-xl font-bold">6. Conventions followed</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li>File operations in their own unit with temp-dir tests, like <code>store.rs</code>; the fold stays the only way to read state.</li>
+    <li><code>fnv1a</code> for a stable file name from a path, as <code>client::socket_path</code> already does.</li>
+    <li>flow ui gets data through a background job running the flow binary, like <code>Job::Start</code> / <code>Job::Remove</code> (<code>ui/mod.rs run_job</code>).</li>
+    <li>Warnings for unreadable logs, as <code>status</code> does today.</li>
+  </ul>
+</section>
+
+<section class="space-y-3" id="tests">
+  <h2 class="text-xl font-bold">7. Test seams</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li><code>Registry</code>: temp shared root; register twice is one file; a vanished store is dropped; project names.</li>
+    <li><code>Slots::claim</code>: lowest free; held and live claims skipped; a dead claim reused; all taken is None; two threads claiming at once get different slots.</li>
+    <li><code>tests/cli.rs</code>: two projects (two FLOW_HOME, one XDG_STATE_HOME) start flows and get slots 1 and 2; <code>flow status --all</code> lists both with their project.</li>
+    <li><code>output::status_all</code>, <code>BoardView</code> with projects: snapshot rows.</li>
+  </ul>
+</section>
+
+<section class="space-y-3" id="assumptions">
+  <h2 class="text-xl font-bold">8. Assumptions</h2>
+  <ol class="list-decimal pl-5 text-sm space-y-1">
+    <li>The registry lives in the default store's folder (<code>~/.local/state/flow</code>), which is also a store; it is registered as "default".</li>
+    <li>Every flow command registers its store, so stores appear as soon as they are used once.</li>
+    <li>Flows started before this change hold their slot through their log; <code>held_slots</code> counts them, so no claim file is needed for them.</li>
+    <li>The project name is the store folder's name; two stores with the same folder name get "name (2)".</li>
+    <li>The dialog's slot preview stays per project (it can be off by one; flow start decides).</li>
+    <li>The overview in flow ui refreshes every 2 s while open, by running the CLI; nothing changes in flow server.</li>
+    <li><code>flow start</code>'s help drops "in a tmux window".</li>
+  </ol>
+</section>
+
+<section class="space-y-3" id="questions">
+  <h2 class="text-xl font-bold">9. Open questions</h2>
+  <p class="text-sm opacity-80">None that change stored data or the public surface beyond what you already decided. Annotate anything above, or approve.</p>
+</section>
+
+</main>
+</body>
+</html>

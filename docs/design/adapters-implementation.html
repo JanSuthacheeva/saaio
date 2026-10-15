@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en" data-theme="nord" data-lavish-annotate="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness adapters - implementation</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge) { overflow-wrap: anywhere; }
+  svg { max-width: 100%; height: auto; }
+  code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  pre { background: var(--color-base-200); border-radius: 6px; padding: .75rem; overflow-x: auto; font-size: .78rem; line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  .fig text { font: 12px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .fig .small { font-size: 10px; opacity: .7; }
+  .fig .new rect { fill: color-mix(in oklab, var(--color-success) 18%, transparent); stroke: var(--color-success); stroke-width: 1.5; }
+  .fig .mod rect { fill: color-mix(in oklab, var(--color-warning) 18%, transparent); stroke: var(--color-warning); stroke-width: 1.5; }
+  .fig .old rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .fig .zone rect { fill: none; stroke: color-mix(in oklab, var(--color-base-content) 25%, transparent); stroke-dasharray: 5 4; }
+  .fig line, .fig path { stroke: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke-width: 1.3; fill: none; marker-end: url(#arrow); }
+  .fig .err { stroke: var(--color-error); stroke-dasharray: 4 3; }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; margin-right: 1rem; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  table.facts td, table.facts th { padding: .3rem .5rem; vertical-align: top; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke: none; marker-end: none"/></marker></defs></svg>
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-10">
+
+<header class="space-y-2">
+  <p class="text-sm opacity-60">design-code / phase 3 - review the implementation</p>
+  <h1 class="text-3xl font-bold">Harness adapters: a worker reports through Claude Code's own hooks</h1>
+  <div class="legend text-sm">
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-success) 40%,transparent)"></i>new</span>
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-warning) 40%,transparent)"></i>modified</span>
+    <span><i class="sw" style="background:var(--color-base-300)"></i>unchanged</span>
+  </div>
+</header>
+
+<section class="space-y-2" id="recap">
+  <h2 class="text-xl font-bold">1. Decision recap</h2>
+  <p>Approach <b>A</b>: flow ui launches a Claude Code worker with <code>--settings</code> hooks that run <code>flow hook claude-code</code> on each event; that command translates the hook's JSON into flow events with a pure adapter and appends only what changes the flow. No model decides anything, the skills stop knowing about flow, and the flows mod's reporting can go.</p>
+  <p class="text-sm opacity-80">Decided in phase 2: Claude Code only now; the structure takes Codex or pi later as one more adapter behind the same command. The event log stays the only truth.</p>
+</section>
+
+<section class="space-y-3" id="overview">
+  <h2 class="text-xl font-bold">2. Structure overview</h2>
+  <svg class="fig" viewBox="0 0 900 330" role="img" aria-label="Units">
+    <g class="zone"><rect x="10" y="10" width="300" height="310" rx="8"/><text x="22" y="30">launch (flow server)</text></g>
+    <g class="zone"><rect x="330" y="10" width="560" height="310" rx="8"/><text x="342" y="30">report (flow hook, one process per event)</text></g>
+    <g class="mod"><rect x="30" y="50" width="260" height="44" rx="6"/><text x="160" y="70" text-anchor="middle">server::reconcile / Server</text><text class="small" x="160" y="85" text-anchor="middle">opens workers (unchanged flow)</text></g>
+    <g class="mod"><rect x="30" y="130" width="260" height="44" rx="6"/><text x="160" y="150" text-anchor="middle">launch::worker_spec</text><text class="small" x="160" y="165" text-anchor="middle">inserts the adapter's wiring argv</text></g>
+    <g class="mod"><rect x="30" y="210" width="260" height="44" rx="6"/><text x="160" y="230" text-anchor="middle">config: Agent.adapter, Config.phases</text><text class="small" x="160" y="245" text-anchor="middle">claude + master: "claude-code"</text></g>
+    <g class="mod"><rect x="350" y="50" width="250" height="44" rx="6"/><text x="475" y="70" text-anchor="middle">main::hook</text><text class="small" x="475" y="85" text-anchor="middle">stdin + $FLOW_ID, silent, exit 0</text></g>
+    <g class="new"><rect x="350" y="130" width="250" height="44" rx="6"/><text x="475" y="150" text-anchor="middle">adapter::Adapter</text><text class="small" x="475" y="165" text-anchor="middle">named, wiring, translate, phase_of</text></g>
+    <g class="new"><rect x="350" y="210" width="250" height="44" rx="6"/><text x="475" y="230" text-anchor="middle">adapter::claude_code</text><text class="small" x="475" y="245" text-anchor="middle">settings, translate + helpers (pure)</text></g>
+    <g class="mod"><rect x="630" y="50" width="240" height="44" rx="6"/><text x="750" y="70" text-anchor="middle">fold::changes</text><text class="small" x="750" y="85" text-anchor="middle">does this event change the flow?</text></g>
+    <g class="old"><rect x="630" y="130" width="240" height="44" rx="6"/><text x="750" y="150" text-anchor="middle">Store::events / append</text></g>
+    <g class="mod"><rect x="630" y="210" width="240" height="44" rx="6"/><text x="750" y="230" text-anchor="middle">output::Document::Silent</text></g>
+    <line x1="160" y1="94" x2="160" y2="128"/>
+    <line x1="160" y1="208" x2="160" y2="176"/>
+    <line x1="290" y1="152" x2="348" y2="152"/>
+    <line x1="475" y1="94" x2="475" y2="128"/>
+    <line x1="475" y1="174" x2="475" y2="208"/>
+    <line x1="600" y1="72" x2="628" y2="72"/>
+    <line x1="750" y1="94" x2="750" y2="128"/>
+    <line x1="600" y1="80" x2="628" y2="226"/>
+    <text class="small" x="30" y="290">worker_spec asks the adapter for its wiring; flow hook asks it to translate.</text>
+  </svg>
+</section>
+
+<section class="space-y-4" id="units">
+  <h2 class="text-xl font-bold">3. Units</h2>
+
+  <div class="card bg-base-200"><div class="card-body space-y-2">
+    <h3 class="card-title text-base"><code>src/adapter/mod.rs</code> <span class="badge badge-success badge-sm">new</span></h3>
+    <p class="text-sm">Which harnesses flow can observe, and the two things each one does: wire itself into a launch, translate one event. Pure.</p>
+<pre><code>/// A harness flow observes through its own hooks.
+pub enum Adapter { ClaudeCode }
+
+impl Adapter {
+    /// "claude-code" -> ClaudeCode; None for a name flow does not know.
+    pub fn named(name: &amp;str) -> Option&lt;Adapter&gt;;
+    pub fn name(self) -> &amp;'static str;
+    /// The arguments that make the harness report to `&lt;flow_exe&gt; hook &lt;name&gt;`,
+    /// inserted right after the program in the agent's argv (fresh and resumed).
+    pub fn wiring(self, flow_exe: &amp;Path) -> Vec&lt;String&gt;;
+    /// The flow events one hook payload means; empty for an event that means nothing.
+    pub fn translate(self, payload: &amp;Value, phases: &amp;PhaseMap) -> Vec&lt;EventKind&gt;;
+}
+
+/// The phase a skill starts: "/design-code" and "plugin:design-code" both look up "design-code".
+pub fn phase_of(skill: &amp;str, phases: &amp;PhaseMap) -> Option&lt;Phase&gt;;
+/// Text cut to REPORT_TEXT_LIMIT (200) chars, as the mod did.
+pub fn cut(text: &amp;str) -> String;</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body space-y-2">
+    <h3 class="card-title text-base"><code>src/adapter/claude_code.rs</code> <span class="badge badge-success badge-sm">new</span></h3>
+    <p class="text-sm">Claude Code's hook settings and the mapping from its hook JSON to flow events. Pure; every rule is a table test over recorded payloads.</p>
+<pre><code>/// The --settings JSON: UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop and
+/// SessionEnd each run `&lt;flow_exe&gt; hook claude-code` (exec form, synchronous, timeout 10 s).
+pub fn settings(flow_exe: &amp;Path) -> String;
+
+/// Ignores every event a subagent raises (agent_id set). Otherwise:
+///   UserPromptSubmit             -> working; plus phase when the prompt is a typed /skill
+///   PreToolUse Skill             -> phase of tool_input.skill
+///   PreToolUse Agent             -> delegated tool_input.description (not when run_in_background)
+///   PreToolUse AskUserQuestion   -> waiting questions[0].question
+///   PostToolUse (any tool)       -> working
+///   PostToolUse plan-progress    -> tasks done total, or blocked "item: note"
+///   PostToolUse Bash             -> merge-request url, when gh pr / glab mr create printed one
+///   PermissionRequest            -> waiting "permission: Name(target)"; nothing for AskUserQuestion
+///   Stop (stop_hook_active false)-> waiting question(last_assistant_message), else "turn ended"
+///   SessionEnd prompt_input_exit -> ended; any other reason (hangup = "other") -> nothing
+pub fn translate(payload: &amp;Value, phases: &amp;PhaseMap) -> Vec&lt;EventKind&gt;;
+
+/// The last sentence ending in "?" of the answer's last line, else its last sentence (the mod's rule).
+fn waiting_question(answer: &amp;str) -> Option&lt;String&gt;;
+/// "ok, 4/9 done" or "ok, all 9 done" -> (4, 9) / (9, 9).
+fn task_counts(result: &amp;str) -> Option&lt;(u32, u32)&gt;;
+/// gh pr create / glab mr create and the first http(s) URL in its stdout.
+fn created_merge_request(command: &amp;str, stdout: &amp;str) -> Option&lt;String&gt;;
+/// The skill a prompt typed as "/name args" names.
+fn typed_skill(prompt: &amp;str) -> Option&lt;&amp;str&gt;;
+/// Name(target) for a permission question: Bash(command), Write(file_path), ...
+fn tool_call(name: &amp;str, input: &amp;Value) -> String;</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body space-y-2">
+    <h3 class="card-title text-base"><code>src/main.rs</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+    <p class="text-sm">The hidden <code>flow hook &lt;adapter&gt;</code> command. Reads stdin and <code>FLOW_ID</code> (main stays the only place that reads the environment); never prints to stdout and always exits 0, because a hook's stdout can reach the model and a non-zero exit shows the user a notice.</p>
+<pre><code>enum Command {
+    // ...
+    /// What a harness hook runs; reports the event into $FLOW_ID's flow
+    #[command(hide = true)]
+    Hook { adapter: String },
+}
+/// Silent: problems go to stderr (Claude Code's debug log), the exit code is always 0.
+fn hook(store: &amp;Store, config: &amp;Config, adapter: &amp;str, flow: Option&lt;String&gt;, payload: &amp;str, now: u64) -> Document;
+// server(): LaunchEnv gets flow_exe = env::current_exe()</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body space-y-2">
+    <h3 class="card-title text-base"><code>src/config.rs</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+<pre><code>pub struct Agent {
+    pub command: Vec&lt;String&gt;,
+    pub prompt: String,
+    #[serde(default)] pub resume: Option&lt;Vec&lt;String&gt;&gt;,
+    /// The harness flow observes it through: "claude-code"; none means no reports, only the pane's state.
+    #[serde(default)] pub adapter: Option&lt;String&gt;,
+}
+pub type PhaseMap = BTreeMap&lt;String, Phase&gt;;
+pub struct Config {
+    pub agent: String,
+    pub agents: BTreeMap&lt;String, Agent&gt;,
+    /// Skill name -> phase, the built-in map with the file's entries over it.
+    #[serde(default)] pub phases: PhaseMap,
+}
+// builtin claude and master: adapter = Some("claude-code")
+pub fn builtin_phases() -> PhaseMap;   // see open question 1</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body space-y-2">
+    <h3 class="card-title text-base"><code>src/launch.rs</code>, <code>src/fold.rs</code>, <code>src/output.rs</code>, <code>src/server/reconcile.rs</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+<pre><code>// launch.rs
+pub struct LaunchEnv { pub flow_home: Option&lt;PathBuf&gt;, pub flow_exe: PathBuf }
+/// worker_spec: the agent's argv (fresh or resume) with Adapter::wiring inserted after the program.
+/// None also when the agent names an adapter flow does not know.
+pub fn worker_spec(flow: &amp;FlowView, agent: &amp;Agent, env: &amp;LaunchEnv) -> Option&lt;PaneSpec&gt;;
+
+// fold.rs
+/// True when appending `kind` would change what the flow shows (state, phase, blocker, delegate,
+/// tasks, review, merge request); flow hook skips the rest, so the log stays small.
+pub fn changes(id: &amp;str, events: &amp;[Event], kind: &amp;EventKind, now: u64) -> bool;
+
+// output.rs
+pub enum Document { Toon(String), Json(String), Text(String), Silent }   // Silent prints nothing
+
+// reconcile.rs: failed reason "agent X uses adapter Y, which flow does not know"</code></pre>
+  </div></div>
+</section>
+
+<section class="space-y-3" id="data">
+  <h2 class="text-xl font-bold">4. Data</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li><b>Stored events: unchanged.</b> A permission wait is a <code>Waiting</code> event with the text <code>permission: Bash(rm -rf build)</code>, so the log format, the fold and <code>--json</code> stay as they are.</li>
+    <li><b>config.toml</b> gains <code>adapter = "claude-code"</code> per agent and a <code>[phases]</code> table:
+<pre><code>[phases]
+design-code = "design"
+implement-plan = "implement"
+review-changes = "review"
+write-merge-request = "merge-request"</code></pre></li>
+    <li><b>Hook input</b> (Claude Code -&gt; <code>flow hook</code>, stdin): the payloads recorded today, kept as fixtures in <code>src/adapter/fixtures/claude-code/*.json</code>.</li>
+    <li><b>Wiring</b> (flow -&gt; Claude Code, argv): <code>--settings '{"hooks":{...}}'</code>, inline, nothing written to disk.</li>
+  </ul>
+</section>
+
+<section class="space-y-6" id="chains">
+  <h2 class="text-xl font-bold">5. Call chains</h2>
+
+  <div class="space-y-2">
+    <h3 class="font-semibold">a. flow ui opens a worker</h3>
+    <svg class="fig" viewBox="0 0 900 120" role="img" aria-label="Open a worker">
+      <g class="old"><rect x="10" y="30" width="150" height="40" rx="6"/><text x="85" y="55" text-anchor="middle">Server::open_worker</text></g>
+      <g class="mod"><rect x="210" y="30" width="170" height="40" rx="6"/><text x="295" y="55" text-anchor="middle">launch::worker_spec</text></g>
+      <g class="new"><rect x="430" y="30" width="170" height="40" rx="6"/><text x="515" y="55" text-anchor="middle">Adapter::wiring</text></g>
+      <g class="old"><rect x="650" y="30" width="170" height="40" rx="6"/><text x="735" y="55" text-anchor="middle">Host::open (PTY)</text></g>
+      <line x1="160" y1="50" x2="208" y2="50"/><line x1="380" y1="50" x2="428" y2="50"/><path d="M515,70 L515,95 L735,95 L735,72"/>
+    </svg>
+    <ol class="list-decimal pl-5 text-sm space-y-0.5">
+      <li><code>Server::open_worker -&gt; launch::worker_spec(flow, agent, env): Option&lt;PaneSpec&gt;</code></li>
+      <li><code>worker_spec -&gt; Adapter::named(agent.adapter): Option&lt;Adapter&gt;</code></li>
+      <li><code>worker_spec -&gt; Adapter::wiring(env.flow_exe): ["--settings", "{...}"]</code>, inserted after <code>argv[0]</code></li>
+      <li><code>Server -&gt; Host::open(spec)</code>: <code>claude --settings '{...}' -n shop-217 --session-id &lt;id&gt; "/ship-feature ..."</code> with <code>FLOW_ID</code></li>
+      <li class="opacity-80">Error: unknown adapter name -&gt; <code>reconcile</code> puts it in <code>Wanted.failed</code> -&gt; <code>Host::fail(key, "agent claude uses adapter X, which flow does not know")</code>; the sidebar shows failed with that reason.</li>
+    </ol>
+  </div>
+
+  <div class="space-y-2">
+    <h3 class="font-semibold">b. A hook event reaches the log</h3>
+    <svg class="fig" viewBox="0 0 900 150" role="img" aria-label="Hook event">
+      <g class="old"><rect x="10" y="30" width="140" height="40" rx="6"/><text x="80" y="55" text-anchor="middle">Claude Code</text></g>
+      <g class="mod"><rect x="190" y="30" width="140" height="40" rx="6"/><text x="260" y="55" text-anchor="middle">main::hook</text></g>
+      <g class="new"><rect x="370" y="30" width="160" height="40" rx="6"/><text x="450" y="55" text-anchor="middle">Adapter::translate</text></g>
+      <g class="mod"><rect x="570" y="30" width="140" height="40" rx="6"/><text x="640" y="55" text-anchor="middle">fold::changes</text></g>
+      <g class="old"><rect x="750" y="30" width="140" height="40" rx="6"/><text x="820" y="55" text-anchor="middle">Store::append</text></g>
+      <line x1="150" y1="50" x2="188" y2="50"/><line x1="330" y1="50" x2="368" y2="50"/><line x1="530" y1="50" x2="568" y2="50"/><line x1="710" y1="50" x2="748" y2="50"/>
+      <path class="err" d="M260,70 L260,115 L420,115"/><text class="small" x="425" y="119">no FLOW_ID / unknown flow / bad JSON: stderr, exit 0, nothing appended</text>
+    </svg>
+    <ol class="list-decimal pl-5 text-sm space-y-0.5">
+      <li>Claude Code runs <code>flow hook claude-code</code> with the event JSON on stdin, <code>FLOW_ID</code> inherited</li>
+      <li><code>main -&gt; hook(store, config, "claude-code", flow_id, stdin, now): Document::Silent</code></li>
+      <li><code>hook -&gt; Adapter::named("claude-code") -&gt; Adapter::translate(payload, &amp;config.phases): Vec&lt;EventKind&gt;</code></li>
+      <li><code>hook -&gt; fold::resolve(flows, flow_id)</code>, then per kind <code>Store::events(id) -&gt; fold::changes(id, events, kind, now): bool</code></li>
+      <li>when true: <code>Store::append(id, Event::new(now, kind))</code>; exit 0, no stdout</li>
+      <li class="opacity-80">Errors: no <code>FLOW_ID</code> (a session flow did not start) -&gt; nothing. Unknown adapter, unparsable JSON, no such flow, a failed append -&gt; one line on stderr (Claude Code's debug log), nothing appended, exit 0. The worker is never slowed or blocked by flow.</li>
+    </ol>
+  </div>
+
+  <div class="space-y-2">
+    <h3 class="font-semibold">c. Examples, end to end</h3>
+    <div class="overflow-x-auto">
+    <table class="table table-sm facts text-sm">
+      <thead><tr><th>You / Claude</th><th>Hook</th><th>Appended</th></tr></thead>
+      <tbody>
+        <tr><td>you type "/design-code add CSV export"</td><td>UserPromptSubmit</td><td><code>working</code>, <code>phase design</code></td></tr>
+        <tr><td>Claude calls Skill review-changes</td><td>PreToolUse Skill</td><td><code>phase review</code></td></tr>
+        <tr><td>Claude starts a subagent "review changes"</td><td>PreToolUse Agent</td><td><code>delegated review changes</code></td></tr>
+        <tr><td>the subagent runs 40 tools</td><td>40 x Pre/PostToolUse with agent_id</td><td>nothing</td></tr>
+        <tr><td>Claude asks "Which approach?"</td><td>PreToolUse AskUserQuestion, PermissionRequest</td><td><code>waiting Which approach?</code> (the PermissionRequest adds nothing)</td></tr>
+        <tr><td>Claude wants to run rm -rf build</td><td>PermissionRequest Bash</td><td><code>waiting permission: Bash(rm -rf build)</code></td></tr>
+        <tr><td>Claude runs 12 more tools</td><td>12 x PostToolUse</td><td><code>working</code> once; the other 11 change nothing</td></tr>
+        <tr><td>Claude finishes: "...Shall I open the MR?"</td><td>Stop</td><td><code>waiting Shall I open the MR?</code></td></tr>
+        <tr><td>you /exit</td><td>SessionEnd prompt_input_exit</td><td><code>ended</code></td></tr>
+        <tr><td>flow server dies (hangup)</td><td>SessionEnd other</td><td>nothing; the flow resumes</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<section class="space-y-3" id="conventions">
+  <h2 class="text-xl font-bold">6. Conventions followed</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li>A hidden subcommand for something only a program calls, like <code>flow server</code> (<code>main.rs</code> <code>#[command(hide = true)]</code>).</li>
+    <li>Pure units with table tests, I/O in main: like <code>launch.rs</code> and <code>fold.rs</code>; main stays the only reader of the environment and stdin (CLAUDE.md).</li>
+    <li>Built-in defaults merged with the file, file wins: like <code>builtin_agents</code> in <code>Config::load</code>.</li>
+    <li>Rules ported from the mod (<code>reporter.ts</code>: <code>waitingQuestion</code>, <code>taskCounts</code>, <code>createdMergeRequest</code>, <code>phaseOfSkill</code>, the 200-char cut) so behaviour carries over.</li>
+    <li>Deviation: <code>flow hook</code> skips events that change nothing (the mod appended every one), so a long session does not grow its log by a line per tool call.</li>
+  </ul>
+</section>
+
+<section class="space-y-3" id="tests">
+  <h2 class="text-xl font-bold">7. Test seams</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li><code>claude_code::translate</code>: one table test per row of chain c, over the recorded payloads (fixtures); helpers each with their own cases (the mod's tests ported).</li>
+    <li><code>Adapter::wiring</code> / <code>settings</code>: the JSON parses and names every event with the exe path; <code>worker_spec</code> puts it after the program, fresh and resumed.</li>
+    <li><code>fold::changes</code>: repeats and no-ops are false, real changes true.</li>
+    <li><code>tests/cli.rs</code>: <code>flow hook claude-code</code> with a payload on stdin writes the event, prints nothing, exits 0 also without <code>FLOW_ID</code> and with garbage.</li>
+    <li>End to end: a real Claude worker in flow ui, with the flows mod switched off, shows phase, delegated, the question, a permission wait and ended.</li>
+  </ul>
+</section>
+
+<section class="space-y-3" id="assumptions">
+  <h2 class="text-xl font-bold">8. Assumptions</h2>
+  <ol class="list-decimal pl-5 text-sm space-y-1">
+    <li>Only workers are wired; the master has no <code>FLOW_ID</code>, so wiring it would only start processes that do nothing.</li>
+    <li>Hooks run synchronously (keeps the order of events); each <code>flow hook</code> takes a few ms. Timeout 10 s.</li>
+    <li>No heartbeat: under flow ui the server already sees whether a worker's process lives; "not responding" then only comes from flows with heartbeats (<code>flow report heartbeat</code> stays).</li>
+    <li>A permission wait is stored as <code>Waiting</code> with the text <code>permission: Name(target)</code>, not a new event kind.</li>
+    <li>Any main-agent PostToolUse means working (after a permission or a question was answered); <code>fold::changes</code> keeps it to one line.</li>
+    <li>Workers started before this change get the wiring on their next resume (the resume argv is wired too).</li>
+    <li><code>flow report</code> stays as it is, for scripts and other tools.</li>
+    <li>The recorded payloads are from Claude Code 2.1.299; an unknown event or field is ignored, never an error.</li>
+  </ol>
+</section>
+
+<section class="space-y-4" id="questions">
+  <h2 class="text-xl font-bold">9. Open questions</h2>
+  <form class="space-y-5" data-lavish-question="open-questions" onsubmit="event.preventDefault(); const f = new FormData(event.currentTarget); const parts = []; for (const [k, v] of f.entries()) { if (String(v).trim()) parts.push(k + ': ' + String(v).trim()); } window.lavish.queuePrompt('Answers on the adapters implementation page: ' + parts.join(' | '), { tag: 'answers', text: 'Open questions answered', element: event.currentTarget, data: Object.fromEntries(f.entries()) });">
+    <div class="card bg-base-200"><div class="card-body space-y-2 text-sm">
+      <h3 class="font-semibold">1. Which skills map to phases by default?</h3>
+      <p>The map lives in <code>config.toml</code> either way. Recommended: ship your four as the built-in default, so nothing changes for you and anyone else can override or add.</p>
+      <label class="flex gap-2"><input type="radio" class="radio radio-sm" name="phases" value="built-in default: design-code, implement-plan, review-changes, write-merge-request" checked> built-in default: your four skills (recommended)</label>
+      <label class="flex gap-2"><input type="radio" class="radio radio-sm" name="phases" value="empty by default, set in config.toml"> empty by default; you set them in your config.toml</label>
+    </div></div>
+    <div class="card bg-base-200"><div class="card-body space-y-2 text-sm">
+      <h3 class="font-semibold">2. Retire the old reporting in the same plan?</h3>
+      <p>Recommended: yes, as the last tasks, after the end-to-end check passes: remove the reporting from the flows mod (claude-code-mods) and the "report to flow" block from the five skills (agent-skills). Until then both report; that is harmless, repeats change nothing.</p>
+      <label class="flex gap-2"><input type="radio" class="radio radio-sm" name="retire" value="yes, last tasks of this plan" checked> yes, last tasks of this plan (recommended)</label>
+      <label class="flex gap-2"><input type="radio" class="radio radio-sm" name="retire" value="no, separately later"> no, separately later</label>
+    </div></div>
+    <label class="form-control"><span class="text-sm opacity-70">Anything else (optional)</span><textarea class="textarea textarea-bordered w-full" name="notes" rows="3"></textarea></label>
+    <div><button class="btn btn-primary btn-sm" type="submit">Queue these answers</button></div>
+  </form>
+</section>
+
+</main>
+</body>
+</html>

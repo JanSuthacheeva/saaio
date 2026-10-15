@@ -3,9 +3,9 @@ use std::path::{Path, PathBuf};
 use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::proto::PaneKey;
+use crate::slots::MAX_SLOTS;
 use crate::view::{FlowView, Workspace};
 
-pub const MAX_SLOTS: u8 = 9;
 pub const WORKTREES_DIR: &str = ".flow/worktrees";
 /// Workspace.window of a worker flow ui has opened once; its next open resumes it.
 pub const HOSTED: &str = "flow-ui";
@@ -43,13 +43,19 @@ pub fn flow_name(name: Option<&str>, request: &str, taken: &[String]) -> String 
         .expect("an unused suffix always exists")
 }
 
-/// The lowest slot 1..=MAX_SLOTS no unfinished flow holds; None when all are taken.
-pub fn free_slot(flows: &[FlowView]) -> Option<u8> {
-    let held: Vec<u8> = flows
+/// The slots unfinished flows hold.
+pub fn taken_slots(flows: &[FlowView]) -> Vec<u8> {
+    flows
         .iter()
         .filter(|flow| !flow.is_finished())
         .filter_map(|flow| flow.workspace.as_ref().map(|workspace| workspace.slot))
-        .collect();
+        .collect()
+}
+
+/// The lowest slot 1..=MAX_SLOTS no unfinished flow of this project holds; flow start decides across
+/// projects.
+pub fn free_slot(flows: &[FlowView]) -> Option<u8> {
+    let held = taken_slots(flows);
     (1..=MAX_SLOTS).find(|slot| !held.contains(slot))
 }
 
@@ -302,6 +308,12 @@ mod tests {
             .map(|slot| flow_in_slot(slot, false))
             .collect();
         assert_eq!(free_slot(&full), None);
+    }
+
+    #[test]
+    fn lists_the_slots_of_unfinished_flows() {
+        let flows = [flow_in_slot(4, false), flow_in_slot(2, true)];
+        assert_eq!(taken_slots(&flows), vec![4]);
     }
 
     #[test]
