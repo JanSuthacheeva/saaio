@@ -112,6 +112,30 @@ impl Board {
     }
 }
 
+/// What `flow status --all --json` prints: a board per project.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Projects {
+    pub version: u32,
+    pub now: u64,
+    pub projects: Vec<Project>,
+}
+
+/// One registered store: its project name, its folder and its flows.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Project {
+    pub name: String,
+    pub root: String,
+    pub board: Board,
+}
+
+impl Projects {
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).expect("projects always serialise")
+    }
+}
+
 impl FlowView {
     /// Waiting, blocked or not responding.
     pub fn needs_you(&self) -> bool {

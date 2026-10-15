@@ -27,6 +27,8 @@ use config::Config;
 use event::{Event, EventKind, Mode, Phase};
 use output::{Document, Failure, Opening};
 use proto::{ClientMsg, Role};
+use registry::Registry;
+use slots::{Claim, Slots};
 use store::Store;
 use ui::theme::Theme;
 use view::FlowView;
@@ -72,8 +74,11 @@ enum Command {
         /// Do not truncate long texts
         #[arg(long)]
         full: bool,
+        /// Every project's flows, from every registered store
+        #[arg(long, conflicts_with = "flow")]
+        all: bool,
     },
-    /// Start a worker: a flow, a worktree, the setup hook and an agent in a tmux window
+    /// Start a worker: a flow, a worktree, the setup hook and an agent flow ui opens
     Start {
         /// What to build, e.g. "SHOP-217 add CSV export"
         request: String,
@@ -194,7 +199,15 @@ fn main() -> ExitCode {
             ));
         }
     };
-    match run(cli, &store, now_ms()) {
+    let Ok(registry) = Registry::locate(env_path("XDG_STATE_HOME"), env_path("HOME")) else {
+        return fail(&Failure::error(
+            "cannot find a state directory",
+            vec!["Set HOME or XDG_STATE_HOME to a directory".to_string()],
+        ));
+    };
+    // Only for the overview and the slots; a command works without it.
+    let _ = registry.register(&store);
+    match run(cli, &store, &registry, now_ms()) {
         Ok(Document::Silent) => ExitCode::SUCCESS,
         Ok(document) => {
             println!("{}", document.text());
@@ -204,7 +217,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure> {
+fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Document, Failure> {
     match cli.command {
         None => home(store, now),
         Some(Command::New {
@@ -213,7 +226,15 @@ fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure> {
             mode,
         }) => new_flow(store, name, request, mode, now),
         Some(Command::Report { flow, event }) => report(store, flow, event, now),
-        Some(Command::Status { flow, json, full }) => status(store, flow, json, full, now),
+        Some(Command::Status {
+            all: true,
+            json,
+            full,
+            ..
+        }) => status_all(registry, json, full, now),
+        Some(Command::Status {
+            flow, json, full, ..
+        }) => status(store, flow, json, full, now),
         Some(Command::Start {
             request,
             name,
@@ -229,6 +250,7 @@ fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure> {
             let cwd = env::current_dir().map_err(|error| Failure::from_io(error.into()))?;
             start(
                 store,
+                registry,
                 &config,
                 &cwd,
                 Launch {
@@ -435,6 +457,7 @@ struct Launch {
 
 fn start(
     store: &Store,
+    registry: &Registry,
     config: &Config,
     cwd: &Path,
     launch: Launch,
@@ -463,15 +486,6 @@ fn start(
         .map(|flow| flow.name.clone())
         .collect();
     let name = launch::flow_name(launch.name.as_deref(), &launch.request, &taken);
-    let slot = launch::free_slot(&flows).ok_or_else(|| {
-        Failure::error(
-            format!("all {} slots are in use", slots::MAX_SLOTS),
-            vec!["Run `flow clear` after finished flows".to_string()],
-        )
-    })?;
-    let space = launch::workspace_for(&repo, &name, slot, agent_name);
-    workspace::create_worktree(&repo, &space).map_err(Failure::from_io)?;
-
     let first = Event::new(
         now,
         EventKind::Started {
@@ -481,6 +495,37 @@ fn start(
         },
     );
     let id = store.create(&first).map_err(Failure::from_io)?;
+
+    // Claimed before the worktree and setup, so a second start cannot take the same slot meanwhile.
+    let claim = Claim {
+        store: store.root().to_path_buf(),
+        flow: id.clone(),
+    };
+    let mut held = held_slots(registry, now);
+    held.extend(launch::taken_slots(&flows));
+    let slot = match Slots::at(registry).claim(&claim, &held, |claim| claim_is_live(claim, now)) {
+        Ok(Some(slot)) => slot,
+        Ok(None) => {
+            let _ = store.remove(&id);
+            return Err(Failure::error(
+                format!("all {} slots are in use", slots::MAX_SLOTS),
+                vec![
+                    "Run `flow status --all` to see which flows hold them".to_string(),
+                    "Run `flow clear` in projects with finished flows".to_string(),
+                ],
+            ));
+        }
+        Err(error) => {
+            let _ = store.remove(&id);
+            return Err(Failure::from_io(error));
+        }
+    };
+    let space = launch::workspace_for(&repo, &name, slot, agent_name);
+    if let Err(error) = workspace::create_worktree(&repo, &space) {
+        let _ = Slots::at(registry).release(slot, &claim);
+        let _ = store.remove(&id);
+        return Err(Failure::from_io(error));
+    }
 
     let setup = match workspace::run_hook(
         &repo,
@@ -686,6 +731,65 @@ fn status(
             .map(|space| Path::new(&space.path).exists());
         output::status_detail(&one, now, full, worktree_exists)
     })
+}
+
+/// Every registered project with flows, each as its board; unreadable logs become warnings.
+fn status_all(registry: &Registry, json: bool, full: bool, now: u64) -> Result<Document, Failure> {
+    let mut projects: Vec<view::Project> = Vec::new();
+    let mut warnings = Vec::new();
+    for store in registry.stores() {
+        let (flows, unread) = views(&store, now);
+        let base = registry::project_name(&store, registry);
+        let name = (1..)
+            .map(|number| match number {
+                1 => base.clone(),
+                _ => format!("{base} ({number})"),
+            })
+            .find(|name| projects.iter().all(|project| &project.name != name))
+            .expect("an unused suffix always exists");
+        warnings.extend(
+            unread
+                .into_iter()
+                .map(|warning| format!("{name}: {warning}")),
+        );
+        if flows.is_empty() {
+            continue;
+        }
+        projects.push(view::Project {
+            name,
+            root: store.root().display().to_string(),
+            board: fold::board(flows, now),
+        });
+    }
+    let projects = view::Projects {
+        version: view::VIEW_VERSION,
+        now,
+        projects,
+    };
+    Ok(if json {
+        Document::Json(projects.to_json())
+    } else {
+        output::status_all(&projects, &warnings, full)
+    })
+}
+
+/// Whether a claim's flow is still unfinished in its store.
+fn claim_is_live(claim: &Claim, now: u64) -> bool {
+    Store::at(claim.store.clone())
+        .events(&claim.flow)
+        .ok()
+        .and_then(|events| fold::fold(&claim.flow, &events, None, now))
+        .is_some_and(|flow| !flow.is_finished())
+}
+
+/// The slots unfinished flows hold in every registered store, claimed or not (flows started before
+/// claims existed).
+fn held_slots(registry: &Registry, now: u64) -> Vec<u8> {
+    registry
+        .stores()
+        .iter()
+        .flat_map(|store| launch::taken_slots(&views(store, now).0))
+        .collect()
 }
 
 /// Every flow folded; unreadable ones become warnings so the rest still shows.

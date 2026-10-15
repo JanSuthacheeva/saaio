@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::view::{Board, FlowView, State};
+use crate::view::{Board, FlowView, Projects, State};
 
 pub const DESCRIPTION: &str =
     "Tracks parallel feature flows: what each is doing, where it is blocked, how far it got";
@@ -188,6 +188,99 @@ fn list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool) -> Do
         count: board.count,
         needs_you: board.needs_you,
         flows,
+        blockers,
+        warnings,
+        help,
+    }))
+}
+
+/// Every project's flows in one list with a project column, blockers likewise.
+pub fn status_all(projects: &Projects, warnings: &[String], full: bool) -> Document {
+    #[derive(Serialize)]
+    struct AllDocument<'a> {
+        count: usize,
+        needs_you: usize,
+        flows: AllRows,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        blockers: Vec<AllBlockerRow>,
+        #[serde(skip_serializing_if = "<[String]>::is_empty")]
+        warnings: &'a [String],
+        help: Vec<String>,
+    }
+    #[derive(Serialize)]
+    #[serde(untagged)]
+    enum AllRows {
+        None(&'static str),
+        Rows(Vec<AllRow>),
+    }
+    #[derive(Serialize)]
+    struct AllRow {
+        project: String,
+        name: String,
+        state: String,
+        phase: String,
+        tasks: String,
+        age: String,
+    }
+    #[derive(Serialize)]
+    struct AllBlockerRow {
+        project: String,
+        name: String,
+        blocker: String,
+    }
+
+    let flows: Vec<(&str, &FlowView)> = projects
+        .projects
+        .iter()
+        .flat_map(|project| {
+            project
+                .board
+                .flows
+                .iter()
+                .map(|flow| (project.name.as_str(), flow))
+        })
+        .collect();
+    let rows = flows
+        .iter()
+        .map(|(project, flow)| AllRow {
+            project: project.to_string(),
+            name: flow.name.clone(),
+            state: name_of(&flow.state),
+            phase: flow
+                .phase
+                .map(|phase| phase.name().to_string())
+                .unwrap_or_default(),
+            tasks: tasks_text(flow),
+            age: short_duration(projects.now.saturating_sub(flow.changed_at)),
+        })
+        .collect::<Vec<_>>();
+    let blockers = flows
+        .iter()
+        .filter(|(_, flow)| flow.needs_you())
+        .filter_map(|(project, flow)| {
+            flow.blocker.as_ref().map(|blocker| AllBlockerRow {
+                project: project.to_string(),
+                name: flow.name.clone(),
+                blocker: truncated(blocker, LIST_TEXT_LIMIT, full),
+            })
+        })
+        .collect();
+    let mut help = Vec::new();
+    if !rows.is_empty() {
+        help.push(
+            "Run `flow status <name>` in a flow's project for its phases, timeline and decisions"
+                .to_string(),
+        );
+    }
+    help.push("Run `flow status --all --json` for every project's board".to_string());
+    Document::Toon(toon(&AllDocument {
+        count: rows.len(),
+        needs_you: flows.iter().filter(|(_, flow)| flow.needs_you()).count(),
+        flows: if rows.is_empty() {
+            AllRows::None("none tracked")
+        } else {
+            AllRows::Rows(rows)
+        },
         blockers,
         warnings,
         help,
@@ -690,6 +783,61 @@ mod tests {
             "{}",
             short.text()
         );
+    }
+
+    #[test]
+    fn the_overview_lists_every_projects_flows_with_their_project() {
+        let now = 30 * MIN;
+        let projects = Projects {
+            version: 1,
+            now,
+            projects: vec![
+                crate::view::Project {
+                    name: "api".into(),
+                    root: "/state/flow/projects/api".into(),
+                    board: fold::board(vec![flow("api-7", vec![], now)], now),
+                },
+                crate::view::Project {
+                    name: "shop".into(),
+                    root: "/state/flow/projects/shop".into(),
+                    board: sample_board(now),
+                },
+            ],
+        };
+
+        let document = status_all(&projects, &["web: cannot read x".into()], false);
+        let text = document.text();
+
+        assert!(text.starts_with("count: 4\nneeds_you: 1\n"), "{text}");
+        assert!(
+            text.contains("flows[4]{project,name,state,phase,tasks,age}:"),
+            "{text}"
+        );
+        assert!(text.contains("  api,api-7,working,"), "{text}");
+        assert!(
+            text.contains("  shop,shop-221,blocked,implement,4/9,"),
+            "{text}"
+        );
+        assert!(
+            text.contains("blockers[1]{project,name,blocker}:\n  shop,shop-221,"),
+            "{text}"
+        );
+        assert!(text.contains("web: cannot read x"), "{text}");
+    }
+
+    #[test]
+    fn an_empty_overview_says_so() {
+        let projects = Projects {
+            version: 1,
+            now: 0,
+            projects: vec![],
+        };
+
+        let document = status_all(&projects, &[], false);
+        let text = document.text();
+
+        assert!(text.contains("flows: none tracked"), "{text}");
+        assert!(!text.contains("flow status <name>"), "{text}");
     }
 
     #[test]
