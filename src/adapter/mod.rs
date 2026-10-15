@@ -41,7 +41,6 @@ impl Adapter {
 
     /// The arguments that run `<flow_exe> wait --master` in the master's session, inserted right
     /// after the program; the master is no flow, so nothing else.
-    #[allow(dead_code)] // until the master's spec wires it in
     pub fn master_wiring(self, flow_exe: &Path) -> Vec<String> {
         match self {
             Adapter::ClaudeCode => vec![

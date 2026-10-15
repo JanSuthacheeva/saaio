@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::launch::{self, LaunchEnv, PaneSpec};
 use crate::proto::PaneKey;
@@ -72,13 +73,15 @@ impl MasterRecord {
     }
 
     /// The agent's command (name master, no prompt) when new, its resume command after, with
-    /// {instructions} filled in; None when it must resume and the agent has no resume template.
+    /// {instructions} filled in and, when it `wake`s, its adapter's waiter wired in after the
+    /// program; None when it must resume and the agent has no resume template.
     pub fn spec(
         &self,
         fresh: bool,
         agent: &Agent,
         env: &LaunchEnv,
         instructions: &Path,
+        wake: bool,
     ) -> Option<PaneSpec> {
         let argv = if fresh {
             let bare = Agent {
@@ -90,10 +93,15 @@ impl MasterRecord {
             launch::resume_argv(agent, &self.session, MASTER_NAME)?
         };
         let instructions = instructions.display().to_string();
-        let argv = argv
+        let mut argv: Vec<String> = argv
             .into_iter()
             .map(|part| part.replace("{instructions}", &instructions))
             .collect();
+        let adapter = agent.adapter.as_deref().and_then(Adapter::named);
+        if let Some(adapter) = adapter.filter(|_| wake) {
+            let at = 1.min(argv.len());
+            argv.splice(at..at, adapter.master_wiring(&env.flow_exe));
+        }
         Some(PaneSpec {
             key: PaneKey::Master,
             argv,
@@ -147,10 +155,10 @@ mod tests {
 
         let md = Path::new("/cfg/master.md");
         let fresh = record
-            .spec(true, claude, &LaunchEnv::default(), md)
+            .spec(true, claude, &LaunchEnv::default(), md, false)
             .unwrap();
         let resumed = record
-            .spec(false, claude, &LaunchEnv::default(), md)
+            .spec(false, claude, &LaunchEnv::default(), md, false)
             .unwrap();
 
         assert_eq!(fresh.key, PaneKey::Master);
@@ -169,7 +177,10 @@ mod tests {
             resume: None,
             ..claude.clone()
         };
-        assert_eq!(record.spec(false, &plain, &LaunchEnv::default(), md), None);
+        assert_eq!(
+            record.spec(false, &plain, &LaunchEnv::default(), md, true),
+            None
+        );
     }
 
     #[test]
@@ -183,10 +194,10 @@ mod tests {
         let md = Path::new("/cfg/master.md");
 
         let fresh = record
-            .spec(true, master, &LaunchEnv::default(), md)
+            .spec(true, master, &LaunchEnv::default(), md, false)
             .unwrap();
         let resumed = record
-            .spec(false, master, &LaunchEnv::default(), md)
+            .spec(false, master, &LaunchEnv::default(), md, false)
             .unwrap();
 
         assert_eq!(
@@ -229,5 +240,44 @@ mod tests {
 
         assert_eq!(fs::read_to_string(&file).unwrap(), DEFAULT_INSTRUCTIONS);
         assert_ne!(PREVIOUS_DEFAULTS[0], DEFAULT_INSTRUCTIONS);
+    }
+
+    #[test]
+    fn wires_the_masters_waiter_in_when_it_wakes() {
+        let record = MasterRecord {
+            session: "5e55".into(),
+            cwd: PathBuf::from("/work"),
+        };
+        let agents = builtin_agents();
+        let master = &agents[crate::config::MASTER_AGENT];
+        let md = Path::new("/cfg/master.md");
+        let env = LaunchEnv {
+            flow_exe: PathBuf::from("/bin/flow"),
+            ..LaunchEnv::default()
+        };
+
+        for fresh in [true, false] {
+            let woken = record.spec(fresh, master, &env, md, true).unwrap();
+            assert_eq!(woken.argv[0], "claude");
+            assert_eq!(woken.argv[1], "--settings");
+            assert!(
+                woken.argv[2].contains(r#""args":["wait","--master"]"#),
+                "{}",
+                woken.argv[2]
+            );
+            assert_eq!(
+                woken.argv[3..],
+                record.spec(fresh, master, &env, md, false).unwrap().argv[1..]
+            );
+        }
+        let unknown = Agent {
+            adapter: Some("codex".into()),
+            ..master.clone()
+        };
+        assert_eq!(
+            record.spec(true, &unknown, &env, md, true).unwrap().argv,
+            record.spec(true, &unknown, &env, md, false).unwrap().argv,
+            "an adapter flow does not know wires nothing in"
+        );
     }
 }

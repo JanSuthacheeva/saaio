@@ -86,6 +86,7 @@ mod tests {
             agent: "claude".into(),
             agents,
             phases: crate::config::builtin_phases(),
+            master: crate::config::MasterConfig::default(),
         }
     }
 
