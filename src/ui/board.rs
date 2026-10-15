@@ -8,7 +8,7 @@ use crate::event::Mode;
 use crate::event::Phase;
 use crate::output::short_duration;
 use crate::proto::{PaneKey, PaneStatus};
-use crate::ui::sidebar::{self, Sidebar, clip, split, wrap};
+use crate::ui::sidebar::{self, Sidebar, clip, clip_place, split, wrap};
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Project, Projects, State, StepStatus, Tone};
 
@@ -194,10 +194,10 @@ impl BoardView<'_> {
         split(left, right, width)
     }
 
-    fn master_card(&self) -> [Line<'static>; 4] {
+    fn master_card(&self, width: usize) -> [Line<'static>; 4] {
         let theme = self.theme();
         let workers = sidebar::workers(self.board()).len();
-        let place = self.sidebar.master.unwrap_or("").to_string();
+        let place = clip_place(self.sidebar.master.unwrap_or(""), width.saturating_sub(4));
         let status = match self.status(&PaneKey::Master) {
             Some(PaneStatus::Exited { .. }) => "exited - C-space r resumes it",
             Some(PaneStatus::Failed { .. }) => "could not start",
@@ -260,30 +260,24 @@ impl BoardView<'_> {
                 .tasks
                 .map(|tasks| (tasks.done, tasks.total))
                 .filter(|(_, total)| *total > 0);
-            let count = tasks.map_or("-".to_string(), |(done, total)| format!("{done}/{total}"));
-            let bar = width
-                .saturating_sub(3 + 2 + count.chars().count() + ago.chars().count() + 1)
-                .min(BAR_WIDTH);
-            let filled = tasks.map_or(0, |(done, total)| {
-                (bar as u32 * done.min(total) / total) as usize
-            });
-            split(
-                vec![
-                    Span::raw("   "),
-                    Span::styled("━".repeat(filled), theme.ui.muted),
-                    Span::styled("─".repeat(bar - filled), theme.ui.faint),
-                    Span::styled(
-                        format!("  {count}"),
-                        if tasks.is_some() {
-                            theme.ui.text
-                        } else {
-                            theme.ui.faint
-                        },
-                    ),
-                ],
-                vec![Span::styled(ago, theme.ui.faint)],
-                width,
-            )
+            let progress = match tasks {
+                // Nothing to measure yet: no bar, only the age.
+                None => vec![Span::raw("   ")],
+                Some((done, total)) => {
+                    let count = format!("{done}/{total}");
+                    let bar = width
+                        .saturating_sub(3 + 2 + count.chars().count() + ago.chars().count() + 1)
+                        .min(BAR_WIDTH);
+                    let filled = (bar as u32 * done.min(total) / total) as usize;
+                    vec![
+                        Span::raw("   "),
+                        Span::styled("━".repeat(filled), theme.state(flow.state)),
+                        Span::styled("─".repeat(bar - filled), theme.ui.faint),
+                        Span::styled(format!("  {count}"), theme.ui.text),
+                    ]
+                }
+            };
+            split(progress, vec![Span::styled(ago, theme.ui.faint)], width)
         };
 
         let (note, style) = match flow.state {
@@ -293,14 +287,7 @@ impl BoardView<'_> {
                 flow.delegate.as_ref().map(|text| format!("agent: {text}")),
                 theme.ui.faint,
             ),
-            State::Working | State::Idle => (
-                flow.timeline
-                    .iter()
-                    .skip(1)
-                    .last()
-                    .map(|entry| entry.text.clone()),
-                theme.ui.faint,
-            ),
+            State::Working | State::Idle => (sidebar::last_note(flow), theme.ui.faint),
             State::Done | State::Ended => (Some(flow.request.clone()), theme.ui.faint),
         };
         let fourth = Line::styled(
@@ -403,7 +390,7 @@ impl BoardView<'_> {
         block.render(rect, buf);
         let width = body.width as usize;
         let lines = match flow {
-            None => self.master_card(),
+            None => self.master_card(width),
             Some(flow) => self.flow_card(flow, index.wrapping_sub(1), width),
         };
         for (offset, line) in lines.iter().enumerate() {
@@ -518,14 +505,7 @@ impl BoardView<'_> {
             if self.state.all {
                 return;
             }
-            let line = Line::from(vec![
-                Span::styled(" 0 master", theme.ui.strong),
-                Span::styled(
-                    format!("  {}", self.sidebar.master.unwrap_or("")),
-                    theme.ui.faint,
-                ),
-            ]);
-            buf.set_line(area.x, area.y, &line, area.width);
+            self.render_master_detail(area, buf);
             return;
         };
         let mut facts: Vec<String> = project.into_iter().cloned().collect();
@@ -576,6 +556,88 @@ impl BoardView<'_> {
         );
         self.render_timeline(flow, left, buf);
         self.render_facts(flow, right, buf);
+    }
+
+    /// Under the master: where it runs, then each flow that needs you with what it asks, and each
+    /// idle one with what is ready.
+    fn render_master_detail(&self, area: Rect, buf: &mut Buffer) {
+        let theme = self.theme();
+        let width = area.width as usize;
+        let flows = sidebar::workers(self.board());
+        let count = flows.len();
+        let place = clip_place(self.sidebar.master.unwrap_or(""), width.saturating_sub(24));
+        let mut facts = vec![format!(
+            "{count} worker{}",
+            if count == 1 { "" } else { "s" }
+        )];
+        if !place.is_empty() {
+            facts.insert(0, place);
+        }
+        let header = Line::from(vec![
+            Span::styled(" 0 master", theme.ui.strong),
+            Span::styled(format!("  {}", facts.join(" · ")), theme.ui.faint),
+        ]);
+        buf.set_line(area.x, area.y, &header, area.width);
+        buf.set_line(
+            area.x,
+            area.y + 1,
+            &Line::styled("─".repeat(width), theme.ui.rule),
+            area.width,
+        );
+
+        let sidebar = &self.sidebar;
+        let entry = |flow: &FlowView, text: String, style: Style| {
+            let lead = format!("  {} {}  ", sidebar.glyph(flow.state), flow.name);
+            Line::from(vec![
+                Span::styled("  ", theme.ui.text),
+                Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
+                Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
+                Span::styled(
+                    clip(&text, width.saturating_sub(lead.chars().count() + 1)),
+                    style,
+                ),
+            ])
+        };
+        let needing: Vec<Line> = flows
+            .iter()
+            .filter(|flow| flow.needs_you())
+            .map(|flow| {
+                let style = match flow.state {
+                    State::Waiting => theme.ui.muted,
+                    _ => theme.state.blocked,
+                };
+                entry(flow, flow.blocker.clone().unwrap_or_default(), style)
+            })
+            .collect();
+        let ready: Vec<Line> = flows
+            .iter()
+            .filter(|flow| flow.state == State::Idle)
+            .map(|flow| {
+                entry(
+                    flow,
+                    sidebar::last_note(flow).unwrap_or_default(),
+                    theme.ui.muted,
+                )
+            })
+            .collect();
+        let mut lines = Vec::new();
+        for (label, entries) in [("needs you", needing), ("ready for you", ready)] {
+            if entries.is_empty() {
+                continue;
+            }
+            if !lines.is_empty() {
+                lines.push(Line::raw(""));
+            }
+            lines.push(Line::styled(format!("  {label}"), theme.ui.faint));
+            lines.extend(entries);
+        }
+        if lines.is_empty() {
+            lines.push(Line::styled("  nothing needs you", theme.ui.faint));
+        }
+        let rows = area.height.saturating_sub(2) as usize;
+        for (offset, line) in lines.iter().take(rows).enumerate() {
+            buf.set_line(area.x, area.y + 2 + offset as u16, line, area.width);
+        }
     }
 
     fn render_timeline(&self, flow: &FlowView, area: Rect, buf: &mut Buffer) {

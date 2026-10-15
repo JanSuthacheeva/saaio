@@ -154,6 +154,11 @@ pub struct StateTokens {
     pub ended: Style,
 }
 
+/// flow's mark: a goose in flight, in block characters every font has.
+pub const MARK: &str = "▚▄▞";
+/// flow's mark with a Nerd Font: Font Awesome's kiwi bird, in the theme's accent like any mark.
+pub const KIWI: &str = "\u{edff}";
+
 #[derive(Debug, Clone)]
 pub struct Glyphs {
     pub mark: &'static str,
@@ -221,7 +226,7 @@ impl Theme {
                 ended: fg(palette.ended),
             },
             glyphs: Glyphs {
-                mark: "≋",
+                mark: MARK,
                 master: "◎",
                 waiting: "◆",
                 idle: "◌",
@@ -233,9 +238,9 @@ impl Theme {
                 separator: "│",
                 in_view: "◂",
                 step_done: "●",
-                step_current: "◉",
+                step_current: "●",
                 step_open: "○",
-                step_join: "─",
+                step_join: "───",
                 more: "…",
                 tool: "⏺",
                 result: "⎿",

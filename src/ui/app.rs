@@ -18,7 +18,7 @@ use crate::ui::newflow::{FormAction, NewFlowForm, NewFlowView};
 use crate::ui::peek::PeekLine;
 use crate::ui::rail::Rail;
 use crate::ui::screen::{Screen, ScreenView};
-use crate::ui::sidebar::{self, Sidebar};
+use crate::ui::sidebar::{self, Sidebar, clip, clip_place};
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Projects, State};
 
@@ -386,12 +386,12 @@ impl App {
                     projects: self.projects.as_ref(),
                     here: self.here.as_deref(),
                 },
-                frame.area(),
+                layout::screen(self.size),
             );
             return;
         }
         let areas = self.areas();
-        frame.render_widget(self.border(theme), areas.frame);
+        frame.render_widget(self.border(theme, areas.frame.width), areas.frame);
         frame.render_widget(
             ScreenView {
                 screen: &self.screen,
@@ -1106,13 +1106,19 @@ impl App {
         draw_dialog(frame, pane, theme, " stop ", theme.state.waiting, text);
     }
 
-    fn border(&self, theme: &Theme) -> Block<'static> {
+    /// The frame around the pane in view, named on its top edge. The title is fitted to `width`,
+    /// so the place loses folders from its middle and the edge keeps its corner.
+    fn border(&self, theme: &Theme, width: u16) -> Block<'static> {
         let mut block = Block::bordered()
             .border_type(BorderType::Rounded)
             .border_style(theme.ui.rule);
         if let Some(notice) = &self.notice {
             block = block.title_bottom(Line::styled(format!(" {notice} "), theme.state.waiting));
         }
+        let hint = self.border_hint(theme);
+        // The corners and at least two rule characters before the closing one.
+        let edge = 4 + hint.as_ref().map_or(0, Line::width);
+        let room = |used: usize| (width as usize).saturating_sub(edge + used);
         let PaneKey::Flow(id) = &self.focus else {
             let mut title = vec![
                 Span::raw(" "),
@@ -1120,10 +1126,13 @@ impl App {
                 Span::styled(" master ", theme.ui.strong),
             ];
             if let Some(place) = &self.master {
-                title.push(Span::styled(format!(" {place} "), theme.ui.faint));
+                let fitted = clip_place(place, room(Line::from(title.clone()).width() + 2));
+                if !fitted.is_empty() {
+                    title.push(Span::styled(format!(" {fitted} "), theme.ui.faint));
+                }
             }
             let block = block.title(Line::from(title));
-            return match self.border_hint(theme) {
+            return match hint {
                 Some(hint) => block.title(hint.right_aligned()),
                 None => block,
             };
@@ -1131,6 +1140,10 @@ impl App {
         let Some(flow) = self.workers().into_iter().find(|flow| &flow.id == id) else {
             return block.title(Line::styled(format!(" {id} "), theme.ui.strong));
         };
+        // A worker that needs you is framed in its state's color, so you see it from inside.
+        if flow.needs_you() {
+            block = block.border_style(theme.state(flow.state));
+        }
         let sidebar = self.sidebar(theme, &[]);
         let mut title = vec![
             Span::raw(" "),
@@ -1141,16 +1154,16 @@ impl App {
         title.push(Span::raw(" "));
         title.push(sidebar.label(flow));
         if let Some(space) = &flow.workspace {
-            title.push(Span::styled(
-                format!(
-                    "  {} {} · slot {} ",
-                    theme.glyphs.separator, space.branch, space.slot
-                ),
-                theme.ui.faint,
-            ));
+            let place = format!("{} · slot {}", space.branch, space.slot);
+            let lead = format!("  {} ", theme.glyphs.separator);
+            let used = Line::from(title.clone()).width() + lead.chars().count() + 1;
+            let fitted = clip(&place, room(used));
+            if !fitted.is_empty() {
+                title.push(Span::styled(format!("{lead}{fitted} "), theme.ui.faint));
+            }
         }
         let block = block.title(Line::from(title));
-        match self.border_hint(theme) {
+        match hint {
             Some(hint) => block.title(hint.right_aligned()),
             None => block,
         }
@@ -1223,7 +1236,11 @@ impl App {
             Span::styled(" master", theme.ui.text),
         ];
         if let Some(place) = &self.master {
-            left.push(Span::styled(format!("  {place}"), theme.ui.faint));
+            let room = (area.width as usize).saturating_sub(Line::from(left.clone()).width() + 3);
+            left.push(Span::styled(
+                format!("  {}", clip_place(place, room)),
+                theme.ui.faint,
+            ));
         }
         match self.status(&PaneKey::Master) {
             Some(PaneStatus::Exited { .. }) => left.push(Span::styled(
@@ -1419,10 +1436,15 @@ mod tests {
         terminal
     }
 
+    /// Row `y` of what flow draws, inside the margin.
     fn row(terminal: &Terminal<TestBackend>, y: u16) -> String {
         let buffer = terminal.backend().buffer();
-        (0..buffer.area.width)
-            .map(|x| buffer[(x, y)].symbol().to_string())
+        let screen = layout::screen(Size {
+            cols: buffer.area.width,
+            rows: buffer.area.height,
+        });
+        (screen.x..screen.x + screen.width)
+            .map(|x| buffer[(x, screen.y + y)].symbol().to_string())
             .collect()
     }
 
@@ -1458,7 +1480,7 @@ mod tests {
                 cols: 100,
                 rows: 30
             }),
-            vec![Effect::Send(ClientMsg::Resize(Size { cols: 98, rows: 26 }))]
+            vec![Effect::Send(ClientMsg::Resize(Size { cols: 96, rows: 24 }))]
         );
     }
 
@@ -1507,22 +1529,22 @@ mod tests {
             "{}",
             row(&terminal, 1)
         );
-        assert!(row(&terminal, 7).starts_with("╰─"));
+        assert!(row(&terminal, 5).starts_with("╰─"));
         assert_eq!(
-            row(&terminal, 8).trim(),
+            row(&terminal, 6).trim(),
             "",
             "a blank row between session and bar"
         );
-        let bar = row(&terminal, 9);
-        assert!(bar.contains("≋ flow"), "{bar}");
+        let bar = row(&terminal, 7);
+        assert!(bar.contains("▚▄▞ flow"), "{bar}");
         assert!(bar.contains("◎ master"), "{bar}");
         assert!(bar.contains("C-space then  n new flow   ? keys"), "{bar}");
         let buffer = terminal.backend().buffer();
         assert!(
-            (0..SIZE.cols).all(|x| buffer[(x, 9)].bg == Theme::builtin().ui.bar.bg.unwrap()),
+            (1..SIZE.cols - 1).all(|x| buffer[(x, 8)].bg == Theme::builtin().ui.bar.bg.unwrap()),
             "the whole bar has the panel background"
         );
-        terminal.backend_mut().assert_cursor_position((6, 1));
+        terminal.backend_mut().assert_cursor_position((7, 2));
     }
 
     #[test]
@@ -1535,8 +1557,8 @@ mod tests {
 
         let terminal = render(&app);
 
-        assert!(row(&terminal, 9).contains("exited - C-space r resumes it"));
-        let screen: String = (0..9).map(|y| row(&terminal, y)).collect();
+        assert!(row(&terminal, 7).contains("exited - C-space r resumes it"));
+        let screen: String = (0..7).map(|y| row(&terminal, y)).collect();
         assert!(screen.contains("The session ended."), "{screen}");
         assert!(screen.contains("C-space r resumes it"), "{screen}");
         assert_eq!(
@@ -1556,7 +1578,9 @@ mod tests {
         }]));
 
         let terminal = render_at(&app, FLEET);
-        let screen: String = (0..FLEET.rows).map(|y| row(&terminal, y) + "\n").collect();
+        let screen: String = (0..FLEET.rows - 2)
+            .map(|y| row(&terminal, y) + "\n")
+            .collect();
         assert!(
             screen.contains("x clean up: worktree, branch, flow   r resume   esc back to master"),
             "{screen}"
@@ -1593,7 +1617,9 @@ mod tests {
         assert!(app.is_modal());
         let screen: String = {
             let terminal = render_at(&app, FLEET);
-            (0..FLEET.rows).map(|y| row(&terminal, y) + "\n").collect()
+            (0..FLEET.rows - 2)
+                .map(|y| row(&terminal, y) + "\n")
+                .collect()
         };
         assert!(
             screen.contains("shop-230 has uncommitted changes. Discard them?"),
@@ -1735,8 +1761,12 @@ mod tests {
         terminal
     }
 
+    /// Row `y` of the sidebar.
     fn side(terminal: &Terminal<TestBackend>, y: u16) -> String {
-        row(terminal, y).chars().skip(110).collect::<String>()
+        let side = layout::areas(FLEET, layout::Chrome::Sidebar).side.unwrap();
+        let screen = layout::screen(FLEET);
+        let from = (side.x - screen.x) as usize;
+        row(terminal, y).chars().skip(from).collect::<String>()
     }
 
     #[test]
@@ -1772,8 +1802,8 @@ mod tests {
         assert_eq!(
             app.on_server(ServerMsg::Board(fleet())),
             vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 107,
-                rows: 42
+                cols: 105,
+                rows: 40
             }))]
         );
         assert_eq!(app.on_server(ServerMsg::Board(fleet())), vec![]);
@@ -1785,20 +1815,20 @@ mod tests {
 
         assert_eq!(
             side(&terminal, 0),
-            " ≋ flow                      2 need you "
+            " ▚▄▞ flow                    2 need you "
         );
         assert_eq!(
             side(&terminal, 2),
             " 0 ◎ master                   ◂ in view "
         );
-        assert_eq!(side(&terminal, 4).trim_end(), " NEEDS YOU");
+        assert_eq!(side(&terminal, 4).trim_end(), " NEEDS YOU 2");
         assert_eq!(
             side(&terminal, 5),
             " 1 ✖ shop-221                       29m "
         );
         assert_eq!(
             side(&terminal, 6),
-            "     ●─◉─○─○ implement              4/9 "
+            "     ●───●───○───○ implement        4/9 "
         );
         assert_eq!(
             side(&terminal, 7),
@@ -1806,21 +1836,21 @@ mod tests {
         );
         assert_eq!(
             side(&terminal, 10),
-            "     ◉─○─○─○ design              guided "
+            "     ●───○───○───○ design        guided "
         );
-        assert_eq!(side(&terminal, 13).trim_end(), " RUNNING");
+        assert_eq!(side(&terminal, 13).trim_end(), " RUNNING 1");
         assert!(side(&terminal, 14).starts_with(" 3 ⠙ export-csv"));
         assert_eq!(side(&terminal, 16).trim_end(), "     agent: review changes");
-        assert_eq!(side(&terminal, 18).trim_end(), " DONE");
-        assert_eq!(side(&terminal, 20).trim_end(), "     ●─●─●─● MR !418");
-        assert_eq!(side(&terminal, 41), "─".repeat(40));
+        assert_eq!(side(&terminal, 18).trim_end(), " DONE 1");
+        assert_eq!(side(&terminal, 20).trim_end(), "     ●───●───●───● MR !418");
+        assert_eq!(side(&terminal, 39), "─".repeat(40));
         assert_eq!(
-            side(&terminal, 42).trim_end(),
+            side(&terminal, 40).trim_end(),
             " C-space j k peek  0-9 jump  n new"
         );
         let buffer = terminal.backend().buffer();
         assert_eq!(
-            buffer[(113, 5)].fg,
+            buffer[(112, 6)].fg,
             Theme::builtin().state.blocked.fg.unwrap()
         );
     }
@@ -1838,11 +1868,11 @@ mod tests {
         let terminal = render_at(&app, FLEET);
         let title = row(&terminal, 0);
         assert!(
-            title.starts_with("╭ ◆ shop-230  ◉─○─○─○ design  │ flow/shop-230 · slot 1 ─"),
+            title.starts_with("╭ ◆ shop-230  ●───○───○───○ design  │ flow/shop-230 · slot 1 ─"),
             "{title}"
         );
         assert!(
-            title.ends_with(" C-space 0 back to master ╮  ≋ flow                      2 need you "),
+            title.ends_with(" C-space 0 back to master ╮  ▚▄▞ flow                    2 need you "),
             "{title}"
         );
         assert_eq!(
@@ -1852,11 +1882,11 @@ mod tests {
         assert!(side(&terminal, 9).starts_with("▌2 ◆ shop-230"));
         let buffer = terminal.backend().buffer();
         let selection = Theme::builtin().ui.selection.bg.unwrap();
-        assert!((110..150).all(|x| buffer[(x, 10)].bg == selection));
-        assert_ne!(buffer[(120, 8)].bg, selection);
+        assert!((109..149).all(|x| buffer[(x, 11)].bg == selection));
+        assert_ne!(buffer[(119, 9)].bg, selection);
 
         assert_eq!(
-            app.on_input(Routed::Click { col: 120, row: 6 }),
+            app.on_input(Routed::Click { col: 120, row: 7 }),
             vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
                 "shop-221".into()
             )))]
@@ -1931,9 +1961,12 @@ mod tests {
 
         let terminal = render_at(&app, FLEET);
 
-        assert_eq!(side(&terminal, 6).trim_end(), "     ○─○─○─○ waiting");
+        assert_eq!(side(&terminal, 6).trim_end(), "     ○───○───○───○ waiting");
         assert_eq!(side(&terminal, 7).trim_end(), "     ready");
-        assert_eq!(side(&terminal, 11).trim_end(), "     ○─○─○─○ starting");
+        assert_eq!(
+            side(&terminal, 11).trim_end(),
+            "     ○───○───○───○ starting"
+        );
         assert_eq!(
             side(&terminal, 12).trim_end(),
             "",
@@ -1995,7 +2028,7 @@ mod tests {
         );
         assert_eq!(
             side(&terminal, 15).trim_end(),
-            "▌    ●─●─◉─○ review                 6/6"
+            "▌    ●───●───●───○ review           6/6"
         );
         assert_eq!(
             side(&terminal, 16).trim_end(),
@@ -2020,9 +2053,9 @@ mod tests {
         );
         assert_eq!(side(&terminal, 22).trim_end(), "▌ enter jump in");
         assert_eq!(side(&terminal, 23).trim_end(), "");
-        assert_eq!(side(&terminal, 24).trim_end(), " DONE");
+        assert_eq!(side(&terminal, 24).trim_end(), " DONE 1");
         assert_eq!(
-            side(&terminal, 42).trim_end(),
+            side(&terminal, 40).trim_end(),
             " C-space j k peek  0-9 jump  n new"
         );
 
@@ -2077,6 +2110,26 @@ mod tests {
     }
 
     #[test]
+    fn a_long_place_loses_its_middle_but_keeps_the_branch_and_the_corner() {
+        let mut fleet = with_fleet();
+        fleet.on_server(ServerMsg::Master {
+            cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
+            branch: Some("main".into()),
+        });
+
+        let screen = render_at(&fleet, FLEET);
+        let top = row(&screen, 0);
+        let pane_edge = top.split('╮').next().unwrap();
+
+        assert!(pane_edge.contains("/private/…/"), "{top}");
+        assert!(pane_edge.contains("/repo · main ─"), "{top}");
+        assert_eq!(
+            side(&screen, 3).trim_end(),
+            "     /private/…/ui-look/repo · main"
+        );
+    }
+
+    #[test]
     fn shows_where_the_master_runs_with_home_as_a_tilde() {
         let master = ServerMsg::Master {
             cwd: "/Users/jan/projects/shop".into(),
@@ -2087,7 +2140,7 @@ mod tests {
         let mut fleet = with_fleet().with_home(Some("/Users/jan".into()));
         fleet.on_server(master);
 
-        let bar = row(&render(&solo), 9);
+        let bar = row(&render(&solo), 7);
         let sidebar = render_at(&fleet, FLEET);
 
         assert!(bar.contains("◎ master  ~/projects/shop · main"), "{bar}");
@@ -2096,14 +2149,14 @@ mod tests {
             cwd: "/shop".into(),
             branch: None,
         });
-        let wide = row(&render_at(&wide, FLEET), 43);
+        let wide = row(&render_at(&wide, FLEET), 41);
         assert!(
             wide.ends_with("no workers yet   │  C-space then  n new flow   ? keys "),
             "{wide}"
         );
         assert!(row(&sidebar, 0).starts_with("╭ ◎ master  ~/projects/shop · main ─"));
         assert_eq!(side(&sidebar, 3).trim_end(), "     ~/projects/shop · main");
-        assert_eq!(side(&sidebar, 5).trim_end(), " NEEDS YOU");
+        assert_eq!(side(&sidebar, 5).trim_end(), " NEEDS YOU 2");
     }
 
     fn board_app() -> App {
@@ -2125,18 +2178,27 @@ mod tests {
         let terminal = render_at(&app, FLEET);
 
         assert!(app.is_modal());
-        assert!(row(&terminal, 0).starts_with(" ≋ flow board "));
+        assert!(row(&terminal, 0).starts_with(" ▚▄▞ flow board "));
         assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
-        assert!(row(&terminal, 3).contains("│ 0 ◎ master                              you  │"));
-        assert!(row(&terminal, 3).contains("│ 1 ✖ shop-221                        blocked  │"));
-        assert!(row(&terminal, 3).contains("│ 2 ◆ shop-230                waiting for you  │"));
+        assert!(row(&terminal, 3).contains("│ 0 ◎ master                             you  │"));
+        assert!(row(&terminal, 3).contains("│ 1 ✖ shop-221                       blocked  │"));
+        assert!(row(&terminal, 3).contains("│ 2 ◆ shop-230               waiting for you  │"));
         assert!(row(&terminal, 4).contains("│   ~/projects/shop · main"));
         assert!(
-            row(&terminal, 5).contains("│   ━━━━━━━━━━━━───────────────  4/9   29m ago │"),
+            row(&terminal, 5).contains("│   ━━━━━━━━━━━━───────────────  4/9  29m ago │"),
             "{}",
             row(&terminal, 5)
         );
-        assert!(row(&terminal, 10).contains("│ 3 ⠙ export-csv            reviewing · agent  │"));
+        let shop_230 = row(&terminal, 5)
+            .split('│')
+            .nth(5)
+            .unwrap_or_default()
+            .to_string();
+        assert!(
+            shop_230.trim_start() == "31m ago ",
+            "a flow without tasks draws no bar: {shop_230:?}"
+        );
+        assert!(row(&terminal, 10).contains("│ 3 ⠙ export-csv           reviewing · agent  │"));
         assert!(
             row(&terminal, 16)
                 .starts_with(" 2 shop-230  shop-230 · guided · flow/shop-230 · slot 1"),
@@ -2144,15 +2206,101 @@ mod tests {
             row(&terminal, 16)
         );
         assert!(
-            row(&terminal, 43)
+            row(&terminal, 41)
                 .starts_with(" 0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   a every project   esc back to shop-230")
         );
         let buffer = terminal.backend().buffer();
         let accent = Theme::builtin().ui.accent.fg.unwrap();
-        assert_eq!(buffer[(101, 2)].fg, accent, "the selected card is outlined");
+        assert_eq!(buffer[(100, 3)].fg, accent, "the selected card is outlined");
         assert_eq!(
-            buffer[(52, 2)].fg,
+            buffer[(51, 3)].fg,
             Theme::builtin().state.blocked.fg.unwrap()
+        );
+    }
+
+    #[test]
+    fn what_is_done_takes_the_color_of_where_the_flow_is() {
+        let theme = Theme::builtin();
+        let blocked = theme.state.blocked.fg.unwrap();
+        let faint = theme.ui.faint.fg.unwrap();
+        let terminal = render_at(&with_fleet(), FLEET);
+        let buffer = terminal.backend().buffer();
+        let y = (0..FLEET.rows)
+            .find(|&y| side(&terminal, y).contains("●───●───○───○ implement"))
+            .expect("shop-221's track")
+            + layout::MARGIN;
+        let x = (0..FLEET.cols)
+            .find(|&x| buffer[(x, y)].symbol() == "●")
+            .unwrap();
+
+        assert_eq!(buffer[(x, y)].fg, blocked, "done");
+        assert_eq!(
+            buffer[(x + 1, y)].fg,
+            blocked,
+            "the join into the current step"
+        );
+        assert_eq!(buffer[(x + 4, y)].fg, blocked, "current");
+        assert_eq!(buffer[(x + 8, y)].fg, faint, "open");
+
+        let mut board = board_app();
+        board.on_input(Routed::Command(Command::Board));
+        let terminal = render_at(&board, FLEET);
+        let buffer = terminal.backend().buffer();
+        let bar = (0..FLEET.cols)
+            .find(|&x| buffer[(x, 6)].symbol() == "━")
+            .expect("shop-221's task bar");
+        assert_eq!(buffer[(bar, 6)].fg, blocked, "the filled bar");
+    }
+
+    #[test]
+    fn a_worker_that_needs_you_is_framed_in_its_state_color() {
+        let theme = Theme::builtin();
+        let corner = |app: &App| render_at(app, FLEET).backend().buffer()[(1, 1)].fg;
+        let mut app = with_fleet();
+
+        assert_eq!(corner(&app), theme.ui.rule.fg.unwrap(), "the master");
+        app.on_input(Routed::Command(Command::Focus(1)));
+        assert_eq!(
+            corner(&app),
+            theme.state.blocked.fg.unwrap(),
+            "shop-221 is blocked"
+        );
+        app.on_input(Routed::Command(Command::Focus(2)));
+        assert_eq!(
+            corner(&app),
+            theme.state.waiting.fg.unwrap(),
+            "shop-230 waits"
+        );
+        app.on_input(Routed::Command(Command::Focus(3)));
+        assert_eq!(corner(&app), theme.ui.rule.fg.unwrap(), "export-csv runs");
+    }
+
+    #[test]
+    fn the_board_shows_what_needs_you_under_the_master() {
+        let mut app = board_app();
+        app.on_input(Routed::Command(Command::Board));
+        let terminal = render_at(&app, FLEET);
+        let rows: Vec<String> = (12..30).map(|y| row(&terminal, y)).collect();
+        let at = rows
+            .iter()
+            .position(|line| line.starts_with(" 0 master"))
+            .unwrap_or_else(|| panic!("{}", rows.join("\n")));
+
+        assert!(
+            rows[at].contains("~/projects/shop · main · 4 workers"),
+            "{}",
+            rows[at]
+        );
+        assert_eq!(rows[at + 2].trim_end(), "  needs you");
+        assert!(
+            rows[at + 3].starts_with("  ✖ shop-221  migration needs a default value"),
+            "{}",
+            rows[at + 3]
+        );
+        assert!(
+            rows[at + 4].starts_with("  ◆ shop-230  Which approach: a channel column"),
+            "{}",
+            rows[at + 4]
         );
     }
 
@@ -2385,12 +2533,12 @@ mod tests {
             row(&terminal, 2)
         );
         assert!(row(&terminal, 2).ends_with("this project "));
-        let api = (0..44).find(|y| row(&terminal, *y).starts_with(" api  1 flow"));
+        let api = (0..42).find(|y| row(&terminal, *y).starts_with(" api  1 flow"));
         assert!(api.is_some(), "this project comes first, then api");
         assert!(
-            row(&terminal, 43).starts_with(" h j k l move   enter jump in   n new flow   x clear finished flow   a this project"),
+            row(&terminal, 41).starts_with(" h j k l move   enter jump in   n new flow   x clear finished flow   a this project"),
             "{}",
-            row(&terminal, 43)
+            row(&terminal, 41)
         );
 
         let first = fleet().flows[0].id.clone();
@@ -2457,24 +2605,24 @@ mod tests {
         assert_eq!(
             app.on_input(Routed::Command(Command::Rail)),
             vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 141,
-                rows: 42
+                cols: 139,
+                rows: 40
             }))]
         );
         let terminal = render_at(&app, FLEET);
-        let rail = |y| row(&terminal, y).chars().skip(144).collect::<String>();
+        let rail = |y| row(&terminal, y).chars().skip(142).collect::<String>();
 
         assert!(
-            row(&terminal, 0).ends_with(" ◆ 2 shop-230 is waiting  │  C-space b sidebar ╮  ≋    ")
+            row(&terminal, 0).ends_with(" ◆ 2 shop-230 is waiting  │  C-space b sidebar ╮  ▚▄▞  ")
         );
         assert_eq!(rail(2), " 0 ◎  ");
         assert_eq!(rail(4), "▌1 ✖  ");
         assert_eq!(rail(5), " 2 ◆  ");
         assert_eq!(rail(7), " 3 ⠙  ");
         assert_eq!(rail(9), " 4 ✔  ");
-        assert_eq!(rail(43), " C-␣  ");
+        assert_eq!(rail(41), " C-␣  ");
         assert_eq!(
-            app.on_input(Routed::Click { col: 146, row: 5 }),
+            app.on_input(Routed::Click { col: 146, row: 6 }),
             vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
                 "shop-230".into()
             )))]
@@ -2482,8 +2630,8 @@ mod tests {
         assert_eq!(
             app.on_input(Routed::Command(Command::Rail)),
             vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 107,
-                rows: 42
+                cols: 105,
+                rows: 40
             }))]
         );
     }
@@ -2514,14 +2662,14 @@ mod tests {
         );
         assert_eq!(
             app.on_input(Routed::View(vec![Key::Ctrl('d')])),
-            vec![Effect::Send(ClientMsg::History(Some(117)))]
+            vec![Effect::Send(ClientMsg::History(Some(118)))]
         );
 
         let terminal = render(&app);
         assert!(
-            row(&terminal, 7).contains("↑ 117 lines back   k j scroll  g G ends  q live"),
+            row(&terminal, 5).contains("↑ 118 lines back   k j scroll  g G ends  q live"),
             "{}",
-            row(&terminal, 7)
+            row(&terminal, 5)
         );
         assert_eq!(
             app.on_input(Routed::View(vec![Key::Char('q')])),
@@ -2535,7 +2683,7 @@ mod tests {
         let mut app = board_app();
         app.on_input(Routed::Command(Command::StopServer));
         let terminal = render_at(&app, FLEET);
-        let dialog: String = (0..44).map(|y| row(&terminal, y) + "\n").collect();
+        let dialog: String = (0..42).map(|y| row(&terminal, y) + "\n").collect();
         assert!(dialog.contains("3 flows are not finished:"), "{dialog}");
         assert!(
             dialog.contains("✖ shop-221  migration needs a default value"),
@@ -2591,19 +2739,38 @@ mod tests {
         app.on_input(Routed::Command(Command::Help));
 
         let terminal = render_at(&app, FLEET);
-        let help: String = (0..44).map(|y| row(&terminal, y) + "\n").collect();
+        let help: String = (0..42).map(|y| row(&terminal, y) + "\n").collect();
         assert!(help.contains("C-space then"), "{help}");
         assert!(
             help.contains("  b        fold the sidebar to a rail and back"),
             "{help}"
         );
         assert_eq!(
-            side(&terminal, 43).trim_end(),
+            side(&terminal, 41).trim_end(),
             "         o board  b rail  ? all keys"
         );
 
         app.on_input(Routed::View(vec![Key::Char('x')]));
         assert!(!app.is_modal());
+    }
+
+    #[test]
+    fn the_new_flow_dialog_keeps_its_title_beside_a_long_place() {
+        let mut app = with_fleet();
+        app.on_server(ServerMsg::Master {
+            cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
+            branch: None,
+        });
+        app.on_input(Routed::Command(Command::NewFlow));
+
+        let terminal = render_at(&app, FLEET);
+        let header = (5..20)
+            .map(|y| row(&terminal, y))
+            .find(|line| line.contains(" new flow"))
+            .expect("the dialog names itself");
+
+        assert!(header.contains("in /private/…/"), "{header}");
+        assert!(header.contains("/ui-look/repo │"), "{header}");
     }
 
     #[test]

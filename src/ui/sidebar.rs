@@ -107,27 +107,37 @@ impl Sidebar<'_> {
         });
         if let Some(place) = self.master {
             rows.push(Row {
-                line: Line::styled(format!("     {}", clip(place, width - 6)), theme.ui.faint),
+                line: Line::styled(
+                    format!("     {}", clip_place(place, width - 6)),
+                    theme.ui.faint,
+                ),
                 key: Some(PaneKey::Master),
                 selected: false,
             });
         }
         rows.push(plain(Line::raw("")));
 
+        let listed = workers(self.board);
         let mut group = "";
         let mut flows = Vec::new();
-        for (index, flow) in workers(self.board).into_iter().enumerate() {
-            let heading = if flow.needs_you() {
-                "NEEDS YOU"
-            } else if flow.is_finished() {
-                "DONE"
-            } else {
-                "RUNNING"
-            };
+        for (index, flow) in listed.iter().copied().enumerate() {
+            let heading = group_of(flow);
             let mut block = Vec::new();
             if heading != group {
                 group = heading;
-                block.push(plain(Line::styled(format!(" {heading}"), theme.ui.faint)));
+                let count = listed
+                    .iter()
+                    .filter(|other| group_of(other) == heading)
+                    .count();
+                let tone = if heading == "NEEDS YOU" {
+                    theme.state.waiting
+                } else {
+                    theme.ui.faint
+                };
+                block.push(plain(Line::from(vec![
+                    Span::styled(format!(" {heading} "), theme.ui.faint),
+                    Span::styled(count.to_string(), tone),
+                ])));
             }
             block.extend(self.flow_rows(flow, index));
             block.push(plain(Line::raw("")));
@@ -367,7 +377,7 @@ impl Sidebar<'_> {
         }
     }
 
-    /// ●─◉─○─○: what is done in muted, the current step in the state's color, the rest faint;
+    /// ●───●───○───○: what is done and the current step in the state's color, the rest faint;
     /// all of it in the state's color once the flow is finished.
     pub fn steps(&self, flow: &FlowView) -> Vec<Span<'static>> {
         let theme = self.theme;
@@ -377,16 +387,15 @@ impl Sidebar<'_> {
         for (index, step) in flow.steps.iter().enumerate() {
             let (glyph, style) = match step.status {
                 _ if flow.is_finished() => (glyphs.step_done, tone),
-                StepStatus::Done => (glyphs.step_done, theme.ui.muted),
+                StepStatus::Done => (glyphs.step_done, tone),
                 StepStatus::Current => (glyphs.step_current, tone),
                 StepStatus::Open => (glyphs.step_open, theme.ui.faint),
             };
             spans.push(Span::styled(glyph, style));
             if let Some(next) = flow.steps.get(index + 1) {
-                let join = if flow.is_finished() {
+                let reached = step.status == StepStatus::Done && next.status != StepStatus::Open;
+                let join = if flow.is_finished() || reached {
                     tone
-                } else if step.status == StepStatus::Done && next.status != StepStatus::Open {
-                    theme.ui.muted
                 } else {
                     theme.ui.faint
                 };
@@ -432,12 +441,7 @@ impl Sidebar<'_> {
         if let Some(delegate) = &flow.delegate {
             return Some((format!("agent: {delegate}"), theme.ui.faint));
         }
-        // The first entry only says the flow started, which the label already does.
-        flow.timeline
-            .iter()
-            .skip(1)
-            .last()
-            .map(|entry| (entry.text.clone(), theme.ui.faint))
+        last_note(flow).map(|note| (note, theme.ui.faint))
     }
 
     fn footer(&self, width: usize) -> Vec<Row> {
@@ -559,6 +563,63 @@ pub fn clip(text: &str, width: usize) -> String {
     kept
 }
 
+/// The sidebar section a flow is listed under.
+fn group_of(flow: &FlowView) -> &'static str {
+    if flow.needs_you() {
+        "NEEDS YOU"
+    } else if flow.is_finished() {
+        "DONE"
+    } else {
+        "RUNNING"
+    }
+}
+
+/// What a flow last said that its row does not already show: its last timeline entry, without
+/// "started", phase changes and "answered" (the steps and the glyph say those), and without the
+/// "idle: " the glyph says too.
+pub fn last_note(flow: &FlowView) -> Option<String> {
+    let text = flow
+        .timeline
+        .iter()
+        .skip(1)
+        .rev()
+        .map(|entry| entry.text.as_str())
+        .find(|text| !text.starts_with("phase: "))?;
+    // An answered question is over; what came before it is no news.
+    (text != "answered").then(|| text.strip_prefix("idle: ").unwrap_or(text).to_string())
+}
+
+/// A place (`path · branch`) in `width` columns: the path loses folders from its middle first
+/// (/private/…/ui-look/repo · main), then its first folder; the branch goes only when the last
+/// folder alone does not fit beside it.
+pub fn clip_place(place: &str, width: usize) -> String {
+    let fits = |text: &str| Span::raw(text).width() <= width;
+    if fits(place) {
+        return place.to_string();
+    }
+    let (path, suffix) = match place.rsplit_once(" · ") {
+        Some((path, branch)) => (path, format!(" · {branch}")),
+        None => (place, String::new()),
+    };
+    let parts: Vec<&str> = path.split('/').collect();
+    let head_len = if parts.first() == Some(&"") { 2 } else { 1 };
+    let head = parts[..head_len.min(parts.len())].join("/");
+    let tail = |keep: usize| parts[parts.len() - keep..].join("/");
+    let removable = parts.len().saturating_sub(head_len + 1);
+    let with_head = (1..=removable)
+        .rev()
+        .map(|keep| format!("{head}/…/{}{suffix}", tail(keep)));
+    let without_head = (1..parts.len())
+        .rev()
+        .map(|keep| format!("…/{}{suffix}", tail(keep)));
+    let last = format!("…/{}", tail(1));
+    with_head
+        .chain(without_head)
+        .chain(std::iter::once(last.clone()))
+        .find(|candidate| fits(candidate))
+        .unwrap_or_else(|| clip(&last, width))
+}
+
 /// !418 for a GitLab merge request, #12 for a GitHub pull request, else MR.
 fn merge_request(url: &str) -> String {
     let number = url.trim_end_matches('/').rsplit('/').next().unwrap_or("");
@@ -575,6 +636,74 @@ fn merge_request(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_note_is_what_the_flow_last_said_not_what_the_row_shows() {
+        use crate::event::{Event, EventKind, Mode, Phase};
+        let flow = |kinds: Vec<EventKind>| {
+            let mut events = vec![Event::new(
+                0,
+                EventKind::Started {
+                    name: "shop".into(),
+                    request: "x".into(),
+                    mode: Mode::Auto,
+                },
+            )];
+            events.extend(kinds.into_iter().map(|kind| Event::new(1, kind)));
+            crate::fold::fold("id", &events, None, 2).unwrap()
+        };
+        let phase = |phase| EventKind::Phase { phase };
+
+        let ready = flow(vec![
+            phase(Phase::Design),
+            EventKind::Idle {
+                note: "The design is ready for review.".into(),
+            },
+        ]);
+        let working = flow(vec![phase(Phase::Design), phase(Phase::Implement)]);
+        let told = flow(vec![
+            EventKind::Message {
+                text: "Semicolons.".into(),
+            },
+            EventKind::Working,
+            phase(Phase::Implement),
+        ]);
+
+        assert_eq!(
+            last_note(&ready).as_deref(),
+            Some("The design is ready for review.")
+        );
+        assert_eq!(last_note(&working), None);
+        assert_eq!(last_note(&told).as_deref(), Some("master: Semicolons."));
+        let answered = flow(vec![
+            EventKind::Waiting {
+                question: "Which?".into(),
+            },
+            EventKind::Working,
+        ]);
+        assert_eq!(last_note(&answered), None, "not the old question");
+    }
+
+    #[test]
+    fn shortens_a_place_in_the_middle_and_keeps_its_branch() {
+        let place = "/private/tmp/claude-501/x/scratchpad/ui-look/repo · main";
+
+        assert_eq!(
+            clip_place("~/projects/shop · main", 30),
+            "~/projects/shop · main"
+        );
+        assert_eq!(clip_place(place, 34), "/private/…/ui-look/repo · main");
+        assert_eq!(clip_place(place, 24), "/private/…/repo · main");
+        assert_eq!(clip_place(place, 15), "…/repo · main");
+        assert_eq!(clip_place(place, 9), "…/repo", "too narrow for the branch");
+        assert_eq!(clip_place("~/a/b/c/d", 8), "~/…/c/d");
+        for width in 1..60 {
+            assert!(
+                Span::raw(clip_place(place, width)).width() <= width,
+                "{width}"
+            );
+        }
+    }
 
     #[test]
     fn clips_long_text_with_an_ellipsis() {
