@@ -9,7 +9,7 @@ use crate::branching::{self, Branching};
 use crate::event::Mode;
 use crate::launch;
 use crate::ui::input::Key;
-use crate::ui::sidebar::{clip, split};
+use crate::ui::sidebar::{clip, clip_place, split};
 use crate::ui::theme::Theme;
 use crate::view::FlowView;
 
@@ -172,7 +172,10 @@ impl Widget for NewFlowView<'_> {
             0,
             split(
                 vec![Span::styled(" new flow", theme.ui.strong)],
-                vec![Span::styled(format!("in {} ", self.place), theme.ui.faint)],
+                vec![Span::styled(
+                    format!("in {} ", clip_place(self.place, width.saturating_sub(15))),
+                    theme.ui.faint,
+                )],
                 width,
             ),
         );

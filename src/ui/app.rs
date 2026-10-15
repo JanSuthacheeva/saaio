@@ -2640,6 +2640,25 @@ mod tests {
     }
 
     #[test]
+    fn the_new_flow_dialog_keeps_its_title_beside_a_long_place() {
+        let mut app = with_fleet();
+        app.on_server(ServerMsg::Master {
+            cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
+            branch: None,
+        });
+        app.on_input(Routed::Command(Command::NewFlow));
+
+        let terminal = render_at(&app, FLEET);
+        let header = (5..20)
+            .map(|y| row(&terminal, y))
+            .find(|line| line.contains(" new flow"))
+            .expect("the dialog names itself");
+
+        assert!(header.contains("in /private/…/"), "{header}");
+        assert!(header.contains("/ui-look/repo │"), "{header}");
+    }
+
+    #[test]
     fn keeps_what_a_new_flow_creates_inside_the_dialog() {
         let mut app = board_app();
         app.on_input(Routed::Command(Command::NewFlow));
