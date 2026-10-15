@@ -26,6 +26,7 @@ flow status [<name|id>] [--json] [--full]
 flow status --all [--json] [--full]     every project's flows, with their project
 flow remove <name|id> [--force] [--delete-unmerged]
                                         end a flow's worker, tear down its worktree and branch, forget it
+flow send <name|id> <text>              tell a flow's worker something (the master's command)
 flow clear                              forget finished flows, tear down their worktrees
 ```
 
@@ -168,7 +169,7 @@ only what changes the flow:
 | AskUserQuestion | `waiting <the question>` |
 | a permission prompt | `waiting permission: Bash(rm -rf build)` |
 | a tool finishing | `working`; plan-progress task counts and blocks; a merge request `gh` / `glab` created |
-| the end of a turn | `waiting <the question in Claude's last line>` |
+| the end of a turn | `waiting <the question>` when Claude's last line asks one, else `idle <its last sentence>`; the whole closing message becomes the flow's `answer` |
 | `/exit` | `ended` (a hangup is not an end; flow ui resumes the worker) |
 
 A subagent's own events are ignored. A custom agent replaces the built-in one, so give it
@@ -183,6 +184,27 @@ write-merge-request = "merge-request"
 ```
 
 `flow report` stays for scripts and other tools.
+
+### The master and its workers
+
+Every Claude Code session flow starts, the master included, also runs `flow wait` as an
+`asyncRewake` hook at its start and at each turn end. `flow wait` sleeps until there is news for
+its session, prints it and exits 2, and Claude Code wakes the session with it:
+
+- A worker is woken by the master's `flow send <name> "<text>"`, which adds a `master: <text>`
+  line to the flow's timeline. A worker whose session is not running gets it when it runs again.
+- The master is woken when flows of its project become `waiting`, `blocked`, `idle`, `done` or
+  `not-responding`; flows that stop within two seconds come as one list.
+
+The flow's mode decides who answers a waiting worker. In an `auto` flow the master answers what
+the code, the plan or your earlier decisions settle, and tells you what it answered. A `guided`
+flow's questions go to you, and the master sends your answer on. `flow status <name> --full`
+shows a worker's whole last answer. To stop the master being woken:
+
+```toml
+[master]
+wake = false
+```
 
 ### Branch names
 
@@ -332,13 +354,16 @@ Programs read `flow status --json`: the whole board, nothing truncated, camelCas
       ],
       "timeline": [{ "at": 1791951013760, "text": "started", "tone": "neutral" }],
       "startedAt": 1791951013760,
-      "changedAt": 1791953413760
+      "changedAt": 1791953413760,
+      "workspace": null,
+      "answer": null
     }
   ]
 }
 ```
 
-Timeline tones: `neutral`, `progress`, `attention`, `problem`, `success`.
+Timeline tones: `neutral`, `progress`, `attention`, `problem`, `success`. `answer` is the last
+turn's whole closing message, as the worker's harness reported it.
 
 ## Where the logs live
 

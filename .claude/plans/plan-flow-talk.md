@@ -176,8 +176,8 @@ pub fn news_for_master(flows: &[&FlowView]) -> String; // changed[n]{name,state,
 - [x] store.rs: Waiter, claim_waiter/waiter, delivered/set_delivered, seen/set_seen, remove cleans waits/; tests
 - [x] output.rs: sent, news_for_worker, news_for_master, answer in status_detail; tests
 - [x] main.rs: flow send with its refusals; tests/cli.rs cases
-- [ ] main.rs: flow wait (loop, replace, settle, exit 2 on stderr), drop the dead_code allowances; tests/cli.rs process tests
-- [ ] claude_code.rs: waiter hooks in settings, master_settings, Answer on Stop; Adapter::master_wiring; tests
-- [ ] config.rs MasterConfig; master.rs spec(.., wake) wiring; server passes config.master.wake; tests
+- [x] main.rs: flow wait (loop, replace, settle, exit 2 on stderr), drop the dead_code allowances; tests/cli.rs process tests
+- [x] claude_code.rs: waiter hooks in settings, master_settings, Answer on Stop; Adapter::master_wiring; tests
+- [x] config.rs MasterConfig; master.rs spec(.., wake) wiring; server passes config.master.wake; tests
 - [ ] master.md v3 (master-v2.md kept as a previous default); README, CLAUDE.md, HANDOVER
 - [ ] End-to-end check: flow ui with an auto and a guided worker; each wakes the master; the master answers the auto one with flow send and relays for the guided one; a mid-turn send reaches a busy worker

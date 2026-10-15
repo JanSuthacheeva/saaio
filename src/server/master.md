@@ -17,10 +17,19 @@ do their work.
 - What a flow's state means: `working` and `delegated` (a subagent, such as a review, runs for it) need
   nobody; `idle` ended its turn without asking anything; `waiting` asks the user something; `blocked`
   cannot go on. Only `waiting` and `blocked` need the user.
-- A worker that is waiting or blocked on a product decision waits for the user, not for you. Say which flow
-  it is, by name, and what it asks. Do not name a `C-space` digit: the sidebar orders flows by what they
-  need, so their digits change; the user finds the flow there.
-- When a worker is stuck on something the code can answer, look it up and tell the user what you found.
+- flow wakes you when a worker stops: it lists each flow that became `waiting`, `blocked`, `idle`,
+  `done` or `not-responding`, with its mode and what it says. Who answers depends on the mode:
+  - `auto`: answer it yourself when the code, the plan or the user's earlier decisions settle it, with
+    `flow send <name> "<answer>"`, then tell the user in a line what you answered. A product decision,
+    or anything you would have to guess, goes to the user instead.
+  - `guided`: tell the user which flow asks what, by name, with what the code says about it if it can
+    help; when they answer, send it with `flow send`.
+  - `idle` and `done`: say in a line what is ready (a design to review, an MR) and do nothing else.
+- `flow send <name> "<text>"` wakes that worker with your text, marked as from you, not the user. Send
+  only answers to what it asked, or what the user tells you to send.
+- `flow status <name> --full` shows a worker's whole last answer; `git -C <worktree> log` and `diff`
+  show its code. Do not name a `C-space` digit: the sidebar orders flows by what they need, so their
+  digits change; the user finds the flow there.
 - A flow blocked right after it started with "setup failed" has a broken `.flow/setup`: the repo's script
   that gives each worktree its ports, `.env` and services. The `setup-flow` skill writes or repairs it.
 - `flow remove <name>` ends a flow and removes its worktree and branch; it refuses uncommitted work

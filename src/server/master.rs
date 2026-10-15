@@ -16,7 +16,7 @@ pub const MASTER_NAME: &str = "master";
 /// What flow writes to master.md: how the master works with flow.
 pub const DEFAULT_INSTRUCTIONS: &str = include_str!("master.md");
 /// Earlier defaults: a master.md still holding one of them was never edited, so it gets the current one.
-const PREVIOUS_DEFAULTS: [&str; 1] = [include_str!("master-v1.md")];
+const PREVIOUS_DEFAULTS: [&str; 2] = [include_str!("master-v1.md"), include_str!("master-v2.md")];
 
 /// Writes the default instructions to `file` when it is missing or still an earlier default; an edited
 /// file is never overwritten.
@@ -234,12 +234,14 @@ mod tests {
     fn replaces_an_earlier_default_nobody_edited() {
         let dir = TempDir::new().unwrap();
         let file = dir.path().join("master.md");
-        fs::write(&file, PREVIOUS_DEFAULTS[0]).unwrap();
+        for previous in PREVIOUS_DEFAULTS {
+            fs::write(&file, previous).unwrap();
 
-        ensure_instructions(&file).unwrap();
+            ensure_instructions(&file).unwrap();
 
-        assert_eq!(fs::read_to_string(&file).unwrap(), DEFAULT_INSTRUCTIONS);
-        assert_ne!(PREVIOUS_DEFAULTS[0], DEFAULT_INSTRUCTIONS);
+            assert_eq!(fs::read_to_string(&file).unwrap(), DEFAULT_INSTRUCTIONS);
+            assert_ne!(previous, DEFAULT_INSTRUCTIONS);
+        }
     }
 
     #[test]

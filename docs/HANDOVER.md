@@ -111,6 +111,14 @@ Claude Code hooks (2.1.300, recorded):
   before any hook).
 - When the background agent finishes, the main agent resumes on its own and its next `Stop`
   follows.
+- A command hook with `"asyncRewake": true` runs in the background; when it exits 2, its stderr
+  wakes the session as a new turn, shown as "Stop hook feedback". Probed on 2.1.300: on `Stop`
+  it woke an idle session at its prompt and is armed again at each turn end; on `SessionStart`
+  it woke a fresh session that had no prompt yet. Its `timeout` (seconds) also bounds a
+  background hook. `flow wait` is built on this.
+- `claude/channel` MCP servers can push messages into a session, but 2.1.300 offers one only
+  from an approved allowlist or with a development flag, and Team/Enterprise accounts have them
+  off by default: not a base for flow.
 
 Claude Code mods (2.1.296 / 2.1.299):
 - A mod's `$.store` is shared live between simultaneous sessions (probe mod in two
@@ -208,6 +216,19 @@ The vision below is built as `flow ui`, see README and `.claude/plans/plan-flow-
   the built-in `master` agent with `master.md` appended to its system prompt.
 - `C-space Q` keeps or ends unfinished flows; ended flows keep branch and worktree until `flow clear`.
 - Later: see Future improvements.
+
+## The master and its workers talk (built 2026-10-15)
+
+See README "The master and its workers" and `.claude/plans/plan-flow-talk.md`. Decisions:
+- Messages are events in the flow's log (`message`), so the conversation is in `flow status`; the
+  master is the only sender, a worker asks by ending its turn with the question.
+- Delivery and waking use Claude Code's own hooks (`asyncRewake` `flow wait` on SessionStart and
+  Stop), not typing into the PTY: it never mixes into what you are typing, works without flow ui,
+  and the worker can tell the master's words from yours.
+- The flow's mode decides who answers: auto -> the master when the code, plan or earlier decisions
+  settle it; guided -> you, the master relays. `[master] wake = false` turns the master's off.
+- One waiter per session (`waits/<key>.pid`, last claim wins); the master's `waits/master.seen`
+  keeps what it was woken for, so nothing wakes it twice.
 
 ## Future improvements
 
