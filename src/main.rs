@@ -368,6 +368,7 @@ fn ui(store: &Store, stop: bool) -> Result<Document, Failure> {
         exe: exe.clone(),
         claude_home,
         home: env_path("HOME").filter(|home| !home.as_os_str().is_empty()),
+        store: store.root().to_path_buf(),
     };
     let message = ui::run(&socket, Theme::builtin(), env).map_err(Failure::from_io)?;
     Ok(Document::Text(message))

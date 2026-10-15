@@ -48,8 +48,10 @@ const TICKS_PER_PEEK: u32 = 10;
 pub struct UiEnv {
     pub claude_home: PathBuf,
     pub home: Option<PathBuf>,
-    /// This flow binary, for the flow commands the UI runs (start, remove).
+    /// This flow binary, for the flow commands the UI runs (start, remove, status --all).
     pub exe: PathBuf,
+    /// This project's store, as `flow status --all` names its root.
+    pub store: PathBuf,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
@@ -59,7 +61,9 @@ pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String> {
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     terminal.clear()?;
     let home = env.home.map(|home| home.display().to_string());
-    let mut app = App::new(outer.size()?).with_home(home);
+    let mut app = App::new(outer.size()?)
+        .with_home(home)
+        .with_store(env.store.display().to_string());
     let client = Client::connect(
         socket,
         Role::Attach {
@@ -111,7 +115,7 @@ pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String> {
                     if ticks.is_multiple_of(TICKS_PER_PEEK) {
                         redraw |= peek.refresh(app.peeked());
                     }
-                    vec![]
+                    app.overview_due()
                 }
             });
         }
@@ -142,6 +146,9 @@ fn run_job(exe: &Path, job: Job, events: Sender<Event>) {
     }
     thread::spawn(move || {
         let result = match command.output() {
+            Ok(output) if output.status.success() && job == Job::Overview => {
+                Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+            }
             Ok(output) => app::outcome(
                 output.status.success(),
                 &String::from_utf8_lossy(&output.stdout),

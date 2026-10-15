@@ -10,7 +10,7 @@ use crate::output::short_duration;
 use crate::proto::{PaneKey, PaneStatus};
 use crate::ui::sidebar::{self, Sidebar, clip, split, wrap};
 use crate::ui::theme::Theme;
-use crate::view::{Board, FlowView, State, StepStatus, Tone};
+use crate::view::{Board, FlowView, Project, Projects, State, StepStatus, Tone};
 
 /// Cards per row.
 const COLUMNS: usize = 3;
@@ -18,11 +18,15 @@ const COLUMNS: usize = 3;
 const BAR_WIDTH: usize = 27;
 /// A card's rows: its four lines inside a border.
 const CARD_ROWS: u16 = 6;
+/// Rows every project's cards leave for the selected flow's detail.
+const DETAIL_ROWS: u16 = 10;
 
-/// Which card the board's cursor is on: 0 is the master, n the nth worker.
+/// Which card the board's cursor is on: 0 is the master, n the nth worker; with `all`, the nth flow
+/// of every project's, counted from 0.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct BoardState {
     pub selected: usize,
+    pub all: bool,
 }
 
 impl BoardState {
@@ -34,6 +38,7 @@ impl BoardState {
         }
         BoardState {
             selected: next as usize,
+            ..self
         }
     }
 
@@ -58,6 +63,19 @@ pub struct BoardView<'a> {
     pub offset_secs: i64,
     /// Shown in place of the keys, such as why clearing a flow failed.
     pub notice: Option<&'a str>,
+    /// Every project's flows, this project first, once `flow status --all` answered.
+    pub projects: Option<&'a Projects>,
+    /// This project's store, to tell its flows from other projects'.
+    pub here: Option<&'a str>,
+}
+
+/// Every project's flows in board order, each with its project.
+pub fn every_flow(projects: &Projects) -> Vec<(&Project, &FlowView)> {
+    projects
+        .projects
+        .iter()
+        .flat_map(|project| project.board.flows.iter().map(move |flow| (project, flow)))
+        .collect()
 }
 
 impl BoardView<'_> {
@@ -70,6 +88,9 @@ impl BoardView<'_> {
     }
 
     fn header(&self, width: usize) -> Line<'static> {
+        if self.state.all {
+            return self.all_header(width);
+        }
         let theme = self.theme();
         let flows = sidebar::workers(self.board());
         let count = |states: &[State]| {
@@ -110,6 +131,66 @@ impl BoardView<'_> {
             right,
             width,
         )
+    }
+
+    fn all_header(&self, width: usize) -> Line<'static> {
+        let theme = self.theme();
+        let mut right = Vec::new();
+        if let Some(projects) = self.projects {
+            let flows = every_flow(projects);
+            let needs_you = flows.iter().filter(|(_, flow)| flow.needs_you()).count();
+            let count = projects.projects.len();
+            right.push(Span::styled(
+                format!(
+                    "{count} project{} · {} flow{}",
+                    plural(count),
+                    flows.len(),
+                    plural(flows.len())
+                ),
+                theme.ui.faint,
+            ));
+            if needs_you > 0 {
+                right.push(Span::styled(" · ", theme.ui.faint));
+                right.push(Span::styled(
+                    format!("{needs_you} need you"),
+                    theme.state.waiting,
+                ));
+            }
+        }
+        right.push(Span::raw(" "));
+        split(
+            vec![
+                Span::raw(" "),
+                Span::styled(theme.glyphs.mark, theme.ui.accent),
+                Span::styled(" flow", theme.ui.strong),
+                Span::styled(" board · every project", theme.ui.faint),
+            ],
+            right,
+            width,
+        )
+    }
+
+    /// A project's row above its cards: its name, how many flows and how many need you.
+    fn project_line(&self, project: &Project, width: usize) -> Line<'static> {
+        let theme = self.theme();
+        let flows = project.board.flows.len();
+        let mut left = vec![
+            Span::raw(" "),
+            Span::styled(project.name.clone(), theme.ui.strong),
+            Span::styled(format!("  {flows} flow{}", plural(flows)), theme.ui.faint),
+        ];
+        if project.board.needs_you > 0 {
+            left.push(Span::styled(" · ", theme.ui.faint));
+            left.push(Span::styled(
+                format!("{} need you", project.board.needs_you),
+                theme.state.waiting,
+            ));
+        }
+        let mut right = Vec::new();
+        if self.here == Some(project.root.as_str()) {
+            right.push(Span::styled("this project ", theme.ui.faint));
+        }
+        split(left, right, width)
     }
 
     fn master_card(&self) -> [Line<'static>; 4] {
@@ -269,7 +350,6 @@ impl BoardView<'_> {
     }
 
     fn render_cards(&self, area: Rect, buf: &mut Buffer) -> u16 {
-        let theme = self.theme();
         let flows = sidebar::workers(self.board());
         let gap = 2;
         let inner = area.width.saturating_sub(2);
@@ -289,34 +369,126 @@ impl BoardView<'_> {
                 CARD_ROWS,
             );
             let flow = index.checked_sub(1).map(|at| flows[at]);
-            let border = if index == self.state.selected {
-                theme.ui.accent
-            } else if flow
-                .is_some_and(|flow| matches!(flow.state, State::Blocked | State::NotResponding))
-            {
-                theme.state.blocked
-            } else {
-                theme.ui.rule
-            };
-            let block = Block::bordered()
-                .border_type(BorderType::Rounded)
-                .border_style(border);
-            let body = block.inner(rect);
-            block.render(rect, buf);
-            let width = body.width as usize;
-            let lines = match flow {
-                None => self.master_card(),
-                Some(flow) => self.flow_card(flow, index - 1, width),
-            };
-            for (offset, line) in lines.iter().enumerate() {
-                buf.set_line(body.x, body.y + offset as u16, line, body.width);
-            }
-            let pill = self.pill(flow);
-            let pill_x = (body.x + body.width).saturating_sub(pill.width() as u16 + 1);
-            buf.set_span(pill_x, body.y, &pill, pill.width() as u16);
+            self.render_card(flow, index, index == self.state.selected, rect, buf);
             bottom = y + CARD_ROWS;
         }
         bottom
+    }
+
+    /// One card: the master's when `flow` is None; `index` picks its digit (1-9 for a worker).
+    fn render_card(
+        &self,
+        flow: Option<&FlowView>,
+        index: usize,
+        selected: bool,
+        rect: Rect,
+        buf: &mut Buffer,
+    ) {
+        let theme = self.theme();
+        let border = if selected {
+            theme.ui.accent
+        } else if flow
+            .is_some_and(|flow| matches!(flow.state, State::Blocked | State::NotResponding))
+        {
+            theme.state.blocked
+        } else {
+            theme.ui.rule
+        };
+        let block = Block::bordered()
+            .border_type(BorderType::Rounded)
+            .border_style(border);
+        let body = block.inner(rect);
+        block.render(rect, buf);
+        let width = body.width as usize;
+        let lines = match flow {
+            None => self.master_card(),
+            Some(flow) => self.flow_card(flow, index.wrapping_sub(1), width),
+        };
+        for (offset, line) in lines.iter().enumerate() {
+            buf.set_line(body.x, body.y + offset as u16, line, body.width);
+        }
+        let pill = self.pill(flow);
+        let pill_x = (body.x + body.width).saturating_sub(pill.width() as u16 + 1);
+        buf.set_span(pill_x, body.y, &pill, pill.width() as u16);
+    }
+
+    /// Every project's row and cards, scrolled so the selected card shows; returns the last row used.
+    fn render_projects(&self, projects: &Projects, area: Rect, buf: &mut Buffer) -> u16 {
+        let theme = self.theme();
+        let width = area.width as usize;
+        if projects.projects.is_empty() {
+            let line = Line::styled(" no flows in any project", theme.ui.faint);
+            buf.set_line(area.x, area.y, &line, area.width);
+            return area.y + 1;
+        }
+        let gap = 2;
+        let inner = area.width.saturating_sub(2);
+        let card_width = inner.saturating_sub(gap * (COLUMNS as u16 - 1)) / COLUMNS as u16;
+
+        // Rows from the top of the first project: each project's line, then its rows of cards.
+        enum Item<'p> {
+            Project(&'p Project),
+            Card(&'p FlowView, usize, u16),
+        }
+        let mut items = Vec::new();
+        let mut y: u16 = 0;
+        let mut number = 0;
+        for project in &projects.projects {
+            if y > 0 {
+                y += 1;
+            }
+            items.push((y, Item::Project(project)));
+            y += 1;
+            for (at, flow) in project.board.flows.iter().enumerate() {
+                let row = (at / COLUMNS) as u16;
+                let column = (at % COLUMNS) as u16;
+                items.push((y + row * (CARD_ROWS + 1), Item::Card(flow, number, column)));
+                number += 1;
+            }
+            let rows = project.board.flows.len().div_ceil(COLUMNS) as u16;
+            y += rows * (CARD_ROWS + 1);
+        }
+        let total = y.saturating_sub(1);
+        let room = if area.height > DETAIL_ROWS + CARD_ROWS + 2 {
+            area.height - DETAIL_ROWS
+        } else {
+            area.height
+        }
+        .min(total);
+        let selected_bottom = items
+            .iter()
+            .find_map(|(top, item)| match item {
+                Item::Card(_, number, _) if *number == self.state.selected => Some(top + CARD_ROWS),
+                _ => None,
+            })
+            .unwrap_or(0);
+        let scroll = selected_bottom.saturating_sub(room);
+
+        for (top, item) in &items {
+            let height = match item {
+                Item::Project(_) => 1,
+                Item::Card(..) => CARD_ROWS,
+            };
+            if *top < scroll || top + height > scroll + room {
+                continue;
+            }
+            let y = area.y + top - scroll;
+            match item {
+                Item::Project(project) => {
+                    buf.set_line(area.x, y, &self.project_line(project, width), area.width);
+                }
+                Item::Card(flow, number, column) => {
+                    let rect = Rect::new(
+                        area.x + 1 + column * (card_width + gap),
+                        y,
+                        card_width,
+                        CARD_ROWS,
+                    );
+                    self.render_card(Some(flow), 0, *number == self.state.selected, rect, buf);
+                }
+            }
+        }
+        area.y + room
     }
 
     /// The selected flow's request, mode, branch and age, then its timeline beside its decisions and steps.
@@ -324,12 +496,23 @@ impl BoardView<'_> {
         let theme = self.theme();
         let flows = sidebar::workers(self.board());
         let width = area.width as usize;
-        let Some(flow) = self
-            .state
-            .selected
-            .checked_sub(1)
-            .and_then(|at| flows.get(at).copied())
-        else {
+        let selected = if self.state.all {
+            self.projects.and_then(|projects| {
+                every_flow(projects)
+                    .get(self.state.selected)
+                    .map(|(project, flow)| (project.name.clone(), *flow))
+            })
+        } else {
+            self.state
+                .selected
+                .checked_sub(1)
+                .and_then(|at| flows.get(at).copied())
+                .map(|flow| (self.state.selected.to_string(), flow))
+        };
+        let Some((label, flow)) = selected else {
+            if self.state.all {
+                return;
+            }
             let line = Line::from(vec![
                 Span::styled(" 0 master", theme.ui.strong),
                 Span::styled(
@@ -350,16 +533,13 @@ impl BoardView<'_> {
             long_duration(self.sidebar.now.saturating_sub(flow.started_at))
         ));
         let header = Line::from(vec![
-            Span::styled(
-                format!(" {} {}", self.state.selected, flow.name),
-                theme.ui.strong,
-            ),
+            Span::styled(format!(" {label} {}", flow.name), theme.ui.strong),
             Span::styled(
                 format!(
                     "  {}",
                     clip(
                         &facts.join(" · "),
-                        width.saturating_sub(flow.name.len() + 6)
+                        width.saturating_sub(label.len() + flow.name.len() + 5)
                     )
                 ),
                 theme.ui.faint,
@@ -490,6 +670,23 @@ impl BoardView<'_> {
         }
         let key = |text: &'static str| Span::styled(text, theme.ui.key);
         let hint = |text: String| Span::styled(text, theme.ui.faint);
+        if self.state.all {
+            return Line::from(vec![
+                Span::raw(" "),
+                key("h j k l"),
+                hint(" move   ".into()),
+                key("enter"),
+                hint(" jump in   ".into()),
+                key("n"),
+                hint(" new flow   ".into()),
+                key("x"),
+                hint(" clear finished flow   ".into()),
+                key("a"),
+                hint(" this project   ".into()),
+                key("esc"),
+                hint(format!(" back to {}", self.back)),
+            ]);
+        }
         Line::from(vec![
             Span::raw(" "),
             key("0-9"),
@@ -502,6 +699,8 @@ impl BoardView<'_> {
             hint(" new flow   ".into()),
             key("x"),
             hint(" clear finished flow   ".into()),
+            key("a"),
+            hint(" every project   ".into()),
             key("esc"),
             hint(format!(" back to {}", self.back)),
         ])
@@ -528,13 +727,25 @@ impl Widget for BoardView<'_> {
             area.width,
             footer_y.saturating_sub(area.y + 3),
         );
-        let bottom = self.render_cards(cards, buf);
+        let bottom = match (self.state.all, self.projects) {
+            (false, _) => self.render_cards(cards, buf),
+            (true, Some(projects)) => self.render_projects(projects, cards, buf),
+            (true, None) => {
+                let line = Line::styled(" reading every project…", theme.ui.faint);
+                buf.set_line(cards.x, cards.y, &line, cards.width);
+                return;
+            }
+        };
         let detail_y = bottom + 1;
         if detail_y + 3 < footer_y - 1 {
             let detail = Rect::new(area.x, detail_y, area.width, footer_y - 1 - detail_y);
             self.render_detail(detail, buf);
         }
     }
+}
+
+fn plural(count: usize) -> &'static str {
+    if count == 1 { "" } else { "s" }
 }
 
 fn gerund(phase: Phase) -> &'static str {
@@ -590,12 +801,20 @@ mod tests {
 
     #[test]
     fn moves_over_the_grid_but_not_off_it() {
-        let state = BoardState { selected: 1 };
+        let state = BoardState {
+            selected: 1,
+            all: false,
+        };
 
         assert_eq!(state.moved(1, 6).selected, 2);
         assert_eq!(state.moved(3, 6).selected, 4);
         assert_eq!(state.moved(-3, 6).selected, 1, "no row above");
-        assert_eq!(BoardState { selected: 5 }.moved(1, 6).selected, 5);
+        let last = BoardState {
+            selected: 5,
+            all: true,
+        };
+        assert_eq!(last.moved(1, 6), last);
+        assert!(last.moved(-1, 6).all, "moving keeps every project in view");
     }
 
     #[test]

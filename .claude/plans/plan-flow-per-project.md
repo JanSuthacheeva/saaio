@@ -108,10 +108,10 @@ pub struct BoardView<'a> { /* as now */ pub projects: Option<&'a Projects> }
 
 ## Tasks
 
-- [ ] Add registry.rs (Registry::locate, root, register, stores, project_name) with temp-dir tests
-- [ ] Add slots.rs (MAX_SLOTS 20, Claim, Slots::at, claim, release) with tests incl. two threads at once; launch::taken_slots
-- [ ] main: register every command's store; start claims before the worktree (held_slots, claim_is_live, release on failure); help text; cli test for two projects getting slots 1 and 2
-- [ ] view::Projects, output::status_all, `flow status --all` (TOON and --json) with tests
-- [ ] flow ui: Job::Overview, BoardState.all, key `a`, BoardView.projects, refresh every 2 s, read-only other projects; tests
+- [x] Add registry.rs (Registry::locate, root, register, stores, project_name) with temp-dir tests
+- [x] Add slots.rs (MAX_SLOTS 20, Claim, Slots::at, claim, release) with tests incl. two threads at once; launch::taken_slots
+- [x] main: register every command's store; start claims before the worktree (held_slots, claim_is_live, release on failure); help text; cli test for two projects getting slots 1 and 2
+- [x] view::Projects, output::status_all, `flow status --all` (TOON and --json) with tests
+- [x] flow ui: Job::Overview, BoardState.all, key `a`, BoardView.projects, refresh every 2 s, read-only other projects; tests
 - [ ] Docs: README, CLAUDE.md module map, HANDOVER
 - [ ] End-to-end check: two tmux project sessions (private socket), a flow started in each gets distinct slots; `flow status --all` and flow ui `a` show both projects
