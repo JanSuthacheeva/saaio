@@ -65,7 +65,11 @@ const WAIT_TIMEOUT_SECS: u64 = 604_800;
 pub fn settings(flow_exe: &Path) -> String;
 /// Only the waiter, args ["wait","--master"], on SessionStart and Stop.
 pub fn master_settings(flow_exe: &Path) -> String;
-// translate, Stop: [Answer { text }, turn_end(..)] when the message is not empty.
+// translate, Stop: [Answer { text }, turn_end(..)] when the message is not empty; every Stop counts,
+// also with stop_hook_active (a turn flow woke ends with it set, verified on 2.1.300).
+pub const WORKER_PROMPT: &str = "...";   // who the flow master is; Adapter::wiring appends it with
+                                        // --append-system-prompt (found in the E2E check: without it a
+                                        // worker rightly would not act on hook feedback)
 
 // src/config.rs
 pub struct Config { .., #[serde(default)] pub master: MasterConfig }
@@ -179,5 +183,5 @@ pub fn news_for_master(flows: &[&FlowView]) -> String; // changed[n]{name,state,
 - [x] main.rs: flow wait (loop, replace, settle, exit 2 on stderr), drop the dead_code allowances; tests/cli.rs process tests
 - [x] claude_code.rs: waiter hooks in settings, master_settings, Answer on Stop; Adapter::master_wiring; tests
 - [x] config.rs MasterConfig; master.rs spec(.., wake) wiring; server passes config.master.wake; tests
-- [ ] master.md v3 (master-v2.md kept as a previous default); README, CLAUDE.md, HANDOVER
+- [x] master.md v3 (master-v2.md kept as a previous default); README, CLAUDE.md, HANDOVER
 - [ ] End-to-end check: flow ui with an auto and a guided worker; each wakes the master; the master answers the auto one with flow send and relays for the guided one; a mid-turn send reaches a busy worker

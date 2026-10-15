@@ -22,6 +22,13 @@ const WAIT_TIMEOUT_SECS: u64 = 604_800;
 /// The events that arm a session's waiter: its start (the master starts without a prompt) and
 /// every turn end.
 const WAIT_EVENTS: [&str; 2] = ["SessionStart", "Stop"];
+/// What a worker is told about the master, appended to its system prompt: the master's messages
+/// arrive as hook feedback, which it would rightly not take as the user's words otherwise.
+pub const WORKER_PROMPT: &str = "You run as a worker of flow, in your own git worktree. The flow \
+master is the Claude session that coordinates the workers for the user. Its messages reach you as \
+hook feedback that starts with \"message from the flow master:\"; they answer what you asked or \
+pass on what the user said, so act on them as you would on the user's own answer. To ask the \
+master or the user something, end your turn with the question.";
 /// plan-progress's report tool, whose answers carry the plan's task counts.
 const PLAN_PROGRESS_TOOL: &str = "mcp__plan-progress__report";
 
@@ -146,7 +153,7 @@ pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
                 question: cut(&format!("permission: {}", tool_call(tool, input, cwd))),
             }]
         }
-        "Stop" if payload["stop_hook_active"] != Value::Bool(true) => {
+        "Stop" => {
             if let Some(task) = running_background_task(&payload["background_tasks"]) {
                 return vec![EventKind::Delegated {
                     description: cut(task),
@@ -503,6 +510,11 @@ mod tests {
             "{text}"
         );
         assert_eq!(question, "Let me know if you still want it.");
+        assert_eq!(
+            events("stop_woken").last(),
+            Some(&waiting("Shall I also quote every field?")),
+            "a turn flow woke ends like any other"
+        );
         assert_eq!(events("session_end_exit"), vec![EventKind::Ended]);
         assert_eq!(events("session_end_hangup"), vec![], "a hangup resumes");
     }
@@ -578,6 +590,14 @@ mod tests {
         }
         assert_eq!(settings["hooks"]["PreToolUse"][0]["matcher"], "*");
         assert_eq!(settings["hooks"]["Stop"][0].get("matcher"), None);
+    }
+
+    #[test]
+    fn tells_a_worker_who_the_flow_master_is() {
+        assert!(WORKER_PROMPT.contains("message from the flow master:"));
+        let wiring = Adapter::ClaudeCode.wiring(Path::new("/bin/flow"));
+        assert_eq!(wiring[0], "--settings");
+        assert_eq!(wiring[2..], ["--append-system-prompt", WORKER_PROMPT]);
     }
 
     #[test]

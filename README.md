@@ -193,6 +193,8 @@ its session, prints it and exits 2, and Claude Code wakes the session with it:
 
 - A worker is woken by the master's `flow send <name> "<text>"`, which adds a `master: <text>`
   line to the flow's timeline. A worker whose session is not running gets it when it runs again.
+  Its system prompt says who the flow master is, so it acts on the message instead of taking hook
+  feedback for an untrusted voice.
 - The master is woken when flows of its project become `waiting`, `blocked`, `idle`, `done` or
   `not-responding`; flows that stop within two seconds come as one list.
 

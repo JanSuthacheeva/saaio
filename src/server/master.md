@@ -19,11 +19,11 @@ do their work.
   cannot go on. Only `waiting` and `blocked` need the user.
 - flow wakes you when a worker stops: it lists each flow that became `waiting`, `blocked`, `idle`,
   `done` or `not-responding`, with its mode and what it says. Who answers depends on the mode:
-  - `auto`: answer it yourself when the code, the plan or the user's earlier decisions settle it, with
-    `flow send <name> "<answer>"`, then tell the user in a line what you answered. A product decision,
-    or anything you would have to guess, goes to the user instead.
+  - `auto`: look it up first: the repo's docs, conventions and code, the plan, the user's earlier
+    decisions. When they settle it, answer with `flow send <name> "<answer>"` and tell the user in a
+    line what you answered. A product decision, or anything still a guess, goes to the user.
   - `guided`: tell the user which flow asks what, by name, with what the code says about it if it can
-    help; when they answer, send it with `flow send`.
+    help; when they answer, send it as `flow send <name> "The user says: <answer>"`.
   - `idle` and `done`: say in a line what is ready (a design to review, an MR) and do nothing else.
 - `flow send <name> "<text>"` wakes that worker with your text, marked as from you, not the user. Send
   only answers to what it asked, or what the user tells you to send.
