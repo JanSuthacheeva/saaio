@@ -146,6 +146,20 @@ pub fn commits_only_on(repo: &Path, branch: &str) -> Result<Option<u32>> {
         .with_context(|| format!("git counted {count}"))
 }
 
+/// Whether the repo has a local branch of this name.
+pub fn branch_exists(repo: &Path, branch: &str) -> bool {
+    run(&[
+        "git".to_string(),
+        "-C".to_string(),
+        repo.display().to_string(),
+        "show-ref".to_string(),
+        "--verify".to_string(),
+        "--quiet".to_string(),
+        format!("refs/heads/{branch}"),
+    ])
+    .is_ok()
+}
+
 /// git branch -D <branch>: the flow's branch once its worktree is gone.
 pub fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
     run(&[
@@ -277,10 +291,14 @@ mod tests {
     #[test]
     fn creates_a_worktree_on_its_branch_and_keeps_it_out_of_git_status() {
         let (_dir, repo) = repo();
-        let workspace = workspace_for(&repo, "shop-217", 1, "claude");
+        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
 
         create_worktree(&repo, &workspace).unwrap();
-        create_worktree(&repo, &workspace_for(&repo, "shop-230", 2, "claude")).unwrap();
+        create_worktree(
+            &repo,
+            &workspace_for(&repo, "shop-230", "flow/shop-230".into(), 2, "claude"),
+        )
+        .unwrap();
 
         assert!(Path::new(&workspace.path).join(".git").exists());
         let status = Command::new("git")
@@ -298,7 +316,7 @@ mod tests {
     #[test]
     fn runs_a_hook_in_the_worktree_with_the_flow_environment() {
         let (_dir, repo) = repo();
-        let workspace = workspace_for(&repo, "shop-217", 3, "claude");
+        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 3, "claude");
         create_worktree(&repo, &workspace).unwrap();
         hook(
             &repo,
@@ -323,7 +341,7 @@ mod tests {
     #[test]
     fn a_failing_hook_reports_its_last_error_line() {
         let (_dir, repo) = repo();
-        let workspace = workspace_for(&repo, "shop-217", 1, "claude");
+        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
         create_worktree(&repo, &workspace).unwrap();
         hook(
             &repo,
@@ -341,7 +359,7 @@ mod tests {
         let (_dir, repo) = repo();
         let sub = repo.join("src/deep");
         fs::create_dir_all(&sub).unwrap();
-        let worker = workspace_for(&repo, "csv", 1, "claude");
+        let worker = workspace_for(&repo, "csv", "flow/csv".into(), 1, "claude");
         create_worktree(&repo, &worker).unwrap();
 
         assert_eq!(current_branch(&repo).as_deref(), Some("main"));
@@ -356,8 +374,8 @@ mod tests {
     #[test]
     fn removes_a_clean_worktree_and_keeps_one_with_uncommitted_work() {
         let (_dir, repo) = repo();
-        let clean = workspace_for(&repo, "clean", 1, "claude");
-        let dirty = workspace_for(&repo, "dirty", 2, "claude");
+        let clean = workspace_for(&repo, "clean", "flow/clean".into(), 1, "claude");
+        let dirty = workspace_for(&repo, "dirty", "flow/dirty".into(), 2, "claude");
         create_worktree(&repo, &clean).unwrap();
         create_worktree(&repo, &dirty).unwrap();
         fs::write(Path::new(&dirty.path).join("work.txt"), "unsaved").unwrap();

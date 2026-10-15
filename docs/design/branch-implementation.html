@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en" data-theme="nord" data-lavish-annotate="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branch names - implementation</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge) { overflow-wrap: anywhere; }
+  code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  pre { background: var(--color-base-200); border-radius: 6px; padding: .75rem; overflow-x: auto; font-size: .78rem; line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  .term { background: #141418; color: #c8c8d0; font: 12px/1.45 ui-monospace, Menlo, monospace; border-radius: 8px; padding: 12px; white-space: pre; overflow-x: auto; }
+  .term .f { color: #6c6c78 } .term .a { color: #e07a52 } .term .k { color: #f0f0f4; font-weight: 700 }
+  td, th { padding: .3rem .5rem; vertical-align: top; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-10">
+
+<header class="space-y-2">
+  <p class="text-sm opacity-60">design-code / phase 3 - review the implementation</p>
+  <h1 class="text-3xl font-bold">Branch names that follow a project's convention</h1>
+  <p class="opacity-80">Decided: a repo names its branch template once; flow names the branch right at <code>flow start</code> (no rename later), with a <code>{type}</code> picked per flow in <code>flow start --type</code> and in the new-flow dialog.</p>
+</header>
+
+<section class="space-y-3">
+  <h2 class="text-xl font-bold">1. What a project commits</h2>
+<pre><code># &lt;repo&gt;/.flow/config.toml (beside .flow/setup and .flow/teardown)
+[branch]
+name  = "{type}/{ticket}-{slug}"            # {type} {ticket} {slug} {name}
+types = ["feature", "bugfix", "hotfix", "chore"]   # the first is the default</code></pre>
+  <table class="text-sm">
+    <thead><tr><th class="text-left">request</th><th class="text-left">type</th><th class="text-left">branch</th></tr></thead>
+    <tbody>
+      <tr><td><code>SHOP-217 add CSV export</code></td><td>feature</td><td><code>feature/SHOP-217-add-csv-export</code></td></tr>
+      <tr><td><code>SHOP-230 fix totals on refunds</code></td><td>bugfix</td><td><code>bugfix/SHOP-230-fix-totals-on-refunds</code></td></tr>
+      <tr><td><code>rate-limit the export endpoint</code></td><td>feature</td><td><code>feature/rate-limit-the-export-endpoint</code> (no ticket: the separator next to it goes too)</td></tr>
+      <tr><td>no <code>.flow/config.toml</code></td><td>-</td><td><code>flow/shop-217</code>, as today</td></tr>
+    </tbody>
+  </table>
+  <p class="text-sm opacity-80">The worktree folder stays <code>.flow/worktrees/&lt;flow name&gt;</code>; only the branch changes. A branch that already exists gets <code>-2</code>, <code>-3</code> like flow names do.</p>
+</section>
+
+<section class="space-y-3">
+  <h2 class="text-xl font-bold">2. Where you pick the type</h2>
+  <div class="term"><span class="k"> new flow</span><span class="f">                                                in ~/projects/shop</span>
+
+<span class="f"> request</span>
+ ╭──────────────────────────────────────────────────────────────────╮
+ │ SHOP-230 fix totals on refunds                                   │
+ ╰──────────────────────────────────────────────────────────────────╯
+<span class="k"> type</span>    <span class="f">( )</span> feature   <span class="a">(•)</span> bugfix   <span class="f">( )</span> hotfix   <span class="f">( )</span> chore
+<span class="f"> mode</span>    <span class="a">(•)</span> auto     <span class="f">( )</span> guided       <span class="f">guided stops at every phase</span>
+<span class="f"> creates</span> bugfix/SHOP-230-fix-totals-on-refunds  <span class="f">·</span>  slot 2
+<span class="f">─────────────────────────────────────────────────────────────────────</span>
+<span class="k"> enter</span><span class="f"> start   </span><span class="k">tab</span><span class="f"> next field   </span><span class="k">esc</span><span class="f"> cancel</span></div>
+  <p class="text-sm opacity-80">The type row only shows in a repo with types. <code>flow start "..." --type bugfix</code> does the same from the CLI (the master uses it); a type the repo does not list fails with the list.</p>
+</section>
+
+<section class="space-y-3">
+  <h2 class="text-xl font-bold">3. Units</h2>
+<pre><code>// src/branching.rs (new): a repo's branch convention
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Branching { pub name: String, #[serde(default)] pub types: Vec&lt;String&gt; }
+impl Branching {
+    /// &lt;repo&gt;/.flow/config.toml's [branch]; None without the file or the section.
+    pub fn load(repo: &amp;Path) -> Result&lt;Option&lt;Branching&gt;&gt;;
+    /// The type a flow gets: `asked` when the repo lists it (an error naming the list when not),
+    /// else the first listed; None when the repo has no types.
+    pub fn pick_type(&amp;self, asked: Option&lt;&amp;str&gt;) -> Result&lt;Option&lt;String&gt;&gt;;
+}
+/// The branch for a flow: the template filled, empty placeholders' separators dropped;
+/// flow/&lt;name&gt; without a convention.
+pub fn branch_name(branching: Option&lt;&amp;Branching&gt;, kind: Option&lt;&amp;str&gt;, request: &amp;str, name: &amp;str) -> String;
+
+// src/launch.rs
+pub fn ticket(request: &amp;str) -> Option&lt;&amp;str&gt;;        // SHOP-217 as written (ticket_key lowercases it for names)
+pub fn slug(request: &amp;str) -> String;                // up to 5 words after the ticket, lowercase, -joined
+pub fn workspace_for(repo, name, branch: String, slot, agent) -> Workspace;   // takes the branch now
+
+// src/workspace.rs
+pub fn branch_exists(repo: &amp;Path, branch: &amp;str) -> bool;
+
+// src/main.rs
+Start { .., /// Branch type from the repo's .flow/config.toml [[default: its first]]
+        #[arg(long = "type")] kind: Option&lt;String&gt; }
+// start: Branching::load(repo) -> pick_type(--type) -> branch_name -> -2, -3 while branch_exists -> workspace_for
+
+// src/ui: NewFlowForm gains `branching: Option&lt;Branching&gt;` and `kind: usize` (a Type field between
+// Request and Mode); Effect::LoadBranching(repo) when the dialog opens, answered by App::on_branching;
+// Job::Start passes --type; the preview shows branch_name(..).</code></pre>
+</section>
+
+<section class="space-y-2">
+  <h2 class="text-xl font-bold">4. Call chains</h2>
+  <ol class="list-decimal pl-6 text-sm space-y-1">
+    <li><code>flow start "SHOP-230 fix totals" --type bugfix -> main::start -> Branching::load(repo): Some -> pick_type(Some("bugfix")): Some("bugfix") -> branching::branch_name(..): "bugfix/SHOP-230-fix-totals" -> workspace::branch_exists? -> launch::workspace_for(repo, name, branch, slot, agent) -> create_worktree</code></li>
+    <li>Errors: a broken config.toml or an unknown type fail before anything is created (exit 1, help lists the types); <code>--type</code> in a repo without types fails the same way.</li>
+    <li>Dialog: <code>n -> App opens NewFlowForm -> Effect::LoadBranching(repo) -> ui::run reads it -> App::on_branching(Ok(Some(b))) -> type row + preview; Enter -> Job::Start(form) -> flow start ... --type &lt;picked&gt;</code>. A broken file shows its error under the request, like a failed start.</li>
+  </ol>
+</section>
+
+<section class="space-y-2">
+  <h2 class="text-xl font-bold">5. Assumptions</h2>
+  <ol class="list-decimal pl-5 text-sm space-y-1">
+    <li><code>{ticket}</code> keeps the key as written (<code>SHOP-230</code>); <code>{slug}</code> is up to 5 words after it, lowercased.</li>
+    <li>An empty placeholder drops the <code>-</code>/<code>_</code> next to it, so no <code>feature/-x</code>.</li>
+    <li>The first listed type is the default; the dialog starts on it.</li>
+    <li>Only the branch follows the convention; flow names and worktree folders stay as they are.</li>
+    <li>A taken branch gets <code>-2</code>, <code>-3</code>, checked against local branches.</li>
+    <li>Unknown keys in <code>[branch]</code> are an error, so a typo shows.</li>
+  </ol>
+</section>
+
+<section class="space-y-2">
+  <h2 class="text-xl font-bold">6. Tests</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li><code>branching</code>: load (none, section, broken, unknown key), pick_type, branch_name for the table above.</li>
+    <li><code>launch</code>: ticket and slug.</li>
+    <li><code>tests/cli.rs</code>: a repo with the file gets <code>bugfix/SHOP-1-...</code> with <code>--type bugfix</code>, the default without; an unknown type fails and creates nothing; a taken branch gets -2.</li>
+    <li><code>newflow</code>: the type row only with types, tab order, the preview, Job::Start args.</li>
+  </ul>
+</section>
+
+</main>
+</body>
+</html>

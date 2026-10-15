@@ -59,11 +59,11 @@ pub fn free_slot(flows: &[FlowView]) -> Option<u8> {
     (1..=MAX_SLOTS).find(|slot| !held.contains(slot))
 }
 
-/// <repo>/.flow/worktrees/<name> and branch flow/<name>.
-pub fn workspace_for(repo: &Path, name: &str, slot: u8, agent: &str) -> Workspace {
+/// <repo>/.flow/worktrees/<name> on `branch`.
+pub fn workspace_for(repo: &Path, name: &str, branch: String, slot: u8, agent: &str) -> Workspace {
     Workspace {
         path: repo.join(WORKTREES_DIR).join(name).display().to_string(),
-        branch: format!("flow/{name}"),
+        branch,
         slot,
         window: None,
         agent: agent.to_string(),
@@ -208,26 +208,44 @@ fn fill(template: &str, id: &str, name: &str, request: &str, prompt: &str) -> St
         .replace("{id}", id)
 }
 
-/// A ticket key like SHOP-217 at the start of the request, lowercased.
-fn ticket_key(request: &str) -> Option<String> {
+/// A ticket key like SHOP-217 at the start of the request, as written.
+pub fn ticket(request: &str) -> Option<&str> {
     let first = request.split_whitespace().next()?;
     let (letters, digits) = first.split_once('-')?;
     let is_key = !letters.is_empty()
         && letters.chars().all(|c| c.is_ascii_uppercase())
         && !digits.is_empty()
         && digits.chars().all(|c| c.is_ascii_digit());
-    is_key.then(|| first.to_ascii_lowercase())
+    is_key.then_some(first)
+}
+
+/// Up to five lowercase words of the request after its ticket key, joined by dashes; empty when none.
+pub fn slug(request: &str) -> String {
+    let rest = match ticket(request) {
+        Some(key) => request.trim_start()[key.len()..].to_string(),
+        None => request.to_string(),
+    };
+    words(&rest, 5).join("-")
+}
+
+/// The request's ticket key lowercased, for a flow's name.
+fn ticket_key(request: &str) -> Option<String> {
+    ticket(request).map(str::to_ascii_lowercase)
+}
+
+/// Lowercase words of letters and digits, at most `max_words`.
+fn words(text: &str, max_words: usize) -> Vec<String> {
+    text.split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .take(max_words)
+        .map(str::to_ascii_lowercase)
+        .collect()
 }
 
 /// Lowercase words of letters and digits, at most `max_words`, joined by single dashes;
 /// any other character separates words. "flow" when nothing is left.
 fn slugify(text: &str, max_words: usize) -> String {
-    let words: Vec<String> = text
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|word| !word.is_empty())
-        .take(max_words)
-        .map(str::to_ascii_lowercase)
-        .collect();
+    let words = words(text, max_words);
     if words.is_empty() {
         "flow".to_string()
     } else {
@@ -271,7 +289,13 @@ mod tests {
     }
 
     fn shop() -> Workspace {
-        workspace_for(Path::new("/repo"), "shop-217", 2, "claude")
+        workspace_for(
+            Path::new("/repo"),
+            "shop-217",
+            "flow/shop-217".into(),
+            2,
+            "claude",
+        )
     }
 
     #[test]
@@ -314,6 +338,22 @@ mod tests {
             "shop-217-3"
         );
         assert_eq!(flow_name(None, "!!!", &[]), "flow");
+    }
+
+    #[test]
+    fn reads_the_ticket_as_written_and_the_words_after_it() {
+        assert_eq!(ticket("SHOP-230 fix totals"), Some("SHOP-230"));
+        assert_eq!(ticket("fix SHOP-230"), None);
+        assert_eq!(ticket("shop-230 fix"), None);
+        assert_eq!(
+            slug("SHOP-230 Fix totals, on refunds!"),
+            "fix-totals-on-refunds"
+        );
+        assert_eq!(
+            slug("rate-limit the export endpoint now please"),
+            "rate-limit-the-export-endpoint"
+        );
+        assert_eq!(slug("SHOP-230"), "");
     }
 
     #[test]
