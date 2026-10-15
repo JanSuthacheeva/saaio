@@ -36,7 +36,8 @@ pub struct FlowView { .., pub answer: Option<String> }   // additive, VIEW_VERSI
 // An Idle with a new note sets changed_at (a woken turn may end idle again without working first).
 
 // src/wake.rs (new, pure)
-pub type Seen = BTreeMap<String, u64>;   // flow id -> changed_at the master was woken for
+pub type Seen = BTreeMap<String, Mark>;  // flow id -> how the master last saw it
+pub struct Mark { pub state: State, pub changed_at: u64 }  // a flow gone silent is news again
 pub fn undelivered(events: &[Event], delivered: usize) -> Vec<&str>;
 pub fn changed_flows<'a>(flows: &'a [FlowView], seen: &Seen) -> Vec<&'a FlowView>;  // oldest change first
 pub fn mark_seen(seen: &mut Seen, flows: &[&FlowView]);
@@ -168,7 +169,7 @@ pub fn news_for_master(flows: &[&FlowView]) -> String; // changed[n]{name,state,
 ## Tasks
 
 - [x] event.rs Message and Answer; fold.rs/view.rs: timeline entry, FlowView.answer, changes(); tests
-- [ ] wake.rs: Seen, undelivered, changed_flows, mark_seen, first_seen with unit tests
+- [x] wake.rs: Seen, undelivered, changed_flows, mark_seen, first_seen with unit tests
 - [ ] store.rs: Waiter, claim_waiter/waiter, delivered/set_delivered, seen/set_seen, remove cleans waits/; tests
 - [ ] output.rs: sent, news_for_worker, news_for_master, answer in status_detail; tests
 - [ ] main.rs: flow send with its refusals; tests/cli.rs cases

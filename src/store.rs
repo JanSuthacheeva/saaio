@@ -7,6 +7,11 @@ use anyhow::{Context, Result, bail};
 use uuid::Uuid;
 
 use crate::event::Event;
+use crate::wake::Seen;
+
+/// What the waiters keep: each session's waiter pid, deliveries, the master's seen marks.
+const WAITS_DIR: &str = "waits";
+const SEEN_FILE: &str = "master.seen";
 
 /// One flow's events and its last heartbeat, as read from disk.
 #[derive(Debug, Clone, PartialEq)]
@@ -21,6 +26,22 @@ pub struct FlowLog {
 pub struct Stamp {
     pub modified: SystemTime,
     pub len: u64,
+}
+
+/// Whose wait: the master's or a flow's worker's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Waiter {
+    Master,
+    Flow(String),
+}
+
+impl Waiter {
+    fn key(&self) -> &str {
+        match self {
+            Waiter::Master => "master",
+            Waiter::Flow(id) => id,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -188,19 +209,78 @@ impl Store {
         Ok(Some(since_epoch.as_millis() as u64))
     }
 
-    /// Deletes the log and the heartbeat file.
+    /// Makes `pid` the session's one waiter; an older waiter sees it was replaced.
+    pub fn claim_waiter(&self, waiter: &Waiter, pid: u32) -> Result<()> {
+        self.write_wait(&format!("{}.pid", waiter.key()), &pid.to_string())
+    }
+
+    /// The pid of the session's current waiter.
+    pub fn waiter(&self, waiter: &Waiter) -> Option<u32> {
+        self.read_wait(&format!("{}.pid", waiter.key()))?
+            .trim()
+            .parse()
+            .ok()
+    }
+
+    /// How many of the master's messages the flow's worker was given.
+    pub fn delivered(&self, id: &str) -> usize {
+        self.read_wait(&format!("{id}.delivered"))
+            .and_then(|text| text.trim().parse().ok())
+            .unwrap_or(0)
+    }
+
+    pub fn set_delivered(&self, id: &str, count: usize) -> Result<()> {
+        self.write_wait(&format!("{id}.delivered"), &count.to_string())
+    }
+
+    /// What the master was last woken for; None before its first wake.
+    pub fn seen(&self) -> Option<Seen> {
+        serde_json::from_str(&self.read_wait(SEEN_FILE)?).ok()
+    }
+
+    pub fn set_seen(&self, seen: &Seen) -> Result<()> {
+        let text = serde_json::to_string(seen).expect("seen marks serialise");
+        self.write_wait(SEEN_FILE, &text)
+    }
+
+    /// Deletes the log, the heartbeat file and what its waiter kept.
     pub fn remove(&self, id: &str) -> Result<()> {
         match fs::remove_file(self.log(id)) {
             Ok(()) => {}
             Err(error) if error.kind() == ErrorKind::NotFound => bail!("no flow {id}"),
             Err(error) => return Err(error).with_context(|| format!("could not remove flow {id}")),
         }
-        match fs::remove_file(self.alive(id)) {
-            Err(error) if error.kind() != ErrorKind::NotFound => {
-                Err(error).with_context(|| format!("could not remove heartbeat of {id}"))
+        let waits = self.root.join(WAITS_DIR);
+        for file in [
+            self.alive(id),
+            waits.join(format!("{id}.pid")),
+            waits.join(format!("{id}.delivered")),
+        ] {
+            match fs::remove_file(&file) {
+                Err(error) if error.kind() != ErrorKind::NotFound => {
+                    return Err(error)
+                        .with_context(|| format!("could not remove {}", file.display()));
+                }
+                _ => {}
             }
-            _ => Ok(()),
         }
+        Ok(())
+    }
+
+    fn read_wait(&self, name: &str) -> Option<String> {
+        fs::read_to_string(self.root.join(WAITS_DIR).join(name)).ok()
+    }
+
+    /// Written beside and renamed over, so a reader never sees half a file.
+    fn write_wait(&self, name: &str, text: &str) -> Result<()> {
+        let waits = self.root.join(WAITS_DIR);
+        fs::create_dir_all(&waits)
+            .with_context(|| format!("could not create {}", waits.display()))?;
+        let file = waits.join(name);
+        let partial = waits.join(format!(".{name}.{}", std::process::id()));
+        fs::write(&partial, text)
+            .and_then(|()| fs::rename(&partial, &file))
+            .with_context(|| format!("could not write {}", file.display()))
     }
 
     fn log(&self, id: &str) -> PathBuf {
@@ -220,6 +300,8 @@ mod tests {
 
     use super::*;
     use crate::event::{EventKind, Mode};
+    use crate::view::State;
+    use crate::wake::Mark;
 
     fn started() -> Event {
         Event::new(
@@ -398,5 +480,55 @@ mod tests {
         let store = Store::at(dir.path().join("missing"));
 
         assert_eq!(store.ids().unwrap(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn the_last_waiter_to_claim_a_session_is_its_waiter() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let worker = Waiter::Flow("7f3c".into());
+
+        assert_eq!(store.waiter(&worker), None);
+        store.claim_waiter(&worker, 41).unwrap();
+        store.claim_waiter(&Waiter::Master, 7).unwrap();
+        store.claim_waiter(&worker, 42).unwrap();
+
+        assert_eq!(store.waiter(&worker), Some(42));
+        assert_eq!(store.waiter(&Waiter::Master), Some(7));
+    }
+
+    #[test]
+    fn remembers_what_was_delivered_and_what_the_master_saw() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+
+        assert_eq!(store.delivered("7f3c"), 0);
+        store.set_delivered("7f3c", 3).unwrap();
+        assert_eq!(store.delivered("7f3c"), 3);
+
+        assert_eq!(store.seen(), None);
+        let seen = Seen::from([(
+            "7f3c".to_string(),
+            Mark {
+                state: State::Waiting,
+                changed_at: 5,
+            },
+        )]);
+        store.set_seen(&seen).unwrap();
+        assert_eq!(store.seen(), Some(seen));
+    }
+
+    #[test]
+    fn removing_a_flow_forgets_its_waiter_and_deliveries() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let id = store.create(&started()).unwrap();
+        store.claim_waiter(&Waiter::Flow(id.clone()), 9).unwrap();
+        store.set_delivered(&id, 2).unwrap();
+
+        store.remove(&id).unwrap();
+
+        assert_eq!(store.waiter(&Waiter::Flow(id.clone())), None);
+        assert_eq!(store.delivered(&id), 0);
     }
 }

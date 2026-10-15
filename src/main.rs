@@ -10,6 +10,7 @@ mod proto;
 mod registry;
 mod server;
 mod slots;
+#[allow(dead_code)] // until flow wait uses the waiter files
 mod store;
 mod ui;
 mod view;
