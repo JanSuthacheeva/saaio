@@ -72,7 +72,7 @@ pub fn views(logs: Vec<FlowLog>, now: u64) -> Vec<FlowView> {
         .collect()
 }
 
-/// Sorted: needs you, running, finished; newest change first within each group.
+/// Sorted: needs you, ready (idle), running, finished; newest change first within each group.
 pub fn board(mut flows: Vec<FlowView>, now: u64) -> Board {
     flows.sort_by_key(|flow| (group(flow), std::cmp::Reverse(flow.changed_at)));
     Board {
@@ -102,10 +102,12 @@ pub fn resolve<'a>(flows: &'a [FlowView], name_or_id: &str) -> Option<&'a FlowVi
 fn group(flow: &FlowView) -> u8 {
     if flow.needs_you() {
         0
-    } else if flow.is_finished() {
-        2
-    } else {
+    } else if flow.state == State::Idle {
         1
+    } else if flow.is_finished() {
+        3
+    } else {
+        2
     }
 }
 
@@ -918,9 +920,10 @@ mod tests {
     }
 
     #[test]
-    fn the_board_puts_flows_needing_you_first_then_running_then_finished() {
+    fn the_board_puts_flows_needing_you_first_then_ready_then_running_then_finished() {
         let board = board(
             vec![
+                flow_in("idle", State::Idle, 1),
                 flow_in("done-old", State::Done, 1),
                 flow_in("working-old", State::Working, 2),
                 flow_in("blocked", State::Blocked, 3),
@@ -940,6 +943,7 @@ mod tests {
                 "silent",
                 "blocked",
                 "waiting",
+                "idle",
                 "working-new",
                 "working-old",
                 "ended",
@@ -949,7 +953,7 @@ mod tests {
         );
         assert_eq!(board.version, VIEW_VERSION);
         assert_eq!(board.now, 100);
-        assert_eq!(board.count, 8);
+        assert_eq!(board.count, 9);
         assert_eq!(board.needs_you, 3);
     }
 

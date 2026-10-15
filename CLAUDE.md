@@ -12,6 +12,7 @@ flow is an AXI (https://axi.md): a CLI whose main user is an agent. It records e
 cargo build                    # debug build
 cargo run -- <args>            # run, e.g. cargo run -- status
 cargo test                     # unit and integration tests
+FLOW_UPDATE_GOLDEN=1 cargo test  # rewrite src/ui/golden after a change to the look that is meant
 cargo clippy -- -D warnings    # lint
 cargo fmt                      # format
 cargo install --path .         # install the flow binary

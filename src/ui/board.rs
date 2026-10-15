@@ -1,6 +1,6 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Widget};
 
@@ -110,7 +110,7 @@ impl BoardView<'_> {
                 theme.state.waiting,
             ),
             (count(&[State::Working]), "running", theme.ui.faint),
-            (count(&[State::Idle]), "idle", theme.ui.faint),
+            (count(&[State::Idle]), "ready", theme.ui.faint),
             (count(&[State::Delegated]), "delegated", theme.ui.faint),
             (count(&[State::Done]), "done", theme.ui.faint),
             (count(&[State::Ended]), "ended", theme.ui.faint),
@@ -301,33 +301,28 @@ impl BoardView<'_> {
     }
 
     /// The label at a card's top right: a solid pill when the flow needs you, a soft one otherwise.
+    /// The card's state in words, in its color: no fill, as Claude Code says a state in colored text.
     fn pill(&self, flow: Option<&FlowView>) -> Span<'static> {
         let theme = self.theme();
-        let soft = |style: Style| style.bg(theme.ui.selection.bg.unwrap_or(Color::Reset));
-        let solid = |style: Style| {
-            Style::default()
-                .fg(theme.on_solid())
-                .bg(style.fg.unwrap_or(Color::Reset))
-        };
         let Some(flow) = flow else {
-            return Span::styled(" you ", soft(theme.ui.accent));
+            return Span::styled("you", theme.ui.accent);
         };
-        let tone = theme.state(flow.state);
-        let (text, style) = match flow.state {
-            State::Blocked => ("blocked".to_string(), solid(tone)),
-            State::NotResponding => ("not responding".to_string(), solid(tone)),
-            State::Waiting => ("waiting for you".to_string(), solid(tone)),
-            State::Working => ("working".to_string(), soft(tone)),
-            State::Idle => ("idle".to_string(), soft(tone)),
-            State::Delegated => (
-                format!("{} · agent", flow.phase.map_or("working", gerund)),
-                soft(tone),
-            ),
-            State::Done if flow.merge_request.is_some() => ("MR open".to_string(), soft(tone)),
-            State::Done => ("done".to_string(), soft(tone)),
-            State::Ended => ("ended".to_string(), soft(tone)),
+        let text = match flow.state {
+            State::Blocked => "blocked".to_string(),
+            State::NotResponding => "not responding".to_string(),
+            State::Waiting => "waiting for you".to_string(),
+            State::Working => "working".to_string(),
+            State::Idle => "ready".to_string(),
+            State::Delegated => format!("{} · agent", flow.phase.map_or("working", gerund)),
+            State::Done if flow.merge_request.is_some() => "MR open".to_string(),
+            State::Done => "done".to_string(),
+            State::Ended => "ended".to_string(),
         };
-        Span::styled(format!(" {text} "), style)
+        let style = match flow.state {
+            State::Idle => theme.ui.muted,
+            state => theme.state(state),
+        };
+        Span::styled(text, style)
     }
 
     fn status(&self, key: &PaneKey) -> Option<&PaneStatus> {
@@ -374,20 +369,14 @@ impl BoardView<'_> {
         buf: &mut Buffer,
     ) {
         let theme = self.theme();
-        let border = if selected {
-            theme.ui.accent
-        } else if flow
-            .is_some_and(|flow| matches!(flow.state, State::Blocked | State::NotResponding))
-        {
-            theme.state.blocked
-        } else {
-            theme.ui.rule
-        };
+        // Only the selected card is outlined; the glyph and the state's words say the rest.
         let block = Block::bordered()
             .border_type(BorderType::Rounded)
-            .border_style(border);
+            .border_style(theme.ui.accent);
         let body = block.inner(rect);
-        block.render(rect, buf);
+        if selected {
+            block.render(rect, buf);
+        }
         let width = body.width as usize;
         let lines = match flow {
             None => self.master_card(width),
@@ -586,12 +575,23 @@ impl BoardView<'_> {
         );
 
         let sidebar = &self.sidebar;
+        // Names padded to the longest, so what each flow asks starts in one column.
+        let name_width = flows
+            .iter()
+            .filter(|flow| flow.needs_you() || flow.state == State::Idle)
+            .map(|flow| flow.name.chars().count())
+            .max()
+            .unwrap_or(0);
         let entry = |flow: &FlowView, text: String, style: Style| {
-            let lead = format!("  {} {}  ", sidebar.glyph(flow.state), flow.name);
+            let lead = format!(
+                "  {} {:name_width$}  ",
+                sidebar.glyph(flow.state),
+                flow.name
+            );
             Line::from(vec![
                 Span::styled("  ", theme.ui.text),
                 Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
-                Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
+                Span::styled(format!(" {:name_width$}  ", flow.name), theme.ui.strong),
                 Span::styled(
                     clip(&text, width.saturating_sub(lead.chars().count() + 1)),
                     style,

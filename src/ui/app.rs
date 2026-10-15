@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use ratatui::Frame as TuiFrame;
@@ -22,6 +23,8 @@ use crate::ui::sidebar::{self, Sidebar, clip, clip_place};
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Projects, State};
 
+/// How long a flow's row stands out after its state changed.
+const CHANGE_SHOWN_MS: u64 = 3_000;
 /// Ticks between redraws that only refresh how long ago things changed.
 const TICKS_PER_AGE: u32 = 10;
 /// How often the board asks `flow status --all` again while every project is in view.
@@ -157,6 +160,8 @@ pub struct App {
     size: Size,
     screen: Screen,
     board: Option<Board>,
+    /// When each flow's state last changed while this UI watched, by id: its row stands out a moment.
+    changed: HashMap<String, u64>,
     panes: Vec<PaneInfo>,
     focus: PaneKey,
     /// The flow whose peek the sidebar shows.
@@ -191,6 +196,7 @@ impl App {
             size,
             screen: Screen::default(),
             board: None,
+            changed: HashMap::new(),
             panes: Vec::new(),
             focus: PaneKey::Master,
             cursor: None,
@@ -262,7 +268,11 @@ impl App {
         if spinning {
             self.spin = self.spin.wrapping_add(1);
         }
-        spinning || self.ticks.is_multiple_of(TICKS_PER_AGE)
+        let shown = self.changed.len();
+        self.changed
+            .retain(|_, at| now.saturating_sub(*at) < CHANGE_SHOWN_MS);
+        let fading = !self.changed.is_empty() || self.changed.len() != shown;
+        spinning || fading || self.ticks.is_multiple_of(TICKS_PER_AGE)
     }
 
     /// Job::Overview when every project is in view and the last answer is older than 2 s.
@@ -300,6 +310,14 @@ impl App {
             ServerMsg::Board(board) => {
                 let before = self.areas().pane;
                 self.now = self.now.max(board.now);
+                if let Some(old) = &self.board {
+                    for flow in &board.flows {
+                        let was = old.flows.iter().find(|other| other.id == flow.id);
+                        if was.is_some_and(|was| was.state != flow.state) {
+                            self.changed.insert(flow.id.clone(), self.now);
+                        }
+                    }
+                }
                 self.board = Some(board);
                 let mut effects = Vec::new();
                 let after = self.areas();
@@ -391,7 +409,16 @@ impl App {
             return;
         }
         let areas = self.areas();
-        frame.render_widget(self.border(theme, areas.frame.width), areas.frame);
+        self.draw_title(frame, areas.title, theme);
+        if let Some(rule) = areas.rule {
+            let mut line =
+                vec![Line::styled(theme.glyphs.rule_v, theme.ui.rule); rule.height as usize];
+            // The sidebar's and the rail's header rule meets the line in its second row.
+            if let Some(joint) = line.get_mut(1) {
+                *joint = Line::styled(theme.glyphs.rule_joint, theme.ui.rule);
+            }
+            frame.render_widget(Paragraph::new(line), rule);
+        }
         frame.render_widget(
             ScreenView {
                 screen: &self.screen,
@@ -461,18 +488,13 @@ impl App {
                     Span::styled(" live ", theme.ui.faint),
                 ]);
                 let edge = Rect::new(
-                    areas.frame.x,
-                    areas.frame.y + areas.frame.height.saturating_sub(1),
-                    areas.frame.width,
+                    areas.pane.x,
+                    areas.pane.y + areas.pane.height.saturating_sub(1),
+                    areas.pane.width,
                     1,
                 );
-                frame.render_widget(
-                    Paragraph::new(hint).alignment(Alignment::Right),
-                    Rect {
-                        width: edge.width.saturating_sub(2),
-                        ..edge
-                    },
-                );
+                frame.render_widget(Clear, edge);
+                frame.render_widget(Paragraph::new(hint).alignment(Alignment::Right), edge);
             }
             View::NewFlow(ref form) => {
                 let flows: Vec<FlowView> = self.workers().into_iter().cloned().collect();
@@ -486,9 +508,9 @@ impl App {
                         place: &self.tilde(&repo),
                         theme,
                     },
-                    areas.frame,
+                    areas.session(),
                 );
-                if let Some(cursor) = form.cursor(areas.frame) {
+                if let Some(cursor) = form.cursor(areas.session()) {
                     frame.set_cursor_position(cursor);
                 }
             }
@@ -1034,12 +1056,12 @@ impl App {
             master: self.master.as_deref(),
             now: self.now,
             spin: self.spin,
+            changed: &self.changed,
             theme,
         }
     }
 
-    /// The rounded border around the focused pane: its name in the top edge, and for a worker
-    /// its steps, branch and slot, and the way back to the master on the right.
+    /// Before flow stops: asks to stop, or to keep or end the flows that are not finished.
     fn draw_stop(&self, frame: &mut TuiFrame, pane: Rect, theme: &Theme, unfinished: &[String]) {
         if unfinished.is_empty() {
             let text = vec![
@@ -1062,11 +1084,18 @@ impl App {
             ),
             theme.ui.text,
         )];
-        for flow in self
+        let listed: Vec<&FlowView> = self
             .workers()
             .into_iter()
             .filter(|flow| unfinished.contains(&flow.id))
-        {
+            .collect();
+        // Names padded to the longest, so what each flow does starts in one column.
+        let name_width = listed
+            .iter()
+            .map(|flow| flow.name.chars().count())
+            .max()
+            .unwrap_or(0);
+        for flow in listed {
             let doing = flow
                 .blocker
                 .clone()
@@ -1075,8 +1104,8 @@ impl App {
             text.push(Line::from(vec![
                 Span::raw("  "),
                 Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
-                Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
-                Span::styled(crate::ui::sidebar::clip(&doing, 44), theme.ui.muted),
+                Span::styled(format!(" {:name_width$}  ", flow.name), theme.ui.strong),
+                Span::styled(clip(&doing, 44), theme.ui.muted),
             ]));
         }
         let (them, they) = if count == 1 {
@@ -1106,47 +1135,58 @@ impl App {
         draw_dialog(frame, pane, theme, " stop ", theme.state.waiting, text);
     }
 
-    /// The frame around the pane in view, named on its top edge. The title is fitted to `width`,
-    /// so the place loses folders from its middle and the edge keeps its corner.
-    fn border(&self, theme: &Theme, width: u16) -> Block<'static> {
-        let mut block = Block::bordered()
-            .border_type(BorderType::Rounded)
-            .border_style(theme.ui.rule);
-        if let Some(notice) = &self.notice {
-            block = block.title_bottom(Line::styled(format!(" {notice} "), theme.state.waiting));
+    /// The row above the pane that names the session, on the panel color: what is in view on the
+    /// left, a notice or the rail's hint on the right. The left is fitted so the right stays.
+    fn draw_title(&self, frame: &mut TuiFrame, area: Rect, theme: &Theme) {
+        let right = match &self.notice {
+            Some(notice) => Some(Line::styled(format!(" {notice} "), theme.state.waiting)),
+            None => self.border_hint(theme),
+        };
+        let left = self.title_line(theme, area.width, right.as_ref().map_or(0, Line::width));
+        frame.render_widget(Block::default().style(theme.ui.bar), area);
+        frame.render_widget(Paragraph::new(left), area);
+        if let Some(right) = right {
+            frame.render_widget(Paragraph::new(right).alignment(Alignment::Right), area);
         }
-        let hint = self.border_hint(theme);
-        // The corners and at least two rule characters before the closing one.
-        let edge = 4 + hint.as_ref().map_or(0, Line::width);
-        let room = |used: usize| (width as usize).saturating_sub(edge + used);
+    }
+
+    /// The session in view: the master and its branch, or a worker's glyph, name, steps, phase and
+    /// branch; a worker that needs you leads with a bar in its state's color.
+    fn title_line(&self, theme: &Theme, width: u16, right: usize) -> Line<'static> {
+        let room = |used: usize| (width as usize).saturating_sub(right + 2 + used);
         let PaneKey::Flow(id) = &self.focus else {
             let mut title = vec![
                 Span::raw(" "),
                 Span::styled(theme.glyphs.master, theme.ui.accent),
-                Span::styled(" master ", theme.ui.strong),
+                Span::styled(" master", theme.ui.strong),
             ];
-            if let Some(place) = &self.master {
-                let fitted = clip_place(place, room(Line::from(title.clone()).width() + 2));
+            // The sidebar says where the master runs; alone, the title says it.
+            let place = match (&self.master, self.areas().side) {
+                (Some(place), Some(_)) => place
+                    .rsplit_once(" · ")
+                    .map(|(_, branch)| branch.to_string()),
+                (Some(place), None) => Some(place.clone()),
+                (None, _) => None,
+            };
+            if let Some(place) = place {
+                let fitted = clip_place(&place, room(Line::from(title.clone()).width() + 2));
                 if !fitted.is_empty() {
-                    title.push(Span::styled(format!(" {fitted} "), theme.ui.faint));
+                    title.push(Span::styled(format!("  {fitted}"), theme.ui.faint));
                 }
             }
-            let block = block.title(Line::from(title));
-            return match hint {
-                Some(hint) => block.title(hint.right_aligned()),
-                None => block,
-            };
+            return Line::from(title);
         };
         let Some(flow) = self.workers().into_iter().find(|flow| &flow.id == id) else {
-            return block.title(Line::styled(format!(" {id} "), theme.ui.strong));
+            return Line::styled(format!(" {id}"), theme.ui.strong);
         };
-        // A worker that needs you is framed in its state's color, so you see it from inside.
-        if flow.needs_you() {
-            block = block.border_style(theme.state(flow.state));
-        }
         let sidebar = self.sidebar(theme, &[]);
+        let lead = if flow.needs_you() {
+            Span::styled(theme.glyphs.cursor, theme.state(flow.state))
+        } else {
+            Span::raw(" ")
+        };
         let mut title = vec![
-            Span::raw(" "),
+            lead,
             Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
             Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
         ];
@@ -1156,30 +1196,21 @@ impl App {
         if let Some(space) = &flow.workspace {
             let place = format!("{} · slot {}", space.branch, space.slot);
             let lead = format!("  {} ", theme.glyphs.separator);
-            let used = Line::from(title.clone()).width() + lead.chars().count() + 1;
+            let used = Line::from(title.clone()).width() + lead.chars().count();
             let fitted = clip(&place, room(used));
             if !fitted.is_empty() {
-                title.push(Span::styled(format!("{lead}{fitted} "), theme.ui.faint));
+                title.push(Span::styled(format!("{lead}{fitted}"), theme.ui.faint));
             }
         }
-        let block = block.title(Line::from(title));
-        match hint {
-            Some(hint) => block.title(hint.right_aligned()),
-            None => block,
-        }
+        Line::from(title)
     }
 
     /// The right of the pane's top edge: with the rail, the next flow that needs you and the way back
-    /// to the sidebar; with the sidebar, the way back to the master.
+    /// to the sidebar; with the sidebar, nothing.
     fn border_hint(&self, theme: &Theme) -> Option<Line<'static>> {
+        // With the sidebar in view its key hint says the rest.
         if !self.rail {
-            return match self.focus {
-                PaneKey::Master => None,
-                PaneKey::Flow(_) => Some(Line::from(vec![
-                    Span::styled(" C-space 0", theme.ui.key),
-                    Span::styled(" back to master ", theme.ui.faint),
-                ])),
-            };
+            return None;
         }
         if self.workers().is_empty() {
             return None;
@@ -1480,7 +1511,7 @@ mod tests {
                 cols: 100,
                 rows: 30
             }),
-            vec![Effect::Send(ClientMsg::Resize(Size { cols: 96, rows: 24 }))]
+            vec![Effect::Send(ClientMsg::Resize(Size { cols: 98, rows: 25 }))]
         );
     }
 
@@ -1520,16 +1551,16 @@ mod tests {
         let mut terminal = render(&app);
 
         assert!(
-            row(&terminal, 0).starts_with("╭ ◎ master ─"),
+            row(&terminal, 0).starts_with(" ● master "),
             "{}",
             row(&terminal, 0)
         );
         assert!(
-            row(&terminal, 1).starts_with("│hello"),
+            row(&terminal, 1).starts_with("hello"),
             "{}",
             row(&terminal, 1)
         );
-        assert!(row(&terminal, 5).starts_with("╰─"));
+        assert!(row(&terminal, 5).trim().is_empty(), "no box under the pane");
         assert_eq!(
             row(&terminal, 6).trim(),
             "",
@@ -1537,14 +1568,14 @@ mod tests {
         );
         let bar = row(&terminal, 7);
         assert!(bar.contains("▚▄▞ flow"), "{bar}");
-        assert!(bar.contains("◎ master"), "{bar}");
+        assert!(bar.contains("● master"), "{bar}");
         assert!(bar.contains("C-space then  n new flow   ? keys"), "{bar}");
         let buffer = terminal.backend().buffer();
         assert!(
             (1..SIZE.cols - 1).all(|x| buffer[(x, 8)].bg == Theme::builtin().ui.bar.bg.unwrap()),
             "the whole bar has the panel background"
         );
-        terminal.backend_mut().assert_cursor_position((7, 2));
+        terminal.backend_mut().assert_cursor_position((6, 2));
     }
 
     #[test]
@@ -1802,8 +1833,8 @@ mod tests {
         assert_eq!(
             app.on_server(ServerMsg::Board(fleet())),
             vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 105,
-                rows: 40
+                cols: 107,
+                rows: 41
             }))]
         );
         assert_eq!(app.on_server(ServerMsg::Board(fleet())), vec![]);
@@ -1819,7 +1850,7 @@ mod tests {
         );
         assert_eq!(
             side(&terminal, 2),
-            " 0 ◎ master                   ◂ in view "
+            " 0 ● master                   ◂ in view "
         );
         assert_eq!(side(&terminal, 4).trim_end(), " NEEDS YOU 2");
         assert_eq!(
@@ -1842,12 +1873,13 @@ mod tests {
         assert!(side(&terminal, 14).starts_with(" 3 ⠙ export-csv"));
         assert_eq!(side(&terminal, 16).trim_end(), "     agent: review changes");
         assert_eq!(side(&terminal, 18).trim_end(), " DONE 1");
-        assert_eq!(side(&terminal, 20).trim_end(), "     ●───●───●───● MR !418");
-        assert_eq!(side(&terminal, 39), "─".repeat(40));
         assert_eq!(
-            side(&terminal, 40).trim_end(),
-            " C-space j k peek  0-9 jump  n new"
+            side(&terminal, 20).trim_end(),
+            "     ●───●───●───● MR !418        in 0s",
+            "a finished flow says how long it took"
         );
+        assert_eq!(side(&terminal, 40).trim_end(), "", "no rule above the hint");
+        assert_eq!(side(&terminal, 41).trim_end(), " C-space ? keys");
         let buffer = terminal.backend().buffer();
         assert_eq!(
             buffer[(112, 6)].fg,
@@ -1868,16 +1900,16 @@ mod tests {
         let terminal = render_at(&app, FLEET);
         let title = row(&terminal, 0);
         assert!(
-            title.starts_with("╭ ◆ shop-230  ●───○───○───○ design  │ flow/shop-230 · slot 1 ─"),
+            title.starts_with("▌◆ shop-230  ●───○───○───○ design  │ flow/shop-230 · slot 1 "),
             "{title}"
         );
         assert!(
-            title.ends_with(" C-space 0 back to master ╮  ▚▄▞ flow                    2 need you "),
+            title.ends_with("  │ ▚▄▞ flow                    2 need you "),
             "{title}"
         );
         assert_eq!(
             side(&terminal, 2),
-            " 0 ◎ master                         you "
+            " 0 ● master                         you "
         );
         assert!(side(&terminal, 9).starts_with("▌2 ◆ shop-230"));
         let buffer = terminal.backend().buffer();
@@ -2054,10 +2086,7 @@ mod tests {
         assert_eq!(side(&terminal, 22).trim_end(), "▌ enter jump in");
         assert_eq!(side(&terminal, 23).trim_end(), "");
         assert_eq!(side(&terminal, 24).trim_end(), " DONE 1");
-        assert_eq!(
-            side(&terminal, 40).trim_end(),
-            " C-space j k peek  0-9 jump  n new"
-        );
+        assert_eq!(side(&terminal, 41).trim_end(), " C-space ? keys");
 
         assert_eq!(
             app.on_input(Routed::Command(Command::Jump)),
@@ -2117,12 +2146,18 @@ mod tests {
             branch: Some("main".into()),
         });
 
-        let screen = render_at(&fleet, FLEET);
-        let top = row(&screen, 0);
-        let pane_edge = top.split('╮').next().unwrap();
+        let narrow = Size { cols: 90, rows: 20 };
+        let mut solo = App::new(narrow);
+        solo.on_server(ServerMsg::Master {
+            cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
+            branch: Some("main".into()),
+        });
+        let solo = render_at(&solo, narrow);
+        let top = row(&solo, 0);
+        assert!(top.contains("/private/…/"), "{top}");
+        assert!(top.trim_end().ends_with("/repo · main"), "{top}");
 
-        assert!(pane_edge.contains("/private/…/"), "{top}");
-        assert!(pane_edge.contains("/repo · main ─"), "{top}");
+        let screen = render_at(&fleet, FLEET);
         assert_eq!(
             side(&screen, 3).trim_end(),
             "     /private/…/ui-look/repo · main"
@@ -2143,7 +2178,7 @@ mod tests {
         let bar = row(&render(&solo), 7);
         let sidebar = render_at(&fleet, FLEET);
 
-        assert!(bar.contains("◎ master  ~/projects/shop · main"), "{bar}");
+        assert!(bar.contains("● master  ~/projects/shop · main"), "{bar}");
         let mut wide = App::new(FLEET);
         wide.on_server(ServerMsg::Master {
             cwd: "/shop".into(),
@@ -2154,7 +2189,11 @@ mod tests {
             wide.ends_with("no workers yet   │  C-space then  n new flow   ? keys "),
             "{wide}"
         );
-        assert!(row(&sidebar, 0).starts_with("╭ ◎ master  ~/projects/shop · main ─"));
+        assert!(
+            row(&sidebar, 0).starts_with(" ● master  main "),
+            "the sidebar says where it runs: {}",
+            row(&sidebar, 0)
+        );
         assert_eq!(side(&sidebar, 3).trim_end(), "     ~/projects/shop · main");
         assert_eq!(side(&sidebar, 5).trim_end(), " NEEDS YOU 2");
     }
@@ -2180,25 +2219,28 @@ mod tests {
         assert!(app.is_modal());
         assert!(row(&terminal, 0).starts_with(" ▚▄▞ flow board "));
         assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
-        assert!(row(&terminal, 3).contains("│ 0 ◎ master                             you  │"));
-        assert!(row(&terminal, 3).contains("│ 1 ✖ shop-221                       blocked  │"));
-        assert!(row(&terminal, 3).contains("│ 2 ◆ shop-230               waiting for you  │"));
-        assert!(row(&terminal, 4).contains("│   ~/projects/shop · main"));
         assert!(
-            row(&terminal, 5).contains("│   ━━━━━━━━━━━━───────────────  4/9  29m ago │"),
+            row(&terminal, 3).starts_with("   0 ● master                              you "),
+            "only the selected card is outlined"
+        );
+        assert!(row(&terminal, 3).contains(" 1 ✖ shop-221                        blocked "));
+        assert!(row(&terminal, 3).contains("│ 2 ◆ shop-230                waiting for you │"));
+        assert!(row(&terminal, 4).contains("     ~/projects/shop · main"));
+        assert!(
+            row(&terminal, 5).contains("   ━━━━━━━━━━━━───────────────  4/9  29m ago "),
             "{}",
             row(&terminal, 5)
         );
         let shop_230 = row(&terminal, 5)
             .split('│')
-            .nth(5)
+            .nth(1)
             .unwrap_or_default()
             .to_string();
         assert!(
             shop_230.trim_start() == "31m ago ",
             "a flow without tasks draws no bar: {shop_230:?}"
         );
-        assert!(row(&terminal, 10).contains("│ 3 ⠙ export-csv           reviewing · agent  │"));
+        assert!(row(&terminal, 10).contains(" 3 ⠙ export-csv            reviewing · agent "));
         assert!(
             row(&terminal, 16)
                 .starts_with(" 2 shop-230  shop-230 · guided · flow/shop-230 · slot 1"),
@@ -2212,9 +2254,118 @@ mod tests {
         let buffer = terminal.backend().buffer();
         let accent = Theme::builtin().ui.accent.fg.unwrap();
         assert_eq!(buffer[(100, 3)].fg, accent, "the selected card is outlined");
+        let blocked_at = row(&terminal, 2 + 1).find("blocked").unwrap();
+        let blocked_x = row(&terminal, 3)[..blocked_at].chars().count() as u16 + layout::MARGIN;
         assert_eq!(
-            buffer[(51, 3)].fg,
-            Theme::builtin().state.blocked.fg.unwrap()
+            buffer[(blocked_x, 3 + layout::MARGIN)].fg,
+            Theme::builtin().state.blocked.fg.unwrap(),
+            "the state in its color"
+        );
+        assert_eq!(
+            buffer[(blocked_x, 3 + layout::MARGIN)].bg,
+            Theme::builtin()
+                .ui
+                .background
+                .bg
+                .unwrap_or(ratatui::style::Color::Reset),
+            "no fill"
+        );
+    }
+
+    #[test]
+    fn an_idle_flow_is_ready_not_running() {
+        let mut flows = fleet().flows;
+        flows.push(worker(
+            "shop-250",
+            crate::event::Mode::Guided,
+            5,
+            vec![EventKind::Idle {
+                note: "The design is ready for review.".into(),
+            }],
+        ));
+        let mut app = App::new(FLEET);
+        app.on_server(ServerMsg::Board(crate::fold::board(flows, NOW)));
+        app.on_tick(NOW);
+        let terminal = render_at(&app, FLEET);
+        let sections: Vec<String> = (0..FLEET.rows - 2)
+            .map(|y| side(&terminal, y).trim_end().to_string())
+            .filter(|line| {
+                line.starts_with(" ")
+                    && line
+                        .trim()
+                        .chars()
+                        .all(|c| c.is_ascii_uppercase() || c == ' ' || c.is_ascii_digit())
+                    && !line.trim().is_empty()
+            })
+            .collect();
+
+        assert_eq!(
+            sections,
+            [" NEEDS YOU 2", " READY 1", " RUNNING 1", " DONE 1"]
+        );
+    }
+
+    #[test]
+    fn a_row_stands_out_a_moment_after_its_flow_changed() {
+        let selection = Theme::builtin().ui.selection.bg.unwrap();
+        let mut app = with_fleet();
+        let background_of = |app: &App, text: &str| {
+            let terminal = render_at(app, FLEET);
+            let y = (0..FLEET.rows - 2)
+                .find(|&y| side(&terminal, y).contains(text))
+                .unwrap();
+            terminal.backend().buffer()[(120, y + layout::MARGIN)].bg
+        };
+        assert_ne!(background_of(&app, "shop-221"), selection);
+
+        let mut board = fleet();
+        let flow = board
+            .flows
+            .iter_mut()
+            .find(|flow| flow.name == "shop-221")
+            .unwrap();
+        flow.state = State::Working;
+        flow.blocker = None;
+        app.on_server(ServerMsg::Board(board));
+
+        assert_eq!(
+            background_of(&app, "shop-221"),
+            selection,
+            "it just started working"
+        );
+        assert_ne!(
+            background_of(&app, "shop-230"),
+            selection,
+            "nothing changed there"
+        );
+        assert!(
+            app.on_tick(NOW + CHANGE_SHOWN_MS),
+            "a redraw takes the mark away"
+        );
+        assert_ne!(background_of(&app, "shop-221"), selection);
+    }
+
+    #[test]
+    fn notes_stay_behind_the_names_but_the_selected_one() {
+        let theme = Theme::builtin();
+        let mut app = with_fleet();
+        app.on_input(Routed::Command(Command::Focus(2)));
+        let terminal = render_at(&app, FLEET);
+        let buffer = terminal.backend().buffer();
+        let color_of = |text: &str| {
+            let y = (0..FLEET.rows - 2)
+                .find(|&y| side(&terminal, y).contains(text))
+                .unwrap_or_else(|| panic!("no row with {text}"));
+            let x = row(&terminal, y).find(text).unwrap();
+            let x = row(&terminal, y)[..x].chars().count() as u16 + layout::MARGIN;
+            buffer[(x, y + layout::MARGIN)].fg
+        };
+
+        assert_eq!(color_of("migration needs"), theme.ui.faint.fg.unwrap());
+        assert_eq!(
+            color_of("Which approach"),
+            theme.ui.muted.fg.unwrap(),
+            "shop-230 is in view"
         );
     }
 
@@ -2253,26 +2404,30 @@ mod tests {
     }
 
     #[test]
-    fn a_worker_that_needs_you_is_framed_in_its_state_color() {
+    fn a_worker_that_needs_you_leads_its_title_with_its_state_color() {
         let theme = Theme::builtin();
-        let corner = |app: &App| render_at(app, FLEET).backend().buffer()[(1, 1)].fg;
+        let lead = |app: &App| {
+            let terminal = render_at(app, FLEET);
+            let cell = terminal.backend().buffer()[(1, 1)].clone();
+            (cell.symbol().to_string(), cell.fg)
+        };
         let mut app = with_fleet();
 
-        assert_eq!(corner(&app), theme.ui.rule.fg.unwrap(), "the master");
+        assert_eq!(lead(&app).0, " ", "the master");
         app.on_input(Routed::Command(Command::Focus(1)));
         assert_eq!(
-            corner(&app),
-            theme.state.blocked.fg.unwrap(),
+            lead(&app),
+            ("▌".to_string(), theme.state.blocked.fg.unwrap()),
             "shop-221 is blocked"
         );
         app.on_input(Routed::Command(Command::Focus(2)));
         assert_eq!(
-            corner(&app),
-            theme.state.waiting.fg.unwrap(),
+            lead(&app),
+            ("▌".to_string(), theme.state.waiting.fg.unwrap()),
             "shop-230 waits"
         );
         app.on_input(Routed::Command(Command::Focus(3)));
-        assert_eq!(corner(&app), theme.ui.rule.fg.unwrap(), "export-csv runs");
+        assert_eq!(lead(&app).0, " ", "export-csv runs");
     }
 
     #[test]
@@ -2605,17 +2760,19 @@ mod tests {
         assert_eq!(
             app.on_input(Routed::Command(Command::Rail)),
             vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 139,
-                rows: 40
+                cols: 141,
+                rows: 41
             }))]
         );
         let terminal = render_at(&app, FLEET);
         let rail = |y| row(&terminal, y).chars().skip(142).collect::<String>();
 
         assert!(
-            row(&terminal, 0).ends_with(" ◆ 2 shop-230 is waiting  │  C-space b sidebar ╮  ▚▄▞  ")
+            row(&terminal, 0).ends_with(" ◆ 2 shop-230 is waiting  │  C-space b sidebar │ ▚▄▞  "),
+            "{}",
+            row(&terminal, 0)
         );
-        assert_eq!(rail(2), " 0 ◎  ");
+        assert_eq!(rail(2), " 0 ●  ");
         assert_eq!(rail(4), "▌1 ✖  ");
         assert_eq!(rail(5), " 2 ◆  ");
         assert_eq!(rail(7), " 3 ⠙  ");
@@ -2630,8 +2787,8 @@ mod tests {
         assert_eq!(
             app.on_input(Routed::Command(Command::Rail)),
             vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 105,
-                rows: 40
+                cols: 107,
+                rows: 41
             }))]
         );
     }
@@ -2686,7 +2843,7 @@ mod tests {
         let dialog: String = (0..42).map(|y| row(&terminal, y) + "\n").collect();
         assert!(dialog.contains("3 flows are not finished:"), "{dialog}");
         assert!(
-            dialog.contains("✖ shop-221  migration needs a default value"),
+            dialog.contains("✖ shop-221    migration needs a default value"),
             "{dialog}"
         );
         assert!(
@@ -2745,10 +2902,7 @@ mod tests {
             help.contains("  b        fold the sidebar to a rail and back"),
             "{help}"
         );
-        assert_eq!(
-            side(&terminal, 41).trim_end(),
-            "         o board  b rail  ? all keys"
-        );
+        assert_eq!(side(&terminal, 41).trim_end(), " C-space ? keys");
 
         app.on_input(Routed::View(vec![Key::Char('x')]));
         assert!(!app.is_modal());
@@ -2795,5 +2949,80 @@ mod tests {
             "{creates}"
         );
         assert!(creates.contains("  │"), "{creates}");
+    }
+
+    /// The whole screen as text, compared with src/ui/golden/<name>.txt. FLOW_UPDATE_GOLDEN=1
+    /// writes the file instead, for a change to the look that is meant; a missing file is written
+    /// and fails, so a new view is looked at once.
+    fn golden(name: &str, terminal: &Terminal<TestBackend>) {
+        let buffer = terminal.backend().buffer();
+        let text: String = (0..buffer.area.height)
+            .map(|y| {
+                let line: String = (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol().to_string())
+                    .collect();
+                line.trim_end().to_string() + "\n"
+            })
+            .collect();
+        let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/ui/golden")
+            .join(format!("{name}.txt"));
+        let update = std::env::var_os("FLOW_UPDATE_GOLDEN").is_some();
+        match std::fs::read_to_string(&file) {
+            Ok(expected) if !update => assert!(
+                expected == text,
+                "{name} looks different; if that is meant, run FLOW_UPDATE_GOLDEN=1 cargo test\n{text}"
+            ),
+            found => {
+                std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+                std::fs::write(&file, &text).unwrap();
+                assert!(
+                    update || found.is_ok(),
+                    "wrote {}; look at it, then run the tests again",
+                    file.display()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_view_looks_as_it_did() {
+        let mut solo = App::new(FLEET).with_home(Some("/Users/jan".into()));
+        solo.on_server(ServerMsg::Master {
+            cwd: "/Users/jan/projects/shop".into(),
+            branch: Some("main".into()),
+        });
+        golden("solo", &render_at(&solo, FLEET));
+
+        let fleet = board_app();
+        golden("fleet", &render_at(&fleet, FLEET));
+
+        let mut worker = board_app();
+        worker.on_input(Routed::Command(Command::Focus(2)));
+        golden("worker", &render_at(&worker, FLEET));
+
+        let mut peek = board_app();
+        peek.on_input(Routed::Command(Command::Cursor(1)));
+        golden("peek", &render_at(&peek, FLEET));
+
+        let mut rail = board_app();
+        rail.on_input(Routed::Command(Command::Rail));
+        golden("rail", &render_at(&rail, FLEET));
+
+        let mut board = board_app();
+        board.on_input(Routed::Command(Command::Board));
+        golden("board", &render_at(&board, FLEET));
+
+        let mut new_flow = board_app();
+        new_flow.on_input(Routed::Command(Command::NewFlow));
+        golden("new-flow", &render_at(&new_flow, FLEET));
+
+        let mut help = board_app();
+        help.on_input(Routed::Command(Command::Help));
+        golden("help", &render_at(&help, FLEET));
+
+        let mut stop = board_app();
+        stop.on_input(Routed::Command(Command::StopServer));
+        golden("stop", &render_at(&stop, FLEET));
     }
 }

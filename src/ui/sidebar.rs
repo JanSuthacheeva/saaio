@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -12,8 +14,8 @@ use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, State, StepStatus};
 
 const WIDTH: usize = SIDEBAR_WIDTH as usize;
-/// Rows the key hints take at the bottom, with the rule above them.
-const FOOTER_ROWS: u16 = 3;
+/// Rows the key hint takes at the bottom.
+const FOOTER_ROWS: u16 = 1;
 /// The most rows a peek takes, with its rule and its hint.
 const PEEK_ROWS: usize = 14;
 /// Fewer rows than this and the peek is left out.
@@ -31,6 +33,8 @@ pub struct Sidebar<'a> {
     pub master: Option<&'a str>,
     pub now: u64,
     pub spin: usize,
+    /// Flows whose state changed a moment ago, by id; their rows stand out.
+    pub changed: &'a HashMap<String, u64>,
     pub theme: &'a Theme,
 }
 
@@ -41,7 +45,7 @@ struct Row {
     selected: bool,
 }
 
-/// The flows that get a pane, in sidebar order (needs you, running, done); digit n focuses the nth.
+/// The flows that get a pane, in sidebar order (needs you, ready, running, done); digit n focuses the nth.
 pub fn workers(board: &Board) -> Vec<&FlowView> {
     board
         .flows
@@ -183,7 +187,7 @@ impl Sidebar<'_> {
         }
         rows.truncate(room);
         rows.resize_with(room, || plain(Line::raw("")));
-        rows.extend(self.footer(width));
+        rows.extend(self.footer());
         rows
     }
 
@@ -192,6 +196,7 @@ impl Sidebar<'_> {
         let width = WIDTH;
         let key = PaneKey::Flow(flow.id.clone());
         let selected = *self.focus == key || self.cursor == Some(flow.id.as_str());
+        let changed = self.changed.contains_key(&flow.id);
         let tone = theme.state(flow.state);
         let status = self.status(flow);
         let lead = |rest: &str| -> Vec<Span<'static>> {
@@ -237,6 +242,11 @@ impl Sidebar<'_> {
         second.push(Span::raw(" "));
         second.push(self.label(flow));
         let detail = match flow.tasks {
+            // A finished flow says how long it took.
+            _ if flow.is_finished() => format!(
+                "in {} ",
+                short_duration(flow.changed_at.saturating_sub(flow.started_at))
+            ),
             Some(tasks) => format!("{}/{} ", tasks.done, tasks.total),
             None if flow.mode == crate::event::Mode::Guided && !flow.is_finished() => {
                 "guided ".to_string()
@@ -248,21 +258,27 @@ impl Sidebar<'_> {
             Row {
                 line: split(first, vec![right], width),
                 key: Some(key.clone()),
-                selected,
+                selected: selected || changed,
             },
             Row {
                 line: split(second, vec![Span::styled(detail, theme.ui.faint)], width),
                 key: Some(key.clone()),
-                selected,
+                selected: selected || changed,
             },
         ];
         if let Some((text, style)) = self.note(flow, status) {
             let mut third = lead("    ");
+            // Notes stay behind the names; the row you are on reads a step brighter.
+            let style = if selected && style == theme.ui.faint {
+                theme.ui.muted
+            } else {
+                style
+            };
             third.push(Span::styled(clip(&text, width - 6), style));
             rows.push(Row {
                 line: Line::from(third),
                 key: Some(key),
-                selected,
+                selected: selected || changed,
             });
         }
         rows
@@ -436,7 +452,7 @@ impl Sidebar<'_> {
             return None;
         }
         if let Some(blocker) = &flow.blocker {
-            return Some((blocker.clone(), theme.ui.muted));
+            return Some((blocker.clone(), theme.ui.faint));
         }
         if let Some(delegate) = &flow.delegate {
             return Some((format!("agent: {delegate}"), theme.ui.faint));
@@ -444,33 +460,16 @@ impl Sidebar<'_> {
         last_note(flow).map(|note| (note, theme.ui.faint))
     }
 
-    fn footer(&self, width: usize) -> Vec<Row> {
+    /// One quiet line at the foot: the prefix and the key that lists the rest.
+    fn footer(&self) -> Vec<Row> {
         let theme = self.theme;
-        let key = |text: &'static str| Span::styled(text, theme.ui.key);
-        let hint = |text: &'static str| Span::styled(text, theme.ui.faint);
-        vec![
-            plain(Line::styled("─".repeat(width), theme.ui.rule)),
-            plain(Line::from(vec![
-                Span::raw(" "),
-                key("C-space"),
-                Span::raw(" "),
-                key("j k"),
-                hint(" peek  "),
-                key("0-9"),
-                hint(" jump  "),
-                key("n"),
-                hint(" new"),
-            ])),
-            plain(Line::from(vec![
-                Span::raw("         "),
-                key("o"),
-                hint(" board  "),
-                key("b"),
-                hint(" rail  "),
-                key("?"),
-                hint(" all keys"),
-            ])),
-        ]
+        vec![plain(Line::from(vec![
+            Span::raw(" "),
+            Span::styled("C-space", theme.ui.key),
+            Span::raw(" "),
+            Span::styled("?", theme.ui.key),
+            Span::styled(" keys", theme.ui.faint),
+        ]))]
     }
 }
 
@@ -567,6 +566,8 @@ pub fn clip(text: &str, width: usize) -> String {
 fn group_of(flow: &FlowView) -> &'static str {
     if flow.needs_you() {
         "NEEDS YOU"
+    } else if flow.state == State::Idle {
+        "READY"
     } else if flow.is_finished() {
         "DONE"
     } else {

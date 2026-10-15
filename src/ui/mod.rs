@@ -20,6 +20,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
+use ratatui::crossterm::execute;
+use ratatui::crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
 use signal_hook::consts::SIGWINCH;
 use signal_hook::iterator::Signals;
 
@@ -146,7 +148,10 @@ pub fn run(socket: &Path, env: UiEnv) -> Result<String> {
         }
         if redraw {
             peek.refresh(app.peeked());
+            // The terminal holds the frame until it is complete, so it never shows half of one.
+            execute!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
             terminal.draw(|frame| app.draw(frame, &theme, peek.lines()))?;
+            execute!(terminal.backend_mut(), EndSynchronizedUpdate)?;
         }
     }
 }

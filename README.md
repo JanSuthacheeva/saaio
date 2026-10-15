@@ -62,7 +62,8 @@ updates it with flow while you have not edited it; your edits are never overwrit
 
 Every unfinished flow with a worktree gets its own session: `flow start` records the flow and
 the server opens it within half a second. The sidebar on the right groups the workers under
-NEEDS YOU, RUNNING and DONE with their steps, tasks and what they ask or do.
+NEEDS YOU, READY (idle: a turn ended, nothing asked), RUNNING and DONE with their steps, tasks and
+what they ask or do.
 
 Keys, after the prefix `C-space` (`C-space C-space` sends one through):
 
@@ -95,7 +96,7 @@ second when it, or the theme it extends, changes. Without it flow uses the termi
 ```toml
 # Colors: "#rrggbb", an ANSI index, "default" (the terminal's), or another key.
 extends = "flow"        # terminal | flow | flow-light | a file in themes/, without .toml
-nerd_font = true        # the font has Nerd Font icons: flow's mark becomes the kiwi
+nerd_font = true        # the font has Nerd Font icons: a kiwi mark and a crown for the master
 [ui]
 accent = "#d9825b"
 [state]
@@ -104,12 +105,12 @@ ended = "faint"
 
 Keys: `[ui]` background, panel, selection, rule, text, strong, muted, faint, accent; `[state]`
 working, waiting, blocked, done, ended. A key left out keeps the base's value. `nerd_font` (default
-false) shows flow's mark as a kiwi bird, which needs a Nerd Font; without it the mark is a goose in
-flight, `▚▄▞`, in block characters every font has. The mark takes the theme's accent either way.
-`flow` and `flow-light` are the design's dark and light colors. A tool can keep a theme in
-`~/.config/flow/themes/<name>.toml` for `extends` to name; a Noctalia template that writes
-`themes/noctalia.toml` makes flow follow Noctalia live. A broken file keeps the last theme and says
-why in the border.
+false) shows flow's mark as a kiwi bird and the master as a crown, which need a Nerd Font; without
+it the mark is a goose in flight, `▚▄▞`, in block characters every font has, and the master a dot,
+`●`. The mark takes the theme's accent either way. `flow` and `flow-light` are the design's dark
+and light colors. A tool can keep a theme in `~/.config/flow/themes/<name>.toml` for `extends` to
+name; a Noctalia template that writes `themes/noctalia.toml` makes flow follow Noctalia live. A
+broken file keeps the last theme and says why in the title row.
 
 ## Starting a worker
 

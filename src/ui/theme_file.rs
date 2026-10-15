@@ -9,7 +9,7 @@ use toml::{Table, Value};
 use crate::store::Stamp;
 #[cfg(test)]
 use crate::ui::theme::MARK;
-use crate::ui::theme::{KIWI, Palette, Theme};
+use crate::ui::theme::{CROWN, KIWI, Palette, Theme};
 
 pub const THEME_FILE: &str = "theme.toml";
 pub const THEMES_DIR: &str = "themes";
@@ -75,6 +75,7 @@ pub fn load(dir: &Path) -> (Result<Theme>, Vec<PathBuf>) {
         let mut theme = Theme::from_palette(palette);
         if nerd_font {
             theme.glyphs.mark = KIWI;
+            theme.glyphs.master = CROWN;
         }
         Ok(theme)
     });
@@ -266,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn a_nerd_font_turns_the_mark_into_the_kiwi() {
+    fn a_nerd_font_turns_the_mark_into_the_kiwi_and_the_master_into_a_crown() {
         let dir = TempDir::new().unwrap();
         write(&dir, "theme.toml", "extends = \"flow\"\n");
         assert_eq!(theme(&dir).glyphs.mark, MARK, "every font has it");
@@ -274,6 +275,7 @@ mod tests {
         write(&dir, "theme.toml", "extends = \"mine\"\nnerd_font = true\n");
         write(&dir, "themes/mine.toml", "extends = \"flow\"\n");
         assert_eq!(theme(&dir).glyphs.mark, KIWI);
+        assert_eq!(theme(&dir).glyphs.master, CROWN);
 
         write(&dir, "theme.toml", "extends = \"mine\"\n");
         write(

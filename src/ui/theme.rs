@@ -157,7 +157,10 @@ pub struct StateTokens {
 /// flow's mark: a goose in flight, in block characters every font has.
 pub const MARK: &str = "▚▄▞";
 /// flow's mark with a Nerd Font: Font Awesome's kiwi bird, in the theme's accent like any mark.
-pub const KIWI: &str = "\u{edff}";
+/// Terminals draw Nerd Font icons wider than their one cell, so it brings a space of its own.
+pub const KIWI: &str = "\u{edff} ";
+/// The master with a Nerd Font: a crown, for the one that leads the flock; a space of its own too.
+pub const CROWN: &str = "\u{f01a5} ";
 
 #[derive(Debug, Clone)]
 pub struct Glyphs {
@@ -172,6 +175,9 @@ pub struct Glyphs {
     pub spinner: &'static [&'static str],
     pub cursor: &'static str,
     pub separator: &'static str,
+    /// The line between the pane and the sidebar, and where the sidebar's header rule meets it.
+    pub rule_v: &'static str,
+    pub rule_joint: &'static str,
     pub in_view: &'static str,
     pub step_done: &'static str,
     pub step_current: &'static str,
@@ -227,7 +233,7 @@ impl Theme {
             },
             glyphs: Glyphs {
                 mark: MARK,
-                master: "◎",
+                master: "●",
                 waiting: "◆",
                 idle: "◌",
                 blocked: "✖",
@@ -236,6 +242,8 @@ impl Theme {
                 spinner: &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
                 cursor: "▌",
                 separator: "│",
+                rule_v: "│",
+                rule_joint: "├",
                 in_view: "◂",
                 step_done: "●",
                 step_current: "●",
@@ -247,14 +255,6 @@ impl Theme {
                 dash: "╌",
             },
             palette,
-        }
-    }
-
-    /// Text on a solid pill: the background, or black where the background is the terminal's.
-    pub fn on_solid(&self) -> Color {
-        match self.palette.background {
-            Color::Reset => Color::Black,
-            background => background,
         }
     }
 
@@ -289,7 +289,6 @@ mod tests {
             plain.bg(Color::Indexed(235)).fg(Color::Indexed(252))
         );
         assert_eq!(theme.state.working, plain.fg(Color::Blue));
-        assert_eq!(theme.on_solid(), Color::Black);
     }
 
     #[test]
@@ -302,7 +301,6 @@ mod tests {
             theme.ui.bar,
             Style::default().bg(hex(0x1f1f26)).fg(hex(0xc8c8d0))
         );
-        assert_eq!(theme.on_solid(), hex(0x141418));
         assert!(Palette::named("flow-light").is_some());
         assert_eq!(Palette::named("solarized"), None);
     }
