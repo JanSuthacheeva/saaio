@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Widget};
 
+use crate::branching::{self, Branching};
 use crate::event::Mode;
 use crate::launch;
 use crate::ui::input::Key;
@@ -26,12 +27,17 @@ pub struct NewFlowForm {
     pub repo: PathBuf,
     /// Why the last start failed, shown under the request.
     pub error: Option<String>,
+    /// The repo's branch convention, once read; its types make a type row.
+    pub branching: Option<Branching>,
+    /// The picked type, an index into the convention's types.
+    pub kind: usize,
     field: Field,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Field {
     Request,
+    Type,
     Mode,
 }
 
@@ -50,8 +56,31 @@ impl NewFlowForm {
             mode: Mode::Auto,
             repo,
             error: None,
+            branching: None,
+            kind: 0,
             field: Field::Request,
         }
+    }
+
+    /// The repo's convention arrived (LoadBranching); the type starts at its first.
+    pub fn set_branching(&mut self, branching: Option<Branching>) {
+        self.branching = branching;
+        self.kind = 0;
+    }
+
+    /// The types the repo lists; empty without a convention.
+    pub fn types(&self) -> &[String] {
+        self.branching.as_ref().map_or(&[], |rules| &rules.types)
+    }
+
+    /// The picked branch type, when the repo has types.
+    pub fn picked_type(&self) -> Option<&str> {
+        self.types().get(self.kind).map(String::as_str)
+    }
+
+    /// Rows the type row adds to the dialog.
+    fn extra_rows(&self) -> u16 {
+        u16::from(!self.types().is_empty())
     }
 
     pub fn on_key(&mut self, key: Key) -> FormAction {
@@ -61,7 +90,8 @@ impl NewFlowForm {
             (_, Key::Enter) => {}
             (_, Key::Tab) => {
                 self.field = match self.field {
-                    Field::Request => Field::Mode,
+                    Field::Request if !self.types().is_empty() => Field::Type,
+                    Field::Request | Field::Type => Field::Mode,
                     Field::Mode => Field::Request,
                 };
             }
@@ -74,6 +104,13 @@ impl NewFlowForm {
                 let kept = self.request.trim_end().len();
                 let start = self.request[..kept].rfind(' ').map_or(0, |at| at + 1);
                 self.request.truncate(start);
+            }
+            (Field::Type, Key::Right | Key::Char(' ' | 'l')) => {
+                self.kind = (self.kind + 1) % self.types().len().max(1);
+            }
+            (Field::Type, Key::Left | Key::Char('h')) => {
+                let count = self.types().len().max(1);
+                self.kind = (self.kind + count - 1) % count;
             }
             (Field::Mode, Key::Left | Key::Right | Key::Char(' ' | 'h' | 'l')) => {
                 self.mode = match self.mode {
@@ -91,7 +128,7 @@ impl NewFlowForm {
         if self.field != Field::Request {
             return None;
         }
-        let dialog = dialog_area(area);
+        let dialog = dialog_area(area, self.extra_rows());
         let typed = Span::raw(self.shown_request(dialog)).width() as u16;
         Some((dialog.x + 3 + typed, dialog.y + 5))
     }
@@ -117,7 +154,7 @@ impl Widget for NewFlowView<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let theme = self.theme;
         let form = self.form;
-        let dialog = dialog_area(area);
+        let dialog = dialog_area(area, form.extra_rows());
         Clear.render(dialog, buf);
         let frame = Block::bordered()
             .border_type(BorderType::Rounded)
@@ -175,6 +212,29 @@ impl Widget for NewFlowView<'_> {
                 Span::styled(format!(" {label}"), theme.ui.text),
             ]
         };
+        let extra = form.extra_rows();
+        if extra > 0 {
+            let mut row = vec![Span::styled(
+                " type    ",
+                if form.field == Field::Type {
+                    theme.ui.key
+                } else {
+                    theme.ui.faint
+                },
+            )];
+            for (index, kind) in form.types().iter().enumerate() {
+                if index > 0 {
+                    row.push(Span::raw("   "));
+                }
+                let on = index == form.kind;
+                row.push(Span::styled(
+                    if on { "(•)" } else { "( )" },
+                    if on { theme.ui.accent } else { theme.ui.faint },
+                ));
+                row.push(Span::styled(format!(" {kind}"), theme.ui.text));
+            }
+            line(buf, 7, Line::from(row));
+        }
         let mut mode = vec![Span::styled(" mode    ", theme.ui.faint)];
         if form.field == Field::Mode {
             mode[0] = Span::styled(" mode    ", theme.ui.key);
@@ -186,7 +246,7 @@ impl Widget for NewFlowView<'_> {
             "       guided stops at every phase",
             theme.ui.faint,
         ));
-        line(buf, 7, Line::from(mode));
+        line(buf, 7 + extra, Line::from(mode));
 
         let taken: Vec<String> = self
             .flows
@@ -201,9 +261,15 @@ impl Widget for NewFlowView<'_> {
             )]
         } else {
             let name = launch::flow_name(None, &form.request, &taken);
+            let branch = branching::branch_name(
+                form.branching.as_ref(),
+                form.picked_type(),
+                &form.request,
+                &name,
+            );
             let mut spans = vec![
                 Span::styled(" creates ", theme.ui.faint),
-                Span::styled(format!("flow/{name}"), theme.ui.text),
+                Span::styled(branch, theme.ui.text),
             ];
             let worktree = format!("{}/{name}", launch::WORKTREES_DIR);
             if Line::from(spans.clone()).width() + worktree.len() + 20 <= width {
@@ -222,12 +288,16 @@ impl Widget for NewFlowView<'_> {
             }
             spans
         };
-        line(buf, 8, Line::from(creates));
+        line(buf, 8 + extra, Line::from(creates));
 
-        line(buf, 10, Line::styled("─".repeat(width), theme.ui.rule));
         line(
             buf,
-            11,
+            10 + extra,
+            Line::styled("─".repeat(width), theme.ui.rule),
+        );
+        line(
+            buf,
+            11 + extra,
             Line::from(vec![
                 Span::styled(" enter", theme.ui.key),
                 Span::styled(" start   ", theme.ui.faint),
@@ -241,9 +311,9 @@ impl Widget for NewFlowView<'_> {
 }
 
 /// Centered on the screen, a little above the middle as in the design.
-fn dialog_area(area: Rect) -> Rect {
+fn dialog_area(area: Rect, extra_rows: u16) -> Rect {
     let width = WIDTH.min(area.width);
-    let height = HEIGHT.min(area.height);
+    let height = (HEIGHT + extra_rows).min(area.height);
     Rect::new(
         area.x + (area.width - width) / 2,
         area.y + (area.height - height) / 3,
@@ -283,6 +353,32 @@ mod tests {
 
         assert_eq!(form.on_key(Key::Enter), FormAction::Submit);
         assert_eq!(form.on_key(Key::Esc), FormAction::Cancel);
+    }
+
+    #[test]
+    fn picks_a_branch_type_when_the_repo_has_types() {
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"));
+        form.on_key(Key::Tab);
+        form.on_key(Key::Right);
+        assert_eq!(
+            form.mode,
+            Mode::Guided,
+            "without types tab goes to the mode"
+        );
+
+        form.set_branching(Some(Branching {
+            name: "{type}/{ticket}-{slug}".into(),
+            types: vec!["feature".into(), "bugfix".into(), "hotfix".into()],
+        }));
+        assert_eq!(form.picked_type(), Some("feature"));
+        form.on_key(Key::Tab);
+        form.on_key(Key::Tab);
+        form.on_key(Key::Left);
+        assert_eq!(form.picked_type(), Some("hotfix"), "left wraps around");
+        form.on_key(Key::Char('l'));
+        form.on_key(Key::Char('l'));
+        assert_eq!(form.picked_type(), Some("bugfix"));
+        assert_eq!(form.request, "", "the type row takes the keys");
     }
 
     #[test]

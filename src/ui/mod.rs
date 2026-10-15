@@ -23,6 +23,7 @@ use ratatui::backend::CrosstermBackend;
 use signal_hook::consts::SIGWINCH;
 use signal_hook::iterator::Signals;
 
+use crate::branching::Branching;
 use crate::client::Client;
 use crate::proto::{Role, ServerMsg};
 use app::{App, Effect, Job};
@@ -135,6 +136,10 @@ pub fn run(socket: &Path, env: UiEnv) -> Result<String> {
             match effect {
                 Effect::Send(message) => writer.send(&message)?,
                 Effect::Mirror(modes) => outer.mirror(&modes)?,
+                Effect::LoadBranching(repo) => {
+                    let branching = Branching::load(&repo).map_err(|error| format!("{error:#}"));
+                    app.on_branching(&repo, branching);
+                }
                 Effect::Run(job) => run_job(&env.exe, job, jobs.clone()),
                 Effect::Quit(message) => return Ok(message),
             }

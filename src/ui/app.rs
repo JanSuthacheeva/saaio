@@ -6,6 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
 
+use crate::branching::Branching;
 use crate::event::Mode;
 use crate::launch::WORKTREES_DIR;
 use crate::output;
@@ -77,15 +78,21 @@ impl Job {
     /// The arguments after the flow binary.
     pub fn args(&self) -> Vec<String> {
         match self {
-            Job::Start(form) => vec![
-                "start".to_string(),
-                form.request.trim().to_string(),
-                "--mode".to_string(),
-                match form.mode {
-                    Mode::Auto => "auto".to_string(),
-                    Mode::Guided => "guided".to_string(),
-                },
-            ],
+            Job::Start(form) => {
+                let mut args = vec![
+                    "start".to_string(),
+                    form.request.trim().to_string(),
+                    "--mode".to_string(),
+                    match form.mode {
+                        Mode::Auto => "auto".to_string(),
+                        Mode::Guided => "guided".to_string(),
+                    },
+                ];
+                if let Some(kind) = form.picked_type() {
+                    args.extend(["--type".to_string(), kind.to_string()]);
+                }
+                args
+            }
             Job::Remove(removal) => {
                 let mut args = vec!["remove".to_string(), removal.name.clone()];
                 if removal.force {
@@ -116,6 +123,8 @@ impl Job {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     Send(ClientMsg),
+    /// Read the repo's branch convention for the new-flow dialog; answered by on_branching.
+    LoadBranching(PathBuf),
     Mirror(Modes),
     Run(Job),
     Quit(String),
@@ -555,10 +564,7 @@ impl App {
                 self.view = View::Help;
                 vec![]
             }
-            Command::NewFlow => {
-                self.view = View::NewFlow(NewFlowForm::new(self.focused_repo()));
-                vec![]
-            }
+            Command::NewFlow => self.open_new_flow(),
             Command::Focus(0) => self.focus(PaneKey::Master),
             Command::Focus(digit) => {
                 let Some(flow) = self.workers().get(digit as usize - 1).copied() else {
@@ -790,11 +796,29 @@ impl App {
                 self.view = View::Panes;
                 vec![]
             }
-            Key::Char('n') => {
-                self.view = View::NewFlow(NewFlowForm::new(self.focused_repo()));
-                vec![]
-            }
+            Key::Char('n') => self.open_new_flow(),
             _ => vec![],
+        }
+    }
+
+    /// The new-flow dialog for the repo in view, asking for its branch convention.
+    fn open_new_flow(&mut self) -> Vec<Effect> {
+        let repo = self.focused_repo();
+        self.view = View::NewFlow(NewFlowForm::new(repo.clone()));
+        vec![Effect::LoadBranching(repo)]
+    }
+
+    /// The repo's branch convention for the open dialog; a broken file shows as its error.
+    pub fn on_branching(&mut self, repo: &Path, branching: Result<Option<Branching>, String>) {
+        let View::NewFlow(form) = &mut self.view else {
+            return;
+        };
+        if form.repo != repo {
+            return;
+        }
+        match branching {
+            Ok(branching) => form.set_branching(branching),
+            Err(error) => form.error = Some(error),
         }
     }
 
@@ -2220,6 +2244,64 @@ mod tests {
         };
         assert_eq!(form.request, "SHOP-240 rate-limit the export endpoint");
         assert_eq!(form.error.as_deref(), Some("all 20 slots are in use"));
+    }
+
+    #[test]
+    fn names_the_branch_after_the_repos_convention_in_the_dialog() {
+        let mut app = board_app();
+        let repo = PathBuf::from("/Users/jan/projects/shop");
+
+        assert_eq!(
+            app.on_input(Routed::Command(Command::NewFlow)),
+            vec![Effect::LoadBranching(repo.clone())]
+        );
+        app.on_branching(
+            &repo,
+            Ok(Some(Branching {
+                name: "{type}/{ticket}-{slug}".into(),
+                types: vec!["feature".into(), "bugfix".into()],
+            })),
+        );
+        app.on_input(Routed::View(
+            "SHOP-240 fix totals".chars().map(Key::Char).collect(),
+        ));
+        app.on_input(Routed::View(vec![Key::Tab, Key::Right]));
+
+        let terminal = render_at(&app, FLEET);
+        let dialog: String = (10..26).map(|y| row(&terminal, y) + "\n").collect();
+        assert!(
+            dialog.contains("│ type    ( ) feature   (•) bugfix"),
+            "{dialog}"
+        );
+        assert!(
+            dialog.contains("│ creates bugfix/SHOP-240-fix-totals"),
+            "{dialog}"
+        );
+        let effects = app.on_input(Routed::View(vec![Key::Enter]));
+        let [Effect::Run(job)] = &effects[..] else {
+            panic!("expected a job: {effects:?}");
+        };
+        assert_eq!(
+            job.args(),
+            [
+                "start",
+                "SHOP-240 fix totals",
+                "--mode",
+                "auto",
+                "--type",
+                "bugfix"
+            ]
+        );
+
+        app.on_input(Routed::Command(Command::NewFlow));
+        app.on_branching(&repo, Err("/shop/.flow/config.toml is not valid".into()));
+        let View::NewFlow(form) = &app.view else {
+            panic!("expected the dialog");
+        };
+        assert_eq!(
+            form.error.as_deref(),
+            Some("/shop/.flow/config.toml is not valid")
+        );
     }
 
     #[test]
