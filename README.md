@@ -62,7 +62,8 @@ updates it with flow while you have not edited it; your edits are never overwrit
 
 Every unfinished flow with a worktree gets its own session: `flow start` records the flow and
 the server opens it within half a second. The sidebar on the right groups the workers under
-NEEDS YOU, RUNNING and DONE with their steps, tasks and what they ask or do.
+NEEDS YOU, READY (idle: a turn ended, nothing asked), RUNNING and DONE with their steps, tasks and
+what they ask or do.
 
 Keys, after the prefix `C-space` (`C-space C-space` sends one through):
 

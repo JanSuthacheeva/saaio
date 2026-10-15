@@ -2219,6 +2219,39 @@ mod tests {
     }
 
     #[test]
+    fn an_idle_flow_is_ready_not_running() {
+        let mut flows = fleet().flows;
+        flows.push(worker(
+            "shop-250",
+            crate::event::Mode::Guided,
+            5,
+            vec![EventKind::Idle {
+                note: "The design is ready for review.".into(),
+            }],
+        ));
+        let mut app = App::new(FLEET);
+        app.on_server(ServerMsg::Board(crate::fold::board(flows, NOW)));
+        app.on_tick(NOW);
+        let terminal = render_at(&app, FLEET);
+        let sections: Vec<String> = (0..FLEET.rows - 2)
+            .map(|y| side(&terminal, y).trim_end().to_string())
+            .filter(|line| {
+                line.starts_with(" ")
+                    && line
+                        .trim()
+                        .chars()
+                        .all(|c| c.is_ascii_uppercase() || c == ' ' || c.is_ascii_digit())
+                    && !line.trim().is_empty()
+            })
+            .collect();
+
+        assert_eq!(
+            sections,
+            [" NEEDS YOU 2", " READY 1", " RUNNING 1", " DONE 1"]
+        );
+    }
+
+    #[test]
     fn notes_stay_behind_the_names_but_the_selected_one() {
         let theme = Theme::builtin();
         let mut app = with_fleet();

@@ -41,7 +41,7 @@ struct Row {
     selected: bool,
 }
 
-/// The flows that get a pane, in sidebar order (needs you, running, done); digit n focuses the nth.
+/// The flows that get a pane, in sidebar order (needs you, ready, running, done); digit n focuses the nth.
 pub fn workers(board: &Board) -> Vec<&FlowView> {
     board
         .flows
@@ -573,6 +573,8 @@ pub fn clip(text: &str, width: usize) -> String {
 fn group_of(flow: &FlowView) -> &'static str {
     if flow.needs_you() {
         "NEEDS YOU"
+    } else if flow.state == State::Idle {
+        "READY"
     } else if flow.is_finished() {
         "DONE"
     } else {
