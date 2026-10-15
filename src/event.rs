@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 pub const EVENT_VERSION: u32 = 1;
 pub const TEXT_LIMIT: usize = 500;
+/// The longest message or answer: what the master tells a worker, a turn's whole closing message.
+pub const LONG_TEXT_LIMIT: usize = 4000;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Event {
@@ -51,6 +53,14 @@ pub enum EventKind {
     },
     MergeRequest {
         url: String,
+    },
+    /// What the master told this flow's worker, through `flow send`.
+    Message {
+        text: String,
+    },
+    /// A turn's whole closing message, for the master to read; Waiting and Idle keep its short form.
+    Answer {
+        text: String,
     },
     Ended,
     Workspace {
@@ -126,13 +136,23 @@ impl EventKind {
             },
             EventKind::Decision { text } => EventKind::Decision { text: cut(text) },
             EventKind::MergeRequest { url } => EventKind::MergeRequest { url: cut(url) },
+            EventKind::Message { text } => EventKind::Message {
+                text: cut_to(text, LONG_TEXT_LIMIT),
+            },
+            EventKind::Answer { text } => EventKind::Answer {
+                text: cut_to(text, LONG_TEXT_LIMIT),
+            },
             other => other,
         }
     }
 }
 
 fn cut(text: String) -> String {
-    match text.char_indices().nth(TEXT_LIMIT) {
+    cut_to(text, TEXT_LIMIT)
+}
+
+fn cut_to(text: String, limit: usize) -> String {
+    match text.char_indices().nth(limit) {
         Some((end, _)) => text[..end].to_string(),
         None => text,
     }

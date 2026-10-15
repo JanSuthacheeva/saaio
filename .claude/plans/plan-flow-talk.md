@@ -26,10 +26,14 @@ pub enum EventKind { ..,
     Answer { text: String },
 }
 
+// event.rs: pub const LONG_TEXT_LIMIT: usize = 4000; Event::new cuts Message and Answer to it
+// (in place of a separate ANSWER_LIMIT and MESSAGE_LIMIT).
+
 // src/view.rs
 pub struct FlowView { .., pub answer: Option<String> }   // additive, VIEW_VERSION stays 1
 // src/fold.rs: Message -> timeline "master: {text}" (Tone::Neutral), state unchanged;
 // Answer -> view.answer; changes(): true for Message, Answer when it differs from view.answer.
+// An Idle with a new note sets changed_at (a woken turn may end idle again without working first).
 
 // src/wake.rs (new, pure)
 pub type Seen = BTreeMap<String, u64>;   // flow id -> changed_at the master was woken for
@@ -51,7 +55,6 @@ impl Store {
 // remove(id) also deletes waits/<id>.pid and waits/<id>.delivered.
 
 // src/adapter/mod.rs
-pub const ANSWER_LIMIT: usize = 4000;
 impl Adapter { pub fn master_wiring(self, flow_exe: &Path) -> Vec<String>; }
 
 // src/adapter/claude_code.rs
@@ -61,7 +64,7 @@ const WAIT_TIMEOUT_SECS: u64 = 604_800;
 pub fn settings(flow_exe: &Path) -> String;
 /// Only the waiter, args ["wait","--master"], on SessionStart and Stop.
 pub fn master_settings(flow_exe: &Path) -> String;
-// translate, Stop: [Answer { text cut to ANSWER_LIMIT }, turn_end(..)] when the message is not empty.
+// translate, Stop: [Answer { text }, turn_end(..)] when the message is not empty.
 
 // src/config.rs
 pub struct Config { .., #[serde(default)] pub master: MasterConfig }
@@ -82,7 +85,6 @@ enum Command { ..,
     #[command(hide = true)]
     Wait { #[arg(long)] master: bool },
 }
-const MESSAGE_LIMIT: usize = 4000;
 const WAIT_EVERY: Duration = Duration::from_millis(500);
 const SETTLE: Duration = Duration::from_secs(2);
 fn send(store: &Store, flow: &str, text: &str, now: u64) -> Result<Document, Failure>;
@@ -165,7 +167,7 @@ pub fn news_for_master(flows: &[&FlowView]) -> String; // changed[n]{name,state,
 
 ## Tasks
 
-- [ ] event.rs Message and Answer; fold.rs/view.rs: timeline entry, FlowView.answer, changes(); tests
+- [x] event.rs Message and Answer; fold.rs/view.rs: timeline entry, FlowView.answer, changes(); tests
 - [ ] wake.rs: Seen, undelivered, changed_flows, mark_seen, first_seen with unit tests
 - [ ] store.rs: Waiter, claim_waiter/waiter, delivered/set_delivered, seen/set_seen, remove cleans waits/; tests
 - [ ] output.rs: sent, news_for_worker, news_for_master, answer in status_detail; tests

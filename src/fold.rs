@@ -34,9 +34,12 @@ pub fn fold(id: &str, events: &[Event], last_beat: Option<u64>, now: u64) -> Opt
 }
 
 /// True when appending `kind` changes what the flow shows: its state, phase, blocker, delegate,
-/// tasks, review, merge request or decisions. Adapters skip the rest, so a log does not grow by a
+/// tasks, review, merge request, decisions or answer; every message does. Adapters skip the rest, so a log does not grow by a
 /// line for every tool call.
 pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
+    if matches!(kind, EventKind::Message { .. }) {
+        return true;
+    }
     let Some(before) = fold(id, events, None, now) else {
         return true;
     };
@@ -56,6 +59,7 @@ pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
             view.merge_request.clone(),
             view.decisions.clone(),
             view.timeline.last().map(|entry| entry.text.clone()),
+            view.answer.clone(),
         )
     };
     shown(&before) != shown(&after)
@@ -133,6 +137,7 @@ impl Folding {
             started_at: at,
             changed_at: at,
             workspace: None,
+            answer: None,
         };
         Folding {
             view,
@@ -180,6 +185,7 @@ impl Folding {
                 let same = self.view.state == State::Idle
                     && self.view.timeline.last().map(|entry| &entry.text) == Some(&text);
                 if !same {
+                    self.view.changed_at = at;
                     self.view.state = State::Idle;
                     self.view.blocker = None;
                     self.view.delegate = None;
@@ -238,6 +244,12 @@ impl Folding {
                     window: window.clone(),
                     agent: agent.clone(),
                 });
+            }
+            EventKind::Message { text } => {
+                self.note(at, format!("master: {text}"), Tone::Neutral);
+            }
+            EventKind::Answer { text } => {
+                self.view.answer = Some(text.clone());
             }
             EventKind::Ended => {
                 if self.view.state != State::Done {
@@ -353,6 +365,65 @@ mod tests {
         ));
         assert!(changes("x", &events, &idle("Tests pass."), 3));
         assert!(changes("x", &events, &EventKind::Working, 3));
+    }
+
+    #[test]
+    fn a_message_is_in_the_timeline_and_leaves_the_state() {
+        let events = vec![
+            started(0),
+            at(
+                1,
+                EventKind::Waiting {
+                    question: "Which delimiter?".into(),
+                },
+            ),
+            at(
+                2,
+                EventKind::Message {
+                    text: "Semicolons.".into(),
+                },
+            ),
+        ];
+
+        let flow = fold("x", &events, None, 3).unwrap();
+
+        assert_eq!(flow.state, State::Waiting);
+        assert_eq!(flow.changed_at, 1);
+        assert_eq!(flow.timeline.last().unwrap().text, "master: Semicolons.");
+        assert!(changes(
+            "x",
+            &events,
+            &EventKind::Message {
+                text: "Semicolons.".into()
+            },
+            3
+        ));
+    }
+
+    #[test]
+    fn keeps_the_last_answer_whole() {
+        let long = "word ".repeat(300);
+        let answer = |text: &str| EventKind::Answer { text: text.into() };
+        let events = vec![started(0), at(1, answer("first")), at(2, answer(&long))];
+
+        let flow = fold("x", &events, None, 3).unwrap();
+
+        assert_eq!(flow.answer.as_deref(), Some(long.as_str()));
+        assert_eq!(flow.timeline.len(), 1, "an answer adds no entry");
+        assert!(!changes("x", &events, &answer(&long), 3));
+        assert!(changes("x", &events, &answer("other"), 3));
+    }
+
+    #[test]
+    fn a_new_idle_note_counts_as_a_change() {
+        let idle = |note: &str| EventKind::Idle { note: note.into() };
+        let events = vec![
+            started(0),
+            at(1, idle("Design is ready.")),
+            at(5, idle("Plan is ready.")),
+        ];
+
+        assert_eq!(fold("x", &events, None, 6).unwrap().changed_at, 5);
     }
 
     #[test]
