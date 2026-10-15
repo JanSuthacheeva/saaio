@@ -65,4 +65,4 @@ Start { .., #[arg(long = "type")] kind: Option<String> }
 - [x] workspace::branch_exists; workspace_for takes the branch; flow start --type with tests/cli.rs cases
 - [x] new-flow dialog: type row, LoadBranching, preview, --type in Job::Start; tests
 - [x] Docs: README, CLAUDE.md, HANDOVER
-- [ ] End-to-end check: a repo with .flow/config.toml; flow start --type and the dialog create the right branch
+- [x] End-to-end check: a repo with .flow/config.toml; flow start --type and the dialog create the right branch
