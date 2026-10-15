@@ -434,9 +434,6 @@ impl BoardView<'_> {
         let mut y: u16 = 0;
         let mut number = 0;
         for project in &projects.projects {
-            if y > 0 {
-                y += 1;
-            }
             items.push((y, Item::Project(project)));
             y += 1;
             for (at, flow) in project.board.flows.iter().enumerate() {
@@ -500,16 +497,22 @@ impl BoardView<'_> {
             self.projects.and_then(|projects| {
                 every_flow(projects)
                     .get(self.state.selected)
-                    .map(|(project, flow)| (project.name.clone(), *flow))
+                    .map(|(project, flow)| (format!(" {}", flow.name), Some(&project.name), *flow))
             })
         } else {
             self.state
                 .selected
                 .checked_sub(1)
                 .and_then(|at| flows.get(at).copied())
-                .map(|flow| (self.state.selected.to_string(), flow))
+                .map(|flow| {
+                    (
+                        format!(" {} {}", self.state.selected, flow.name),
+                        None,
+                        flow,
+                    )
+                })
         };
-        let Some((label, flow)) = selected else {
+        let Some((title, project, flow)) = selected else {
             if self.state.all {
                 return;
             }
@@ -523,7 +526,9 @@ impl BoardView<'_> {
             buf.set_line(area.x, area.y, &line, area.width);
             return;
         };
-        let mut facts = vec![flow.request.clone(), name_of_mode(flow.mode).to_string()];
+        let mut facts: Vec<String> = project.into_iter().cloned().collect();
+        facts.push(flow.request.clone());
+        facts.push(name_of_mode(flow.mode).to_string());
         if let Some(space) = &flow.workspace {
             facts.push(space.branch.clone());
             facts.push(format!("slot {}", space.slot));
@@ -533,13 +538,13 @@ impl BoardView<'_> {
             long_duration(self.sidebar.now.saturating_sub(flow.started_at))
         ));
         let header = Line::from(vec![
-            Span::styled(format!(" {label} {}", flow.name), theme.ui.strong),
+            Span::styled(title.clone(), theme.ui.strong),
             Span::styled(
                 format!(
                     "  {}",
                     clip(
                         &facts.join(" · "),
-                        width.saturating_sub(label.len() + flow.name.len() + 5)
+                        width.saturating_sub(title.chars().count() + 3)
                     )
                 ),
                 theme.ui.faint,

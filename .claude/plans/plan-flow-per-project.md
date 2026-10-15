@@ -114,4 +114,4 @@ pub struct BoardView<'a> { /* as now */ pub projects: Option<&'a Projects> }
 - [x] view::Projects, output::status_all, `flow status --all` (TOON and --json) with tests
 - [x] flow ui: Job::Overview, BoardState.all, key `a`, BoardView.projects, refresh every 2 s, read-only other projects; tests
 - [x] Docs: README, CLAUDE.md module map, HANDOVER
-- [ ] End-to-end check: two tmux project sessions (private socket), a flow started in each gets distinct slots; `flow status --all` and flow ui `a` show both projects
+- [x] End-to-end check: two tmux project sessions (private socket), a flow started in each gets distinct slots; `flow status --all` and flow ui `a` show both projects
