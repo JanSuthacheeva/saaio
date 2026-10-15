@@ -55,6 +55,7 @@ pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
             view.review,
             view.merge_request.clone(),
             view.decisions.clone(),
+            view.timeline.last().map(|entry| entry.text.clone()),
         )
     };
     shown(&before) != shown(&after)
@@ -170,6 +171,17 @@ impl Folding {
             }
             EventKind::Waiting { question } => {
                 self.stop_for(State::Waiting, question, at, "waiting", Tone::Attention);
+            }
+            EventKind::Idle { note } => {
+                let text = format!("idle: {note}");
+                let same = self.view.state == State::Idle
+                    && self.view.timeline.last().map(|entry| &entry.text) == Some(&text);
+                if !same {
+                    self.view.state = State::Idle;
+                    self.view.blocker = None;
+                    self.view.delegate = None;
+                    self.note(at, text, Tone::Neutral);
+                }
             }
             EventKind::Blocked { reason } => {
                 self.stop_for(State::Blocked, reason, at, "blocked", Tone::Problem);
@@ -312,6 +324,25 @@ mod tests {
     use super::*;
 
     const MIN: u64 = 60_000;
+
+    #[test]
+    fn an_idle_worker_does_not_need_you_but_shows_its_last_line() {
+        let idle = |note: &str| EventKind::Idle { note: note.into() };
+        let events = vec![started(0), Event::new(1, idle("The review is still running."))];
+
+        let flow = fold("x", &events, None, 2).unwrap();
+
+        assert_eq!(flow.state, State::Idle);
+        assert!(!flow.needs_you());
+        assert_eq!(flow.blocker, None);
+        assert_eq!(
+            flow.timeline.last().unwrap().text,
+            "idle: The review is still running."
+        );
+        assert!(!changes("x", &events, &idle("The review is still running."), 3));
+        assert!(changes("x", &events, &idle("Tests pass."), 3));
+        assert!(changes("x", &events, &EventKind::Working, 3));
+    }
 
     fn started(at: u64) -> Event {
         Event::new(

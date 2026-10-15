@@ -134,6 +134,8 @@ enum ReportEvent {
     Delegated { description: String },
     /// The flow waits for the person's answer
     Waiting { question: String },
+    /// The turn ended without a question; nothing to do for the person
+    Idle { note: String },
     /// The flow cannot go on
     Blocked { reason: String },
     /// A decision made on the person's behalf
@@ -163,6 +165,7 @@ impl ReportEvent {
             ReportEvent::Working => EventKind::Working,
             ReportEvent::Delegated { description } => EventKind::Delegated { description },
             ReportEvent::Waiting { question } => EventKind::Waiting { question },
+            ReportEvent::Idle { note } => EventKind::Idle { note },
             ReportEvent::Blocked { reason } => EventKind::Blocked { reason },
             ReportEvent::Decision { text } => EventKind::Decision { text },
             ReportEvent::Tasks { done, total } => EventKind::Tasks { done, total },
