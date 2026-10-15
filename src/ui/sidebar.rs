@@ -377,7 +377,7 @@ impl Sidebar<'_> {
         }
     }
 
-    /// ●─◉─○─○: what is done in muted, the current step in the state's color, the rest faint;
+    /// ●───●───○───○: what is done and the current step in the state's color, the rest faint;
     /// all of it in the state's color once the flow is finished.
     pub fn steps(&self, flow: &FlowView) -> Vec<Span<'static>> {
         let theme = self.theme;
@@ -387,16 +387,15 @@ impl Sidebar<'_> {
         for (index, step) in flow.steps.iter().enumerate() {
             let (glyph, style) = match step.status {
                 _ if flow.is_finished() => (glyphs.step_done, tone),
-                StepStatus::Done => (glyphs.step_done, theme.ui.muted),
+                StepStatus::Done => (glyphs.step_done, tone),
                 StepStatus::Current => (glyphs.step_current, tone),
                 StepStatus::Open => (glyphs.step_open, theme.ui.faint),
             };
             spans.push(Span::styled(glyph, style));
             if let Some(next) = flow.steps.get(index + 1) {
-                let join = if flow.is_finished() {
+                let reached = step.status == StepStatus::Done && next.status != StepStatus::Open;
+                let join = if flow.is_finished() || reached {
                     tone
-                } else if step.status == StepStatus::Done && next.status != StepStatus::Open {
-                    theme.ui.muted
                 } else {
                     theme.ui.faint
                 };

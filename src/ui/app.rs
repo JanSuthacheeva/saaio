@@ -1815,7 +1815,7 @@ mod tests {
         );
         assert_eq!(
             side(&terminal, 6),
-            "     ●─◉─○─○ implement              4/9 "
+            "     ●───●───○───○ implement        4/9 "
         );
         assert_eq!(
             side(&terminal, 7),
@@ -1823,13 +1823,13 @@ mod tests {
         );
         assert_eq!(
             side(&terminal, 10),
-            "     ◉─○─○─○ design              guided "
+            "     ●───○───○───○ design        guided "
         );
         assert_eq!(side(&terminal, 13).trim_end(), " RUNNING 1");
         assert!(side(&terminal, 14).starts_with(" 3 ⠙ export-csv"));
         assert_eq!(side(&terminal, 16).trim_end(), "     agent: review changes");
         assert_eq!(side(&terminal, 18).trim_end(), " DONE 1");
-        assert_eq!(side(&terminal, 20).trim_end(), "     ●─●─●─● MR !418");
+        assert_eq!(side(&terminal, 20).trim_end(), "     ●───●───●───● MR !418");
         assert_eq!(side(&terminal, 41), "─".repeat(40));
         assert_eq!(
             side(&terminal, 42).trim_end(),
@@ -1855,7 +1855,7 @@ mod tests {
         let terminal = render_at(&app, FLEET);
         let title = row(&terminal, 0);
         assert!(
-            title.starts_with("╭ ◆ shop-230  ◉─○─○─○ design  │ flow/shop-230 · slot 1 ─"),
+            title.starts_with("╭ ◆ shop-230  ●───○───○───○ design  │ flow/shop-230 · slot 1 ─"),
             "{title}"
         );
         assert!(
@@ -1948,9 +1948,12 @@ mod tests {
 
         let terminal = render_at(&app, FLEET);
 
-        assert_eq!(side(&terminal, 6).trim_end(), "     ○─○─○─○ waiting");
+        assert_eq!(side(&terminal, 6).trim_end(), "     ○───○───○───○ waiting");
         assert_eq!(side(&terminal, 7).trim_end(), "     ready");
-        assert_eq!(side(&terminal, 11).trim_end(), "     ○─○─○─○ starting");
+        assert_eq!(
+            side(&terminal, 11).trim_end(),
+            "     ○───○───○───○ starting"
+        );
         assert_eq!(
             side(&terminal, 12).trim_end(),
             "",
@@ -2012,7 +2015,7 @@ mod tests {
         );
         assert_eq!(
             side(&terminal, 15).trim_end(),
-            "▌    ●─●─◉─○ review                 6/6"
+            "▌    ●───●───●───○ review           6/6"
         );
         assert_eq!(
             side(&terminal, 16).trim_end(),
@@ -2200,6 +2203,39 @@ mod tests {
             buffer[(52, 2)].fg,
             Theme::builtin().state.blocked.fg.unwrap()
         );
+    }
+
+    #[test]
+    fn what_is_done_takes_the_color_of_where_the_flow_is() {
+        let theme = Theme::builtin();
+        let blocked = theme.state.blocked.fg.unwrap();
+        let faint = theme.ui.faint.fg.unwrap();
+        let terminal = render_at(&with_fleet(), FLEET);
+        let buffer = terminal.backend().buffer();
+        let y = (0..FLEET.rows)
+            .find(|&y| side(&terminal, y).contains("●───●───○───○ implement"))
+            .expect("shop-221's track");
+        let x = (0..FLEET.cols)
+            .find(|&x| buffer[(x, y)].symbol() == "●")
+            .unwrap();
+
+        assert_eq!(buffer[(x, y)].fg, blocked, "done");
+        assert_eq!(
+            buffer[(x + 1, y)].fg,
+            blocked,
+            "the join into the current step"
+        );
+        assert_eq!(buffer[(x + 4, y)].fg, blocked, "current");
+        assert_eq!(buffer[(x + 8, y)].fg, faint, "open");
+
+        let mut board = board_app();
+        board.on_input(Routed::Command(Command::Board));
+        let terminal = render_at(&board, FLEET);
+        let buffer = terminal.backend().buffer();
+        let bar = (0..FLEET.cols)
+            .find(|&x| buffer[(x, 5)].symbol() == "━")
+            .expect("shop-221's task bar");
+        assert_eq!(buffer[(bar, 5)].fg, blocked, "the filled bar");
     }
 
     #[test]

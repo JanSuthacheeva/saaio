@@ -271,7 +271,7 @@ impl BoardView<'_> {
                     let filled = (bar as u32 * done.min(total) / total) as usize;
                     vec![
                         Span::raw("   "),
-                        Span::styled("━".repeat(filled), theme.ui.muted),
+                        Span::styled("━".repeat(filled), theme.state(flow.state)),
                         Span::styled("─".repeat(bar - filled), theme.ui.faint),
                         Span::styled(format!("  {count}"), theme.ui.text),
                     ]
