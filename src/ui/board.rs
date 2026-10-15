@@ -575,12 +575,23 @@ impl BoardView<'_> {
         );
 
         let sidebar = &self.sidebar;
+        // Names padded to the longest, so what each flow asks starts in one column.
+        let name_width = flows
+            .iter()
+            .filter(|flow| flow.needs_you() || flow.state == State::Idle)
+            .map(|flow| flow.name.chars().count())
+            .max()
+            .unwrap_or(0);
         let entry = |flow: &FlowView, text: String, style: Style| {
-            let lead = format!("  {} {}  ", sidebar.glyph(flow.state), flow.name);
+            let lead = format!(
+                "  {} {:name_width$}  ",
+                sidebar.glyph(flow.state),
+                flow.name
+            );
             Line::from(vec![
                 Span::styled("  ", theme.ui.text),
                 Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
-                Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
+                Span::styled(format!(" {:name_width$}  ", flow.name), theme.ui.strong),
                 Span::styled(
                     clip(&text, width.saturating_sub(lead.chars().count() + 1)),
                     style,

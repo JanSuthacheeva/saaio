@@ -1,0 +1,44 @@
+
+  ● master  main                                                                                            │ ▚▄▞ flow                    2 need you
+                                                                                                            ├────────────────────────────────────────
+                                                                                                            │ 0 ● master                   ◂ in view
+                                                                                                            │     ~/projects/shop · main
+                                                                                                            │
+                                                                                                            │ NEEDS YOU 2
+                                                                                                            │ 1 ✖ shop-221                       29m
+                                                                                                            │     ●───●───○───○ implement        4/9
+                                                                                                            │     migration needs a default value f…
+                                                                                                            │
+                                                                                                            │ 2 ◆ shop-230                       31m
+                                                                                                            │     ●───○───○───○ design        guided
+                                                                                                            │     Which approach: a channel column …
+                             ╭ keys ──────────────────────────────────────────╮                             │
+                             │ C-space then                                   │                             │ RUNNING 1
+                             │   0-9      jump to a session (0 is the master) │                             │ 3 ⠙ export-csv                      1h
+                             │   j k      move the peek over the workers      │                             │     ●───●───●───○ review           6/6
+                             │   enter    jump into the peeked worker         │                             │     agent: review changes
+                             │   n        start a new flow                    │                             │
+                             │   o        the board of every session          │                             │ DONE 1
+                             │   b        fold the sidebar to a rail and back │                             │ 4 ✔ shop-198                        2h
+                             │   r        resume a session that ended         │                             │     ●───●───●───● MR !418        in 0s
+                             │   [        scroll back through the history     │                             │
+                             │   d        detach; every session keeps running │                             │
+                             │   Q        stop flow                           │                             │
+                             │   C-space  send C-space itself                 │                             │
+                             │   ?        these keys                          │                             │
+                             │                                                │                             │
+                             │ any key closes this                            │                             │
+                             ╰────────────────────────────────────────────────╯                             │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │ C-space ? keys
+

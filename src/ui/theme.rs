@@ -175,8 +175,9 @@ pub struct Glyphs {
     pub spinner: &'static [&'static str],
     pub cursor: &'static str,
     pub separator: &'static str,
-    /// The line between the pane and the sidebar.
+    /// The line between the pane and the sidebar, and where the sidebar's header rule meets it.
     pub rule_v: &'static str,
+    pub rule_joint: &'static str,
     pub in_view: &'static str,
     pub step_done: &'static str,
     pub step_current: &'static str,
@@ -242,6 +243,7 @@ impl Theme {
                 cursor: "▌",
                 separator: "│",
                 rule_v: "│",
+                rule_joint: "├",
                 in_view: "◂",
                 step_done: "●",
                 step_current: "●",
