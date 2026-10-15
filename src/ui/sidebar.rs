@@ -258,6 +258,12 @@ impl Sidebar<'_> {
         ];
         if let Some((text, style)) = self.note(flow, status) {
             let mut third = lead("    ");
+            // Notes stay behind the names; the row you are on reads a step brighter.
+            let style = if selected && style == theme.ui.faint {
+                theme.ui.muted
+            } else {
+                style
+            };
             third.push(Span::styled(clip(&text, width - 6), style));
             rows.push(Row {
                 line: Line::from(third),
@@ -436,7 +442,7 @@ impl Sidebar<'_> {
             return None;
         }
         if let Some(blocker) = &flow.blocker {
-            return Some((blocker.clone(), theme.ui.muted));
+            return Some((blocker.clone(), theme.ui.faint));
         }
         if let Some(delegate) = &flow.delegate {
             return Some((format!("agent: {delegate}"), theme.ui.faint));

@@ -2219,6 +2219,30 @@ mod tests {
     }
 
     #[test]
+    fn notes_stay_behind_the_names_but_the_selected_one() {
+        let theme = Theme::builtin();
+        let mut app = with_fleet();
+        app.on_input(Routed::Command(Command::Focus(2)));
+        let terminal = render_at(&app, FLEET);
+        let buffer = terminal.backend().buffer();
+        let color_of = |text: &str| {
+            let y = (0..FLEET.rows - 2)
+                .find(|&y| side(&terminal, y).contains(text))
+                .unwrap_or_else(|| panic!("no row with {text}"));
+            let x = row(&terminal, y).find(text).unwrap();
+            let x = row(&terminal, y)[..x].chars().count() as u16 + layout::MARGIN;
+            buffer[(x, y + layout::MARGIN)].fg
+        };
+
+        assert_eq!(color_of("migration needs"), theme.ui.faint.fg.unwrap());
+        assert_eq!(
+            color_of("Which approach"),
+            theme.ui.muted.fg.unwrap(),
+            "shop-230 is in view"
+        );
+    }
+
+    #[test]
     fn what_is_done_takes_the_color_of_where_the_flow_is() {
         let theme = Theme::builtin();
         let blocked = theme.state.blocked.fg.unwrap();
