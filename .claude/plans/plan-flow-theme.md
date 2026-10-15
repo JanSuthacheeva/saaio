@@ -156,7 +156,7 @@ Unknown keys are an error.
 - [x] theme_file.rs: load with extends, apply, color; tests for bases, overrides, references and each error
 - [x] ThemeWatch::new/changed with tests (first load, unchanged, edit, create, delete)
 - [x] screen::ScreenView and App::draw painting the background; board pills via on_solid; tests with the flow palette
-- [ ] ui::run owns the theme (UiEnv.theme_dir, TICKS_PER_THEME, App::say on errors); main::ui passes the config dir
+- [x] ui::run owns the theme (UiEnv.theme_dir, TICKS_PER_THEME, App::say on errors); main::ui passes the config dir
 - [ ] Docs: README (themes), CLAUDE.md module map, HANDOVER
 - [ ] dotfiles-v2: Noctalia template templates/flow.toml and its [theme.templates.user.flow] entry
 - [ ] End-to-end check: flow ui in a private tmux server; theme.toml extends flow, then flow-light, then a themes/ file edited while running repaints within a second; a broken file shows the notice and keeps the theme

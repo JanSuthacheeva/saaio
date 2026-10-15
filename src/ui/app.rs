@@ -168,6 +168,11 @@ impl App {
         }
     }
 
+    /// Shows a one-line notice until the next key, such as why theme.toml could not be read.
+    pub fn say(&mut self, notice: String) {
+        self.notice = Some(notice);
+    }
+
     /// The store this flow ui belongs to, as `flow status --all` names its root.
     pub fn with_store(mut self, root: String) -> App {
         self.here = Some(root);
