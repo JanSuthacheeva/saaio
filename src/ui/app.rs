@@ -8,6 +8,7 @@ use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
 
 use crate::event::Mode;
 use crate::launch::WORKTREES_DIR;
+use crate::output;
 use crate::proto::{ClientMsg, Modes, PaneInfo, PaneKey, PaneStatus, ServerMsg, Size};
 use crate::ui::board::{self, BoardState, BoardView};
 use crate::ui::input::{Command, Key, Routed};
@@ -36,13 +37,38 @@ pub enum View {
     Stop(Vec<String>),
     /// C-space ?: every key.
     Help,
+    /// A question before a removal loses work: y runs `then`, any other key keeps the flow.
+    Confirm {
+        question: String,
+        then: Removal,
+    },
+}
+
+/// A `flow remove`, with what the person agreed to lose.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Removal {
+    pub name: String,
+    /// Discard uncommitted work in the worktree (--force).
+    pub force: bool,
+    /// Delete the branch with commits on no other branch (--delete-unmerged).
+    pub delete_unmerged: bool,
+}
+
+impl Removal {
+    pub fn of(name: &str) -> Removal {
+        Removal {
+            name: name.to_string(),
+            force: false,
+            delete_unmerged: false,
+        }
+    }
 }
 
 /// A flow command flow ui runs in the background.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Job {
     Start(NewFlowForm),
-    Remove(String),
+    Remove(Removal),
     /// `flow status --all --json`: every project's board.
     Overview,
 }
@@ -60,7 +86,16 @@ impl Job {
                     Mode::Guided => "guided".to_string(),
                 },
             ],
-            Job::Remove(name) => vec!["remove".to_string(), name.clone()],
+            Job::Remove(removal) => {
+                let mut args = vec!["remove".to_string(), removal.name.clone()];
+                if removal.force {
+                    args.push("--force".to_string());
+                }
+                if removal.delete_unmerged {
+                    args.push("--delete-unmerged".to_string());
+                }
+                args
+            }
             Job::Overview => vec![
                 "status".to_string(),
                 "--all".to_string(),
@@ -299,9 +334,10 @@ impl App {
             self.notice = None;
         }
         match routed {
-            Routed::Pane(bytes) if self.view == View::Panes => {
-                vec![Effect::Send(ClientMsg::Input(bytes))]
-            }
+            Routed::Pane(bytes) if self.view == View::Panes => match self.ended_worker() {
+                Some(name) => self.on_ended_key(name, &bytes),
+                None => vec![Effect::Send(ClientMsg::Input(bytes))],
+            },
             Routed::Click { col, row } if self.view == View::Panes => self.on_click(col, row),
             Routed::Pane(_) | Routed::Click { .. } => vec![],
             Routed::View(keys) => self.on_keys(keys),
@@ -372,12 +408,35 @@ impl App {
         }
         match self.status(&self.focus) {
             Some(PaneStatus::Running) => {}
-            Some(status) => draw_not_running(frame, areas.pane, status, theme),
+            Some(status) => draw_not_running(
+                frame,
+                areas.pane,
+                status,
+                self.ended_worker().as_deref(),
+                theme,
+            ),
             None if self.focus != PaneKey::Master => draw_no_session(frame, areas.pane, theme),
             None => {}
         }
         match self.view {
             View::Stop(ref unfinished) => self.draw_stop(frame, areas.pane, theme, unfinished),
+            View::Confirm { ref question, .. } => {
+                let text = vec![
+                    Line::styled(question.clone(), theme.ui.text),
+                    Line::from(vec![
+                        Span::styled("y", theme.ui.key),
+                        Span::styled(" yes, any other key keeps the flow", theme.ui.muted),
+                    ]),
+                ];
+                draw_dialog(
+                    frame,
+                    areas.pane,
+                    theme,
+                    " clean up ",
+                    theme.state.waiting,
+                    text,
+                );
+            }
             View::Help => draw_help(frame, areas.pane, theme),
             View::Board(_) => {}
             View::History(back) => {
@@ -544,6 +603,14 @@ impl App {
         if let View::Stop(unfinished) = &self.view {
             let unfinished = unfinished.clone();
             return self.on_stop_key(&unfinished, key);
+        }
+        if let View::Confirm { then, .. } = &self.view {
+            let then = then.clone();
+            self.view = View::Panes;
+            if key != Key::Char('y') {
+                return vec![];
+            }
+            return self.remove(then);
         }
         self.view = View::Panes;
         vec![]
@@ -729,16 +796,45 @@ impl App {
         }
     }
 
+    /// The focused worker's name when its session is no longer running.
+    fn ended_worker(&self) -> Option<String> {
+        let PaneKey::Flow(id) = &self.focus else {
+            return None;
+        };
+        match self.status(&self.focus) {
+            Some(PaneStatus::Exited { .. } | PaneStatus::Failed { .. }) => self
+                .workers()
+                .into_iter()
+                .find(|flow| &flow.id == id)
+                .map(|flow| flow.name.clone()),
+            _ => None,
+        }
+    }
+
+    /// Over a worker whose session ended: x cleans the flow up, r resumes it, esc goes to the master.
+    fn on_ended_key(&mut self, name: String, bytes: &[u8]) -> Vec<Effect> {
+        match bytes {
+            b"x" | b"X" => self.remove(Removal::of(&name)),
+            b"r" | b"R" => vec![Effect::Send(ClientMsg::Reopen(self.focus.clone()))],
+            [0x1b] => self.focus(PaneKey::Master),
+            _ => vec![],
+        }
+    }
+
+    /// Runs `flow remove` in the background; what it refuses comes back as a question (on_ran).
+    fn remove(&mut self, removal: Removal) -> Vec<Effect> {
+        self.notice = Some(format!("cleaning up {}…", removal.name));
+        vec![Effect::Run(Job::Remove(removal))]
+    }
+
     /// Removes a finished flow of this project in the background; says so for any other.
     fn clear(&mut self, flow: Option<FlowView>) -> Vec<Effect> {
         match flow {
             Some(flow) if flow.is_finished() => {
-                let job = Job::Remove(flow.name.clone());
-                self.notice = Some(format!("clearing {}…", flow.name));
                 if let View::Board(state) = &mut self.view {
                     state.selected = 0;
                 }
-                vec![Effect::Run(job)]
+                self.remove(Removal::of(&flow.name))
             }
             _ => {
                 self.notice = Some("only a finished flow can be cleared".to_string());
@@ -800,6 +896,24 @@ impl App {
             (Job::Start(mut form), Err(error)) => {
                 form.error = Some(error);
                 self.view = View::NewFlow(form);
+            }
+            (Job::Remove(removal), Err(error)) if error.contains(output::UNCOMMITTED) => {
+                self.view = View::Confirm {
+                    question: format!("{} has uncommitted changes. Discard them?", removal.name),
+                    then: Removal {
+                        force: true,
+                        ..removal
+                    },
+                };
+            }
+            (Job::Remove(removal), Err(error)) if error.contains(output::UNMERGED) => {
+                self.view = View::Confirm {
+                    question: format!("{error}. Delete it anyway?"),
+                    then: Removal {
+                        delete_unmerged: true,
+                        ..removal
+                    },
+                };
             }
             (Job::Remove(_), Err(error)) => self.notice = Some(error),
         }
@@ -1121,8 +1235,15 @@ impl App {
     }
 }
 
-/// A notice over a pane whose process is gone, saying how to bring it back.
-fn draw_not_running(frame: &mut TuiFrame, pane: Rect, status: &PaneStatus, theme: &Theme) {
+/// A notice over a pane whose process is gone: for a worker (`worker` is its name) what to do with
+/// its flow, for the master how to bring it back.
+fn draw_not_running(
+    frame: &mut TuiFrame,
+    pane: Rect,
+    status: &PaneStatus,
+    worker: Option<&str>,
+    theme: &Theme,
+) {
     let (title, first, style) = match status {
         PaneStatus::Exited { code } => (
             " exited ",
@@ -1135,15 +1256,23 @@ fn draw_not_running(frame: &mut TuiFrame, pane: Rect, status: &PaneStatus, theme
         PaneStatus::Failed { reason } => (" could not start ", reason.clone(), theme.state.blocked),
         PaneStatus::Running => return,
     };
-    let text = vec![
-        Line::styled(first, theme.ui.text),
-        Line::from(vec![
+    let keys = match worker {
+        Some(_) => vec![
+            Span::styled("x", theme.ui.key),
+            Span::styled(" clean up: worktree, branch, flow   ", theme.ui.muted),
+            Span::styled("r", theme.ui.key),
+            Span::styled(" resume   ", theme.ui.muted),
+            Span::styled("esc", theme.ui.key),
+            Span::styled(" back to master", theme.ui.muted),
+        ],
+        None => vec![
             Span::styled("C-space r", theme.ui.key),
             Span::styled(" resumes it   ", theme.ui.muted),
             Span::styled("C-space Q", theme.ui.key),
             Span::styled(" stops flow", theme.ui.muted),
-        ]),
-    ];
+        ],
+    };
+    let text = vec![Line::styled(first, theme.ui.text), Line::from(keys)];
     draw_dialog(frame, pane, theme, title, style, text);
 }
 
@@ -1388,6 +1517,90 @@ mod tests {
             app.on_input(Routed::Command(Command::Reopen)),
             vec![Effect::Send(ClientMsg::Reopen(PaneKey::Master))]
         );
+    }
+
+    #[test]
+    fn offers_to_clean_up_a_worker_whose_session_ended() {
+        let mut app = board_app();
+        app.on_input(Routed::Command(Command::Focus(2)));
+        let id = PaneKey::Flow("shop-230".into());
+        app.on_server(ServerMsg::Panes(vec![PaneInfo {
+            key: id.clone(),
+            status: PaneStatus::Exited { code: Some(0) },
+        }]));
+
+        let terminal = render_at(&app, FLEET);
+        let screen: String = (0..FLEET.rows).map(|y| row(&terminal, y) + "\n").collect();
+        assert!(
+            screen.contains("x clean up: worktree, branch, flow   r resume   esc back to master"),
+            "{screen}"
+        );
+        assert_eq!(
+            app.on_input(Routed::Pane(b"a".to_vec())),
+            vec![],
+            "the pane is gone"
+        );
+        assert_eq!(
+            app.on_input(Routed::Pane(b"r".to_vec())),
+            vec![Effect::Send(ClientMsg::Reopen(id))]
+        );
+        assert_eq!(
+            app.on_input(Routed::Pane(b"x".to_vec())),
+            vec![Effect::Run(Job::Remove(Removal::of("shop-230")))]
+        );
+        assert_eq!(app.notice.as_deref(), Some("cleaning up shop-230…"));
+        assert_eq!(
+            app.on_input(Routed::Pane(vec![0x1b])),
+            vec![Effect::Send(ClientMsg::Focus(PaneKey::Master))]
+        );
+    }
+
+    #[test]
+    fn asks_before_a_clean_up_loses_work() {
+        let mut app = board_app();
+        let first = Removal::of("shop-230");
+
+        app.on_ran(
+            Job::Remove(first.clone()),
+            Err(format!("shop-230 {} in /shop", output::UNCOMMITTED)),
+        );
+        assert!(app.is_modal());
+        let screen: String = {
+            let terminal = render_at(&app, FLEET);
+            (0..FLEET.rows).map(|y| row(&terminal, y) + "\n").collect()
+        };
+        assert!(
+            screen.contains("shop-230 has uncommitted changes. Discard them?"),
+            "{screen}"
+        );
+        let forced = Removal {
+            force: true,
+            ..first.clone()
+        };
+        assert_eq!(
+            app.on_input(Routed::View(vec![Key::Char('y')])),
+            vec![Effect::Run(Job::Remove(forced.clone()))]
+        );
+
+        app.on_ran(
+            Job::Remove(forced.clone()),
+            Err(format!("flow/shop-230 has 2 commits {}", output::UNMERGED)),
+        );
+        let View::Confirm { question, then } = &app.view else {
+            panic!("expected a question: {:?}", app.view);
+        };
+        assert_eq!(
+            question,
+            "flow/shop-230 has 2 commits on no other branch. Delete it anyway?"
+        );
+        assert!(then.force && then.delete_unmerged);
+        assert_eq!(
+            Job::Remove(then.clone()).args(),
+            ["remove", "shop-230", "--force", "--delete-unmerged"]
+        );
+
+        assert_eq!(app.on_input(Routed::View(vec![Key::Char('n')])), vec![]);
+        assert!(!app.is_modal(), "any other key keeps the flow");
     }
 
     const MINUTE: u64 = 60_000;
@@ -2025,14 +2238,17 @@ mod tests {
             Some("only a finished flow can be cleared")
         );
         let effects = app.on_input(Routed::View(vec![Key::Char('4'), Key::Char('x')]));
-        assert_eq!(effects, vec![Effect::Run(Job::Remove("shop-198".into()))]);
+        assert_eq!(
+            effects,
+            vec![Effect::Run(Job::Remove(Removal::of("shop-198")))]
+        );
         app.on_ran(
-            Job::Remove("shop-198".into()),
-            Err("shop-198 has uncommitted work in /shop".into()),
+            Job::Remove(Removal::of("shop-198")),
+            Err("could not remove shop-198: permission denied".into()),
         );
         assert_eq!(
             app.notice.as_deref(),
-            Some("shop-198 has uncommitted work in /shop")
+            Some("could not remove shop-198: permission denied")
         );
     }
 
