@@ -34,6 +34,8 @@ pub struct FlowView {
     pub started_at: u64,
     pub changed_at: u64,
     pub workspace: Option<Workspace>,
+    /// The last turn's whole closing message.
+    pub answer: Option<String>,
 }
 
 /// Where a started flow's worker runs: its worktree, branch, port slot, window (flow-ui once
@@ -190,6 +192,7 @@ mod tests {
                 window: Some("@14".into()),
                 agent: "claude".into(),
             }),
+            answer: None,
         }
     }
 

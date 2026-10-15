@@ -1076,3 +1076,224 @@ fn the_server_command_stays_out_of_the_help() {
     assert!(help.contains("ui"), "{help}");
     assert!(!help.contains("server"), "{help}");
 }
+
+fn seed_worker(home: &Path, id: &str, name: &str, last: &str) {
+    let started = format!(
+        r#"{{"v":1,"at":1000,"kind":"started","name":"{name}","request":"x","mode":"auto"}}"#
+    );
+    let workspace = format!(
+        r#"{{"v":1,"at":1500,"kind":"workspace","path":"/repo/.flow/worktrees/{name}","branch":"flow/{name}","slot":1,"window":"flow-ui","agent":"claude"}}"#
+    );
+    seed(home, id, &[&started, &workspace, last]);
+}
+
+#[test]
+fn send_puts_the_masters_message_into_the_flows_log() {
+    let home = TempDir::new().unwrap();
+    seed_worker(
+        home.path(),
+        "7f3c",
+        "shop-217",
+        r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
+    );
+
+    let output = flow(home.path(), &["send", "shop-217", "Semicolons."]);
+
+    assert!(output.status.success(), "{}", stdout(&output));
+    assert!(stdout(&output).starts_with("sent: shop-217\nstate: waiting\n"));
+    let log = fs::read_to_string(home.path().join("flows/7f3c.jsonl")).unwrap();
+    assert!(
+        log.lines()
+            .last()
+            .unwrap()
+            .contains(r#""kind":"message","text":"Semicolons.""#),
+        "{log}"
+    );
+    let detail = stdout(&flow(home.path(), &["status", "shop-217"]));
+    assert!(detail.contains("master: Semicolons."), "{detail}");
+}
+
+#[test]
+fn send_refuses_what_has_no_worker_to_read_it() {
+    let home = TempDir::new().unwrap();
+    seed_worker(
+        home.path(),
+        "aaaa",
+        "shipped",
+        r#"{"v":1,"at":2000,"kind":"ended"}"#,
+    );
+    seed(
+        home.path(),
+        "bbbb",
+        &[r#"{"v":1,"at":1000,"kind":"started","name":"tracked","request":"x","mode":"auto"}"#],
+    );
+    seed_worker(
+        home.path(),
+        "cccc",
+        "live",
+        r#"{"v":1,"at":2000,"kind":"working"}"#,
+    );
+
+    let refused = |args: &[&str], from: Option<&str>| {
+        let output = match from {
+            Some(id) => flow_in(home.path(), id, args),
+            None => flow(home.path(), args),
+        };
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "{args:?}: {}",
+            stdout(&output)
+        );
+        stdout(&output)
+    };
+
+    assert!(refused(&["send", "nobody", "hi"], None).contains("no flow named nobody"));
+    assert!(refused(&["send", "shipped", "hi"], None).contains("shipped is finished"));
+    assert!(refused(&["send", "tracked", "hi"], None).contains("tracked has no worker"));
+    assert!(refused(&["send", "live", "  "], None).contains("nothing to send"));
+    let long = "x".repeat(4001);
+    assert!(refused(&["send", "live", &long], None).contains("over 4000"));
+    assert!(refused(&["send", "live", "hi"], Some("cccc")).contains("only the master sends"));
+    let log = fs::read_to_string(home.path().join("flows/cccc.jsonl")).unwrap();
+    assert!(!log.contains("message"), "{log}");
+}
+
+fn waiter(home: &Path, flow_id: Option<&str>, args: &[&str]) -> std::process::Child {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_flow"));
+    command
+        .arg("wait")
+        .args(args)
+        .env("FLOW_HOME", home)
+        .env("XDG_STATE_HOME", shared(home))
+        .env_remove("FLOW_ID")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    if let Some(id) = flow_id {
+        command.env("FLOW_ID", id);
+    }
+    command.spawn().expect("the flow binary runs")
+}
+
+/// The waiter's exit code, stdout and stderr once it ends; None while it still runs after `limit`.
+fn ended(
+    child: &mut std::process::Child,
+    limit: std::time::Duration,
+) -> Option<(i32, String, String)> {
+    let deadline = std::time::Instant::now() + limit;
+    while std::time::Instant::now() < deadline {
+        if let Some(status) = child.try_wait().unwrap() {
+            let mut out = String::new();
+            let mut err = String::new();
+            use std::io::Read;
+            child
+                .stdout
+                .take()
+                .unwrap()
+                .read_to_string(&mut out)
+                .unwrap();
+            child
+                .stderr
+                .take()
+                .unwrap()
+                .read_to_string(&mut err)
+                .unwrap();
+            return Some((status.code().unwrap_or(-1), out, err));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    None
+}
+
+#[test]
+fn a_workers_wait_ends_with_the_masters_message_once() {
+    let home = TempDir::new().unwrap();
+    seed_worker(
+        home.path(),
+        "7f3c",
+        "shop-217",
+        r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
+    );
+    let short = std::time::Duration::from_millis(1200);
+    let mut first = waiter(home.path(), Some("7f3c"), &[]);
+    assert!(ended(&mut first, short).is_none(), "nothing to deliver yet");
+
+    flow(home.path(), &["send", "shop-217", "Semicolons."]);
+
+    let (code, out, err) = ended(&mut first, std::time::Duration::from_secs(5)).expect("woken");
+    assert_eq!(code, 2);
+    assert_eq!(out, "");
+    assert_eq!(
+        err.trim_end(),
+        "message from the flow master:\n  Semicolons."
+    );
+
+    let mut again = waiter(home.path(), Some("7f3c"), &[]);
+    assert!(ended(&mut again, short).is_none(), "delivered once only");
+    let mut replacing = waiter(home.path(), Some("7f3c"), &[]);
+    let (code, _, err) = ended(&mut again, std::time::Duration::from_secs(5)).expect("replaced");
+    assert_eq!((code, err.as_str()), (0, ""));
+    replacing.kill().unwrap();
+    replacing.wait().unwrap();
+}
+
+#[test]
+fn the_masters_wait_ends_with_the_flows_that_stopped() {
+    let home = TempDir::new().unwrap();
+    seed_worker(
+        home.path(),
+        "7f3c",
+        "shop-217",
+        r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
+    );
+    seed_worker(
+        home.path(),
+        "8a1b",
+        "shop-218",
+        r#"{"v":1,"at":2000,"kind":"working"}"#,
+    );
+
+    let mut master = waiter(home.path(), None, &["--master"]);
+    let (code, _, err) = ended(&mut master, std::time::Duration::from_secs(6)).expect("woken");
+
+    assert_eq!(code, 2);
+    assert!(
+        err.starts_with(
+            "changed[1]{name,state,mode,says}:\n  shop-217,waiting,auto,Which delimiter?\n"
+        ),
+        "{err}"
+    );
+
+    let mut again = waiter(home.path(), None, &["--master"]);
+    assert!(
+        ended(&mut again, std::time::Duration::from_millis(3000)).is_none(),
+        "it saw shop-217 already"
+    );
+    fs::write(
+        home.path().join("flows/8a1b.jsonl"),
+        fs::read_to_string(home.path().join("flows/8a1b.jsonl")).unwrap()
+            + r#"{"v":1,"at":3000,"kind":"idle","note":"Plan is ready."}"#
+            + "\n",
+    )
+    .unwrap();
+    let (code, _, err) = ended(&mut again, std::time::Duration::from_secs(6)).expect("woken again");
+    assert_eq!(code, 2);
+    assert!(err.contains("shop-218,idle,auto,Plan is ready."), "{err}");
+    assert!(!err.contains("shop-217"), "{err}");
+}
+
+#[test]
+fn a_wait_with_nobody_to_wait_for_ends_quietly() {
+    let home = TempDir::new().unwrap();
+    let mut nobody = waiter(home.path(), None, &[]);
+    assert_eq!(
+        ended(&mut nobody, std::time::Duration::from_secs(3)),
+        Some((0, String::new(), String::new()))
+    );
+    let mut gone = waiter(home.path(), Some("nope"), &[]);
+    assert_eq!(
+        ended(&mut gone, std::time::Duration::from_secs(3)),
+        Some((0, String::new(), String::new()))
+    );
+}

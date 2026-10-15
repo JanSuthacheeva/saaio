@@ -34,6 +34,27 @@ pub struct Config {
     /// Skill name -> phase: the built-in map with the file's entries over it.
     #[serde(default)]
     pub phases: PhaseMap,
+    #[serde(default)]
+    pub master: MasterConfig,
+}
+
+/// [master]: how the master works with its workers.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MasterConfig {
+    /// flow wakes the master when a worker stops (wake = false: it learns only from flow status).
+    #[serde(default = "yes")]
+    pub wake: bool,
+}
+
+impl Default for MasterConfig {
+    fn default() -> MasterConfig {
+        MasterConfig { wake: true }
+    }
+}
+
+fn yes() -> bool {
+    true
 }
 
 impl Config {
@@ -154,6 +175,7 @@ impl Config {
             agent: default_agent_name(),
             agents: BTreeMap::new(),
             phases: PhaseMap::new(),
+            master: MasterConfig::default(),
         }
     }
 }
@@ -303,6 +325,24 @@ prompt = "/design-code {request}"
         assert!(
             format!("{error:#}").contains(&file.display().to_string()),
             "{error:#}"
+        );
+    }
+
+    #[test]
+    fn wakes_the_master_unless_the_file_says_not_to() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        let load = || Config::load(Some(file.clone()), None, None).unwrap();
+
+        assert!(load().master.wake, "no file");
+        fs::write(&file, "agent = \"claude\"\n").unwrap();
+        assert!(load().master.wake, "no [master]");
+        fs::write(&file, "[master]\nwake = false\n").unwrap();
+        assert!(!load().master.wake);
+        fs::write(&file, "[master]\nwke = false\n").unwrap();
+        assert!(
+            Config::load(Some(file.clone()), None, None).is_err(),
+            "a typo is an error"
         );
     }
 }

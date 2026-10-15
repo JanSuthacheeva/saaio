@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-flow is an AXI (https://axi.md): a CLI whose main user is an agent. It records each feature flow as an append-only event log and folds the logs into where every flow stands. Agents read TOON (the default output); programs read `flow status --json`. The designs and task lists live in `.claude/plans/` (`plan-flow-core.md`, `plan-flow-start.md`, `plan-flow-ui.md`, `plan-flow-adapters.md`, `plan-flow-per-project.md`, `plan-flow-theme.md`, `plan-flow-branch-names.md`); the whole flows system (the other five pieces, every decision, verified Claude Code facts, gotchas) is in `docs/HANDOVER.md`, with the design review pages in `docs/design/`.
+flow is an AXI (https://axi.md): a CLI whose main user is an agent. It records each feature flow as an append-only event log and folds the logs into where every flow stands. Agents read TOON (the default output); programs read `flow status --json`. The designs and task lists live in `.claude/plans/` (`plan-flow-core.md`, `plan-flow-start.md`, `plan-flow-ui.md`, `plan-flow-adapters.md`, `plan-flow-per-project.md`, `plan-flow-theme.md`, `plan-flow-branch-names.md`, `plan-flow-talk.md`); the whole flows system (the other five pieces, every decision, verified Claude Code facts, gotchas) is in `docs/HANDOVER.md`, with the design review pages in `docs/design/`.
 
 ## Build Commands
 
@@ -21,9 +21,10 @@ cargo install --path .         # install the flow binary
 
 - **main.rs** - clap `Cli`, dispatch, exit codes (0 ok, 1 error, 2 usage). The only place that reads the environment and the clock and writes stdout.
 - **event.rs** - what can be reported (`Event`, `EventKind`, `Phase`, `Mode`) and the JSON line format of the log.
-- **store.rs** - every file operation: `flows/<id>.jsonl` logs and `flows/<id>.alive` heartbeats under `$FLOW_HOME`, `$XDG_STATE_HOME/flow` or `~/.local/state/flow`.
+- **store.rs** - every file operation: `flows/<id>.jsonl` logs and `flows/<id>.alive` heartbeats under `$FLOW_HOME`, `$XDG_STATE_HOME/flow` or `~/.local/state/flow`; `waits/` for `flow wait` (each session's waiter pid, deliveries, the master's seen marks).
 - **registry.rs** - the shared folder (`$XDG_STATE_HOME/flow` or `~/.local/state/flow`) every store registers in (`stores/<hash>`), for `flow status --all`; a store's project name.
 - **slots.rs** - `FLOW_SLOT` across every project: `flow start` claims `slots/<n>` under a flock before setup; a claim counts while its flow is unfinished.
+- **wake.rs** - what is news for a session (pure): the master's undelivered messages for a worker, the flows that stopped since the master last saw them. `flow wait` (main.rs) polls it as Claude Code's `asyncRewake` hook and wakes the session with exit 2.
 - **fold.rs** - turns a flow's events into its `FlowView`, views into the sorted `Board`, a name or id into one flow.
 - **view.rs** - the derived types; serialised as the `--json` contract (`VIEW_VERSION`).
 - **launch.rs** - what `flow start` creates and what a pane runs: name, slot, worktree path, branch, git command lines, agent and resume argv, pane environment (pure).

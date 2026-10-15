@@ -486,10 +486,13 @@ impl Server {
             self.host.fail(PaneKey::Master, reason);
             return;
         };
-        match self
-            .record
-            .spec(fresh, agent, &self.env, &self.instructions)
-        {
+        match self.record.spec(
+            fresh,
+            agent,
+            &self.env,
+            &self.instructions,
+            self.config.master.wake,
+        ) {
             Some(spec) => match self.host.open(spec) {
                 Ok(()) if !fresh => {
                     self.resumed.insert(PaneKey::Master, Instant::now());
@@ -749,6 +752,7 @@ mod tests {
             agent: "claude".into(),
             agents,
             phases: crate::config::builtin_phases(),
+            master: crate::config::MasterConfig::default(),
         };
         let handle =
             thread::spawn(move || run(&thread_paths, store, config, LaunchEnv::default(), || 0));

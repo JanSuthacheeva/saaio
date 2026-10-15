@@ -610,8 +610,9 @@ mod tests {
             assert_eq!(spec.argv[1], "--settings");
             assert!(spec.argv[2].contains("\"/bin/flow\""), "{}", spec.argv[2]);
         }
-        assert_eq!(&fresh.argv[3..5], ["-n", "shop-217"]);
-        assert_eq!(&resumed.argv[5..], ["--resume", "7f3c"]);
+        assert_eq!(fresh.argv[3], "--append-system-prompt");
+        assert_eq!(&fresh.argv[5..7], ["-n", "shop-217"]);
+        assert_eq!(&resumed.argv[7..], ["--resume", "7f3c"]);
         claude.adapter = Some("codex".into());
         assert_eq!(worker_spec(&worker(None), &claude, &env), None);
     }

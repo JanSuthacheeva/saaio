@@ -31,11 +31,27 @@ impl Adapter {
         }
     }
 
-    /// The arguments that make the harness report to `<flow_exe> hook <name>`, inserted right after
-    /// the program in the agent's argv, fresh and resumed.
+    /// The arguments that make the harness report to `<flow_exe> hook <name>` and wait for the
+    /// master's messages, inserted right after the program in the agent's argv, fresh and resumed.
     pub fn wiring(self, flow_exe: &Path) -> Vec<String> {
         match self {
-            Adapter::ClaudeCode => vec!["--settings".to_string(), claude_code::settings(flow_exe)],
+            Adapter::ClaudeCode => vec![
+                "--settings".to_string(),
+                claude_code::settings(flow_exe),
+                "--append-system-prompt".to_string(),
+                claude_code::WORKER_PROMPT.to_string(),
+            ],
+        }
+    }
+
+    /// The arguments that run `<flow_exe> wait --master` in the master's session, inserted right
+    /// after the program; the master is no flow, so nothing else.
+    pub fn master_wiring(self, flow_exe: &Path) -> Vec<String> {
+        match self {
+            Adapter::ClaudeCode => vec![
+                "--settings".to_string(),
+                claude_code::master_settings(flow_exe),
+            ],
         }
     }
 

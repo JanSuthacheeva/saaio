@@ -17,11 +17,23 @@ const EVENTS: [&str; 6] = [
 ];
 /// Seconds Claude Code waits for `flow hook` before it goes on without it.
 const HOOK_TIMEOUT_SECS: u64 = 10;
+/// Seconds Claude Code lets an asyncRewake waiter sleep before it ends it: a week.
+const WAIT_TIMEOUT_SECS: u64 = 604_800;
+/// The events that arm a session's waiter: its start (the master starts without a prompt) and
+/// every turn end.
+const WAIT_EVENTS: [&str; 2] = ["SessionStart", "Stop"];
+/// What a worker is told about the master, appended to its system prompt: the master's messages
+/// arrive as hook feedback, which it would rightly not take as the user's words otherwise.
+pub const WORKER_PROMPT: &str = "You run as a worker of flow, in your own git worktree. The flow \
+master is the Claude session that coordinates the workers for the user. Its messages reach you as \
+hook feedback that starts with \"message from the flow master:\"; they answer what you asked or \
+pass on what the user said, so act on them as you would on the user's own answer. To ask the \
+master or the user something, end your turn with the question.";
 /// plan-progress's report tool, whose answers carry the plan's task counts.
 const PLAN_PROGRESS_TOOL: &str = "mcp__plan-progress__report";
 
 /// The --settings JSON: each event in EVENTS runs `<flow_exe> hook claude-code`, synchronously so
-/// the events reach the log in order.
+/// the events reach the log in order; each in WAIT_EVENTS also arms `<flow_exe> wait`.
 pub fn settings(flow_exe: &Path) -> String {
     let handler = json!({
         "type": "command",
@@ -29,7 +41,7 @@ pub fn settings(flow_exe: &Path) -> String {
         "args": ["hook", Adapter::ClaudeCode.name()],
         "timeout": HOOK_TIMEOUT_SECS,
     });
-    let hooks: serde_json::Map<String, Value> = EVENTS
+    let mut hooks: serde_json::Map<String, Value> = EVENTS
         .iter()
         .map(|event| {
             let entry = if event.ends_with("ToolUse") || *event == "PermissionRequest" {
@@ -40,7 +52,39 @@ pub fn settings(flow_exe: &Path) -> String {
             (event.to_string(), json!([entry]))
         })
         .collect();
+    let waiter = waiter(flow_exe, &["wait"]);
+    for event in WAIT_EVENTS {
+        let entry = hooks
+            .entry(event)
+            .or_insert_with(|| json!([{ "hooks": [] }]));
+        entry[0]["hooks"]
+            .as_array_mut()
+            .expect("an entry holds a hooks list")
+            .push(waiter.clone());
+    }
     json!({ "hooks": hooks }).to_string()
+}
+
+/// The master's --settings JSON: only its waiter, `<flow_exe> wait --master`; the master is no
+/// flow, so it reports nothing.
+pub fn master_settings(flow_exe: &Path) -> String {
+    let waiter = waiter(flow_exe, &["wait", "--master"]);
+    let hooks: serde_json::Map<String, Value> = WAIT_EVENTS
+        .iter()
+        .map(|event| (event.to_string(), json!([{ "hooks": [waiter] }])))
+        .collect();
+    json!({ "hooks": hooks }).to_string()
+}
+
+/// A hook Claude Code runs in the background; its exit 2 wakes the session with its stderr.
+fn waiter(flow_exe: &Path, args: &[&str]) -> Value {
+    json!({
+        "type": "command",
+        "command": flow_exe.display().to_string(),
+        "args": args,
+        "asyncRewake": true,
+        "timeout": WAIT_TIMEOUT_SECS,
+    })
 }
 
 /// The flow events one Claude Code hook payload means. Of a subagent's events (agent_id set) only
@@ -109,14 +153,21 @@ pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
                 question: cut(&format!("permission: {}", tool_call(tool, input, cwd))),
             }]
         }
-        "Stop" if payload["stop_hook_active"] != Value::Bool(true) => {
+        "Stop" => {
             if let Some(task) = running_background_task(&payload["background_tasks"]) {
                 return vec![EventKind::Delegated {
                     description: cut(task),
                 }];
             }
             let answer = payload["last_assistant_message"].as_str().unwrap_or("");
-            vec![turn_end(answer)]
+            let mut kinds = Vec::new();
+            if !answer.trim().is_empty() {
+                kinds.push(EventKind::Answer {
+                    text: answer.trim().to_string(),
+                });
+            }
+            kinds.push(turn_end(answer));
+            kinds
         }
         "SessionEnd" if payload["reason"] == "prompt_input_exit" => vec![EventKind::Ended],
         _ => Vec::new(),
@@ -449,10 +500,21 @@ mod tests {
 
     #[test]
     fn the_end_of_a_turn_waits_with_its_question_and_only_exit_ends_the_flow() {
-        let [EventKind::Waiting { question }] = &events("stop")[..] else {
-            panic!("expected waiting");
+        let [EventKind::Answer { text }, EventKind::Waiting { question }] = &events("stop")[..]
+        else {
+            panic!("expected the answer, then waiting");
         };
+        assert!(text.starts_with("I ran `rm -f`"), "{text}");
+        assert!(
+            text.ends_with("Let me know if you still want it."),
+            "{text}"
+        );
         assert_eq!(question, "Let me know if you still want it.");
+        assert_eq!(
+            events("stop_woken").last(),
+            Some(&waiting("Shall I also quote every field?")),
+            "a turn flow woke ends like any other"
+        );
         assert_eq!(events("session_end_exit"), vec![EventKind::Ended]);
         assert_eq!(events("session_end_hangup"), vec![], "a hangup resumes");
     }
@@ -528,5 +590,50 @@ mod tests {
         }
         assert_eq!(settings["hooks"]["PreToolUse"][0]["matcher"], "*");
         assert_eq!(settings["hooks"]["Stop"][0].get("matcher"), None);
+    }
+
+    #[test]
+    fn tells_a_worker_who_the_flow_master_is() {
+        assert!(WORKER_PROMPT.contains("message from the flow master:"));
+        let wiring = Adapter::ClaudeCode.wiring(Path::new("/bin/flow"));
+        assert_eq!(wiring[0], "--settings");
+        assert_eq!(wiring[2..], ["--append-system-prompt", WORKER_PROMPT]);
+    }
+
+    #[test]
+    fn every_session_waits_for_news_at_its_start_and_each_turn_end() {
+        let waiter = |args: Value| {
+            json!({
+                "type": "command",
+                "command": "/bin/flow",
+                "args": args,
+                "asyncRewake": true,
+                "timeout": WAIT_TIMEOUT_SECS,
+            })
+        };
+        let worker: Value = serde_json::from_str(&settings(Path::new("/bin/flow"))).unwrap();
+        let master: Value = serde_json::from_str(&master_settings(Path::new("/bin/flow"))).unwrap();
+
+        for event in ["SessionStart", "Stop"] {
+            let hooks = worker["hooks"][event][0]["hooks"].as_array().unwrap();
+            assert_eq!(hooks.last().unwrap(), &waiter(json!(["wait"])), "{event}");
+            assert_eq!(
+                master["hooks"][event],
+                json!([{ "hooks": [waiter(json!(["wait", "--master"]))] }]),
+                "{event}"
+            );
+        }
+        assert_eq!(
+            worker["hooks"]["SessionStart"][0]["hooks"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            master["hooks"].as_object().unwrap().len(),
+            2,
+            "the master reports nothing"
+        );
     }
 }
