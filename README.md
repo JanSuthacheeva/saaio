@@ -3,7 +3,7 @@
 Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 
 `flow` is an [AXI](https://axi.md), a command line tool whose main user is an agent. A worker
-reports what it does with `flow report`; anyone - an agent, a person, the Claude Code board -
+reports what it does with `flow report`; anyone - an agent, a person, `flow ui` -
 asks `flow` where every flow stands. Each flow is an append-only event log; `flow` alone
 folds the logs into state, phases with durations, task counts, blockers and a timeline.
 
@@ -17,12 +17,13 @@ cargo install --path .
 
 ```
 flow                                    home view: every flow and what needs you
+flow ui [--stop]                        the terminal UI: the master, every worker, the board
 flow start <request> [--name <name>] [--mode guided|auto] [--agent <name>]
-                                        a worker in its own worktree and tmux window
+                                        a worker in its own worktree, opened in flow ui
 flow new --name <name> --request <text> [--mode guided|auto]
 flow report [--flow <name|id>] <event>  the flow comes from --flow or $FLOW_ID
 flow status [<name|id>] [--json] [--full]
-flow remove <name|id> [--force]         stop a flow's worker, tear down its worktree, forget it
+flow remove <name|id> [--force]         end a flow's worker, tear down its worktree, forget it
 flow clear                              forget finished flows, tear down their worktrees
 ```
 
@@ -39,16 +40,48 @@ Events for `flow report`:
 | `tasks <done> <total>` | plan tasks done |
 | `review --fixed <n> --open <n>` | review findings fixed and still open |
 | `merge-request <url>` | the merge request is open; the flow is done |
-| `ended` | the worker session ended |
+| `ended` | the flow is over; flow ui does not open it again |
 | `heartbeat` | the worker is alive; no event is added |
 
 `flow report` without a flow id answers `skipped: no flow id` and exits 0, so a skill can
 report unconditionally and still work in a session that is not a flow. Repeated reports fold
 to the same state, so retries are harmless.
 
+## flow ui
+
+`flow ui` is home: one Claude Code session, the master, almost full screen, and every worker
+beside it. It starts a session server (`flow server`) when none runs; the server owns every
+session, so closing the terminal, a crash of the UI or `C-space d` leaves them running, and the
+next `flow ui` attaches again. The master runs in the folder of the first `flow ui` with the
+orchestrator instructions in `master.md` beside `config.toml` (flow writes a default once and
+never overwrites your edits).
+
+Every unfinished flow with a worktree gets its own session: `flow start` records the flow and
+the server opens it within half a second. The sidebar on the right groups the workers under
+NEEDS YOU, RUNNING and DONE with their steps, tasks and what they ask or do.
+
+Keys, after the prefix `C-space` (`C-space C-space` sends one through):
+
+| Key | Does |
+| --- | --- |
+| `0`-`9` | jump to a session; 0 is the master, 1 the top of the sidebar |
+| `j` `k`, `enter` | move the peek over the workers (their latest tool calls and text, read from Claude's transcript), jump in |
+| `n` | start a flow: request, mode, what it creates |
+| `o` | the board: a card per session and the selected flow's timeline, decisions and steps |
+| `b` | fold the sidebar to a rail and back |
+| `r` | resume a session that exited, or an ended flow |
+| `[` | scroll back through the session's history |
+| `d` | detach |
+| `Q` | stop: lists unfinished workers; `k` keeps them for the next `flow ui`, `e` ends them |
+| `?` | every key |
+
+`flow ui --stop` stops the server and every session, keeping unfinished flows for the next
+start. After a crash or a reboot the next `flow ui` resumes the master and every worker
+(`claude --resume`); after a stop the master starts fresh.
+
 ## Starting a worker
 
-Run `flow start` inside the repository and inside tmux:
+Run `flow start` inside the repository, usually from the master:
 
 ```
 $ flow start "SHOP-217 add CSV export"
@@ -58,19 +91,21 @@ branch: flow/shop-217
 slot: 1
 setup: ran
 agent: claude
-window: @14
+pane: opening
 ```
 
 It creates the flow, a git worktree in `.flow/worktrees/<name>` on branch `flow/<name>` (kept out
-of `git status` through `.git/info/exclude`), runs the repo's setup hook there, and opens a
-background tmux window running the agent with `FLOW_ID` set, so it reports into the flow. The
-name comes from the ticket key (`SHOP-217` -> `shop-217`) or the first four words.
+of `git status` through `.git/info/exclude`), runs the repo's setup hook there, and records the
+flow's workspace; flow ui then opens the agent in it with `FLOW_ID` set, so it reports into the
+flow (`pane: when flow ui runs` when no flow ui runs yet). The name comes from the ticket key
+(`SHOP-217` -> `shop-217`) or the first four words.
 
 ### Agents
 
-Claude Code is built in: `claude -n <name> --session-id <id> "/ship-feature <request>"`. Add or
-change agents in `~/.config/flow/config.toml` (or `$XDG_CONFIG_HOME/flow/config.toml`, or
-`$FLOW_CONFIG`):
+Claude Code is built in: `claude -n <name> --session-id <id> "/ship-feature <request>"`, resumed
+with `claude -n <name> --resume <id>`. The master is the built-in `master` agent: Claude with
+`--append-system-prompt-file <master.md>`. Add or change agents in `~/.config/flow/config.toml`
+(or `$XDG_CONFIG_HOME/flow/config.toml`, or `$FLOW_CONFIG`):
 
 ```toml
 agent = "claude"              # the default for flow start
@@ -78,21 +113,56 @@ agent = "claude"              # the default for flow start
 [agents.claude]
 command = ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
 prompt = "/ship-feature {request}"
+resume = ["claude", "-n", "{name}", "--resume", "{id}"]
 
 [agents.codex]
 command = ["codex", "{prompt}"]
 prompt = "{request}"
 ```
 
-Placeholders: `{id}`, `{name}`, `{request}`, `{prompt}`.
+Placeholders: `{id}`, `{name}`, `{request}`, `{prompt}`, and `{instructions}` (the master's
+`master.md`). An agent without `resume` starts fresh once and is not resumed after a restart.
+
+### How a worker reports
+
+A worker reports through its harness's own hooks; neither the model nor the skills take part.
+When flow ui starts a worker whose agent names an `adapter`, it adds the adapter's wiring to the
+command line. For Claude Code (`adapter = "claude-code"`, the built-in agents' default) that is
+`--settings` with hooks that run `flow hook claude-code` on each event; they run beside your own
+hooks and install nothing. `flow hook` reads the event, turns it into flow events and appends
+only what changes the flow:
+
+| Claude Code event | Reported |
+| --- | --- |
+| a prompt | `working` (and the phase of a typed `/skill`) |
+| the Skill tool | `phase`, from the `[phases]` map |
+| the Agent tool | `delegated <description>` |
+| AskUserQuestion | `waiting <the question>` |
+| a permission prompt | `waiting permission: Bash(rm -rf build)` |
+| a tool finishing | `working`; plan-progress task counts and blocks; a merge request `gh` / `glab` created |
+| the end of a turn | `waiting <the question in Claude's last line>` |
+| `/exit` | `ended` (a hangup is not an end; flow ui resumes the worker) |
+
+A subagent's own events are ignored. A custom agent replaces the built-in one, so give it
+`adapter = "claude-code"` when it runs Claude Code. Which skill starts which phase:
+
+```toml
+[phases]                      # the built-in map, extend or override it
+design-code = "design"
+implement-plan = "implement"
+review-changes = "review"
+write-merge-request = "merge-request"
+```
+
+`flow report` stays for scripts and other tools.
 
 ### Hooks, slots and Docker
 
 A repo can commit two executable hooks; `flow` runs them in the worktree with `FLOW_ID`,
 `FLOW_NAME`, `FLOW_SLOT`, `FLOW_WORKTREE` and `FLOW_REPO` set:
 
-- `.flow/setup` after the worktree is created. If it fails, the flow is marked blocked with its
-  last error line and the window still opens so you can look.
+- `.flow/setup` after the worktree is created, before the worker starts. If it fails, the flow is
+  marked blocked with its last error line and the worker still opens so you can look.
 - `.flow/teardown` when `flow clear` removes a finished flow's worktree.
 
 `FLOW_SLOT` is 1 to 9, unique among running flows, for anything that must not collide, such as
@@ -117,12 +187,13 @@ docker compose down -v
 Compose names a project after its folder, so each worktree runs its own stack and
 `docker compose exec ...` inside a worktree reaches that stack.
 
-`flow remove <name>` does the same for one flow at any state: it closes the worker's tmux
-window, runs the teardown hook, removes the worktree and forgets the flow. With uncommitted
+`flow remove <name>` does the same for one flow at any state: it ends the worker's session in
+flow ui, runs the teardown hook, removes the worktree and forgets the flow. With uncommitted
 work in the worktree it refuses and touches nothing; `--force` discards that work.
 
 `flow clear` keeps a worktree with uncommitted work (listed under `kept`) and always keeps the
-branch, which carries the merge request.
+branch, which carries the merge request. `flow status <name>` shows a flow's `branch`, `worktree`
+and whether that worktree is still there.
 
 ## Output
 
@@ -224,4 +295,5 @@ Timeline tones: `neutral`, `progress`, `attention`, `problem`, `success`.
 
 `$FLOW_HOME`, else `$XDG_STATE_HOME/flow`, else `~/.local/state/flow`: one
 `flows/<id>.jsonl` per flow, and `flows/<id>.alive` whose modification time is the last
-heartbeat.
+heartbeat. Beside them flow ui keeps `server.sock` (readable only by you), `server.log` and
+`master.json` (the master's session id and folder).

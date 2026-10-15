@@ -1,0 +1,20 @@
+{
+ "session_id": "7f3c0000-0000-4000-8000-000000000000",
+ "transcript_path": "/home/dev/.claude/projects/-repo/7f3c.jsonl",
+ "cwd": "/repo",
+ "permission_mode": "default",
+ "hook_event_name": "PostToolUse",
+ "tool_name": "mcp__plan-progress__report",
+ "tool_input": {
+  "item": "Task 5",
+  "status": "blocked",
+  "note": "the migration needs a default"
+ },
+ "tool_response": [
+  {
+   "type": "text",
+   "text": "ok, 4/9 done - blocked: Task 5"
+  }
+ ],
+ "tool_use_id": "toolu_pp2"
+}

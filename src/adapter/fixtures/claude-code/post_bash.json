@@ -1,0 +1,21 @@
+{
+ "session_id": "7f3c0000-0000-4000-8000-000000000000",
+ "transcript_path": "/home/dev/.claude/projects/-repo/7f3c.jsonl",
+ "cwd": "/repo",
+ "permission_mode": "default",
+ "hook_event_name": "PostToolUse",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "rm -f /private/tmp/fe2e/probe/repo/x.txt && test ! -e /private/tmp/fe2e/probe/repo/x.txt && echo \"x.txt removed\"",
+  "description": "Remove x.txt and confirm it is gone"
+ },
+ "tool_response": {
+  "stdout": "x.txt removed",
+  "stderr": "",
+  "interrupted": false,
+  "isImage": false,
+  "noOutputExpected": false
+ },
+ "tool_use_id": "toolu_01CPeY9a4fP9sMrvGKFCop5x",
+ "duration_ms": 660
+}

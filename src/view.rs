@@ -1,10 +1,10 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::event::{Mode, Phase};
 
 pub const VIEW_VERSION: u32 = 1;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Board {
     pub version: u32,
@@ -14,7 +14,7 @@ pub struct Board {
     pub flows: Vec<FlowView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlowView {
     pub id: String,
@@ -36,8 +36,9 @@ pub struct FlowView {
     pub workspace: Option<Workspace>,
 }
 
-/// Where a started flow's worker runs: its worktree, branch, port slot, tmux window and agent.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+/// Where a started flow's worker runs: its worktree, branch, port slot, window (flow-ui once
+/// flow ui opened it; a tmux window id from before) and agent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
     pub path: String,
@@ -47,7 +48,7 @@ pub struct Workspace {
     pub agent: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum State {
     Working,
@@ -59,7 +60,7 @@ pub enum State {
     Ended,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Step {
     pub phase: Phase,
@@ -67,7 +68,7 @@ pub struct Step {
     pub duration_ms: Option<u64>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum StepStatus {
     Done,
@@ -75,26 +76,26 @@ pub enum StepStatus {
     Open,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Tasks {
     pub done: u32,
     pub total: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReviewCount {
     pub fixed: u32,
     pub open: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TimelineEntry {
     pub at: u64,
     pub text: String,
     pub tone: Tone,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Tone {
     Neutral,

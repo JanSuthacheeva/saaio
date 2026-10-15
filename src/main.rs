@@ -1,9 +1,14 @@
+mod adapter;
+mod client;
 mod config;
 mod event;
 mod fold;
 mod launch;
 mod output;
+mod proto;
+mod server;
 mod store;
+mod ui;
 mod view;
 mod workspace;
 
@@ -15,12 +20,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
 
+use client::{Client, Closing};
 use config::Config;
 use event::{Event, EventKind, Mode, Phase};
-use output::{Document, Failure};
+use output::{Document, Failure, Opening};
+use proto::{ClientMsg, Role};
 use store::Store;
+use ui::theme::Theme;
 use view::FlowView;
 use workspace::Hook;
+
+/// How long `flow remove` and `flow clear` wait for a flow's session to end (SIGKILL comes after 3 s).
+const CLOSE_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 #[derive(Debug, Parser)]
@@ -83,6 +94,21 @@ enum Command {
     },
     /// Forget flows that are done or ended
     Clear,
+    /// Open the terminal UI: the master, every worker and the board
+    Ui {
+        /// Stop the server and every session in it
+        #[arg(long)]
+        stop: bool,
+    },
+    /// The session server flow ui starts on its own
+    #[command(hide = true)]
+    Server,
+    /// What a harness hook runs: reports the event on stdin into $FLOW_ID's flow
+    #[command(hide = true)]
+    Hook {
+        /// The harness: claude-code
+        adapter: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -149,6 +175,10 @@ fn main() -> ExitCode {
         }
         Err(error) => return fail(&Failure::usage(&error)),
     };
+    if let Some(Command::Hook { adapter }) = &cli.command {
+        run_hook(adapter);
+        return ExitCode::SUCCESS;
+    }
     let store = match Store::locate(
         env_path("FLOW_HOME"),
         env_path("XDG_STATE_HOME"),
@@ -163,6 +193,7 @@ fn main() -> ExitCode {
         }
     };
     match run(cli, &store, now_ms()) {
+        Ok(Document::Silent) => ExitCode::SUCCESS,
         Ok(document) => {
             println!("{}", document.text());
             ExitCode::SUCCESS
@@ -194,13 +225,10 @@ fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure> {
             )
             .map_err(Failure::from_io)?;
             let cwd = env::current_dir().map_err(|error| Failure::from_io(error.into()))?;
-            let in_tmux = env::var_os("TMUX").is_some_and(|value| !value.is_empty());
             start(
                 store,
                 &config,
                 &cwd,
-                in_tmux,
-                env_path("FLOW_HOME"),
                 Launch {
                     request,
                     name,
@@ -212,7 +240,154 @@ fn run(cli: Cli, store: &Store, now: u64) -> Result<Document, Failure> {
         }
         Some(Command::Remove { flow, force }) => remove(store, &flow, force, now),
         Some(Command::Clear) => clear(store, now),
+        Some(Command::Ui { stop }) => ui(store, stop),
+        Some(Command::Server) => server(store.clone()),
+        Some(Command::Hook { .. }) => Ok(Document::Silent),
     }
+}
+
+/// `flow hook`: never prints to stdout (a hook's stdout can reach the model) and never fails (a
+/// failing hook shows the user a notice); what goes wrong goes to stderr, Claude Code's debug log.
+fn run_hook(adapter: &str) {
+    let store = match Store::locate(
+        env_path("FLOW_HOME"),
+        env_path("XDG_STATE_HOME"),
+        env_path("HOME"),
+    ) {
+        Ok(store) => store,
+        Err(error) => return eprintln!("flow hook: {error:#}"),
+    };
+    let config = match Config::load(
+        env_path("FLOW_CONFIG"),
+        env_path("XDG_CONFIG_HOME"),
+        env_path("HOME"),
+    ) {
+        Ok(config) => config,
+        Err(error) => return eprintln!("flow hook: {error:#}"),
+    };
+    let mut payload = String::new();
+    if let Err(error) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut payload) {
+        return eprintln!("flow hook: could not read the event: {error}");
+    }
+    let flow = env::var("FLOW_ID").ok();
+    hook(&store, &config, adapter, flow, &payload, now_ms());
+}
+
+/// Translates one hook event with the named adapter and appends what changes the flow.
+fn hook(
+    store: &Store,
+    config: &Config,
+    adapter: &str,
+    flow: Option<String>,
+    payload: &str,
+    now: u64,
+) -> Document {
+    let Some(flow) = flow.filter(|flow| !flow.is_empty()) else {
+        return Document::Silent;
+    };
+    let Some(named) = adapter::Adapter::named(adapter) else {
+        eprintln!("flow hook: no adapter named {adapter}");
+        return Document::Silent;
+    };
+    let payload: serde_json::Value = match serde_json::from_str(payload) {
+        Ok(payload) => payload,
+        Err(error) => {
+            eprintln!("flow hook: the event is not JSON: {error}");
+            return Document::Silent;
+        }
+    };
+    let kinds = named.translate(&payload, &config.phases);
+    if kinds.is_empty() {
+        return Document::Silent;
+    }
+    let id = if store.events(&flow).is_ok() {
+        flow
+    } else {
+        let (flows, _) = views(store, now);
+        match fold::resolve(&flows, &flow) {
+            Some(view) => view.id.clone(),
+            None => {
+                eprintln!("flow hook: no flow {flow}");
+                return Document::Silent;
+            }
+        }
+    };
+    for kind in kinds {
+        let events = match store.events(&id) {
+            Ok(events) => events,
+            Err(error) => {
+                eprintln!("flow hook: {error:#}");
+                return Document::Silent;
+            }
+        };
+        if fold::changes(&id, &events, &kind, now)
+            && let Err(error) = store.append(&id, &Event::new(now, kind))
+        {
+            eprintln!("flow hook: {error:#}");
+        }
+    }
+    Document::Silent
+}
+
+fn ui(store: &Store, stop: bool) -> Result<Document, Failure> {
+    let socket = client::socket_path(store);
+    if stop {
+        return stop_server(&socket);
+    }
+    let exe = env::current_exe().map_err(|error| Failure::from_io(error.into()))?;
+    client::ensure_server(&socket, &exe, &[]).map_err(Failure::from_io)?;
+    let claude_home = env_path("CLAUDE_CONFIG_DIR")
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .or_else(|| env_path("HOME").map(|home| home.join(".claude")))
+        .unwrap_or_else(|| PathBuf::from(".claude"));
+    let env = ui::UiEnv {
+        exe: exe.clone(),
+        claude_home,
+        home: env_path("HOME").filter(|home| !home.as_os_str().is_empty()),
+    };
+    let message = ui::run(&socket, Theme::builtin(), env).map_err(Failure::from_io)?;
+    Ok(Document::Text(message))
+}
+
+fn stop_server(socket: &Path) -> Result<Document, Failure> {
+    let Some(mut control) = Client::connect(socket, Role::Control).map_err(Failure::from_io)?
+    else {
+        return Ok(Document::Text("no flow server runs".to_string()));
+    };
+    control
+        .send(&ClientMsg::StopServer)
+        .map_err(Failure::from_io)?;
+    while let Ok(Some(_)) = control.recv() {}
+    Ok(Document::Text(
+        "stopped the flow server and every session in it".to_string(),
+    ))
+}
+
+fn server(store: Store) -> Result<Document, Failure> {
+    let config = Config::load(
+        env_path("FLOW_CONFIG"),
+        env_path("XDG_CONFIG_HOME"),
+        env_path("HOME"),
+    )
+    .map_err(Failure::from_io)?;
+    let config_dir = config::config_file(
+        env_path("FLOW_CONFIG"),
+        env_path("XDG_CONFIG_HOME"),
+        env_path("HOME"),
+    )
+    .and_then(|file| file.parent().map(Path::to_path_buf))
+    .unwrap_or_else(|| store.root().to_path_buf());
+    let paths = server::ServerPaths {
+        socket: client::socket_path(&store),
+        master: store.root().join("master.json"),
+        instructions: config_dir.join("master.md"),
+    };
+    let env = launch::LaunchEnv {
+        flow_home: env_path("FLOW_HOME"),
+        flow_exe: env::current_exe().map_err(|error| Failure::from_io(error.into()))?,
+    };
+    server::run(&paths, store, config, env, now_ms).map_err(Failure::from_io)?;
+    Ok(Document::Text("flow server stopped".to_string()))
 }
 
 fn home(store: &Store, now: u64) -> Result<Document, Failure> {
@@ -260,12 +435,10 @@ fn start(
     store: &Store,
     config: &Config,
     cwd: &Path,
-    in_tmux: bool,
-    flow_home: Option<PathBuf>,
     launch: Launch,
     now: u64,
 ) -> Result<Document, Failure> {
-    let Some((agent_name, agent)) = config.agent(launch.agent.as_deref()) else {
+    let Some((agent_name, _)) = config.agent(launch.agent.as_deref()) else {
         let known: Vec<&str> = config.agents.keys().map(String::as_str).collect();
         return Err(Failure::error(
             format!(
@@ -275,12 +448,6 @@ fn start(
             vec![format!("Agents: {}", known.join(", "))],
         ));
     };
-    if !in_tmux {
-        return Err(Failure::error(
-            "flow start opens the worker in a tmux window - run it inside tmux",
-            vec!["Start tmux, then run `flow start <request>` again".to_string()],
-        ));
-    }
     let repo = workspace::repo_root(cwd).map_err(|_| {
         Failure::error(
             "flow start needs a git repository",
@@ -300,7 +467,7 @@ fn start(
             vec!["Run `flow clear` after finished flows".to_string()],
         )
     })?;
-    let mut space = launch::workspace_for(&repo, &name, slot, agent_name);
+    let space = launch::workspace_for(&repo, &name, slot, agent_name);
     workspace::create_worktree(&repo, &space).map_err(Failure::from_io)?;
 
     let first = Event::new(
@@ -312,7 +479,6 @@ fn start(
         },
     );
     let id = store.create(&first).map_err(Failure::from_io)?;
-    append_workspace(store, &id, &space, now)?;
 
     let setup = match workspace::run_hook(
         &repo,
@@ -331,28 +497,16 @@ fn start(
         }
     };
 
-    let mut env = vec![("FLOW_ID".to_string(), id.clone())];
-    if let Some(home) = flow_home {
-        env.push(("FLOW_HOME".to_string(), home.display().to_string()));
-    }
-    let agent_argv = launch::agent_argv(agent, &id, &name, &launch.request);
-    match workspace::open_window(&launch::window_argv(&space, &name, &env, &agent_argv)) {
-        Ok(window) => space.window = Some(window),
-        Err(error) => {
-            store
-                .append(&id, &Event::new(now, EventKind::Ended))
-                .map_err(Failure::from_io)?;
-            return Err(Failure::error(
-                format!("could not open the worker window: {error}"),
-                vec![format!("The worktree stays at {}", space.path)],
-            ));
-        }
-    }
+    // Only now, so flow server opens the worker once setup is done.
     append_workspace(store, &id, &space, now)?;
 
     let events = store.events(&id).map_err(Failure::from_io)?;
     let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");
-    Ok(output::started(&flow, &setup))
+    let opening = match Client::connect(&client::socket_path(store), Role::Control) {
+        Ok(None) => Opening::WhenUiRuns,
+        Ok(Some(_)) | Err(_) => Opening::Running,
+    };
+    Ok(output::started(&flow, &setup, opening))
 }
 
 fn append_workspace(
@@ -404,14 +558,10 @@ fn remove(store: &Store, name: &str, force: bool, now: u64) -> Result<Document, 
     if !force {
         refuse_uncommitted_work(flow)?;
     }
-    let window = match flow
-        .workspace
-        .as_ref()
-        .and_then(|space| space.window.as_deref())
-    {
-        None => "none",
-        Some(window) if workspace::close_window(window).unwrap_or(false) => "closed",
-        Some(_) => "gone",
+    let pane = match close_pane(store, flow)? {
+        Closing::Closed => "closed",
+        Closing::NoServer | Closing::NoPane => "none",
+        Closing::TimedOut => "timed out",
     };
     let worktree = match retire_worktree(flow, force) {
         Retired::None => "none".to_string(),
@@ -421,7 +571,12 @@ fn remove(store: &Store, name: &str, force: bool, now: u64) -> Result<Document, 
     store.remove(&flow.id).map_err(|error| {
         Failure::from_io(error.context(format!("could not remove {}", flow.name)))
     })?;
-    Ok(output::removed(&flow.name, window, &worktree))
+    Ok(output::removed(&flow.name, pane, &worktree))
+}
+
+/// Ends the flow's session in flow ui before its worktree goes.
+fn close_pane(store: &Store, flow: &FlowView) -> Result<Closing, Failure> {
+    client::close_flow(&client::socket_path(store), &flow.id, CLOSE_WAIT).map_err(Failure::from_io)
 }
 
 /// Fails before anything is touched when the flow's worktree holds uncommitted work.
@@ -453,6 +608,7 @@ fn clear(store: &Store, now: u64) -> Result<Document, Failure> {
     let mut names = Vec::new();
     let mut kept = Vec::new();
     for flow in flows.iter().filter(|flow| flow.is_finished()) {
+        close_pane(store, flow)?;
         if let Retired::Kept(path) = retire_worktree(flow, false) {
             kept.push((flow.name.clone(), path));
         }
@@ -522,30 +678,18 @@ fn status(
     Ok(if json {
         Document::Json(fold::board(vec![one], now).to_json())
     } else {
-        output::status_detail(&one, now, full)
+        let worktree_exists = one
+            .workspace
+            .as_ref()
+            .map(|space| Path::new(&space.path).exists());
+        output::status_detail(&one, now, full, worktree_exists)
     })
 }
 
 /// Every flow folded; unreadable ones become warnings so the rest still shows.
 fn views(store: &Store, now: u64) -> (Vec<FlowView>, Vec<String>) {
-    let ids = match store.ids() {
-        Ok(ids) => ids,
-        Err(error) => return (Vec::new(), vec![format!("{error:#}")]),
-    };
-    let mut flows = Vec::new();
-    let mut warnings = Vec::new();
-    for id in ids {
-        let folded = store
-            .events(&id)
-            .and_then(|events| Ok((events, store.last_beat(&id)?)))
-            .map(|(events, beat)| fold::fold(&id, &events, beat, now));
-        match folded {
-            Ok(Some(view)) => flows.push(view),
-            Ok(None) => {}
-            Err(error) => warnings.push(format!("cannot read {id}: {error:#}")),
-        }
-    }
-    (flows, warnings)
+    let (logs, warnings) = store.logs();
+    (fold::views(logs, now), warnings)
 }
 
 fn no_flow(name: &str) -> Failure {

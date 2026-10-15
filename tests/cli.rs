@@ -36,10 +36,14 @@ fn new_flow(home: &Path, name: &str) -> String {
         ],
     );
     assert!(output.status.success(), "{}", stdout(&output));
-    stdout(&output)
-        .lines()
+    id_in(&stdout(&output))
+}
+
+/// The id a document prints; TOON quotes one that starts like a number (02e1...).
+fn id_in(text: &str) -> String {
+    text.lines()
         .find_map(|line| line.strip_prefix("id: "))
-        .expect("new prints the id")
+        .expect("the document prints an id")
         .trim_matches('"')
         .to_string()
 }
@@ -164,7 +168,7 @@ fn new_creates_a_flow_once_and_returns_it_again_while_unfinished() {
     );
 
     let text = stdout(&again);
-    assert!(text.contains(&format!("id: {id}")), "{text}");
+    assert_eq!(id_in(&text), id, "{text}");
     assert!(text.contains("existing: true"), "{text}");
     assert!(stdout(&flow(home.path(), &["status"])).contains("count: 1"));
 }
@@ -275,13 +279,11 @@ fn clear_forgets_finished_flows_only() {
     );
 }
 
-/// A temp git repo with one commit, a fake tmux on PATH that records its argv and prints @14,
-/// and a state folder.
+/// A temp git repo with one commit and a state folder.
 struct Lab {
     _dir: TempDir,
     repo: std::path::PathBuf,
     home: std::path::PathBuf,
-    bin: std::path::PathBuf,
 }
 
 impl Lab {
@@ -290,9 +292,7 @@ impl Lab {
         let root = dir.path().canonicalize().unwrap();
         let repo = root.join("repo");
         let home = root.join("state");
-        let bin = root.join("bin");
         fs::create_dir_all(&repo).unwrap();
-        fs::create_dir_all(&bin).unwrap();
         let git = |args: &[&str]| {
             assert!(
                 Command::new("git")
@@ -316,80 +316,62 @@ impl Lab {
             "-m",
             "init",
         ]);
-        let tmux = bin.join("tmux");
-        fs::write(
-            &tmux,
-            format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$@\" > {root}/tmux-args\nprintf '%s\\n' \"$*\" >> {root}/tmux-log\necho @14\n",
-                root = root.display()
-            ),
-        )
-        .unwrap();
-        set_executable(&tmux);
         Lab {
             _dir: dir,
             repo,
             home,
-            bin,
         }
     }
 
-    fn start(&self, args: &[&str], in_tmux: bool) -> Output {
-        let path = format!(
-            "{}:{}",
-            self.bin.display(),
-            std::env::var("PATH").unwrap_or_default()
-        );
-        let mut command = Command::new(env!("CARGO_BIN_EXE_flow"));
-        command
-            .arg("start")
-            .args(args)
-            .current_dir(&self.repo)
-            .env("FLOW_HOME", &self.home)
-            .env("FLOW_CONFIG", self.home.join("no-config.toml"))
-            .env("PATH", path)
-            .env_remove("FLOW_ID");
-        if in_tmux {
-            command.env("TMUX", "/tmp/tmux-test,1,0");
-        } else {
-            command.env_remove("TMUX");
-        }
-        command.output().unwrap()
+    fn start(&self, args: &[&str]) -> Output {
+        let mut all = vec!["start"];
+        all.extend_from_slice(args);
+        self.run(&all)
     }
 
-    /// Runs flow with the fake tmux on PATH and inside "tmux".
+    /// Runs flow in the repo with the lab's state.
     fn run(&self, args: &[&str]) -> Output {
-        let path = format!(
-            "{}:{}",
-            self.bin.display(),
-            std::env::var("PATH").unwrap_or_default()
-        );
         Command::new(env!("CARGO_BIN_EXE_flow"))
             .args(args)
             .current_dir(&self.repo)
             .env("FLOW_HOME", &self.home)
             .env("FLOW_CONFIG", self.home.join("no-config.toml"))
-            .env("PATH", path)
-            .env("TMUX", "/tmp/tmux-test,1,0")
             .env_remove("FLOW_ID")
             .output()
             .unwrap()
     }
 
-    fn tmux_log(&self) -> Vec<String> {
-        fs::read_to_string(self.bin.parent().unwrap().join("tmux-log"))
-            .unwrap_or_default()
-            .lines()
-            .map(String::from)
-            .collect()
+    /// The claude agent flow runs, as config.toml lines.
+    fn agent(&self, lines: &str) {
+        fs::create_dir_all(&self.home).unwrap();
+        fs::write(
+            self.home.join("no-config.toml"),
+            format!("[agents.claude]\n{lines}\n[agents.master]\n{lines}\n"),
+        )
+        .unwrap();
     }
 
-    fn tmux_args(&self) -> Vec<String> {
-        fs::read_to_string(self.bin.parent().unwrap().join("tmux-args"))
-            .unwrap_or_default()
-            .lines()
-            .map(String::from)
-            .collect()
+    /// `flow server` in the repo, once it listens.
+    fn server(&self) -> std::process::Child {
+        let server = Command::new(env!("CARGO_BIN_EXE_flow"))
+            .arg("server")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .current_dir(&self.repo)
+            .env("FLOW_HOME", &self.home)
+            .env("FLOW_CONFIG", self.home.join("no-config.toml"))
+            .spawn()
+            .unwrap();
+        let socket = self.home.join("server.sock");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::os::unix::net::UnixStream::connect(&socket).is_err() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the server never listened"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        server
     }
 
     fn hook(&self, name: &str, script: &str) {
@@ -406,11 +388,11 @@ fn set_executable(file: &Path) {
 }
 
 #[test]
-fn start_makes_a_worktree_runs_setup_and_opens_the_worker_window() {
+fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_flow_ui() {
     let lab = Lab::new();
     lab.hook("setup", "#!/bin/sh\necho \"slot $FLOW_SLOT\" > setup-ran\n");
 
-    let output = lab.start(&["SHOP-217 add CSV export"], true);
+    let output = lab.start(&["SHOP-217 add CSV export"]);
 
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
@@ -421,9 +403,12 @@ fn start_makes_a_worktree_runs_setup_and_opens_the_worker_window() {
         "{text}"
     );
     assert!(
-        text.contains("branch: flow/shop-217\nslot: 1\nsetup: ran\nagent: claude\nwindow: @14"),
+        text.contains(
+            "branch: flow/shop-217\nslot: 1\nsetup: ran\nagent: claude\npane: when flow ui runs"
+        ),
         "{text}"
     );
+    assert!(text.contains("Run `flow ui` to open the worker"), "{text}");
     assert_eq!(
         fs::read_to_string(worktree.join("setup-ran"))
             .unwrap()
@@ -431,63 +416,223 @@ fn start_makes_a_worktree_runs_setup_and_opens_the_worker_window() {
         "slot 1"
     );
 
-    let args = lab.tmux_args();
-    assert_eq!(
-        &args[..8],
-        [
-            "new-window",
-            "-d",
-            "-P",
-            "-F",
-            "#{window_id}",
-            "-n",
-            "shop-217",
-            "-c"
-        ]
-    );
-    assert!(
-        args.iter().any(|arg| arg.starts_with("FLOW_ID=")),
-        "{args:?}"
-    );
-    assert!(
-        args.iter()
-            .any(|arg| *arg == format!("FLOW_HOME={}", lab.home.display())),
-        "{args:?}"
-    );
-    let agent = &args[args.iter().position(|arg| arg == "--").unwrap() + 1..];
-    assert_eq!(agent[0], "claude");
-    assert_eq!(
-        agent.last().unwrap(),
-        "/ship-feature SHOP-217 add CSV export"
-    );
-
     let board: serde_json::Value =
         serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
-    assert_eq!(board["flows"][0]["workspace"]["window"], "@14");
+    assert_eq!(
+        board["flows"][0]["workspace"]["window"],
+        serde_json::Value::Null
+    );
     assert_eq!(board["flows"][0]["workspace"]["slot"], 1);
 }
 
 #[test]
-fn start_refuses_outside_tmux_and_outside_a_repository() {
+fn start_hands_the_worker_to_a_running_flow_server() {
     let lab = Lab::new();
+    lab.agent(
+        r#"command = ["cat"]
+prompt = ""
+resume = ["cat"]"#,
+    );
+    let mut server = lab.server();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
 
-    let outside_tmux = lab.start(&["x"], false);
-    assert_eq!(outside_tmux.status.code(), Some(1));
+    let output = lab.start(&["SHOP-217 add CSV export"]);
+
+    let text = stdout(&output);
+    assert!(text.contains("pane: opening"), "{text}");
     assert!(
-        stdout(&outside_tmux).contains("run it inside tmux"),
-        "{}",
-        stdout(&outside_tmux)
+        text.contains("flow ui opens shop-217 in its sidebar"),
+        "{text}"
+    );
+    let hosted = || {
+        let board: serde_json::Value =
+            serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+        board["flows"][0]["workspace"]["window"] == "flow-ui"
+    };
+    while !hosted() {
+        assert!(
+            std::time::Instant::now() < deadline + std::time::Duration::from_secs(5),
+            "the server never opened the worker"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert!(lab.run(&["ui", "--stop"]).status.success());
+    assert!(server.wait().unwrap().success());
+}
+
+#[test]
+fn status_says_where_a_flows_code_is_and_whether_its_worktree_is_left() {
+    let lab = Lab::new();
+    assert!(lab.start(&["SHOP-217 add CSV export"]).status.success());
+    let worktree = lab.repo.join(".flow/worktrees/shop-217");
+    assert!(
+        lab.run(&["report", "--flow", "shop-217", "ended"])
+            .status
+            .success()
     );
 
+    let ended = stdout(&lab.run(&["status", "shop-217"]));
+
+    assert!(
+        ended.contains(&format!(
+            "branch: flow/shop-217\nworktree: {}\nworktree_exists: true\n",
+            worktree.display()
+        )),
+        "{ended}"
+    );
+    assert!(ended.contains("C-space r in flow ui resumes it"), "{ended}");
+    assert!(
+        Command::new("git")
+            .arg("-C")
+            .arg(&lab.repo)
+            .args(["worktree", "remove"])
+            .arg(&worktree)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let gone = stdout(&lab.run(&["status", "shop-217"]));
+    assert!(gone.contains("worktree_exists: false"), "{gone}");
+    assert!(gone.contains("its commits stay on flow/shop-217"), "{gone}");
+}
+
+#[test]
+fn after_a_crash_the_server_resumes_the_master_and_every_worker() {
+    let lab = Lab::new();
+    let log = lab.home.join("agents.log");
+    lab.agent(&format!(
+        r#"command = ["sh", "-c", "echo fresh {{name}} >> {log}; exec cat"]
+prompt = ""
+resume = ["sh", "-c", "echo resumed {{name}} >> {log}; exec cat"]"#,
+        log = log.display()
+    ));
+    let lines = || {
+        let mut lines: Vec<String> = fs::read_to_string(&log)
+            .unwrap_or_default()
+            .lines()
+            .map(String::from)
+            .collect();
+        lines.sort();
+        lines
+    };
+    let wait_for = |count: usize| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while lines().len() < count {
+            assert!(std::time::Instant::now() < deadline, "{:?}", lines());
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    };
+    let mut server = lab.server();
+    assert!(lab.start(&["SHOP-1 first"]).status.success());
+    assert!(lab.start(&["SHOP-2 second"]).status.success());
+    wait_for(3);
+    assert_eq!(lines(), ["fresh master", "fresh shop-1", "fresh shop-2"]);
+
+    server.kill().unwrap();
+    server.wait().unwrap();
+    let mut again = lab.server();
+    wait_for(6);
+
+    assert_eq!(
+        lines()[3..],
+        ["resumed master", "resumed shop-1", "resumed shop-2"]
+    );
+    assert!(lab.run(&["ui", "--stop"]).status.success());
+    assert!(again.wait().unwrap().success());
+}
+
+/// Runs `flow hook claude-code` with a hook payload on stdin, as Claude Code does.
+fn hook(home: &Path, flow_id: Option<&str>, payload: &str) -> Output {
+    use std::io::Write;
+    let mut command = Command::new(env!("CARGO_BIN_EXE_flow"));
+    command
+        .args(["hook", "claude-code"])
+        .env("FLOW_HOME", home)
+        .env("FLOW_CONFIG", home.join("no-config.toml"))
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    match flow_id {
+        Some(id) => command.env("FLOW_ID", id),
+        None => command.env_remove("FLOW_ID"),
+    };
+    let mut child = command.spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(payload.as_bytes())
+        .unwrap();
+    child.wait_with_output().unwrap()
+}
+
+#[test]
+fn a_hook_event_reports_into_the_flow_silently_and_only_once() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let question = r#"{"hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"Red or blue?"}]}}"#;
+    let skill = r#"{"hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"design-code"}}"#;
+
+    let first = hook(home.path(), Some(&id), question);
+    let again = hook(home.path(), Some(&id), question);
+    let phase = hook(home.path(), Some(&id), skill);
+
+    for output in [&first, &again, &phase] {
+        assert!(output.status.success());
+        assert!(output.stdout.is_empty(), "{}", stdout(output));
+    }
+    let detail = stdout(&flow(home.path(), &["status", "shop-221"]));
+    assert!(detail.contains("phase: design"), "{detail}");
+    let log = fs::read_to_string(home.path().join(format!("flows/{id}.jsonl"))).unwrap();
+    assert_eq!(
+        log.lines()
+            .filter(|line| line.contains("Red or blue?"))
+            .count(),
+        1,
+        "{log}"
+    );
+}
+
+#[test]
+fn a_hook_never_fails_or_prints_whatever_it_gets() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let stop = r#"{"hook_event_name":"Stop","last_assistant_message":"Done?"}"#;
+
+    let cases = [
+        hook(home.path(), None, stop),
+        hook(home.path(), Some(&id), "not json"),
+        hook(home.path(), Some("no-such-flow"), stop),
+        hook(
+            home.path(),
+            Some(&id),
+            r#"{"hook_event_name":"Notification"}"#,
+        ),
+    ];
+
+    for output in &cases {
+        assert!(output.status.success());
+        assert!(output.stdout.is_empty(), "{}", stdout(output));
+    }
+    assert!(String::from_utf8_lossy(&cases[1].stderr).contains("not JSON"));
+    assert!(String::from_utf8_lossy(&cases[2].stderr).contains("no flow no-such-flow"));
+    let list = stdout(&flow(home.path(), &["status"]));
+    assert!(!list.contains("waiting"), "{list}");
+}
+
+#[test]
+fn start_refuses_outside_a_repository() {
+    let lab = Lab::new();
     let elsewhere = TempDir::new().unwrap();
+
     let output = Command::new(env!("CARGO_BIN_EXE_flow"))
         .args(["start", "x"])
         .current_dir(elsewhere.path())
         .env("FLOW_HOME", &lab.home)
         .env("FLOW_CONFIG", lab.home.join("no-config.toml"))
-        .env("TMUX", "/tmp/tmux-test,1,0")
         .output()
         .unwrap();
+
     assert_eq!(output.status.code(), Some(1));
     assert!(
         stdout(&output).contains("needs a git repository"),
@@ -497,14 +642,14 @@ fn start_refuses_outside_tmux_and_outside_a_repository() {
 }
 
 #[test]
-fn a_failing_setup_marks_the_flow_blocked_but_still_opens_the_window() {
+fn a_failing_setup_marks_the_flow_blocked_but_still_records_the_worker() {
     let lab = Lab::new();
     lab.hook(
         "setup",
         "#!/bin/sh\necho 'port 8001 is taken' >&2\nexit 1\n",
     );
 
-    let output = lab.start(&["SHOP-218 fix totals"], true);
+    let output = lab.start(&["SHOP-218 fix totals"]);
 
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
@@ -512,7 +657,7 @@ fn a_failing_setup_marks_the_flow_blocked_but_still_opens_the_window() {
         text.contains("setup: \"failed: port 8001 is taken\""),
         "{text}"
     );
-    assert!(!lab.tmux_args().is_empty());
+    assert!(text.contains("pane: when flow ui runs"), "{text}");
     let board: serde_json::Value =
         serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
     assert_eq!(board["flows"][0]["state"], "blocked");
@@ -540,7 +685,7 @@ fn start_says_when_every_slot_is_taken() {
         );
     }
 
-    let output = lab.start(&["one more"], true);
+    let output = lab.start(&["one more"]);
 
     assert_eq!(output.status.code(), Some(1));
     assert!(
@@ -557,9 +702,9 @@ fn clear_tears_down_and_removes_clean_worktrees_but_keeps_uncommitted_work() {
         "teardown",
         "#!/bin/sh\necho \"$FLOW_NAME\" >> \"$FLOW_REPO/torn-down\"\n",
     );
-    assert!(lab.start(&["SHOP-1 clean one"], true).status.success());
-    assert!(lab.start(&["SHOP-2 dirty one"], true).status.success());
-    assert!(lab.start(&["SHOP-3 still running"], true).status.success());
+    assert!(lab.start(&["SHOP-1 clean one"]).status.success());
+    assert!(lab.start(&["SHOP-2 dirty one"]).status.success());
+    assert!(lab.start(&["SHOP-3 still running"]).status.success());
     let worktrees = lab.repo.join(".flow/worktrees");
     fs::write(worktrees.join("shop-2/work.txt"), "unsaved").unwrap();
     for name in ["shop-1", "shop-2"] {
@@ -606,27 +751,22 @@ fn clear_tears_down_and_removes_clean_worktrees_but_keeps_uncommitted_work() {
 }
 
 #[test]
-fn remove_closes_the_window_tears_down_and_forgets_a_running_flow() {
+fn remove_tears_down_and_forgets_a_running_flow() {
     let lab = Lab::new();
     lab.hook(
         "teardown",
         "#!/bin/sh\necho \"$FLOW_NAME\" >> \"$FLOW_REPO/torn-down\"\n",
     );
-    assert!(lab.start(&["SHOP-1 first try"], true).status.success());
-    assert!(lab.start(&["SHOP-2 keep me"], true).status.success());
+    assert!(lab.start(&["SHOP-1 first try"]).status.success());
+    assert!(lab.start(&["SHOP-2 keep me"]).status.success());
 
     let output = lab.run(&["remove", "shop-1"]);
 
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
     assert!(
-        text.starts_with("removed: shop-1\nwindow: closed\nworktree: removed\n"),
+        text.starts_with("removed: shop-1\npane: none\nworktree: removed\n"),
         "{text}"
-    );
-    assert!(
-        lab.tmux_log().contains(&"kill-window -t @14".to_string()),
-        "{:?}",
-        lab.tmux_log()
     );
     assert!(!lab.repo.join(".flow/worktrees/shop-1").exists());
     assert_eq!(
@@ -645,7 +785,7 @@ fn remove_closes_the_window_tears_down_and_forgets_a_running_flow() {
 #[test]
 fn remove_refuses_uncommitted_work_unless_forced() {
     let lab = Lab::new();
-    assert!(lab.start(&["SHOP-1 dirty"], true).status.success());
+    assert!(lab.start(&["SHOP-1 dirty"]).status.success());
     let worktree = lab.repo.join(".flow/worktrees/shop-1");
     fs::write(worktree.join("work.txt"), "unsaved").unwrap();
 
@@ -658,13 +798,6 @@ fn remove_refuses_uncommitted_work_unless_forced() {
     );
     assert!(text.contains("flow remove shop-1 --force"), "{text}");
     assert!(worktree.exists());
-    assert!(
-        !lab.tmux_log()
-            .iter()
-            .any(|line| line.starts_with("kill-window")),
-        "{:?}",
-        lab.tmux_log()
-    );
     assert!(stdout(&lab.run(&[])).contains("shop-1"));
 
     let forced = lab.run(&["remove", "shop-1", "--force"]);
@@ -688,4 +821,56 @@ fn remove_says_when_there_is_no_such_flow() {
         "{}",
         stdout(&output)
     );
+}
+
+#[test]
+fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
+    let home = TempDir::new().unwrap();
+    let config = home.path().join("config.toml");
+    fs::write(
+        &config,
+        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n\n[agents.master]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
+    )
+    .unwrap();
+    let socket = home.path().join("server.sock");
+
+    let none = flow(home.path(), &["ui", "--stop"]);
+    assert!(none.status.success());
+    assert_eq!(stdout(&none).trim(), "no flow server runs");
+
+    let mut server = Command::new(env!("CARGO_BIN_EXE_flow"))
+        .arg("server")
+        .stdout(std::process::Stdio::null())
+        .env("FLOW_HOME", home.path())
+        .env("FLOW_CONFIG", &config)
+        .spawn()
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !socket.exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the server never listened"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+
+    let stopped = flow(home.path(), &["ui", "--stop"]);
+
+    assert_eq!(
+        stdout(&stopped).trim(),
+        "stopped the flow server and every session in it"
+    );
+    assert!(server.wait().unwrap().success());
+    assert!(!socket.exists());
+    assert!(!home.path().join("master.json").exists());
+}
+
+#[test]
+fn the_server_command_stays_out_of_the_help() {
+    let home = TempDir::new().unwrap();
+
+    let help = stdout(&flow(home.path(), &["--help"]));
+
+    assert!(help.contains("ui"), "{help}");
+    assert!(!help.contains("server"), "{help}");
 }

@@ -6,7 +6,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
-use crate::launch::{WORKTREES_DIR, kill_window_argv, worktree_add_argv, worktree_remove_argv};
+use crate::launch::{WORKTREES_DIR, worktree_add_argv, worktree_remove_argv};
 use crate::view::Workspace;
 
 /// The repo's own hooks: .flow/setup after the worktree exists, .flow/teardown before it goes.
@@ -30,6 +30,31 @@ pub fn repo_root(cwd: &Path) -> Result<PathBuf> {
     Ok(PathBuf::from(
         String::from_utf8_lossy(&output.stdout).trim(),
     ))
+}
+
+/// The branch checked out in `dir` or the repository above it, read from git's HEAD file so it is
+/// cheap to ask often; None when HEAD is detached or there is no repository.
+pub fn current_branch(dir: &Path) -> Option<String> {
+    let mut here = Some(dir);
+    while let Some(at) = here {
+        let dot_git = at.join(".git");
+        let head = if dot_git.is_dir() {
+            dot_git.join("HEAD")
+        } else if dot_git.is_file() {
+            let link = fs::read_to_string(&dot_git).ok()?;
+            at.join(link.trim().strip_prefix("gitdir:")?.trim())
+                .join("HEAD")
+        } else {
+            here = at.parent();
+            continue;
+        };
+        let text = fs::read_to_string(head).ok()?;
+        return text
+            .trim()
+            .strip_prefix("ref: refs/heads/")
+            .map(String::from);
+    }
+    None
 }
 
 /// Creates the worktree and branch; adds .flow/worktrees/ to .git/info/exclude once.
@@ -64,17 +89,6 @@ pub fn run_hook(
         bail!("{}", last_line(&output.stderr, &output.stdout));
     }
     Ok(true)
-}
-
-/// Opens the worker window; returns its id (@14).
-pub fn open_window(argv: &[String]) -> Result<String> {
-    let stdout = run(argv)?;
-    Ok(stdout.trim().to_string())
-}
-
-/// Closes a worker's tmux window; Ok(false) when it is already gone.
-pub fn close_window(window: &str) -> Result<bool> {
-    Ok(run(&kill_window_argv(window)).is_ok())
 }
 
 /// Removes a worktree; without force Ok(false) when git refuses (uncommitted work).
@@ -278,17 +292,20 @@ mod tests {
     }
 
     #[test]
-    fn returns_the_window_id_tmux_prints() {
-        let argv: Vec<String> = ["sh", "-c", "echo @14"].map(String::from).to_vec();
+    fn reads_the_branch_of_a_repo_a_subfolder_and_a_worktree() {
+        let (_dir, repo) = repo();
+        let sub = repo.join("src/deep");
+        fs::create_dir_all(&sub).unwrap();
+        let worker = workspace_for(&repo, "csv", 1, "claude");
+        create_worktree(&repo, &worker).unwrap();
 
-        assert_eq!(open_window(&argv).unwrap(), "@14");
-        let failing: Vec<String> = ["sh", "-c", "echo 'no server running' >&2; exit 1"]
-            .map(String::from)
-            .to_vec();
+        assert_eq!(current_branch(&repo).as_deref(), Some("main"));
+        assert_eq!(current_branch(&sub).as_deref(), Some("main"));
         assert_eq!(
-            open_window(&failing).unwrap_err().to_string(),
-            "no server running"
+            current_branch(Path::new(&worker.path)).as_deref(),
+            Some("flow/csv")
         );
+        assert_eq!(current_branch(Path::new("/")), None);
     }
 
     #[test]

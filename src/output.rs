@@ -8,11 +8,14 @@ pub const DESCRIPTION: &str =
 /// List views cut long texts to this many chars, with a hint; --full lifts it.
 pub const LIST_TEXT_LIMIT: usize = 80;
 
-/// What a successful command prints: TOON for agents or JSON for programs.
+/// What a successful command prints: TOON for agents, JSON for programs, a line for people (flow ui).
 #[derive(Debug, PartialEq)]
 pub enum Document {
     Toon(String),
     Json(String),
+    Text(String),
+    /// Nothing at all: what `flow hook` answers, since a hook's stdout can reach the model.
+    Silent,
 }
 
 /// An error an agent can act on: a message and next steps, printed as TOON on stdout.
@@ -26,7 +29,8 @@ pub struct Failure {
 impl Document {
     pub fn text(&self) -> &str {
         match self {
-            Document::Toon(text) | Document::Json(text) => text,
+            Document::Toon(text) | Document::Json(text) | Document::Text(text) => text,
+            Document::Silent => "",
         }
     }
 }
@@ -190,8 +194,14 @@ fn list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool) -> Do
     }))
 }
 
-/// One flow with its steps, decisions and timeline.
-pub fn status_detail(flow: &FlowView, now: u64, full: bool) -> Document {
+/// One flow with its steps, decisions and timeline, and for a started flow where its code is:
+/// branch, worktree and whether the worktree is still there (`worktree_exists`).
+pub fn status_detail(
+    flow: &FlowView,
+    now: u64,
+    full: bool,
+    worktree_exists: Option<bool>,
+) -> Document {
     #[derive(Serialize)]
     struct DetailDocument {
         name: String,
@@ -211,6 +221,12 @@ pub fn status_detail(flow: &FlowView, now: u64, full: bool) -> Document {
         review: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         merge_request: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        branch: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        worktree: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        worktree_exists: Option<bool>,
         steps: Vec<StepRow>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         decisions: Vec<String>,
@@ -246,6 +262,9 @@ pub fn status_detail(flow: &FlowView, now: u64, full: bool) -> Document {
             .review
             .map(|review| format!("{} fixed, {} open", review.fixed, review.open)),
         merge_request: flow.merge_request.clone(),
+        branch: flow.workspace.as_ref().map(|space| space.branch.clone()),
+        worktree: flow.workspace.as_ref().map(|space| space.path.clone()),
+        worktree_exists: flow.workspace.as_ref().and(worktree_exists),
         steps: flow
             .steps
             .iter()
@@ -268,13 +287,24 @@ pub fn status_detail(flow: &FlowView, now: u64, full: bool) -> Document {
                 text: cut(&entry.text),
             })
             .collect(),
-        help: detail_help(flow),
+        help: detail_help(flow, worktree_exists),
     };
     Document::Toon(toon(&document))
 }
 
-fn detail_help(flow: &FlowView) -> Vec<String> {
+fn detail_help(flow: &FlowView, worktree_exists: Option<bool>) -> Vec<String> {
     let mut help = Vec::new();
+    if let Some(space) = &flow.workspace
+        && flow.state == State::Ended
+    {
+        help.push("C-space r in flow ui resumes it".to_string());
+        if worktree_exists == Some(false) {
+            help.push(format!(
+                "Its worktree is gone; its commits stay on {}",
+                space.branch
+            ));
+        }
+    }
     match flow.state {
         State::Blocked => help.push(format!(
             "Run `flow report --flow {} working` once the block is resolved",
@@ -305,8 +335,15 @@ fn name_of<T: Serialize>(value: &T) -> String {
     }
 }
 
-/// flow, id, worktree, branch, slot, setup (ran / none / failed: ...), agent, window, help.
-pub fn started(flow: &FlowView, setup: &str) -> Document {
+/// Whether flow ui opens a started worker now or once it runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Opening {
+    Running,
+    WhenUiRuns,
+}
+
+/// flow, id, worktree, branch, slot, setup (ran / none / failed: ...), agent, pane, help.
+pub fn started(flow: &FlowView, setup: &str, opening: Opening) -> Document {
     #[derive(Serialize)]
     struct Started<'a> {
         flow: &'a str,
@@ -316,14 +353,23 @@ pub fn started(flow: &FlowView, setup: &str) -> Document {
         slot: u8,
         setup: &'a str,
         agent: &'a str,
-        window: &'a str,
+        pane: &'a str,
         help: Vec<String>,
     }
     let workspace = flow
         .workspace
         .as_ref()
         .expect("a started flow has a workspace");
-    let window = workspace.window.as_deref().unwrap_or("");
+    let (pane, watch) = match opening {
+        Opening::Running => (
+            "opening",
+            format!("flow ui opens {} in its sidebar", flow.name),
+        ),
+        Opening::WhenUiRuns => (
+            "when flow ui runs",
+            "Run `flow ui` to open the worker".to_string(),
+        ),
+    };
     Document::Toon(toon(&Started {
         flow: &flow.name,
         id: &flow.id,
@@ -332,11 +378,8 @@ pub fn started(flow: &FlowView, setup: &str) -> Document {
         slot: workspace.slot,
         setup,
         agent: &workspace.agent,
-        window,
-        help: vec![
-            format!("Run `tmux select-window -t {window}` to watch it"),
-            "Run `flow` for all flows".to_string(),
-        ],
+        pane,
+        help: vec![watch, "Run `flow` for all flows".to_string()],
     }))
 }
 
@@ -407,11 +450,12 @@ pub fn skipped() -> Document {
 }
 
 /// removed: name, window (closed / gone / none), worktree (removed / kept: path / none), help.
-pub fn removed(name: &str, window: &str, worktree: &str) -> Document {
+/// removed, pane (closed / none / timed out), worktree, help.
+pub fn removed(name: &str, pane: &str, worktree: &str) -> Document {
     #[derive(Serialize)]
     struct Removed<'a> {
         removed: &'a str,
-        window: &'a str,
+        pane: &'a str,
         worktree: &'a str,
         help: Vec<String>,
     }
@@ -424,7 +468,7 @@ pub fn removed(name: &str, window: &str, worktree: &str) -> Document {
     help.push("Run `flow` to see what is left".to_string());
     Document::Toon(toon(&Removed {
         removed: name,
-        window,
+        pane,
         worktree,
         help,
     }))
@@ -671,7 +715,7 @@ mod tests {
         );
 
         assert_eq!(
-            status_detail(&flow, 10 * MIN, false).text(),
+            status_detail(&flow, 10 * MIN, false, None).text(),
             [
                 "name: shop-221",
                 "id: shop-221-id",
