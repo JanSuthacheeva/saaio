@@ -2232,7 +2232,7 @@ mod tests {
                 "start",
                 "SHOP-240 rate-limit the export endpoint",
                 "--mode",
-                "auto"
+                "guided"
             ]
         );
         assert_eq!(job.dir(), Some(Path::new("/Users/jan/projects/shop")));
@@ -2287,7 +2287,7 @@ mod tests {
                 "start",
                 "SHOP-240 fix totals",
                 "--mode",
-                "auto",
+                "guided",
                 "--type",
                 "bugfix"
             ]
