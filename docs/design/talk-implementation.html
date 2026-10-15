@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en" data-theme="nord" data-lavish-annotate="on">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Master and worker talk - implementation</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge) { overflow-wrap: anywhere; }
+  svg { max-width: 100%; height: auto; }
+  code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  pre { font-size: .78rem; line-height: 1.45; background: var(--color-base-200); padding: .8rem 1rem; border-radius: 8px; overflow-x: auto; white-space: pre; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .fig text { font: 12px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .fig .small { font-size: 10px; opacity: .7; }
+  .fig .group { font-size: 11px; font-weight: 600; opacity: .6; }
+  .fig .new rect { fill: color-mix(in oklab, var(--color-success) 18%, transparent); stroke: var(--color-success); stroke-width: 1.5; }
+  .fig .mod rect { fill: color-mix(in oklab, var(--color-warning) 18%, transparent); stroke: var(--color-warning); stroke-width: 1.5; }
+  .fig .old rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .fig .ext rect { fill: none; stroke: color-mix(in oklab, var(--color-base-content) 40%, transparent); stroke-dasharray: 4 3; }
+  .fig line, .fig path.edge { fill: none; stroke: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke-width: 1.3; marker-end: url(#arrow); }
+  .fig .life { stroke: color-mix(in oklab, var(--color-base-content) 25%, transparent); stroke-dasharray: 3 3; marker-end: none; }
+  .fig .err { stroke: var(--color-error); stroke-dasharray: 4 3; opacity: .7; }
+  .fig .lbl { font-size: 10.5px; }
+  .fig .errl { font-size: 10px; fill: var(--color-error); }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; margin-right: 1rem; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  ol.steps li { font-family: ui-monospace, monospace; font-size: .78rem; }
+  table td, table th { vertical-align: top; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: color-mix(in oklab, var(--color-base-content) 55%, transparent)"/></marker></defs></svg>
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-12">
+
+<header class="space-y-2">
+  <p class="text-sm opacity-60">design-code / phase 3 - review the implementation</p>
+  <h1 class="text-3xl font-bold">The master and its workers talk to each other</h1>
+  <div class="legend text-sm pt-1">
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-success) 40%,transparent)"></i>new</span>
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-warning) 40%,transparent)"></i>modified</span>
+    <span><i class="sw" style="background:var(--color-base-300)"></i>unchanged</span>
+    <span><i class="sw" style="border:1px dashed currentColor"></i>Claude Code</span>
+  </div>
+</header>
+
+<section id="recap" class="space-y-2">
+  <h2 class="text-xl font-bold">1. Decision recap</h2>
+  <p><code>flow send &lt;flow&gt; "&lt;text&gt;"</code> appends a <code>Message</code> event to the flow's log. Every Claude Code session flow starts, the master included, runs <code>flow wait</code> as an <code>asyncRewake</code> hook on <code>SessionStart</code> and <code>Stop</code>. The hook sleeps until there is news for its session, prints it and exits 2, and Claude Code then wakes the session with it.</p>
+  <p class="text-sm opacity-80">Decided in phase 2: approach A, and the flow's mode decides who answers. The master answers an <code>auto</code> flow's questions when the code, the plan or your earlier decisions settle them. A <code>guided</code> flow's questions go to you, and the master relays your answer.</p>
+</section>
+
+<section id="overview" class="space-y-3">
+  <h2 class="text-xl font-bold">2. Structure overview</h2>
+  <svg class="fig" viewBox="0 0 900 380" role="img" aria-labelledby="ov-t">
+    <title id="ov-t">Every unit involved, by layer</title>
+    <text x="20" y="22" class="group">commands (main.rs)</text>
+    <g class="new" id="ov-send"><title>main::send</title><rect x="20" y="32" width="150" height="40" rx="6"/><text x="95" y="56" text-anchor="middle">flow send</text></g>
+    <g class="new" id="ov-wait"><title>main::wait</title><rect x="190" y="32" width="150" height="40" rx="6"/><text x="265" y="56" text-anchor="middle">flow wait (hidden)</text></g>
+    <g class="old" id="ov-hook"><title>main::hook</title><rect x="360" y="32" width="150" height="40" rx="6"/><text x="435" y="56" text-anchor="middle">flow hook</text></g>
+    <g class="old" id="ov-status"><title>main::status</title><rect x="530" y="32" width="150" height="40" rx="6"/><text x="605" y="56" text-anchor="middle">flow status</text></g>
+
+    <text x="20" y="122" class="group">pure</text>
+    <g class="new" id="ov-wake"><title>wake.rs</title><rect x="190" y="132" width="150" height="40" rx="6"/><text x="265" y="150" text-anchor="middle">wake.rs</text><text x="265" y="164" text-anchor="middle" class="small">what is news</text></g>
+    <g class="mod" id="ov-cc"><title>adapter/claude_code.rs</title><rect x="360" y="132" width="150" height="40" rx="6"/><text x="435" y="150" text-anchor="middle">claude_code.rs</text><text x="435" y="164" text-anchor="middle" class="small">wait hooks, Answer</text></g>
+    <g class="mod" id="ov-fold"><title>fold.rs and view.rs</title><rect x="530" y="132" width="150" height="40" rx="6"/><text x="605" y="150" text-anchor="middle">fold.rs / view.rs</text><text x="605" y="164" text-anchor="middle" class="small">Message, answer</text></g>
+    <g class="mod" id="ov-out"><title>output.rs</title><rect x="20" y="132" width="150" height="40" rx="6"/><text x="95" y="150" text-anchor="middle">output.rs</text><text x="95" y="164" text-anchor="middle" class="small">sent, news texts</text></g>
+    <g class="mod" id="ov-adapter"><title>adapter/mod.rs</title><rect x="700" y="132" width="170" height="40" rx="6"/><text x="785" y="150" text-anchor="middle">adapter/mod.rs</text><text x="785" y="164" text-anchor="middle" class="small">master_wiring</text></g>
+
+    <text x="20" y="222" class="group">files</text>
+    <g class="mod" id="ov-event"><title>event.rs</title><rect x="530" y="232" width="150" height="40" rx="6"/><text x="605" y="250" text-anchor="middle">event.rs</text><text x="605" y="264" text-anchor="middle" class="small">Message, Answer</text></g>
+    <g class="mod" id="ov-store"><title>store.rs</title><rect x="190" y="232" width="320" height="40" rx="6"/><text x="350" y="250" text-anchor="middle">store.rs</text><text x="350" y="264" text-anchor="middle" class="small">flows/&lt;id&gt;.jsonl + waits/ (waiter pid, delivered, seen)</text></g>
+
+    <text x="20" y="322" class="group">server</text>
+    <g class="mod" id="ov-master"><title>server/master.rs</title><rect x="700" y="232" width="170" height="40" rx="6"/><text x="785" y="250" text-anchor="middle">master.rs + master.md</text><text x="785" y="264" text-anchor="middle" class="small">master gets the wait hook</text></g>
+    <g class="ext" id="ov-claude"><title>Claude Code sessions</title><rect x="530" y="322" width="340" height="40" rx="6"/><text x="700" y="346" text-anchor="middle">Claude Code: master and workers (SessionStart, Stop)</text></g>
+
+    <line x1="95" y1="72" x2="95" y2="130"/>
+    <line x1="265" y1="72" x2="265" y2="130"/>
+    <line x1="250" y1="72" x2="120" y2="130"/>
+    <line x1="95" y1="72" x2="250" y2="230"/>
+    <line x1="290" y1="72" x2="330" y2="230"/>
+    <line x1="435" y1="72" x2="435" y2="130"/>
+    <line x1="605" y1="72" x2="605" y2="130"/>
+    <line x1="605" y1="172" x2="605" y2="230"/>
+    <line x1="785" y1="230" x2="785" y2="174"/>
+    <line x1="785" y1="272" x2="785" y2="320"/>
+    <path class="edge" d="M 700 340 C 640 300, 330 300, 290 74"/>
+    <text x="400" y="300" class="small">runs flow wait / flow hook</text>
+  </svg>
+</section>
+
+<section id="units" class="space-y-4">
+  <h2 class="text-xl font-bold">3. Units</h2>
+
+  <div class="card bg-base-200"><div class="card-body p-4 space-y-2">
+    <h3 class="font-semibold"><code>src/event.rs</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+    <p class="text-sm">Two new event kinds in the log.</p>
+<pre><code>pub enum EventKind {
+    ..
+    /// What the master told this flow's worker, through `flow send`.
+    Message { text: String },
+    /// A turn's whole closing message, for the master to read; Waiting/Idle keep its short form.
+    Answer { text: String },
+}</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body p-4 space-y-2">
+    <h3 class="font-semibold"><code>src/view.rs</code>, <code>src/fold.rs</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+    <p class="text-sm">The fold records both: a message as a timeline entry, an answer as the flow's latest answer.</p>
+<pre><code>pub struct FlowView { .., pub answer: Option&lt;String&gt; }   // the last turn's closing message
+// fold: Message { text } -> timeline "master: {text}" (Tone::Neutral); state unchanged
+//       Answer { text }  -> view.answer = Some(text); no timeline entry
+// fold::changes: true for every Message; Answer when it differs from view.answer</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body p-4 space-y-2">
+    <h3 class="font-semibold"><code>src/wake.rs</code> <span class="badge badge-success badge-sm">new</span> - pure</h3>
+    <p class="text-sm">Decides what counts as news for a session. It has no I/O.</p>
+<pre><code>/// Each flow id -> the changed_at the master was last woken for.
+pub type Seen = BTreeMap&lt;String, u64&gt;;
+
+/// The master's messages in a flow's log after the first `delivered` of them.
+pub fn undelivered(events: &amp;[Event], delivered: usize) -> Vec&lt;&amp;str&gt;;
+
+/// Flows whose state needs the master (waiting, blocked, idle, done, not responding) and that
+/// changed since it last saw them, oldest change first.
+pub fn changed_flows&lt;'a&gt;(flows: &amp;'a [FlowView], seen: &amp;Seen) -> Vec&lt;&amp;'a FlowView&gt;;
+
+/// Seen after the master was told about `flows`.
+pub fn mark_seen(seen: &amp;mut Seen, flows: &amp;[&amp;FlowView]);
+
+/// A first Seen, when none is stored yet: every finished flow, so only unfinished ones are news.
+pub fn first_seen(flows: &amp;[FlowView]) -> Seen;</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body p-4 space-y-2">
+    <h3 class="font-semibold"><code>src/store.rs</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+    <p class="text-sm">Every file the waiters use, under <code>&lt;store&gt;/waits/</code>.</p>
+<pre><code>/// Whose wait: the master's or a flow's worker's.
+pub enum Waiter { Master, Flow(String) }
+
+impl Store {
+    /// Makes `pid` the session's one waiter (waits/&lt;key&gt;.pid); an older waiter sees it is replaced.
+    pub fn claim_waiter(&amp;self, waiter: &amp;Waiter, pid: u32) -> Result&lt;()&gt;;
+    /// The pid of the session's current waiter.
+    pub fn waiter(&amp;self, waiter: &amp;Waiter) -> Option&lt;u32&gt;;
+    /// How many master messages the flow's worker was given (waits/&lt;id&gt;.delivered), 0 without the file.
+    pub fn delivered(&amp;self, id: &amp;str) -> usize;
+    pub fn set_delivered(&amp;self, id: &amp;str, count: usize) -> Result&lt;()&gt;;
+    /// The master's Seen (waits/master.seen, JSON); None before the first wake.
+    pub fn seen(&amp;self) -> Option&lt;Seen&gt;;
+    pub fn set_seen(&amp;self, seen: &amp;Seen) -> Result&lt;()&gt;;
+}
+// remove(id) also deletes waits/&lt;id&gt;.pid and waits/&lt;id&gt;.delivered.</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body p-4 space-y-2">
+    <h3 class="font-semibold"><code>src/adapter/mod.rs</code>, <code>src/adapter/claude_code.rs</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+    <p class="text-sm">Adds the waiter to every session's hooks, gives the master its own hooks, and records each turn's whole closing message.</p>
+<pre><code>// adapter/mod.rs
+/// The longest closing message an Answer keeps.
+pub const ANSWER_LIMIT: usize = 4000;
+impl Adapter {
+    /// The arguments that run `flow wait --master` in the master's session (nothing else: the master is no flow).
+    pub fn master_wiring(self, flow_exe: &amp;Path) -> Vec&lt;String&gt;;
+}
+
+// claude_code.rs
+/// Seconds an async waiter may sleep before Claude Code ends it: a week.
+const WAIT_TIMEOUT_SECS: u64 = 604_800;
+/// settings(): as today, plus on SessionStart and Stop
+///   {"type":"command","command":flow_exe,"args":["wait"],"asyncRewake":true,"timeout":WAIT_TIMEOUT_SECS}
+pub fn settings(flow_exe: &amp;Path) -> String;
+/// Only the waiter, with args ["wait","--master"], on SessionStart and Stop.
+pub fn master_settings(flow_exe: &amp;Path) -> String;
+// translate, Stop: [Answer { text: cut to ANSWER_LIMIT }, turn_end(..)] when the message is not empty.</code></pre>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body p-4 space-y-2">
+    <h3 class="font-semibold"><code>src/server/master.rs</code>, <code>src/server/master.md</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+<pre><code>// MasterRecord::spec: inserts adapter.master_wiring(&amp;env.flow_exe) after the program, fresh and
+// resumed, when the master's agent names an adapter (as worker_spec does). Signature unchanged.
+const PREVIOUS_DEFAULTS: [&amp;str; 2] = [include_str!("master-v1.md"), include_str!("master-v2.md")];</code></pre>
+    <p class="text-sm">The new rules in <code>master.md</code>:</p>
+    <ul class="list-disc pl-5 text-sm space-y-1">
+      <li>flow wakes you with the flows that changed.</li>
+      <li>For an <code>auto</code> flow, answer what the code, the plan or the user's earlier decisions settle with <code>flow send</code>, then tell the user what you answered.</li>
+      <li>For a <code>guided</code> flow, tell the user, and send their answer when they give it.</li>
+      <li>Read a worker's whole answer with <code>flow status &lt;name&gt; --full</code>, and its code with <code>git -C &lt;worktree&gt;</code>.</li>
+      <li>Do not send a worker anything it did not ask for unless the user says so.</li>
+    </ul>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body p-4 space-y-2">
+    <h3 class="font-semibold"><code>src/main.rs</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+<pre><code>enum Command {
+    ..
+    /// Tell a flow's worker something: an answer, an instruction, a correction
+    Send { /// Flow name or id
+           flow: String,
+           /// What to tell it
+           text: String },
+    /// What a session's asyncRewake hook runs: sleeps until there is news for it, prints it, exits 2
+    #[command(hide = true)]
+    Wait { /// The master's news: flows that changed [default: $FLOW_ID's messages]
+           #[arg(long)] master: bool },
+}
+
+/// Appends Message { text } to the flow; refused from a worker ($FLOW_ID set), for a finished
+/// flow, one with no worker (no workspace), and an empty text or one over MESSAGE_LIMIT.
+fn send(store: &amp;Store, flow: &amp;str, text: &amp;str, now: u64) -> Result&lt;Document, Failure&gt;;
+
+/// The news that ends the wait; None when the waiter was replaced, its flow is gone or its
+/// session ended (parent pid changed).
+fn wait(store: &amp;Store, waiter: &amp;Waiter, clock: fn() -> u64) -> Option&lt;String&gt;;
+// main(): Command::Wait is handled before the store lookup's output, like Hook: Some(news) ->
+// eprint!(news), exit 2; None -> exit 0. It never prints to stdout.</code></pre>
+    <p class="text-sm">Constants: <code>MESSAGE_LIMIT = 4000</code> chars; <code>WAIT_EVERY = 500 ms</code>, the same as the server's <code>WATCH_EVERY</code>; <code>SETTLE = 2 s</code>, how long the master's waiter keeps collecting after the first change so that several flows arrive as one wake.</p>
+  </div></div>
+
+  <div class="card bg-base-200"><div class="card-body p-4 space-y-2">
+    <h3 class="font-semibold"><code>src/output.rs</code> <span class="badge badge-warning badge-sm">modified</span></h3>
+<pre><code>/// sent: name, state, help: flow wakes the worker; flow wakes you when it changes again.
+pub fn sent(flow: &amp;FlowView) -> Document;
+/// What a woken worker reads: "message from the flow master:" and each message.
+pub fn news_for_worker(messages: &amp;[&amp;str]) -> String;
+/// What the woken master reads (TOON): changed[n]{name,state,mode,says}, with says cut to
+/// LIST_TEXT_LIMIT, then help: per mode who answers, `flow status &lt;name&gt; --full`, `flow send`.
+pub fn news_for_master(flows: &amp;[&amp;FlowView]) -> String;
+// status_detail: adds answer (cut unless --full).</code></pre>
+  </div></div>
+</section>
+
+<section id="data" class="space-y-3">
+  <h2 class="text-xl font-bold">4. Data</h2>
+  <div class="overflow-x-auto"><table class="table table-sm">
+    <thead><tr><th>What</th><th>Shape</th><th>Crosses</th></tr></thead>
+    <tbody>
+      <tr><td><code>Message</code> event</td><td><code>{"at":..,"kind":"message","text":"use semicolons"}</code> in <code>flows/&lt;id&gt;.jsonl</code></td><td><code>flow send</code> → log → fold, waiter</td></tr>
+      <tr><td><code>Answer</code> event</td><td><code>{"at":..,"kind":"answer","text":"&lt;closing message, up to 4000 chars&gt;"}</code></td><td>hook → log → fold → <code>flow status</code></td></tr>
+      <tr><td><code>FlowView.answer</code></td><td><code>"answer": "..."</code> in <code>--json</code>; additive, so <code>VIEW_VERSION</code> stays 1</td><td>fold → status JSON/TOON</td></tr>
+      <tr><td><code>waits/&lt;key&gt;.pid</code></td><td>the current waiter's pid, a decimal line; key is the flow id or <code>master</code></td><td>waiter ↔ waiter</td></tr>
+      <tr><td><code>waits/&lt;id&gt;.delivered</code></td><td>how many master messages the worker was given, a decimal line</td><td>worker waiter</td></tr>
+      <tr><td><code>waits/master.seen</code></td><td><code>{"&lt;flow id&gt;": &lt;changed_at ms&gt;, ..}</code></td><td>master waiter</td></tr>
+      <tr><td>wake text, worker</td><td>stderr, exit 2:<br><code>message from the flow master:<br>&nbsp;&nbsp;use semicolons, as in the existing exports</code></td><td>waiter → Claude Code → worker</td></tr>
+      <tr><td>wake text, master</td><td>stderr, exit 2:<br><code>changed[2]{name,state,mode,says}:<br>&nbsp;&nbsp;shop-217,waiting,auto,which CSV delimiter?<br>&nbsp;&nbsp;shop-220,idle,guided,Design is ready for review.<br>help[3]: ...</code></td><td>waiter → Claude Code → master</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="chains" class="space-y-8">
+  <h2 class="text-xl font-bold">5. Call chains</h2>
+
+  <div class="space-y-2" id="chain-send">
+    <h3 class="font-semibold">a. The master answers a worker</h3>
+    <svg class="fig" viewBox="0 0 900 300" role="img" aria-labelledby="cs-t">
+      <title id="cs-t">flow send to a sleeping worker</title>
+      <g><text x="70" y="20" text-anchor="middle">master (Bash)</text><text x="230" y="20" text-anchor="middle">main::send</text><text x="400" y="20" text-anchor="middle">Store</text><text x="580" y="20" text-anchor="middle">worker's flow wait</text><text x="780" y="20" text-anchor="middle">worker session</text></g>
+      <line class="life" x1="70" y1="28" x2="70" y2="290"/><line class="life" x1="230" y1="28" x2="230" y2="290"/><line class="life" x1="400" y1="28" x2="400" y2="290"/><line class="life" x1="580" y1="28" x2="580" y2="290"/><line class="life" x1="780" y1="28" x2="780" y2="290"/>
+      <line x1="70" y1="50" x2="228" y2="50"/><text x="150" y="44" text-anchor="middle" class="lbl">flow send shop-217 "..."</text>
+      <line x1="230" y1="78" x2="398" y2="78"/><text x="315" y="72" text-anchor="middle" class="lbl">append(id, Message)</text>
+      <line class="err" x1="228" y1="100" x2="72" y2="100"/><text x="150" y="114" text-anchor="middle" class="errl">exit 1: unknown, finished, no worker</text>
+      <line x1="228" y1="135" x2="72" y2="135"/><text x="150" y="129" text-anchor="middle" class="lbl">sent</text>
+      <line x1="580" y1="165" x2="402" y2="165"/><text x="490" y="159" text-anchor="middle" class="lbl">events, delivered (every 500 ms)</text>
+      <line x1="580" y1="195" x2="402" y2="195"/><text x="490" y="189" text-anchor="middle" class="lbl">set_delivered(n)</text>
+      <line x1="580" y1="230" x2="778" y2="230"/><text x="680" y="224" text-anchor="middle" class="lbl">stderr + exit 2: wakes it</text>
+      <line x1="780" y1="270" x2="402" y2="270"/><text x="590" y="264" text-anchor="middle" class="lbl">flow hook: Working ... Answer, Idle</text>
+    </svg>
+    <ol class="steps list-decimal pl-6 space-y-0.5">
+      <li>master -> main::send(store, "shop-217", text, now): Document</li>
+      <li>main::send -> views(store, now) -> fold::resolve(&amp;flows, "shop-217"): Option&lt;&amp;FlowView&gt;</li>
+      <li>main::send -> Store::append(&amp;id, &amp;Event::new(now, Message { text })): Result&lt;()&gt;</li>
+      <li>main::send -> output::sent(&amp;flow): Document ("sent")</li>
+      <li>worker's wait loop -> Store::events(&amp;id) -> wake::undelivered(&amp;events, Store::delivered(&amp;id)): ["..."]</li>
+      <li>wait -> Store::waiter(&amp;Waiter::Flow(id)) == own pid -> Store::set_delivered(&amp;id, n)</li>
+      <li>wait -> output::news_for_worker(&amp;messages): String -> main: eprint, exit 2 -> Claude Code wakes the worker</li>
+      <li>worker works; its hooks append Working, then at Stop Answer and Idle/Waiting, which wakes the master again (chain b)</li>
+    </ol>
+    <p class="text-sm"><b>Errors:</b></p>
+    <ul class="list-disc pl-5 text-sm space-y-1">
+      <li>Step 2 finds no flow: exit 1, <code>no flow shop-217</code>, help <code>flow status</code>.</li>
+      <li>The flow is done or ended: exit 1, <code>shop-217 is finished</code>.</li>
+      <li>The flow has no workspace: exit 1, <code>shop-217 has no worker; it was not started with flow start</code>.</li>
+      <li><code>$FLOW_ID</code> is set: exit 1, <code>only the master sends; end your turn with the question instead</code>.</li>
+      <li>The text is empty or too long: exit 2 (usage).</li>
+      <li>The worker's session is not running, for example because flow ui is stopped: the message waits in the log, and the <code>SessionStart</code> waiter delivers it when the pane opens again.</li>
+    </ul>
+  </div>
+
+  <div class="space-y-2" id="chain-wake">
+    <h3 class="font-semibold">b. A worker asks, and the master wakes</h3>
+    <svg class="fig" viewBox="0 0 900 270" role="img" aria-labelledby="cw-t">
+      <title id="cw-t">a worker's turn end wakes the master</title>
+      <g><text x="80" y="20" text-anchor="middle">worker session</text><text x="250" y="20" text-anchor="middle">flow hook</text><text x="420" y="20" text-anchor="middle">Store</text><text x="610" y="20" text-anchor="middle">master's flow wait</text><text x="800" y="20" text-anchor="middle">master session</text></g>
+      <line class="life" x1="80" y1="28" x2="80" y2="260"/><line class="life" x1="250" y1="28" x2="250" y2="260"/><line class="life" x1="420" y1="28" x2="420" y2="260"/><line class="life" x1="610" y1="28" x2="610" y2="260"/><line class="life" x1="800" y1="28" x2="800" y2="260"/>
+      <line x1="80" y1="50" x2="248" y2="50"/><text x="165" y="44" text-anchor="middle" class="lbl">Stop (sync)</text>
+      <line x1="250" y1="78" x2="418" y2="78"/><text x="335" y="72" text-anchor="middle" class="lbl">append Answer, Waiting</text>
+      <line x1="610" y1="110" x2="422" y2="110"/><text x="515" y="104" text-anchor="middle" class="lbl">logs, seen (every 500 ms)</text>
+      <line x1="610" y1="145" x2="422" y2="145"/><text x="515" y="139" text-anchor="middle" class="lbl">after 2 s: logs again</text>
+      <line x1="610" y1="180" x2="422" y2="180"/><text x="515" y="174" text-anchor="middle" class="lbl">set_seen</text>
+      <line x1="610" y1="215" x2="798" y2="215"/><text x="705" y="209" text-anchor="middle" class="lbl">stderr + exit 2: wakes it</text>
+      <line x1="800" y1="245" x2="612" y2="245"/><text x="705" y="239" text-anchor="middle" class="lbl">auto: flow send / guided: tells you</text>
+    </svg>
+    <ol class="steps list-decimal pl-6 space-y-0.5">
+      <li>worker Stop -> main::hook -> claude_code::translate: [Answer { text }, Waiting { question }] -> Store::append each</li>
+      <li>master's wait loop -> views(store, now): Vec&lt;FlowView&gt; -> wake::changed_flows(&amp;flows, &amp;seen): [shop-217]</li>
+      <li>wait -> sleep SETTLE -> views again -> wake::changed_flows: [shop-217, any others that changed meanwhile]</li>
+      <li>wait -> Store::waiter(&amp;Waiter::Master) == own pid -> wake::mark_seen(&amp;mut seen, &amp;changed) -> Store::set_seen(&amp;seen)</li>
+      <li>wait -> output::news_for_master(&amp;changed): String -> main: eprint, exit 2 -> Claude Code wakes the master</li>
+      <li>master (master.md): auto -> reads code, <code>flow status shop-217 --full</code> -> chain a; guided -> tells you which flow asks what</li>
+    </ol>
+    <p class="text-sm"><b>Errors and edges:</b></p>
+    <ul class="list-disc pl-5 text-sm space-y-1">
+      <li>No <code>master.seen</code> yet: <code>wake::first_seen</code> marks finished flows as seen, so the first wake lists only unfinished flows that need the master.</li>
+      <li>A log does not parse: that flow is skipped, the same as in <code>flow status</code>.</li>
+      <li>A file write fails: the waiter prints nothing and exits 0. The next turn end arms a new waiter.</li>
+    </ul>
+  </div>
+
+  <div class="space-y-2" id="chain-arm">
+    <h3 class="font-semibold">c. Arming, replacing and ending a waiter</h3>
+    <ol class="steps list-decimal pl-6 space-y-0.5">
+      <li>Claude Code SessionStart or Stop -> spawns <code>flow wait [--master]</code> in the background (asyncRewake), stdin = the hook payload, which is ignored</li>
+      <li>main -> Waiter from --master or $FLOW_ID; neither -> exit 0</li>
+      <li>main::wait -> Store::claim_waiter(&amp;waiter, std::process::id())</li>
+      <li>loop every WAIT_EVERY: Store::waiter(&amp;waiter) != own pid -> None (replaced by the next turn end's waiter)</li>
+      <li>loop: the parent pid changed (Claude Code exited) -> None; a worker's flow is removed or finished -> None</li>
+      <li>loop: news -> Some(text) as in chains a and b</li>
+    </ol>
+    <p class="text-sm"><b>Mid-turn:</b> a waiter armed at the last turn end is still running while its session works. When it fires, Claude Code hands its text to the running turn, so a correction reaches a busy worker without waiting for the turn to end. The implementation's end-to-end check verifies this.</p>
+  </div>
+</section>
+
+<section id="conventions" class="space-y-2">
+  <h2 class="text-xl font-bold">6. Conventions followed</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li>A command appends an event and the fold derives the rest (<code>main.rs</code> <code>report</code>, <code>src/main.rs:625</code>). <code>flow send</code> is a report the master makes about a flow.</li>
+    <li>Hidden plumbing commands, like <code>Hook</code> (<code>src/main.rs:119</code>), and exit-code handling before stdout output, like <code>run_hook</code> (<code>src/main.rs:194</code>).</li>
+    <li>File operations only in <code>store.rs</code> (CLAUDE.md "store.rs - every file operation"). The waiter files sit beside <code>flows/</code>, as <code>.alive</code> heartbeats do (<code>src/store.rs:163</code>).</li>
+    <li>Pure decisions in their own module, tested without I/O, like <code>server/reconcile.rs</code> and <code>fold.rs</code>.</li>
+    <li>The adapter owns the harness specifics: <code>Adapter::wiring</code> (<code>src/adapter/mod.rs:36</code>), now joined by <code>master_wiring</code>. Wiring is inserted after the program, fresh and resumed, as <code>worker_spec</code> does (<code>src/launch.rs:143</code>).</li>
+    <li>Earlier defaults of <code>master.md</code> are replaced only when unedited (<code>PREVIOUS_DEFAULTS</code>, <code>src/server/master.rs:18</code>).</li>
+    <li><b>Deviation:</b> <code>flow wait</code> writes to stderr and exits 2 on success. That is Claude Code's <code>asyncRewake</code> contract, and the reason it is handled before the normal stdout path.</li>
+  </ul>
+</section>
+
+<section id="tests" class="space-y-2">
+  <h2 class="text-xl font-bold">7. Test seams</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li><code>wake.rs</code>: unit tests over hand-built events and views: undelivered counts, which states and changes count, first_seen.</li>
+    <li><code>store.rs</code>: claim, replace and read a waiter; delivered and seen round trips; remove cleans waits/.</li>
+    <li><code>fold.rs</code>: Message adds a timeline entry and leaves the state; Answer sets <code>answer</code>; <code>changes</code> for both.</li>
+    <li><code>claude_code.rs</code>: settings carry the asyncRewake waiter on SessionStart and Stop; master_settings only that; Stop yields Answer then Waiting/Idle (fixture <code>stop_waiting.json</code>).</li>
+    <li><code>master.rs</code>: spec wires <code>wait --master</code> fresh and resumed; v2 default is replaced.</li>
+    <li><code>tests/cli.rs</code>: <code>flow send</code>'s refusals and its event; <code>flow wait</code> as a process: exits 2 with the message once one is appended, 0 when a second waiter replaces it, the master's sees a waiting flow.</li>
+    <li>End-to-end: <code>flow ui</code> with a real <code>auto</code> and <code>guided</code> worker; the master is woken by each and answers or relays.</li>
+  </ul>
+</section>
+
+<section id="assumptions" class="space-y-2">
+  <h2 class="text-xl font-bold">8. Assumptions</h2>
+  <ol class="list-decimal pl-6 text-sm space-y-1">
+    <li>Only the master sends. A worker asks by ending its turn with the question, as today, and there is no worker-to-master or worker-to-worker message.</li>
+    <li>The master is woken for waiting, blocked, idle, done and not responding. In a guided flow that includes every phase stop, which is what tells you a design is ready to review.</li>
+    <li>Several changes within 2 seconds arrive as one wake.</li>
+    <li>A message does not change the flow's state. The state changes once the worker acts on it.</li>
+    <li>The worker sees "message from the flow master:" as a hook message, not as your words.</li>
+    <li>The diff stays git's job: the master runs <code>git -C &lt;worktree&gt;</code>, and flow does not add commits or files to <code>flow status</code>.</li>
+    <li>The master's waiter watches its own project's store only, not <code>--all</code>.</li>
+    <li>Agents without a Claude Code adapter get no waiter. <code>flow send</code> still records the message for when their adapter can deliver it.</li>
+  </ol>
+</section>
+
+<section id="open" class="space-y-2">
+  <h2 class="text-xl font-bold">9. Decided in review</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li>Every <code>idle</code> turn end wakes the master, in guided and auto flows.</li>
+    <li>The wake-ups can be switched off: <code>[master] wake = false</code> in <code>~/.config/flow/config.toml</code> (default true). <code>Config</code> gains <code>master: MasterConfig { wake: bool }</code>; <code>MasterRecord::spec</code> takes <code>wake: bool</code> and leaves the master's waiter out when it is false. Workers keep theirs, so <code>flow send</code> still works.</li>
+  </ul>
+</section>
+
+</main>
+</body>
+</html>

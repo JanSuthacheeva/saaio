@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en" data-theme="nord" data-lavish-annotate="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Master and worker talk - approaches</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge) { overflow-wrap: anywhere; }
+  svg { max-width: 100%; height: auto; }
+  code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  .fig text { font: 12px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .fig .small { font-size: 10px; opacity: .7; }
+  .fig .new rect { fill: color-mix(in oklab, var(--color-success) 18%, transparent); stroke: var(--color-success); stroke-width: 1.5; }
+  .fig .mod rect { fill: color-mix(in oklab, var(--color-warning) 18%, transparent); stroke: var(--color-warning); stroke-width: 1.5; }
+  .fig .old rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .fig .ext rect { fill: none; stroke: color-mix(in oklab, var(--color-base-content) 40%, transparent); stroke-dasharray: 4 3; }
+  .fig line, .fig path.edge { fill: none; stroke: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke-width: 1.3; marker-end: url(#arrow); }
+  .fig .lbl { font-size: 10px; opacity: .75; }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; margin-right: 1rem; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: color-mix(in oklab, var(--color-base-content) 55%, transparent)"/></marker></defs></svg>
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-10">
+
+<header class="space-y-2">
+  <p class="text-sm opacity-60">design-code / phase 2 - pick an approach</p>
+  <h1 class="text-3xl font-bold">The master and its workers talk to each other</h1>
+  <p class="opacity-80">Three pieces, designed together: the master can <b>send</b> a worker an instruction or answer; the master is <b>woken</b> when a worker finishes, gets blocked or asks something; and the master can <b>read a worker's result</b>. The approaches differ in how a message reaches a session that is sitting idle at its prompt.</p>
+  <div class="legend text-sm pt-1">
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-success) 40%,transparent)"></i>new</span>
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-warning) 40%,transparent)"></i>modified</span>
+    <span><i class="sw" style="background:var(--color-base-300)"></i>unchanged</span>
+  </div>
+</header>
+
+<section class="space-y-3" id="today">
+  <h2 class="text-xl font-bold">What exists today</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li>Workers report through Claude Code hooks: <code>Adapter::wiring</code> adds <code>--settings</code> with a <code>flow hook claude-code</code> handler on each event (<code>src/adapter/mod.rs:36</code>, <code>src/adapter/claude_code.rs:25</code>), and the fold turns them into <code>working</code>, <code>delegated</code>, <code>waiting</code>, <code>idle</code>, <code>blocked</code> (<code>src/event.rs:18</code>).</li>
+    <li>The master gets <b>no</b> hooks and no <code>FLOW_ID</code>: <code>MasterRecord::spec</code> builds its argv with <code>pane_env(None, ..)</code> (<code>src/server/master.rs:76</code>). It learns about workers only when it runs <code>flow status</code>, which <code>master.md</code> tells it to do before saying anything.</li>
+    <li>Nothing can put text into another session except you typing into its pane. The server owns every PTY (<code>Host::write</code>, <code>src/server/host.rs:118</code>), but only the attached UI's keys go there.</li>
+    <li>A worker's result is visible only as the last 200 characters of its turn (<code>Waiting{question}</code>, <code>Idle{note}</code>) and the timeline in <code>flow status &lt;name&gt;</code>. The full last message is in the Claude transcript, which only the UI's peek reads (<code>src/ui/peek.rs:39</code>).</li>
+    <li><b>Verified today on Claude Code 2.1.300:</b> a <code>Stop</code> hook with <code>"asyncRewake": true</code> runs in the background, and when it exits with code 2 its output wakes the idle session as a new turn (shown to you as "Stop hook feedback"). A probe with a 25-second sleep woke an idle Haiku session at its prompt, and the hook is armed again at each turn end.</li>
+  </ul>
+</section>
+
+<section class="space-y-4" id="a">
+  <h2 class="text-xl font-bold">A. Messages in the log, delivered by the agent's own hooks <span class="badge badge-success badge-sm align-middle">recommended</span></h2>
+  <p><code>flow send &lt;flow&gt; "&lt;text&gt;"</code> appends a <code>Message</code> event to that flow's log, like any report. Every session, the master included, gets one more hook: an <code>asyncRewake</code> <code>Stop</code> handler, <code>flow wait</code>, that sleeps until there is news for that session, prints it and exits 2. Claude Code then wakes the session with the news as its next turn. For a worker the news is a message for it; for the master it is a worker that became waiting, blocked, idle or done, or a message a worker sent the master.</p>
+  <svg class="fig" viewBox="0 0 860 230" role="img" aria-labelledby="a-t">
+    <title id="a-t">Approach A: flow send appends to the log, flow wait wakes the session through its Stop hook</title>
+    <g class="new" id="a-send"><title>flow send</title><rect x="20" y="20" width="150" height="44" rx="6"/><text x="95" y="40" text-anchor="middle">flow send</text><text x="95" y="55" text-anchor="middle" class="small">main.rs, run by the master</text></g>
+    <g class="mod" id="a-log"><title>the flow's event log</title><rect x="250" y="20" width="170" height="44" rx="6"/><text x="335" y="40" text-anchor="middle">flows/&lt;id&gt;.jsonl</text><text x="335" y="55" text-anchor="middle" class="small">+ Message event</text></g>
+    <g class="new" id="a-wait"><title>flow wait</title><rect x="500" y="20" width="150" height="44" rx="6"/><text x="575" y="40" text-anchor="middle">flow wait</text><text x="575" y="55" text-anchor="middle" class="small">asyncRewake Stop hook</text></g>
+    <g class="ext" id="a-cc"><title>Claude Code session</title><rect x="710" y="20" width="130" height="44" rx="6"/><text x="775" y="40" text-anchor="middle">worker session</text><text x="775" y="55" text-anchor="middle" class="small">woken, exit 2</text></g>
+    <line x1="170" y1="42" x2="248" y2="42"/>
+    <line x1="420" y1="42" x2="498" y2="42"/>
+    <line x1="650" y1="42" x2="708" y2="42"/>
+    <g class="mod" id="a-wiring"><title>Adapter::wiring</title><rect x="20" y="140" width="170" height="44" rx="6"/><text x="105" y="160" text-anchor="middle">Adapter::wiring</text><text x="105" y="175" text-anchor="middle" class="small">+ the wait hook</text></g>
+    <g class="mod" id="a-master"><title>MasterRecord::spec</title><rect x="250" y="140" width="170" height="44" rx="6"/><text x="335" y="160" text-anchor="middle">MasterRecord::spec</text><text x="335" y="175" text-anchor="middle" class="small">master gets hooks too</text></g>
+    <g class="old" id="a-fold"><title>fold::board</title><rect x="500" y="140" width="150" height="44" rx="6"/><text x="575" y="160" text-anchor="middle">fold::board</text><text x="575" y="175" text-anchor="middle" class="small">what changed for the master</text></g>
+    <g class="ext" id="a-ms"><title>master session</title><rect x="710" y="140" width="130" height="44" rx="6"/><text x="775" y="160" text-anchor="middle">master session</text><text x="775" y="175" text-anchor="middle" class="small">woken, exit 2</text></g>
+    <line x1="575" y1="66" x2="575" y2="138"/>
+    <text x="582" y="105" class="lbl">master's wait folds the board</text>
+    <line x1="650" y1="162" x2="708" y2="162"/>
+    <line x1="190" y1="162" x2="248" y2="162"/>
+  </svg>
+  <div class="grid md:grid-cols-2 gap-4 text-sm">
+    <div class="card bg-base-200"><div class="card-body p-4 space-y-1">
+      <h3 class="font-semibold">Fits</h3>
+      <ul class="list-disc pl-4 space-y-1">
+        <li>Same path as every other report: a command appends an event, the fold reads it (CLAUDE.md "Data flow"). The conversation is in the record: <code>flow status &lt;name&gt;</code> shows it in the timeline.</li>
+        <li>Works with or without <code>flow ui</code> running; the server does not change.</li>
+        <li>The message arrives as hook feedback, not as if you typed it, so a worker can tell "the master says" from "the user says".</li>
+        <li>Only a sleeping session is woken; a working one gets the news at its next turn end, without breaking into what it is doing.</li>
+        <li>Testable without a terminal: <code>flow wait</code> is a command with a log in, text and exit code out.</li>
+      </ul>
+    </div></div>
+    <div class="card bg-base-200"><div class="card-body p-4 space-y-1">
+      <h3 class="font-semibold">Costs</h3>
+      <ul class="list-disc pl-4 space-y-1">
+        <li>Relies on <code>asyncRewake</code>, a Claude Code hook option. Another agent in <code>config.toml</code> gets no channel until its adapter has an equivalent (Claude Code is the only adapter today).</li>
+        <li>One sleeping <code>flow wait</code> per session. Each turn end arms a new one, so a newer waiter has to replace the older (a lock per session).</li>
+        <li>The master's waiter must not miss a change that happens between its turn end and the waiter starting, so the master keeps a "seen" mark in the store.</li>
+        <li>New event kind in the log format: older flow binaries reading a newer log would fail on it (we always install both together).</li>
+      </ul>
+    </div></div>
+  </div>
+  <p class="text-sm opacity-80">Touches: <code>event.rs</code> (Message), <code>fold.rs</code>/<code>view.rs</code> (messages in the timeline, a flow's result), <code>main.rs</code> (<code>send</code>, <code>wait</code>), <code>adapter/claude_code.rs</code> (the wait hook), <code>server/master.rs</code> (master hooks and env), <code>output.rs</code>, <code>master.md</code>.</p>
+</section>
+
+<section class="space-y-4" id="b">
+  <h2 class="text-xl font-bold">B. The server types into the panes</h2>
+  <p><code>flow send</code> connects to the server (a Control connection, like <code>flow remove</code>) and the server writes the text and Enter into the target pane's PTY, as if you had typed it. The server also watches the board and types a summary into the master's pane when a worker needs it.</p>
+  <svg class="fig" viewBox="0 0 860 110" role="img" aria-labelledby="b-t">
+    <title id="b-t">Approach B: flow send goes over the socket and the server writes into the pane's PTY</title>
+    <g class="new"><title>flow send</title><rect x="20" y="30" width="150" height="44" rx="6"/><text x="95" y="50" text-anchor="middle">flow send</text><text x="95" y="65" text-anchor="middle" class="small">Control connection</text></g>
+    <g class="mod"><title>proto</title><rect x="230" y="30" width="150" height="44" rx="6"/><text x="305" y="50" text-anchor="middle">ClientMsg::Send</text><text x="305" y="65" text-anchor="middle" class="small">proto.rs</text></g>
+    <g class="mod"><title>server</title><rect x="440" y="30" width="170" height="44" rx="6"/><text x="525" y="50" text-anchor="middle">Server + Host::write</text><text x="525" y="65" text-anchor="middle" class="small">waits for idle, types</text></g>
+    <g class="ext"><title>any pane</title><rect x="670" y="30" width="170" height="44" rx="6"/><text x="755" y="50" text-anchor="middle">worker or master PTY</text><text x="755" y="65" text-anchor="middle" class="small">text + Enter</text></g>
+    <line x1="170" y1="52" x2="228" y2="52"/><line x1="380" y1="52" x2="438" y2="52"/><line x1="610" y1="52" x2="668" y2="52"/>
+  </svg>
+  <div class="grid md:grid-cols-2 gap-4 text-sm">
+    <div class="card bg-base-200"><div class="card-body p-4 space-y-1">
+      <h3 class="font-semibold">Fits</h3>
+      <ul class="list-disc pl-4 space-y-1">
+        <li>Works for any agent with a prompt, not only Claude Code.</li>
+        <li>No sleeping processes; the server already owns every PTY.</li>
+      </ul>
+    </div></div>
+    <div class="card bg-base-200"><div class="card-body p-4 space-y-1">
+      <h3 class="font-semibold">Costs</h3>
+      <ul class="list-disc pl-4 space-y-1">
+        <li>Collides with you: if you have half a sentence typed in that pane, the message is appended to it and both are sent.</li>
+        <li>The worker sees the message as <b>your</b> words; it cannot tell the master from you.</li>
+        <li>Each agent's input box differs (paste detection, vim mode, <code>/</code> and <code>!</code> prefixes, multi-line). Typing reliably is guesswork per agent and version.</li>
+        <li>Only works while <code>flow ui</code>'s server runs, and the master still needs hooks to know when it is idle, so it does not save the master wiring.</li>
+        <li>Nothing lands in the log, so <code>flow status</code> cannot show the conversation.</li>
+      </ul>
+    </div></div>
+  </div>
+</section>
+
+<section class="space-y-3" id="c">
+  <h2 class="text-xl font-bold">C. An MCP channel <span class="badge badge-ghost badge-sm align-middle">rejected</span></h2>
+  <p class="text-sm">flow would run an MCP server that declares Claude Code's <code>claude/channel</code> capability and pushes messages into each session. The 2.1.300 binary describes channels as gated: a server is only offered when its plugin is on an approved allowlist (or the session starts with a development flag), and claude.ai Team and Enterprise accounts have them off by default. A flow every worker depends on cannot rest on a research preview your organisation may switch off.</p>
+</section>
+
+<section class="space-y-3" id="answer">
+  <h2 class="text-xl font-bold">Second decision: who answers a waiting worker?</h2>
+  <p class="text-sm">This decides what wakes the master and what <code>master.md</code> tells it, not the structure, so it applies to whichever approach you pick. Your rule so far: "needs you" should only mean a decision is yours.</p>
+  <div class="grid md:grid-cols-3 gap-3 text-sm">
+    <div class="card bg-base-200"><div class="card-body p-4 space-y-1"><h3 class="font-semibold">1. The master first</h3><p>The master answers what the code, the plan or your earlier decisions settle, sends the answer with <code>flow send</code>, and tells you what it answered. Product decisions stay with you. Fewest interruptions; the master decides some things for you.</p></div></div>
+    <div class="card bg-base-200"><div class="card-body p-4 space-y-1"><h3 class="font-semibold">2. You, the master relays</h3><p>The master never answers on its own. It tells you which worker asks what, with what it found in the code, and sends your answer when you give it to the master. Safest; you are interrupted as often as today.</p></div></div>
+    <div class="card bg-base-200 ring-2 ring-success"><div class="card-body p-4 space-y-1"><h3 class="font-semibold">3. By the flow's mode <span class="badge badge-success badge-xs align-middle">recommended</span></h3><p>The mode already says how much a flow may do alone: an <code>auto</code> flow's questions go to the master first (1), a <code>guided</code> flow's go to you with the master relaying (2). No new setting; you choose per flow when you start it.</p></div></div>
+  </div>
+</section>
+
+<section class="space-y-3" id="rec">
+  <h2 class="text-xl font-bold">Recommendation</h2>
+  <p class="text-sm"><b>A with answer rule 3.</b> A puts the conversation where everything else about a flow already lives, never types over you, and lets a worker tell the master's words from yours. Its one real cost, depending on <code>asyncRewake</code>, is the same kind of dependency flow already has on Claude Code's hooks, and today's probe shows it works on your version. B's collisions with your typing are the sort of thing that makes you stop trusting the tool.</p>
+</section>
+
+<section class="card bg-base-200" id="decide">
+  <form class="card-body space-y-3" data-lavish-question="talk-approach" onsubmit="event.preventDefault(); const f = new FormData(event.currentTarget); const a = f.get('approach'); const r = f.get('rule'); const n = (f.get('notes') || '').trim(); if (!a || !r) return; window.lavish.queuePrompt('Approach: ' + a + '. Who answers a waiting worker: ' + r + '.' + (n ? ' Notes: ' + n : ''), { tag: 'choice', text: 'Approach ' + a + ', rule ' + r, element: event.currentTarget, data: { question: 'talk-approach', approach: a, rule: r, notes: n } });">
+    <h2 class="card-title">Your choice</h2>
+    <fieldset class="space-y-1 text-sm"><legend class="font-semibold mb-1">Approach</legend>
+      <label class="flex gap-2 items-center"><input type="radio" class="radio radio-sm" name="approach" value="A (log + asyncRewake hooks)" checked> A. Messages in the log, delivered by hooks</label>
+      <label class="flex gap-2 items-center"><input type="radio" class="radio radio-sm" name="approach" value="B (server types into panes)"> B. The server types into the panes</label>
+    </fieldset>
+    <fieldset class="space-y-1 text-sm"><legend class="font-semibold mb-1">Who answers a waiting worker</legend>
+      <label class="flex gap-2 items-center"><input type="radio" class="radio radio-sm" name="rule" value="3 by the flow's mode"  checked> 3. By the flow's mode</label>
+      <label class="flex gap-2 items-center"><input type="radio" class="radio radio-sm" name="rule" value="1 the master first"> 1. The master first</label>
+      <label class="flex gap-2 items-center"><input type="radio" class="radio radio-sm" name="rule" value="2 you, the master relays"> 2. You, the master relays</label>
+    </fieldset>
+    <textarea name="notes" class="textarea textarea-bordered w-full text-sm" rows="3" placeholder="Anything to mix in or change"></textarea>
+    <div><button type="submit" class="btn btn-primary btn-sm">Queue this answer</button></div>
+  </form>
+</section>
+
+</main>
+</body>
+</html>
