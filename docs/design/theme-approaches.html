@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" data-theme="nord" data-lavish-annotate="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flow ui theme - approaches</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge) { overflow-wrap: anywhere; }
+  svg { max-width: 100%; height: auto; }
+  code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  .fig text { font: 12px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .fig .small { font-size: 10px; opacity: .7; }
+  .fig .new rect { fill: color-mix(in oklab, var(--color-success) 18%, transparent); stroke: var(--color-success); stroke-width: 1.5; }
+  .fig .mod rect { fill: color-mix(in oklab, var(--color-warning) 18%, transparent); stroke: var(--color-warning); stroke-width: 1.5; }
+  .fig .old rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .fig line { stroke: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke-width: 1.3; marker-end: url(#arrow); }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; margin-right: 1rem; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: color-mix(in oklab, var(--color-base-content) 55%, transparent)"/></marker></defs></svg>
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-10">
+
+<header class="space-y-2">
+  <p class="text-sm opacity-60">design-code / phase 2 - pick an approach</p>
+  <h1 class="text-3xl font-bold">flow ui follows the Noctalia theme, live</h1>
+  <p class="opacity-80">Decided: flow ui can follow Noctalia, and you can also pick the colors of the TUI design. When Noctalia switches theme, flow ui repaints in the new colors without a restart; without a theme it looks as it does today. The three approaches differ in where flow gets the colors from and how it notices a change.</p>
+  <div class="legend text-sm pt-1">
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-success) 40%,transparent)"></i>new</span>
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-warning) 40%,transparent)"></i>modified</span>
+    <span><i class="sw" style="background:var(--color-base-300)"></i>unchanged</span>
+  </div>
+</header>
+
+<section class="space-y-3" id="today">
+  <h2 class="text-xl font-bold">What exists today</h2>
+  <ul class="list-disc pl-5 text-sm space-y-1.5">
+    <li><code>Theme::builtin()</code> (<code>src/ui/theme.rs:61</code>) is the only theme: tokens <code>ui.{text, strong, muted, faint, accent, rule, selection, key, bar}</code> and <code>state.{working, waiting, blocked, done, ended}</code>. It is built once in <code>main::ui</code> (<code>src/main.rs:373</code>) and handed to <code>ui::run</code>, which passes <code>&amp;Theme</code> to every draw.</li>
+    <li>Most tokens are ANSI 0-15, so they already follow the terminal's palette, which Noctalia sets through your <code>terminal-sequences</code> template. Four colors are fixed: the clay accent (256-color 173), the bar (235 on 252) and the selection (236). Those are what clash with a Noctalia theme. The board's solid pills also hard-code black text (<code>src/ui/board.rs:321</code>).</li>
+    <li>Noctalia renders user templates on every theme change: <code>[theme.templates.user.*]</code> with <code>input_path</code>, <code>output_path</code> and an optional <code>post_hook</code> (<code>dotfiles-v2/noctalia/theme.toml:16</code>). Your nvim template reloads nvim with <code>pkill -SIGUSR1 nvim</code>. tmux gets <code>@noctalia_*</code> options from the community tmux template.</li>
+    <li>Noctalia runs on your Linux machine. On this Mac, <code>~/.config/tmux/themes/noctalia.conf</code> is a static copy from Sep 22, so "live" only happens where Noctalia runs; elsewhere the file stays as it was written.</li>
+    <li>The design canvas already has a <b>Theme</b> artboard: <code>~/.config/flow/theme.toml</code> with <code>extends = "terminal"</code>, sections <code>[ui]</code> (background, panel, selection, rule, text, strong, muted, faint, accent), <code>[state]</code> and <code>[glyphs]</code>; a color is <code>"#rrggbb"</code>, an ANSI index 0-15, <code>"default"</code> or another key; a key left out keeps the built-in value; "flow reloads the theme when the file is saved". Its other artboards use a dark palette (ground <code>#141418</code>, text <code>#c8c8d0</code>, clay <code>#e07a52</code>, blue <code>#7aa7ff</code>, amber <code>#e5b45a</code>, red <code>#f0717f</code>, green <code>#93c46d</code>); the Theme artboard shows a light one.</li>
+    <li>flow ui already ticks every 100 ms (<code>src/ui/mod.rs</code>), and the server notices changes from file sizes and times (<code>src/server/watch.rs</code>).</li>
+  </ul>
+</section>
+
+<section class="space-y-4" id="a">
+  <h2 class="text-xl font-bold">A. A theme file in flow's own token names, watched by flow ui <span class="badge badge-success badge-sm align-middle">recommended</span></h2>
+  <p>The design's file: <code>~/.config/flow/theme.toml</code> picks a base with <code>extends</code> and overrides any key. Bases are built in (<code>terminal</code>: today's look; <code>flow</code>: the design's dark palette; <code>flow-light</code>: its light one) or files in <code>~/.config/flow/themes/</code>. A Noctalia user template in dotfiles-v2 writes <code>themes/noctalia.toml</code> on every theme change, mapping Material roles to flow's keys; <code>extends = "noctalia"</code> follows it, <code>extends = "flow"</code> gives the design's colors, and switching is one line. flow ui checks both files' size and time once a second and swaps the theme when either changes.</p>
+  <svg class="fig" viewBox="0 0 860 110" role="img" aria-label="Approach A">
+    <g class="new"><rect x="10" y="30" width="170" height="46" rx="6"/><text x="95" y="50" text-anchor="middle">Noctalia template</text><text class="small" x="95" y="66" text-anchor="middle">dotfiles-v2, roles -> tokens</text></g>
+    <g class="new"><rect x="240" y="30" width="170" height="46" rx="6"/><text x="325" y="50" text-anchor="middle">themes/noctalia.toml</text><text class="small" x="325" y="66" text-anchor="middle">theme.toml extends it, or "flow"</text></g>
+    <g class="mod"><rect x="470" y="30" width="170" height="46" rx="6"/><text x="555" y="50" text-anchor="middle">Theme::load + ThemeWatch</text><text class="small" x="555" y="66" text-anchor="middle">theme.rs, checked each second</text></g>
+    <g class="old"><rect x="700" y="30" width="150" height="46" rx="6"/><text x="775" y="57" text-anchor="middle">every draw</text></g>
+    <line x1="180" y1="53" x2="238" y2="53"/><line x1="410" y1="53" x2="468" y2="53"/><line x1="640" y1="53" x2="698" y2="53"/>
+  </svg>
+  <div class="grid md:grid-cols-2 gap-3 text-sm">
+    <div class="alert alert-soft alert-success items-start"><div><b>Gains</b><ul class="list-disc pl-5"><li>Exactly the file the design already shows, and the design's palette as a built-in theme.</li><li>flow knows nothing about Noctalia: any tool, or you by hand, can write the file. Codex or another shell later is just another template.</li><li>The mapping lives in the template, where you can change it without a flow release.</li><li>Notices every change, including a hand edit or a theme written while flow ui was closed.</li><li>Fits flow's habits: a file under <code>~/.config/flow</code> like <code>config.toml</code>, change detection from size and time like <code>StoreWatch</code>.</li></ul></div></div>
+    <div class="alert alert-soft alert-warning items-start"><div><b>Costs</b><ul class="list-disc pl-5"><li>One <code>stat</code> per second while flow ui runs (negligible).</li><li>A repaint can lag a theme change by up to a second.</li><li>A theme file format to keep compatible from now on: token names become public.</li></ul></div></div>
+  </div>
+</section>
+
+<section class="space-y-4" id="b">
+  <h2 class="text-xl font-bold">B. Same file, reloaded on a signal from Noctalia's post hook</h2>
+  <p>As A (same files and built-in themes), but the template's <code>post_hook</code> sends flow ui a signal (like your nvim template does), and flow ui reloads the file only then.</p>
+  <div class="grid md:grid-cols-2 gap-3 text-sm">
+    <div class="alert alert-soft alert-success items-start"><div><b>Gains</b><ul class="list-disc pl-5"><li>Repaints the moment the theme changes; no polling.</li></ul></div></div>
+    <div class="alert alert-soft alert-warning items-start"><div><b>Costs</b><ul class="list-disc pl-5"><li><code>pkill -USR1 flow</code> also hits <code>flow server</code> and every <code>flow hook</code>, and SIGUSR1's default is to terminate: one theme change could kill every Claude session. The hook needs an exact pattern for <code>flow ui</code> only, and every flow process must ignore the signal.</li><li>Misses a hand edit, or a theme written while flow ui was closed until the next start.</li><li>The template has to know how to find flow's processes.</li></ul></div></div>
+  </div>
+</section>
+
+<section class="space-y-4" id="c">
+  <h2 class="text-xl font-bold">C. No template: read the colors tmux already has</h2>
+  <p>flow ui asks the tmux server for the <code>@noctalia_*</code> options (<code>tmux show-options -gv</code>) and maps the Material roles to its tokens in Rust, polling every few seconds.</p>
+  <div class="grid md:grid-cols-2 gap-3 text-sm">
+    <div class="alert alert-soft alert-success items-start"><div><b>Gains</b><ul class="list-disc pl-5"><li>Nothing to add to dotfiles-v2; works wherever tmux has the palette.</li><li>The design's palette can still be a built-in theme.</li></ul></div></div>
+    <div class="alert alert-soft alert-warning items-start"><div><b>Costs</b><ul class="list-disc pl-5"><li>Leaves the design's theme file out, or needs it as a second mechanism.</li><li>Ties flow to tmux and to the names the community tmux template happens to set; outside tmux, no theme.</li><li>The role-to-token mapping is compiled into flow.</li><li>Spawns a process on every poll.</li></ul></div></div>
+  </div>
+</section>
+
+<section class="space-y-3" id="recommend">
+  <h2 class="text-xl font-bold">Recommendation: A</h2>
+  <p>A keeps flow independent of Noctalia and tmux, puts the mapping where you can tune it, and cannot harm the sessions. B's speedup is under a second, and its signal would have to be fenced off from the server and every hook. C couples flow to tmux.</p>
+</section>
+
+<section class="card bg-base-200" id="decide">
+  <form class="card-body space-y-3" data-lavish-question="approach" onsubmit="event.preventDefault(); const f = new FormData(event.currentTarget); const choice = f.get('approach'); const notes = (f.get('notes') || '').trim(); if (choice) window.lavish.queuePrompt('Use approach ' + choice + ' for the flow ui theme.' + (notes ? ' Notes: ' + notes : ''), { tag: 'choice', text: 'Approach: ' + choice, element: event.currentTarget, data: { question: 'approach', answer: choice, notes } });">
+    <h2 class="card-title">Which approach?</h2>
+    <label class="flex gap-2 items-start"><input type="radio" class="radio radio-sm mt-0.5" name="approach" value="A - theme file in flow's token names, watched by flow ui" checked> <span><b>A</b> - theme file in flow's token names, watched by flow ui</span></label>
+    <label class="flex gap-2 items-start"><input type="radio" class="radio radio-sm mt-0.5" name="approach" value="B - theme file reloaded on a signal from the post hook"> <span><b>B</b> - theme file reloaded on a signal from the post hook</span></label>
+    <label class="flex gap-2 items-start"><input type="radio" class="radio radio-sm mt-0.5" name="approach" value="C - read the colors tmux already has"> <span><b>C</b> - read the colors tmux already has</span></label>
+    <label class="form-control"><span class="text-sm opacity-70">Notes or a mix (optional)</span><textarea class="textarea textarea-bordered w-full" name="notes" rows="3"></textarea></label>
+    <div><button class="btn btn-primary btn-sm" type="submit">Queue this answer</button></div>
+  </form>
+</section>
+
+</main>
+</body>
+</html>
