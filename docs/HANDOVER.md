@@ -244,7 +244,6 @@ The vision below is built as `flow ui`, see README and `.claude/plans/plan-flow-
   Docker example as its starting point), then runs both once in a scratch worktree to prove them.
 - **Extensions:** glab and ClickUp as data sources (ticket as the request, MR and pipeline status
   per flow); the new-flow dialog's "from ClickUp" list in the design waits for this.
-- **One default mode:** `flow start` defaults to guided, the new-flow dialog to auto (as designed).
   Decide whether both should match.
 
 ## Long-term vision: `flow` as its own TUI

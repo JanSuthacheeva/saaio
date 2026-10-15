@@ -53,7 +53,7 @@ impl NewFlowForm {
     pub fn new(repo: PathBuf) -> NewFlowForm {
         NewFlowForm {
             request: String::new(),
-            mode: Mode::Auto,
+            mode: Mode::Guided,
             repo,
             error: None,
             branching: None,
@@ -360,11 +360,7 @@ mod tests {
         let mut form = NewFlowForm::new(PathBuf::from("/shop"));
         form.on_key(Key::Tab);
         form.on_key(Key::Right);
-        assert_eq!(
-            form.mode,
-            Mode::Guided,
-            "without types tab goes to the mode"
-        );
+        assert_eq!(form.mode, Mode::Auto, "without types tab goes to the mode");
 
         form.set_branching(Some(Branching {
             name: "{type}/{ticket}-{slug}".into(),
@@ -386,12 +382,12 @@ mod tests {
         let mut form = NewFlowForm::new(PathBuf::from("/shop"));
 
         form.on_key(Key::Char('l'));
-        assert_eq!(form.mode, Mode::Auto, "l is typed into the request");
+        assert_eq!(form.mode, Mode::Guided, "l is typed into the request");
         form.on_key(Key::Tab);
         form.on_key(Key::Right);
-        assert_eq!(form.mode, Mode::Guided);
-        form.on_key(Key::Char(' '));
         assert_eq!(form.mode, Mode::Auto);
+        form.on_key(Key::Char(' '));
+        assert_eq!(form.mode, Mode::Guided);
         assert_eq!(form.request, "l");
     }
 }
