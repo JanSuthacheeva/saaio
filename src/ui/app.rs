@@ -1125,8 +1125,16 @@ impl App {
                 Span::styled(theme.glyphs.master, theme.ui.accent),
                 Span::styled(" master ", theme.ui.strong),
             ];
-            if let Some(place) = &self.master {
-                let fitted = clip_place(place, room(Line::from(title.clone()).width() + 2));
+            // The sidebar says where the master runs; alone, the title says it.
+            let place = match (&self.master, self.areas().side) {
+                (Some(place), Some(_)) => place
+                    .rsplit_once(" · ")
+                    .map(|(_, branch)| branch.to_string()),
+                (Some(place), None) => Some(place.clone()),
+                (None, _) => None,
+            };
+            if let Some(place) = place {
+                let fitted = clip_place(&place, room(Line::from(title.clone()).width() + 2));
                 if !fitted.is_empty() {
                     title.push(Span::styled(format!(" {fitted} "), theme.ui.faint));
                 }
@@ -1170,16 +1178,11 @@ impl App {
     }
 
     /// The right of the pane's top edge: with the rail, the next flow that needs you and the way back
-    /// to the sidebar; with the sidebar, the way back to the master.
+    /// to the sidebar; with the sidebar, nothing.
     fn border_hint(&self, theme: &Theme) -> Option<Line<'static>> {
+        // With the sidebar in view its key hint says the rest.
         if !self.rail {
-            return match self.focus {
-                PaneKey::Master => None,
-                PaneKey::Flow(_) => Some(Line::from(vec![
-                    Span::styled(" C-space 0", theme.ui.key),
-                    Span::styled(" back to master ", theme.ui.faint),
-                ])),
-            };
+            return None;
         }
         if self.workers().is_empty() {
             return None;
@@ -1869,7 +1872,7 @@ mod tests {
             "{title}"
         );
         assert!(
-            title.ends_with(" C-space 0 back to master ╮  ▚▄▞ flow                    2 need you "),
+            title.ends_with("──╮  ▚▄▞ flow                    2 need you "),
             "{title}"
         );
         assert_eq!(
@@ -2111,12 +2114,19 @@ mod tests {
             branch: Some("main".into()),
         });
 
-        let screen = render_at(&fleet, FLEET);
-        let top = row(&screen, 0);
+        let narrow = Size { cols: 90, rows: 20 };
+        let mut solo = App::new(narrow);
+        solo.on_server(ServerMsg::Master {
+            cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
+            branch: Some("main".into()),
+        });
+        let solo = render_at(&solo, narrow);
+        let top = row(&solo, 0);
         let pane_edge = top.split('╮').next().unwrap();
-
         assert!(pane_edge.contains("/private/…/"), "{top}");
         assert!(pane_edge.contains("/repo · main ─"), "{top}");
+
+        let screen = render_at(&fleet, FLEET);
         assert_eq!(
             side(&screen, 3).trim_end(),
             "     /private/…/ui-look/repo · main"
@@ -2148,7 +2158,11 @@ mod tests {
             wide.ends_with("no workers yet   │  C-space then  n new flow   ? keys "),
             "{wide}"
         );
-        assert!(row(&sidebar, 0).starts_with("╭ ● master  ~/projects/shop · main ─"));
+        assert!(
+            row(&sidebar, 0).starts_with("╭ ● master  main ─"),
+            "the sidebar says where it runs: {}",
+            row(&sidebar, 0)
+        );
         assert_eq!(side(&sidebar, 3).trim_end(), "     ~/projects/shop · main");
         assert_eq!(side(&sidebar, 5).trim_end(), " NEEDS YOU 2");
     }
