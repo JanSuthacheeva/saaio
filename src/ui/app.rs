@@ -173,6 +173,15 @@ impl App {
         self.notice = Some(notice);
     }
 
+    /// say(), with the home folder in it written as ~.
+    pub fn say_about_file(&mut self, notice: String) {
+        let notice = match self.home.as_deref() {
+            Some(home) => notice.replace(&format!("{home}/"), "~/"),
+            None => notice,
+        };
+        self.say(notice);
+    }
+
     /// The store this flow ui belongs to, as `flow status --all` names its root.
     pub fn with_store(mut self, root: String) -> App {
         self.here = Some(root);

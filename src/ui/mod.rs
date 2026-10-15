@@ -156,7 +156,7 @@ fn reload_theme(themes: &mut ThemeWatch, theme: &mut Theme, app: &mut App) -> bo
             true
         }
         Some(Err(error)) => {
-            app.say(format!("theme: {error:#}"));
+            app.say_about_file(format!("theme: {error:#}"));
             true
         }
     }
