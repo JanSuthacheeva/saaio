@@ -2169,6 +2169,15 @@ mod tests {
             "{}",
             row(&terminal, 5)
         );
+        let shop_230 = row(&terminal, 5)
+            .split('│')
+            .nth(5)
+            .unwrap_or_default()
+            .to_string();
+        assert!(
+            shop_230.trim_start() == "31m ago ",
+            "a flow without tasks draws no bar: {shop_230:?}"
+        );
         assert!(row(&terminal, 10).contains("│ 3 ⠙ export-csv            reviewing · agent  │"));
         assert!(
             row(&terminal, 16)

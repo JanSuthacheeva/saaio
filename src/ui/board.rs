@@ -260,30 +260,24 @@ impl BoardView<'_> {
                 .tasks
                 .map(|tasks| (tasks.done, tasks.total))
                 .filter(|(_, total)| *total > 0);
-            let count = tasks.map_or("-".to_string(), |(done, total)| format!("{done}/{total}"));
-            let bar = width
-                .saturating_sub(3 + 2 + count.chars().count() + ago.chars().count() + 1)
-                .min(BAR_WIDTH);
-            let filled = tasks.map_or(0, |(done, total)| {
-                (bar as u32 * done.min(total) / total) as usize
-            });
-            split(
-                vec![
-                    Span::raw("   "),
-                    Span::styled("━".repeat(filled), theme.ui.muted),
-                    Span::styled("─".repeat(bar - filled), theme.ui.faint),
-                    Span::styled(
-                        format!("  {count}"),
-                        if tasks.is_some() {
-                            theme.ui.text
-                        } else {
-                            theme.ui.faint
-                        },
-                    ),
-                ],
-                vec![Span::styled(ago, theme.ui.faint)],
-                width,
-            )
+            let progress = match tasks {
+                // Nothing to measure yet: no bar, only the age.
+                None => vec![Span::raw("   ")],
+                Some((done, total)) => {
+                    let count = format!("{done}/{total}");
+                    let bar = width
+                        .saturating_sub(3 + 2 + count.chars().count() + ago.chars().count() + 1)
+                        .min(BAR_WIDTH);
+                    let filled = (bar as u32 * done.min(total) / total) as usize;
+                    vec![
+                        Span::raw("   "),
+                        Span::styled("━".repeat(filled), theme.ui.muted),
+                        Span::styled("─".repeat(bar - filled), theme.ui.faint),
+                        Span::styled(format!("  {count}"), theme.ui.text),
+                    ]
+                }
+            };
+            split(progress, vec![Span::styled(ago, theme.ui.faint)], width)
         };
 
         let (note, style) = match flow.state {
