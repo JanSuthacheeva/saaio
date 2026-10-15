@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use ratatui::Frame as TuiFrame;
@@ -22,6 +23,8 @@ use crate::ui::sidebar::{self, Sidebar, clip, clip_place};
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Projects, State};
 
+/// How long a flow's row stands out after its state changed.
+const CHANGE_SHOWN_MS: u64 = 3_000;
 /// Ticks between redraws that only refresh how long ago things changed.
 const TICKS_PER_AGE: u32 = 10;
 /// How often the board asks `flow status --all` again while every project is in view.
@@ -157,6 +160,8 @@ pub struct App {
     size: Size,
     screen: Screen,
     board: Option<Board>,
+    /// When each flow's state last changed while this UI watched, by id: its row stands out a moment.
+    changed: HashMap<String, u64>,
     panes: Vec<PaneInfo>,
     focus: PaneKey,
     /// The flow whose peek the sidebar shows.
@@ -191,6 +196,7 @@ impl App {
             size,
             screen: Screen::default(),
             board: None,
+            changed: HashMap::new(),
             panes: Vec::new(),
             focus: PaneKey::Master,
             cursor: None,
@@ -262,7 +268,11 @@ impl App {
         if spinning {
             self.spin = self.spin.wrapping_add(1);
         }
-        spinning || self.ticks.is_multiple_of(TICKS_PER_AGE)
+        let shown = self.changed.len();
+        self.changed
+            .retain(|_, at| now.saturating_sub(*at) < CHANGE_SHOWN_MS);
+        let fading = !self.changed.is_empty() || self.changed.len() != shown;
+        spinning || fading || self.ticks.is_multiple_of(TICKS_PER_AGE)
     }
 
     /// Job::Overview when every project is in view and the last answer is older than 2 s.
@@ -300,6 +310,14 @@ impl App {
             ServerMsg::Board(board) => {
                 let before = self.areas().pane;
                 self.now = self.now.max(board.now);
+                if let Some(old) = &self.board {
+                    for flow in &board.flows {
+                        let was = old.flows.iter().find(|other| other.id == flow.id);
+                        if was.is_some_and(|was| was.state != flow.state) {
+                            self.changed.insert(flow.id.clone(), self.now);
+                        }
+                    }
+                }
                 self.board = Some(board);
                 let mut effects = Vec::new();
                 let after = self.areas();
@@ -1033,12 +1051,12 @@ impl App {
             master: self.master.as_deref(),
             now: self.now,
             spin: self.spin,
+            changed: &self.changed,
             theme,
         }
     }
 
-    /// The rounded border around the focused pane: its name in the top edge, and for a worker
-    /// its steps, branch and slot, and the way back to the master on the right.
+    /// Before flow stops: asks to stop, or to keep or end the flows that are not finished.
     fn draw_stop(&self, frame: &mut TuiFrame, pane: Rect, theme: &Theme, unfinished: &[String]) {
         if unfinished.is_empty() {
             let text = vec![
@@ -1843,7 +1861,11 @@ mod tests {
         assert!(side(&terminal, 14).starts_with(" 3 ⠙ export-csv"));
         assert_eq!(side(&terminal, 16).trim_end(), "     agent: review changes");
         assert_eq!(side(&terminal, 18).trim_end(), " DONE 1");
-        assert_eq!(side(&terminal, 20).trim_end(), "     ●───●───●───● MR !418");
+        assert_eq!(
+            side(&terminal, 20).trim_end(),
+            "     ●───●───●───● MR !418        in 0s",
+            "a finished flow says how long it took"
+        );
         assert_eq!(side(&terminal, 40).trim_end(), "", "no rule above the hint");
         assert_eq!(side(&terminal, 41).trim_end(), " C-space ? keys");
         let buffer = terminal.backend().buffer();
@@ -2269,6 +2291,46 @@ mod tests {
             sections,
             [" NEEDS YOU 2", " READY 1", " RUNNING 1", " DONE 1"]
         );
+    }
+
+    #[test]
+    fn a_row_stands_out_a_moment_after_its_flow_changed() {
+        let selection = Theme::builtin().ui.selection.bg.unwrap();
+        let mut app = with_fleet();
+        let background_of = |app: &App, text: &str| {
+            let terminal = render_at(app, FLEET);
+            let y = (0..FLEET.rows - 2)
+                .find(|&y| side(&terminal, y).contains(text))
+                .unwrap();
+            terminal.backend().buffer()[(120, y + layout::MARGIN)].bg
+        };
+        assert_ne!(background_of(&app, "shop-221"), selection);
+
+        let mut board = fleet();
+        let flow = board
+            .flows
+            .iter_mut()
+            .find(|flow| flow.name == "shop-221")
+            .unwrap();
+        flow.state = State::Working;
+        flow.blocker = None;
+        app.on_server(ServerMsg::Board(board));
+
+        assert_eq!(
+            background_of(&app, "shop-221"),
+            selection,
+            "it just started working"
+        );
+        assert_ne!(
+            background_of(&app, "shop-230"),
+            selection,
+            "nothing changed there"
+        );
+        assert!(
+            app.on_tick(NOW + CHANGE_SHOWN_MS),
+            "a redraw takes the mark away"
+        );
+        assert_ne!(background_of(&app, "shop-221"), selection);
     }
 
     #[test]

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -31,6 +33,8 @@ pub struct Sidebar<'a> {
     pub master: Option<&'a str>,
     pub now: u64,
     pub spin: usize,
+    /// Flows whose state changed a moment ago, by id; their rows stand out.
+    pub changed: &'a HashMap<String, u64>,
     pub theme: &'a Theme,
 }
 
@@ -192,6 +196,7 @@ impl Sidebar<'_> {
         let width = WIDTH;
         let key = PaneKey::Flow(flow.id.clone());
         let selected = *self.focus == key || self.cursor == Some(flow.id.as_str());
+        let changed = self.changed.contains_key(&flow.id);
         let tone = theme.state(flow.state);
         let status = self.status(flow);
         let lead = |rest: &str| -> Vec<Span<'static>> {
@@ -237,6 +242,11 @@ impl Sidebar<'_> {
         second.push(Span::raw(" "));
         second.push(self.label(flow));
         let detail = match flow.tasks {
+            // A finished flow says how long it took.
+            _ if flow.is_finished() => format!(
+                "in {} ",
+                short_duration(flow.changed_at.saturating_sub(flow.started_at))
+            ),
             Some(tasks) => format!("{}/{} ", tasks.done, tasks.total),
             None if flow.mode == crate::event::Mode::Guided && !flow.is_finished() => {
                 "guided ".to_string()
@@ -248,12 +258,12 @@ impl Sidebar<'_> {
             Row {
                 line: split(first, vec![right], width),
                 key: Some(key.clone()),
-                selected,
+                selected: selected || changed,
             },
             Row {
                 line: split(second, vec![Span::styled(detail, theme.ui.faint)], width),
                 key: Some(key.clone()),
-                selected,
+                selected: selected || changed,
             },
         ];
         if let Some((text, style)) = self.note(flow, status) {
@@ -268,7 +278,7 @@ impl Sidebar<'_> {
             rows.push(Row {
                 line: Line::from(third),
                 key: Some(key),
-                selected,
+                selected: selected || changed,
             });
         }
         rows
