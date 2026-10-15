@@ -155,7 +155,7 @@ Unknown keys are an error.
 - [x] theme.rs: Palette (named terminal/flow/flow-light, get, set), Theme::from_palette, UiTokens.background, on_solid; builtin via from_palette; tests that terminal equals today's tokens
 - [x] theme_file.rs: load with extends, apply, color; tests for bases, overrides, references and each error
 - [x] ThemeWatch::new/changed with tests (first load, unchanged, edit, create, delete)
-- [ ] screen::ScreenView and App::draw painting the background; board pills via on_solid; tests with the flow palette
+- [x] screen::ScreenView and App::draw painting the background; board pills via on_solid; tests with the flow palette
 - [ ] ui::run owns the theme (UiEnv.theme_dir, TICKS_PER_THEME, App::say on errors); main::ui passes the config dir
 - [ ] Docs: README (themes), CLAUDE.md module map, HANDOVER
 - [ ] dotfiles-v2: Noctalia template templates/flow.toml and its [theme.templates.user.flow] entry
