@@ -184,4 +184,4 @@ pub fn news_for_master(flows: &[&FlowView]) -> String; // changed[n]{name,state,
 - [x] claude_code.rs: waiter hooks in settings, master_settings, Answer on Stop; Adapter::master_wiring; tests
 - [x] config.rs MasterConfig; master.rs spec(.., wake) wiring; server passes config.master.wake; tests
 - [x] master.md v3 (master-v2.md kept as a previous default); README, CLAUDE.md, HANDOVER
-- [ ] End-to-end check: flow ui with an auto and a guided worker; each wakes the master; the master answers the auto one with flow send and relays for the guided one; a mid-turn send reaches a busy worker
+- [x] End-to-end check: flow ui with an auto and a guided worker; each wakes the master; the master answers the auto one with flow send and relays for the guided one; a mid-turn send reaches a busy worker
