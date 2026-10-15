@@ -7,7 +7,7 @@ use ratatui::style::Color;
 use toml::{Table, Value};
 
 use crate::store::Stamp;
-use crate::ui::theme::{Palette, Theme};
+use crate::ui::theme::{KIWI, Palette, Theme};
 
 pub const THEME_FILE: &str = "theme.toml";
 pub const THEMES_DIR: &str = "themes";
@@ -16,12 +16,14 @@ const EXTENDS_LIMIT: usize = 4;
 /// What a theme extends when it names nothing.
 const DEFAULT_BASE: &str = "terminal";
 
-/// One theme file: what it extends and its colors by key, from [ui] and [state].
+/// One theme file: what it extends, its colors by key from [ui] and [state], and whether the
+/// terminal's font has Nerd Font icons.
 #[derive(Debug)]
 struct ThemeFile {
     path: PathBuf,
     extends: String,
     colors: Vec<(String, Value)>,
+    nerd_font: Option<bool>,
 }
 
 /// The theme in `dir`: theme.toml over what it extends, a built-in name or themes/<name>.toml; the
@@ -63,7 +65,16 @@ pub fn load(dir: &Path) -> (Result<Theme>, Vec<PathBuf>) {
         for file in chain.iter().rev() {
             apply(file, &mut palette).with_context(|| file.path.display().to_string())?;
         }
-        Ok(Theme::from_palette(palette))
+        // The nearest file that says wins: theme.toml over what it extends.
+        let nerd_font = chain
+            .iter()
+            .find_map(|file| file.nerd_font)
+            .unwrap_or(false);
+        let mut theme = Theme::from_palette(palette);
+        if nerd_font {
+            theme.glyphs.mark = KIWI;
+        }
+        Ok(theme)
     });
     (theme, files)
 }
@@ -84,10 +95,13 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
     let table: Table = text.parse()?;
     let mut extends = DEFAULT_BASE.to_string();
     let mut colors = Vec::new();
+    let mut nerd_font = None;
     for (key, value) in table {
         match (key.as_str(), value) {
             ("extends", Value::String(name)) => extends = name,
             ("extends", _) => bail!("extends must be a theme's name"),
+            ("nerd_font", Value::Boolean(on)) => nerd_font = Some(on),
+            ("nerd_font", _) => bail!("nerd_font is true or false"),
             ("ui" | "state", Value::Table(section)) => colors.extend(section),
             // The design's [glyphs] comes later; a file that has it still loads.
             ("glyphs", Value::Table(_)) => {}
@@ -98,6 +112,7 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
         path: path.to_path_buf(),
         extends,
         colors,
+        nerd_font,
     })
 }
 
@@ -246,6 +261,39 @@ mod tests {
         assert_eq!(palette.rule, Color::Indexed(8));
         assert_eq!(palette.ended, Color::Reset);
         assert_eq!(palette.text, flow.text);
+    }
+
+    #[test]
+    fn a_nerd_font_turns_the_mark_into_the_kiwi() {
+        let dir = TempDir::new().unwrap();
+        write(&dir, "theme.toml", "extends = \"flow\"\n");
+        assert_eq!(theme(&dir).glyphs.mark, "≋", "every font has it");
+
+        write(&dir, "theme.toml", "extends = \"mine\"\nnerd_font = true\n");
+        write(&dir, "themes/mine.toml", "extends = \"flow\"\n");
+        assert_eq!(theme(&dir).glyphs.mark, KIWI);
+
+        write(&dir, "theme.toml", "extends = \"mine\"\n");
+        write(
+            &dir,
+            "themes/mine.toml",
+            "extends = \"flow\"\nnerd_font = true\n",
+        );
+        assert_eq!(theme(&dir).glyphs.mark, KIWI, "from the theme it extends");
+
+        write(
+            &dir,
+            "theme.toml",
+            "extends = \"mine\"\nnerd_font = false\n",
+        );
+        assert_eq!(theme(&dir).glyphs.mark, "≋", "the nearer file wins");
+
+        write(&dir, "theme.toml", "nerd_font = \"yes\"\n");
+        let error = load(dir.path()).0.unwrap_err();
+        assert!(
+            format!("{error:#}").contains("nerd_font is true or false"),
+            "{error:#}"
+        );
     }
 
     #[test]

@@ -154,6 +154,9 @@ pub struct StateTokens {
     pub ended: Style,
 }
 
+/// flow's mark with a Nerd Font: Font Awesome's kiwi bird, in the theme's accent like any mark.
+pub const KIWI: &str = "\u{edff}";
+
 #[derive(Debug, Clone)]
 pub struct Glyphs {
     pub mark: &'static str,

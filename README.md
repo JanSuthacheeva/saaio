@@ -95,6 +95,7 @@ second when it, or the theme it extends, changes. Without it flow uses the termi
 ```toml
 # Colors: "#rrggbb", an ANSI index, "default" (the terminal's), or another key.
 extends = "flow"        # terminal | flow | flow-light | a file in themes/, without .toml
+nerd_font = true        # the font has Nerd Font icons: flow's mark becomes the kiwi
 [ui]
 accent = "#d9825b"
 [state]
@@ -102,7 +103,9 @@ ended = "faint"
 ```
 
 Keys: `[ui]` background, panel, selection, rule, text, strong, muted, faint, accent; `[state]`
-working, waiting, blocked, done, ended. A key left out keeps the base's value. `flow` and
+working, waiting, blocked, done, ended. A key left out keeps the base's value. `nerd_font`
+(default false) shows flow's mark as a kiwi bird, which needs a Nerd Font; without it the mark is
+`≋`, which every font has. The mark takes the theme's accent either way. `flow` and
 `flow-light` are the design's dark and light colors. A tool can keep a theme in
 `~/.config/flow/themes/<name>.toml` for `extends` to name; a Noctalia template that writes
 `themes/noctalia.toml` makes flow follow Noctalia live. A broken file keeps the last theme and
