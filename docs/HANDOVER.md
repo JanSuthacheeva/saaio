@@ -25,6 +25,7 @@ ship-feature orchestrator skill (planned there, not written yet; see its plan pa
 | 4 | Adapter: a Claude Code worker reports into flow | this repo, `src/adapter/` | **rebuilt in flow** (plan `.claude/plans/plan-flow-adapters.md`): Claude Code's own hooks run `flow hook claude-code`; the flows mod and the skills' report lines are gone. Was the flows mod in claude-code-mods, plan `~/projects/claude-code-mods/.claude/plans/plan-flows-adapter.md` (local); page `docs/design/adapter-implementation.html`. Typed skills raise no skill.prompt, so phases also come from the submitted `/skill` prompt |
 | 5 | `flow start`: worktree, slot, setup hook, worker; `flow clear` tears down | this repo | **built**, plan `.claude/plans/plan-flow-start.md`, page `docs/design/start-implementation.html`; since flow ui the worker opens there, the tmux path is gone |
 | 7 | `flow ui`: session server owning every Claude session, master + workers, sidebar, peek, board, new flow, rail, restore | this repo | **built**, plan `.claude/plans/plan-flow-ui.md`, pages `docs/design/ui-approaches.html`, `docs/design/ui-implementation.html`, screens https://claude.ai/artifact/68Ff2wJP6BcYX6qy4hppXp |
+| 8 | One flow per project: slots shared across every project's store, `flow status --all`, the board's `a` | this repo, `src/registry.rs`, `src/slots.rs` | **built**, plan `.claude/plans/plan-flow-per-project.md`, pages `docs/design/projects-approaches.html`, `docs/design/projects-implementation.html`. Each tmux project session sets its own `FLOW_HOME`; stores register in the default folder's `stores/`, `flow start` claims `slots/<n>` (1-20) under a flock before setup |
 | 6 | Auto mode + optional report line in the skills, `flow setup` hook | `~/projects/agent-skills` (+ this repo for setup) | not designed |
 
 Each piece gets its own design-code round (approaches page, implementation page, plan)
@@ -219,12 +220,6 @@ The vision below is built as `flow ui`, see README and `.claude/plans/plan-flow-
   arriving as a message in the master's session. The sidebar shows "asked by master", the timeline
   the exchange. To settle: hooks for the master too, a question arriving while you type in that pane,
   loops; start with master -> worker only.
-- **One flow per project (in use since 2026-10-15).** The tmux sessionizer gives each project
-  session its own `FLOW_HOME` (`~/.local/state/flow/projects/<session>`), so `flow ui` there has its
-  own server, master in that project and flows. To improve:
-  - slots are counted per state folder, so two projects can both hand out slot 1 and their ports
-    clash; count slots across every state folder (or give each folder its own slot range);
-  - an overview across all projects' state folders, read-only, for when you want everything at once.
 - **A mascot.** A small character in a corner of flow ui (bottom right of the sidebar, or the bar
   when solo) that reacts to the board: idle, working while workers run, dancing when a flow opens
   its merge request, worried when one is blocked. Further on it becomes the master's face, a Jarvis

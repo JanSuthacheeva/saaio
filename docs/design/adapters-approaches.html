@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en" data-theme="nord" data-lavish-annotate="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness adapters - approaches</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, li, td, th, .badge) { overflow-wrap: anywhere; }
+  svg { max-width: 100%; height: auto; }
+  code { font-size: .85em; background: var(--color-base-200); padding: 0 .3em; border-radius: 4px; }
+  .fig text { font: 12px ui-sans-serif, system-ui; fill: var(--color-base-content); }
+  .fig .small { font-size: 10px; opacity: .7; }
+  .fig .new rect { fill: color-mix(in oklab, var(--color-success) 18%, transparent); stroke: var(--color-success); stroke-width: 1.5; }
+  .fig .mod rect { fill: color-mix(in oklab, var(--color-warning) 18%, transparent); stroke: var(--color-warning); stroke-width: 1.5; }
+  .fig .old rect { fill: var(--color-base-200); stroke: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+  .fig .gone rect { fill: none; stroke: var(--color-error); stroke-dasharray: 4 3; }
+  .fig line, .fig path { stroke: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke-width: 1.3; fill: none; marker-end: url(#arrow); }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; margin-right: 1rem; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  table.facts td, table.facts th { padding: .3rem .5rem; vertical-align: top; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: color-mix(in oklab, var(--color-base-content) 55%, transparent); stroke: none; marker-end: none"/></marker></defs></svg>
+<main class="mx-auto max-w-5xl p-5 lg:p-10 space-y-10">
+
+<header class="space-y-2">
+  <p class="text-sm opacity-60">design-code / phase 2 - pick an approach</p>
+  <h1 class="text-3xl font-bold">Harness adapters: how does a worker's state reach flow without the mod?</h1>
+  <p class="opacity-80">Goal: flow learns what each worker does from the harness itself, deterministically. The skills stop knowing about flow, the flows mod's reporting goes away, and other harnesses (Codex, pi) can follow with their own adapter. The three approaches differ in <b>who receives the harness's events</b> and <b>who turns them into flow events</b>.</p>
+  <div class="legend text-sm pt-1">
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-success) 40%,transparent)"></i>new</span>
+    <span><i class="sw" style="background:color-mix(in oklab,var(--color-warning) 40%,transparent)"></i>modified</span>
+    <span><i class="sw" style="background:var(--color-base-300)"></i>unchanged</span>
+    <span><i class="sw" style="border:1.5px dashed var(--color-error)"></i>retired</span>
+  </div>
+</header>
+
+<section class="space-y-3" id="today">
+  <h2 class="text-xl font-bold">What exists today</h2>
+  <div class="grid md:grid-cols-2 gap-4 text-sm">
+    <ul class="list-disc pl-5 space-y-1.5">
+      <li>A worker reports through the <b>flows mod</b> (claude-code-mods): it watches engine events and runs <code>flow report --flow $FLOW_ID ...</code> one at a time (<code>flows/hooks/register.tsx:132-150</code>), with the mapping in <code>reporter.ts</code>.</li>
+      <li>Each phase skill also carries a "if a <code>flow</code> command exists, report ..." block (<code>agent-skills/skills/*/SKILL.md</code>), so phases arrive twice today.</li>
+      <li><code>flow report</code> appends one <code>Event</code> to the flow's log; the fold is idempotent, so repeats are harmless (<code>main.rs:433</code>, <code>fold.rs</code>).</li>
+    </ul>
+    <ul class="list-disc pl-5 space-y-1.5">
+      <li>flow ui's server launches every worker from <code>launch::worker_spec</code> and the agent's command template in <code>config.toml</code> (<code>launch.rs</code>, <code>config.rs</code>), with <code>FLOW_ID</code> in its environment.</li>
+      <li>The server already knows each pane's liveness (running, exited, failed) and the peek already reads Claude's transcript (<code>server/host.rs</code>, <code>ui/peek.rs</code>).</li>
+      <li>The flow log is the single source of truth; every reader goes through <code>fold</code>.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="space-y-3" id="facts">
+  <h2 class="text-xl font-bold">Verified today on Claude Code 2.1.299</h2>
+  <p class="text-sm opacity-80">A real Haiku session with <code>--settings</code> hooks that dump their stdin (probe in <code>/tmp/fe2e/probe</code>), plus the hooks docs:</p>
+  <div class="overflow-x-auto">
+  <table class="table table-sm facts text-sm">
+    <thead><tr><th>Flow event</th><th>Hook and field</th><th>Seen</th></tr></thead>
+    <tbody>
+      <tr><td>working</td><td><code>UserPromptSubmit</code>; <code>PostToolUse</code> of <code>Agent</code> / <code>AskUserQuestion</code></td><td>yes</td></tr>
+      <tr><td>delegated &lt;description&gt;</td><td><code>PreToolUse</code>, <code>tool_name: "Agent"</code>, <code>tool_input.description</code>; subagent events carry <code>agent_id</code></td><td>yes</td></tr>
+      <tr><td>waiting &lt;question&gt;</td><td><code>PreToolUse</code> of <code>AskUserQuestion</code>, <code>tool_input.questions[0].question</code>; <code>Stop</code> with <code>last_assistant_message</code>; <code>Notification</code> <code>permission_prompt</code></td><td>yes</td></tr>
+      <tr><td>phase</td><td><code>PreToolUse</code> of <code>Skill</code>, <code>tool_input.skill</code>; a typed <code>/skill</code> via <code>UserPromptSubmit.prompt</code> / <code>UserPromptExpansion</code></td><td>yes</td></tr>
+      <tr><td>tasks / blocked</td><td><code>PostToolUse</code> of <code>mcp__plan-progress__report</code></td><td>docs</td></tr>
+      <tr><td>merge-request</td><td><code>PostToolUse</code> of <code>Bash</code>, <code>tool_input.command</code>, <code>tool_response.stdout</code></td><td>yes</td></tr>
+      <tr><td>ended</td><td><code>SessionEnd</code> <code>reason: "prompt_input_exit"</code>; a hangup gives <code>"other"</code></td><td>yes, both</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li><code>FLOW_ID</code> set on the Claude process reaches every hook. <code>--settings</code> hooks run <i>alongside</i> the user's own hooks (merged, not replaced), and must be passed again on <code>--resume</code>.</li>
+    <li>Hooks run synchronously unless marked <code>async</code>; matching hooks run in parallel. An observe-only hook that exits 0 with no output changes nothing for Claude.</li>
+  </ul>
+</section>
+
+<section class="space-y-4" id="a">
+  <h2 class="text-xl font-bold">A. A <code>flow hook</code> command: the harness calls flow, flow translates <span class="badge badge-success badge-sm align-middle">recommended</span></h2>
+  <p>flow ui launches a Claude worker with <code>--settings</code> hooks that run <code>flow hook claude-code</code> on each event. That command reads the hook's JSON from stdin, turns it into zero or more flow events through the agent's adapter, and appends them to the log of <code>$FLOW_ID</code>. The adapter is a pure function per harness, plus the argv it adds at launch.</p>
+  <svg class="fig" viewBox="0 0 860 190" role="img" aria-label="Approach A">
+    <g class="old"><rect x="10" y="20" width="150" height="46" rx="6"/><text x="85" y="40" text-anchor="middle">Claude worker</text><text class="small" x="85" y="56" text-anchor="middle">hooks from --settings</text></g>
+    <g class="new"><rect x="230" y="20" width="170" height="46" rx="6"/><text x="315" y="40" text-anchor="middle">flow hook claude-code</text><text class="small" x="315" y="56" text-anchor="middle">stdin JSON, $FLOW_ID</text></g>
+    <g class="new"><rect x="470" y="20" width="160" height="46" rx="6"/><text x="550" y="40" text-anchor="middle">adapter::ClaudeCode</text><text class="small" x="550" y="56" text-anchor="middle">translate (pure)</text></g>
+    <g class="old"><rect x="700" y="20" width="150" height="46" rx="6"/><text x="775" y="40" text-anchor="middle">Store::append</text><text class="small" x="775" y="56" text-anchor="middle">the flow's log</text></g>
+    <g class="mod"><rect x="230" y="120" width="170" height="46" rx="6"/><text x="315" y="140" text-anchor="middle">launch::worker_spec</text><text class="small" x="315" y="156" text-anchor="middle">+ adapter wiring argv</text></g>
+    <g class="mod"><rect x="470" y="120" width="160" height="46" rx="6"/><text x="550" y="140" text-anchor="middle">config Agent</text><text class="small" x="550" y="156" text-anchor="middle">adapter, phases</text></g>
+    <g class="gone"><rect x="700" y="120" width="150" height="46" rx="6"/><text x="775" y="140" text-anchor="middle">flows mod reporting</text><text class="small" x="775" y="156" text-anchor="middle">+ skills' report lines</text></g>
+    <line x1="160" y1="43" x2="228" y2="43"/><line x1="400" y1="43" x2="468" y2="43"/><line x1="630" y1="43" x2="698" y2="43"/>
+    <line x1="315" y1="120" x2="100" y2="68"/><line x1="470" y1="143" x2="402" y2="143"/>
+  </svg>
+  <div class="card bg-base-200"><div class="card-body text-sm space-y-2">
+    <h3 class="font-semibold text-base">How it works: only hooks, no model involved</h3>
+    <p>A hook is a shell command that <b>Claude Code the program</b> runs on its own whenever an event happens. The model is not asked, does not see the hook, and cannot skip it. Its output is empty, so nothing enters the conversation.</p>
+    <ol class="list-decimal pl-5 space-y-1">
+      <li>flow ui starts the worker as <code>claude ... --settings '&lt;json&gt;'</code>. The JSON is the only wiring, written by flow; nothing is installed, the user's own settings stay as they are:
+<pre class="bg-base-100 rounded p-2 overflow-x-auto text-xs mt-1">{ "hooks": {
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "/…/flow hook claude-code" }] }],
+    "PreToolUse":       [{ "matcher": "*", "hooks": [{ "type": "command", "command": "/…/flow hook claude-code" }] }],
+    "PostToolUse":      [ …same… ],
+    "Stop":             [ …same… ],
+    "Notification":     [ …same… ],
+    "SessionEnd":       [ …same… ] } }</pre></li>
+      <li>You type a prompt. Before the model even starts, Claude Code runs <code>flow hook claude-code</code> with <code>{"hook_event_name":"UserPromptSubmit", …}</code> on stdin. flow appends <code>working</code> to the log of <code>$FLOW_ID</code>.</li>
+      <li>The model calls the Skill tool for <code>design-code</code>. Claude Code runs the hook with <code>{"tool_name":"Skill","tool_input":{"skill":"design-code"}}</code>; flow looks the skill up in its phase map and appends <code>phase design</code>. The skill text says nothing about flow.</li>
+      <li>The model finishes its turn. Claude Code runs the hook with <code>{"hook_event_name":"Stop","last_assistant_message":"…?"}</code>; flow appends <code>waiting "&lt;the question&gt;"</code>.</li>
+      <li>You <code>/exit</code>: <code>SessionEnd</code> with <code>prompt_input_exit</code>, flow appends <code>ended</code>. A hangup (<code>other</code>) appends nothing, so the flow resumes.</li>
+    </ol>
+    <p>So "the harness calls flow" means exactly this: Claude Code runs a command flow told it to run. Every decision is a fixed rule in flow's Rust code, tested against the recorded payloads.</p>
+  </div></div>
+  <div class="grid md:grid-cols-2 gap-4 text-sm">
+    <div><h3 class="font-semibold">Touches</h3><ul class="list-disc pl-5"><li>new <code>src/adapter.rs</code> (or <code>adapter/</code> with one file per harness)</li><li><code>main.rs</code>: <code>flow hook &lt;adapter&gt;</code> (hidden, like <code>flow server</code>)</li><li><code>config.rs</code>: <code>Agent.adapter</code>, a skill-to-phase map</li><li><code>launch.rs</code>: the wiring argv in <code>worker_spec</code> and resume</li></ul></div>
+    <div><h3 class="font-semibold">Fit</h3><ul class="list-disc pl-5"><li>Same shape as <code>flow report</code>: CLI in, <code>Store::append</code> out, the log stays the only truth.</li><li>Pure translation like <code>fold.rs</code> and <code>launch.rs</code>: table tests over the recorded hook JSON.</li><li>Works for any harness that can run a command: Codex's <code>notify</code>, a pi extension, a plain shell.</li></ul></div>
+  </div>
+  <div class="grid md:grid-cols-2 gap-3 text-sm">
+    <div class="alert alert-soft alert-success items-start"><div><b>Gains</b><ul class="list-disc pl-5"><li>Deterministic: the harness fires hooks, the model never decides to report.</li><li>No state between calls, so nothing to keep in sync; order kept by running the hooks synchronously.</li><li>Independent of flow ui: a log written with the server down still counts.</li></ul></div></div>
+    <div class="alert alert-soft alert-warning items-start"><div><b>Costs</b><ul class="list-disc pl-5"><li>One short <code>flow</code> process per hook (a few ms; two per tool call).</li><li>Stateless, so it cannot suppress a repeated "waiting"; the fold already absorbs repeats.</li><li>Subagent turns must be filtered by <code>agent_id</code> in each call.</li></ul></div></div>
+  </div>
+</section>
+
+<section class="space-y-4" id="b">
+  <h2 class="text-xl font-bold">B. Hooks talk to flow server; the server translates</h2>
+  <p>The worker's hooks send events to the running flow server (Claude Code's <code>http</code> hook type to a local endpoint, or <code>flow hook</code> forwarding over the socket). The server translates with state per worker (running subagents, last report) and appends to the log.</p>
+  <svg class="fig" viewBox="0 0 860 90" role="img" aria-label="Approach B">
+    <g class="old"><rect x="10" y="20" width="150" height="46" rx="6"/><text x="85" y="47" text-anchor="middle">Claude worker</text></g>
+    <g class="new"><rect x="230" y="20" width="170" height="46" rx="6"/><text x="315" y="40" text-anchor="middle">http hook / socket</text><text class="small" x="315" y="56" text-anchor="middle">new listener</text></g>
+    <g class="mod"><rect x="470" y="20" width="160" height="46" rx="6"/><text x="550" y="40" text-anchor="middle">flow server</text><text class="small" x="550" y="56" text-anchor="middle">stateful translate</text></g>
+    <g class="old"><rect x="700" y="20" width="150" height="46" rx="6"/><text x="775" y="47" text-anchor="middle">Store::append</text></g>
+    <line x1="160" y1="43" x2="228" y2="43"/><line x1="400" y1="43" x2="468" y2="43"/><line x1="630" y1="43" x2="698" y2="43"/>
+  </svg>
+  <div class="grid md:grid-cols-2 gap-3 text-sm">
+    <div class="alert alert-soft alert-success items-start"><div><b>Gains</b><ul class="list-disc pl-5"><li>Translation can keep state: dedupe, count subagents, combine with pane liveness.</li><li>With http hooks there is no process spawn per event.</li></ul></div></div>
+    <div class="alert alert-soft alert-warning items-start"><div><b>Costs</b><ul class="list-disc pl-5"><li>Reporting only works while the server runs; events during a server restart are lost.</li><li>An HTTP listener in the server (new dependency, a port) or a second socket protocol; more on the one thread that owns all state.</li><li>Every other harness has to reach the server too; most can only run a command.</li></ul></div></div>
+  </div>
+</section>
+
+<section class="space-y-4" id="c">
+  <h2 class="text-xl font-bold">C. No hooks: the server reads each worker's transcript</h2>
+  <p>The server tails each worker's transcript (as the peek already does) and derives state: a tool_use of <code>Agent</code> is delegated, the last assistant message without a following prompt is waiting, a <code>Skill</code> call sets the phase.</p>
+  <div class="grid md:grid-cols-2 gap-3 text-sm">
+    <div class="alert alert-soft alert-success items-start"><div><b>Gains</b><ul class="list-disc pl-5"><li>Nothing to wire into the harness at all.</li><li>Works for any harness that writes a transcript.</li></ul></div></div>
+    <div class="alert alert-soft alert-warning items-start"><div><b>Costs</b><ul class="list-disc pl-5"><li>Not deterministic: "the turn ended" and "waiting for permission" are not in the transcript, they are inferred; <code>/exit</code> vs a hangup is invisible.</li><li>Polling and parsing large files (attachments of 100 KiB+) for every worker.</li><li>The transcript format is private to each harness and changes without notice.</li></ul></div></div>
+  </div>
+  <p class="text-sm opacity-80">Kept from C regardless of the choice: the server's own liveness (running / exited) stays the fallback for a harness without hooks.</p>
+</section>
+
+<section class="space-y-3" id="harnesses">
+  <h2 class="text-xl font-bold">Other harnesses</h2>
+  <p class="text-sm">Built now: <b>Claude Code only</b>. The architecture only has to let the next adapter plug in. Checked today against their source, so the shape holds:</p>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li><b>Codex</b> has lifecycle hooks (on by default) that receive a JSON object on stdin, with nearly Claude's events: <code>UserPromptSubmit</code>, <code>Pre/PostToolUse</code> (shell is <code>Bash</code>), <code>Stop</code> with <code>last_assistant_message</code>, <code>SessionEnd</code>. A <code>codex</code> adapter is one more translate function behind the same command. Its wiring differs (per-run <code>-c</code> config, hook trust).</li>
+    <li><b>pi</b> has TypeScript extensions loaded per run with <code>-e</code>; one tiny extension would run <code>flow hook pi</code>. It has no subagents and starts with a fixed <code>--session-id</code>, like Claude.</li>
+    <li>Neither has a "skill started" event; phases come from the prompt text there, which the phase map handles the same way.</li>
+  </ul>
+  <p class="text-sm opacity-80">A and its command fit all three; B needs each harness to reach the server; C needs a transcript parser per harness.</p>
+</section>
+
+<section class="space-y-3" id="overview">
+  <h2 class="text-xl font-bold">Which gives the better overview?</h2>
+  <div class="overflow-x-auto">
+  <table class="table table-sm facts text-sm">
+    <thead><tr><th></th><th>A: flow hook</th><th>B: server translates</th><th>C: transcripts</th></tr></thead>
+    <tbody>
+      <tr><td>What flow learns</td><td colspan="2">The same: both receive every hook event Claude Code fires. Richness depends only on what flow chooses to translate.</td><td>Less: no permission prompts, no end of turn, no /exit vs hangup</td></tr>
+      <tr><td>Exact, never a guess</td><td>yes</td><td>yes</td><td>no, inferred</td></tr>
+      <tr><td>Complete when flow ui is down or restarting</td><td>yes, written straight to the log</td><td>no, events in that window are lost</td><td>yes, read later</td></tr>
+      <tr><td>Live "doing right now" (current tool)</td><td colspan="2">Both possible. The peek already shows it from the transcript; A could also log it as an event.</td><td>yes (the peek today)</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="text-sm">A and B see the same things, but A never misses one; the overview is only as good as its gaps. What makes the overview richer is the set of events flow translates. These come with A, whichever you pick:</p>
+  <ul class="list-disc pl-5 text-sm space-y-1">
+    <li><b>Permission vs question:</b> "waiting for permission: Bash(rm -rf build)" from <code>Notification permission_prompt</code> and the pending tool, apart from "waiting: Which approach?".</li>
+    <li><b>The question itself</b> from <code>AskUserQuestion</code> and <code>Stop</code>'s last message, not a guess from the screen.</li>
+    <li><b>Subagents</b> named by their description while they run, ignored once their own events carry <code>agent_id</code>.</li>
+    <li><b>Phases from any skill set</b> through a phase map in config, so other people's skills get the steps bar too.</li>
+  </ul>
+</section>
+
+<section class="space-y-3" id="recommend">
+  <h2 class="text-xl font-bold">Recommendation: A</h2>
+  <p>A is the only approach that is both deterministic and harness-agnostic: every harness worth supporting can run a command, and a command that appends to the log is exactly what <code>flow report</code> already is. It keeps the log as the single truth and works even while flow ui is down. Its one weakness, statelessness, does not matter because the fold already tolerates repeats, and the only state the mod kept (running subagents) is replaced by the <code>agent_id</code> field Claude Code puts on every subagent event.</p>
+</section>
+
+<section class="card bg-base-200" id="decide">
+  <form class="card-body space-y-3" data-lavish-question="approach" onsubmit="event.preventDefault(); const f = new FormData(event.currentTarget); const choice = f.get('approach'); const notes = (f.get('notes') || '').trim(); if (choice) window.lavish.queuePrompt('Use approach ' + choice + ' for the harness adapters.' + (notes ? ' Notes: ' + notes : ''), { tag: 'choice', text: 'Approach: ' + choice, element: event.currentTarget, data: { question: 'approach', answer: choice, notes } });">
+    <h2 class="card-title">Which approach?</h2>
+    <label class="flex gap-2 items-start"><input type="radio" class="radio radio-sm mt-0.5" name="approach" value="A - flow hook command, pure adapter translation" checked> <span><b>A</b> - a <code>flow hook</code> command; the harness calls flow, a pure adapter translates</span></label>
+    <label class="flex gap-2 items-start"><input type="radio" class="radio radio-sm mt-0.5" name="approach" value="B - hooks reach flow server, the server translates"> <span><b>B</b> - hooks reach flow server, which translates with state</span></label>
+    <label class="flex gap-2 items-start"><input type="radio" class="radio radio-sm mt-0.5" name="approach" value="C - no hooks, the server reads transcripts"> <span><b>C</b> - no hooks; the server reads the transcripts</span></label>
+    <label class="form-control"><span class="text-sm opacity-70">Notes or a mix (optional)</span><textarea class="textarea textarea-bordered w-full" name="notes" rows="3"></textarea></label>
+    <div><button class="btn btn-primary btn-sm" type="submit">Queue this answer</button></div>
+  </form>
+</section>
+
+</main>
+</body>
+</html>

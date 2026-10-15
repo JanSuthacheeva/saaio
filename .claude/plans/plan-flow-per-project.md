@@ -1,6 +1,6 @@
 # One flow per project: shared slots and an overview of every project
 
-Implementation page (review surface): `.lavish/projects-implementation.html`; approaches: `.lavish/projects-approaches.html`.
+Implementation page (review surface): `docs/design/projects-implementation.html`; approaches: `docs/design/projects-approaches.html`.
 
 ## Decision
 
@@ -113,5 +113,5 @@ pub struct BoardView<'a> { /* as now */ pub projects: Option<&'a Projects> }
 - [x] main: register every command's store; start claims before the worktree (held_slots, claim_is_live, release on failure); help text; cli test for two projects getting slots 1 and 2
 - [x] view::Projects, output::status_all, `flow status --all` (TOON and --json) with tests
 - [x] flow ui: Job::Overview, BoardState.all, key `a`, BoardView.projects, refresh every 2 s, read-only other projects; tests
-- [ ] Docs: README, CLAUDE.md module map, HANDOVER
+- [x] Docs: README, CLAUDE.md module map, HANDOVER
 - [ ] End-to-end check: two tmux project sessions (private socket), a flow started in each gets distinct slots; `flow status --all` and flow ui `a` show both projects
