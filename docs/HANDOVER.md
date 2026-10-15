@@ -225,6 +225,12 @@ The vision below is built as `flow ui`, see README and `.claude/plans/plan-flow-
   - slots are counted per state folder, so two projects can both hand out slot 1 and their ports
     clash; count slots across every state folder (or give each folder its own slot range);
   - an overview across all projects' state folders, read-only, for when you want everything at once.
+- **A mascot.** A small character in a corner of flow ui (bottom right of the sidebar, or the bar
+  when solo) that reacts to the board: idle, working while workers run, dancing when a flow opens
+  its merge request, worried when one is blocked. Further on it becomes the master's face, a Jarvis
+  that tells you what happened ("shop-221 needs a decision on the migration") from `flow status`,
+  in a line beside it. Drawn in a few terminal rows with the theme's tokens, animated on the UI's
+  existing tick; off with a setting.
 - **Extensions:** glab and ClickUp as data sources (ticket as the request, MR and pipeline status
   per flow); the new-flow dialog's "from ClickUp" list in the design waits for this.
 - **Theme file:** the colours are already named tokens (`ui::theme::Theme`); load overrides from a
