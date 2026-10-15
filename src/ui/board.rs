@@ -293,14 +293,7 @@ impl BoardView<'_> {
                 flow.delegate.as_ref().map(|text| format!("agent: {text}")),
                 theme.ui.faint,
             ),
-            State::Working | State::Idle => (
-                flow.timeline
-                    .iter()
-                    .skip(1)
-                    .last()
-                    .map(|entry| entry.text.clone()),
-                theme.ui.faint,
-            ),
+            State::Working | State::Idle => (sidebar::last_note(flow), theme.ui.faint),
             State::Done | State::Ended => (Some(flow.request.clone()), theme.ui.faint),
         };
         let fourth = Line::styled(

@@ -435,12 +435,7 @@ impl Sidebar<'_> {
         if let Some(delegate) = &flow.delegate {
             return Some((format!("agent: {delegate}"), theme.ui.faint));
         }
-        // The first entry only says the flow started, which the label already does.
-        flow.timeline
-            .iter()
-            .skip(1)
-            .last()
-            .map(|entry| (entry.text.clone(), theme.ui.faint))
+        last_note(flow).map(|note| (note, theme.ui.faint))
     }
 
     fn footer(&self, width: usize) -> Vec<Row> {
@@ -562,6 +557,21 @@ pub fn clip(text: &str, width: usize) -> String {
     kept
 }
 
+/// What a flow last said that its row does not already show: its last timeline entry, without
+/// "started", phase changes and "answered" (the steps and the glyph say those), and without the
+/// "idle: " the glyph says too.
+pub fn last_note(flow: &FlowView) -> Option<String> {
+    let text = flow
+        .timeline
+        .iter()
+        .skip(1)
+        .rev()
+        .map(|entry| entry.text.as_str())
+        .find(|text| !text.starts_with("phase: "))?;
+    // An answered question is over; what came before it is no news.
+    (text != "answered").then(|| text.strip_prefix("idle: ").unwrap_or(text).to_string())
+}
+
 /// A place (`path · branch`) in `width` columns: the path loses folders from its middle first
 /// (/private/…/ui-look/repo · main), then its first folder; the branch goes only when the last
 /// folder alone does not fit beside it.
@@ -609,6 +619,53 @@ fn merge_request(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_note_is_what_the_flow_last_said_not_what_the_row_shows() {
+        use crate::event::{Event, EventKind, Mode, Phase};
+        let flow = |kinds: Vec<EventKind>| {
+            let mut events = vec![Event::new(
+                0,
+                EventKind::Started {
+                    name: "shop".into(),
+                    request: "x".into(),
+                    mode: Mode::Auto,
+                },
+            )];
+            events.extend(kinds.into_iter().map(|kind| Event::new(1, kind)));
+            crate::fold::fold("id", &events, None, 2).unwrap()
+        };
+        let phase = |phase| EventKind::Phase { phase };
+
+        let ready = flow(vec![
+            phase(Phase::Design),
+            EventKind::Idle {
+                note: "The design is ready for review.".into(),
+            },
+        ]);
+        let working = flow(vec![phase(Phase::Design), phase(Phase::Implement)]);
+        let told = flow(vec![
+            EventKind::Message {
+                text: "Semicolons.".into(),
+            },
+            EventKind::Working,
+            phase(Phase::Implement),
+        ]);
+
+        assert_eq!(
+            last_note(&ready).as_deref(),
+            Some("The design is ready for review.")
+        );
+        assert_eq!(last_note(&working), None);
+        assert_eq!(last_note(&told).as_deref(), Some("master: Semicolons."));
+        let answered = flow(vec![
+            EventKind::Waiting {
+                question: "Which?".into(),
+            },
+            EventKind::Working,
+        ]);
+        assert_eq!(last_note(&answered), None, "not the old question");
+    }
 
     #[test]
     fn shortens_a_place_in_the_middle_and_keeps_its_branch() {
