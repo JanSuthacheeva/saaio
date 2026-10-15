@@ -159,6 +159,8 @@ pub const MARK: &str = "▚▄▞";
 /// flow's mark with a Nerd Font: Font Awesome's kiwi bird, in the theme's accent like any mark.
 /// Terminals draw Nerd Font icons wider than their one cell, so it brings a space of its own.
 pub const KIWI: &str = "\u{edff} ";
+/// The master with a Nerd Font: a crown, for the one that leads the flock; a space of its own too.
+pub const CROWN: &str = "\u{f01a5} ";
 
 #[derive(Debug, Clone)]
 pub struct Glyphs {
@@ -228,7 +230,7 @@ impl Theme {
             },
             glyphs: Glyphs {
                 mark: MARK,
-                master: "◎",
+                master: "●",
                 waiting: "◆",
                 idle: "◌",
                 blocked: "✖",

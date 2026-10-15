@@ -1520,7 +1520,7 @@ mod tests {
         let mut terminal = render(&app);
 
         assert!(
-            row(&terminal, 0).starts_with("╭ ◎ master ─"),
+            row(&terminal, 0).starts_with("╭ ● master ─"),
             "{}",
             row(&terminal, 0)
         );
@@ -1537,7 +1537,7 @@ mod tests {
         );
         let bar = row(&terminal, 7);
         assert!(bar.contains("▚▄▞ flow"), "{bar}");
-        assert!(bar.contains("◎ master"), "{bar}");
+        assert!(bar.contains("● master"), "{bar}");
         assert!(bar.contains("C-space then  n new flow   ? keys"), "{bar}");
         let buffer = terminal.backend().buffer();
         assert!(
@@ -1819,7 +1819,7 @@ mod tests {
         );
         assert_eq!(
             side(&terminal, 2),
-            " 0 ◎ master                   ◂ in view "
+            " 0 ● master                   ◂ in view "
         );
         assert_eq!(side(&terminal, 4).trim_end(), " NEEDS YOU 2");
         assert_eq!(
@@ -1877,7 +1877,7 @@ mod tests {
         );
         assert_eq!(
             side(&terminal, 2),
-            " 0 ◎ master                         you "
+            " 0 ● master                         you "
         );
         assert!(side(&terminal, 9).starts_with("▌2 ◆ shop-230"));
         let buffer = terminal.backend().buffer();
@@ -2143,7 +2143,7 @@ mod tests {
         let bar = row(&render(&solo), 7);
         let sidebar = render_at(&fleet, FLEET);
 
-        assert!(bar.contains("◎ master  ~/projects/shop · main"), "{bar}");
+        assert!(bar.contains("● master  ~/projects/shop · main"), "{bar}");
         let mut wide = App::new(FLEET);
         wide.on_server(ServerMsg::Master {
             cwd: "/shop".into(),
@@ -2154,7 +2154,7 @@ mod tests {
             wide.ends_with("no workers yet   │  C-space then  n new flow   ? keys "),
             "{wide}"
         );
-        assert!(row(&sidebar, 0).starts_with("╭ ◎ master  ~/projects/shop · main ─"));
+        assert!(row(&sidebar, 0).starts_with("╭ ● master  ~/projects/shop · main ─"));
         assert_eq!(side(&sidebar, 3).trim_end(), "     ~/projects/shop · main");
         assert_eq!(side(&sidebar, 5).trim_end(), " NEEDS YOU 2");
     }
@@ -2180,7 +2180,7 @@ mod tests {
         assert!(app.is_modal());
         assert!(row(&terminal, 0).starts_with(" ▚▄▞ flow board "));
         assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
-        assert!(row(&terminal, 3).contains("│ 0 ◎ master                             you  │"));
+        assert!(row(&terminal, 3).contains("│ 0 ● master                             you  │"));
         assert!(row(&terminal, 3).contains("│ 1 ✖ shop-221                       blocked  │"));
         assert!(row(&terminal, 3).contains("│ 2 ◆ shop-230               waiting for you  │"));
         assert!(row(&terminal, 4).contains("│   ~/projects/shop · main"));
@@ -2615,7 +2615,7 @@ mod tests {
         assert!(
             row(&terminal, 0).ends_with(" ◆ 2 shop-230 is waiting  │  C-space b sidebar ╮  ▚▄▞  ")
         );
-        assert_eq!(rail(2), " 0 ◎  ");
+        assert_eq!(rail(2), " 0 ●  ");
         assert_eq!(rail(4), "▌1 ✖  ");
         assert_eq!(rail(5), " 2 ◆  ");
         assert_eq!(rail(7), " 3 ⠙  ");
