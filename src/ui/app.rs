@@ -386,7 +386,7 @@ impl App {
                     projects: self.projects.as_ref(),
                     here: self.here.as_deref(),
                 },
-                frame.area(),
+                layout::screen(self.size),
             );
             return;
         }
@@ -1436,10 +1436,15 @@ mod tests {
         terminal
     }
 
+    /// Row `y` of what flow draws, inside the margin.
     fn row(terminal: &Terminal<TestBackend>, y: u16) -> String {
         let buffer = terminal.backend().buffer();
-        (0..buffer.area.width)
-            .map(|x| buffer[(x, y)].symbol().to_string())
+        let screen = layout::screen(Size {
+            cols: buffer.area.width,
+            rows: buffer.area.height,
+        });
+        (screen.x..screen.x + screen.width)
+            .map(|x| buffer[(x, screen.y + y)].symbol().to_string())
             .collect()
     }
 
@@ -1475,7 +1480,7 @@ mod tests {
                 cols: 100,
                 rows: 30
             }),
-            vec![Effect::Send(ClientMsg::Resize(Size { cols: 98, rows: 26 }))]
+            vec![Effect::Send(ClientMsg::Resize(Size { cols: 96, rows: 24 }))]
         );
     }
 
@@ -1524,22 +1529,22 @@ mod tests {
             "{}",
             row(&terminal, 1)
         );
-        assert!(row(&terminal, 7).starts_with("╰─"));
+        assert!(row(&terminal, 5).starts_with("╰─"));
         assert_eq!(
-            row(&terminal, 8).trim(),
+            row(&terminal, 6).trim(),
             "",
             "a blank row between session and bar"
         );
-        let bar = row(&terminal, 9);
+        let bar = row(&terminal, 7);
         assert!(bar.contains("≋ flow"), "{bar}");
         assert!(bar.contains("◎ master"), "{bar}");
         assert!(bar.contains("C-space then  n new flow   ? keys"), "{bar}");
         let buffer = terminal.backend().buffer();
         assert!(
-            (0..SIZE.cols).all(|x| buffer[(x, 9)].bg == Theme::builtin().ui.bar.bg.unwrap()),
+            (1..SIZE.cols - 1).all(|x| buffer[(x, 8)].bg == Theme::builtin().ui.bar.bg.unwrap()),
             "the whole bar has the panel background"
         );
-        terminal.backend_mut().assert_cursor_position((6, 1));
+        terminal.backend_mut().assert_cursor_position((7, 2));
     }
 
     #[test]
@@ -1552,8 +1557,8 @@ mod tests {
 
         let terminal = render(&app);
 
-        assert!(row(&terminal, 9).contains("exited - C-space r resumes it"));
-        let screen: String = (0..9).map(|y| row(&terminal, y)).collect();
+        assert!(row(&terminal, 7).contains("exited - C-space r resumes it"));
+        let screen: String = (0..7).map(|y| row(&terminal, y)).collect();
         assert!(screen.contains("The session ended."), "{screen}");
         assert!(screen.contains("C-space r resumes it"), "{screen}");
         assert_eq!(
@@ -1573,7 +1578,9 @@ mod tests {
         }]));
 
         let terminal = render_at(&app, FLEET);
-        let screen: String = (0..FLEET.rows).map(|y| row(&terminal, y) + "\n").collect();
+        let screen: String = (0..FLEET.rows - 2)
+            .map(|y| row(&terminal, y) + "\n")
+            .collect();
         assert!(
             screen.contains("x clean up: worktree, branch, flow   r resume   esc back to master"),
             "{screen}"
@@ -1610,7 +1617,9 @@ mod tests {
         assert!(app.is_modal());
         let screen: String = {
             let terminal = render_at(&app, FLEET);
-            (0..FLEET.rows).map(|y| row(&terminal, y) + "\n").collect()
+            (0..FLEET.rows - 2)
+                .map(|y| row(&terminal, y) + "\n")
+                .collect()
         };
         assert!(
             screen.contains("shop-230 has uncommitted changes. Discard them?"),
@@ -1752,8 +1761,12 @@ mod tests {
         terminal
     }
 
+    /// Row `y` of the sidebar.
     fn side(terminal: &Terminal<TestBackend>, y: u16) -> String {
-        row(terminal, y).chars().skip(110).collect::<String>()
+        let side = layout::areas(FLEET, layout::Chrome::Sidebar).side.unwrap();
+        let screen = layout::screen(FLEET);
+        let from = (side.x - screen.x) as usize;
+        row(terminal, y).chars().skip(from).collect::<String>()
     }
 
     #[test]
@@ -1789,8 +1802,8 @@ mod tests {
         assert_eq!(
             app.on_server(ServerMsg::Board(fleet())),
             vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 107,
-                rows: 42
+                cols: 105,
+                rows: 40
             }))]
         );
         assert_eq!(app.on_server(ServerMsg::Board(fleet())), vec![]);
@@ -1830,14 +1843,14 @@ mod tests {
         assert_eq!(side(&terminal, 16).trim_end(), "     agent: review changes");
         assert_eq!(side(&terminal, 18).trim_end(), " DONE 1");
         assert_eq!(side(&terminal, 20).trim_end(), "     ●───●───●───● MR !418");
-        assert_eq!(side(&terminal, 41), "─".repeat(40));
+        assert_eq!(side(&terminal, 39), "─".repeat(40));
         assert_eq!(
-            side(&terminal, 42).trim_end(),
+            side(&terminal, 40).trim_end(),
             " C-space j k peek  0-9 jump  n new"
         );
         let buffer = terminal.backend().buffer();
         assert_eq!(
-            buffer[(113, 5)].fg,
+            buffer[(112, 6)].fg,
             Theme::builtin().state.blocked.fg.unwrap()
         );
     }
@@ -1869,11 +1882,11 @@ mod tests {
         assert!(side(&terminal, 9).starts_with("▌2 ◆ shop-230"));
         let buffer = terminal.backend().buffer();
         let selection = Theme::builtin().ui.selection.bg.unwrap();
-        assert!((110..150).all(|x| buffer[(x, 10)].bg == selection));
-        assert_ne!(buffer[(120, 8)].bg, selection);
+        assert!((109..149).all(|x| buffer[(x, 11)].bg == selection));
+        assert_ne!(buffer[(119, 9)].bg, selection);
 
         assert_eq!(
-            app.on_input(Routed::Click { col: 120, row: 6 }),
+            app.on_input(Routed::Click { col: 120, row: 7 }),
             vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
                 "shop-221".into()
             )))]
@@ -2042,7 +2055,7 @@ mod tests {
         assert_eq!(side(&terminal, 23).trim_end(), "");
         assert_eq!(side(&terminal, 24).trim_end(), " DONE 1");
         assert_eq!(
-            side(&terminal, 42).trim_end(),
+            side(&terminal, 40).trim_end(),
             " C-space j k peek  0-9 jump  n new"
         );
 
@@ -2127,7 +2140,7 @@ mod tests {
         let mut fleet = with_fleet().with_home(Some("/Users/jan".into()));
         fleet.on_server(master);
 
-        let bar = row(&render(&solo), 9);
+        let bar = row(&render(&solo), 7);
         let sidebar = render_at(&fleet, FLEET);
 
         assert!(bar.contains("◎ master  ~/projects/shop · main"), "{bar}");
@@ -2136,7 +2149,7 @@ mod tests {
             cwd: "/shop".into(),
             branch: None,
         });
-        let wide = row(&render_at(&wide, FLEET), 43);
+        let wide = row(&render_at(&wide, FLEET), 41);
         assert!(
             wide.ends_with("no workers yet   │  C-space then  n new flow   ? keys "),
             "{wide}"
@@ -2167,12 +2180,12 @@ mod tests {
         assert!(app.is_modal());
         assert!(row(&terminal, 0).starts_with(" ≋ flow board "));
         assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
-        assert!(row(&terminal, 3).contains("│ 0 ◎ master                              you  │"));
-        assert!(row(&terminal, 3).contains("│ 1 ✖ shop-221                        blocked  │"));
-        assert!(row(&terminal, 3).contains("│ 2 ◆ shop-230                waiting for you  │"));
+        assert!(row(&terminal, 3).contains("│ 0 ◎ master                             you  │"));
+        assert!(row(&terminal, 3).contains("│ 1 ✖ shop-221                       blocked  │"));
+        assert!(row(&terminal, 3).contains("│ 2 ◆ shop-230               waiting for you  │"));
         assert!(row(&terminal, 4).contains("│   ~/projects/shop · main"));
         assert!(
-            row(&terminal, 5).contains("│   ━━━━━━━━━━━━───────────────  4/9   29m ago │"),
+            row(&terminal, 5).contains("│   ━━━━━━━━━━━━───────────────  4/9  29m ago │"),
             "{}",
             row(&terminal, 5)
         );
@@ -2185,7 +2198,7 @@ mod tests {
             shop_230.trim_start() == "31m ago ",
             "a flow without tasks draws no bar: {shop_230:?}"
         );
-        assert!(row(&terminal, 10).contains("│ 3 ⠙ export-csv            reviewing · agent  │"));
+        assert!(row(&terminal, 10).contains("│ 3 ⠙ export-csv           reviewing · agent  │"));
         assert!(
             row(&terminal, 16)
                 .starts_with(" 2 shop-230  shop-230 · guided · flow/shop-230 · slot 1"),
@@ -2193,14 +2206,14 @@ mod tests {
             row(&terminal, 16)
         );
         assert!(
-            row(&terminal, 43)
+            row(&terminal, 41)
                 .starts_with(" 0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   a every project   esc back to shop-230")
         );
         let buffer = terminal.backend().buffer();
         let accent = Theme::builtin().ui.accent.fg.unwrap();
-        assert_eq!(buffer[(101, 2)].fg, accent, "the selected card is outlined");
+        assert_eq!(buffer[(100, 3)].fg, accent, "the selected card is outlined");
         assert_eq!(
-            buffer[(52, 2)].fg,
+            buffer[(51, 3)].fg,
             Theme::builtin().state.blocked.fg.unwrap()
         );
     }
@@ -2214,7 +2227,8 @@ mod tests {
         let buffer = terminal.backend().buffer();
         let y = (0..FLEET.rows)
             .find(|&y| side(&terminal, y).contains("●───●───○───○ implement"))
-            .expect("shop-221's track");
+            .expect("shop-221's track")
+            + layout::MARGIN;
         let x = (0..FLEET.cols)
             .find(|&x| buffer[(x, y)].symbol() == "●")
             .unwrap();
@@ -2233,15 +2247,15 @@ mod tests {
         let terminal = render_at(&board, FLEET);
         let buffer = terminal.backend().buffer();
         let bar = (0..FLEET.cols)
-            .find(|&x| buffer[(x, 5)].symbol() == "━")
+            .find(|&x| buffer[(x, 6)].symbol() == "━")
             .expect("shop-221's task bar");
-        assert_eq!(buffer[(bar, 5)].fg, blocked, "the filled bar");
+        assert_eq!(buffer[(bar, 6)].fg, blocked, "the filled bar");
     }
 
     #[test]
     fn a_worker_that_needs_you_is_framed_in_its_state_color() {
         let theme = Theme::builtin();
-        let corner = |app: &App| render_at(app, FLEET).backend().buffer()[(0, 0)].fg;
+        let corner = |app: &App| render_at(app, FLEET).backend().buffer()[(1, 1)].fg;
         let mut app = with_fleet();
 
         assert_eq!(corner(&app), theme.ui.rule.fg.unwrap(), "the master");
@@ -2519,12 +2533,12 @@ mod tests {
             row(&terminal, 2)
         );
         assert!(row(&terminal, 2).ends_with("this project "));
-        let api = (0..44).find(|y| row(&terminal, *y).starts_with(" api  1 flow"));
+        let api = (0..42).find(|y| row(&terminal, *y).starts_with(" api  1 flow"));
         assert!(api.is_some(), "this project comes first, then api");
         assert!(
-            row(&terminal, 43).starts_with(" h j k l move   enter jump in   n new flow   x clear finished flow   a this project"),
+            row(&terminal, 41).starts_with(" h j k l move   enter jump in   n new flow   x clear finished flow   a this project"),
             "{}",
-            row(&terminal, 43)
+            row(&terminal, 41)
         );
 
         let first = fleet().flows[0].id.clone();
@@ -2591,12 +2605,12 @@ mod tests {
         assert_eq!(
             app.on_input(Routed::Command(Command::Rail)),
             vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 141,
-                rows: 42
+                cols: 139,
+                rows: 40
             }))]
         );
         let terminal = render_at(&app, FLEET);
-        let rail = |y| row(&terminal, y).chars().skip(144).collect::<String>();
+        let rail = |y| row(&terminal, y).chars().skip(142).collect::<String>();
 
         assert!(
             row(&terminal, 0).ends_with(" ◆ 2 shop-230 is waiting  │  C-space b sidebar ╮  ≋    ")
@@ -2606,9 +2620,9 @@ mod tests {
         assert_eq!(rail(5), " 2 ◆  ");
         assert_eq!(rail(7), " 3 ⠙  ");
         assert_eq!(rail(9), " 4 ✔  ");
-        assert_eq!(rail(43), " C-␣  ");
+        assert_eq!(rail(41), " C-␣  ");
         assert_eq!(
-            app.on_input(Routed::Click { col: 146, row: 5 }),
+            app.on_input(Routed::Click { col: 146, row: 6 }),
             vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
                 "shop-230".into()
             )))]
@@ -2616,8 +2630,8 @@ mod tests {
         assert_eq!(
             app.on_input(Routed::Command(Command::Rail)),
             vec![Effect::Send(ClientMsg::Resize(Size {
-                cols: 107,
-                rows: 42
+                cols: 105,
+                rows: 40
             }))]
         );
     }
@@ -2648,14 +2662,14 @@ mod tests {
         );
         assert_eq!(
             app.on_input(Routed::View(vec![Key::Ctrl('d')])),
-            vec![Effect::Send(ClientMsg::History(Some(117)))]
+            vec![Effect::Send(ClientMsg::History(Some(118)))]
         );
 
         let terminal = render(&app);
         assert!(
-            row(&terminal, 7).contains("↑ 117 lines back   k j scroll  g G ends  q live"),
+            row(&terminal, 5).contains("↑ 118 lines back   k j scroll  g G ends  q live"),
             "{}",
-            row(&terminal, 7)
+            row(&terminal, 5)
         );
         assert_eq!(
             app.on_input(Routed::View(vec![Key::Char('q')])),
@@ -2669,7 +2683,7 @@ mod tests {
         let mut app = board_app();
         app.on_input(Routed::Command(Command::StopServer));
         let terminal = render_at(&app, FLEET);
-        let dialog: String = (0..44).map(|y| row(&terminal, y) + "\n").collect();
+        let dialog: String = (0..42).map(|y| row(&terminal, y) + "\n").collect();
         assert!(dialog.contains("3 flows are not finished:"), "{dialog}");
         assert!(
             dialog.contains("✖ shop-221  migration needs a default value"),
@@ -2725,14 +2739,14 @@ mod tests {
         app.on_input(Routed::Command(Command::Help));
 
         let terminal = render_at(&app, FLEET);
-        let help: String = (0..44).map(|y| row(&terminal, y) + "\n").collect();
+        let help: String = (0..42).map(|y| row(&terminal, y) + "\n").collect();
         assert!(help.contains("C-space then"), "{help}");
         assert!(
             help.contains("  b        fold the sidebar to a rail and back"),
             "{help}"
         );
         assert_eq!(
-            side(&terminal, 43).trim_end(),
+            side(&terminal, 41).trim_end(),
             "         o board  b rail  ? all keys"
         );
 

@@ -5,6 +5,10 @@ use crate::proto::Size;
 /// Columns of the sidebar and of the rail, without the line that separates them from the pane.
 pub const SIDEBAR_WIDTH: u16 = 40;
 pub const RAIL_WIDTH: u16 = 6;
+/// Cells left blank on every side, so nothing touches the terminal's edge.
+pub const MARGIN: u16 = 1;
+/// Below this size the margin is left out: every cell is needed.
+const MARGIN_FROM: Size = Size { cols: 40, rows: 10 };
 
 /// What surrounds the framed pane: a bottom bar while the master is alone, else a sidebar or a rail.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,17 +37,37 @@ impl Areas {
     }
 }
 
+/// The part of the terminal flow draws in: all of it but MARGIN on every side.
+pub fn screen(size: Size) -> Rect {
+    if size.cols < MARGIN_FROM.cols || size.rows < MARGIN_FROM.rows {
+        return Rect::new(0, 0, size.cols, size.rows);
+    }
+    Rect::new(
+        MARGIN,
+        MARGIN,
+        size.cols - 2 * MARGIN,
+        size.rows - 2 * MARGIN,
+    )
+}
+
 /// Solo: the framed pane, a blank row, the bottom bar; Sidebar: 40 columns on the right; Rail: 6.
+/// All of it within the screen's margin.
 pub fn areas(size: Size, chrome: Chrome) -> Areas {
-    let (width, height) = (size.cols, size.rows);
+    let screen = screen(size);
+    let (x, y, width, height) = (screen.x, screen.y, screen.width, screen.height);
     match chrome {
         Chrome::Solo => {
-            let frame = Rect::new(0, 0, width, height.saturating_sub(2));
+            let frame = Rect::new(x, y, width, height.saturating_sub(2));
             Areas {
                 frame,
                 pane: inside(frame),
                 side: None,
-                bar: Some(Rect::new(0, height.saturating_sub(1), width, 1.min(height))),
+                bar: Some(Rect::new(
+                    x,
+                    y + height.saturating_sub(1),
+                    width,
+                    1.min(height),
+                )),
             }
         }
         Chrome::Sidebar | Chrome::Rail => {
@@ -53,11 +77,11 @@ pub fn areas(size: Size, chrome: Chrome) -> Areas {
                 RAIL_WIDTH
             };
             let side_width = side_width.min(width.saturating_sub(2));
-            let frame = Rect::new(0, 0, width.saturating_sub(side_width + 1), height);
+            let frame = Rect::new(x, y, width.saturating_sub(side_width + 1), height);
             Areas {
                 frame,
                 pane: inside(frame),
-                side: Some(Rect::new(width - side_width, 0, side_width, height)),
+                side: Some(Rect::new(x + width - side_width, y, side_width, height)),
                 bar: None,
             }
         }
@@ -87,19 +111,19 @@ mod tests {
     fn gives_a_lone_master_everything_but_the_bottom_bar() {
         let areas = areas(SIZE, Chrome::Solo);
 
-        assert_eq!(areas.frame, Rect::new(0, 0, 150, 42));
-        assert_eq!(areas.pane, Rect::new(1, 1, 148, 40));
+        assert_eq!(areas.frame, Rect::new(1, 1, 148, 40));
+        assert_eq!(areas.pane, Rect::new(2, 2, 146, 38));
         assert_eq!(
             areas.bar,
-            Some(Rect::new(0, 43, 150, 1)),
+            Some(Rect::new(1, 42, 148, 1)),
             "a blank row above it"
         );
         assert_eq!(areas.side, None);
         assert_eq!(
             areas.pane_size(),
             Size {
-                cols: 148,
-                rows: 40
+                cols: 146,
+                rows: 38
             }
         );
     }
@@ -109,11 +133,21 @@ mod tests {
         let sidebar = areas(SIZE, Chrome::Sidebar);
         let rail = areas(SIZE, Chrome::Rail);
 
-        assert_eq!(sidebar.side, Some(Rect::new(110, 0, 40, 44)));
-        assert_eq!(sidebar.frame, Rect::new(0, 0, 109, 44));
-        assert_eq!(sidebar.pane, Rect::new(1, 1, 107, 42));
-        assert_eq!(rail.side, Some(Rect::new(144, 0, 6, 44)));
-        assert_eq!(rail.pane.width, 141);
+        assert_eq!(sidebar.side, Some(Rect::new(109, 1, 40, 42)));
+        assert_eq!(sidebar.frame, Rect::new(1, 1, 107, 42));
+        assert_eq!(sidebar.pane, Rect::new(2, 2, 105, 40));
+        assert_eq!(rail.side, Some(Rect::new(143, 1, 6, 42)));
+        assert_eq!(rail.pane.width, 139);
+    }
+
+    #[test]
+    fn keeps_a_margin_around_everything_but_a_tiny_terminal() {
+        assert_eq!(screen(SIZE), Rect::new(1, 1, 148, 42));
+        assert_eq!(
+            screen(Size { cols: 30, rows: 8 }),
+            Rect::new(0, 0, 30, 8),
+            "every cell is needed"
+        );
     }
 
     #[test]
