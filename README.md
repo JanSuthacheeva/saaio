@@ -18,7 +18,7 @@ cargo install --path .
 ```
 flow                                    home view: every flow and what needs you
 flow ui [--stop]                        the terminal UI: the master, every worker, the board
-flow start <request> [--name <name>] [--mode guided|auto] [--agent <name>]
+flow start <request> [--name <name>] [--mode guided|auto] [--agent <name>] [--type <type>]
                                         a worker in its own worktree, opened in flow ui
 flow new --name <name> --request <text> [--mode guided|auto]
 flow report [--flow <name|id>] <event>  the flow comes from --flow or $FLOW_ID
@@ -182,6 +182,21 @@ write-merge-request = "merge-request"
 ```
 
 `flow report` stays for scripts and other tools.
+
+### Branch names
+
+A flow's branch is `flow/<name>`, unless the repo commits a convention in `.flow/config.toml`:
+
+```toml
+[branch]
+name  = "{type}/{ticket}-{slug}"                  # {type} {ticket} {slug} {name}
+types = ["feature", "bugfix", "hotfix", "chore"]  # the first is the default
+```
+
+`SHOP-230 fix totals on refunds` with `--type bugfix` (or `bugfix` picked in the new-flow dialog)
+becomes `bugfix/SHOP-230-fix-totals-on-refunds`. `{ticket}` is the request's ticket key as
+written, `{slug}` up to five words after it; an empty placeholder takes the separator next to it
+along. A branch that already exists gets `-2`. The worktree folder keeps the flow's name.
 
 ### Hooks, slots and Docker
 
