@@ -9,6 +9,7 @@ pub mod rail;
 pub mod screen;
 pub mod sidebar;
 pub mod theme;
+pub mod theme_file;
 
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -29,6 +30,7 @@ use input::Router;
 use outer::Outer;
 use peek::PeekCache;
 use theme::Theme;
+use theme_file::ThemeWatch;
 
 enum Event {
     Input(Vec<u8>),
@@ -43,6 +45,8 @@ enum Event {
 const TICK_EVERY: Duration = Duration::from_millis(100);
 /// Ticks between two looks at the peeked transcript.
 const TICKS_PER_PEEK: u32 = 10;
+/// Ticks between two looks at theme.toml and the theme it extends.
+const TICKS_PER_THEME: u32 = 10;
 
 /// What flow ui reads from where it runs: Claude's home for the peek, the user's home for ~.
 pub struct UiEnv {
@@ -52,10 +56,12 @@ pub struct UiEnv {
     pub exe: PathBuf,
     /// This project's store, as `flow status --all` names its root.
     pub store: PathBuf,
+    /// Where theme.toml lives: config.toml's folder.
+    pub theme_dir: PathBuf,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
-pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String> {
+pub fn run(socket: &Path, env: UiEnv) -> Result<String> {
     let mut outer = Outer::enter()?;
     // Before any thread reads stdin: creating the terminal asks for the cursor position.
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
@@ -82,6 +88,9 @@ pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String> {
     let mut router = Router::default();
     let mut peek = PeekCache::new(env.claude_home);
     let mut ticks: u32 = 0;
+    let mut themes = ThemeWatch::new(env.theme_dir.clone());
+    let mut theme = Theme::builtin();
+    reload_theme(&mut themes, &mut theme, &mut app);
     app.on_tick(now_ms());
     loop {
         let mut effects = Vec::new();
@@ -115,6 +124,9 @@ pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String> {
                     if ticks.is_multiple_of(TICKS_PER_PEEK) {
                         redraw |= peek.refresh(app.peeked());
                     }
+                    if ticks.is_multiple_of(TICKS_PER_THEME) {
+                        redraw |= reload_theme(&mut themes, &mut theme, &mut app);
+                    }
                     app.overview_due()
                 }
             });
@@ -130,6 +142,22 @@ pub fn run(socket: &Path, theme: Theme, env: UiEnv) -> Result<String> {
         if redraw {
             peek.refresh(app.peeked());
             terminal.draw(|frame| app.draw(frame, &theme, peek.lines()))?;
+        }
+    }
+}
+
+/// Takes the theme again when its files changed; a broken one keeps the last and says why. True when
+/// something changed on screen.
+fn reload_theme(themes: &mut ThemeWatch, theme: &mut Theme, app: &mut App) -> bool {
+    match themes.changed() {
+        None => false,
+        Some(Ok(loaded)) => {
+            *theme = loaded;
+            true
+        }
+        Some(Err(error)) => {
+            app.say_about_file(format!("theme: {error:#}"));
+            true
         }
     }
 }

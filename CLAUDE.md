@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-flow is an AXI (https://axi.md): a CLI whose main user is an agent. It records each feature flow as an append-only event log and folds the logs into where every flow stands. Agents read TOON (the default output); programs read `flow status --json`. The designs and task lists live in `.claude/plans/` (`plan-flow-core.md`, `plan-flow-start.md`, `plan-flow-ui.md`, `plan-flow-adapters.md`, `plan-flow-per-project.md`); the whole flows system (the other five pieces, every decision, verified Claude Code facts, gotchas) is in `docs/HANDOVER.md`, with the design review pages in `docs/design/`.
+flow is an AXI (https://axi.md): a CLI whose main user is an agent. It records each feature flow as an append-only event log and folds the logs into where every flow stands. Agents read TOON (the default output); programs read `flow status --json`. The designs and task lists live in `.claude/plans/` (`plan-flow-core.md`, `plan-flow-start.md`, `plan-flow-ui.md`, `plan-flow-adapters.md`, `plan-flow-per-project.md`, `plan-flow-theme.md`); the whole flows system (the other five pieces, every decision, verified Claude Code facts, gotchas) is in `docs/HANDOVER.md`, with the design review pages in `docs/design/`.
 
 ## Build Commands
 
@@ -32,7 +32,7 @@ cargo install --path .         # install the flow binary
 - **proto.rs** - the messages between `flow ui` and `flow server`: length-prefixed postcard over a Unix socket.
 - **client.rs** - connecting to the server, starting it (`ensure_server`), closing a flow's pane for remove and clear.
 - **server/** - `flow server`, one thread owning every session: `host.rs` (PTYs and processes), `terminal.rs` (the only file that knows alacritty_terminal), `master.rs` (master.json, master.md), `watch.rs` (when to refold), `reconcile.rs` (which flows need a pane, pure), `mod.rs` (the event loop).
-- **ui/** - `flow ui`, a ratatui client: `app.rs` (state, input, drawing; no I/O), `input.rs` (the C-space prefix, mouse), `layout.rs`, `screen.rs` (the focused pane), `sidebar.rs`, `rail.rs`, `board.rs`, `newflow.rs`, `peek.rs` (Claude transcripts), `outer.rs` (the real terminal), `theme.rs`, `mod.rs` (threads and the loop).
+- **ui/** - `flow ui`, a ratatui client: `app.rs` (state, input, drawing; no I/O), `input.rs` (the C-space prefix, mouse), `layout.rs`, `screen.rs` (the focused pane), `sidebar.rs`, `rail.rs`, `board.rs`, `newflow.rs`, `peek.rs` (Claude transcripts), `outer.rs` (the real terminal), `theme.rs` (Palette: the built-in terminal, flow and flow-light colors -> styles), `theme_file.rs` (theme.toml and what it extends, ThemeWatch), `mod.rs` (threads and the loop).
 - **config.rs** - the agents a worker can run: Claude Code built in, more in `~/.config/flow/config.toml`.
 - **output.rs** - the TOON documents agents read: home, status, report answers, errors, each with `help[]` next steps.
 

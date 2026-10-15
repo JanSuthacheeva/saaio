@@ -15,7 +15,7 @@ use crate::ui::layout::{self, Areas, Chrome};
 use crate::ui::newflow::{FormAction, NewFlowForm, NewFlowView};
 use crate::ui::peek::PeekLine;
 use crate::ui::rail::Rail;
-use crate::ui::screen::Screen;
+use crate::ui::screen::{Screen, ScreenView};
 use crate::ui::sidebar::{self, Sidebar};
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Projects, State};
@@ -168,6 +168,20 @@ impl App {
         }
     }
 
+    /// Shows a one-line notice until the next key, such as why theme.toml could not be read.
+    pub fn say(&mut self, notice: String) {
+        self.notice = Some(notice);
+    }
+
+    /// say(), with the home folder in it written as ~.
+    pub fn say_about_file(&mut self, notice: String) {
+        let notice = match self.home.as_deref() {
+            Some(home) => notice.replace(&format!("{home}/"), "~/"),
+            None => notice,
+        };
+        self.say(notice);
+    }
+
     /// The store this flow ui belongs to, as `flow status --all` names its root.
     pub fn with_store(mut self, root: String) -> App {
         self.here = Some(root);
@@ -307,6 +321,7 @@ impl App {
     }
 
     pub fn draw(&self, frame: &mut TuiFrame, theme: &Theme, peek: &[PeekLine]) {
+        frame.render_widget(Block::default().style(theme.ui.background), frame.area());
         if let View::Board(state) = self.view {
             let back = match &self.focus {
                 PaneKey::Master => "master".to_string(),
@@ -332,7 +347,14 @@ impl App {
         }
         let areas = self.areas();
         frame.render_widget(self.border(theme), areas.frame);
-        frame.render_widget(&self.screen, areas.pane);
+        frame.render_widget(
+            ScreenView {
+                screen: &self.screen,
+                text: theme.palette.text,
+                background: theme.palette.background,
+            },
+            areas.pane,
+        );
         if let Some(bar) = areas.bar {
             self.draw_bar(frame, bar, theme);
         }
@@ -887,7 +909,7 @@ impl App {
                     Span::styled(" stops it, any other key keeps it", theme.ui.muted),
                 ]),
             ];
-            draw_dialog(frame, pane, " stop ", theme.ui.rule, text);
+            draw_dialog(frame, pane, theme, " stop ", theme.ui.rule, text);
             return;
         }
         let sidebar = self.sidebar(theme, &[]);
@@ -941,7 +963,7 @@ impl App {
             Span::styled("esc", theme.ui.key),
             Span::styled(" keep flow running", theme.ui.muted),
         ]));
-        draw_dialog(frame, pane, " stop ", theme.state.waiting, text);
+        draw_dialog(frame, pane, theme, " stop ", theme.state.waiting, text);
     }
 
     fn border(&self, theme: &Theme) -> Block<'static> {
@@ -1122,7 +1144,7 @@ fn draw_not_running(frame: &mut TuiFrame, pane: Rect, status: &PaneStatus, theme
             Span::styled(" stops flow", theme.ui.muted),
         ]),
     ];
-    draw_dialog(frame, pane, title, style, text);
+    draw_dialog(frame, pane, theme, title, style, text);
 }
 
 /// A notice over a worker pane flow ui has no session for, such as a flow that ended before it opened.
@@ -1136,10 +1158,17 @@ fn draw_no_session(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
             Span::styled(" back to the master", theme.ui.muted),
         ]),
     ];
-    draw_dialog(frame, pane, " not open ", theme.ui.rule, text);
+    draw_dialog(frame, pane, theme, " not open ", theme.ui.rule, text);
 }
 
-fn draw_dialog(frame: &mut TuiFrame, pane: Rect, title: &str, border: Style, text: Vec<Line>) {
+fn draw_dialog(
+    frame: &mut TuiFrame,
+    pane: Rect,
+    theme: &Theme,
+    title: &str,
+    border: Style,
+    text: Vec<Line>,
+) {
     let inner = text.iter().map(Line::width).max().unwrap_or(0) as u16;
     let width = (inner + 4).min(pane.width);
     let height = (text.len() as u16 + 2).min(pane.height);
@@ -1155,6 +1184,7 @@ fn draw_dialog(frame: &mut TuiFrame, pane: Rect, title: &str, border: Style, tex
             Block::bordered()
                 .border_type(BorderType::Rounded)
                 .border_style(border)
+                .style(theme.ui.background)
                 .padding(Padding::horizontal(1))
                 .title(title),
         ),
@@ -1190,7 +1220,7 @@ fn draw_help(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
     }
     text.push(Line::raw(""));
     text.push(Line::styled("any key closes this", theme.ui.faint));
-    draw_dialog(frame, pane, " keys ", theme.ui.rule, text);
+    draw_dialog(frame, pane, theme, " keys ", theme.ui.rule, text);
 }
 
 #[cfg(test)]
@@ -1468,6 +1498,27 @@ mod tests {
 
     fn side(terminal: &Terminal<TestBackend>, y: u16) -> String {
         row(terminal, y).chars().skip(110).collect::<String>()
+    }
+
+    #[test]
+    fn paints_every_cell_on_the_themes_ground() {
+        let app = board_app();
+        let theme = Theme::from_palette(crate::ui::theme::Palette::named("flow").unwrap());
+        let mut terminal = Terminal::new(TestBackend::new(FLEET.cols, FLEET.rows)).unwrap();
+
+        terminal.draw(|frame| app.draw(frame, &theme, &[])).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let ground = theme.palette.background;
+        let painted = (0..FLEET.rows)
+            .flat_map(|y| (0..FLEET.cols).map(move |x| (x, y)))
+            .filter(|(x, y)| buffer[(*x, *y)].bg == ground)
+            .count();
+        assert!(
+            painted > (FLEET.cols as usize * FLEET.rows as usize) * 9 / 10,
+            "{painted} cells on the ground"
+        );
+        assert_eq!(buffer[(5, 5)].bg, ground, "the pane's empty cells too");
     }
 
     #[test]

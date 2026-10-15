@@ -30,7 +30,6 @@ use proto::{ClientMsg, Role};
 use registry::Registry;
 use slots::{Claim, Slots};
 use store::Store;
-use ui::theme::Theme;
 use view::FlowView;
 use workspace::Hook;
 
@@ -369,8 +368,15 @@ fn ui(store: &Store, stop: bool) -> Result<Document, Failure> {
         claude_home,
         home: env_path("HOME").filter(|home| !home.as_os_str().is_empty()),
         store: store.root().to_path_buf(),
+        theme_dir: config::config_file(
+            env_path("FLOW_CONFIG"),
+            env_path("XDG_CONFIG_HOME"),
+            env_path("HOME"),
+        )
+        .and_then(|file| file.parent().map(Path::to_path_buf))
+        .unwrap_or_else(|| PathBuf::from(".")),
     };
-    let message = ui::run(&socket, Theme::builtin(), env).map_err(Failure::from_io)?;
+    let message = ui::run(&socket, env).map_err(Failure::from_io)?;
     Ok(Document::Text(message))
 }
 

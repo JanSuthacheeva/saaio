@@ -121,7 +121,8 @@ impl Widget for NewFlowView<'_> {
         Clear.render(dialog, buf);
         let frame = Block::bordered()
             .border_type(BorderType::Rounded)
-            .border_style(theme.ui.muted);
+            .border_style(theme.ui.muted)
+            .style(theme.ui.background);
         let inner = frame.inner(dialog);
         frame.render(dialog, buf);
         let width = inner.width as usize;

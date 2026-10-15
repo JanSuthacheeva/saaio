@@ -318,7 +318,7 @@ impl BoardView<'_> {
         let soft = |style: Style| style.bg(theme.ui.selection.bg.unwrap_or(Color::Reset));
         let solid = |style: Style| {
             Style::default()
-                .fg(Color::Black)
+                .fg(theme.on_solid())
                 .bg(style.fg.unwrap_or(Color::Reset))
         };
         let Some(flow) = flow else {
