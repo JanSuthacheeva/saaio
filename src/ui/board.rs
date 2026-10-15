@@ -505,17 +505,7 @@ impl BoardView<'_> {
             if self.state.all {
                 return;
             }
-            let line = Line::from(vec![
-                Span::styled(" 0 master", theme.ui.strong),
-                Span::styled(
-                    format!(
-                        "  {}",
-                        clip_place(self.sidebar.master.unwrap_or(""), width.saturating_sub(13))
-                    ),
-                    theme.ui.faint,
-                ),
-            ]);
-            buf.set_line(area.x, area.y, &line, area.width);
+            self.render_master_detail(area, buf);
             return;
         };
         let mut facts: Vec<String> = project.into_iter().cloned().collect();
@@ -566,6 +556,88 @@ impl BoardView<'_> {
         );
         self.render_timeline(flow, left, buf);
         self.render_facts(flow, right, buf);
+    }
+
+    /// Under the master: where it runs, then each flow that needs you with what it asks, and each
+    /// idle one with what is ready.
+    fn render_master_detail(&self, area: Rect, buf: &mut Buffer) {
+        let theme = self.theme();
+        let width = area.width as usize;
+        let flows = sidebar::workers(self.board());
+        let count = flows.len();
+        let place = clip_place(self.sidebar.master.unwrap_or(""), width.saturating_sub(24));
+        let mut facts = vec![format!(
+            "{count} worker{}",
+            if count == 1 { "" } else { "s" }
+        )];
+        if !place.is_empty() {
+            facts.insert(0, place);
+        }
+        let header = Line::from(vec![
+            Span::styled(" 0 master", theme.ui.strong),
+            Span::styled(format!("  {}", facts.join(" · ")), theme.ui.faint),
+        ]);
+        buf.set_line(area.x, area.y, &header, area.width);
+        buf.set_line(
+            area.x,
+            area.y + 1,
+            &Line::styled("─".repeat(width), theme.ui.rule),
+            area.width,
+        );
+
+        let sidebar = &self.sidebar;
+        let entry = |flow: &FlowView, text: String, style: Style| {
+            let lead = format!("  {} {}  ", sidebar.glyph(flow.state), flow.name);
+            Line::from(vec![
+                Span::styled("  ", theme.ui.text),
+                Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
+                Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
+                Span::styled(
+                    clip(&text, width.saturating_sub(lead.chars().count() + 1)),
+                    style,
+                ),
+            ])
+        };
+        let needing: Vec<Line> = flows
+            .iter()
+            .filter(|flow| flow.needs_you())
+            .map(|flow| {
+                let style = match flow.state {
+                    State::Waiting => theme.ui.muted,
+                    _ => theme.state.blocked,
+                };
+                entry(flow, flow.blocker.clone().unwrap_or_default(), style)
+            })
+            .collect();
+        let ready: Vec<Line> = flows
+            .iter()
+            .filter(|flow| flow.state == State::Idle)
+            .map(|flow| {
+                entry(
+                    flow,
+                    sidebar::last_note(flow).unwrap_or_default(),
+                    theme.ui.muted,
+                )
+            })
+            .collect();
+        let mut lines = Vec::new();
+        for (label, entries) in [("needs you", needing), ("ready for you", ready)] {
+            if entries.is_empty() {
+                continue;
+            }
+            if !lines.is_empty() {
+                lines.push(Line::raw(""));
+            }
+            lines.push(Line::styled(format!("  {label}"), theme.ui.faint));
+            lines.extend(entries);
+        }
+        if lines.is_empty() {
+            lines.push(Line::styled("  nothing needs you", theme.ui.faint));
+        }
+        let rows = area.height.saturating_sub(2) as usize;
+        for (offset, line) in lines.iter().take(rows).enumerate() {
+            buf.set_line(area.x, area.y + 2 + offset as u16, line, area.width);
+        }
     }
 
     fn render_timeline(&self, flow: &FlowView, area: Rect, buf: &mut Buffer) {

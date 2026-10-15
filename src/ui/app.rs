@@ -2199,6 +2199,35 @@ mod tests {
     }
 
     #[test]
+    fn the_board_shows_what_needs_you_under_the_master() {
+        let mut app = board_app();
+        app.on_input(Routed::Command(Command::Board));
+        let terminal = render_at(&app, FLEET);
+        let rows: Vec<String> = (12..30).map(|y| row(&terminal, y)).collect();
+        let at = rows
+            .iter()
+            .position(|line| line.starts_with(" 0 master"))
+            .unwrap_or_else(|| panic!("{}", rows.join("\n")));
+
+        assert!(
+            rows[at].contains("~/projects/shop · main · 4 workers"),
+            "{}",
+            rows[at]
+        );
+        assert_eq!(rows[at + 2].trim_end(), "  needs you");
+        assert!(
+            rows[at + 3].starts_with("  ✖ shop-221  migration needs a default value"),
+            "{}",
+            rows[at + 3]
+        );
+        assert!(
+            rows[at + 4].starts_with("  ◆ shop-230  Which approach: a channel column"),
+            "{}",
+            rows[at + 4]
+        );
+    }
+
+    #[test]
     fn moves_over_the_board_and_jumps_into_a_card() {
         let mut app = board_app();
         app.on_input(Routed::Command(Command::Board));
