@@ -8,7 +8,7 @@ use crate::event::Mode;
 use crate::event::Phase;
 use crate::output::short_duration;
 use crate::proto::{PaneKey, PaneStatus};
-use crate::ui::sidebar::{self, Sidebar, clip, split, wrap};
+use crate::ui::sidebar::{self, Sidebar, clip, clip_place, split, wrap};
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Project, Projects, State, StepStatus, Tone};
 
@@ -194,10 +194,10 @@ impl BoardView<'_> {
         split(left, right, width)
     }
 
-    fn master_card(&self) -> [Line<'static>; 4] {
+    fn master_card(&self, width: usize) -> [Line<'static>; 4] {
         let theme = self.theme();
         let workers = sidebar::workers(self.board()).len();
-        let place = self.sidebar.master.unwrap_or("").to_string();
+        let place = clip_place(self.sidebar.master.unwrap_or(""), width.saturating_sub(4));
         let status = match self.status(&PaneKey::Master) {
             Some(PaneStatus::Exited { .. }) => "exited - C-space r resumes it",
             Some(PaneStatus::Failed { .. }) => "could not start",
@@ -403,7 +403,7 @@ impl BoardView<'_> {
         block.render(rect, buf);
         let width = body.width as usize;
         let lines = match flow {
-            None => self.master_card(),
+            None => self.master_card(width),
             Some(flow) => self.flow_card(flow, index.wrapping_sub(1), width),
         };
         for (offset, line) in lines.iter().enumerate() {
@@ -521,7 +521,10 @@ impl BoardView<'_> {
             let line = Line::from(vec![
                 Span::styled(" 0 master", theme.ui.strong),
                 Span::styled(
-                    format!("  {}", self.sidebar.master.unwrap_or("")),
+                    format!(
+                        "  {}",
+                        clip_place(self.sidebar.master.unwrap_or(""), width.saturating_sub(13))
+                    ),
                     theme.ui.faint,
                 ),
             ]);

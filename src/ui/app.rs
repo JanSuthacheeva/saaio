@@ -18,7 +18,7 @@ use crate::ui::newflow::{FormAction, NewFlowForm, NewFlowView};
 use crate::ui::peek::PeekLine;
 use crate::ui::rail::Rail;
 use crate::ui::screen::{Screen, ScreenView};
-use crate::ui::sidebar::{self, Sidebar};
+use crate::ui::sidebar::{self, Sidebar, clip, clip_place};
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Projects, State};
 
@@ -391,7 +391,7 @@ impl App {
             return;
         }
         let areas = self.areas();
-        frame.render_widget(self.border(theme), areas.frame);
+        frame.render_widget(self.border(theme, areas.frame.width), areas.frame);
         frame.render_widget(
             ScreenView {
                 screen: &self.screen,
@@ -1106,13 +1106,19 @@ impl App {
         draw_dialog(frame, pane, theme, " stop ", theme.state.waiting, text);
     }
 
-    fn border(&self, theme: &Theme) -> Block<'static> {
+    /// The frame around the pane in view, named on its top edge. The title is fitted to `width`,
+    /// so the place loses folders from its middle and the edge keeps its corner.
+    fn border(&self, theme: &Theme, width: u16) -> Block<'static> {
         let mut block = Block::bordered()
             .border_type(BorderType::Rounded)
             .border_style(theme.ui.rule);
         if let Some(notice) = &self.notice {
             block = block.title_bottom(Line::styled(format!(" {notice} "), theme.state.waiting));
         }
+        let hint = self.border_hint(theme);
+        // The corners and at least two rule characters before the closing one.
+        let edge = 4 + hint.as_ref().map_or(0, Line::width);
+        let room = |used: usize| (width as usize).saturating_sub(edge + used);
         let PaneKey::Flow(id) = &self.focus else {
             let mut title = vec![
                 Span::raw(" "),
@@ -1120,10 +1126,13 @@ impl App {
                 Span::styled(" master ", theme.ui.strong),
             ];
             if let Some(place) = &self.master {
-                title.push(Span::styled(format!(" {place} "), theme.ui.faint));
+                let fitted = clip_place(place, room(Line::from(title.clone()).width() + 2));
+                if !fitted.is_empty() {
+                    title.push(Span::styled(format!(" {fitted} "), theme.ui.faint));
+                }
             }
             let block = block.title(Line::from(title));
-            return match self.border_hint(theme) {
+            return match hint {
                 Some(hint) => block.title(hint.right_aligned()),
                 None => block,
             };
@@ -1141,16 +1150,16 @@ impl App {
         title.push(Span::raw(" "));
         title.push(sidebar.label(flow));
         if let Some(space) = &flow.workspace {
-            title.push(Span::styled(
-                format!(
-                    "  {} {} · slot {} ",
-                    theme.glyphs.separator, space.branch, space.slot
-                ),
-                theme.ui.faint,
-            ));
+            let place = format!("{} · slot {}", space.branch, space.slot);
+            let lead = format!("  {} ", theme.glyphs.separator);
+            let used = Line::from(title.clone()).width() + lead.chars().count() + 1;
+            let fitted = clip(&place, room(used));
+            if !fitted.is_empty() {
+                title.push(Span::styled(format!("{lead}{fitted} "), theme.ui.faint));
+            }
         }
         let block = block.title(Line::from(title));
-        match self.border_hint(theme) {
+        match hint {
             Some(hint) => block.title(hint.right_aligned()),
             None => block,
         }
@@ -1223,7 +1232,11 @@ impl App {
             Span::styled(" master", theme.ui.text),
         ];
         if let Some(place) = &self.master {
-            left.push(Span::styled(format!("  {place}"), theme.ui.faint));
+            let room = (area.width as usize).saturating_sub(Line::from(left.clone()).width() + 3);
+            left.push(Span::styled(
+                format!("  {}", clip_place(place, room)),
+                theme.ui.faint,
+            ));
         }
         match self.status(&PaneKey::Master) {
             Some(PaneStatus::Exited { .. }) => left.push(Span::styled(
@@ -2074,6 +2087,26 @@ mod tests {
 
         assert_eq!(side(&terminal, 22).trim_end(), "▌ branch   flow/shop-198");
         assert_eq!(side(&terminal, 23).trim_end(), "▌ worktree gone");
+    }
+
+    #[test]
+    fn a_long_place_loses_its_middle_but_keeps_the_branch_and_the_corner() {
+        let mut fleet = with_fleet();
+        fleet.on_server(ServerMsg::Master {
+            cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
+            branch: Some("main".into()),
+        });
+
+        let screen = render_at(&fleet, FLEET);
+        let top = row(&screen, 0);
+        let pane_edge = top.split('╮').next().unwrap();
+
+        assert!(pane_edge.contains("/private/…/"), "{top}");
+        assert!(pane_edge.contains("/repo · main ─"), "{top}");
+        assert_eq!(
+            side(&screen, 3).trim_end(),
+            "     /private/…/ui-look/repo · main"
+        );
     }
 
     #[test]

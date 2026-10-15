@@ -107,7 +107,10 @@ impl Sidebar<'_> {
         });
         if let Some(place) = self.master {
             rows.push(Row {
-                line: Line::styled(format!("     {}", clip(place, width - 6)), theme.ui.faint),
+                line: Line::styled(
+                    format!("     {}", clip_place(place, width - 6)),
+                    theme.ui.faint,
+                ),
                 key: Some(PaneKey::Master),
                 selected: false,
             });
@@ -559,6 +562,37 @@ pub fn clip(text: &str, width: usize) -> String {
     kept
 }
 
+/// A place (`path · branch`) in `width` columns: the path loses folders from its middle first
+/// (/private/…/ui-look/repo · main), then its first folder; the branch goes only when the last
+/// folder alone does not fit beside it.
+pub fn clip_place(place: &str, width: usize) -> String {
+    let fits = |text: &str| Span::raw(text).width() <= width;
+    if fits(place) {
+        return place.to_string();
+    }
+    let (path, suffix) = match place.rsplit_once(" · ") {
+        Some((path, branch)) => (path, format!(" · {branch}")),
+        None => (place, String::new()),
+    };
+    let parts: Vec<&str> = path.split('/').collect();
+    let head_len = if parts.first() == Some(&"") { 2 } else { 1 };
+    let head = parts[..head_len.min(parts.len())].join("/");
+    let tail = |keep: usize| parts[parts.len() - keep..].join("/");
+    let removable = parts.len().saturating_sub(head_len + 1);
+    let with_head = (1..=removable)
+        .rev()
+        .map(|keep| format!("{head}/…/{}{suffix}", tail(keep)));
+    let without_head = (1..parts.len())
+        .rev()
+        .map(|keep| format!("…/{}{suffix}", tail(keep)));
+    let last = format!("…/{}", tail(1));
+    with_head
+        .chain(without_head)
+        .chain(std::iter::once(last.clone()))
+        .find(|candidate| fits(candidate))
+        .unwrap_or_else(|| clip(&last, width))
+}
+
 /// !418 for a GitLab merge request, #12 for a GitHub pull request, else MR.
 fn merge_request(url: &str) -> String {
     let number = url.trim_end_matches('/').rsplit('/').next().unwrap_or("");
@@ -575,6 +609,27 @@ fn merge_request(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shortens_a_place_in_the_middle_and_keeps_its_branch() {
+        let place = "/private/tmp/claude-501/x/scratchpad/ui-look/repo · main";
+
+        assert_eq!(
+            clip_place("~/projects/shop · main", 30),
+            "~/projects/shop · main"
+        );
+        assert_eq!(clip_place(place, 34), "/private/…/ui-look/repo · main");
+        assert_eq!(clip_place(place, 24), "/private/…/repo · main");
+        assert_eq!(clip_place(place, 15), "…/repo · main");
+        assert_eq!(clip_place(place, 9), "…/repo", "too narrow for the branch");
+        assert_eq!(clip_place("~/a/b/c/d", 8), "~/…/c/d");
+        for width in 1..60 {
+            assert!(
+                Span::raw(clip_place(place, width)).width() <= width,
+                "{width}"
+            );
+        }
+    }
 
     #[test]
     fn clips_long_text_with_an_ellipsis() {
