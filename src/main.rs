@@ -633,23 +633,7 @@ fn start(
         )
     })?;
     let branching = branching::Branching::load(&repo)?;
-    let kind = match &branching {
-        Some(rules) => rules.pick_type(launch.kind.as_deref()),
-        None if launch.kind.is_some() => Err(anyhow::anyhow!(
-            "this repo has no {}, so no branch types",
-            branching::CONFIG_FILE
-        )),
-        None => Ok(None),
-    }
-    .map_err(|error| {
-        Failure::error(
-            format!("{error:#}"),
-            vec![format!(
-                "Name the types in {}: [branch] types = [\"feature\", \"bugfix\"]",
-                branching::CONFIG_FILE
-            )],
-        )
-    })?;
+    let kind = pick_kind(branching.as_ref(), launch.kind.as_deref())?;
     let (flows, _) = views(store, now);
     let taken: Vec<String> = flows
         .iter()
@@ -666,42 +650,19 @@ fn start(
         },
     );
     let id = store.create(&first)?;
+    let mut rollback = Rollback::new(store, registry, &id);
 
     // Claimed before the worktree and setup, so a second start cannot take the same slot meanwhile.
     let claim = Claim {
         store: store.root().to_path_buf(),
         flow: id.clone(),
     };
-    let mut held = held_slots(registry, now);
-    held.extend(launch::taken_slots(&flows));
-    let slot = match Slots::at(registry).claim(&claim, &held, |claim| claim_is_live(claim, now)) {
-        Ok(Some(slot)) => slot,
-        Ok(None) => {
-            let _ = store.remove(&id);
-            return Err(Failure::error(
-                format!("all {} slots are in use", slots::MAX_SLOTS),
-                vec![
-                    "Run `flow status --all` to see which flows hold them".to_string(),
-                    "Run `flow clear` in projects with finished flows".to_string(),
-                ],
-            ));
-        }
-        Err(error) => {
-            let _ = store.remove(&id);
-            return Err(error.into());
-        }
-    };
+    let slot = claim_slot(registry, &claim, &flows, now)?;
+    rollback.slot = Some((slot, claim));
     let base = branching::branch_name(branching.as_ref(), kind.as_deref(), &launch.request, &name);
-    let branch = std::iter::once(base.clone())
-        .chain((2..).map(|number| format!("{base}-{number}")))
-        .find(|branch| !workspace::branch_exists(&repo, branch))
-        .expect("an unused suffix always exists");
-    let space = launch::workspace_for(&repo, &name, branch, slot, agent_name);
-    if let Err(error) = workspace::create_worktree(&repo, &space) {
-        let _ = Slots::at(registry).release(slot, &claim);
-        let _ = store.remove(&id);
-        return Err(error.into());
-    }
+    let space = launch::workspace_for(&repo, &name, free_branch(&repo, &base), slot, agent_name);
+    workspace::create_worktree(&repo, &space)?;
+    rollback.disarm();
 
     let setup = match workspace::run_hook(
         &repo,
@@ -728,6 +689,97 @@ fn start(
         Ok(Some(_)) | Err(_) => Opening::Running,
     };
     Ok(output::started(&flow, &space, &setup, opening))
+}
+
+/// The branch type for a start: the one asked for or the repo's first, if the repo has types.
+fn pick_kind(
+    rules: Option<&branching::Branching>,
+    asked: Option<&str>,
+) -> Result<Option<String>, Failure> {
+    match rules {
+        Some(rules) => rules.pick_type(asked),
+        None if asked.is_some() => Err(anyhow::anyhow!(
+            "this repo has no {}, so no branch types",
+            branching::CONFIG_FILE
+        )),
+        None => Ok(None),
+    }
+    .map_err(|error| {
+        Failure::error(
+            format!("{error:#}"),
+            vec![format!(
+                "Name the types in {}: [branch] types = [\"feature\", \"bugfix\"]",
+                branching::CONFIG_FILE
+            )],
+        )
+    })
+}
+
+/// The lowest slot no unfinished flow in any project holds, claimed for this start.
+fn claim_slot(
+    registry: &Registry,
+    claim: &Claim,
+    flows: &[FlowView],
+    now: u64,
+) -> Result<u8, Failure> {
+    let mut held = held_slots(registry, now);
+    held.extend(launch::taken_slots(flows));
+    Slots::at(registry)
+        .claim(claim, &held, |claim| claim_is_live(claim, now))?
+        .ok_or_else(|| {
+            Failure::error(
+                format!("all {} slots are in use", slots::MAX_SLOTS),
+                vec![
+                    "Run `flow status --all` to see which flows hold them".to_string(),
+                    "Run `flow clear` in projects with finished flows".to_string(),
+                ],
+            )
+        })
+}
+
+/// `base`, or base-2, base-3, ... when the repo has that branch already.
+fn free_branch(repo: &Path, base: &str) -> String {
+    std::iter::once(base.to_string())
+        .chain((2..).map(|number| format!("{base}-{number}")))
+        .find(|branch| !workspace::branch_exists(repo, branch))
+        .expect("an unused suffix always exists")
+}
+
+/// Undoes a start that failed before its worktree existed: forgets the flow and gives its slot back.
+struct Rollback<'a> {
+    store: &'a Store,
+    slots: Slots,
+    id: String,
+    slot: Option<(u8, Claim)>,
+    armed: bool,
+}
+
+impl<'a> Rollback<'a> {
+    fn new(store: &'a Store, registry: &Registry, id: &str) -> Rollback<'a> {
+        Rollback {
+            store,
+            slots: Slots::at(registry),
+            id: id.to_string(),
+            slot: None,
+            armed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for Rollback<'_> {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        if let Some((slot, claim)) = &self.slot {
+            let _ = self.slots.release(*slot, claim);
+        }
+        let _ = self.store.remove(&self.id);
+    }
 }
 
 fn append_workspace(

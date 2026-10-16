@@ -773,6 +773,11 @@ fn start_says_when_every_slot_is_taken() {
         "{}",
         stdout(&output)
     );
+    let logs = fs::read_dir(lab.home.join("flows"))
+        .unwrap()
+        .filter(|entry| entry.as_ref().unwrap().path().extension() == Some("jsonl".as_ref()))
+        .count();
+    assert_eq!(logs, 20, "the failed start forgets its flow");
 }
 
 #[test]

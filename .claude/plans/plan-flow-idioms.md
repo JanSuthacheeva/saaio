@@ -72,7 +72,7 @@ any other that turns out to be noise, each named.
 
 ### 5. unsafe and RAII
 - [x] slots: `File::lock` instead of `libc::flock`
-- [ ] `flow start` rolls back through a drop guard
+- [x] `flow start` rolls back through a drop guard
 - [ ] local UTC offset read moves out of board.rs to the I/O side, with `&raw`
 
 ### 6. Errors, dead code, docs
