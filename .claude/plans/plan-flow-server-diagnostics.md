@@ -226,3 +226,40 @@ its first caller.
 - [x] Guard: `commands::ui::refuse_inside_own_flow` for ui and --stop; tests/cli.rs
 - [x] CLAUDE.md: `server_log.rs`, `build.rs`, the scratch FLOW_HOME rule
 - [x] E2E with a scratch FLOW_HOME in tmux: start flow ui, take it over from a second one, stop with C-space Q, start again, `flow ui --stop`, `kill -TERM`, a temporary panic in a thread; read server.log for each case
+
+## Review
+
+Isolated review of `main..flow/server-diagnostics` against this plan and CLAUDE.md.
+
+**Fixed**
+- `build.rs` missed commits on a packed branch: after `git pack-refs` (what `git gc` does) the next
+  commit writes a loose ref that was not watched, so `FLOW_COMMIT` kept naming the old commit
+  (shown in a scratch crate: build, commit, build printed the same hash). It now also watches the
+  git dir's `logs/HEAD`; a commit, a branch switch and an unchanged rebuild (no rerun) checked.
+  a7dd283.
+
+**Open**
+- A first message cut off mid-frame (a client that dies while writing its hello) is also treated
+  as `Unreadable` and logged `refused an unreadable hello`. Harmless; leave it.
+- `exit_on_panic` ends the server with exit 101 and leaves `server.sock` and `master.json`; the
+  next `flow ui` replaces the stale socket and resumes the master. Decided in review; no change.
+- `this_process` falls back to an empty cwd (`pid N in  (flow ...)`) when the folder is gone.
+  Cosmetic; leave it.
+
+**Where to look**
+1. `src/server/conn.rs` `hello` -> `drop_conn`: the take-over removes the old peer first so no
+   `ui left` is logged for it; `read_in_background`'s `first` flag decides `Unreadable` vs `Gone`.
+2. `src/server.rs` `stop_on_signals` and `serve`: SIGINT and SIGHUP now stop the server too
+   (it runs in its own session, so no terminal sends them).
+3. `src/cli/commands/ui.rs` `refuse_inside_own_flow`: runs before `--stop` too; keyed on
+   `FLOW_ID` being a flow in this store (the master pane has no `FLOW_ID`).
+- Routine, skim: the `eprintln!` -> `server_log::write` swaps, `text::stamp`, the named threads,
+  the moved `local_offset_secs`, the test updates for `Peer`.
+
+E2E on a scratch `FLOW_HOME` with a private tmux server: two `flow ui`, then `flow ui --stop`;
+server.log showed started, attached, attached; dropped, the stopper's line, `stopping: SIGTERM
+from pid <stopper>`, `ui left`, `stopped`, and the dropped UI printed who took over.
+
+**Checks**: `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`
+pass with the build.rs fix. The fix was not reviewed by a separate agent; it was re-read and
+re-run against its reproducer.
