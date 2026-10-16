@@ -82,7 +82,7 @@ impl Failure {
             .map(|usage| {
                 usage
                     .split_whitespace()
-                    .take_while(|word| !word.starts_with(['[', '<']))
+                    .take_while(|word| !word.starts_with(['[', '<', '-']))
                     .collect::<Vec<_>>()
                     .join(" ")
             })
@@ -157,7 +157,10 @@ mod tests {
             flow: Option<String>,
         },
         Start {
-            request: String,
+            #[arg(required_unless_present = "plain")]
+            request: Option<String>,
+            #[arg(long, conflicts_with = "request")]
+            plain: Option<String>,
         },
     }
 
@@ -197,6 +200,15 @@ mod tests {
             failure.message,
             "the following required arguments were not provided: <REQUEST>"
         );
+        assert_eq!(failure.help, vec!["Run `flow start --help` for the usage"]);
+    }
+
+    #[test]
+    fn names_the_command_without_the_flags_clap_puts_in_its_usage() {
+        let error = Cli::try_parse_from(["flow", "start", "--plain", "x", "req"]).unwrap_err();
+
+        let failure = Failure::usage(&error);
+
         assert_eq!(failure.help, vec!["Run `flow start --help` for the usage"]);
     }
 
