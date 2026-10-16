@@ -105,3 +105,38 @@ Call sites (modified), `state_style(flow.state)` -> `flow_style(flow)` wherever 
 - [x] Every flow-colored call site uses flow_style, with a sidebar test for the delegated flow in review
 - [x] README theme keys name [phase]
 - [x] End to end: flow ui with the noctalia theme draws working flows in their phase colors
+
+## Review
+
+Reviewed in an isolated context against this plan and CLAUDE.md. The code matches the plan: every
+call site listed uses `flow_style`, no `state_style` call with a flow at hand is left, and the
+`(None, Delegated)` sidebar label and `Tone::Progress` keep `working` as decided.
+
+**Fixed**
+
+- The board's card tone and state label had no test: reverting `cards.rs` to `state_style` kept the
+  suite green. Added `a_working_card_takes_the_color_of_its_phase` (fails without the code). 77c9e0c.
+  Test-only, so no second review round was needed.
+
+**Open**
+
+- `theme_file::parse` merges `[ui]`, `[state]` and `[phase]` into one key list, so `[state] review =`
+  sets the review phase and `[phase] done =` sets the done state, without an error. This was already
+  so between `[ui]` and `[state]`; `[phase]` widens it. Recommendation: leave it for now; if theme
+  files get more sections, check each key against its section then (it tightens what loads, so it is
+  a user-visible change).
+- The rail, the title row and the detail view's glyph and current step have no color test of their
+  own; each is the same one-line swap the sidebar and board tests cover. Recommendation: accept.
+
+**Where to look**
+
+1. `src/ui/theme.rs` `flow_style`: the one rule (Working or Delegated with a phase -> phase color).
+2. `src/ui/board/cards.rs` `state_label`: the Idle -> muted special case was removed and now relies
+   on `state_style(Idle)` returning `ui.muted`; covered by the theme test.
+3. `src/ui/theme_file.rs` `parse`: the `[phase]` section (see Open).
+
+The palette tables, `PaletteKey` additions and README are routine and can be skimmed.
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 77c9e0c.
