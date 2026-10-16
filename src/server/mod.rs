@@ -673,19 +673,12 @@ fn accept_in_background(listener: UnixListener, events: Sender<Event>) {
 
 fn read_in_background(conn: ConnId, mut stream: UnixStream, events: Sender<Event>) {
     thread::spawn(move || {
-        loop {
-            match proto::read_msg::<_, ClientMsg>(&mut stream) {
-                Ok(Some(message)) => {
-                    if events.send(Event::Message(conn, message)).is_err() {
-                        return;
-                    }
-                }
-                Ok(None) | Err(_) => {
-                    let _ = events.send(Event::Gone(conn));
-                    return;
-                }
+        while let Ok(Some(message)) = proto::read_msg::<_, ClientMsg>(&mut stream) {
+            if events.send(Event::Message(conn, message)).is_err() {
+                return;
             }
         }
+        let _ = events.send(Event::Gone(conn));
     });
 }
 

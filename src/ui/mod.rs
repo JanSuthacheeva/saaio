@@ -244,19 +244,12 @@ fn read_stdin(events: Sender<Event>) {
 
 fn read_server(mut client: Client, events: Sender<Event>) {
     thread::spawn(move || {
-        loop {
-            match client.recv() {
-                Ok(Some(message)) => {
-                    if events.send(Event::Server(message)).is_err() {
-                        return;
-                    }
-                }
-                Ok(None) | Err(_) => {
-                    let _ = events.send(Event::ServerGone);
-                    return;
-                }
+        while let Ok(Some(message)) = client.recv() {
+            if events.send(Event::Server(message)).is_err() {
+                return;
             }
         }
+        let _ = events.send(Event::ServerGone);
     });
 }
 

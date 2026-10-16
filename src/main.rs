@@ -219,18 +219,15 @@ fn main() -> ExitCode {
     if let Some(Command::Wait { master }) = &cli.command {
         return run_wait(*master);
     }
-    let store = match Store::locate(
+    let Ok(store) = Store::locate(
         env_path("FLOW_HOME"),
         env_path("XDG_STATE_HOME"),
         env_path("HOME"),
-    ) {
-        Ok(store) => store,
-        Err(_) => {
-            return fail(&Failure::error(
-                "cannot find a state directory",
-                vec!["Set FLOW_HOME to a directory".to_string()],
-            ));
-        }
+    ) else {
+        return fail(&Failure::error(
+            "cannot find a state directory",
+            vec!["Set FLOW_HOME to a directory".to_string()],
+        ));
     };
     let Ok(registry) = Registry::locate(env_path("XDG_STATE_HOME"), env_path("HOME")) else {
         return fail(&Failure::error(
@@ -482,13 +479,11 @@ fn hook(
         flow
     } else {
         let (flows, _) = views(store, now);
-        match fold::resolve(&flows, &flow) {
-            Some(view) => view.id.clone(),
-            None => {
-                eprintln!("flow hook: no flow {flow}");
-                return Document::Silent;
-            }
-        }
+        let Some(view) = fold::resolve(&flows, &flow) else {
+            eprintln!("flow hook: no flow {flow}");
+            return Document::Silent;
+        };
+        view.id.clone()
     };
     for kind in kinds {
         let events = match store.events(&id) {

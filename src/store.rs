@@ -256,12 +256,10 @@ impl Store {
             waits.join(format!("{id}.pid")),
             waits.join(format!("{id}.delivered")),
         ] {
-            match fs::remove_file(&file) {
-                Err(error) if error.kind() != ErrorKind::NotFound => {
-                    return Err(error)
-                        .with_context(|| format!("could not remove {}", file.display()));
-                }
-                _ => {}
+            if let Err(error) = fs::remove_file(&file)
+                && error.kind() != ErrorKind::NotFound
+            {
+                return Err(error).with_context(|| format!("could not remove {}", file.display()));
             }
         }
         Ok(())
