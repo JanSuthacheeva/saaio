@@ -25,7 +25,7 @@ any other that turns out to be noise, each named.
 ### 0. Bugs, each proven by a test that fails first
 - [x] sidebar: the fit loop keeps a running total, so "N more" shows and no block is cut (sidebar.rs:169); the sidebar hides an empty `0/0` task count like the board
 - [x] main: `bin_path` shortens HOME with `Path::strip_prefix` (main.rs:1083)
-- [ ] ui: `draw_dialog` and the new-flow error row cannot overflow or underflow on extreme sizes (app.rs:1376, newflow.rs:204)
+- [x] ui: `draw_dialog` and the new-flow error row cannot overflow or underflow on extreme sizes (app.rs:1376, newflow.rs:204)
 - [ ] ui: `shown_request` trims by display width (newflow.rs:137); one shared width helper on `unicode-width`
 - [ ] ui: clicks use `Rect::contains` (app.rs:904, input.rs:251)
 - [ ] theme_file: a color needs six ASCII hex digits (theme_file.rs:163)

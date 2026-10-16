@@ -201,7 +201,10 @@ impl Widget for NewFlowView<'_> {
             line(
                 buf,
                 6,
-                Line::styled(format!(" {}", clip(error, width - 2)), theme.state.blocked),
+                Line::styled(
+                    format!(" {}", clip(error, width.saturating_sub(2))),
+                    theme.state.blocked,
+                ),
             );
         }
 
@@ -378,6 +381,25 @@ mod tests {
         form.on_key(Key::Char('l'));
         assert_eq!(form.picked_type(), Some("bugfix"));
         assert_eq!(form.request, "", "the type row takes the keys");
+    }
+
+    #[test]
+    fn draws_an_error_in_a_terminal_too_narrow_for_it() {
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"));
+        form.error = Some("the branch exists".into());
+        let theme = Theme::builtin();
+        for width in 0..6 {
+            let area = Rect::new(0, 0, width, 20);
+            let mut buf = Buffer::empty(area);
+
+            NewFlowView {
+                form: &form,
+                flows: &[],
+                place: "~/shop",
+                theme: &theme,
+            }
+            .render(area, &mut buf);
+        }
     }
 
     #[test]

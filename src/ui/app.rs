@@ -1373,9 +1373,15 @@ fn draw_dialog(
     border: Style,
     text: Vec<Line>,
 ) {
-    let inner = text.iter().map(Line::width).max().unwrap_or(0) as u16;
-    let width = (inner + 4).min(pane.width);
-    let height = (text.len() as u16 + 2).min(pane.height);
+    let fit = |size: usize, edge: u16, room: u16| {
+        u16::try_from(size)
+            .unwrap_or(u16::MAX)
+            .saturating_add(edge)
+            .min(room)
+    };
+    let inner = text.iter().map(Line::width).max().unwrap_or(0);
+    let width = fit(inner, 4, pane.width);
+    let height = fit(text.len(), 2, pane.height);
     let area = Rect::new(
         pane.x + (pane.width - width) / 2,
         pane.y + (pane.height - height) / 2,
@@ -1514,6 +1520,19 @@ mod tests {
             }),
             vec![Effect::Send(ClientMsg::Resize(Size { cols: 98, rows: 25 }))]
         );
+    }
+
+    #[test]
+    fn draws_a_question_longer_than_any_terminal() {
+        let mut app = App::new(SIZE);
+        app.view = View::Confirm {
+            question: "x".repeat(usize::from(u16::MAX) - 2),
+            then: Removal::of("shop-230"),
+        };
+
+        let terminal = render(&app);
+
+        assert!((0..8).any(|y| row(&terminal, y).contains("xxx")));
     }
 
     #[test]
