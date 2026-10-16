@@ -103,13 +103,19 @@ nerd_font = true        # the font has Nerd Font icons: a kiwi bird as the mark
 accent = "#d9825b"
 [state]
 ended = "faint"
+[phase]
+merge-request = "#d08ad6"
 ```
 
 Keys: `[ui]` background, panel, selection, rule, text, strong, muted, faint, accent; `[state]`
-working, waiting, blocked, done, ended. A key left out keeps the base's value. `nerd_font` (default
-false) shows flow's mark as a kiwi bird, which needs a Nerd Font; without it the mark is a goose
-in flight, `▚▄▞`, in block characters every font has. The mark takes the theme's accent either way. `flow` and `flow-light` are the design's dark
-and light colors. A tool can keep a theme in `~/.config/flow/themes/<name>.toml` for `extends` to
+working, waiting, blocked, done, ended; `[phase]` design, implement, review, merge-request. A
+working flow takes its phase's color, and `working` only until it reaches its first phase; a flow
+that waits, is blocked or is done keeps its state's color. The terminal theme colors the phases
+with 256-color indexes, since terminals often repaint ANSI blue, magenta and cyan. A key left out
+keeps the base's value. `nerd_font` (default false) shows flow's mark as a kiwi bird, which needs a
+Nerd Font; without it the mark is a goose in flight, `▚▄▞`, in block characters every font has.
+The mark takes the theme's accent either way. `flow` and `flow-light` are the design's dark and
+light colors. A tool can keep a theme in `~/.config/flow/themes/<name>.toml` for `extends` to
 name; a Noctalia template that writes `themes/noctalia.toml` makes flow follow Noctalia live. A
 broken file keeps the last theme and says why in the title row.
 
