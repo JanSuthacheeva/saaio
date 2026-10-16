@@ -85,8 +85,8 @@ any other that turns out to be noise, each named.
 - [x] ui: split `App::draw`, newflow `render`, sidebar `render`; board `digit`, `card_rect`, one footer, `spinner`, shared `Row`, `plural`
 
 ### 8. Tests
-- [ ] theme_file watch test without mtime dependence; cli socket wait by connect; one deadline
-- [ ] cli helpers `flow_command`, `git`, `wait_until`; `Server` / waiter drop guards; imports and naming
+- [x] theme_file watch test without mtime dependence; cli socket wait by connect; one deadline
+- [x] cli helpers `flow_command`, `git`, `wait_until`; `Server` / waiter drop guards; imports and naming
 
 ### 9. Lint gate and end to end
 - [ ] `[lints.clippy]` pedantic table in Cargo.toml; clippy, fmt, tests green

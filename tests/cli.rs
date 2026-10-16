@@ -1,27 +1,91 @@
 use std::fs;
-use std::path::Path;
-use std::process::{Command, Output};
+use std::io::{Read, Write};
+use std::ops::{Deref, DerefMut};
+use std::os::unix::fs::PermissionsExt;
+use std::os::unix::net::UnixStream;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Output, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use tempfile::TempDir;
 
-fn flow(home: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_flow"))
-        .args(args)
+/// The flow binary with a test's own state: `home` as FLOW_HOME, the shared folder inside it, a
+/// config file that does not exist (so the built-in agents) and no FLOW_ID.
+fn flow_command(home: &Path) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_flow"));
+    command
         .env("FLOW_HOME", home)
         .env("XDG_STATE_HOME", shared(home))
-        .env_remove("FLOW_ID")
+        .env("FLOW_CONFIG", home.join("no-config.toml"))
+        .env_remove("FLOW_ID");
+    command
+}
+
+fn flow(home: &Path, args: &[&str]) -> Output {
+    flow_command(home)
+        .args(args)
         .output()
         .expect("the flow binary runs")
 }
 
 fn flow_in(home: &Path, flow_id: &str, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_flow"))
+    flow_command(home)
         .args(args)
-        .env("FLOW_HOME", home)
-        .env("XDG_STATE_HOME", shared(home))
         .env("FLOW_ID", flow_id)
         .output()
         .expect("the flow binary runs")
+}
+
+/// git in `dir`, which must succeed.
+fn git(dir: &Path, args: &[&str]) {
+    let status = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .status()
+        .unwrap();
+    assert!(status.success(), "git {args:?}");
+}
+
+/// Polls `done` until it holds; fails the test with `what` after `limit`.
+fn wait_until(limit: Duration, what: &str, mut done: impl FnMut() -> bool) {
+    let deadline = Instant::now() + limit;
+    while !done() {
+        assert!(Instant::now() < deadline, "{what}");
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// Waits until something accepts connections on `socket`; a socket file can exist before that.
+fn wait_for_socket(socket: &Path) {
+    wait_until(Duration::from_secs(5), "the server never listened", || {
+        UnixStream::connect(socket).is_ok()
+    });
+}
+
+/// A flow process the test started, killed when the test ends, also when it fails.
+struct Running(Child);
+
+impl Deref for Running {
+    type Target = Child;
+
+    fn deref(&self) -> &Child {
+        &self.0
+    }
+}
+
+impl DerefMut for Running {
+    fn deref_mut(&mut self) -> &mut Child {
+        &mut self.0
+    }
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
 }
 
 fn new_flow(home: &Path, name: &str) -> String {
@@ -51,12 +115,12 @@ fn id_in(text: &str) -> String {
 }
 
 /// The shared folder every project registers in: inside the test's home, never the real one.
-fn shared(home: &Path) -> std::path::PathBuf {
+fn shared(home: &Path) -> PathBuf {
     home.join("shared")
 }
 
 fn stdout(output: &Output) -> String {
-    String::from_utf8(output.stdout.clone()).unwrap()
+    std::str::from_utf8(&output.stdout).unwrap().to_string()
 }
 
 fn seed(home: &Path, id: &str, lines: &[&str]) {
@@ -96,9 +160,7 @@ fn the_home_view_shortens_the_binary_only_inside_home() {
     let exe = Path::new(env!("CARGO_BIN_EXE_flow"));
     let folder = exe.parent().unwrap();
     let bin_with = |user_home: &Path| {
-        let output = Command::new(exe)
-            .env("FLOW_HOME", home.path())
-            .env("XDG_STATE_HOME", shared(home.path()))
+        let output = flow_command(home.path())
             .env("HOME", user_home)
             .output()
             .unwrap();
@@ -313,9 +375,9 @@ fn clear_forgets_finished_flows_only() {
 
 /// A temp git repo with one commit and a state folder.
 struct Lab {
-    _dir: TempDir,
-    repo: std::path::PathBuf,
-    home: std::path::PathBuf,
+    dir: TempDir,
+    repo: PathBuf,
+    home: PathBuf,
 }
 
 impl Lab {
@@ -325,34 +387,22 @@ impl Lab {
         let repo = root.join("repo");
         let home = root.join("state");
         fs::create_dir_all(&repo).unwrap();
-        let git = |args: &[&str]| {
-            assert!(
-                Command::new("git")
-                    .arg("-C")
-                    .arg(&repo)
-                    .args(args)
-                    .status()
-                    .unwrap()
-                    .success()
-            )
-        };
-        git(&["init", "-q", "-b", "main"]);
-        git(&[
-            "-c",
-            "user.email=t@t",
-            "-c",
-            "user.name=t",
-            "commit",
-            "-q",
-            "--allow-empty",
-            "-m",
-            "init",
-        ]);
-        Lab {
-            _dir: dir,
-            repo,
-            home,
-        }
+        git(&repo, &["init", "-q", "-b", "main"]);
+        git(
+            &repo,
+            &[
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "init",
+            ],
+        );
+        Lab { dir, repo, home }
     }
 
     fn start(&self, args: &[&str]) -> Output {
@@ -363,13 +413,9 @@ impl Lab {
 
     /// Runs flow in the repo with the lab's state.
     fn run(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_flow"))
+        flow_command(&self.home)
             .args(args)
             .current_dir(&self.repo)
-            .env("FLOW_HOME", &self.home)
-            .env("XDG_STATE_HOME", shared(&self.home))
-            .env("FLOW_CONFIG", self.home.join("no-config.toml"))
-            .env_remove("FLOW_ID")
             .output()
             .unwrap()
     }
@@ -385,26 +431,16 @@ impl Lab {
     }
 
     /// `flow server` in the repo, once it listens.
-    fn server(&self) -> std::process::Child {
-        let server = Command::new(env!("CARGO_BIN_EXE_flow"))
+    fn server(&self) -> Running {
+        let server = flow_command(&self.home)
             .arg("server")
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .current_dir(&self.repo)
-            .env("FLOW_HOME", &self.home)
-            .env("XDG_STATE_HOME", shared(&self.home))
-            .env("FLOW_CONFIG", self.home.join("no-config.toml"))
             .spawn()
             .unwrap();
-        let socket = self.home.join("server.sock");
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while std::os::unix::net::UnixStream::connect(&socket).is_err() {
-            assert!(
-                std::time::Instant::now() < deadline,
-                "the server never listened"
-            );
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        }
+        let server = Running(server);
+        wait_for_socket(&self.home.join("server.sock"));
         server
     }
 
@@ -427,9 +463,10 @@ impl Lab {
     fn commit_in(&self, name: &str) {
         let worktree = self.repo.join(".flow/worktrees").join(name);
         fs::write(worktree.join("work.txt"), "done").unwrap();
-        for args in [
-            vec!["add", "work.txt"],
-            vec![
+        git(&worktree, &["add", "work.txt"]);
+        git(
+            &worktree,
+            &[
                 "-c",
                 "user.email=t@t",
                 "-c",
@@ -439,17 +476,7 @@ impl Lab {
                 "-m",
                 "work",
             ],
-        ] {
-            assert!(
-                Command::new("git")
-                    .arg("-C")
-                    .arg(&worktree)
-                    .args(&args)
-                    .status()
-                    .unwrap()
-                    .success()
-            );
-        }
+        );
     }
 
     fn hook(&self, name: &str, script: &str) {
@@ -461,7 +488,6 @@ impl Lab {
 }
 
 fn set_executable(file: &Path) {
-    use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(file, fs::Permissions::from_mode(0o755)).unwrap();
 }
 
@@ -512,7 +538,6 @@ prompt = ""
 resume = ["cat"]"#,
     );
     let mut server = lab.server();
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
 
     let output = lab.start(&["SHOP-217 add CSV export"]);
 
@@ -527,13 +552,11 @@ resume = ["cat"]"#,
             serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
         board["flows"][0]["workspace"]["window"] == "flow-ui"
     };
-    while !hosted() {
-        assert!(
-            std::time::Instant::now() < deadline + std::time::Duration::from_secs(5),
-            "the server never opened the worker"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
+    wait_until(
+        Duration::from_secs(5),
+        "the server never opened the worker",
+        hosted,
+    );
     assert!(lab.run(&["ui", "--stop"]).status.success());
     assert!(server.wait().unwrap().success());
 }
@@ -559,15 +582,9 @@ fn status_says_where_a_flows_code_is_and_whether_its_worktree_is_left() {
         "{ended}"
     );
     assert!(ended.contains("C-space r in flow ui resumes it"), "{ended}");
-    assert!(
-        Command::new("git")
-            .arg("-C")
-            .arg(&lab.repo)
-            .args(["worktree", "remove"])
-            .arg(&worktree)
-            .status()
-            .unwrap()
-            .success()
+    git(
+        &lab.repo,
+        &["worktree", "remove", worktree.to_str().unwrap()],
     );
     let gone = stdout(&lab.run(&["status", "shop-217"]));
     assert!(gone.contains("worktree_exists: false"), "{gone}");
@@ -594,11 +611,9 @@ resume = ["sh", "-c", "echo resumed {{name}} >> {log}; exec cat"]"#,
         lines
     };
     let wait_for = |count: usize| {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while lines().len() < count {
-            assert!(std::time::Instant::now() < deadline, "{:?}", lines());
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
+        wait_until(Duration::from_secs(10), "the agents never all ran", || {
+            lines().len() >= count
+        });
     };
     let mut server = lab.server();
     assert!(lab.start(&["SHOP-1 first"]).status.success());
@@ -621,20 +636,15 @@ resume = ["sh", "-c", "echo resumed {{name}} >> {log}; exec cat"]"#,
 
 /// Runs `flow hook claude-code` with a hook payload on stdin, as Claude Code does.
 fn hook(home: &Path, flow_id: Option<&str>, payload: &str) -> Output {
-    use std::io::Write;
-    let mut command = Command::new(env!("CARGO_BIN_EXE_flow"));
+    let mut command = flow_command(home);
     command
         .args(["hook", "claude-code"])
-        .env("FLOW_HOME", home)
-        .env("XDG_STATE_HOME", shared(home))
-        .env("FLOW_CONFIG", home.join("no-config.toml"))
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-    match flow_id {
-        Some(id) => command.env("FLOW_ID", id),
-        None => command.env_remove("FLOW_ID"),
-    };
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(id) = flow_id {
+        command.env("FLOW_ID", id);
+    }
     let mut child = command.spawn().unwrap();
     child
         .stdin
@@ -704,12 +714,9 @@ fn start_refuses_outside_a_repository() {
     let lab = Lab::new();
     let elsewhere = TempDir::new().unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_flow"))
+    let output = flow_command(&lab.home)
         .args(["start", "x"])
         .current_dir(elsewhere.path())
-        .env("FLOW_HOME", &lab.home)
-        .env("XDG_STATE_HOME", shared(&lab.home))
-        .env("FLOW_CONFIG", lab.home.join("no-config.toml"))
         .output()
         .unwrap();
 
@@ -784,15 +791,12 @@ fn start_says_when_every_slot_is_taken() {
 fn projects_never_share_a_slot_and_show_up_together() {
     let shop = Lab::new();
     let mut api = Lab::new();
-    api.home = shop._dir.path().join("projects/api");
+    api.home = shop.dir.path().join("projects/api");
     let shared_with_shop = |lab: &Lab, args: &[&str]| {
-        Command::new(env!("CARGO_BIN_EXE_flow"))
+        flow_command(&lab.home)
             .args(args)
             .current_dir(&lab.repo)
-            .env("FLOW_HOME", &lab.home)
             .env("XDG_STATE_HOME", shared(&shop.home))
-            .env("FLOW_CONFIG", lab.home.join("no-config.toml"))
-            .env_remove("FLOW_ID")
             .output()
             .unwrap()
     };
@@ -868,12 +872,11 @@ fn clear_tears_down_and_removes_clean_worktrees_but_keeps_uncommitted_work() {
     assert!(!worktrees.join("shop-1").exists());
     assert!(worktrees.join("shop-2").exists());
     assert!(worktrees.join("shop-3").exists());
-    let torn: Vec<String> = fs::read_to_string(lab.repo.join("torn-down"))
+    let mut torn: Vec<String> = fs::read_to_string(lab.repo.join("torn-down"))
         .unwrap()
         .lines()
         .map(String::from)
         .collect();
-    let mut torn = torn;
     torn.sort();
     assert_eq!(torn, vec!["shop-1", "shop-2"]);
     assert_eq!(
@@ -924,18 +927,7 @@ fn start_names_the_branch_after_the_repos_convention() {
         "[branch]\nname = \"{type}/{ticket}-{slug}\"\ntypes = [\"feature\", \"bugfix\"]\n",
     )
     .unwrap();
-    let git = |args: &[&str]| {
-        assert!(
-            Command::new("git")
-                .arg("-C")
-                .arg(&lab.repo)
-                .args(args)
-                .status()
-                .unwrap()
-                .success()
-        )
-    };
-    git(&["branch", "feature/SHOP-2-export-orders"]);
+    git(&lab.repo, &["branch", "feature/SHOP-2-export-orders"]);
 
     let bugfix = lab.start(&["SHOP-1 fix totals", "--type", "bugfix"]);
     let feature = lab.start(&["SHOP-2 export orders"]);
@@ -1069,22 +1061,14 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     assert!(none.status.success());
     assert_eq!(stdout(&none).trim(), "no flow server runs");
 
-    let mut server = Command::new(env!("CARGO_BIN_EXE_flow"))
+    let server = flow_command(home.path())
         .arg("server")
-        .stdout(std::process::Stdio::null())
-        .env("FLOW_HOME", home.path())
-        .env("XDG_STATE_HOME", shared(home.path()))
+        .stdout(Stdio::null())
         .env("FLOW_CONFIG", &config)
         .spawn()
         .unwrap();
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while !socket.exists() {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the server never listened"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(20));
-    }
+    let mut server = Running(server);
+    wait_for_socket(&socket);
 
     let stopped = flow(home.path(), &["ui", "--stop"]);
 
@@ -1189,34 +1173,27 @@ fn send_refuses_what_has_no_worker_to_read_it() {
     assert!(!log.contains("message"), "{log}");
 }
 
-fn waiter(home: &Path, flow_id: Option<&str>, args: &[&str]) -> std::process::Child {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_flow"));
+fn waiter(home: &Path, flow_id: Option<&str>, args: &[&str]) -> Running {
+    let mut command = flow_command(home);
     command
         .arg("wait")
         .args(args)
-        .env("FLOW_HOME", home)
-        .env("XDG_STATE_HOME", shared(home))
-        .env_remove("FLOW_ID")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     if let Some(id) = flow_id {
         command.env("FLOW_ID", id);
     }
-    command.spawn().expect("the flow binary runs")
+    Running(command.spawn().expect("the flow binary runs"))
 }
 
 /// The waiter's exit code, stdout and stderr once it ends; None while it still runs after `limit`.
-fn ended(
-    child: &mut std::process::Child,
-    limit: std::time::Duration,
-) -> Option<(i32, String, String)> {
-    let deadline = std::time::Instant::now() + limit;
-    while std::time::Instant::now() < deadline {
+fn ended(child: &mut Child, limit: Duration) -> Option<(i32, String, String)> {
+    let deadline = Instant::now() + limit;
+    while Instant::now() < deadline {
         if let Some(status) = child.try_wait().unwrap() {
             let mut out = String::new();
             let mut err = String::new();
-            use std::io::Read;
             child
                 .stdout
                 .take()
@@ -1231,7 +1208,7 @@ fn ended(
                 .unwrap();
             return Some((status.code().unwrap_or(-1), out, err));
         }
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        thread::sleep(Duration::from_millis(50));
     }
     None
 }
@@ -1245,13 +1222,13 @@ fn a_workers_wait_ends_with_the_masters_message_once() {
         "shop-217",
         r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
     );
-    let short = std::time::Duration::from_millis(1200);
+    let short = Duration::from_millis(1200);
     let mut first = waiter(home.path(), Some("7f3c"), &[]);
     assert!(ended(&mut first, short).is_none(), "nothing to deliver yet");
 
     flow(home.path(), &["send", "shop-217", "Semicolons."]);
 
-    let (code, out, err) = ended(&mut first, std::time::Duration::from_secs(5)).expect("woken");
+    let (code, out, err) = ended(&mut first, Duration::from_secs(5)).expect("woken");
     assert_eq!(code, 2);
     assert_eq!(out, "");
     assert_eq!(
@@ -1261,11 +1238,10 @@ fn a_workers_wait_ends_with_the_masters_message_once() {
 
     let mut again = waiter(home.path(), Some("7f3c"), &[]);
     assert!(ended(&mut again, short).is_none(), "delivered once only");
-    let mut replacing = waiter(home.path(), Some("7f3c"), &[]);
-    let (code, _, err) = ended(&mut again, std::time::Duration::from_secs(5)).expect("replaced");
+    let replacing = waiter(home.path(), Some("7f3c"), &[]);
+    let (code, _, err) = ended(&mut again, Duration::from_secs(5)).expect("replaced");
     assert_eq!((code, err.as_str()), (0, ""));
-    replacing.kill().unwrap();
-    replacing.wait().unwrap();
+    drop(replacing);
 }
 
 #[test]
@@ -1285,7 +1261,7 @@ fn the_masters_wait_ends_with_the_flows_that_stopped() {
     );
 
     let mut master = waiter(home.path(), None, &["--master"]);
-    let (code, _, err) = ended(&mut master, std::time::Duration::from_secs(6)).expect("woken");
+    let (code, _, err) = ended(&mut master, Duration::from_secs(6)).expect("woken");
 
     assert_eq!(code, 2);
     assert!(
@@ -1297,7 +1273,7 @@ fn the_masters_wait_ends_with_the_flows_that_stopped() {
 
     let mut again = waiter(home.path(), None, &["--master"]);
     assert!(
-        ended(&mut again, std::time::Duration::from_millis(3000)).is_none(),
+        ended(&mut again, Duration::from_secs(3)).is_none(),
         "it saw shop-217 already"
     );
     fs::write(
@@ -1307,7 +1283,7 @@ fn the_masters_wait_ends_with_the_flows_that_stopped() {
             + "\n",
     )
     .unwrap();
-    let (code, _, err) = ended(&mut again, std::time::Duration::from_secs(6)).expect("woken again");
+    let (code, _, err) = ended(&mut again, Duration::from_secs(6)).expect("woken again");
     assert_eq!(code, 2);
     assert!(err.contains("shop-218,idle,auto,Plan is ready."), "{err}");
     assert!(!err.contains("shop-217"), "{err}");
@@ -1318,12 +1294,12 @@ fn a_wait_with_nobody_to_wait_for_ends_quietly() {
     let home = TempDir::new().unwrap();
     let mut nobody = waiter(home.path(), None, &[]);
     assert_eq!(
-        ended(&mut nobody, std::time::Duration::from_secs(3)),
+        ended(&mut nobody, Duration::from_secs(3)),
         Some((0, String::new(), String::new()))
     );
     let mut gone = waiter(home.path(), Some("nope"), &[]);
     assert_eq!(
-        ended(&mut gone, std::time::Duration::from_secs(3)),
+        ended(&mut gone, Duration::from_secs(3)),
         Some((0, String::new(), String::new()))
     );
 }

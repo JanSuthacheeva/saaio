@@ -221,8 +221,6 @@ fn stamp_of(path: &Path) -> Option<Stamp> {
 
 #[cfg(test)]
 mod tests {
-    use std::thread;
-    use std::time::Duration;
 
     use ratatui::style::Style;
     use tempfile::TempDir;
@@ -399,11 +397,11 @@ mod tests {
         assert_eq!(theme.palette.accent, Color::Indexed(3));
         assert!(watch.changed().is_none());
 
-        thread::sleep(Duration::from_millis(10));
-        write(&dir, "themes/noctalia.toml", "[ui]\naccent = 4\n");
+        // A new length, so the change shows on filesystems whose mtimes are a second coarse.
+        write(&dir, "themes/noctalia.toml", "[ui]\naccent = 42\n");
         assert_eq!(
             watch.changed().unwrap().unwrap().palette.accent,
-            Color::Indexed(4)
+            Color::Indexed(42)
         );
 
         fs::remove_file(dir.path().join("theme.toml")).unwrap();
