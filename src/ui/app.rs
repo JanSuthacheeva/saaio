@@ -53,8 +53,8 @@ pub struct App {
     size: Size,
     screen: Screen,
     board: Option<Board>,
-    /// When each flow's state last changed while this UI watched, by id: its row stands out a moment.
-    changed: HashMap<String, u64>,
+    /// When each pane's state last changed while this UI watched: its row stands out a moment.
+    changed: HashMap<PaneKey, u64>,
     panes: Vec<PaneInfo>,
     focus: PaneKey,
     /// The flow whose peek the sidebar shows.

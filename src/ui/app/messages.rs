@@ -28,7 +28,8 @@ impl App {
                     for flow in &board.flows {
                         let was = old.flows.iter().find(|other| other.id == flow.id);
                         if was.is_some_and(|was| was.state != flow.state) {
-                            self.changed.insert(flow.id.clone(), self.now);
+                            self.changed
+                                .insert(PaneKey::Flow(flow.id.clone()), self.now);
                         }
                     }
                 }

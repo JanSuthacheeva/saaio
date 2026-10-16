@@ -141,7 +141,9 @@ impl Sidebar<'_> {
     fn mark(&self, flow: &FlowView) -> Mark {
         if *self.focus == PaneKey::Flow(flow.id.clone()) {
             Mark::Focus
-        } else if self.cursor == Some(flow.id.as_str()) || self.changed.contains_key(&flow.id) {
+        } else if self.cursor == Some(flow.id.as_str())
+            || self.changed.contains_key(&PaneKey::Flow(flow.id.clone()))
+        {
             Mark::Lit
         } else {
             Mark::None
