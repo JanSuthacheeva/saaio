@@ -1,4 +1,4 @@
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 
 /// What raw keyboard and mouse bytes from the real terminal turn into.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -248,11 +248,7 @@ fn route_mouse(
     routed: &mut Vec<Routed>,
     modal: bool,
 ) {
-    let inside = event.col >= pane.x
-        && event.col < pane.x + pane.width
-        && event.row >= pane.y
-        && event.row < pane.y + pane.height;
-    if inside && !modal {
+    if pane.contains(Position::new(event.col, event.row)) && !modal {
         plain.extend_from_slice(
             format!(
                 "\x1b[<{};{};{}{}",

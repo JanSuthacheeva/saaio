@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use ratatui::Frame as TuiFrame;
-use ratatui::layout::{Alignment, Rect};
+use ratatui::layout::{Alignment, Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
@@ -901,8 +901,7 @@ impl App {
         let Some(side) = self.areas().side else {
             return vec![];
         };
-        let inside = col >= side.x && col < side.x + side.width && row >= side.y;
-        if !inside {
+        if !side.contains(Position::new(col, row)) {
             return vec![];
         }
         let theme = Theme::builtin();
