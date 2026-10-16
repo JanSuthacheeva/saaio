@@ -164,17 +164,21 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     }
 }
 
-/// Takes the theme again when its files changed; a broken one keeps the last and says why. True when
-/// something changed on screen.
+/// How a notice about the theme begins.
+const THEME_NOTICE: &str = "theme: ";
+
+/// Takes the theme again when its files changed; a broken one keeps the last and says why until it
+/// reads again. True when something changed on screen.
 fn reload_theme(themes: &mut ThemeWatch, theme: &mut Theme, app: &mut App) -> bool {
     match themes.changed() {
         None => false,
         Some(Ok(loaded)) => {
             *theme = loaded;
+            app.take_back(THEME_NOTICE);
             true
         }
         Some(Err(error)) => {
-            app.say_about_file(format!("theme: {error:#}"));
+            app.say_about_file(format!("{THEME_NOTICE}{error:#}"));
             true
         }
     }

@@ -1,0 +1,18 @@
+# flow ui theme, written by Noctalia on every theme change.
+# State colors stay ANSI, the terminal's own palette, except working: the warm palette has no
+# blue (ANSI blue is the accent), so working takes the flow theme's blue to stay apart.
+extends = "terminal"
+
+[ui]
+background = "{{colors.surface.default.hex}}"
+panel      = "{{colors.surface_container.default.hex}}"
+selection  = "{{colors.surface_container_high.default.hex}}"
+rule       = "{{colors.outline_variant.default.hex}}"
+text       = "{{colors.on_surface.default.hex}}"
+strong     = "{{colors.on_surface.default.hex}}"
+muted      = "{{colors.outline.default.hex | lighten 0.2}}"
+faint      = "{{colors.outline.default.hex}}"
+accent     = "{{colors.primary.default.hex}}"
+
+[state]
+working = "#7aa7ff"
