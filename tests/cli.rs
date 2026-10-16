@@ -827,8 +827,48 @@ fn a_codex_master_records_its_session_and_reports_nothing() {
         "02b2"
     );
     assert!(home.path().join("waits/master.busy").exists());
+    let turn = fs::read_to_string(home.path().join("waits/master.turn")).unwrap();
+    assert!(turn.contains(r#""state":"working""#), "{turn}");
     let log = fs::read_to_string(home.path().join(format!("flows/{id}.jsonl"))).unwrap();
     assert!(!log.contains("02b2"), "{log}");
+}
+
+/// Runs `flow hook claude-code` as the master's pane does.
+fn master_hook(home: &Path, payload: &str) -> Output {
+    let mut command = hook_command(home, &["claude-code"], None);
+    command.env("FLOW_MASTER", "1");
+    feed(command, payload)
+}
+
+#[test]
+fn a_claude_code_master_keeps_where_its_turn_stands() {
+    let home = TempDir::new().unwrap();
+    let turn = home.path().join("waits/master.turn");
+    let prompt = r#"{"hook_event_name":"UserPromptSubmit","prompt":"status?"}"#;
+    let write = r#"{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"x.txt"}}"#;
+    let stop = r#"{"hook_event_name":"Stop","last_assistant_message":"All green."}"#;
+
+    let started = master_hook(home.path(), prompt);
+    assert!(started.status.success());
+    assert!(started.stdout.is_empty() && started.stderr.is_empty());
+    let working = fs::read_to_string(&turn).unwrap();
+    assert!(working.contains(r#""state":"working""#), "{working}");
+
+    master_hook(home.path(), write);
+    assert_eq!(
+        fs::read_to_string(&turn).unwrap(),
+        working,
+        "a tool call while working leaves the file as it was"
+    );
+
+    master_hook(home.path(), stop);
+    let idle = fs::read_to_string(&turn).unwrap();
+    assert!(idle.contains(r#""state":"idle""#), "{idle}");
+    assert!(
+        !home.path().join("flows").exists()
+            || fs::read_dir(home.path().join("flows")).unwrap().count() == 0,
+        "the master reports into no flow"
+    );
 }
 
 #[test]
