@@ -371,7 +371,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 
 ### 2. Library and binary
 - [x] Add `lib.rs` and `cli.rs`: move the module tree to lib.rs and main.rs's handlers into cli.rs as they are; add `cli/env.rs` with `Env` and its methods (`pub use env::Env`) replacing locate_store, load_config, config_dir, env_path, bin_path; `Document::Wake`; main.rs becomes main, env, now_ms, answer, fail; `ui::run` and `server::run` take the clock and the cwd; unit tests for `Env`
-- [ ] Add `deliver.rs` with WorkerNews (News carries messages), worker_news, master_news; wait formats with output::news_for_worker / news_for_master; unit tests on a temp store
+- [x] Add `deliver.rs` with WorkerNews (News carries messages), worker_news, master_news; wait formats with output::news_for_worker / news_for_master; unit tests on a temp store
 
 ### 3. Commands
 - [ ] `cli/commands.rs` with views and no_flow; `home.rs`, `new.rs`, `report.rs` (ReportEvent moves here), `send.rs`, `status.rs`, each with its `Args`; `Command` uses tuple variants for them

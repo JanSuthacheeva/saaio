@@ -14,6 +14,7 @@ pub use env::Env;
 use crate::cli::output::{BranchFate, Document, Failure, Opening, Retired, Setup};
 use crate::client::{self, Client, Closing};
 use crate::config::Config;
+use crate::deliver::{self, WorkerNews};
 use crate::event::{Event, EventKind, LONG_TEXT_LIMIT, Mode, Phase};
 use crate::proto::{ClientMsg, Role};
 use crate::registry::Registry;
@@ -21,18 +22,12 @@ use crate::slots::{Claim, Slots};
 use crate::store::{Store, Waiter};
 use crate::view::FlowView;
 use crate::workspace::Hook;
-use crate::{
-    adapter, branching, fold, launch, registry, server, slots, text, ui, view, wake, workspace,
-};
+use crate::{adapter, branching, fold, launch, registry, server, slots, text, ui, view, workspace};
 
 /// How long `flow remove` and `flow clear` wait for a flow's session to end (SIGKILL comes after 3 s).
 const CLOSE_WAIT: Duration = Duration::from_secs(5);
 /// How often `flow wait` looks for news, as often as the server looks at the store.
 const WAIT_EVERY: Duration = Duration::from_millis(500);
-/// How long the master's wait keeps collecting after the first change, so flows that stop
-/// together wake it once.
-const SETTLE: Duration = Duration::from_secs(2);
-
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -338,12 +333,19 @@ fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
         || store.waiter(waiter) == Some(me) && std::os::unix::process::parent_id() == parent;
     while is_mine() {
         let news = match waiter {
-            Waiter::Flow(id) => match worker_news(store, id, clock()) {
+            Waiter::Flow(id) => match deliver::worker_news(store, id, clock()) {
                 WorkerNews::Gone => return None,
                 WorkerNews::Nothing => None,
-                WorkerNews::News(news) => Some(news),
+                WorkerNews::News(messages) => {
+                    let messages: Vec<&str> = messages.iter().map(String::as_str).collect();
+                    Some(output::news_for_worker(&messages))
+                }
             },
-            Waiter::Master => master_news(store, clock, &is_mine),
+            Waiter::Master => {
+                let changed = deliver::master_news(store, clock, &is_mine);
+                let changed: Vec<&FlowView> = changed.iter().collect();
+                (!changed.is_empty()).then(|| output::news_for_master(&changed))
+            }
         };
         if news.is_some() {
             return news;
@@ -351,51 +353,6 @@ fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
         thread::sleep(WAIT_EVERY);
     }
     None
-}
-
-/// What a worker's waiter finds on one look.
-enum WorkerNews {
-    /// The flow is finished or gone: stop waiting.
-    Gone,
-    Nothing,
-    News(String),
-}
-
-fn worker_news(store: &Store, id: &str, now: u64) -> WorkerNews {
-    let Ok(events) = store.events(id) else {
-        return WorkerNews::Gone;
-    };
-    if fold::fold(id, &events, None, now).is_none_or(|flow| flow.is_finished()) {
-        return WorkerNews::Gone;
-    }
-    let delivered = store.delivered(id);
-    let messages = wake::undelivered(&events, delivered);
-    if messages.is_empty() {
-        return WorkerNews::Nothing;
-    }
-    if store.set_delivered(id, delivered + messages.len()).is_err() {
-        return WorkerNews::Gone;
-    }
-    WorkerNews::News(output::news_for_worker(&messages))
-}
-
-/// The flows that stopped since the master last saw them, collected for SETTLE so several arrive
-/// as one wake.
-fn master_news(store: &Store, clock: fn() -> u64, is_mine: &dyn Fn() -> bool) -> Option<String> {
-    let flows = views(store, clock()).0;
-    let mut seen = store.seen().unwrap_or_else(|| wake::first_seen(&flows));
-    if wake::changed_flows(&flows, &seen).is_empty() {
-        return None;
-    }
-    thread::sleep(SETTLE);
-    let flows = views(store, clock()).0;
-    let changed = wake::changed_flows(&flows, &seen);
-    if changed.is_empty() || !is_mine() {
-        return None;
-    }
-    wake::mark_seen(&mut seen, &changed);
-    store.set_seen(&seen).ok()?;
-    Some(output::news_for_master(&changed))
 }
 
 /// Translates one hook event with the named adapter and appends what changes the flow.

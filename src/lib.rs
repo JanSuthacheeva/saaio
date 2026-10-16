@@ -4,6 +4,7 @@ mod adapter;
 mod branching;
 mod client;
 mod config;
+mod deliver;
 mod event;
 mod fold;
 mod launch;
