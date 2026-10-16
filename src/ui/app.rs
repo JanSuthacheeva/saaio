@@ -1,4 +1,5 @@
 mod board_keys;
+mod chrome;
 mod draw;
 mod effect;
 mod keys;

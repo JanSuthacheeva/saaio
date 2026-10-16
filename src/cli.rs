@@ -2,13 +2,12 @@ mod commands;
 mod env;
 pub mod output;
 
-use clap::{Parser, Subcommand};
-
-use commands::{clear, home, hook, new, remove, report, send, server, start, status, ui, wait};
-
 pub use crate::event::unix_ms;
 pub use env::Env;
 
+use clap::{Parser, Subcommand};
+
+use commands::{clear, home, hook, new, remove, report, send, server, start, status, ui, wait};
 use output::{Document, Failure};
 
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.

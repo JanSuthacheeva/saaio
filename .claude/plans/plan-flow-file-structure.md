@@ -282,8 +282,9 @@ pub fn clock(ms: u64, offset_secs: i64) -> String;
 // app/keys.rs       impl App { on_input, on_command, on_keys, on_key, on_stop_key, on_history_key,
 //                              on_ended_key, on_click, focus, move_cursor, open_new_flow, remove }
 // app/board_keys.rs impl App { on_board_key, on_all_key, on_any_board_key, clear }; board_step
-// app/draw.rs       impl App { draw, draw_board, draw_rule, draw_view, draw_stop, draw_title,
-//                              title_line, border_hint, draw_bar }
+// app/draw.rs       impl App { draw, draw_board, draw_rule, draw_view, draw_stop }
+// app/chrome.rs     impl App { draw_title, title_line, border_hint, draw_bar }   (8.2: draw.rs was
+//                   416 lines; the pane's chrome is its own seam)
 // app/tests.rs      shared fixtures and render helpers; mod panes, sidebar, board, dialogs, golden
 //                   in app/tests/*.rs
 // dialog.rs         pub fn draw_dialog(frame: &mut Frame, pane: Rect, theme: &Theme, title: &str,
@@ -406,7 +407,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 
 ### 8. Rules and docs
 - [x] CLAUDE.md: a Structure section with the rules above, the Architecture list for the new files, Build Commands unchanged; README mentions of moved files
-- [ ] Check every production file against the rules (size, one responsibility, style) and fix what is left
+- [x] Check every production file against the rules (size, one responsibility, style) and fix what is left
 
 ### 9. End to end
 - [ ] Run the before script against the new binary and diff: byte-identical stdout, stderr and exit codes; run `flow ui` against a temp store, start a flow, open the board, the help and the stop dialog, and detach
