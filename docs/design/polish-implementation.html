@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flow ui Polish Implementation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* One reading column (jasu.dev); unit cards hold signatures, call chains pair a sequence diagram with numbered steps. */
+:root {
+  --surface: #f8f9fb; --card: #eceff4; --ink: #2e3440; --muted: #4c566a; --subtle: #d8dee9;
+  --border: #d8dee9; --code-bg: #e5e9f0; --code-ink: #4b6c8a; --block: #2e3440; --block-ink: #eceff4;
+  --accent: #7b5eaf; --link: #4b6c8a; --new: #7b5eaf; --mod: #d08770; --err: #bf616a;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --surface: #2e3440; --card: #3b4252; --ink: #eceff4; --muted: #93b1cc; --subtle: #434c5e;
+  --border: #4c566a; --code-bg: #3b4252; --code-ink: #88c0d0; --block: #3b4252; --block-ink: #eceff4;
+  --accent: #bd93f9; --link: #88c0d0; --new: #bd93f9; --mod: #ebcb8b; --err: #bf616a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--surface); color: var(--ink); font: 18px/1.6 var(--sans); margin: 0; }
+.page { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 48px 72px; }
+.col { max-width: 760px; margin-inline: auto; display: flex; flex-direction: column; gap: 18px; }
+h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+h2 { font-size: 24px; line-height: 1.3; margin: 40px 0 0; text-wrap: balance; }
+h3 { font-size: 19px; margin: 0; font-family: var(--mono); font-weight: 700; overflow-wrap: anywhere; }
+p { margin: 0; }
+.meta { font-size: 13px; color: var(--muted); }
+code { font-family: var(--mono); font-size: 0.8em; background: var(--code-bg); color: var(--code-ink); padding: 0.1em 0.35em; border-radius: 0.2rem; }
+pre { margin: 0; background: var(--block); color: var(--block-ink); border-radius: 6px; padding: 14px 16px; overflow-x: auto; font: 13px/1.55 var(--mono); }
+pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 22px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.tag { font: 600 12px var(--sans); letter-spacing: 0.05em; padding: 1px 9px; border-radius: 99px; align-self: flex-start; }
+.new { background: var(--new); color: var(--surface); } .mod { background: var(--mod); color: #2e3440; }
+.where { font-size: 14px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+ol, ul { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
+ol.steps li, ul.mono li { font: 14px/1.5 var(--mono); overflow-wrap: anywhere; }
+li.err { color: var(--err); }
+figure { margin: 0; display: grid; gap: 6px; }
+figure svg { width: 100%; height: auto; color: var(--ink); }
+figcaption { font-size: 13px; color: var(--muted); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--subtle); font-size: 13px; }
+td code { white-space: nowrap; }
+.toggle { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); background: var(--card); color: var(--ink); border: 1px solid var(--border); border-radius: 99px; font: 600 13px var(--sans); padding: 6px 12px; cursor: pointer; }
+.toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 560px) { .card { padding: 14px; } }
+</style>
+
+<button class="toggle" id="theme" type="button">Dark</button>
+<main class="page"><div class="col">
+  <p class="meta">flow/tui-polish · 2026-10-16 · design-code step 3: review the implementation</p>
+  <h1>flow ui Polish Implementation</h1>
+
+  <h2>1. Decision recap</h2>
+  <p>Approach A: a new <code>ui/focus.rs</code> draws the one focus look (the theme's <code>ui.selection</code> fill plus a <code>▌</code> in its <code>ui.accent</code>, so every theme gets its own matching focus), and a shared <code>Dialog</code> widget in <code>dialog.rs</code> draws every dialog (dim behind, padding, title in the border, keys under a rule). A new <code>ui/hints.rs</code> fits key hints into any width and greys out keys that do nothing. The board's detail panel shows the last answer under the decisions, and the steps move into its header (8a).</p>
+  <p>Decided in review: build all nine findings. The sidebar shows from the start, holding only the master (Solo goes). Focus looks the same everywhere, dialogs included. Findings: <a href="https://claude.ai/artifact/CjhZ1YTchL5zyPfhTDE3mj">review</a>, approaches: <a href="https://claude.ai/artifact/ErKSyoguLZJq5TmPrE6osa">page</a>.</p>
+
+  <h2>2. Structure overview</h2>
+  <figure>
+    <svg viewBox="0 0 720 360" role="img" aria-label="New modules focus, hints and the Dialog widget; sidebar, rail, board and new flow call focus; board, dialogs and new flow call hints; app draw builds every Dialog">
+      <defs><marker id="o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+      <g font-family="ui-monospace, Menlo, monospace" font-size="12" fill="currentColor">
+        <text x="10" y="18" font-size="11" opacity=".7">app (Elm core)</text>
+        <rect x="10" y="26" width="150" height="34" rx="4" fill="none" stroke="var(--mod)" stroke-width="1.5"/><text x="85" y="47" text-anchor="middle">app.rs  folded()</text>
+        <rect x="10" y="72" width="150" height="34" rx="4" fill="none" stroke="var(--mod)" stroke-width="1.5"/><text x="85" y="93" text-anchor="middle">app/draw.rs</text>
+        <rect x="10" y="118" width="150" height="34" rx="4" fill="none" stroke="var(--mod)" stroke-width="1.5"/><text x="85" y="139" text-anchor="middle">app/keys.rs  Rail</text>
+        <text x="200" y="18" font-size="11" opacity=".7">widgets</text>
+        <rect x="200" y="26" width="160" height="34" rx="4" fill="none" stroke="var(--mod)" stroke-width="1.5"/><text x="280" y="47" text-anchor="middle">sidebar (+rows, labels)</text>
+        <rect x="200" y="72" width="160" height="34" rx="4" fill="none" stroke="var(--mod)" stroke-width="1.5"/><text x="280" y="93" text-anchor="middle">rail.rs</text>
+        <rect x="200" y="118" width="160" height="34" rx="4" fill="none" stroke="var(--mod)" stroke-width="1.5"/><text x="280" y="139" text-anchor="middle">board (+cards, detail)</text>
+        <rect x="200" y="164" width="160" height="34" rx="4" fill="none" stroke="var(--mod)" stroke-width="1.5"/><text x="280" y="185" text-anchor="middle">newflow/view.rs</text>
+        <rect x="200" y="210" width="160" height="34" rx="4" fill="none" stroke="var(--mod)" stroke-width="1.5"/><text x="280" y="231" text-anchor="middle">dialog.rs  Dialog</text>
+        <text x="420" y="18" font-size="11" opacity=".7">shared drawing</text>
+        <rect x="420" y="60" width="130" height="40" rx="4" fill="none" stroke="var(--new)" stroke-width="2"/><text x="485" y="85" text-anchor="middle">focus.rs</text>
+        <rect x="420" y="170" width="130" height="40" rx="4" fill="none" stroke="var(--new)" stroke-width="2"/><text x="485" y="195" text-anchor="middle">hints.rs</text>
+        <rect x="590" y="60" width="120" height="40" rx="4" fill="none" stroke="var(--mod)" stroke-width="1.5"/><text x="650" y="85" text-anchor="middle">theme.rs</text>
+        <rect x="590" y="170" width="120" height="40" rx="4" fill="none" stroke="var(--mod)" stroke-width="1.5"/><text x="650" y="195" text-anchor="middle">layout.rs</text>
+        <g stroke="currentColor" stroke-width="1.1" fill="none" marker-end="url(#o)">
+          <line x1="360" y1="43" x2="418" y2="74"/><line x1="360" y1="89" x2="418" y2="82"/><line x1="360" y1="135" x2="418" y2="92"/><line x1="360" y1="181" x2="418" y2="98"/><line x1="360" y1="227" x2="418" y2="100"/>
+          <line x1="360" y1="135" x2="418" y2="182"/><line x1="360" y1="227" x2="418" y2="200"/>
+          <line x1="550" y1="80" x2="588" y2="80"/>
+          <line x1="160" y1="89" x2="198" y2="227"/><line x1="160" y1="43" x2="588" y2="190" stroke-dasharray="4 3"/>
+          <line x1="280" y1="198" x2="280" y2="208"/>
+        </g>
+        <text x="455" y="300" font-size="11">solid: draws with</text>
+        <text x="455" y="316" font-size="11">dashed: RAIL_BELOW</text>
+        <rect x="10" y="290" width="12" height="12" fill="none" stroke="var(--new)" stroke-width="2"/><text x="28" y="300" font-size="11">new</text>
+        <rect x="70" y="290" width="12" height="12" fill="none" stroke="var(--mod)" stroke-width="1.5"/><text x="88" y="300" font-size="11">modified</text>
+      </g>
+    </svg>
+    <figcaption>Two new modules beside the widgets. Every widget marks focus through focus.rs. The board footer and the dialog key row fit through hints.rs. app/draw.rs builds every dialog as a Dialog, and new flow draws its fields inside one.</figcaption>
+  </figure>
+
+  <h2>3. Units</h2>
+
+  <section class="card">
+    <h3>ui/focus.rs</h3>
+    <div class="where"><span class="tag new">new</span> ui widgets' shared drawing</div>
+    <p>Draws the one focus look: where the keys go.</p>
+    <p class="meta">The colors come only from existing tokens. On noctalia that is the <code>#413b38</code> selection with the <code>#cb9168</code> accent. On terminal it is indexed 236 with indexed 173. flow and flow-light get their own pair. A theme file that sets <code>selection</code> or <code>accent</code> changes focus everywhere at once.</p>
+<pre><code>/// Marks `area` as where the keys go: theme.ui.selection over it and theme.glyphs.cursor in
+/// theme.ui.accent down its first column. Drawn after the content, which leaves that column blank.
+pub fn mark(buf: &amp;mut Buffer, area: Rect, theme: &amp;Theme);
+
+/// Lights `area` without claiming the keys: the fill alone, for the peek and a row that just changed.
+pub fn light(buf: &amp;mut Buffer, area: Rect, theme: &amp;Theme);</code></pre>
+  </section>
+
+  <section class="card">
+    <h3>ui/hints.rs</h3>
+    <div class="where"><span class="tag new">new</span> ui widgets' shared drawing</div>
+    <p>Writes a row of key hints that fits its width.</p>
+<pre><code>/// One key and what it does; `active` false draws both faint, for a key that does nothing now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Hint {
+    pub key: &amp;'static str,
+    pub label: Cow&lt;'static, str&gt;,
+    pub active: bool,
+    /// Kept when the row is too narrow: esc and ? stay as the others go.
+    pub kept: bool,
+}
+
+impl Hint {
+    pub fn new(key: &amp;'static str, label: impl Into&lt;Cow&lt;'static, str&gt;&gt;) -> Hint;
+    pub fn inactive(self) -> Hint;
+    pub fn kept(self) -> Hint;
+}
+
+/// The hints that fit `width`, three columns apart: whole hints are dropped from the right, the
+/// kept ones last; never a cut word.
+pub fn line(hints: &amp;[Hint], width: usize, theme: &amp;Theme) -> Line&lt;'static&gt;;</code></pre>
+  </section>
+
+  <section class="card">
+    <h3>ui/dialog.rs</h3>
+    <div class="where"><span class="tag mod">modified</span> replaces <code>draw_dialog</code>, <code>draw_help</code>, <code>draw_not_running</code>, <code>draw_no_session</code></div>
+    <p>Draws every box over a session in one frame.</p>
+<pre><code>/// A box over the session: the screen behind it dimmed, the title in its border, one row and two
+/// columns of padding, and its keys under a rule that joins the border.
+#[derive(Debug)]
+pub struct Dialog&lt;'a&gt; {
+    pub title: &amp;'a str,
+    /// Right of the title in the border, faint: where a new flow starts.
+    pub aside: Option&lt;String&gt;,
+    /// The border's color: rule for a notice, waiting for a question, blocked for a failure.
+    pub border: Style,
+    pub body: Vec&lt;Line&lt;'a&gt;&gt;,
+    /// Rows the body takes beyond its lines, for a widget that draws into it (new flow).
+    pub body_rows: u16,
+    pub body_width: u16,
+    pub keys: Vec&lt;Hint&gt;,
+    pub theme: &amp;'a Theme,
+}
+
+impl Dialog&lt;'_&gt; {
+    /// The box centered in `area`, a little above the middle, clamped to it.
+    pub fn area(&amp;self, area: Rect) -> Rect;
+    /// Where the body goes inside `area(area)`: inside the padding, above the key rule.
+    pub fn body_area(&amp;self, area: Rect) -> Rect;
+}
+
+impl Widget for Dialog&lt;'_&gt; { fn render(self, area: Rect, buf: &amp;mut Buffer); }
+
+/// Every key behind C-space.
+pub fn help(theme: &amp;Theme) -> Dialog&lt;'static&gt;;
+/// A pane whose process is gone: for a worker (its name) what to do with its flow, else the master.
+pub fn not_running(status: &amp;PaneStatus, worker: Option&lt;&amp;str&gt;, theme: &amp;Theme) -> Option&lt;Dialog&lt;'static&gt;&gt;;
+/// A worker pane flow ui has no session for.
+pub fn no_session(theme: &amp;Theme) -> Dialog&lt;'static&gt;;</code></pre>
+    <p class="meta"><code>render</code> dims all of <code>buf.area</code>, the whole frame, so no caller dims for itself. That replaces <code>app/draw.rs:154</code>.</p>
+  </section>
+
+  <section class="card">
+    <h3>ui/app.rs</h3>
+    <div class="where"><span class="tag mod">modified</span> Elm core state</div>
+<pre><code>// field: rail: bool  becomes
+/// The sidebar folded to a rail: Some once C-space b chose, None follows the width (RAIL_BELOW).
+rail: Option&lt;bool&gt;,
+
+/// Whether the rail shows instead of the sidebar: the user's choice, else a narrow terminal.
+fn folded(&amp;self) -> bool;
+
+/// The sidebar or rail, from the start: the master has its row even before there are workers.
+pub fn areas(&amp;self) -> Areas;   // no Chrome::Solo</code></pre>
+  </section>
+
+  <section class="card">
+    <h3>ui/app/draw.rs · ui/app/chrome.rs · ui/app/keys.rs</h3>
+    <div class="where"><span class="tag mod">modified</span> view and keys</div>
+<pre><code>// draw.rs: every dialog is a Dialog rendered over areas.session()
+fn draw_view(&amp;self, frame: &amp;mut Frame, areas: &amp;Areas, theme: &amp;Theme);
+/// The stop question, or the flows it would leave unfinished with keep, end and esc as keys.
+fn stop_dialog&lt;'a&gt;(&amp;'a self, theme: &amp;'a Theme, unfinished: &amp;[String]) -> Dialog&lt;'a&gt;;
+/// The scrollback hint along the pane's last row, fitted by hints::line.
+fn draw_history(&amp;self, frame: &amp;mut Frame, pane: Rect, back: u32, theme: &amp;Theme);
+
+// chrome.rs: draw_bar goes; title_line drops the needs-you bar (the glyph says it)
+fn title_line(&amp;self, theme: &amp;Theme, width: u16, right: usize) -> Line&lt;'static&gt;;
+
+// keys.rs: Command::Rail sets self.rail = Some(!self.folded())</code></pre>
+  </section>
+
+  <section class="card">
+    <h3>ui/layout.rs</h3>
+    <div class="where"><span class="tag mod">modified</span></div>
+<pre><code>/// Below this many columns the sidebar folds to the rail until C-space b says otherwise.
+pub const RAIL_BELOW: u16 = 110;
+
+pub enum Chrome { Sidebar, Rail }          // Solo removed
+pub struct Areas { title, pane, rule, side } // bar removed; rule and side are no longer Option</code></pre>
+  </section>
+
+  <section class="card">
+    <h3>ui/sidebar.rs · sidebar/rows.rs · sidebar/labels.rs</h3>
+    <div class="where"><span class="tag mod">modified</span></div>
+<pre><code>/// How a row stands out: focused (fill and bar), lit (fill: the peek, a state that just changed).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Mark { None, Lit, Focus }
+
+pub(super) struct Row { pub line: Line&lt;'static&gt;, pub key: Option&lt;PaneKey&gt;, pub mark: Mark }
+
+/// Under the master while there are no workers: "no workers yet" and C-space n.
+fn empty_rows(&amp;self) -> Vec&lt;Row&gt;;
+
+// rows.rs: the lead is always one blank column (focus::mark draws the bar into it);
+//   the second row's right column is tasks only; a finished flow says "took 2h";
+//   the peek's hint reads "C-space enter jump in".
+// labels.rs steps(): done steps and reached joins in ui.text, the current one in the state's
+//   color, open ones faint; finished flows draw every step in ui.text.</code></pre>
+  </section>
+
+  <section class="card">
+    <h3>ui/rail.rs</h3>
+    <div class="where"><span class="tag mod">modified</span></div>
+    <p>The focused row, the master included, is marked with <code>focus::mark</code>. The master's <code>0</code> is no longer always in accent.</p>
+  </section>
+
+  <section class="card">
+    <h3>ui/board.rs · board/cards.rs · board/detail.rs</h3>
+    <div class="where"><span class="tag mod">modified</span></div>
+<pre><code>// board.rs
+/// Its keys for the selected card: those that do nothing for it drawn inactive, fitted to `width`.
+fn footer(&amp;self, width: usize) -> Line&lt;'static&gt;;
+fn header(&amp;self, width: usize) -> Line&lt;'static&gt;;   // "1 session", "N sessions"
+
+// cards.rs
+/// The first row carries the state label through fit::split: the name is cut with … and two
+/// columns stay between them.
+fn flow_card(&amp;self, flow: &amp;FlowView, number: Option&lt;usize&gt;, width: usize) -> [Line&lt;'static&gt;; 4];
+fn master_card(&amp;self, width: usize) -> [Line&lt;'static&gt;; 4];       // "no workers yet" at 0
+/// The selected card gets focus::mark over its rect instead of the accent border; the body
+/// keeps its place.
+fn render_card(&amp;self, flow: Option&lt;&amp;FlowView&gt;, number: Option&lt;usize&gt;, selected: bool, rect: Rect, buf: &amp;mut Buffer);
+// a blocker and a waiting question are both ui.text; " · guided" only when it fits;
+// ages read "3m", as in the sidebar.
+
+// detail.rs
+/// Header (name and facts), the steps under it, a rule, then the timeline beside the answer.
+pub(super) fn render_detail(&amp;self, area: Rect, buf: &amp;mut Buffer);
+/// DECISIONS, then LAST ANSWER: the flow's closing message wrapped, its end kept when it is long.
+fn render_answer(&amp;self, flow: &amp;FlowView, area: Rect, buf: &amp;mut Buffer);   // was render_facts
+// render_master_detail: "no workers yet  n starts a flow" when there are none.</code></pre>
+  </section>
+
+  <section class="card">
+    <h3>ui/newflow/view.rs · ui/newflow.rs</h3>
+    <div class="where"><span class="tag mod">modified</span></div>
+<pre><code>impl Widget for NewFlowView&lt;'_&gt; {
+    /// A Dialog (title "new flow" or "new session", aside "in ~/shop", keys enter, tab, esc)
+    /// with its fields drawn into the body; the focused field gets focus::mark.
+    fn render(self, area: Rect, buf: &amp;mut Buffer);
+}
+impl NewFlowView&lt;'_&gt; {
+    /// The NewFlowForm as a Dialog, so the view and the cursor agree on where the body is.
+    fn dialog(&amp;self) -> Dialog&lt;'_&gt;;
+    /// "(•)" in ui.strong; in the focused row the chosen option is reversed.
+    fn radio(&amp;self, field: Field, on: bool, label: &amp;str) -> Vec&lt;Span&lt;'static&gt;&gt;;
+}
+// newflow.rs: dialog_area goes; cursor() takes the body from Dialog::body_area.
+pub fn cursor(&amp;self, body: Rect) -> Option&lt;(u16, u16)&gt;;</code></pre>
+    <p class="meta">The text box keeps a rule-colored rounded border in every state. With focus it gets the fill and the bar, and the cursor shows.</p>
+  </section>
+
+  <section class="card">
+    <h3>ui/theme.rs</h3>
+    <div class="where"><span class="tag mod">modified</span></div>
+<pre><code>impl Theme {
+    /// A section's heading: its name in capitals, faint, as the sidebar's NEEDS YOU.
+    pub fn heading(&amp;self, text: &amp;str) -> Span&lt;'static&gt;;
+}</code></pre>
+    <p class="meta">There are no new tokens and no new theme keys. Focus is <code>ui.selection</code> plus <code>ui.accent</code>, lit rows are <code>ui.selection</code> alone, and dialog borders are <code>ui.rule</code>, <code>state.waiting</code> or <code>state.blocked</code>. Each built-in theme and each theme file therefore gets a focus in its own colors. A test renders <code>focus::mark</code> under all three built-in palettes and checks that the cell colors equal that palette's selection and accent.</p>
+  </section>
+
+  <h2>4. Data</h2>
+  <div class="scroll"><table>
+    <tr><th>Type</th><th>Fields</th><th>Crosses</th></tr>
+    <tr><td><code>Hint</code></td><td>key, label, active, kept</td><td>widgets to hints::line, inside flow ui</td></tr>
+    <tr><td><code>Dialog</code></td><td>title, aside, border, body, body_rows, body_width, keys, theme</td><td>app/draw.rs and newflow to the frame buffer</td></tr>
+    <tr><td><code>sidebar::Mark</code></td><td>None | Lit | Focus</td><td>rows to Sidebar::render and Rail::render</td></tr>
+    <tr><td><code>App.rail</code></td><td><code>bool</code> to <code>Option&lt;bool&gt;</code></td><td>inside App</td></tr>
+    <tr><td><code>Chrome</code>, <code>Areas</code></td><td>Solo and bar removed</td><td>layout to App</td></tr>
+  </table></div>
+  <p class="meta">Nothing stored changes. The <code>--json</code> contract, theme files and key bindings stay the same.</p>
+
+  <h2>5. Call chains</h2>
+
+  <section class="card">
+    <h3>Redraw: the focused sidebar row</h3>
+    <figure>
+      <svg viewBox="0 0 700 230" role="img" aria-label="App draw calls Sidebar render, which builds rows with a Mark, writes each line, then calls focus mark for the focused row">
+        <defs><marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g font-family="ui-monospace, Menlo, monospace" font-size="12" fill="currentColor">
+          <text x="70" y="20" text-anchor="middle">App</text><text x="250" y="20" text-anchor="middle">Sidebar</text><text x="440" y="20" text-anchor="middle">Buffer</text><text x="620" y="20" text-anchor="middle">focus</text>
+          <g stroke="currentColor" stroke-dasharray="3 4" opacity=".4"><line x1="70" y1="28" x2="70" y2="220"/><line x1="250" y1="28" x2="250" y2="220"/><line x1="440" y1="28" x2="440" y2="220"/><line x1="620" y1="28" x2="620" y2="220"/></g>
+          <g stroke="currentColor" stroke-width="1.2" marker-end="url(#s)"><line x1="70" y1="55" x2="248" y2="55"/><line x1="250" y1="95" x2="438" y2="95"/><line x1="250" y1="135" x2="618" y2="135"/><line x1="620" y1="175" x2="442" y2="175"/></g>
+          <path d="M250,62 h30 v14 h-28" fill="none" stroke="currentColor" marker-end="url(#s)"/>
+          <text x="160" y="48" text-anchor="middle" font-size="11">render(side, buf)</text>
+          <text x="290" y="72" font-size="11">rows(): Row { mark }</text>
+          <text x="345" y="88" text-anchor="middle" font-size="11">set_line</text>
+          <text x="435" y="128" text-anchor="middle" font-size="11">mark(buf, row, theme)</text>
+          <text x="530" y="168" text-anchor="middle" font-size="11">fill + ▌</text>
+        </g>
+      </svg>
+      <figcaption>The content goes in first, then focus paints over it: the fill under every cell and the bar into the blank first column.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li>App::draw -> Sidebar::render(side, buf)</li>
+      <li>Sidebar::render -> Sidebar::rows(height): Vec&lt;Row&gt;; the focused flow's rows get Mark::Focus, the peek's and a changed flow's Mark::Lit</li>
+      <li>Sidebar::render -> Buffer::set_line(x, y, &amp;row.line, width) for each row</li>
+      <li>Sidebar::render -> focus::mark(buf, row_rect, theme) for Mark::Focus, focus::light(buf, row_rect, theme) for Mark::Lit</li>
+      <li class="err">No board yet: rows() still has the header and master rows plus empty_rows(), never an empty sidebar.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h3>C-space ?: a dialog</h3>
+    <figure>
+      <svg viewBox="0 0 700 230" role="img" aria-label="The key sets View Help; draw view builds dialog help and renders it, which dims the buffer, frames the box and fits keys with hints line">
+        <defs><marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g font-family="ui-monospace, Menlo, monospace" font-size="12" fill="currentColor">
+          <text x="70" y="20" text-anchor="middle">App</text><text x="250" y="20" text-anchor="middle">dialog</text><text x="440" y="20" text-anchor="middle">Dialog</text><text x="620" y="20" text-anchor="middle">hints</text>
+          <g stroke="currentColor" stroke-dasharray="3 4" opacity=".4"><line x1="70" y1="28" x2="70" y2="220"/><line x1="250" y1="28" x2="250" y2="220"/><line x1="440" y1="28" x2="440" y2="220"/><line x1="620" y1="28" x2="620" y2="220"/></g>
+          <g stroke="currentColor" stroke-width="1.2" marker-end="url(#d)"><line x1="70" y1="70" x2="248" y2="70"/><line x1="250" y1="90" x2="72" y2="90"/><line x1="70" y1="120" x2="438" y2="120"/><line x1="440" y1="175" x2="618" y2="175"/></g>
+          <path d="M70,36 h30 v14 h-28" fill="none" stroke="currentColor" marker-end="url(#d)"/>
+          <path d="M440,130 h30 v14 h-28" fill="none" stroke="currentColor" marker-end="url(#d)"/>
+          <text x="110" y="45" font-size="11">on_command(Help): view = Help</text>
+          <text x="160" y="64" text-anchor="middle" font-size="11">help(theme)</text>
+          <text x="160" y="104" text-anchor="middle" font-size="11">Dialog</text>
+          <text x="255" y="114" text-anchor="middle" font-size="11">render_widget(dialog, session)</text>
+          <text x="480" y="140" font-size="11">dim, clear, frame, body</text>
+          <text x="530" y="168" text-anchor="middle" font-size="11">line(keys, width)</text>
+        </g>
+      </svg>
+      <figcaption>Every dialog takes this path: help, stop, confirm, not running, no session. New flow builds its Dialog in its own view.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li>App::on_input(Routed::Command(Help)) -> App::on_command: view = View::Help</li>
+      <li>App::draw -> App::draw_view(frame, &amp;areas, theme)</li>
+      <li>App::draw_view -> dialog::help(theme): Dialog</li>
+      <li>App::draw_view -> Frame::render_widget(dialog, areas.session())</li>
+      <li>Dialog::render -> Buffer::set_style(buf.area, Modifier::DIM); Clear; frame with title; body lines inside the padding</li>
+      <li>Dialog::render -> hints::line(&amp;keys, inner_width, theme): Line, under a ├─┤ rule</li>
+      <li class="err">Too small a terminal: Dialog::area clamps to the area; body lines that do not fit are left out, and the keys row goes before the body does.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h3>The board at any width</h3>
+    <ol class="steps">
+      <li>App::draw -> App::draw_board -> BoardView::render(screen, buf)</li>
+      <li>BoardView::render -> BoardView::header(width): "1 session" / "N sessions"</li>
+      <li>BoardView::render -> render_cards -> render_card(flow, number, selected, rect, buf)</li>
+      <li>render_card -> flow_card(flow, number, width) -> fit::split(left, [gap, state_label], width): the name cut with … before the label</li>
+      <li>render_card -> focus::mark(buf, rect, theme) when selected</li>
+      <li>BoardView::render -> render_detail -> header, Sidebar::steps line, rule -> render_timeline(left) and render_answer(right)</li>
+      <li>render_answer -> fit::wrap(answer, width): the last rows that fit, under the DECISIONS heading when there are decisions</li>
+      <li>BoardView::render -> footer(width) -> hints::line(&amp;hints, width, theme); "x clear finished flow" inactive unless the selected card is a finished flow, "0-9 select" and "h j k l" inactive with one card</li>
+      <li class="err">An inactive key pressed anyway: on_board_key keeps today's notice ("only a finished flow can be cleared") and does nothing else.</li>
+      <li class="err">No answer yet: render_answer shows only the decisions, or nothing, and the timeline keeps its column.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h3>Tab in new flow</h3>
+    <ol class="steps">
+      <li>App::on_input(Routed::View(keys)) -> NewFlowForm::on_key(Key::Tab): field = Agent</li>
+      <li>App::draw_view -> Frame::render_widget(NewFlowView, areas.session())</li>
+      <li>NewFlowView::render -> NewFlowView::dialog(): Dialog -> Widget::render (dim, frame, keys)</li>
+      <li>NewFlowView::render -> Dialog::body_area(area): Rect -> request box, agent_row, mode_row, creates into it</li>
+      <li>NewFlowView::render -> focus::mark(buf, agent_row_rect, theme); radio() reverses the chosen agent in that row</li>
+      <li>App::draw_view -> NewFlowForm::cursor(body): None while the agent row has focus, so no cursor shows</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h3>Resize to 96 columns, then C-space b</h3>
+    <ol class="steps">
+      <li>ui loop -> App::on_resize(size): self.size = size</li>
+      <li>App::on_resize -> App::areas() -> App::folded(): rail is None and 96 &lt; RAIL_BELOW, so Chrome::Rail</li>
+      <li>App::on_resize -> Effect::Send(ClientMsg::Resize(areas.pane_size())): the agent gets 88 columns instead of 54</li>
+      <li>C-space b -> App::on_command(Rail): rail = Some(!folded()) = Some(false): the sidebar comes back and stays until the next C-space b</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h3>The first worker starts</h3>
+    <ol class="steps">
+      <li>Server -> App::on_server(Board): board with one worker</li>
+      <li>App::areas(): unchanged Chrome::Sidebar, so the pane keeps its size and no Resize is sent</li>
+      <li>Sidebar::rows: empty_rows() gives way to the NEEDS YOU / RUNNING blocks</li>
+    </ol>
+  </section>
+
+  <h2>6. Conventions followed</h2>
+  <ul>
+    <li>Noun modules with one job: <code>focus.rs</code> and <code>hints.rs</code>, like <code>fit.rs</code> (text in columns) and <code>rail.rs</code>. Functions don't repeat the module name: <code>focus::mark</code>, <code>hints::line</code> (CLAUDE.md, Structure).</li>
+    <li>Widgets as structs with <code>impl Widget</code>, like <code>Sidebar</code> (<code>sidebar.rs:168</code>) and <code>NewFlowView</code> (<code>newflow/view.rs:25</code>). <code>Dialog</code> is one too.</li>
+    <li>Left and right on one row through <code>fit::split</code> (<code>fit.rs:5</code>), as the sidebar's rows already do (<code>sidebar/rows.rs:126</code>). Cards stop painting over it with <code>set_span</code>.</li>
+    <li>App stays I/O free. <code>folded()</code> is a query like <code>areas()</code> (<code>app.rs:156</code>), and the resize effect is the one <code>on_resize</code> already sends (<code>messages.rs:161</code>).</li>
+    <li>The look is pinned by golden files, rewritten with <code>FLOW_UPDATE_GOLDEN=1</code> (<code>app/tests/golden.rs:6</code>) and read line by line in review.</li>
+    <li>Deviation: <code>Dialog::render</code> dims the whole buffer rather than its area. A widget normally draws only into its area, but the dim is the point of a modal, and doing it here keeps every caller from repeating it.</li>
+  </ul>
+
+  <h2>7. Test seams</h2>
+  <ul>
+    <li><code>focus</code>: unit tests on a <code>Buffer</code>: fill on every cell, bar only in column 0, symbols kept, and colors taken from the palette for terminal, flow and flow-light.</li>
+    <li><code>hints</code>: unit tests: everything fits; drops from the right; kept hints last; inactive drawn faint; never a cut word; zero width.</li>
+    <li><code>Dialog</code>: unit tests for <code>area</code> and <code>body_area</code> (padding, clamping), and that the rule joins the border with ├ ┤.</li>
+    <li><code>layout</code>: existing tests without Solo; <code>App::folded</code> in <code>app/tests/panes.rs</code>, both width and the C-space b override.</li>
+    <li><code>cards</code>: a name cut before its label at 30 columns; mode dropped when it does not fit; blocker in text style.</li>
+    <li><code>detail</code>: the answer's end kept; no answer, no heading; steps under the header.</li>
+    <li><code>sidebar</code>: Mark per row (focus, peek, changed); took 2h; tasks-only column; empty rows with no workers.</li>
+    <li>Golden: every view rewritten and checked by eye, plus new <code>narrow-board</code> (96 columns), <code>empty-board</code>, <code>new-flow-agent</code> (focus on agent) and <code>stop-unfinished</code>.</li>
+    <li>E2E: a scratch <code>FLOW_HOME</code> in a separate tmux server at 150×44 and 96×30, the same screens as the review, compared by eye.</li>
+  </ul>
+
+  <h2>8. Assumptions</h2>
+  <ol>
+    <li>The rail threshold is 110 columns. Below it the agent gets 88 columns instead of 54 at 96 wide.</li>
+    <li>C-space b overrides the width until the next C-space b. A resize does not reset the choice.</li>
+    <li>The peek and a just-changed row get the fill without the bar (<code>focus::light</code>). Only one row ever has the bar.</li>
+    <li>The title row's needs-you bar goes, because the state glyph next to the name already says it.</li>
+    <li>Ages read <code>3m</code> on cards as in the sidebar, and finished flows read <code>took 2h</code>.</li>
+    <li>Every dialog border is in rule color, except a question (waiting) and a failure (blocked). The title sits in the border.</li>
+    <li>The last answer shows its end when it is too long, because the end is usually the question or the result.</li>
+    <li>The rail drops the master's always-accent <code>0</code> and marks it like any focused row.</li>
+  </ol>
+
+  <h2>9. Open questions</h2>
+  <ol>
+    <li><strong>Inactive keys:</strong> do they stay visible in faint, so nothing moves, or go away? I recommend faint, as gitui does. The review said the same.</li>
+    <li><strong>The board card frame:</strong> with the accent box gone, the selected card is a filled block with a bar. Should unselected cards keep a faint rounded box so the grid still reads as cards? I recommend no box. The fill makes the selected card clear, and the empty space already separates the cards.</li>
+  </ol>
+</div></main>
+<script>
+(function () {
+  var root = document.documentElement, btn = document.getElementById("theme");
+  function set(t) { root.setAttribute("data-theme", t); btn.textContent = t === "dark" ? "Light" : "Dark"; try { localStorage.setItem("theme", t); } catch (e) {} }
+  var saved = null; try { saved = localStorage.getItem("theme"); } catch (e) {}
+  set(saved === "dark" ? "dark" : "light");
+  btn.addEventListener("click", function () { set(root.getAttribute("data-theme") === "dark" ? "light" : "dark"); });
+})();
+</script>
+
+</html>

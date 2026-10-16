@@ -357,5 +357,5 @@ The first worker starts:
 
 ### Finish
 
-- [ ] Copy the approaches and implementation pages to `docs/design/polish-approaches.html` and `docs/design/polish-implementation.html`; update CLAUDE.md's ui module list for focus.rs and hints.rs
+- [x] Copy the approaches and implementation pages to `docs/design/polish-approaches.html` and `docs/design/polish-implementation.html`; update CLAUDE.md's ui module list for focus.rs and hints.rs
 - [ ] End-to-end: build, run flow ui on a scratch FLOW_HOME in a separate tmux server at 150x44 and 96x30 with stand-in workers, capture every screen from the review and compare by eye under noctalia and the terminal theme; clippy and fmt clean
