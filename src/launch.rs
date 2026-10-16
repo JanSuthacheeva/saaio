@@ -215,11 +215,10 @@ pub fn ticket(request: &str) -> Option<&str> {
 
 /// Up to five lowercase words of the request after its ticket key, joined by dashes; empty when none.
 pub fn slug(request: &str) -> String {
-    let rest = match ticket(request) {
-        Some(key) => request.trim_start()[key.len()..].to_string(),
-        None => request.to_string(),
-    };
-    words(&rest, 5).join("-")
+    let rest = ticket(request)
+        .and_then(|key| request.trim_start().strip_prefix(key))
+        .unwrap_or(request);
+    words(rest, 5).join("-")
 }
 
 /// The request's ticket key lowercased, for a flow's name.

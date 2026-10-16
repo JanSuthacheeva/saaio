@@ -3,7 +3,7 @@ use std::fmt;
 use serde::Serialize;
 
 use crate::client::Closing;
-use crate::event::Mode;
+use crate::event::{Mode, Phase};
 use crate::view::{Board, FlowView, Projects, State, Workspace};
 
 pub const DESCRIPTION: &str =
@@ -125,9 +125,9 @@ struct ListDocument<'a> {
     description: Option<&'a str>,
     count: usize,
     needs_you: usize,
-    flows: FlowRows,
+    flows: FlowRows<'a>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    blockers: Vec<BlockerRow>,
+    blockers: Vec<BlockerRow<'a>>,
     #[serde(skip_serializing_if = "<[String]>::is_empty")]
     warnings: &'a [String],
     help: Vec<String>,
@@ -135,23 +135,23 @@ struct ListDocument<'a> {
 
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
-enum FlowRows {
+enum FlowRows<'a> {
     None(&'static str),
-    Rows(Vec<FlowRow>),
+    Rows(Vec<FlowRow<'a>>),
 }
 
 #[derive(Debug, Serialize)]
-struct FlowRow {
-    name: String,
+struct FlowRow<'a> {
+    name: &'a str,
     state: &'static str,
-    phase: String,
+    phase: &'static str,
     tasks: String,
     age: String,
 }
 
 #[derive(Debug, Serialize)]
-struct BlockerRow {
-    name: String,
+struct BlockerRow<'a> {
+    name: &'a str,
     blocker: String,
 }
 
@@ -164,12 +164,9 @@ fn list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool) -> Do
                 .flows
                 .iter()
                 .map(|flow| FlowRow {
-                    name: flow.name.clone(),
+                    name: &flow.name,
                     state: flow.state.name(),
-                    phase: flow
-                        .phase
-                        .map(|phase| phase.name().to_string())
-                        .unwrap_or_default(),
+                    phase: flow.phase.map_or("", Phase::name),
                     tasks: flow
                         .tasks
                         .map(|tasks| tasks.to_string())
@@ -185,7 +182,7 @@ fn list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool) -> Do
         .filter(|flow| flow.needs_you())
         .filter_map(|flow| {
             flow.blocker.as_ref().map(|blocker| BlockerRow {
-                name: flow.name.clone(),
+                name: &flow.name,
                 blocker: truncated(blocker, LIST_TEXT_LIMIT, full),
             })
         })
@@ -215,32 +212,32 @@ pub fn status_all(projects: &Projects, warnings: &[String], full: bool) -> Docum
     struct AllDocument<'a> {
         count: usize,
         needs_you: usize,
-        flows: AllRows,
+        flows: AllRows<'a>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
-        blockers: Vec<AllBlockerRow>,
+        blockers: Vec<AllBlockerRow<'a>>,
         #[serde(skip_serializing_if = "<[String]>::is_empty")]
         warnings: &'a [String],
         help: Vec<String>,
     }
     #[derive(Serialize)]
     #[serde(untagged)]
-    enum AllRows {
+    enum AllRows<'a> {
         None(&'static str),
-        Rows(Vec<AllRow>),
+        Rows(Vec<AllRow<'a>>),
     }
     #[derive(Serialize)]
-    struct AllRow {
-        project: String,
-        name: String,
+    struct AllRow<'a> {
+        project: &'a str,
+        name: &'a str,
         state: &'static str,
-        phase: String,
+        phase: &'static str,
         tasks: String,
         age: String,
     }
     #[derive(Serialize)]
-    struct AllBlockerRow {
-        project: String,
-        name: String,
+    struct AllBlockerRow<'a> {
+        project: &'a str,
+        name: &'a str,
         blocker: String,
     }
 
@@ -257,14 +254,11 @@ pub fn status_all(projects: &Projects, warnings: &[String], full: bool) -> Docum
         .collect();
     let rows = flows
         .iter()
-        .map(|(project, flow)| AllRow {
-            project: project.to_string(),
-            name: flow.name.clone(),
+        .map(|&(project, flow)| AllRow {
+            project,
+            name: &flow.name,
             state: flow.state.name(),
-            phase: flow
-                .phase
-                .map(|phase| phase.name().to_string())
-                .unwrap_or_default(),
+            phase: flow.phase.map_or("", Phase::name),
             tasks: flow
                 .tasks
                 .map(|tasks| tasks.to_string())
@@ -275,10 +269,10 @@ pub fn status_all(projects: &Projects, warnings: &[String], full: bool) -> Docum
     let blockers = flows
         .iter()
         .filter(|(_, flow)| flow.needs_you())
-        .filter_map(|(project, flow)| {
+        .filter_map(|&(project, flow)| {
             flow.blocker.as_ref().map(|blocker| AllBlockerRow {
-                project: project.to_string(),
-                name: flow.name.clone(),
+                project,
+                name: &flow.name,
                 blocker: truncated(blocker, LIST_TEXT_LIMIT, full),
             })
         })
@@ -367,7 +361,7 @@ pub fn status_detail(
         request: cut(&flow.request),
         mode: flow.mode.name(),
         state: flow.state.name(),
-        phase: flow.phase.map(|phase| phase.name()),
+        phase: flow.phase.map(Phase::name),
         blocker: flow.blocker.as_deref().map(cut),
         delegate: flow.delegate.as_deref().map(cut),
         tasks: flow.tasks.map(|tasks| tasks.to_string()),
@@ -530,7 +524,7 @@ pub fn reported(flow: &FlowView) -> Document {
     Document::Toon(toon(&Reported {
         flow: &flow.name,
         state: flow.state.name(),
-        phase: flow.phase.map(|phase| phase.name()),
+        phase: flow.phase.map(Phase::name),
         help: vec![next],
     }))
 }
@@ -590,11 +584,11 @@ pub fn news_for_master(flows: &[&FlowView]) -> String {
     }
     help.push("`flow status <name> --full` shows its whole last answer");
     let says = |flow: &FlowView| {
-        let text = flow.blocker.clone().unwrap_or_else(|| {
+        let text = flow.blocker.as_deref().unwrap_or_else(|| {
             let last = flow.timeline.last().map_or("", |entry| entry.text.as_str());
-            last.strip_prefix("idle: ").unwrap_or(last).to_string()
+            last.strip_prefix("idle: ").unwrap_or(last)
         });
-        truncated(&text, LIST_TEXT_LIMIT, false)
+        truncated(text, LIST_TEXT_LIMIT, false)
     };
     toon(&News {
         changed: flows
