@@ -86,41 +86,105 @@ impl Palette {
         }
     }
 
-    /// The color of one key ("accent", "working", ...); None for a key flow does not know.
-    pub fn get(&self, key: &str) -> Option<Color> {
-        let mut copy = *self;
-        Self::slot(&mut copy, key).copied()
-    }
-
-    /// Sets one key; false for a key flow does not know.
-    pub fn set(&mut self, key: &str, color: Color) -> bool {
-        match Self::slot(self, key) {
-            Some(slot) => {
-                *slot = color;
-                true
-            }
-            None => false,
+    pub fn color(&self, key: PaletteKey) -> Color {
+        match key {
+            PaletteKey::Background => self.background,
+            PaletteKey::Panel => self.panel,
+            PaletteKey::Selection => self.selection,
+            PaletteKey::Rule => self.rule,
+            PaletteKey::Text => self.text,
+            PaletteKey::Strong => self.strong,
+            PaletteKey::Muted => self.muted,
+            PaletteKey::Faint => self.faint,
+            PaletteKey::Accent => self.accent,
+            PaletteKey::Working => self.working,
+            PaletteKey::Waiting => self.waiting,
+            PaletteKey::Blocked => self.blocked,
+            PaletteKey::Done => self.done,
+            PaletteKey::Ended => self.ended,
         }
     }
 
-    fn slot<'a>(palette: &'a mut Palette, key: &str) -> Option<&'a mut Color> {
-        Some(match key {
-            "background" => &mut palette.background,
-            "panel" => &mut palette.panel,
-            "selection" => &mut palette.selection,
-            "rule" => &mut palette.rule,
-            "text" => &mut palette.text,
-            "strong" => &mut palette.strong,
-            "muted" => &mut palette.muted,
-            "faint" => &mut palette.faint,
-            "accent" => &mut palette.accent,
-            "working" => &mut palette.working,
-            "waiting" => &mut palette.waiting,
-            "blocked" => &mut palette.blocked,
-            "done" => &mut palette.done,
-            "ended" => &mut palette.ended,
-            _ => return None,
-        })
+    pub fn color_mut(&mut self, key: PaletteKey) -> &mut Color {
+        match key {
+            PaletteKey::Background => &mut self.background,
+            PaletteKey::Panel => &mut self.panel,
+            PaletteKey::Selection => &mut self.selection,
+            PaletteKey::Rule => &mut self.rule,
+            PaletteKey::Text => &mut self.text,
+            PaletteKey::Strong => &mut self.strong,
+            PaletteKey::Muted => &mut self.muted,
+            PaletteKey::Faint => &mut self.faint,
+            PaletteKey::Accent => &mut self.accent,
+            PaletteKey::Working => &mut self.working,
+            PaletteKey::Waiting => &mut self.waiting,
+            PaletteKey::Blocked => &mut self.blocked,
+            PaletteKey::Done => &mut self.done,
+            PaletteKey::Ended => &mut self.ended,
+        }
+    }
+}
+
+/// A color a theme file can set, by its key in [ui] or [state].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaletteKey {
+    Background,
+    Panel,
+    Selection,
+    Rule,
+    Text,
+    Strong,
+    Muted,
+    Faint,
+    Accent,
+    Working,
+    Waiting,
+    Blocked,
+    Done,
+    Ended,
+}
+
+impl PaletteKey {
+    pub const ALL: [PaletteKey; 14] = [
+        PaletteKey::Background,
+        PaletteKey::Panel,
+        PaletteKey::Selection,
+        PaletteKey::Rule,
+        PaletteKey::Text,
+        PaletteKey::Strong,
+        PaletteKey::Muted,
+        PaletteKey::Faint,
+        PaletteKey::Accent,
+        PaletteKey::Working,
+        PaletteKey::Waiting,
+        PaletteKey::Blocked,
+        PaletteKey::Done,
+        PaletteKey::Ended,
+    ];
+
+    /// The key a theme file writes: accent, working, ...
+    pub fn name(self) -> &'static str {
+        match self {
+            PaletteKey::Background => "background",
+            PaletteKey::Panel => "panel",
+            PaletteKey::Selection => "selection",
+            PaletteKey::Rule => "rule",
+            PaletteKey::Text => "text",
+            PaletteKey::Strong => "strong",
+            PaletteKey::Muted => "muted",
+            PaletteKey::Faint => "faint",
+            PaletteKey::Accent => "accent",
+            PaletteKey::Working => "working",
+            PaletteKey::Waiting => "waiting",
+            PaletteKey::Blocked => "blocked",
+            PaletteKey::Done => "done",
+            PaletteKey::Ended => "ended",
+        }
+    }
+
+    /// None for a key flow does not know.
+    pub fn named(name: &str) -> Option<PaletteKey> {
+        PaletteKey::ALL.into_iter().find(|key| key.name() == name)
     }
 }
 
@@ -324,11 +388,15 @@ mod tests {
     #[test]
     fn gets_and_sets_colors_by_their_key() {
         let mut palette = Palette::TERMINAL;
+        let accent = PaletteKey::named("accent").unwrap();
 
-        assert!(palette.set("accent", Color::Indexed(5)));
-        assert_eq!(palette.get("accent"), Some(Color::Indexed(5)));
-        assert!(!palette.set("acent", Color::Red));
-        assert_eq!(palette.get("acent"), None);
+        *palette.color_mut(accent) = Color::Indexed(5);
+
+        assert_eq!(palette.color(accent), Color::Indexed(5));
+        assert_eq!(PaletteKey::named("acent"), None);
+        for key in PaletteKey::ALL {
+            assert_eq!(PaletteKey::named(key.name()), Some(key));
+        }
     }
 
     #[test]

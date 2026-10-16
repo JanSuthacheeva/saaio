@@ -9,7 +9,7 @@ use toml::{Table, Value};
 use crate::store::Stamp;
 #[cfg(test)]
 use crate::ui::theme::MARK;
-use crate::ui::theme::{KIWI, Palette, Theme, hex};
+use crate::ui::theme::{KIWI, Palette, PaletteKey, Theme, hex};
 
 pub const THEME_FILE: &str = "theme.toml";
 pub const THEMES_DIR: &str = "themes";
@@ -122,31 +122,33 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
 /// order in the file.
 fn apply(file: &ThemeFile, palette: &mut Palette) -> Result<()> {
     let mut references = Vec::new();
-    for (key, value) in &file.colors {
-        if palette.get(key).is_none() {
-            bail!("unknown key {key}");
-        }
+    for (name, value) in &file.colors {
+        let Some(key) = PaletteKey::named(name) else {
+            bail!("unknown key {name}");
+        };
         match value {
-            Value::String(name) if palette.get(name).is_some() => references.push((key, name)),
+            Value::String(other) if let Some(other) = PaletteKey::named(other) => {
+                references.push((key, other));
+            }
             value => {
-                palette.set(key, color(value, palette).with_context(|| key.clone())?);
+                *palette.color_mut(key) = color(value, palette).with_context(|| name.clone())?
             }
         }
     }
     // A key naming a key that itself still names another waits for it; none moving is a loop.
     while !references.is_empty() {
-        let pending: Vec<String> = references.iter().map(|(key, _)| (*key).clone()).collect();
+        let pending: Vec<PaletteKey> = references.iter().map(|&(key, _)| key).collect();
         let before = references.len();
-        references.retain(|(key, name)| {
-            if pending.contains(name) {
+        references.retain(|&(key, other)| {
+            if pending.contains(&other) {
                 return true;
             }
-            let color = palette.get(name).expect("a reference names a known key");
-            palette.set(key, color);
+            *palette.color_mut(key) = palette.color(other);
             false
         });
         if references.len() == before {
-            bail!("{} name each other", pending.join(", "));
+            let names: Vec<&str> = pending.iter().map(|key| key.name()).collect();
+            bail!("{} name each other", names.join(", "));
         }
     }
     Ok(())
@@ -166,8 +168,8 @@ fn color(value: &Value, palette: &Palette) -> Result<Color> {
                     .map_err(|_| anyhow!("{text} is no #rrggbb color"))
             }
             Some(_) => bail!("{text} is no #rrggbb color"),
-            None => palette
-                .get(text)
+            None => PaletteKey::named(text)
+                .map(|key| palette.color(key))
                 .ok_or_else(|| anyhow!("{text} is no color and no key")),
         },
         _ => bail!("a color is \"#rrggbb\", an ANSI index, \"default\" or another key"),
