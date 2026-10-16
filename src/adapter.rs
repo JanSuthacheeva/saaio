@@ -46,6 +46,17 @@ impl Adapter {
         }
     }
 
+    /// The arguments that make a plain session report to `<flow_exe> hook <name>`: no master
+    /// waiter, no worker prompt, since it is the user's own.
+    pub fn plain_wiring(self, flow_exe: &Path) -> Vec<String> {
+        match self {
+            Adapter::ClaudeCode => vec![
+                "--settings".to_string(),
+                claude_code::plain_settings(flow_exe),
+            ],
+        }
+    }
+
     /// The arguments that run `<flow_exe> wait --master` in the master's session, inserted right
     /// after the program; the master is no flow, so nothing else.
     pub fn master_wiring(self, flow_exe: &Path) -> Vec<String> {

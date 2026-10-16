@@ -341,8 +341,8 @@ The session stops; flow remove
 ### Launch
 
 - [x] `repo_of` None without a branch, `hook_env` FLOW_SLOT only with a slot; tests incl. a plain session inside `.flow/worktrees`
-- [ ] `claude_code::report_hooks`, `plain_settings`, `Adapter::plain_wiring`; tests: every report hook, no waiter, no prompt
-- [ ] `pane::plain_argv`, `worker_spec` for plain sessions; tests: fresh without prompt and with plain wiring, resumed once hosted, env without FLOW_SLOT
+- [x] `claude_code::report_hooks`, `plain_settings`, `Adapter::plain_wiring`; tests: every report hook, no waiter, no prompt
+- [x] `pane::plain_argv`, `worker_spec` for plain sessions; tests: fresh without prompt and with plain wiring, resumed once hosted, env without FLOW_SLOT
 
 ### Commands
 
