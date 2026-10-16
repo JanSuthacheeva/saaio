@@ -177,7 +177,7 @@ impl BoardView<'_> {
             if !lines.is_empty() {
                 lines.push(Line::raw(""));
             }
-            lines.push(Line::styled(format!("  {label}"), theme.ui.faint));
+            lines.push(Line::from(vec![Span::raw("  "), theme.heading(label)]));
             lines.extend(entries);
         }
         if lines.is_empty() && count == 0 {
@@ -225,7 +225,7 @@ impl BoardView<'_> {
         buf.set_line(
             area.x,
             area.y,
-            &Line::styled("timeline", theme.ui.faint),
+            &Line::from(theme.heading("timeline")),
             area.width,
         );
         for (line, row) in lines.iter().zip(area.rows().skip(1)) {
@@ -238,7 +238,7 @@ impl BoardView<'_> {
         let width = area.width as usize;
         let mut lines = Vec::new();
         if !flow.decisions.is_empty() {
-            lines.push(Line::styled("decisions", theme.ui.faint));
+            lines.push(Line::from(theme.heading("decisions")));
             for decision in &flow.decisions {
                 lines.push(Line::from(vec![
                     Span::styled("· ", theme.ui.faint),
@@ -249,7 +249,7 @@ impl BoardView<'_> {
         }
         // A plain session has no phases to show.
         if !flow.steps.is_empty() {
-            lines.push(Line::styled("steps", theme.ui.faint));
+            lines.push(Line::from(theme.heading("steps")));
             lines.push(Line::from(self.steps(flow)));
         }
         for (line, row) in lines.iter().zip(area.rows()) {
@@ -324,7 +324,7 @@ mod tests {
         assert_eq!(
             rows(&wide_buf),
             [
-                "timeline",
+                "TIMELINE",
                 "00:01  ● phase: implement",
                 "00:02  ● blocked: migration needs a default",
             ]
@@ -332,7 +332,7 @@ mod tests {
         assert_eq!(
             rows(&narrow_buf),
             [
-                "timeline",
+                "TIMELINE",
                 "00:02  ● blocked: migration needs a",
                 "          default",
             ],
@@ -365,10 +365,10 @@ mod tests {
         });
 
         let rows = rows(&buf);
-        assert_eq!(rows[0], "decisions");
+        assert_eq!(rows[0], "DECISIONS");
         assert_eq!(rows[1], "· keep the old API");
         assert_eq!(rows[2], "");
-        assert_eq!(rows[3], "steps");
+        assert_eq!(rows[3], "STEPS");
         assert_eq!(rows[4], "design ✓ 2m   implement ● 27m   review ○   MR ○");
     }
 }

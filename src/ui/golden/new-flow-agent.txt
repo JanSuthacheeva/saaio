@@ -10,7 +10,7 @@
                                                                                                             │     migration needs a default value f…
                                                                                                             │
                                                                                                             │ 2 ● shop-230                       31m
-               ╭─ new flow ──────────────────────────────────────────── in ~/projects/shop ─╮               │     ●───○───○───○ design        guided
+               ╭─ new flow ──────────────────────────────────────────── in ~/projects/shop ─╮               │     ●───○───○───○ design
                │                                                                            │               │     Which approach: a channel column …
                │  request                                                                   │               │
                │  ╭──────────────────────────────────────────────────────────────────────╮  │               │ RUNNING 1
@@ -20,7 +20,7 @@
                │▌ agent   (•) claude   ( ) codex                                            │               │
                │  mode    ( ) auto   (•) guided   ( ) plain    guided stops at every phase  │               │ DONE 1
                │  creates a branch, a worktree and a slot                                   │               │ 4 ✓ shop-198                        2h
-               │                                                                            │               │     ●───●───●───● MR !418        in 0s
+               │                                                                            │               │     ●───●───●───● MR !418      took 0s
                ├────────────────────────────────────────────────────────────────────────────┤               │
                │  enter start   tab next field   esc cancel                                 │               │
                ╰────────────────────────────────────────────────────────────────────────────╯               │

@@ -10,7 +10,7 @@
                                                                                                             │     migration needs a default value f…
                                                                                                             │
                                                                                                             │ 2 ● shop-230                       31m
-                     ╭─ stop ─────────────────────────────────────────────────────────╮                     │     ●───○───○───○ design        guided
+                     ╭─ stop ─────────────────────────────────────────────────────────╮                     │     ●───○───○───○ design
                      │                                                                │                     │     Which approach: a channel column …
                      │  3 flows are not finished:                                     │                     │
                      │    ● shop-221    migration needs a default value for orders.…  │                     │ RUNNING 1
@@ -20,7 +20,7 @@
                      │  Kept, they resume the next time flow ui starts.               │                     │
                      │  Ended, branches and worktrees stay until flow clear.          │                     │ DONE 1
                      │                                                                │                     │ 4 ✓ shop-198                        2h
-                     ├────────────────────────────────────────────────────────────────┤                     │     ●───●───●───● MR !418        in 0s
+                     ├────────────────────────────────────────────────────────────────┤                     │     ●───●───●───● MR !418      took 0s
                      │  k keep them   e end them   esc keep flow running              │                     │
                      ╰────────────────────────────────────────────────────────────────╯                     │
                                                                                                             │

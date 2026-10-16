@@ -349,7 +349,7 @@ The first worker starts:
 ### Hints and labels (items 1, 5, 7)
 
 - [x] Board footer through `hints::line` with inactive keys for the selected card; add the narrow-board golden at 96 columns
-- [ ] Labels: `took 2h`, tasks-only right column in the sidebar, `3m` ages on cards, `Theme::heading` for every section heading
+- [x] Labels: `took 2h`, tasks-only right column in the sidebar, `3m` ages on cards, `Theme::heading` for every section heading
 
 ### Detail panel (item 8)
 

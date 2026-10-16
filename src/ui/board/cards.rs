@@ -147,7 +147,7 @@ impl BoardView<'_> {
         }
 
         let ago = format!(
-            "{} ago ",
+            "{} ",
             short_duration(self.sidebar.now.saturating_sub(flow.changed_at))
         );
         let third = if flow.is_finished() {
@@ -435,7 +435,7 @@ mod tests {
         assert!(card[0].ends_with("  blocked "), "{card:#?}");
         assert!(card[1].ends_with("  · guided"), "{card:#?}");
         assert!(card[2].starts_with("   4/9 tasks"), "{card:#?}");
-        assert!(card[2].ends_with("27m ago "), "{card:#?}");
+        assert!(card[2].ends_with(" 27m "), "{card:#?}");
         assert_eq!(card[3], "   migration needs a default");
     }
 

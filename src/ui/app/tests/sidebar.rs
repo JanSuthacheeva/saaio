@@ -58,7 +58,7 @@ fn draws_the_fleet_in_the_sidebar_grouped_by_what_it_needs() {
     );
     assert_eq!(
         side(&terminal, 10),
-        "     ●───○───○───○ design        guided "
+        "     ●───○───○───○ design               "
     );
     assert_eq!(side(&terminal, 13).trim_end(), " RUNNING 1");
     assert!(side(&terminal, 14).starts_with(" 3 ◓ export-csv"));
@@ -66,7 +66,7 @@ fn draws_the_fleet_in_the_sidebar_grouped_by_what_it_needs() {
     assert_eq!(side(&terminal, 18).trim_end(), " DONE 1");
     assert_eq!(
         side(&terminal, 20).trim_end(),
-        "     ●───●───●───● MR !418        in 0s",
+        "     ●───●───●───● MR !418      took 0s",
         "a finished flow says how long it took"
     );
     assert_eq!(side(&terminal, 40).trim_end(), "", "no rule above the hint");

@@ -1,7 +1,6 @@
 use ratatui::text::{Line, Span};
 
 use super::{Mark, Row, Sidebar, WIDTH, digit, plain};
-use crate::event::Mode;
 use crate::proto::{PaneKey, PaneStatus};
 use crate::text::short_duration;
 use crate::ui::fit::{clip, clip_place, split, wrap};
@@ -101,12 +100,10 @@ impl Sidebar<'_> {
         let detail = match flow.tasks.filter(|tasks| tasks.total > 0) {
             // A finished flow says how long it took.
             _ if flow.is_finished() => format!(
-                "in {} ",
+                "took {} ",
                 short_duration(flow.changed_at.saturating_sub(flow.started_at))
             ),
             Some(tasks) => format!("{tasks} "),
-            None if flow.mode == Mode::Guided => "guided ".to_string(),
-            None if flow.is_plain() => "plain ".to_string(),
             None => String::new(),
         };
 

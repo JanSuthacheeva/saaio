@@ -4,27 +4,27 @@
 
     0   master                              you      1 ● shop-221                        blocked      2 ● shop-230                waiting for you
       ~/projects/shop · main                           ●───●───○───○  implement                         ●───○───○───○  design  · guided
-      6 workers                                        4/9 tasks                         29m ago                                          31m ago
+      6 workers                                        4/9 tasks                             29m                                              31m
                                                        migration needs a default value for orde…        Which approach: a channel column or a jo…
 
 
   ▌
   ▌ 3 ○ scratch                           ready      4 ◓ export-csv            reviewing · agent      5 ✓ shop-198                        MR open
   ▌   idle  · plain                                    ●───●───●───○  review                            ●───●───●───●  MR !418
-  ▌                                     12m ago        6/6 tasks                          1h ago        flow/shop-198                      2h ago
+  ▌                                         12m        6/6 tasks                              1h        flow/shop-198                          2h
   ▌   The tree has 14 files under src.                 agent: review changes                            shop-198
   ▌
 
 
     6 ○ notes                             ended
       ended
-      ~/notes                            3h ago
+      ~/notes                                3h
 
 
 
   3 scratch  plain · ~/scratch · started 12m ago
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  timeline
+  TIMELINE
   16:28  ● started
   16:28  ● idle: The tree has 14 files under src.
 

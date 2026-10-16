@@ -24,11 +24,11 @@ fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
         row(&terminal, 5)
     );
     let third = row(&terminal, 5);
-    let shop_230 = third.split("29m ago").nth(1).unwrap_or_default().trim();
+    let shop_230 = third.split("29m").nth(1).unwrap_or_default().trim();
     assert!(
         shop_230
             .strip_prefix('▌')
-            .and_then(|rest| rest.strip_suffix("31m ago"))
+            .and_then(|rest| rest.strip_suffix("31m"))
             .is_some_and(|gap| gap.trim().is_empty()),
         "a flow without tasks draws no bar: {shop_230:?}"
     );
@@ -160,7 +160,7 @@ fn the_board_shows_what_needs_you_under_the_master() {
         "{}",
         rows[at]
     );
-    assert_eq!(rows[at + 2].trim_end(), "  needs you");
+    assert_eq!(rows[at + 2].trim_end(), "  NEEDS YOU");
     assert!(
         rows[at + 3].starts_with("  ● shop-221  migration needs a default value"),
         "{}",
