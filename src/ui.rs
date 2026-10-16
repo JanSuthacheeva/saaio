@@ -1,5 +1,6 @@
 pub mod app;
 pub mod board;
+pub mod dialog;
 pub mod fit;
 pub mod input;
 pub mod layout;

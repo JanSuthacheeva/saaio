@@ -1,3 +1,7 @@
+mod effect;
+
+pub use effect::{Effect, Job, Removal, outcome};
+
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::mem;
@@ -5,9 +9,9 @@ use std::path::{Path, PathBuf};
 
 use ratatui::Frame as TuiFrame;
 use ratatui::layout::{Alignment, Position, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
+use ratatui::widgets::{Block, Clear, Paragraph};
 
 use crate::branching::Branching;
 use crate::cli::output;
@@ -15,6 +19,7 @@ use crate::launch::worktree::WORKTREES_DIR;
 use crate::proto::{ClientMsg, Modes, PaneInfo, PaneKey, PaneStatus, ServerMsg, Size};
 use crate::text::plural;
 use crate::ui::board::{self, BoardState, BoardView};
+use crate::ui::dialog::{draw_dialog, draw_help, draw_no_session, draw_not_running};
 use crate::ui::fit::{clip, clip_place, columns, spans_width};
 use crate::ui::input::{Command, Key, Routed, Step};
 use crate::ui::layout::{self, Areas, Chrome};
@@ -51,88 +56,6 @@ pub enum View {
     },
 }
 
-/// A `flow remove`, with what the person agreed to lose.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Removal {
-    pub name: String,
-    /// Discard uncommitted work in the worktree (--force).
-    pub force: bool,
-    /// Delete the branch with commits on no other branch (--delete-unmerged).
-    pub delete_unmerged: bool,
-}
-
-impl Removal {
-    pub fn of(name: impl Into<String>) -> Removal {
-        Removal {
-            name: name.into(),
-            force: false,
-            delete_unmerged: false,
-        }
-    }
-}
-
-/// A flow command flow ui runs in the background.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Job {
-    Start(NewFlowForm),
-    Remove(Removal),
-    /// `flow status --all --json`: every project's board.
-    Overview,
-}
-
-impl Job {
-    /// The arguments after the flow binary.
-    pub fn args(&self) -> Vec<String> {
-        match self {
-            Job::Start(form) => {
-                let mut args = vec![
-                    "start".to_string(),
-                    form.request.trim().to_string(),
-                    "--mode".to_string(),
-                    form.mode.name().to_string(),
-                ];
-                if let Some(kind) = form.picked_type() {
-                    args.extend(["--type".to_string(), kind.to_string()]);
-                }
-                args
-            }
-            Job::Remove(removal) => {
-                let mut args = vec!["remove".to_string(), removal.name.clone()];
-                if removal.force {
-                    args.push("--force".to_string());
-                }
-                if removal.delete_unmerged {
-                    args.push("--delete-unmerged".to_string());
-                }
-                args
-            }
-            Job::Overview => vec![
-                "status".to_string(),
-                "--all".to_string(),
-                "--json".to_string(),
-            ],
-        }
-    }
-
-    /// Where it runs: the repo a flow starts in.
-    pub fn dir(&self) -> Option<&Path> {
-        match self {
-            Job::Start(form) => Some(&form.repo),
-            Job::Remove(_) | Job::Overview => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Effect {
-    Send(ClientMsg),
-    /// Read the repo's branch convention for the new-flow dialog; answered by on_branching.
-    LoadBranching(PathBuf),
-    Mirror(Modes),
-    Run(Job),
-    Quit(String),
-}
-
 /// h j k l and the arrows on a board.
 fn board_step(key: Key) -> Option<isize> {
     match key {
@@ -142,16 +65,6 @@ fn board_step(key: Key) -> Option<isize> {
         Key::Down => BoardState::step('j'),
         Key::Up => BoardState::step('k'),
         _ => None,
-    }
-}
-
-/// What a flow command printed: its first line when it worked, the error without "error: " when not.
-pub fn outcome(success: bool, stdout: &str) -> Result<String, String> {
-    let first = stdout.lines().next().unwrap_or("").trim();
-    if success {
-        Ok(first.to_string())
-    } else {
-        Err(first.strip_prefix("error: ").unwrap_or(first).to_string())
     }
 }
 
@@ -1315,129 +1228,6 @@ impl App {
             frame.render_widget(Paragraph::new(right).alignment(Alignment::Right), area);
         }
     }
-}
-
-/// A notice over a pane whose process is gone: for a worker (`worker` is its name) what to do with
-/// its flow, for the master how to bring it back.
-fn draw_not_running(
-    frame: &mut TuiFrame,
-    pane: Rect,
-    status: &PaneStatus,
-    worker: Option<&str>,
-    theme: &Theme,
-) {
-    let (title, first, style) = match status {
-        PaneStatus::Exited { code } => (
-            " exited ",
-            match code {
-                Some(0) | None => "The session ended.".to_string(),
-                Some(code) => format!("The session ended with code {code}."),
-            },
-            theme.state.waiting,
-        ),
-        PaneStatus::Failed { reason } => (" could not start ", reason.clone(), theme.state.blocked),
-        PaneStatus::Running => return,
-    };
-    let keys = match worker {
-        Some(_) => vec![
-            Span::styled("x", theme.ui.key),
-            Span::styled(" clean up: worktree, branch, flow   ", theme.ui.muted),
-            Span::styled("r", theme.ui.key),
-            Span::styled(" resume   ", theme.ui.muted),
-            Span::styled("esc", theme.ui.key),
-            Span::styled(" back to master", theme.ui.muted),
-        ],
-        None => vec![
-            Span::styled("C-space r", theme.ui.key),
-            Span::styled(" resumes it   ", theme.ui.muted),
-            Span::styled("C-space Q", theme.ui.key),
-            Span::styled(" stops flow", theme.ui.muted),
-        ],
-    };
-    let text = vec![Line::styled(first, theme.ui.text), Line::from(keys)];
-    draw_dialog(frame, pane, theme, title, style, text);
-}
-
-/// A notice over a worker pane flow ui has no session for, such as a flow that ended before it opened.
-fn draw_no_session(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
-    let text = vec![
-        Line::styled("flow ui has no session for this flow.", theme.ui.text),
-        Line::from(vec![
-            Span::styled("C-space r", theme.ui.key),
-            Span::styled(" resumes it   ", theme.ui.muted),
-            Span::styled("C-space 0", theme.ui.key),
-            Span::styled(" back to the master", theme.ui.muted),
-        ]),
-    ];
-    draw_dialog(frame, pane, theme, " not open ", theme.ui.rule, text);
-}
-
-fn draw_dialog(
-    frame: &mut TuiFrame,
-    pane: Rect,
-    theme: &Theme,
-    title: &str,
-    border: Style,
-    text: Vec<Line>,
-) {
-    let fit = |size: usize, edge: u16, room: u16| {
-        u16::try_from(size)
-            .unwrap_or(u16::MAX)
-            .saturating_add(edge)
-            .min(room)
-    };
-    let inner = text.iter().map(Line::width).max().unwrap_or(0);
-    let width = fit(inner, 4, pane.width);
-    let height = fit(text.len(), 2, pane.height);
-    let area = Rect::new(
-        pane.x + (pane.width - width) / 2,
-        pane.y + (pane.height - height) / 2,
-        width,
-        height,
-    );
-    frame.render_widget(Clear, area);
-    frame.render_widget(
-        Paragraph::new(text).block(
-            Block::bordered()
-                .border_type(BorderType::Rounded)
-                .border_style(border)
-                .style(theme.ui.background)
-                .padding(Padding::horizontal(1))
-                .title(title),
-        ),
-        area,
-    );
-}
-
-/// Every key behind C-space, over the pane.
-fn draw_help(frame: &mut TuiFrame, pane: Rect, theme: &Theme) {
-    let keys = [
-        ("0-9", "jump to a session (0 is the master)"),
-        ("j k", "move the peek over the workers"),
-        ("enter", "jump into the peeked worker"),
-        ("n", "start a new flow"),
-        ("o", "the board of every session"),
-        ("b", "fold the sidebar to a rail and back"),
-        ("r", "resume a session that ended"),
-        ("[", "scroll back through the history"),
-        ("d", "detach; every session keeps running"),
-        ("Q", "stop flow"),
-        ("C-space", "send C-space itself"),
-        ("?", "these keys"),
-    ];
-    let mut text = vec![Line::from(vec![
-        Span::styled("C-space", theme.ui.key),
-        Span::styled(" then", theme.ui.muted),
-    ])];
-    for (key, what) in keys {
-        text.push(Line::from(vec![
-            Span::styled(format!("  {key:<9}"), theme.ui.key),
-            Span::styled(what, theme.ui.text),
-        ]));
-    }
-    text.push(Line::raw(""));
-    text.push(Line::styled("any key closes this", theme.ui.faint));
-    draw_dialog(frame, pane, theme, " keys ", theme.ui.rule, text);
 }
 
 #[cfg(test)]
