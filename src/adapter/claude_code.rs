@@ -209,12 +209,21 @@ fn text_of(response: &Value) -> String {
 }
 
 /// What a turn ending with background work in flight waits for: the first running or pending
-/// task's description.
+/// task's description, artifact watches aside.
 fn running_background_task(tasks: &Value) -> Option<&str> {
     tasks.as_array()?.iter().find_map(|task| {
         let busy = matches!(task["status"].as_str(), Some("running" | "pending"));
-        busy.then(|| task["description"].as_str().unwrap_or("background work"))
+        (busy && !artifact_watch(task))
+            .then(|| task["description"].as_str().unwrap_or("background work"))
     })
+}
+
+/// A live subscription Claude Code keeps for a published artifact: it never finishes.
+fn artifact_watch(task: &Value) -> bool {
+    task["type"] == "monitor"
+        && task["description"]
+            .as_str()
+            .is_some_and(|description| description.starts_with("live updates for artifact "))
 }
 
 /// Waiting with the last sentence of the answer's last non-empty line that asks (ends in "?", or
@@ -434,6 +443,49 @@ mod tests {
     fn a_turn_that_ends_with_background_work_running_is_delegated() {
         assert_eq!(
             events("stop_background"),
+            vec![EventKind::Delegated {
+                description: "background sleeper".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn an_artifact_watch_is_not_work_the_turn_waits_on() {
+        let link = "https://claude.ai/artifact/CUmbqod2Bv8mGRtioXWRH7";
+        assert_eq!(
+            events("stop_artifact_watch"),
+            vec![
+                EventKind::Answer { text: link.into() },
+                EventKind::Idle { note: link.into() }
+            ]
+        );
+    }
+
+    #[test]
+    fn a_pending_artifact_watch_is_not_work_either() {
+        let mut stop = fixture("stop_artifact_watch");
+        stop["background_tasks"][0]["status"] = json!("pending");
+        assert!(matches!(
+            translate(&stop, &phases()).last(),
+            Some(EventKind::Idle { .. })
+        ));
+    }
+
+    #[test]
+    fn a_subagent_running_beside_an_artifact_watch_is_delegated() {
+        let mut stop = fixture("stop_artifact_watch");
+        stop["background_tasks"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({
+                "id": "adfb26396b14a6b82",
+                "type": "subagent",
+                "status": "running",
+                "description": "background sleeper",
+                "agent_type": "general-purpose"
+            }));
+        assert_eq!(
+            translate(&stop, &phases()),
             vec![EventKind::Delegated {
                 description: "background sleeper".into()
             }]
