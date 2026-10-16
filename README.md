@@ -162,10 +162,17 @@ forgets it and never touches the folder.
 
 ### Agents
 
-Claude Code is built in: `claude -n <name> --session-id <id> "/ship-feature <request>"`, resumed
-with `claude -n <name> --resume <id>`. The master is the built-in `master` agent: Claude with
-`--append-system-prompt-file <master.md>`. Add or change agents in `~/.config/flow/config.toml`
-(or `$XDG_CONFIG_HOME/flow/config.toml`, or `$FLOW_CONFIG`):
+Claude Code and Codex are built in:
+
+- `claude`: `claude -n <name> --session-id <id> "/ship-feature <request>"`, resumed with
+  `claude -n <name> --resume <id>`.
+- `codex`: `codex "$ship-feature <request>"`, resumed with `codex resume <session>`. Codex picks
+  its own session id; flow learns it from the first hook.
+
+`flow start --agent codex` or the new-flow dialog's agent row picks one; `agent` in the config is
+the default. The master is the built-in `master` agent (Claude Code), or the agent `[master]
+agent` names; flow adds `master.md` to its instructions. Add or change agents in
+`~/.config/flow/config.toml` (or `$XDG_CONFIG_HOME/flow/config.toml`, or `$FLOW_CONFIG`):
 
 ```toml
 agent = "claude"              # the default for flow start
@@ -175,13 +182,17 @@ command = ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
 prompt = "/ship-feature {request}"
 resume = ["claude", "-n", "{name}", "--resume", "{id}"]
 
-[agents.codex]
-command = ["codex", "{prompt}"]
+[agents.aider]
+command = ["aider", "--message", "{prompt}"]
 prompt = "{request}"
+
+[master]
+agent = "codex"               # the master runs Codex; the default is the built-in master
 ```
 
-Placeholders: `{id}`, `{name}`, `{request}`, `{prompt}`, and `{instructions}` (the master's
-`master.md`). An agent without `resume` starts fresh once and is not resumed after a restart.
+Placeholders: `{id}`, `{name}`, `{request}`, `{prompt}`, `{session}` (the session id the harness
+picked, for Codex) and `{instructions}` (the path of the master's `master.md`). An agent without
+`resume` starts fresh once and is not resumed after a restart.
 
 ### How a worker reports
 
@@ -199,12 +210,32 @@ only what changes the flow:
 | the Agent tool | `delegated <description>` |
 | AskUserQuestion | `waiting <the question>` |
 | a permission prompt | `waiting permission: Bash(rm -rf build)` |
-| a tool finishing | `working`; plan-progress task counts and blocks; a merge request `gh` / `glab` created |
+| a tool finishing | `working`; plan-progress task counts and blocks; a merge request `gh pr create` / `glab mr create` printed, when it is one of a repo the worktree has as a remote (origin, or a fork's upstream) |
 | the end of a turn | `waiting <the question>` when Claude's last line asks one, else `idle <its last sentence>`; the whole closing message becomes the flow's `answer` |
 | `/exit` | `ended` (a hangup is not an end; flow ui resumes the worker) |
 
+For Codex (`adapter = "codex"`) the wiring is `-c hooks.<Event>=[...]` arguments that run
+`flow hook codex`, and `-c developer_instructions=...` for the worker prompt; nothing is written
+to `~/.codex`. The first time, Codex asks you to review the hooks (pick "Trust all and
+continue"); it remembers that until flow's hooks change. A repository you trust in Codex covers its flow
+worktrees.
+
+| Codex event | Reported |
+| --- | --- |
+| a prompt | `working` (and the phase of a `$skill` in it) |
+| a shell command reading a skill's `SKILL.md` | `phase`, from the `[phases]` map |
+| a subagent (`spawn_agent`) | `delegated <its task name>`, until the main agent goes on |
+| a permission prompt | `waiting permission: Bash(touch notes.txt)` |
+| a tool finishing | `working`; a merge request `gh pr create` / `glab mr create` printed, when it is one of a repo the worktree has as a remote (origin, or a fork's upstream) |
+| the end of a turn | as for Claude Code |
+| Esc | `idle interrupted` |
+
+Codex has no plan-progress, so a Codex flow shows no task counts, and no `/exit` event, so you
+end its flow from flow ui or with `flow remove`.
+
 A subagent's own events are ignored. A custom agent replaces the built-in one, so give it
-`adapter = "claude-code"` when it runs Claude Code. Which skill starts which phase:
+`adapter = "claude-code"` or `adapter = "codex"` when it runs one of them. Which skill starts which
+phase:
 
 ```toml
 [phases]                      # the built-in map, extend or override it
@@ -228,6 +259,11 @@ its session, prints it and exits 2, and Claude Code wakes the session with it:
   feedback for an untrusted voice.
 - The master is woken when flows of its project become `waiting`, `blocked`, `idle`, `done` or
   `not-responding`; flows that stop within two seconds come as one list.
+
+Codex cannot wake a session that sits at its prompt, so a Codex session gets its news two ways:
+a busy one from its own Stop hook, which hands the news over as the turn ends; an idle one from
+flow server, which types it in as one paste once nobody has typed into that pane for ten seconds.
+It never types into a Codex session before its first turn (it may still show its hooks review).
 
 The flow's mode decides who answers a waiting worker. In an `auto` flow the master answers what
 the code, the plan or your earlier decisions settle, and tells you what it answered. A `guided`

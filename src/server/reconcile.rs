@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn fails_flows_with_an_unknown_agent_or_no_way_to_resume() {
         let flows = [
-            flow("gone-agent", "codex", None, false),
+            flow("gone-agent", "pi", None, false),
             flow("no-resume", "aider", Some(HOSTED), false),
             flow("fresh-aider", "aider", None, false),
         ];
@@ -209,7 +209,7 @@ mod tests {
         assert_eq!(
             wanted.failed,
             vec![
-                (worker("gone-agent"), "no agent named codex".to_string()),
+                (worker("gone-agent"), "no agent named pi".to_string()),
                 (
                     worker("no-resume"),
                     "agent aider cannot resume a session".to_string()

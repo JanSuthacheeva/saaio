@@ -38,6 +38,16 @@ pub struct FlowView {
     pub workspace: Option<Workspace>,
     /// The last turn's whole closing message.
     pub answer: Option<String>,
+    /// The harness's own session, when it picks its id itself.
+    pub session: Option<Session>,
+}
+
+/// A harness session: the id it resumes by and the transcript it writes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Session {
+    pub id: String,
+    pub transcript: Option<String>,
 }
 
 /// Where a started flow's worker runs: its worktree, branch, port slot, window (flow-ui once
@@ -307,6 +317,7 @@ mod tests {
                 agent: "claude".into(),
             }),
             answer: None,
+            session: None,
         }
     }
 

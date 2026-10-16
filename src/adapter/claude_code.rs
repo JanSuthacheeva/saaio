@@ -2,6 +2,8 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
+use crate::adapter::answer::turn_end;
+use crate::adapter::calls::{created_merge_request, tool_call};
 use crate::adapter::{Adapter, cut, phase_of};
 use crate::config::PhaseMap;
 use crate::event::EventKind;
@@ -22,13 +24,6 @@ const WAIT_TIMEOUT_SECS: u64 = 604_800;
 /// The events that arm a session's waiter: its start (the master starts without a prompt) and
 /// every turn end.
 const WAIT_EVENTS: [&str; 2] = ["SessionStart", "Stop"];
-/// What a worker is told about the master, appended to its system prompt: the master's messages
-/// arrive as hook feedback, which it would rightly not take as the user's words otherwise.
-pub const WORKER_PROMPT: &str = "You run as a worker of flow, in your own git worktree. The flow \
-master is the Claude session that coordinates the workers for the user. Its messages reach you as \
-hook feedback that starts with \"message from the flow master:\"; they answer what you asked or \
-pass on what the user said, so act on them as you would on the user's own answer. To ask the \
-master or the user something, end your turn with the question.";
 /// plan-progress's report tool, whose answers carry the plan's task counts.
 const PLAN_PROGRESS_TOOL: &str = "mcp__plan-progress__report";
 /// How a Stop's background tasks list the watch Claude Code keeps on a published artifact.
@@ -239,71 +234,6 @@ fn artifact_watch(task: &Value) -> bool {
             .is_some_and(|description| description.starts_with(ARTIFACT_WATCH_PREFIX))
 }
 
-/// Waiting with the last sentence of the answer's last non-empty line that asks (ends in "?", or
-/// starts "Let me know" or "Tell me"); else idle, with its last sentence: only a question needs
-/// the person.
-fn turn_end(answer: &str) -> EventKind {
-    let Some(last) = answer.lines().map(str::trim).rfind(|line| !line.is_empty()) else {
-        return EventKind::Idle {
-            note: "turn ended".to_string(),
-        };
-    };
-    let plain = plain(last);
-    let sentences = sentences(&plain);
-    let asks = |sentence: &&String| {
-        let lower = sentence.to_lowercase();
-        sentence.ends_with('?') || lower.starts_with("let me know") || lower.starts_with("tell me")
-    };
-    match sentences.iter().rev().find(asks) {
-        Some(question) => EventKind::Waiting {
-            question: cut(question),
-        },
-        None => EventKind::Idle {
-            note: cut(sentences.last().map_or(last, |sentence| sentence.as_str())),
-        },
-    }
-}
-
-/// A Markdown line as plain text: no list marker, no emphasis or code ticks.
-fn plain(line: &str) -> String {
-    let mut text = line.trim();
-    if let Some(rest) = text
-        .strip_prefix("- ")
-        .or_else(|| text.strip_prefix("* "))
-        .or_else(|| text.strip_prefix("+ "))
-    {
-        text = rest;
-    } else if let Some((number, rest)) = text.split_once(". ")
-        && !number.is_empty()
-        && number.chars().all(|c| c.is_ascii_digit())
-    {
-        text = rest;
-    }
-    text.chars()
-        .filter(|c| !matches!(c, '*' | '_' | '`'))
-        .collect::<String>()
-        .trim()
-        .to_string()
-}
-
-/// Sentences split after ".", "!" or "?" followed by whitespace.
-fn sentences(text: &str) -> Vec<String> {
-    let mut sentences = Vec::new();
-    let mut current = String::new();
-    let mut chars = text.chars().peekable();
-    while let Some(c) = chars.next() {
-        current.push(c);
-        if matches!(c, '.' | '!' | '?') && chars.peek().is_some_and(|next| next.is_whitespace()) {
-            sentences.push(current.trim().to_string());
-            current.clear();
-        }
-    }
-    if !current.trim().is_empty() {
-        sentences.push(current.trim().to_string());
-    }
-    sentences
-}
-
 /// "ok, 4/9 done" -> (4, 9); "ok, all 9 done" -> (9, 9).
 fn task_counts(result: &str) -> Option<(u32, u32)> {
     if let Some(rest) = result.split("ok, all ").nth(1)
@@ -322,54 +252,10 @@ fn task_counts(result: &str) -> Option<(u32, u32)> {
     Some((done.parse().ok()?, total.parse().ok()?))
 }
 
-/// The URL `gh pr create` or `glab mr create` printed: the first http(s) URL in its stdout.
-fn created_merge_request(command: &str, stdout: &str) -> Option<String> {
-    let words: Vec<&str> = command.split_whitespace().collect();
-    let creates = words.windows(3).any(|window| {
-        let tool = (window[0], window[1]);
-        let opens = tool == ("gh", "pr") || tool == ("glab", "mr");
-        opens && (window[2] == "create" || window[2] == "new")
-    });
-    if !creates {
-        return None;
-    }
-    stdout
-        .split_whitespace()
-        .find(|word| word.starts_with("https://") || word.starts_with("http://"))
-        .map(String::from)
-}
-
 /// The skill a prompt typed as "/name args" names.
 fn typed_skill(prompt: &str) -> Option<&str> {
     let first = prompt.split_whitespace().next()?;
     first.strip_prefix('/').filter(|name| !name.is_empty())
-}
-
-/// Name(target) for a permission question: Bash(command), Write(file_path), ...; a path inside the
-/// session's folder is shown relative to it.
-fn tool_call(name: &str, input: &Value, cwd: &str) -> String {
-    let target = [
-        "command",
-        "file_path",
-        "path",
-        "url",
-        "pattern",
-        "description",
-    ]
-    .iter()
-    .find_map(|key| input[*key].as_str())
-    .and_then(|value| value.lines().next())
-    .unwrap_or("");
-    let inside = format!("{}/", cwd.trim_end_matches('/'));
-    let target = match target.strip_prefix(&inside) {
-        Some(relative) if !cwd.is_empty() => relative,
-        _ => target,
-    };
-    if target.is_empty() {
-        name.to_string()
-    } else {
-        format!("{name}({target})")
-    }
 }
 
 #[cfg(test)]
@@ -603,44 +489,11 @@ mod tests {
     }
 
     #[test]
-    fn waits_for_the_person_only_when_the_last_line_asks() {
-        let waiting = |question: &str| EventKind::Waiting {
-            question: question.into(),
-        };
-        let idle = |note: &str| EventKind::Idle { note: note.into() };
-
-        assert_eq!(
-            turn_end("Done.\n\n- **Which** approach: `A` or B? I lean A."),
-            waiting("Which approach: A or B?")
-        );
-        assert_eq!(turn_end("1. Shall I go on?"), waiting("Shall I go on?"));
-        assert_eq!(
-            turn_end("Tests pass. Tell me which one to keep."),
-            waiting("Tell me which one to keep.")
-        );
-        assert_eq!(turn_end("All set. Tests pass."), idle("Tests pass."));
-        assert_eq!(
-            turn_end("Started the review.\n\nThe review is still running."),
-            idle("The review is still running.")
-        );
-        assert_eq!(turn_end("  \n"), idle("turn ended"));
-    }
-
-    #[test]
-    fn reads_task_counts_merge_requests_and_typed_skills() {
+    fn reads_task_counts_and_typed_skills() {
         assert_eq!(task_counts("ok, 4/9 done - next: 2.4"), Some((4, 9)));
         assert_eq!(task_counts("ok, all 9 done - plan complete"), Some((9, 9)));
         assert_eq!(task_counts("ok, all 09 done"), Some((9, 9)));
         assert_eq!(task_counts("refused: 2.4 matches two items"), None);
-        assert_eq!(
-            created_merge_request("gh pr create --fill", "https://github.com/a/b/pull/12\n"),
-            Some("https://github.com/a/b/pull/12".into())
-        );
-        assert_eq!(created_merge_request("git push", "https://x.y/z"), None);
-        assert_eq!(
-            created_merge_request("glab mr create", "error: no permission"),
-            None
-        );
         assert_eq!(typed_skill(" /design-code add csv"), Some("design-code"));
         assert_eq!(typed_skill("please design"), None);
         assert_eq!(typed_skill("/"), None);
@@ -681,14 +534,6 @@ mod tests {
                 plain_settings(Path::new("/bin/flow"))
             ]
         );
-    }
-
-    #[test]
-    fn tells_a_worker_who_the_flow_master_is() {
-        assert!(WORKER_PROMPT.contains("message from the flow master:"));
-        let wiring = Adapter::ClaudeCode.wiring(Path::new("/bin/flow"));
-        assert_eq!(wiring[0], "--settings");
-        assert_eq!(wiring[2..], ["--append-system-prompt", WORKER_PROMPT]);
     }
 
     #[test]

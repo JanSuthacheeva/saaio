@@ -1,0 +1,11 @@
+{
+ "session_id": "01a14000-0000-7000-8000-000000000000",
+ "turn_id": "01a143b4-843e-79e1-b733-b08e6674373e",
+ "transcript_path": "/home/dev/.codex/sessions/2026/10/16/rollout-2026-10-16T14-51-43-01a14000-0000-7000-8000-000000000000.jsonl",
+ "cwd": "/repo",
+ "hook_event_name": "Stop",
+ "model": "gpt-6-luna",
+ "permission_mode": "default",
+ "stop_hook_active": false,
+ "last_assistant_message": "Do you prefer tabs or spaces?"
+}

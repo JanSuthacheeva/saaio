@@ -5,6 +5,7 @@ pub mod terminal;
 pub mod watch;
 
 mod conn;
+mod news;
 mod panes;
 
 use std::collections::{HashMap, HashSet};
@@ -134,6 +135,8 @@ struct Server {
     dirty: bool,
     flushed_at: Instant,
     events: Sender<Event>,
+    /// When each pane last got a key from the person, so typed news waits until they pause.
+    typed_at: HashMap<PaneKey, Instant>,
 }
 
 /// Binds the socket (removing a stale one), opens the master, then loops until StopServer or a
@@ -184,6 +187,7 @@ pub fn run(
         dirty: false,
         flushed_at: Instant::now(),
         events: events.clone(),
+        typed_at: HashMap::new(),
     };
     server.open_master(start);
     server.refresh();
@@ -218,6 +222,7 @@ impl Server {
                 Err(RecvTimeoutError::Disconnected) => bail!("the server lost its event channel"),
             }
             if self.refreshed_at.elapsed() >= WATCH_EVERY {
+                self.deliver_news();
                 self.refresh();
             }
             self.flush();

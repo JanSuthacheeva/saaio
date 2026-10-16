@@ -15,11 +15,13 @@ pub const MASTER_NAME: &str = "master";
 /// What flow writes to master.md: how the master works with flow.
 pub const DEFAULT_INSTRUCTIONS: &str = include_str!("master.md");
 /// Earlier defaults: a master.md still holding one of them was never edited, so it gets the current one.
-const PREVIOUS_DEFAULTS: [&str; 4] = [
+const PREVIOUS_DEFAULTS: [&str; 6] = [
     include_str!("master-v1.md"),
     include_str!("master-v2.md"),
     include_str!("master-v3.md"),
     include_str!("master-v4.md"),
+    include_str!("master-v5.md"),
+    include_str!("master-v6.md"),
 ];
 
 /// Writes the default instructions to `file` when it is missing or still an earlier default; an edited
@@ -40,6 +42,13 @@ pub fn ensure_instructions(file: &Path) -> Result<()> {
     }
     fs::write(file, DEFAULT_INSTRUCTIONS)
         .with_context(|| format!("could not write {}", file.display()))
+}
+
+/// master.md beside config.toml: its path for an agent's {instructions}, its text for the adapter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Instructions {
+    pub path: PathBuf,
+    pub text: String,
 }
 
 /// Whether the master starts a new session or resumes the one in master.json.
@@ -83,17 +92,24 @@ impl MasterRecord {
         }
     }
 
-    /// The agent's command (name master, no prompt) when new, its resume command after, with
-    /// {instructions} filled in and, when it `wake`s, its adapter's waiter wired in after the
-    /// program; None when it must resume and the agent has no resume template.
+    /// The agent's command (name master, no prompt) when new, its resume command after, by
+    /// `session` when its harness picked one (else a new session), with {instructions} filled in.
+    /// After the program: the adapter's master wiring (Claude Code's waiter only when it `wake`s;
+    /// Codex's hooks always, which also record its session), then the instructions. None when it
+    /// must resume and the agent has no resume template.
     pub fn spec(
         &self,
         start: Start,
         agent: &Agent,
         env: &LaunchEnv,
-        instructions: &Path,
+        instructions: &Instructions,
         wake: bool,
+        session: Option<&str>,
     ) -> Option<PaneSpec> {
+        let start = match start {
+            Start::Resume if session.is_none() && pane::names_session(agent) => Start::Fresh,
+            start => start,
+        };
         let argv = match start {
             Start::Fresh => {
                 let bare = Agent {
@@ -102,22 +118,30 @@ impl MasterRecord {
                 };
                 pane::agent_argv(&bare, &self.session, MASTER_NAME, "")
             }
-            Start::Resume => pane::resume_argv(agent, &self.session, MASTER_NAME)?,
+            Start::Resume => pane::resume_argv(
+                agent,
+                &self.session,
+                MASTER_NAME,
+                session.unwrap_or(&self.session),
+            )?,
         };
-        let instructions = instructions.display().to_string();
+        let path = instructions.path.display().to_string();
         let mut argv: Vec<String> = argv
             .into_iter()
-            .map(|part| part.replace("{instructions}", &instructions))
+            .map(|part| part.replace("{instructions}", &path))
             .collect();
-        if wake && let Some(adapter) = agent.adapter {
-            let at = 1.min(argv.len());
-            argv.splice(at..at, adapter.master_wiring(&env.flow_exe));
+        if let Some(adapter) = agent.adapter {
+            let fresh = start == Start::Fresh;
+            argv = adapter.wire_master(argv, &env.flow_exe, &instructions.text, wake, fresh);
         }
         Some(PaneSpec {
             key: PaneKey::Master,
             argv,
             cwd: self.cwd.clone(),
-            env: pane::pane_env(env),
+            env: [(pane::MASTER_ENV.to_string(), "1".to_string())]
+                .into_iter()
+                .chain(pane::pane_env(env))
+                .collect(),
         })
     }
 }
@@ -127,6 +151,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::adapter::Adapter;
     use crate::config::builtin_agents;
 
     #[test]
@@ -155,21 +180,35 @@ mod tests {
         assert!(format!("{error:#}").contains("master.json"), "{error:#}");
     }
 
-    #[test]
-    fn starts_claude_without_a_prompt_then_resumes_it() {
-        let record = MasterRecord {
+    fn record() -> MasterRecord {
+        MasterRecord {
             session: "5e55".into(),
             cwd: PathBuf::from("/work"),
-        };
-        let agents = builtin_agents();
-        let claude = &agents["claude"];
+        }
+    }
 
-        let md = Path::new("/cfg/master.md");
-        let fresh = record
-            .spec(Start::Fresh, claude, &LaunchEnv::default(), md, false)
+    fn instructions() -> Instructions {
+        Instructions {
+            path: PathBuf::from("/cfg/master.md"),
+            text: "# You are the master".into(),
+        }
+    }
+
+    #[test]
+    fn starts_an_agent_without_a_prompt_then_resumes_it() {
+        let agents = builtin_agents();
+        let bare = Agent {
+            adapter: None,
+            ..agents["claude"].clone()
+        };
+        let env = LaunchEnv::default();
+        let md = instructions();
+
+        let fresh = record()
+            .spec(Start::Fresh, &bare, &env, &md, false, None)
             .unwrap();
-        let resumed = record
-            .spec(Start::Resume, claude, &LaunchEnv::default(), md, false)
+        let resumed = record()
+            .spec(Start::Resume, &bare, &env, &md, false, None)
             .unwrap();
 
         assert_eq!(fresh.key, PaneKey::Master);
@@ -183,49 +222,110 @@ mod tests {
         );
         assert_eq!(resumed.cwd, PathBuf::from("/work"));
         assert!(resumed.env.iter().all(|(key, _)| key != "FLOW_ID"));
-        let plain = Agent {
-            adapter: None,
+        assert!(
+            resumed
+                .env
+                .contains(&("FLOW_MASTER".to_string(), "1".to_string()))
+        );
+        let unresumable = Agent {
             resume: None,
-            ..claude.clone()
+            ..bare.clone()
         };
         assert_eq!(
-            record.spec(Start::Resume, &plain, &LaunchEnv::default(), md, true),
+            record().spec(Start::Resume, &unresumable, &env, &md, true, None),
             None
+        );
+        let pointed = Agent {
+            command: ["aider", "--read", "{instructions}"]
+                .map(String::from)
+                .to_vec(),
+            ..bare
+        };
+        assert_eq!(
+            record()
+                .spec(Start::Fresh, &pointed, &env, &md, false, None)
+                .unwrap()
+                .argv[2],
+            "/cfg/master.md",
+            "{{instructions}} is the file"
         );
     }
 
     #[test]
-    fn gives_the_master_agent_its_instructions_fresh_and_resumed() {
-        let record = MasterRecord {
-            session: "5e55".into(),
-            cwd: PathBuf::from("/work"),
-        };
+    fn gives_the_claude_master_its_instructions_and_its_waiter_when_it_wakes() {
         let agents = builtin_agents();
         let master = &agents[crate::config::MASTER_AGENT];
-        let md = Path::new("/cfg/master.md");
+        let env = LaunchEnv {
+            flow_exe: PathBuf::from("/bin/flow"),
+            ..LaunchEnv::default()
+        };
+        let md = instructions();
 
-        let fresh = record
-            .spec(Start::Fresh, master, &LaunchEnv::default(), md, false)
+        for start in [Start::Fresh, Start::Resume] {
+            let quiet = record()
+                .spec(start, master, &env, &md, false, None)
+                .unwrap();
+            assert_eq!(
+                quiet.argv[1..3],
+                ["--append-system-prompt", "# You are the master"]
+            );
+            assert!(
+                !quiet
+                    .argv
+                    .iter()
+                    .any(|arg| arg == crate::adapter::MASTER_OPENING),
+                "Claude Code wakes itself"
+            );
+            let woken = record().spec(start, master, &env, &md, true, None).unwrap();
+            assert_eq!(woken.argv[0], "claude");
+            assert_eq!(woken.argv[1], "--settings");
+            assert!(
+                woken.argv[2].contains(r#""args":["wait","--master"]"#),
+                "{}",
+                woken.argv[2]
+            );
+            assert_eq!(woken.argv[3..], quiet.argv[1..]);
+        }
+    }
+
+    #[test]
+    fn a_codex_master_resumes_by_its_own_session_or_starts_again() {
+        let agents = builtin_agents();
+        let codex = &agents["codex"];
+        let env = LaunchEnv {
+            flow_exe: PathBuf::from("/bin/flow"),
+            ..LaunchEnv::default()
+        };
+        let md = instructions();
+        let exe = Path::new("/bin/flow");
+        let mut wired = crate::adapter::codex::hooks(exe);
+        wired.extend(Adapter::Codex.instruct("# You are the master"));
+
+        let fresh = record()
+            .spec(Start::Fresh, codex, &env, &md, false, None)
             .unwrap();
-        let resumed = record
-            .spec(Start::Resume, master, &LaunchEnv::default(), md, false)
+        let resumed = record()
+            .spec(Start::Resume, codex, &env, &md, true, Some("01a1"))
+            .unwrap();
+        let never_ran = record()
+            .spec(Start::Resume, codex, &env, &md, true, None)
             .unwrap();
 
+        let opening = crate::adapter::MASTER_OPENING;
+        assert_eq!(fresh.argv[0], "codex");
         assert_eq!(
-            fresh.argv,
-            [
-                "claude",
-                "-n",
-                "master",
-                "--session-id",
-                "5e55",
-                "--append-system-prompt-file",
-                "/cfg/master.md"
-            ]
-            .map(String::from)
+            fresh.argv[1..=wired.len()],
+            wired[..],
+            "hooks even without wake"
         );
-        assert_eq!(&resumed.argv[3..5], ["--resume", "5e55"]);
-        assert_eq!(resumed.argv.last().unwrap(), "/cfg/master.md");
+        assert_eq!(
+            fresh.argv[wired.len() + 1..],
+            [opening],
+            "a first turn at once, so it gets news from the start"
+        );
+        assert_eq!(resumed.argv[1..=wired.len()], wired[..]);
+        assert_eq!(resumed.argv[wired.len() + 1..], ["resume", "01a1"]);
+        assert_eq!(never_ran.argv, fresh.argv, "no session yet: a new one");
     }
 
     #[test]
@@ -253,50 +353,5 @@ mod tests {
             assert_eq!(fs::read_to_string(&file).unwrap(), DEFAULT_INSTRUCTIONS);
             assert_ne!(previous, DEFAULT_INSTRUCTIONS);
         }
-    }
-
-    #[test]
-    fn wires_the_masters_waiter_in_when_it_wakes() {
-        let record = MasterRecord {
-            session: "5e55".into(),
-            cwd: PathBuf::from("/work"),
-        };
-        let agents = builtin_agents();
-        let master = &agents[crate::config::MASTER_AGENT];
-        let md = Path::new("/cfg/master.md");
-        let env = LaunchEnv {
-            flow_exe: PathBuf::from("/bin/flow"),
-            ..LaunchEnv::default()
-        };
-
-        for start in [Start::Fresh, Start::Resume] {
-            let woken = record.spec(start, master, &env, md, true).unwrap();
-            assert_eq!(woken.argv[0], "claude");
-            assert_eq!(woken.argv[1], "--settings");
-            assert!(
-                woken.argv[2].contains(r#""args":["wait","--master"]"#),
-                "{}",
-                woken.argv[2]
-            );
-            assert_eq!(
-                woken.argv[3..],
-                record.spec(start, master, &env, md, false).unwrap().argv[1..]
-            );
-        }
-        let plain = Agent {
-            adapter: None,
-            ..master.clone()
-        };
-        assert_eq!(
-            record
-                .spec(Start::Fresh, &plain, &env, md, true)
-                .unwrap()
-                .argv,
-            record
-                .spec(Start::Fresh, &plain, &env, md, false)
-                .unwrap()
-                .argv,
-            "an agent without an adapter has nothing to wire in"
-        );
     }
 }

@@ -31,6 +31,10 @@ pub struct NewFlowForm {
     pub branching: Option<Branching>,
     /// The picked type, an index into the convention's types.
     pub kind: usize,
+    /// The agents a flow can run, the default first; two or more make an agent row.
+    pub agents: Vec<String>,
+    /// The picked agent, an index into agents.
+    pub agent: usize,
     field: Field,
 }
 
@@ -38,6 +42,7 @@ pub struct NewFlowForm {
 enum Field {
     Request,
     Type,
+    Agent,
     Mode,
 }
 
@@ -49,8 +54,9 @@ pub enum FormAction {
 }
 
 impl NewFlowForm {
-    /// Prefilled with the focused pane's repo, and `place` as a plain session's folder.
-    pub fn new(repo: PathBuf, place: String) -> NewFlowForm {
+    /// Prefilled with the focused pane's repo, `place` as a plain session's folder, and the
+    /// default agent picked.
+    pub fn new(repo: PathBuf, place: String, agents: Vec<String>) -> NewFlowForm {
         NewFlowForm {
             request: String::new(),
             folder: place,
@@ -59,8 +65,18 @@ impl NewFlowForm {
             error: None,
             branching: None,
             kind: 0,
+            agents,
+            agent: 0,
             field: Field::Request,
         }
+    }
+
+    /// The picked agent when it is not the default.
+    pub fn picked_agent(&self) -> Option<&str> {
+        (self.agent > 0)
+            .then(|| self.agents.get(self.agent))
+            .flatten()
+            .map(String::as_str)
     }
 
     /// The repo's convention arrived (LoadBranching); the type starts at its first.
@@ -101,9 +117,14 @@ impl NewFlowForm {
         !self.types().is_empty() && self.mode != Mode::Plain
     }
 
-    /// Rows the type row adds to the dialog.
+    /// Whether the agent row shows: there is more than one agent to pick.
+    fn has_agent_row(&self) -> bool {
+        self.agents.len() > 1
+    }
+
+    /// Rows the type and agent rows add to the dialog.
     fn extra_rows(&self) -> u16 {
-        u16::from(self.has_type_row())
+        u16::from(self.has_type_row()) + u16::from(self.has_agent_row())
     }
 
     pub fn on_key(&mut self, key: Key) -> FormAction {
@@ -114,7 +135,8 @@ impl NewFlowForm {
             (_, Key::Tab) => {
                 self.field = match self.field {
                     Field::Request if self.has_type_row() => Field::Type,
-                    Field::Request | Field::Type => Field::Mode,
+                    Field::Request | Field::Type if self.has_agent_row() => Field::Agent,
+                    Field::Request | Field::Type | Field::Agent => Field::Mode,
                     Field::Mode => Field::Request,
                 };
             }
@@ -141,6 +163,13 @@ impl NewFlowForm {
             (Field::Type, Key::Left | Key::Char('h')) => {
                 let count = self.types().len().max(1);
                 self.kind = (self.kind + count - 1) % count;
+            }
+            (Field::Agent, Key::Right | Key::Char(' ' | 'l')) => {
+                self.agent = (self.agent + 1) % self.agents.len().max(1);
+            }
+            (Field::Agent, Key::Left | Key::Char('h')) => {
+                let count = self.agents.len().max(1);
+                self.agent = (self.agent + count - 1) % count;
             }
             (Field::Mode, Key::Right | Key::Char(' ' | 'l')) => {
                 self.mode = self.cycled(1);
@@ -202,7 +231,7 @@ mod tests {
 
     #[test]
     fn edits_the_request_and_submits_only_with_one() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into());
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into(), Vec::new());
 
         assert_eq!(
             form.on_key(Key::Enter),
@@ -225,7 +254,7 @@ mod tests {
 
     #[test]
     fn picks_a_branch_type_when_the_repo_has_types() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into());
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into(), Vec::new());
         form.on_key(Key::Tab);
         form.on_key(Key::Left);
         assert_eq!(form.mode, Mode::Auto, "without types tab goes to the mode");
@@ -247,7 +276,7 @@ mod tests {
 
     #[test]
     fn keeps_wide_characters_inside_the_request_box() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into());
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into(), Vec::new());
         typed(&mut form, &"界".repeat(60));
         let dialog = dialog_area(Rect::new(0, 0, 100, 30), form.extra_rows());
 
@@ -258,7 +287,7 @@ mod tests {
 
     #[test]
     fn cycles_the_mode_from_its_field_only() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into());
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into(), Vec::new());
 
         form.on_key(Key::Char('l'));
         assert_eq!(form.mode, Mode::Guided, "l is typed into the request");
@@ -295,7 +324,8 @@ mod tests {
 
     #[test]
     fn a_plain_session_edits_its_folder_and_has_no_type_row() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/projects/shop".into());
+        let mut form =
+            NewFlowForm::new(PathBuf::from("/shop"), "~/projects/shop".into(), Vec::new());
         form.set_branching(Some(Branching {
             name: "{type}/{slug}".into(),
             types: vec!["feature".into(), "bugfix".into()],

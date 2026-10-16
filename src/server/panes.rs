@@ -1,8 +1,9 @@
+use std::fs;
 use std::sync::mpsc::{self, Sender};
 use std::time::Instant;
 
 use super::host::HostEvent;
-use super::master::Start;
+use super::master::{Instructions, Start};
 use super::reconcile::{self, Wanted};
 use super::{ConnId, Event, Server, spawn_named};
 use crate::event::{Event as LogEvent, EventKind};
@@ -10,6 +11,7 @@ use crate::fold;
 use crate::launch::pane::{self, HOSTED, PaneSpec};
 use crate::proto::{PaneKey, PaneStatus, ServerMsg};
 use crate::server_log;
+use crate::store::Waiter;
 use crate::view::{FlowView, Workspace};
 
 impl Server {
@@ -67,23 +69,40 @@ impl Server {
     }
 
     pub(super) fn open_master(&mut self, start: Start) {
-        let master = self
-            .config
-            .agent(Some(crate::config::MASTER_AGENT))
-            .or_else(|| self.config.agent(None));
-        let Some((name, agent)) = master else {
-            let reason = format!("no agent named {}", self.config.agent);
+        let Some((name, agent)) = self.config.master_agent() else {
+            let missing = self
+                .config
+                .master
+                .agent
+                .as_ref()
+                .unwrap_or(&self.config.agent);
+            let reason = format!("no agent named {missing}");
             self.host.fail(PaneKey::Master, reason);
             return;
+        };
+        if start == Start::Fresh
+            && let Err(error) = self.store.forget_master_session()
+        {
+            server_log::write((self.clock)(), &format!("{error:#}"));
+        }
+        let text = fs::read_to_string(&self.instructions).unwrap_or_else(|error| {
+            let file = self.instructions.display();
+            server_log::write((self.clock)(), &format!("could not read {file}: {error}"));
+            String::new()
+        });
+        let instructions = Instructions {
+            path: self.instructions.clone(),
+            text,
         };
         match self.record.spec(
             start,
             agent,
             &self.env,
-            &self.instructions,
+            &instructions,
             self.config.master.wake,
+            self.store.master_session().as_deref(),
         ) {
-            Some(spec) => match self.host.open(spec) {
+            Some(spec) => match self.open_pane(spec) {
                 Ok(()) if start == Start::Resume => {
                     self.resumed.insert(PaneKey::Master, Instant::now());
                 }
@@ -100,6 +119,19 @@ impl Server {
         }
     }
 
+    /// Opens a pane, forgetting the busy mark an earlier process of it may have left: one killed
+    /// mid-turn never reached its Stop, and a new process runs no turn yet.
+    fn open_pane(&mut self, spec: PaneSpec) -> anyhow::Result<()> {
+        let waiter = match &spec.key {
+            PaneKey::Master => Waiter::Master,
+            PaneKey::Flow(id) => Waiter::Flow(id.clone()),
+        };
+        if let Err(error) = self.store.set_busy(&waiter, false) {
+            server_log::write((self.clock)(), &format!("{error:#}"));
+        }
+        self.host.open(spec)
+    }
+
     fn open_worker(&mut self, spec: PaneSpec) {
         let key = spec.key.clone();
         let PaneKey::Flow(id) = &key else {
@@ -110,7 +142,7 @@ impl Server {
             return;
         };
         let now = (self.clock)();
-        let event = match self.host.open(spec) {
+        let event = match self.open_pane(spec) {
             Ok(()) => {
                 if space.window.is_some() {
                     self.resumed.insert(key.clone(), Instant::now());
@@ -178,7 +210,7 @@ impl Server {
             .agent(Some(&space.agent))
             .and_then(|(_, agent)| pane::worker_spec(&flow, agent, &self.env));
         if let Some(spec) = spec
-            && let Err(error) = self.host.open(spec)
+            && let Err(error) = self.open_pane(spec)
         {
             server_log::write((self.clock)(), &format!("{error:#}"));
         }

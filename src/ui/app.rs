@@ -81,6 +81,8 @@ pub struct App {
     /// When the board last asked for them, and whether that answer is still out.
     overview_at: u64,
     overview_running: bool,
+    /// The agents the new-flow dialog offers, the default first.
+    agents: Vec<String>,
 }
 
 impl App {
@@ -108,6 +110,7 @@ impl App {
             projects: None,
             overview_at: 0,
             overview_running: false,
+            agents: Vec::new(),
         }
     }
 
@@ -134,6 +137,12 @@ impl App {
     /// The store this flow ui belongs to, as `flow status --all` names its root.
     pub fn with_store(mut self, root: String) -> App {
         self.here = Some(root);
+        self
+    }
+
+    /// The agents the new-flow dialog offers, the default first.
+    pub fn with_agents(mut self, agents: Vec<String>) -> App {
+        self.agents = agents;
         self
     }
 

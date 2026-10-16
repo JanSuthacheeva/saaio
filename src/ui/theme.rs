@@ -489,6 +489,7 @@ mod tests {
             changed_at: 0,
             workspace: None,
             answer: None,
+            session: None,
         }
     }
 

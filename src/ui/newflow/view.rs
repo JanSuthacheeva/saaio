@@ -50,8 +50,11 @@ impl Widget for NewFlowView<'_> {
             let text = format!(" {}", clip(error, width.saturating_sub(2)));
             lines.push((6, Line::styled(text, self.theme.state.blocked)));
         }
-        if extra > 0 {
+        if form.has_type_row() {
             lines.push((7, self.type_row()));
+        }
+        if form.has_agent_row() {
+            lines.push((7 + u16::from(form.has_type_row()), self.agent_row()));
         }
         // A terminal too short for the dialog gets the rows that fit.
         for (row, line) in lines {
@@ -140,6 +143,17 @@ impl NewFlowView<'_> {
                 row.push(Span::raw("   "));
             }
             row.extend(self.radio(index == self.form.kind, kind));
+        }
+        Line::from(row)
+    }
+
+    fn agent_row(&self) -> Line<'static> {
+        let mut row = vec![self.heading(Field::Agent, " agent   ")];
+        for (index, agent) in self.form.agents.iter().enumerate() {
+            if index > 0 {
+                row.push(Span::raw("   "));
+            }
+            row.extend(self.radio(index == self.form.agent, agent));
         }
         Line::from(row)
     }
@@ -240,7 +254,7 @@ mod tests {
 
     #[test]
     fn draws_an_error_in_a_terminal_too_small_for_it() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into());
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into(), Vec::new());
         form.error = Some("the branch exists".into());
         let theme = Theme::default();
         for (width, height) in (0..6)

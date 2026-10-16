@@ -1,0 +1,16 @@
+{
+ "session_id": "01a14000-0000-7000-8000-000000000000",
+ "turn_id": "01a143b4-3314-7360-bf9e-17662e72cc8c",
+ "transcript_path": "/home/dev/.codex/sessions/2026/10/16/rollout-2026-10-16T14-51-43-01a14000-0000-7000-8000-000000000000.jsonl",
+ "cwd": "/repo",
+ "hook_event_name": "PreToolUse",
+ "model": "gpt-6-luna",
+ "permission_mode": "default",
+ "tool_name": "collaborationspawn_agent",
+ "tool_input": {
+  "task_name": "count_files",
+  "fork_turns": "all",
+  "message": "gAAAAA...(encrypted)"
+ },
+ "tool_use_id": "call_f4b66771c8e3414baedfc273ab49d955"
+}

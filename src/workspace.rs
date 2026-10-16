@@ -149,6 +149,20 @@ pub fn branch_exists(repo: &Path, branch: &str) -> bool {
     .is_ok()
 }
 
+/// The URLs of every remote of the repository `dir` is in (a fork's upstream too); none without one.
+pub fn remote_urls(dir: &Path) -> Vec<String> {
+    let Ok(text) = git(dir, &["remote", "-v"]) else {
+        return Vec::new();
+    };
+    let mut urls: Vec<String> = text
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(1))
+        .map(String::from)
+        .collect();
+    urls.dedup();
+    urls
+}
+
 /// git branch -D <branch>: the flow's branch once its worktree is gone.
 pub fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
     git(repo, &["branch", "-D", branch]).map(|_| ())

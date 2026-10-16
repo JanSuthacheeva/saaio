@@ -11,6 +11,8 @@ pub struct Env {
     pub flow_home: Option<PathBuf>,
     pub flow_config: Option<PathBuf>,
     pub flow_id: Option<String>,
+    /// $FLOW_MASTER is 1: the master's pane, whose hooks report no flow.
+    pub flow_master: bool,
     pub home: Option<PathBuf>,
     pub xdg_state_home: Option<PathBuf>,
     pub xdg_config_home: Option<PathBuf>,
@@ -65,6 +67,11 @@ impl Env {
         self.home
             .as_deref()
             .filter(|home| !home.as_os_str().is_empty())
+    }
+
+    /// True in the master's session: its hooks record the master, not a flow.
+    pub(crate) fn is_master(&self) -> bool {
+        self.flow_master
     }
 
     /// $FLOW_ID, unless it is empty: set in a worker's session, not in the master's.

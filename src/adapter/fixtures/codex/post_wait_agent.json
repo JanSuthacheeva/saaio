@@ -1,0 +1,15 @@
+{
+ "session_id": "01a14000-0000-7000-8000-000000000000",
+ "turn_id": "01a143b4-3314-7360-bf9e-17662e72cc8c",
+ "transcript_path": "/home/dev/.codex/sessions/2026/10/16/rollout-2026-10-16T14-51-43-01a14000-0000-7000-8000-000000000000.jsonl",
+ "cwd": "/repo",
+ "hook_event_name": "PostToolUse",
+ "model": "gpt-6-luna",
+ "permission_mode": "default",
+ "tool_name": "collaborationwait_agent",
+ "tool_input": {
+  "timeout_ms": 60000
+ },
+ "tool_response": "{\"message\":\"Wait completed.\",\"timed_out\":false}",
+ "tool_use_id": "call_064070d9041c415c8af0b72c3483255e"
+}

@@ -10,6 +10,7 @@ use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
 use crate::launch::pane::HOSTED;
 use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
+use crate::store::Waiter;
 
 /// A server whose master is `cat`, run on its own thread.
 fn start(dir: &Path) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
@@ -570,4 +571,131 @@ fn says_why_it_stops() {
         Stop::Asked(Some(peer(4321))).to_string(),
         "StopServer from pid 4321 in /work (flow test)"
     );
+}
+
+/// A Codex stand-in: ignores flow's wiring and keeps what is typed into it in `typed`.
+fn fake_codex(dir: &Path) -> Agent {
+    let script = dir.join("fake-codex");
+    fs::write(&script, "#!/bin/sh\nexec cat > typed\n").unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    Agent {
+        command: vec![script.display().to_string()],
+        prompt: String::new(),
+        adapter: Some(crate::adapter::Adapter::Codex),
+        resume: Some(vec![script.display().to_string()]),
+    }
+}
+
+/// What a session that had its first turn reported, so flow server may type into it.
+fn had_a_turn(store: &Store, id: &str) {
+    let session = EventKind::Session {
+        id: "01a1".into(),
+        transcript: None,
+    };
+    store.append(id, &LogEvent::new(2, session)).unwrap();
+}
+
+fn tell(store: &Store, id: &str, text: &str) {
+    let message = EventKind::Message { text: text.into() };
+    store.append(id, &LogEvent::new(3, message)).unwrap();
+}
+
+fn typed(dir: &Path, name: &str) -> String {
+    fs::read_to_string(dir.join(name).join("typed")).unwrap_or_default()
+}
+
+#[test]
+fn types_the_masters_message_into_an_idle_codex_worker_once() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let csv = started_flow(&store, dir.path(), "csv", "codex");
+    let busy = started_flow(&store, dir.path(), "busy", "codex");
+    had_a_turn(&store, &csv);
+    had_a_turn(&store, &busy);
+    store.set_busy(&Waiter::Flow(csv.clone()), true).unwrap();
+    let (paths, handle) = start_with_agents(
+        dir.path(),
+        BTreeMap::from([("codex".to_string(), fake_codex(dir.path()))]),
+    );
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !dir.path().join("busy/typed").exists() {
+        assert!(Instant::now() < deadline, "the busy worker never started");
+        thread::sleep(Duration::from_millis(20));
+    }
+    store.set_busy(&Waiter::Flow(busy.clone()), true).unwrap();
+
+    tell(&store, &csv, "Tabs.");
+    tell(&store, &busy, "Spaces.");
+    while !typed(dir.path(), "csv").contains("Tabs.") {
+        assert!(
+            Instant::now() < deadline,
+            "never typed: {:?}",
+            typed(dir.path(), "csv")
+        );
+        thread::sleep(Duration::from_millis(50));
+    }
+    thread::sleep(WATCH_EVERY * 3);
+
+    let text = typed(dir.path(), "csv");
+    assert!(text.contains("message from the flow master:"), "{text:?}");
+    assert_eq!(text.matches("Tabs.").count(), 1, "once: {text:?}");
+    assert_eq!(
+        store.delivered(&csv),
+        1,
+        "a busy mark from before its pane opened is stale"
+    );
+    assert_eq!(
+        typed(dir.path(), "busy"),
+        "",
+        "a busy worker gets it at its Stop"
+    );
+    assert_eq!(store.delivered(&busy), 0);
+
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
+fn never_types_into_a_session_that_had_no_turn_or_a_claude_worker() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let fresh = started_flow(&store, dir.path(), "fresh", "codex");
+    let claude = started_flow(&store, dir.path(), "claude", "claude-cat");
+    had_a_turn(&store, &claude);
+    let cat = Agent {
+        adapter: Some(crate::adapter::Adapter::ClaudeCode),
+        ..fake_codex(dir.path())
+    };
+    let (paths, handle) = start_with_agents(
+        dir.path(),
+        BTreeMap::from([
+            ("codex".to_string(), fake_codex(dir.path())),
+            ("claude-cat".to_string(), cat),
+        ]),
+    );
+
+    tell(&store, &fresh, "Tabs.");
+    tell(&store, &claude, "Tabs.");
+    thread::sleep(WATCH_EVERY * 4);
+
+    assert_eq!(
+        typed(dir.path(), "fresh"),
+        "",
+        "still starting, maybe at its hooks review"
+    );
+    assert_eq!(typed(dir.path(), "claude"), "", "flow wait wakes it");
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
 }

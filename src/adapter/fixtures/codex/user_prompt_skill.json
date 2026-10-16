@@ -1,0 +1,10 @@
+{
+ "session_id": "01a14000-0000-7000-8000-000000000000",
+ "turn_id": "01a143b2-3ee2-7320-8f2d-49e549cd0cc5",
+ "transcript_path": "/home/dev/.codex/sessions/2026/10/16/rollout-2026-10-16T14-51-43-01a14000-0000-7000-8000-000000000000.jsonl",
+ "cwd": "/repo",
+ "hook_event_name": "UserPromptSubmit",
+ "model": "gpt-6-luna",
+ "permission_mode": "default",
+ "prompt": "$demo-skill please run this skill"
+}

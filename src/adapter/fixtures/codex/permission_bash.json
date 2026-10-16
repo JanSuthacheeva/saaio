@@ -1,0 +1,14 @@
+{
+ "session_id": "01a14000-0000-7000-8000-000000000000",
+ "turn_id": "01a143b2-ffcb-71d0-b18d-5b58e899df39",
+ "transcript_path": "/home/dev/.codex/sessions/2026/10/16/rollout-2026-10-16T14-51-43-01a14000-0000-7000-8000-000000000000.jsonl",
+ "cwd": "/repo",
+ "hook_event_name": "PermissionRequest",
+ "model": "gpt-6-luna",
+ "permission_mode": "default",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "touch notes.txt",
+  "description": "May I create the requested empty notes.txt file in this repo?"
+ }
+}

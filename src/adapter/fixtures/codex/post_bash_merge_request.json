@@ -1,0 +1,15 @@
+{
+ "session_id": "01a14000-0000-7000-8000-000000000000",
+ "turn_id": "01a143b2-e682-7982-a32f-3e9572c6c0f5",
+ "transcript_path": "/home/dev/.codex/sessions/2026/10/16/rollout-2026-10-16T14-51-43-01a14000-0000-7000-8000-000000000000.jsonl",
+ "cwd": "/repo",
+ "hook_event_name": "PostToolUse",
+ "model": "gpt-6-luna",
+ "permission_mode": "default",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "PATH=/tmp/probe/bin:$PATH gh pr create --fill"
+ },
+ "tool_response": "Creating pull request for probe into main\nhttps://github.com/probe/repo/pull/7\n",
+ "tool_use_id": "exec-1eb8c254-d8a8-430a-969b-dc1063aae4ca"
+}

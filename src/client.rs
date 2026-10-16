@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
-use crate::launch::worktree;
+use crate::launch::{pane, worktree};
 use crate::proto::{self, BUILD, ClientMsg, PROTOCOL_VERSION, Peer, Role, ServerMsg};
 use crate::registry;
 use crate::server_log;
@@ -265,12 +265,12 @@ fn socket_path_for(root: &Path, tmp: &Path) -> PathBuf {
     ))
 }
 
-/// `<exe> server` with `env` and without the hook variables of the session it starts from, so a
-/// flow ui opened inside a worker gives its panes none of that worker's identity or slot.
+/// `<exe> server` with `env` and without the hook variables or FLOW_MASTER of the session it starts
+/// from, so a flow ui opened inside a worker or the master gives its panes none of that identity.
 fn server_command(exe: &Path, env: &[(String, String)]) -> Command {
     let mut command = Command::new(exe);
     command.arg("server");
-    for var in worktree::HOOK_VARS {
+    for var in worktree::HOOK_VARS.iter().chain(&[pane::MASTER_ENV]) {
         command.env_remove(var);
     }
     command.envs(env.iter().map(|(key, value)| (key, value)));
@@ -500,5 +500,28 @@ mod tests {
             socket_path(&store),
             PathBuf::from("/state/flow/server.sock")
         );
+    }
+
+    #[test]
+    fn starts_the_server_without_the_identity_of_the_session_it_comes_from() {
+        let command = server_command(
+            Path::new("/bin/flow"),
+            &[("FLOW_HOME".into(), "/state".into())],
+        );
+        let envs: Vec<(String, Option<String>)> = command
+            .get_envs()
+            .map(|(key, value)| {
+                let value = value.map(|value| value.to_string_lossy().into_owned());
+                (key.to_string_lossy().into_owned(), value)
+            })
+            .collect();
+
+        for var in worktree::HOOK_VARS.iter().chain(&[pane::MASTER_ENV]) {
+            assert!(
+                envs.contains(&(var.to_string(), None)),
+                "{var} removed: {envs:?}"
+            );
+        }
+        assert!(envs.contains(&("FLOW_HOME".into(), Some("/state".into()))));
     }
 }

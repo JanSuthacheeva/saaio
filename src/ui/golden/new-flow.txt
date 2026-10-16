@@ -16,13 +16,13 @@
                │ │                                                                        │ │               │ RUNNING 1
                │ ╰────────────────────────────────────────────────────────────────────────╯ │               │ 3 ◓ export-csv                      1h
                │                                                                            │               │     ●───●───●───○ review           6/6
-               │ mode    ( ) auto   (•) guided   ( ) plain      guided stops at every phase │               │     agent: review changes
-               │ creates a branch, a worktree and a slot                                    │               │
-               │                                                                            │               │ DONE 1
-               │────────────────────────────────────────────────────────────────────────────│               │ 4 ✓ shop-198                        2h
-               │ enter start   tab next field   esc cancel                                  │               │     ●───●───●───● MR !418        in 0s
+               │ agent   (•) claude   ( ) codex                                             │               │     agent: review changes
+               │ mode    ( ) auto   (•) guided   ( ) plain      guided stops at every phase │               │
+               │ creates a branch, a worktree and a slot                                    │               │ DONE 1
+               │                                                                            │               │ 4 ✓ shop-198                        2h
+               │────────────────────────────────────────────────────────────────────────────│               │     ●───●───●───● MR !418        in 0s
+               │ enter start   tab next field   esc cancel                                  │               │
                ╰────────────────────────────────────────────────────────────────────────────╯               │
-                                                                                                            │
                                                                                                             │
                                                                                                             │
                                                                                                             │

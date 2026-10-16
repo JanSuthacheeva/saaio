@@ -28,6 +28,7 @@ impl Server {
                 self.send_full_frame();
             }
             ClientMsg::Input(bytes) => {
+                self.typed_at.insert(self.focus.clone(), Instant::now());
                 if let Err(error) = self.host.write(&self.focus, &bytes) {
                     server_log::write((self.clock)(), &format!("{error:#}"));
                 }

@@ -5,6 +5,9 @@ use crate::launch::worktree::{hook_env, repo_of};
 use crate::proto::PaneKey;
 use crate::view::{FlowView, Workspace};
 
+/// Set to 1 in the master's pane, so the hooks it shares with workers know whose they are.
+pub const MASTER_ENV: &str = "FLOW_MASTER";
+
 /// Workspace.window of a worker flow ui has opened once; its next open resumes it.
 pub const HOSTED: &str = "flow-ui";
 
@@ -28,11 +31,11 @@ pub struct PaneSpec {
 /// The agent's command with {id}, {name}, {prompt}, {request} filled in ({prompt} itself filled first);
 /// an argument that fills to nothing is dropped, so an agent without a prompt gets no empty one.
 pub fn agent_argv(agent: &Agent, id: &str, name: &str, request: &str) -> Vec<String> {
-    let prompt = fill(&agent.prompt, id, name, request, "");
+    let prompt = fill(&agent.prompt, id, name, request, "", "");
     agent
         .command
         .iter()
-        .map(|part| fill(part, id, name, request, &prompt))
+        .map(|part| fill(part, id, name, request, &prompt, ""))
         .filter(|part| !part.is_empty())
         .collect()
 }
@@ -43,18 +46,19 @@ pub fn plain_argv(agent: &Agent, id: &str, name: &str) -> Vec<String> {
     agent
         .command
         .iter()
-        .map(|part| fill(part, id, name, "", ""))
+        .map(|part| fill(part, id, name, "", "", ""))
         .filter(|part| !part.is_empty())
         .collect()
 }
 
-/// The agent's resume command with {id} and {name} filled in; None when it has none.
-pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>> {
+/// The agent's resume command with {id}, {name} and {session}, the id the harness resumes by,
+/// filled in; None when it has none.
+pub fn resume_argv(agent: &Agent, id: &str, name: &str, session: &str) -> Option<Vec<String>> {
     let resume = agent.resume.as_ref()?;
     Some(
         resume
             .iter()
-            .map(|part| fill(part, id, name, "", ""))
+            .map(|part| fill(part, id, name, "", "", session))
             .filter(|part| !part.is_empty())
             .collect(),
     )
@@ -63,12 +67,15 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>> {
 /// The agent's command the first time, its resume command once it ran somewhere (window set:
 /// HOSTED, or a tmux window from before flow ui), since its session id is taken from then on;
 /// either way with the agent's adapter wired in right after the program. A plain session starts
-/// without a prompt and gets the adapter's plain wiring. None when the flow has no workspace, or
-/// must resume and the agent has no resume template.
+/// without a prompt and gets the adapter's plain wiring. A harness that picks its own session
+/// resumes by the one its hooks reported, and starts again when it never reported one (it had no
+/// turn). None when the flow has no workspace, or must resume and the agent has no resume template.
 pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec> {
     let space = flow.workspace.as_ref()?;
-    let mut argv = if space.window.is_some() {
-        resume_argv(agent, &flow.id, &flow.name)?
+    let session = flow.session.as_ref().map(|session| session.id.as_str());
+    let resumes = space.window.is_some() && (session.is_some() || !names_session(agent));
+    let mut argv = if resumes {
+        resume_argv(agent, &flow.id, &flow.name, session.unwrap_or(&flow.id))?
     } else if flow.is_plain() {
         plain_argv(agent, &flow.id, &flow.name)
     } else {
@@ -89,6 +96,15 @@ pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<Pa
         cwd: PathBuf::from(&space.path),
         env: worker_env(flow, space, env),
     })
+}
+
+/// True when the agent resumes by the session its harness picked, not by flow's id.
+pub fn names_session(agent: &Agent) -> bool {
+    agent
+        .resume
+        .iter()
+        .flatten()
+        .any(|part| part.contains("{session}"))
 }
 
 /// What a worker's session knows of its flow: the hooks' variables, so it can find its own ports
@@ -113,11 +129,19 @@ pub fn pane_env(env: &LaunchEnv) -> Vec<(String, String)> {
     vars
 }
 
-fn fill(template: &str, id: &str, name: &str, request: &str, prompt: &str) -> String {
+fn fill(
+    template: &str,
+    id: &str,
+    name: &str,
+    request: &str,
+    prompt: &str,
+    session: &str,
+) -> String {
     template
         .replace("{prompt}", prompt)
         .replace("{request}", request)
         .replace("{name}", name)
+        .replace("{session}", session)
         .replace("{id}", id)
 }
 
@@ -177,11 +201,16 @@ mod tests {
         };
 
         assert_eq!(
-            resume_argv(&agent, "7f3c", "shop-217"),
+            resume_argv(&agent, "7f3c", "shop-217", "7f3c"),
             Some(strings(&["claude", "-n", "shop-217", "--resume", "7f3c"]))
         );
+        agent.resume = Some(strings(&["codex", "resume", "{session}"]));
+        assert_eq!(
+            resume_argv(&agent, "7f3c", "shop-217", "01a1"),
+            Some(strings(&["codex", "resume", "01a1"]))
+        );
         agent.resume = None;
-        assert_eq!(resume_argv(&agent, "7f3c", "shop-217"), None);
+        assert_eq!(resume_argv(&agent, "7f3c", "shop-217", "7f3c"), None);
     }
 
     #[test]
@@ -292,6 +321,58 @@ mod tests {
         assert_eq!(fresh.argv[3], "--append-system-prompt");
         assert_eq!(&fresh.argv[5..7], ["-n", "shop-217"]);
         assert_eq!(&resumed.argv[7..], ["--resume", "7f3c"]);
+    }
+
+    fn codex_worker(window: Option<&str>, session: Option<&str>) -> FlowView {
+        let mut flow = worker(window);
+        flow.workspace.as_mut().unwrap().agent = "codex".into();
+        flow.session = session.map(|id| crate::view::Session {
+            id: id.into(),
+            transcript: None,
+        });
+        flow
+    }
+
+    #[test]
+    fn resumes_a_codex_worker_by_the_session_it_picked_or_starts_it_again() {
+        let agents = crate::config::builtin_agents();
+        let codex = Agent {
+            adapter: None,
+            ..agents["codex"].clone()
+        };
+        let env = LaunchEnv::default();
+
+        let resumed = worker_spec(&codex_worker(Some(HOSTED), Some("01a1")), &codex, &env);
+        assert_eq!(resumed.unwrap().argv, strings(&["codex", "resume", "01a1"]));
+        let never_ran = worker_spec(&codex_worker(Some(HOSTED), None), &codex, &env).unwrap();
+        assert_eq!(
+            never_ran.argv,
+            strings(&["codex", "$ship-feature SHOP-217 add CSV export"]),
+            "a session that never had a turn starts again"
+        );
+        let mut plain = codex_worker(Some(HOSTED), None);
+        plain.mode = Mode::Plain;
+        assert_eq!(
+            worker_spec(&plain, &codex, &env).unwrap().argv,
+            strings(&["codex"])
+        );
+    }
+
+    #[test]
+    fn wires_codex_hooks_in_before_its_resume_subcommand() {
+        let agents = crate::config::builtin_agents();
+        let codex = &agents["codex"];
+        let env = LaunchEnv {
+            flow_exe: PathBuf::from("/bin/flow"),
+            ..LaunchEnv::default()
+        };
+
+        let resumed = worker_spec(&codex_worker(Some(HOSTED), Some("01a1")), codex, &env).unwrap();
+
+        let wiring = crate::adapter::Adapter::Codex.wiring(Path::new("/bin/flow"));
+        assert_eq!(resumed.argv[0], "codex");
+        assert_eq!(resumed.argv[1..=wiring.len()], wiring[..]);
+        assert_eq!(resumed.argv[wiring.len() + 1..], ["resume", "01a1"]);
     }
 
     fn scratch(window: Option<&str>) -> FlowView {
