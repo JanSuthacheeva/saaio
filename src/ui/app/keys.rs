@@ -275,7 +275,8 @@ impl App {
     /// The new-flow dialog for the repo in view, asking for its branch convention.
     pub(super) fn open_new_flow(&mut self) -> Vec<Effect> {
         let repo = self.focused_repo();
-        self.view = View::NewFlow(NewFlowForm::new(repo.clone()));
+        let place = self.tilde(&repo.display().to_string());
+        self.view = View::NewFlow(NewFlowForm::new(repo.clone(), place));
         vec![Effect::LoadBranching(repo)]
     }
 

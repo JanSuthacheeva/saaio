@@ -87,6 +87,33 @@ fn worker(id: &str, mode: crate::event::Mode, age: u64, events: Vec<EventKind>) 
     fold::fold(id, &log, None, NOW).unwrap()
 }
 
+/// A plain session in `folder`, started `age` minutes ago, with the events after its Workspace.
+fn plain_session(id: &str, folder: &str, age: u64, events: Vec<EventKind>) -> FlowView {
+    let at = NOW - age * MINUTE;
+    let mut log = vec![
+        Event::new(
+            at,
+            EventKind::Started {
+                name: id.into(),
+                request: String::new(),
+                mode: crate::event::Mode::Plain,
+            },
+        ),
+        Event::new(
+            at,
+            EventKind::Workspace {
+                path: folder.into(),
+                branch: None,
+                slot: None,
+                window: Some("flow-ui".into()),
+                agent: "claude".into(),
+            },
+        ),
+    ];
+    log.extend(events.into_iter().map(|kind| Event::new(at, kind)));
+    fold::fold(id, &log, None, NOW).unwrap()
+}
+
 fn fleet() -> Board {
     use crate::event::Mode::{Auto, Guided};
     use crate::event::Phase::{Design, Implement, Review};

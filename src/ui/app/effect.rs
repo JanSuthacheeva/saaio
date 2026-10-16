@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use crate::cli::output::remove::Refusal;
+use crate::event::Mode;
 use crate::proto::{ClientMsg, Modes};
 use crate::ui::newflow::NewFlowForm;
 
@@ -39,6 +40,11 @@ impl Job {
     /// The arguments after the flow binary.
     pub fn args(&self) -> Vec<String> {
         match self {
+            Job::Start(form) if form.mode == Mode::Plain => vec![
+                "start".to_string(),
+                "--plain".to_string(),
+                form.folder.trim().to_string(),
+            ],
             Job::Start(form) => {
                 let mut args = vec![
                     "start".to_string(),

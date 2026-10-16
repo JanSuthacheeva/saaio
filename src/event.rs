@@ -156,19 +156,15 @@ fn cut_to(text: &mut String, limit: usize) {
 }
 
 impl Mode {
+    /// auto, guided, plain - the new-flow dialog's order.
+    pub const ALL: [Mode; 3] = [Mode::Auto, Mode::Guided, Mode::Plain];
+
     /// The name the command line and the logs use: guided, auto, plain.
     pub fn name(self) -> &'static str {
         match self {
             Mode::Guided => "guided",
             Mode::Auto => "auto",
             Mode::Plain => "plain",
-        }
-    }
-
-    pub fn toggled(self) -> Mode {
-        match self {
-            Mode::Guided => Mode::Auto,
-            Mode::Auto | Mode::Plain => Mode::Guided,
         }
     }
 }
@@ -209,7 +205,7 @@ mod tests {
 
     #[test]
     fn names_modes_and_phases_as_the_log_does() {
-        for mode in [Mode::Guided, Mode::Auto, Mode::Plain] {
+        for mode in Mode::ALL {
             assert_eq!(serde_json::to_value(mode).unwrap(), mode.name());
         }
         for (index, phase) in Phase::ALL.into_iter().enumerate() {

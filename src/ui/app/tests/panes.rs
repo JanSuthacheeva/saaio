@@ -220,7 +220,7 @@ fn draws_every_view_in_a_terminal_of_any_size() {
             selected: 2,
             all: true,
         }),
-        View::NewFlow(NewFlowForm::new(PathBuf::from("/shop"))),
+        View::NewFlow(NewFlowForm::new(PathBuf::from("/shop"), "/shop".into())),
         View::History(3),
         View::Stop(vec!["shop-221".into()]),
         View::Help,

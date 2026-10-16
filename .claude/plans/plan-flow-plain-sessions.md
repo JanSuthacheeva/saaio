@@ -225,6 +225,9 @@ impl NewFlowView<'_> {
 }
 ```
 
+`NewFlowView` moved to `src/ui/newflow/view.rs` (re-exported), since the dialog passed 400 lines
+(done in the build). Ctrl-w in a folder drops its last folder.
+
 Box label is `request` or `folder`. Left/right on the mode row cycle `Mode::ALL`, wrapping. Tab skips
 the type row in plain mode. Submit needs a non-empty `text()`.
 
@@ -356,7 +359,7 @@ The session stops; flow remove
 
 ### flow ui
 
-- [ ] `Mode::ALL`, remove `toggled()`; `NewFlowForm` folder, `text`/`text_mut`, mode cycling through `Mode::ALL`, type row hidden in plain, `new(repo, place)`; `Job::args` for plain; `open_new_flow` place, `focused_repo` for plain; newflow and app tests, golden `new-flow-plain.txt`
+- [x] `Mode::ALL`, remove `toggled()`; `NewFlowForm` folder, `text`/`text_mut`, mode cycling through `Mode::ALL`, type row hidden in plain, `new(repo, place)`; `Job::args` for plain; `open_new_flow` place, `focused_repo` for plain; newflow and app tests, golden `new-flow-plain.txt`
 - [ ] Plain session look: sidebar `plain` tag and no steps, card `· plain` and folder, board detail facts, chrome title folder, C-space Q list, `PeekLine::Code` branch Option; golden with a plain session
 
 ### Docs and check

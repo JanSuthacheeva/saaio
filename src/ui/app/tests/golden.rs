@@ -66,6 +66,11 @@ fn every_view_looks_as_it_did() {
     new_flow.on_input(Routed::Command(Command::NewFlow));
     golden("new-flow", &render_at(&new_flow, FLEET));
 
+    let mut new_session = board_app();
+    new_session.on_input(Routed::Command(Command::NewFlow));
+    new_session.on_input(Routed::View(vec![Key::Tab, Key::Right]));
+    golden("new-flow-plain", &render_at(&new_session, FLEET));
+
     let mut help = board_app();
     help.on_input(Routed::Command(Command::Help));
     golden("help", &render_at(&help, FLEET));

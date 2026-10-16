@@ -178,15 +178,21 @@ impl App {
         }
     }
 
-    /// The repository of the pane in view: the master's directory, or the repo a worker's worktree is in.
+    /// The repository of the pane in view: the master's directory, the repo a worker's worktree is
+    /// in, or a plain session's folder.
     fn focused_repo(&self) -> PathBuf {
-        let worktree = match &self.focus {
+        let focused = match &self.focus {
             PaneKey::Master => None,
-            PaneKey::Flow(id) => self
-                .worker(id)
-                .and_then(|flow| flow.workspace.as_ref())
-                .map(|space| space.path.clone()),
+            PaneKey::Flow(id) => self.worker(id),
         };
+        if let Some(flow) = focused.filter(|flow| flow.is_plain())
+            && let Some(space) = &flow.workspace
+        {
+            return PathBuf::from(&space.path);
+        }
+        let worktree = focused
+            .and_then(|flow| flow.workspace.as_ref())
+            .map(|space| space.path.clone());
         let repo = worktree.and_then(|path| {
             let marker = format!("/{WORKTREES_DIR}/");
             path.find(&marker).map(|at| path[..at].to_string())
