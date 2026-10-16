@@ -8,8 +8,8 @@ use crate::proto::{PaneKey, PaneStatus};
 use crate::text::plural;
 use crate::ui::board::{BoardState, BoardView};
 use crate::ui::dialog::{self, Dialog};
-use crate::ui::fit::clip;
-use crate::ui::hints::Hint;
+use crate::ui::fit::{clip, spans_width};
+use crate::ui::hints::{self, Hint};
 use crate::ui::layout::{self, Areas};
 use crate::ui::newflow::NewFlowView;
 use crate::ui::peek::PeekLine;
@@ -126,25 +126,7 @@ impl App {
             ),
             View::Help => frame.render_widget(dialog::help(theme), areas.session()),
             View::Board(_) => {}
-            View::History(back) => {
-                let hint = Line::from(vec![
-                    Span::styled(format!(" ↑ {back} lines back   "), theme.state.waiting),
-                    Span::styled("k j", theme.ui.key),
-                    Span::styled(" scroll  ", theme.ui.faint),
-                    Span::styled("g G", theme.ui.key),
-                    Span::styled(" ends  ", theme.ui.faint),
-                    Span::styled("q", theme.ui.key),
-                    Span::styled(" live ", theme.ui.faint),
-                ]);
-                let edge = Rect::new(
-                    areas.pane.x,
-                    areas.pane.y + areas.pane.height.saturating_sub(1),
-                    areas.pane.width,
-                    1,
-                );
-                frame.render_widget(Clear, edge);
-                frame.render_widget(Paragraph::new(hint).alignment(Alignment::Right), edge);
-            }
+            View::History(back) => self.draw_history(frame, areas.pane, *back, theme),
             View::NewFlow(form) => {
                 let repo = form.repo.display().to_string();
                 let view = NewFlowView {
@@ -172,6 +154,37 @@ impl App {
                 }
             }
         }
+    }
+
+    /// The scrollback hint along the pane's last row, fitted by hints::line.
+    fn draw_history(&self, frame: &mut Frame, pane: Rect, back: u32, theme: &Theme) {
+        let mut spans = vec![Span::styled(
+            format!("↑ {back} lines back"),
+            theme.state.waiting,
+        )];
+        let keys = [
+            Hint::new("k j", "scroll"),
+            Hint::new("g G", "ends"),
+            Hint::new("q", "live").kept(),
+        ];
+        let room = usize::from(pane.width).saturating_sub(spans_width(&spans) + 5);
+        let keys = hints::line(&keys, room, theme);
+        if keys.width() > 0 {
+            spans.push(Span::raw("   "));
+            spans.extend(keys.spans);
+        }
+        spans.push(Span::raw(" "));
+        let edge = Rect::new(
+            pane.x,
+            pane.y + pane.height.saturating_sub(1),
+            pane.width,
+            1,
+        );
+        frame.render_widget(Clear, edge);
+        frame.render_widget(
+            Paragraph::new(Line::from(spans)).alignment(Alignment::Right),
+            edge,
+        );
     }
 
     /// The stop question, or the flows it would leave unfinished with keep, end and esc as keys.

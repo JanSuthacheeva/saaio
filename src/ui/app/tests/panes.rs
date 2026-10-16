@@ -166,9 +166,17 @@ fn scrolls_the_history_and_goes_back_to_live() {
 
     let terminal = render(&app);
     assert!(
-        row(&terminal, 5).contains("↑ 118 lines back   k j scroll  g G ends  q live"),
+        row(&terminal, 5).contains("↑ 118 lines back   k j scroll   g G ends   q live"),
         "{}",
         row(&terminal, 5)
+    );
+    app.on_resize(Size { cols: 36, rows: 10 });
+    let narrow = render_at(&app, Size { cols: 36, rows: 10 });
+    let last = app.areas().pane.bottom() - 1;
+    assert!(
+        row(&narrow, last).ends_with("↑ 118 lines back   q live "),
+        "whole hints give way, q stays: {}",
+        row(&narrow, last)
     );
     assert_eq!(
         app.on_input(Routed::View(vec![Key::Char('q')])),
