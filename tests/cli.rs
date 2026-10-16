@@ -778,6 +778,31 @@ fn start_refuses_outside_a_repository() {
 }
 
 #[test]
+fn start_and_new_refuse_a_request_over_the_limit_before_making_anything() {
+    let lab = Lab::new();
+    let long = format!("SHOP-301 {}", "ä".repeat(20_000 - 9 + 1));
+    let refused = |output: Output| {
+        assert_eq!(output.status.code(), Some(1), "{}", stdout(&output));
+        stdout(&output)
+    };
+
+    let text = refused(lab.start(&[&long]));
+    assert!(
+        text.contains("the request is 20001 chars, over 20000"),
+        "{text}"
+    );
+    assert!(text.contains("name it in the request"), "{text}");
+    let text = refused(lab.run(&["new", "--name", "shop-301", "--request", &long]));
+    assert!(text.contains("over 20000"), "{text}");
+    assert!(stdout(&lab.run(&["status"])).contains("count: 0"));
+    assert!(lab.branches().is_empty());
+
+    let fits = &long[..long.len() - "ä".len()];
+    assert!(lab.start(&[fits]).status.success());
+    assert_eq!(lab.branches(), ["flow/shop-301"]);
+}
+
+#[test]
 fn a_failing_setup_marks_the_flow_blocked_but_still_records_the_worker() {
     let lab = Lab::new();
     lab.hook(

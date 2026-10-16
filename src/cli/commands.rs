@@ -13,6 +13,7 @@ pub(super) mod ui;
 pub(super) mod wait;
 
 use crate::cli::output::Failure;
+use crate::event::REQUEST_LIMIT;
 use crate::fold;
 use crate::store::Store;
 use crate::view::FlowView;
@@ -21,6 +22,18 @@ use crate::view::FlowView;
 fn views(store: &Store, now: u64) -> (Vec<FlowView>, Vec<String>) {
     let (logs, warnings) = store.logs();
     (fold::views(&logs, now), warnings)
+}
+
+/// Refuses a request over REQUEST_LIMIT chars, so it is never cut on the way to the worker.
+fn check_request(request: &str) -> Result<(), Failure> {
+    let length = request.chars().count();
+    if length > REQUEST_LIMIT {
+        return Err(Failure::error(
+            format!("the request is {length} chars, over {REQUEST_LIMIT}"),
+            vec!["Put the details in a file in the repo and name it in the request".to_string()],
+        ));
+    }
+    Ok(())
 }
 
 fn no_flow(name: &str) -> Failure {
