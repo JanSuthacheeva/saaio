@@ -167,8 +167,12 @@ fn shell_quoted(text: &str) -> String {
     format!("'{}'", text.replace('\'', r"'\''"))
 }
 
-/// A prompt begins a turn, a Stop ends it, an Esc interrupts it.
+/// A prompt begins a turn, a Stop ends it, an Esc interrupts it; a subagent's (agent_id set) are
+/// not the session's.
 pub fn turn(payload: &Value) -> Option<Turn> {
+    if payload.get("agent_id").is_some() {
+        return None;
+    }
     match payload["hook_event_name"].as_str()? {
         "UserPromptSubmit" => Some(Turn::Began),
         "Stop" => Some(Turn::Ended),

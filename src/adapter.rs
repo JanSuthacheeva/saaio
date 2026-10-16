@@ -289,6 +289,12 @@ mod tests {
             Some(Turn::Interrupted)
         );
         assert_eq!(Adapter::Codex.turn(&event("PreToolUse")), None);
+        let subagent = serde_json::json!({ "hook_event_name": "Stop", "agent_id": "01a1" });
+        assert_eq!(
+            Adapter::Codex.turn(&subagent),
+            None,
+            "a subagent's turn is not the session's"
+        );
         assert_eq!(
             Adapter::ClaudeCode.turn(&event("Stop")),
             None,

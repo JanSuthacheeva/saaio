@@ -421,7 +421,7 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 
 ### Review follow-ups (decided 2026-10-16)
 - [x] Clear a session's busy mark when the server opens its pane (open_worker and open_master, before Host::open): a fresh process is never mid-turn; server test sets busy after the pane opened
-- [ ] codex::turn returns None for a subagent's event (agent_id set), as translate does; test
+- [x] codex::turn returns None for a subagent's event (agent_id set), as translate does; test
 - [ ] client::server_command strips FLOW_MASTER with the hook variables; test
 - Not built: a user [agents.master] still passing --append-system-prompt-file gets master.md twice; a CHANGELOG line at the public release says so.
 
