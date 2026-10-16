@@ -4,7 +4,7 @@ use std::time::Duration;
 use crate::cli::output::Failure;
 use crate::cli::output::remove::{BranchFate, Retired, UNCOMMITTED, UNMERGED};
 use crate::client::{self, Closing};
-use crate::launch;
+use crate::launch::worktree;
 use crate::store::Store;
 use crate::text::plural;
 use crate::view::FlowView;
@@ -85,13 +85,13 @@ pub fn retire_worktree(flow: &FlowView, uncommitted: Uncommitted) -> Retired {
     let Some(space) = &flow.workspace else {
         return Retired::NoWorktree;
     };
-    let Some(repo) = launch::repo_of(space) else {
+    let Some(repo) = worktree::repo_of(space) else {
         return Retired::NoWorktree;
     };
     if !Path::new(&space.path).exists() {
         return Retired::NoWorktree;
     }
-    let env = launch::hook_env(&flow.id, &flow.name, &repo, space);
+    let env = worktree::hook_env(&flow.id, &flow.name, &repo, space);
     let _ = workspace::run_hook(&repo, Hook::Teardown, space, &env);
     let force = uncommitted == Uncommitted::Discard;
     if workspace::remove_worktree(&repo, space, force).unwrap_or(false) {
@@ -122,5 +122,5 @@ pub fn drop_branch(flow: &FlowView, unmerged: Unmerged) -> BranchFate {
 /// The repository and branch of a started flow.
 fn branch_of(flow: &FlowView) -> Option<(PathBuf, &str)> {
     let space = flow.workspace.as_ref()?;
-    Some((launch::repo_of(space)?, &space.branch))
+    Some((worktree::repo_of(space)?, &space.branch))
 }

@@ -8,7 +8,7 @@ use crate::client::{self, Client};
 use crate::config::Config;
 use crate::event::{Event, EventKind, Mode};
 use crate::fold;
-use crate::launch;
+use crate::launch::{name, worktree};
 use crate::proto::Role;
 use crate::registry::Registry;
 use crate::slots::{self, Claim, Slots};
@@ -66,7 +66,7 @@ pub fn run(
         .filter(|flow| !flow.is_finished())
         .map(|flow| flow.name.clone())
         .collect();
-    let name = launch::flow_name(args.name.as_deref(), &args.request, &taken);
+    let name = name::flow_name(args.name.as_deref(), &args.request, &taken);
     let first = Event::new(
         now,
         EventKind::Started {
@@ -86,7 +86,7 @@ pub fn run(
     let slot = claim_slot(registry, &claim, &flows, now)?;
     rollback.slot = Some((slot, claim));
     let base = branching::branch_name(branching.as_ref(), kind.as_deref(), &args.request, &name);
-    let space = launch::workspace_for(&repo, &name, free_branch(&repo, &base), slot, agent_name);
+    let space = worktree::workspace_for(&repo, &name, free_branch(&repo, &base), slot, agent_name);
     workspace::create_worktree(&repo, &space)?;
     rollback.disarm();
 
@@ -94,7 +94,7 @@ pub fn run(
         &repo,
         Hook::Setup,
         &space,
-        &launch::hook_env(&id, &name, &repo, &space),
+        &worktree::hook_env(&id, &name, &repo, &space),
     ) {
         Ok(true) => Setup::Ran,
         Ok(false) => Setup::None,
@@ -146,7 +146,7 @@ fn claim_slot(
     now: u64,
 ) -> Result<u8, Failure> {
     let mut held = held_slots(registry, now);
-    held.extend(launch::taken_slots(flows));
+    held.extend(slots::taken_slots(flows));
     Slots::at(registry)
         .claim(claim, &held, |claim| claim_is_live(claim, now))?
         .ok_or_else(|| {
@@ -166,7 +166,7 @@ fn held_slots(registry: &Registry, now: u64) -> Vec<u8> {
     registry
         .stores()
         .iter()
-        .flat_map(|store| launch::taken_slots(&views(store, now).0))
+        .flat_map(|store| slots::taken_slots(&views(store, now).0))
         .collect()
 }
 

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::config::Agent;
-use crate::launch::{self, LaunchEnv, PaneSpec};
+use crate::launch::pane::{self, LaunchEnv, PaneSpec};
 use crate::proto::PaneKey;
 
 /// The name the master session gets.
@@ -95,9 +95,9 @@ impl MasterRecord {
                     prompt: String::new(),
                     ..agent.clone()
                 };
-                launch::agent_argv(&bare, &self.session, MASTER_NAME, "")
+                pane::agent_argv(&bare, &self.session, MASTER_NAME, "")
             }
-            Start::Resume => launch::resume_argv(agent, &self.session, MASTER_NAME)?,
+            Start::Resume => pane::resume_argv(agent, &self.session, MASTER_NAME)?,
         };
         let instructions = instructions.display().to_string();
         let mut argv: Vec<String> = argv
@@ -112,7 +112,7 @@ impl MasterRecord {
             key: PaneKey::Master,
             argv,
             cwd: self.cwd.clone(),
-            env: launch::pane_env(env),
+            env: pane::pane_env(env),
         })
     }
 }

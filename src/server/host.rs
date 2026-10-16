@@ -10,7 +10,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 
-use crate::launch::PaneSpec;
+use crate::launch::pane::PaneSpec;
 use crate::proto::{Frame, PaneInfo, PaneKey, PaneStatus, Size};
 use crate::server::terminal::Terminal;
 

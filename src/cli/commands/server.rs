@@ -3,7 +3,7 @@ use anyhow::Context;
 use crate::cli::Env;
 use crate::cli::output::{Document, Failure};
 use crate::client;
-use crate::launch::LaunchEnv;
+use crate::launch::pane::LaunchEnv;
 use crate::server::{self, ServerPaths};
 use crate::store::Store;
 

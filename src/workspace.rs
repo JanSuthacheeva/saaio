@@ -7,7 +7,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
-use crate::launch::{WORKTREES_DIR, worktree_add_argv, worktree_remove_argv};
+use crate::launch::worktree::{WORKTREES_DIR, worktree_add_argv, worktree_remove_argv};
 use crate::view::Workspace;
 
 /// The repo's own hooks: .flow/setup after the worktree exists, .flow/teardown before it goes.
@@ -222,7 +222,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::launch::workspace_for;
+    use crate::launch::worktree::workspace_for;
 
     fn git(dir: &Path, args: &[&str]) {
         let status = Command::new("git")

@@ -20,7 +20,7 @@ use anyhow::{Context, Result, bail};
 use crate::config::Config;
 use crate::event::{Event as LogEvent, EventKind};
 use crate::fold;
-use crate::launch::{self, HOSTED, LaunchEnv, PaneSpec};
+use crate::launch::pane::{self, HOSTED, LaunchEnv, PaneSpec};
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, PaneStatus, Role, ServerMsg, Size};
 use crate::store::Store;
 use crate::view::{Board, FlowView, Workspace};
@@ -376,7 +376,7 @@ impl Server {
                 .fail(key, format!("no agent named {}", space.agent));
             return;
         };
-        match launch::worker_spec(&flow, agent, &self.env) {
+        match pane::worker_spec(&flow, agent, &self.env) {
             Some(spec) => self.open_worker(spec),
             None => self.host.fail(key, reconcile::unopenable(name)),
         }
@@ -400,7 +400,7 @@ impl Server {
         let spec = self
             .config
             .agent(Some(&space.agent))
-            .and_then(|(_, agent)| launch::worker_spec(&flow, agent, &self.env));
+            .and_then(|(_, agent)| pane::worker_spec(&flow, agent, &self.env));
         if let Some(spec) = spec
             && let Err(error) = self.host.open(spec)
         {

@@ -251,6 +251,8 @@ pub fn clock(ms: u64, offset_secs: i64) -> String;
 // launch/worktree.rs WORKTREES_DIR, workspace_for, worktree_add_argv, worktree_remove_argv, repo_of, hook_env
 // launch/pane.rs     HOSTED, LaunchEnv, PaneSpec, agent_argv, resume_argv, worker_spec, pane_env (+ worker_env, fill)
 // slots.rs           + taken_slots(flows: &[FlowView]) -> Vec<u8>, free_slot(flows: &[FlowView]) -> Option<u8>
+// launch/fixtures.rs (test only) strings, shop: shared by the name, worktree and pane tests
+// Callers name the part: launch::pane::LaunchEnv, launch::worktree::repo_of; launch.rs re-exports nothing.
 ```
 
 ### server.rs, server/
@@ -386,7 +388,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 - [x] Split `cli/output.rs` (moved there in 2.1, so main could name `cli::output`; keeps Document, Failure, toon, truncated, DESCRIPTION, LIST_TEXT_LIMIT) into `output/status.rs`, `flow.rs`, `start.rs`, `remove.rs`, `news.rs`, each with its tests
 
 ### 5. Core
-- [ ] Split `launch.rs` into `launch/name.rs`, `worktree.rs`, `pane.rs` with their tests; move taken_slots and free_slot to `slots.rs`
+- [x] Split `launch.rs` into `launch/name.rs`, `worktree.rs`, `pane.rs` with their tests; move taken_slots and free_slot to `slots.rs`
 - [ ] Move fold's tests to `fold/tests.rs`
 
 ### 6. Server
