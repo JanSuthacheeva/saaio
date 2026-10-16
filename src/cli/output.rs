@@ -58,16 +58,24 @@ impl Failure {
         }
     }
 
-    /// Exit code 2: clap's message and where to read the usage.
+    /// Exit code 2: clap's message, with what it lists below a closing colon (the missing
+    /// arguments), and where to read the usage.
     #[must_use]
     pub fn usage(clap_error: &clap::Error) -> Failure {
         let rendered = clap_error.to_string();
-        let message = rendered
-            .lines()
+        let mut lines = rendered.lines();
+        let mut message = lines
             .next()
             .unwrap_or_default()
             .trim_start_matches("error: ")
             .to_string();
+        if message.ends_with(':') {
+            let listed: Vec<&str> = lines
+                .take_while(|line| line.starts_with(char::is_whitespace))
+                .map(str::trim)
+                .collect();
+            message = format!("{message} {}", listed.join(", "));
+        }
         let command = rendered
             .lines()
             .find_map(|line| line.strip_prefix("Usage: "))
@@ -148,6 +156,9 @@ mod tests {
             #[arg(long)]
             flow: Option<String>,
         },
+        Start {
+            request: String,
+        },
     }
 
     #[test]
@@ -174,6 +185,19 @@ mod tests {
         assert_eq!(failure.code, 2);
         assert_eq!(failure.message, "unexpected argument '--nope' found");
         assert_eq!(failure.help, vec!["Run `flow report --help` for the usage"]);
+    }
+
+    #[test]
+    fn names_the_missing_arguments_clap_lists_below_its_message() {
+        let error = Cli::try_parse_from(["flow", "start"]).unwrap_err();
+
+        let failure = Failure::usage(&error);
+
+        assert_eq!(
+            failure.message,
+            "the following required arguments were not provided: <REQUEST>"
+        );
+        assert_eq!(failure.help, vec!["Run `flow start --help` for the usage"]);
     }
 
     #[test]
