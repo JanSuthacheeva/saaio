@@ -18,9 +18,11 @@ cargo fmt                      # format
 cargo install --path .         # install the flow binary
 ```
 
+E2E runs of `flow ui`, `flow server` or `flow ui --stop` use a scratch store: `FLOW_HOME=$(mktemp -d)`. On the project's real store a second `flow ui` takes over the user's, and `--stop` ends every session in it; inside a worker, `flow ui` refuses its own store.
+
 ## Structure
 
-- One crate: a library (`lib.rs`) with a thin binary. `main.rs` parses, reads the environment variables and the clock, prints, and maps exit codes; nothing else.
+- One crate: a library (`lib.rs`) with a thin binary. `main.rs` parses, reads the environment variables and the clock, prints, and maps exit codes; nothing else. `build.rs` only sets `FLOW_COMMIT`, the commit `proto::BUILD` names.
 - One responsibility per file, nameable without "and". Past about 400 production lines a file splits along a real seam; a uniform file (a table of documents, one match of key bindings) may run longer.
 - Unit tests stay inline in `mod tests`. Past about 400 lines of tests they move to a sibling `tests.rs` (`#[cfg(test)] mod tests;`), split further into `tests/*.rs` by subject when large; fixtures several test modules share go in a `#[cfg(test)] mod fixtures;`. CLI behaviour is tested end to end in `tests/cli.rs`.
 - Module files are `foo.rs` beside `foo/`, never `foo/mod.rs` (`clippy::mod_module_files`). An `impl` may span the files of its module's children: they see its private fields.
@@ -40,12 +42,13 @@ cargo install --path .         # install the flow binary
 - **deliver.rs** - one look for news on the store: a worker's undelivered messages (marked delivered), the master's stopped flows (collected for a moment, marked seen). `flow wait` (`cli/commands/wait.rs`) polls it as Claude Code's `asyncRewake` hook and prints it with `output::news`.
 - **fold.rs** - turns a flow's events into its `FlowView`, views into the sorted `Board`, a name or id into one flow; its tests in `fold/tests.rs`.
 - **view.rs** - the derived types; serialised as the `--json` contract (`VIEW_VERSION`).
-- **text.rs** - how counts, durations and clock times are written, in documents and the UI.
+- **text.rs** - how counts, durations, clock times and log stamps are written, in documents, the UI and server.log; the local zone's offset.
 - **launch/** - what `flow start` creates and what a pane runs (pure): `name.rs` (a flow's name, the ticket and slug of a request), `worktree.rs` (worktree path, git command lines, the hooks' environment), `pane.rs` (agent and resume argv, `PaneSpec`, pane environment).
 - **branching.rs** - a repo's branch convention (`.flow/config.toml` `[branch]`: template and types) and the branch name `flow start` gives a flow.
 - **workspace.rs** - the processes `flow start` and `flow clear` run: git worktrees, the repo's `.flow/setup` and `.flow/teardown` hooks; the branch a folder is on.
 - **adapter/** - how flow observes a harness through its own hooks: `adapter.rs` (`Adapter`: the wiring a launch adds, `translate` of one hook event, the skill-to-phase lookup), `claude_code.rs` (Claude Code's `--settings` hooks and its events -> flow events, pure; fixtures are recorded hook payloads). `flow hook <adapter>` (`cli/commands/hook.rs`) runs it, silently, appending only what changes the flow (`fold::changes`).
-- **proto.rs** - the messages between `flow ui` and `flow server`: length-prefixed postcard over a Unix socket.
+- **proto.rs** - the messages between `flow ui` and `flow server`: length-prefixed postcard over a Unix socket; `Peer`, who a connection is (pid, folder, `BUILD`).
+- **server_log.rs** - server.log beside the socket: rotation past 1 MiB to `server.log.1`, lines stamped with time and pid (the server writes them to stderr, which is the log; `flow ui --stop` appends its own), and the panic hook that logs a panic and ends the server.
 - **client.rs** - connecting to the server, starting it (`ensure_server`), closing a flow's pane for remove and clear.
 - **server/** - `flow server`, one thread owning every session: `server.rs` (the event loop: `run`, `serve`, `handle`, `stop`), `conn.rs` (UI connections: hello, messages, frames, board and panes sent), `panes.rs` (which panes are open: refresh, reconcile, open, resume, close), `host.rs` (PTYs and processes), `terminal.rs` (the only file that knows alacritty_terminal), `master.rs` (master.json, master.md), `watch.rs` (when to refold), `reconcile.rs` (which flows need a pane, pure), `tests.rs` (over a real socket).
 - **ui/** - `flow ui`, a ratatui client: `ui.rs` (threads and the loop), `app.rs` + `app/` (the Elm-style core, no I/O: `app.rs` state and queries, `messages.rs` server and job answers, `keys.rs` input, `board_keys.rs` the board's keys, `draw.rs` the view, `chrome.rs` the title row and the bar around the pane, `effect.rs` what App asks of the loop; tests in `app/tests/` by subject), `board.rs` + `board/` (`cards.rs`, `detail.rs`), `sidebar.rs` + `sidebar/` (`rows.rs`, `labels.rs`), `dialog.rs` (the boxes over a pane), `fit.rs` (text in terminal columns), `input.rs` (the C-space prefix, mouse), `layout.rs`, `screen.rs` (the focused pane), `rail.rs`, `newflow.rs` + `newflow/` (the new-flow dialog's form and keys; `view.rs` draws it), `peek.rs` (Claude transcripts), `outer.rs` (the real terminal), `theme.rs` (Palette: the built-in terminal, flow and flow-light colors -> styles), `theme_file.rs` (theme.toml and what it extends, ThemeWatch).

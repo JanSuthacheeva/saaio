@@ -1,15 +1,15 @@
 use std::sync::mpsc::{self, Sender};
-use std::thread;
 use std::time::Instant;
 
 use super::host::HostEvent;
 use super::master::Start;
 use super::reconcile::{self, Wanted};
-use super::{ConnId, Event, Server};
+use super::{ConnId, Event, Server, spawn_named};
 use crate::event::{Event as LogEvent, EventKind};
 use crate::fold;
 use crate::launch::pane::{self, HOSTED, PaneSpec};
 use crate::proto::{PaneKey, PaneStatus, ServerMsg};
+use crate::server_log;
 use crate::view::{FlowView, Workspace};
 
 impl Server {
@@ -22,13 +22,16 @@ impl Server {
             Ok(true) => {}
             Ok(false) => return,
             Err(error) => {
-                eprintln!("could not look at the flows: {error:#}");
+                server_log::write(
+                    (self.clock)(),
+                    &format!("could not look at the flows: {error:#}"),
+                );
                 return;
             }
         }
         let (logs, warnings) = self.store.logs();
         for warning in warnings {
-            eprintln!("{warning}");
+            server_log::write(now, &warning);
         }
         self.board = fold::board(fold::views(&logs, now), now);
         let open: Vec<PaneKey> = self.host.keys().cloned().collect();
@@ -85,7 +88,10 @@ impl Server {
                     self.resumed.insert(PaneKey::Master, Instant::now());
                 }
                 Ok(()) => {}
-                Err(error) => eprintln!("could not start the master: {error:#}"),
+                Err(error) => server_log::write(
+                    (self.clock)(),
+                    &format!("could not start the master: {error:#}"),
+                ),
             },
             None => self.host.fail(
                 PaneKey::Master,
@@ -122,7 +128,7 @@ impl Server {
             },
         };
         if let Err(error) = self.store.append(id, &LogEvent::new(now, event)) {
-            eprintln!("{error:#}");
+            server_log::write((self.clock)(), &format!("{error:#}"));
         }
     }
 
@@ -152,7 +158,10 @@ impl Server {
     /// Opens a pane once more with the agent's first command: its resume failed before the agent
     /// ever saved the session.
     pub(super) fn open_fresh(&mut self, key: &PaneKey) {
-        eprintln!("resuming {key} failed, starting it fresh");
+        server_log::write(
+            (self.clock)(),
+            &format!("resuming {key} failed, starting it fresh"),
+        );
         let PaneKey::Flow(id) = key else {
             self.open_master(Start::Fresh);
             return;
@@ -171,7 +180,7 @@ impl Server {
         if let Some(spec) = spec
             && let Err(error) = self.host.open(spec)
         {
-            eprintln!("{error:#}");
+            server_log::write((self.clock)(), &format!("{error:#}"));
         }
     }
 
@@ -226,7 +235,7 @@ impl Server {
                 .store
                 .append(&id, &LogEvent::new(now, EventKind::Ended))
             {
-                eprintln!("{error:#}");
+                server_log::write((self.clock)(), &format!("{error:#}"));
             }
         }
     }
@@ -238,7 +247,7 @@ impl Server {
 
 pub(super) fn forward_host_events(events: Sender<Event>) -> Sender<HostEvent> {
     let (host_events, inbox) = mpsc::channel();
-    thread::spawn(move || {
+    spawn_named("host events".to_string(), move || {
         for event in inbox {
             if events.send(Event::Host(event)).is_err() {
                 break;

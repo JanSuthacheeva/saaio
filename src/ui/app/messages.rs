@@ -65,9 +65,12 @@ impl App {
                 self.mirrored = self.screen.modes;
                 vec![Effect::Mirror(self.mirrored)]
             }
-            ServerMsg::Detached => vec![Effect::Quit(
-                "another flow ui attached, so this one let go".to_string(),
-            )],
+            ServerMsg::Detached { by } => vec![Effect::Quit(format!(
+                "another flow ui took over: pid {} in {} (flow {})",
+                by.pid,
+                self.tilde(&by.folder()),
+                by.build
+            ))],
         }
     }
 

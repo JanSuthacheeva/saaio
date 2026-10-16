@@ -1,6 +1,8 @@
+use std::borrow::Cow;
 use std::fmt;
 use std::io::{ErrorKind, Read, Write};
 use std::ops::BitOr;
+use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 use serde::de::DeserializeOwned;
@@ -8,8 +10,42 @@ use serde::{Deserialize, Serialize};
 
 use crate::view::Board;
 
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
+/// This binary: `0.1.0 2904734`, the commit from build.rs, `unknown` outside a git checkout.
+pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("FLOW_COMMIT"));
 pub const MAX_MESSAGE: usize = 8 << 20;
+
+/// The process at the other end: what the log and a dropped UI say about it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Peer {
+    pub pid: u32,
+    pub cwd: PathBuf,
+    pub build: String,
+}
+
+impl Peer {
+    /// Its folder, or "an unknown folder" when the process could not read its own.
+    pub fn folder(&self) -> Cow<'_, str> {
+        if self.cwd.as_os_str().is_empty() {
+            Cow::Borrowed("an unknown folder")
+        } else {
+            self.cwd.to_string_lossy()
+        }
+    }
+}
+
+/// pid 4321 in /Users/jan/projects/flow (flow 0.1.0 2904734)
+impl fmt::Display for Peer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "pid {} in {} (flow {})",
+            self.pid,
+            self.folder(),
+            self.build
+        )
+    }
+}
 
 /// Which session a pane runs: the master, or the worker of a flow id.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -43,9 +79,11 @@ pub enum Role {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientMsg {
+    /// `peer` comes last, so a server of an older protocol still reads the version and refuses.
     Hello {
         version: u32,
         role: Role,
+        peer: Peer,
     },
     Focus(PaneKey),
     Input(Vec<u8>),
@@ -72,8 +110,10 @@ pub enum ServerMsg {
     Frame(Frame),
     /// The flow's pane exited after CloseFlow.
     Closed(String),
-    /// Another flow ui attached.
-    Detached,
+    /// Another flow ui attached: the process `by`.
+    Detached {
+        by: Peer,
+    },
     /// CloseFlow found no pane for the flow.
     NotOpen(String),
     /// Where the master runs: its directory and the branch checked out there.
@@ -241,6 +281,14 @@ mod tests {
         }
     }
 
+    fn peer() -> Peer {
+        Peer {
+            pid: 4321,
+            cwd: "/Users/jan/projects/flow".into(),
+            build: "0.1.0 2904734".into(),
+        }
+    }
+
     fn client_messages() -> Vec<ClientMsg> {
         let size = Size {
             cols: 120,
@@ -250,10 +298,12 @@ mod tests {
             ClientMsg::Hello {
                 version: PROTOCOL_VERSION,
                 role: Role::Attach { size },
+                peer: peer(),
             },
             ClientMsg::Hello {
                 version: PROTOCOL_VERSION,
                 role: Role::Control,
+                peer: peer(),
             },
             ClientMsg::Focus(PaneKey::Flow("7f3c".into())),
             ClientMsg::Input(vec![0, 27, b'[', b'A']),
@@ -313,7 +363,7 @@ mod tests {
                 history: None,
             }),
             ServerMsg::Closed("a".into()),
-            ServerMsg::Detached,
+            ServerMsg::Detached { by: peer() },
             ServerMsg::NotOpen("b".into()),
             ServerMsg::Master {
                 cwd: "/shop".into(),
@@ -349,6 +399,47 @@ mod tests {
             );
         }
         assert_eq!(read_msg::<_, ServerMsg>(&mut reader).unwrap(), None);
+    }
+
+    #[test]
+    fn an_older_server_still_reads_the_version_of_a_newer_hello() {
+        #[derive(Deserialize)]
+        enum OlderClientMsg {
+            Hello { version: u32, role: Role },
+        }
+        let mut wire = Vec::new();
+        write_msg(
+            &mut wire,
+            &ClientMsg::Hello {
+                version: PROTOCOL_VERSION,
+                role: Role::Control,
+                peer: peer(),
+            },
+        )
+        .unwrap();
+
+        let Some(OlderClientMsg::Hello { version, role }) =
+            read_msg(&mut Cursor::new(wire)).unwrap()
+        else {
+            panic!("no hello");
+        };
+        assert_eq!((version, role), (PROTOCOL_VERSION, Role::Control));
+    }
+
+    #[test]
+    fn names_a_peer_by_pid_folder_and_build() {
+        assert_eq!(
+            peer().to_string(),
+            "pid 4321 in /Users/jan/projects/flow (flow 0.1.0 2904734)"
+        );
+        let lost = Peer {
+            cwd: PathBuf::new(),
+            ..peer()
+        };
+        assert_eq!(
+            lost.to_string(),
+            "pid 4321 in an unknown folder (flow 0.1.0 2904734)"
+        );
     }
 
     #[test]

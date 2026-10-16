@@ -12,8 +12,9 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 
 use crate::launch::worktree;
-use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, Role, ServerMsg};
+use crate::proto::{self, BUILD, ClientMsg, PROTOCOL_VERSION, Peer, Role, ServerMsg};
 use crate::registry;
+use crate::server_log;
 use crate::store::Store;
 
 /// How long a new server gets to start listening.
@@ -52,6 +53,7 @@ impl Client {
             &ClientMsg::Hello {
                 version: PROTOCOL_VERSION,
                 role,
+                peer: this_process(),
             },
         )?;
         match proto::read_msg::<_, ServerMsg>(&mut stream)
@@ -86,6 +88,15 @@ impl Client {
     }
 }
 
+/// This process as a Peer: its pid, current folder (empty when it cannot be read) and BUILD.
+fn this_process() -> Peer {
+    Peer {
+        pid: std::process::id(),
+        cwd: std::env::current_dir().unwrap_or_default(),
+        build: BUILD.to_string(),
+    }
+}
+
 /// None when no server listens on `socket`.
 fn dial(socket: &Path) -> Result<Option<UnixStream>> {
     match UnixStream::connect(socket) {
@@ -106,7 +117,8 @@ fn dial(socket: &Path) -> Result<Option<UnixStream>> {
 
 /// Stops the server on `socket` with SIGTERM, SIGKILL when it still listens after STOP_WAIT;
 /// false when none runs. A signal, not a message, so it stops a server of any protocol version.
-pub fn stop_server(socket: &Path) -> Result<bool> {
+/// Each step goes into server.log, as the server cannot log a SIGKILL or who sent it.
+pub fn stop_server(socket: &Path, clock: fn() -> u64) -> Result<bool> {
     let Some(stream) = dial(socket)? else {
         return Ok(false);
     };
@@ -117,7 +129,21 @@ pub fn stop_server(socket: &Path) -> Result<bool> {
         )
     })?;
     drop(stream);
+    let log = server_log::path(socket);
+    // A log that cannot be written never keeps the server from stopping.
+    let note = |text: String| {
+        let _ = server_log::append(&log, clock(), &text);
+    };
+    note(format!(
+        "flow ui --stop (flow {BUILD}) sends SIGTERM to pid {pid}"
+    ));
     for (signal, wait) in [(libc::SIGTERM, STOP_WAIT), (libc::SIGKILL, KILL_WAIT)] {
+        if signal == libc::SIGKILL {
+            note(format!(
+                "pid {pid} still listens after {} s; sends SIGKILL",
+                STOP_WAIT.as_secs()
+            ));
+        }
         // SAFETY: kill only sends a signal; a pid that already exited fails with ESRCH.
         unsafe {
             libc::kill(pid, signal);
@@ -126,6 +152,7 @@ pub fn stop_server(socket: &Path) -> Result<bool> {
             return Ok(true);
         }
     }
+    note(format!("pid {pid} did not stop"));
     bail!("the flow server (pid {pid}) did not stop")
 }
 
@@ -250,19 +277,21 @@ fn server_command(exe: &Path, env: &[(String, String)]) -> Command {
     command
 }
 
-/// Starts `<exe> server` in its own session with output to server.log unless one listens;
-/// waits up to 2 s for the socket.
+/// Starts `<exe> server` in its own session with output to server.log unless one listens, moving a
+/// log past server_log::CAP to server.log.1 first; waits up to 2 s for the socket.
 pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Result<()> {
     if UnixStream::connect(socket).is_ok() {
         return Ok(());
     }
-    let log_path = socket.with_extension("log");
+    let log_path = server_log::path(socket);
     if let Some(dir) = socket.parent() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("could not create {}", dir.display()))?;
         std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
             .with_context(|| format!("could not restrict {}", dir.display()))?;
     }
+    // A log that cannot be moved aside is only longer; it never keeps the server from starting.
+    let _ = server_log::rotate(&log_path, server_log::CAP);
     let log = OpenOptions::new()
         .create(true)
         .append(true)
@@ -375,6 +404,7 @@ mod tests {
             Some(ClientMsg::Hello {
                 version: PROTOCOL_VERSION,
                 role: Role::Control,
+                peer: this_process(),
             })
         );
     }
@@ -400,6 +430,23 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn moves_a_full_log_aside_before_it_starts_a_server() {
+        let dir = TempDir::new().unwrap();
+        let socket = dir.path().join("server.sock");
+        let log = dir.path().join("server.log");
+        let full = vec![b'x'; usize::try_from(server_log::CAP).unwrap() + 1];
+        std::fs::write(&log, &full).unwrap();
+
+        let _ = ensure_server(&socket, Path::new("/usr/bin/true"), &[]);
+
+        assert_eq!(
+            std::fs::read(dir.path().join("server.log.1")).unwrap(),
+            full
+        );
+        assert_eq!(std::fs::metadata(&log).unwrap().len(), 0);
     }
 
     #[test]

@@ -73,19 +73,6 @@ fn install_panic_restore() {
     });
 }
 
-/// How many seconds the local time zone is east of UTC now; 0 when the system cannot say.
-pub fn local_offset_secs() -> i64 {
-    // SAFETY: time and localtime_r only write into the tm we pass; a zeroed tm is a valid start.
-    unsafe {
-        let now = libc::time(std::ptr::null_mut());
-        let mut tm: libc::tm = std::mem::zeroed();
-        if libc::localtime_r(&raw const now, &raw mut tm).is_null() {
-            return 0;
-        }
-        tm.tm_gmtoff
-    }
-}
-
 /// The escape sequences that take the real terminal from `from` to `to`.
 fn mode_changes(from: Modes, to: Modes) -> String {
     let mut out = String::new();

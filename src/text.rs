@@ -32,6 +32,55 @@ pub fn clock(ms: u64, offset_secs: i64) -> String {
     format!("{:02}:{:02}", minute_of_day / 60, minute_of_day % 60)
 }
 
+/// `2026-10-16 13:39:54 +07:00` of a Unix ms time in a zone `offset_secs` east of UTC.
+pub fn stamp(ms: u64, offset_secs: i64) -> String {
+    let secs = (ms / 1_000) as i64 + offset_secs;
+    let (year, month, day) = civil_date(secs.div_euclid(86_400));
+    let second_of_day = secs.rem_euclid(86_400);
+    let sign = if offset_secs < 0 { '-' } else { '+' };
+    let offset_minutes = offset_secs.abs() / 60;
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02} {sign}{:02}:{:02}",
+        second_of_day / 3_600,
+        second_of_day % 3_600 / 60,
+        second_of_day % 60,
+        offset_minutes / 60,
+        offset_minutes % 60
+    )
+}
+
+/// The year, month and day of a count of days since 1970-01-01 (Howard Hinnant's civil_from_days).
+fn civil_date(days: i64) -> (i64, i64, i64) {
+    let shifted = days + 719_468;
+    let era = shifted.div_euclid(146_097);
+    let day_of_era = shifted.rem_euclid(146_097);
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_index = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 {
+        month_index + 3
+    } else {
+        month_index - 9
+    };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    (year, month, day)
+}
+
+/// How many seconds the local time zone is east of UTC now; 0 when the system cannot say.
+pub fn local_offset_secs() -> i64 {
+    // SAFETY: time and localtime_r only write into the tm we pass; a zeroed tm is a valid start.
+    unsafe {
+        let now = libc::time(std::ptr::null_mut());
+        let mut tm: libc::tm = std::mem::zeroed();
+        if libc::localtime_r(&raw const now, &raw mut tm).is_null() {
+            return 0;
+        }
+        tm.tm_gmtoff
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -60,5 +109,18 @@ mod tests {
         assert_eq!(long_duration(30_000), "30s");
         assert_eq!(clock(12 * 3_600_000 + 4 * 60_000, 0), "12:04");
         assert_eq!(clock(23 * 3_600_000, 2 * 3_600), "01:00");
+    }
+
+    #[test]
+    fn stamps_a_date_and_time_in_the_zone_with_its_offset() {
+        let ms = 1_792_132_794_000; // 2026-10-16 06:39:54 UTC
+        assert_eq!(stamp(ms, 7 * 3_600), "2026-10-16 13:39:54 +07:00");
+        assert_eq!(stamp(ms, 0), "2026-10-16 06:39:54 +00:00");
+        assert_eq!(
+            stamp(ms, -(9 * 3_600 + 30 * 60)),
+            "2026-10-15 21:09:54 -09:30"
+        );
+        assert_eq!(stamp(1_709_164_800_000, 0), "2024-02-29 00:00:00 +00:00");
+        assert_eq!(stamp(0, 0), "1970-01-01 00:00:00 +00:00");
     }
 }

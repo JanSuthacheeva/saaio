@@ -1,4 +1,5 @@
 use super::*;
+use crate::proto::Peer;
 
 #[test]
 fn sends_keys_to_the_pane_and_mirrors_the_modes_it_asks_for() {
@@ -50,13 +51,33 @@ fn draws_a_question_longer_than_any_terminal() {
 }
 
 #[test]
-fn lets_go_when_another_ui_attaches() {
-    let mut app = App::new(SIZE);
+fn lets_go_when_another_ui_attaches_and_says_which() {
+    let mut app = App::new(SIZE).with_home(Some("/Users/jan".into()));
+    let by = Peer {
+        pid: 4321,
+        cwd: "/Users/jan/projects/flow".into(),
+        build: "0.1.0 2904734".into(),
+    };
 
-    assert!(matches!(
-        app.on_server(ServerMsg::Detached)[..],
-        [Effect::Quit(_)]
-    ));
+    let lost = Peer {
+        cwd: "".into(),
+        ..by.clone()
+    };
+
+    assert_eq!(
+        app.on_server(ServerMsg::Detached { by }),
+        vec![Effect::Quit(
+            "another flow ui took over: pid 4321 in ~/projects/flow (flow 0.1.0 2904734)"
+                .to_string()
+        )]
+    );
+    assert_eq!(
+        app.on_server(ServerMsg::Detached { by: lost }),
+        vec![Effect::Quit(
+            "another flow ui took over: pid 4321 in an unknown folder (flow 0.1.0 2904734)"
+                .to_string()
+        )]
+    );
 }
 
 #[test]
