@@ -91,3 +91,39 @@ any other that turns out to be noise, each named.
 ### 9. Lint gate and end to end
 - [x] `[lints.clippy]` pedantic table in Cargo.toml; clippy, fmt, tests green
 - [x] end to end: run `flow start`, `flow status`, `flow ui` with flows, `flow remove`, `flow clear` like a user (the debug build with an isolated state folder: installing would replace the binary the live flow session runs)
+
+## Review
+
+Isolated review of `flow/rust-idioms` against `origin/main` (merge-base 2e715fc; the PR #14 merge
+16721ff is not part of it). Every changed line read; behaviour checked against the plan.
+
+**Fixed**
+- The drop guard that undoes a failed `flow start` had no test on the path it exists for (the
+  worktree failing after the slot is claimed). A test now blocks the worktree path and checks the
+  flow is forgotten and `slots/1` released; it fails with the guard disarmed early. 4cfc759
+
+**Open**
+- A bad `adapter` in any agent of `config.toml` now fails `Config::load` everywhere, as the plan
+  decided - including `flow hook`, which only writes to stderr. Shown: with `adapter = "claud-code"`
+  on an unrelated `aider` agent, a claude worker's Stop hook appends nothing (1 line in the log;
+  3 with a valid config). So a typo made while workers run silently stops tracking all of them;
+  `flow start` and `flow ui` do say it loudly. Recommendation: keep the strict load (the loud
+  failure at start/ui is the point), and accept that running workers go stale until it is fixed.
+  If that is too quiet, let `flow hook` fall back to the built-in phases when the config fails.
+
+**Where to look**
+1. `src/main.rs` `start()` -> `Rollback` -> `claim_slot` / `free_branch`: the rollback moved from
+   inline cleanup to a drop guard; check what it undoes before and after `disarm()`.
+2. `src/ui/app.rs` `on_key`: the view is taken with `mem::replace` and put back per arm; a missed
+   restore would close a dialog on a key (Stop keeps itself only on unhandled keys).
+3. `src/registry.rs` `register` / `stores` and `src/store.rs` `write_atomic`: entries are now raw
+   bytes with a trailing newline required on read, and partial files are `.<name>.<pid>`; existing
+   entries were always written with the newline.
+4. `src/config.rs` + `src/launch.rs` `worker_spec`: `adapter` is typed; the "unknown adapter" pane
+   failure is gone because the config cannot load with one.
+
+Routine and skimmable: the derives, `Display` / `name()` replacements for `name_of`, `as` casts to
+`From`/`try_from`, `write!`, `zip(area.rows())` loops, theme consts and `PaletteKey`, test helpers.
+
+**Checks**: `cargo test` (263 + 40), `cargo clippy --all-targets -- -D warnings` and
+`cargo fmt --check` pass at 4cfc759.
