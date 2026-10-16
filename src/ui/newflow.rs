@@ -8,8 +8,8 @@ use ratatui::widgets::{Block, BorderType, Clear, Widget};
 use crate::branching::{self, Branching};
 use crate::event::Mode;
 use crate::launch;
+use crate::ui::fit::{clip, clip_place, columns, spans_width, split, tail};
 use crate::ui::input::Key;
-use crate::ui::sidebar::{clip, clip_place, columns, spans_width, split, tail};
 use crate::ui::theme::Theme;
 use crate::view::FlowView;
 

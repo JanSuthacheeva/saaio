@@ -11,16 +11,18 @@ use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
 
 use crate::branching::Branching;
 use crate::launch::WORKTREES_DIR;
-use crate::output::{self, plural};
+use crate::output;
 use crate::proto::{ClientMsg, Modes, PaneInfo, PaneKey, PaneStatus, ServerMsg, Size};
+use crate::text::plural;
 use crate::ui::board::{self, BoardState, BoardView};
+use crate::ui::fit::{clip, clip_place, columns, spans_width};
 use crate::ui::input::{Command, Key, Routed, Step};
 use crate::ui::layout::{self, Areas, Chrome};
 use crate::ui::newflow::{FormAction, NewFlowForm, NewFlowView};
 use crate::ui::peek::PeekLine;
 use crate::ui::rail::Rail;
 use crate::ui::screen::{Screen, ScreenView};
-use crate::ui::sidebar::{self, Sidebar, clip, clip_place, columns, spans_width};
+use crate::ui::sidebar::{self, Sidebar};
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Projects, State};
 

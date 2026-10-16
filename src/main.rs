@@ -11,6 +11,7 @@ mod registry;
 mod server;
 mod slots;
 mod store;
+mod text;
 mod ui;
 mod view;
 mod wake;
@@ -869,7 +870,7 @@ fn refuse_unmerged_commits(flow: &FlowView) -> Result<(), Failure> {
         Ok(Some(count)) if count > 0 => Err(Failure::error(
             format!(
                 "{branch} has {count} commit{} {}",
-                output::plural(count),
+                text::plural(count),
                 output::UNMERGED
             ),
             vec![

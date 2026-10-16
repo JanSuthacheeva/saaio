@@ -4,6 +4,7 @@ use serde::Serialize;
 
 use crate::client::Closing;
 use crate::event::{Mode, Phase};
+use crate::text::short_duration;
 use crate::view::{Board, FlowView, Projects, State, Workspace};
 
 pub const DESCRIPTION: &str =
@@ -744,22 +745,6 @@ pub fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
     }))
 }
 
-/// "s" unless there is exactly one: `format!("{n} flow{}", plural(n))`.
-pub fn plural<N: Copy + PartialEq + From<u8>>(count: N) -> &'static str {
-    if count == N::from(1) { "" } else { "s" }
-}
-
-/// 45s, 12m, 3h, 2d.
-pub fn short_duration(ms: u64) -> String {
-    let seconds = ms / 1_000;
-    match seconds {
-        0..60 => format!("{seconds}s"),
-        60..3_600 => format!("{}m", seconds / 60),
-        3_600..86_400 => format!("{}h", seconds / 3_600),
-        _ => format!("{}d", seconds / 86_400),
-    }
-}
-
 /// Text cut to `limit` chars with " (truncated, N chars - use --full)" unless `full`.
 pub fn truncated(text: &str, limit: usize, full: bool) -> String {
     let length = text.chars().count();
@@ -1176,15 +1161,6 @@ mod tests {
             failure.to_toon(),
             "error: \"could not create flow in /x: Permission denied\""
         );
-    }
-
-    #[test]
-    fn shortens_durations_to_one_unit() {
-        assert_eq!(short_duration(0), "0s");
-        assert_eq!(short_duration(45_000), "45s");
-        assert_eq!(short_duration(12 * 60_000 + 59_000), "12m");
-        assert_eq!(short_duration(3 * 3_600_000), "3h");
-        assert_eq!(short_duration(49 * 3_600_000), "2d");
     }
 
     #[test]

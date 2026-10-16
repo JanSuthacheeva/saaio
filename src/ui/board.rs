@@ -8,9 +8,10 @@ use ratatui::widgets::{Block, BorderType, Widget};
 
 use crate::event::Mode;
 use crate::event::Phase;
-use crate::output::{plural, short_duration};
 use crate::proto::{PaneKey, PaneStatus};
-use crate::ui::sidebar::{self, Sidebar, clip, clip_place, split, wrap};
+use crate::text::{clock, long_duration, plural, short_duration};
+use crate::ui::fit::{clip, clip_place, split, wrap};
+use crate::ui::sidebar::{self, Sidebar};
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Project, Projects, State, StepStatus, Tone};
 
@@ -784,17 +785,6 @@ fn gerund(phase: Phase) -> &'static str {
     }
 }
 
-/// 41m, 1h 12m, 2d 3h: two units, so a long-running flow still shows its minutes.
-pub fn long_duration(ms: u64) -> String {
-    let minutes = ms / 60_000;
-    match minutes {
-        0 => short_duration(ms),
-        1..60 => format!("{minutes}m"),
-        60..1_440 => format!("{}h {}m", minutes / 60, minutes % 60),
-        _ => format!("{}d {}h", minutes / 1_440, minutes % 1_440 / 60),
-    }
-}
-
 /// A row of every project's board: a project's line, or one of its cards.
 #[derive(Debug)]
 enum Item<'p> {
@@ -820,13 +810,6 @@ fn card_rect(area: Rect, column: usize, y: u16) -> Rect {
     Rect::new(x, y, width, CARD_ROWS)
 }
 
-/// HH:MM of a Unix ms time in a zone `offset_secs` east of UTC.
-pub fn clock(ms: u64, offset_secs: i64) -> String {
-    let secs = (ms / 1_000) as i64 + offset_secs;
-    let minute_of_day = secs.rem_euclid(86_400) / 60;
-    format!("{:02}:{:02}", minute_of_day / 60, minute_of_day % 60)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -847,15 +830,5 @@ mod tests {
         };
         assert_eq!(last.moved(1, 6), last);
         assert!(last.moved(-1, 6).all, "moving keeps every project in view");
-    }
-
-    #[test]
-    fn writes_durations_and_clock_times() {
-        assert_eq!(long_duration(41 * 60_000), "41m");
-        assert_eq!(long_duration(72 * 60_000), "1h 12m");
-        assert_eq!(long_duration(51 * 3_600_000), "2d 3h");
-        assert_eq!(long_duration(30_000), "30s");
-        assert_eq!(clock(12 * 3_600_000 + 4 * 60_000, 0), "12:04");
-        assert_eq!(clock(23 * 3_600_000, 2 * 3_600), "01:00");
     }
 }
