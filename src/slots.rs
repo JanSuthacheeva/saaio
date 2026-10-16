@@ -1,6 +1,5 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::ErrorKind;
-use std::os::fd::AsRawFd;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -61,15 +60,15 @@ impl Slots {
         if self.read(slot).as_ref() != Some(claim) {
             return Ok(());
         }
-        match fs::remove_file(self.path(slot)) {
-            Err(error) if error.kind() != ErrorKind::NotFound => {
-                Err(error).with_context(|| format!("could not release slot {slot}"))
-            }
-            _ => Ok(()),
+        if let Err(error) = fs::remove_file(self.path(slot))
+            && error.kind() != ErrorKind::NotFound
+        {
+            return Err(error).with_context(|| format!("could not release slot {slot}"));
         }
+        Ok(())
     }
 
-    /// An exclusive flock on slots/.lock, released when the file closes.
+    /// An exclusive lock on slots/.lock, released when the file closes.
     fn lock(&self) -> Result<File> {
         fs::create_dir_all(&self.dir)
             .with_context(|| format!("could not create {}", self.dir.display()))?;
@@ -79,10 +78,7 @@ impl Slots {
             .write(true)
             .open(self.dir.join(".lock"))
             .with_context(|| format!("could not open {}", self.dir.join(".lock").display()))?;
-        // SAFETY: flock only takes the descriptor, which lives as long as `file`.
-        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } != 0 {
-            return Err(std::io::Error::last_os_error()).context("could not lock the slots");
-        }
+        file.lock().context("could not lock the slots")?;
         Ok(file)
     }
 

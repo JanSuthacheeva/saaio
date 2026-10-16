@@ -71,7 +71,7 @@ any other that turns out to be noise, each named.
 - [x] remaining small rewrites: input `find`, sidebar/newflow/peek tidy-ups, redundant closures (`map().unwrap_or_else()` stays: `map_or_else` puts the default first and reads worse)
 
 ### 5. unsafe and RAII
-- [ ] slots: `File::lock` instead of `libc::flock`
+- [x] slots: `File::lock` instead of `libc::flock`
 - [ ] `flow start` rolls back through a drop guard
 - [ ] local UTC offset read moves out of board.rs to the I/O side, with `&raw`
 
