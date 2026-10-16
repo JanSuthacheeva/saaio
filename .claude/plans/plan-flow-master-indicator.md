@@ -206,7 +206,7 @@ The master's pane opens again:
 - [x] Give the Claude Code master the report hooks: `claude_code::master_settings(flow_exe, wake)` with `arm`, `Adapter::wire_master` always wiring it, doc comments in `adapter.rs` and `server/master.rs`; update the settings and wire_master tests
 - [x] Add `record_master_turn` to `flow hook`'s master arm, with `tests/cli.rs` cases: a prompt writes working, a Stop writes idle, a repeated tool call leaves the file untouched
 - [x] Send the turn: `ServerMsg::Master { turn }` from `send_master`, `open_pane` forgets the master's turn; server test over the socket
-- [ ] Key `App.changed` and `Sidebar.changed` by `PaneKey`; existing tests pass unchanged in behaviour
+- [x] Key `App.changed` and `Sidebar.changed` by `PaneKey`; existing tests pass unchanged in behaviour
 - [ ] Add `App::on_master_turn`, `master_state`, `master_unseen`, the focus clear and the master spin in `on_tick`, with `app/tests/sidebar.rs` cases for unseen, focused, cleared and spinning
 - [ ] Draw row 0 and the rail's 0 with the glyph and the Lit mark; golden for the master working and waiting; `FLOW_UPDATE_GOLDEN=1` only for the meant change
 - [ ] Update CLAUDE.md's architecture lines (store, hook, proto) and docs/HANDOVER.md where they describe the master's hooks

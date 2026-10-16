@@ -480,6 +480,96 @@ fn a_row_stands_out_a_moment_after_its_flow_changed() {
     assert_ne!(background_of(&app, "shop-221"), selection);
 }
 
+/// Where the master's turn stands, as the server says it.
+fn master_at(state: State, at: u64) -> ServerMsg {
+    ServerMsg::Master {
+        cwd: "/shop".into(),
+        branch: None,
+        turn: Some(MasterTurn { state, at }),
+    }
+}
+
+#[test]
+fn the_master_waits_for_you_after_a_turn_you_did_not_see() {
+    let mut app = with_fleet();
+    app.on_input(Routed::Command(Command::Focus(1)));
+
+    app.on_server(master_at(State::Working, 1));
+    assert_eq!(app.master_state(), Some(State::Working));
+    app.on_server(master_at(State::Idle, 2));
+    assert_eq!(app.master_state(), Some(State::Waiting), "an ended turn");
+    app.on_server(master_at(State::Waiting, 3));
+    assert_eq!(app.master_state(), Some(State::Waiting), "a question");
+    app.on_server(master_at(State::Blocked, 4));
+    assert_eq!(app.master_state(), Some(State::Blocked), "a permission");
+}
+
+#[test]
+fn a_turn_that_ends_in_view_needs_nothing() {
+    let mut app = with_fleet();
+
+    app.on_server(master_at(State::Working, 1));
+    assert_eq!(
+        app.master_state(),
+        Some(State::Working),
+        "it spins in view too"
+    );
+    app.on_server(master_at(State::Idle, 2));
+    assert_eq!(app.master_state(), None);
+    app.on_input(Routed::Command(Command::Focus(1)));
+    assert_eq!(
+        app.master_state(),
+        None,
+        "looking away later changes nothing"
+    );
+}
+
+#[test]
+fn looking_at_the_master_clears_its_dot() {
+    let mut app = with_fleet();
+    app.on_input(Routed::Command(Command::Focus(1)));
+    app.on_server(master_at(State::Idle, 2));
+
+    app.on_input(Routed::Command(Command::Focus(0)));
+    assert_eq!(app.master_state(), None);
+    app.on_input(Routed::Command(Command::Focus(1)));
+    assert_eq!(app.master_state(), None, "seen stays seen");
+    app.on_server(master_at(State::Working, 3));
+    app.on_server(master_at(State::Idle, 4));
+    assert_eq!(
+        app.master_state(),
+        Some(State::Waiting),
+        "until its next turn"
+    );
+    app.on_server(ServerMsg::Master {
+        cwd: "/shop".into(),
+        branch: None,
+        turn: None,
+    });
+    assert_eq!(app.master_state(), None, "a new master runs no turn yet");
+}
+
+#[test]
+fn a_working_master_turns_the_spinner_and_its_row_lights_up_on_a_change() {
+    let mut app = App::new(FLEET);
+    app.on_server(ServerMsg::Board(fold::board(vec![], NOW)));
+    app.on_tick(NOW);
+    let spin = app.spin;
+
+    app.on_server(master_at(State::Working, 1));
+    assert!(app.on_tick(NOW + 100));
+    assert_ne!(app.spin, spin, "the master works");
+    assert!(
+        !app.changed.contains_key(&PaneKey::Master),
+        "its first turn is no change"
+    );
+    app.on_server(master_at(State::Idle, 2));
+    assert!(app.changed.contains_key(&PaneKey::Master));
+    let spin = app.spin;
+    app.on_tick(NOW + 200);
+    assert_eq!(app.spin, spin, "at rest");
+}
+
 #[test]
 fn notes_stay_behind_the_names_but_the_selected_one() {
     let theme = Theme::default();

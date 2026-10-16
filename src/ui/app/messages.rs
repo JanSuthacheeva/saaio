@@ -7,13 +7,14 @@ use crate::branching::Branching;
 use crate::cli::output::remove::Refusal;
 use crate::proto::{ClientMsg, PaneKey, ServerMsg, Size};
 use crate::ui::board::BoardState;
-use crate::view::{Projects, State};
+use crate::view::{MasterTurn, Projects, State};
 
 impl App {
     pub fn on_server(&mut self, message: ServerMsg) -> Vec<Effect> {
         match message {
             ServerMsg::Welcome { .. } | ServerMsg::Closed(_) | ServerMsg::NotOpen(_) => vec![],
-            ServerMsg::Master { cwd, branch, .. } => {
+            ServerMsg::Master { cwd, branch, turn } => {
+                self.on_master_turn(turn);
                 let place = self.tilde(&cwd);
                 self.master_cwd = Some(cwd);
                 self.master = Some(match branch {
@@ -126,15 +127,30 @@ impl App {
         }
     }
 
+    /// Takes the master's turn: lights row 0 when its state changed, and marks it unseen when it
+    /// came to rest (Waiting, Idle, Blocked) while the master is not focused.
+    fn on_master_turn(&mut self, turn: Option<MasterTurn>) {
+        if turn == self.master_turn {
+            return;
+        }
+        let was = self.master_turn.map(|turn| turn.state);
+        let state = turn.map(|turn| turn.state);
+        if was.is_some() && state.is_some() && was != state {
+            self.changed.insert(PaneKey::Master, self.now);
+        }
+        self.master_unseen = matches!(state, Some(State::Waiting | State::Idle | State::Blocked))
+            && self.focus != PaneKey::Master;
+        self.master_turn = turn;
+    }
+
     /// The time (Unix ms) ages count to; true when the screen should be drawn again for it:
     /// a spinner turns, or an age may have changed.
     pub fn on_tick(&mut self, now: u64) -> bool {
         self.now = now;
         self.ticks = self.ticks.wrapping_add(1);
-        let spinning = self
-            .workers()
-            .iter()
-            .any(|flow| matches!(flow.state, State::Working | State::Delegated));
+        let busy = |state| matches!(state, State::Working | State::Delegated);
+        let spinning = self.workers().iter().any(|flow| busy(flow.state))
+            || self.master_state().is_some_and(busy);
         if spinning {
             self.spin = self.spin.wrapping_add(1);
         }

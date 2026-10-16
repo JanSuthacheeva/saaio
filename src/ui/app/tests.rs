@@ -13,7 +13,7 @@ use crate::fold;
 use crate::proto::{Cell, ClientMsg, Color, Flags, Frame, Mouse, ServerMsg};
 use crate::ui::input::{Command, Key, Routed, Step};
 use crate::ui::theme::PhaseColors;
-use crate::view::{State, VIEW_VERSION};
+use crate::view::{MasterTurn, State, VIEW_VERSION};
 
 const SIZE: Size = Size { cols: 80, rows: 10 };
 
