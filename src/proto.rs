@@ -1,5 +1,6 @@
 use std::fmt;
 use std::io::{ErrorKind, Read, Write};
+use std::ops::BitOr;
 
 use anyhow::{Context, Result, bail};
 use serde::de::DeserializeOwned;
@@ -122,22 +123,30 @@ pub enum Color {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Flags(pub u8);
+pub struct Flags(u8);
 
 impl Flags {
-    pub const BOLD: u8 = 1;
-    pub const DIM: u8 = 1 << 1;
-    pub const ITALIC: u8 = 1 << 2;
-    pub const UNDERLINE: u8 = 1 << 3;
-    pub const REVERSE: u8 = 1 << 4;
-    pub const STRIKE: u8 = 1 << 5;
+    pub const BOLD: Flags = Flags(1);
+    pub const DIM: Flags = Flags(1 << 1);
+    pub const ITALIC: Flags = Flags(1 << 2);
+    pub const UNDERLINE: Flags = Flags(1 << 3);
+    pub const REVERSE: Flags = Flags(1 << 4);
+    pub const STRIKE: Flags = Flags(1 << 5);
     /// The first column of a double-width character.
-    pub const WIDE: u8 = 1 << 6;
+    pub const WIDE: Flags = Flags(1 << 6);
     /// The column a double-width character covers after its first.
-    pub const SPACER: u8 = 1 << 7;
+    pub const SPACER: Flags = Flags(1 << 7);
 
-    pub fn has(self, flag: u8) -> bool {
-        self.0 & flag != 0
+    pub fn has(self, flag: Flags) -> bool {
+        self.0 & flag.0 != 0
+    }
+}
+
+impl BitOr for Flags {
+    type Output = Flags;
+
+    fn bitor(self, other: Flags) -> Flags {
+        Flags(self.0 | other.0)
     }
 }
 
@@ -228,7 +237,7 @@ mod tests {
             text: text.into(),
             fg: Color::Indexed(4),
             bg: Color::Rgb(1, 2, 3),
-            flags: Flags(Flags::BOLD | Flags::WIDE),
+            flags: Flags::BOLD | Flags::WIDE,
         }
     }
 

@@ -38,10 +38,10 @@ impl fmt::Debug for Terminal {
 }
 
 /// Collects what the emulator wants written back to the program.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct Listener {
     replies: Arc<Mutex<Vec<u8>>>,
-    size: Arc<Mutex<(u16, u16)>>,
+    size: Arc<Mutex<Size>>,
 }
 
 impl EventListener for Listener {
@@ -50,10 +50,10 @@ impl EventListener for Listener {
             Event::PtyWrite(text) => text,
             Event::ColorRequest(index, format) => format(asked_color(index)),
             Event::TextAreaSizeRequest(format) => {
-                let (cols, rows) = *self.size.lock().expect("size lock");
+                let size = *self.size.lock().expect("size lock");
                 format(alacritty_terminal::event::WindowSize {
-                    num_lines: rows,
-                    num_cols: cols,
+                    num_lines: size.rows,
+                    num_cols: size.cols,
                     cell_width: 8,
                     cell_height: 16,
                 })
@@ -89,8 +89,10 @@ impl Dimensions for Dims {
 
 impl Terminal {
     pub fn new(size: Size, history: usize) -> Terminal {
-        let listener = Listener::default();
-        *listener.size.lock().expect("size lock") = (size.cols, size.rows);
+        let listener = Listener {
+            replies: Arc::default(),
+            size: Arc::new(Mutex::new(size)),
+        };
         let config = Config {
             scrolling_history: history,
             kitty_keyboard: false,
@@ -126,7 +128,7 @@ impl Terminal {
     }
 
     pub fn resize(&mut self, size: Size) {
-        *self.listener.size.lock().expect("size lock") = (size.cols, size.rows);
+        *self.listener.size.lock().expect("size lock") = size;
         self.term.resize(dims(size));
     }
 
@@ -243,12 +245,10 @@ fn flags(cell: CellFlags) -> Flags {
         (CellFlags::WIDE_CHAR, Flags::WIDE),
         (CellFlags::WIDE_CHAR_SPACER, Flags::SPACER),
     ];
-    Flags(
-        pairs
-            .iter()
-            .filter(|(theirs, _)| cell.intersects(*theirs))
-            .fold(0, |bits, (_, ours)| bits | ours),
-    )
+    pairs
+        .iter()
+        .filter(|(theirs, _)| cell.intersects(*theirs))
+        .fold(Flags::default(), |flags, (_, ours)| flags | *ours)
 }
 
 /// What a program asking for a palette color is told: the xterm defaults.

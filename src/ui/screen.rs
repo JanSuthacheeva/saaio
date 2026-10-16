@@ -104,12 +104,12 @@ fn color(color: Color, default: TuiColor) -> TuiColor {
 mod tests {
     use super::*;
 
-    fn cell(text: &str, flags: u8) -> Cell {
+    fn cell(text: &str, flags: Flags) -> Cell {
         Cell {
             text: text.into(),
             fg: Color::Indexed(2),
             bg: Color::Default,
-            flags: Flags(flags),
+            flags,
         }
     }
 
@@ -130,17 +130,24 @@ mod tests {
         screen.apply(frame(
             PaneKey::Master,
             true,
-            vec![(0, vec![cell("a", 0)]), (1, vec![cell("b", 0)])],
+            vec![
+                (0, vec![cell("a", Flags::default())]),
+                (1, vec![cell("b", Flags::default())]),
+            ],
         ));
 
-        screen.apply(frame(PaneKey::Master, false, vec![(1, vec![cell("c", 0)])]));
+        screen.apply(frame(
+            PaneKey::Master,
+            false,
+            vec![(1, vec![cell("c", Flags::default())])],
+        ));
 
         assert_eq!(screen.rows[0][0].text, "a");
         assert_eq!(screen.rows[1][0].text, "c");
         screen.apply(frame(
             PaneKey::Flow("x".into()),
             false,
-            vec![(1, vec![cell("d", 0)])],
+            vec![(1, vec![cell("d", Flags::default())])],
         ));
         assert!(screen.rows[0].is_empty(), "another pane starts afresh");
     }
@@ -157,7 +164,7 @@ mod tests {
                     cell("x", Flags::BOLD),
                     cell("界", Flags::WIDE),
                     cell("", Flags::SPACER),
-                    cell("y", 0),
+                    cell("y", Flags::default()),
                 ],
             )],
         ));
@@ -182,12 +189,12 @@ mod tests {
     #[test]
     fn draws_default_colored_cells_in_the_themes_colors() {
         let mut screen = Screen::default();
-        let mut plain = cell("a", 0);
+        let mut plain = cell("a", Flags::default());
         plain.fg = Color::Default;
         screen.apply(frame(
             PaneKey::Master,
             true,
-            vec![(0, vec![plain, cell("b", 0)])],
+            vec![(0, vec![plain, cell("b", Flags::default())])],
         ));
         let mut buf = Buffer::empty(Rect::new(0, 0, 4, 1));
         let (text, background) = (TuiColor::Rgb(200, 200, 208), TuiColor::Rgb(20, 20, 24));
