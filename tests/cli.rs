@@ -1044,6 +1044,25 @@ fn start_refuses_outside_a_repository() {
     );
 }
 
+#[test]
+fn start_refuses_a_config_with_the_top_level_agent_key() {
+    let lab = Lab::new();
+    fs::create_dir_all(&lab.home).unwrap();
+    fs::write(lab.home.join("no-config.toml"), "agent = \"codex\"\n").unwrap();
+
+    let output = lab.start(&["SHOP-1 old config"]);
+
+    assert_eq!(output.status.code(), Some(1));
+    let said = format!(
+        "{}{}",
+        stdout(&output),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(said.contains("no-config.toml is not valid"), "{said}");
+    assert!(said.contains("`agent` under [worker]"), "{said}");
+    assert!(claimed_slots(&lab.home).is_empty());
+}
+
 /// The slots claimed in the lab's shared folder.
 fn claimed_slots(home: &Path) -> Vec<String> {
     fs::read_dir(shared(home).join("flow/slots"))

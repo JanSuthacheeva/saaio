@@ -172,12 +172,13 @@ Claude Code and Codex are built in:
 - `codex`: `codex "$ship-feature <request>"`, resumed with `codex resume <session>`. Codex picks
   its own session id; flow learns it from the first hook.
 
-`flow start --agent codex` or the new-flow dialog's agent row picks one; `agent` in the config is
-the default. The master is the built-in `master` agent (Claude Code), or the agent `[master]
-agent` names; flow adds `master.md` to its instructions. Add or change agents in
+`flow start --agent codex` or the new-flow dialog's agent row picks one; `[worker] agent` in the
+config is the default. The master is the built-in `master` agent (Claude Code), or the agent
+`[master] agent` names; flow adds `master.md` to its instructions. Add or change agents in
 `~/.config/flow/config.toml` (or `$XDG_CONFIG_HOME/flow/config.toml`, or `$FLOW_CONFIG`):
 
 ```toml
+[worker]
 agent = "claude"              # the default for flow start
 
 [agents.claude]
@@ -195,7 +196,8 @@ agent = "codex"               # the master runs Codex; the default is the built-
 
 Placeholders: `{id}`, `{name}`, `{request}`, `{prompt}`, `{session}` (the session id the harness
 picked, for Codex) and `{instructions}` (the path of the master's `master.md`). An agent without
-`resume` starts fresh once and is not resumed after a restart.
+`resume` starts fresh once and is not resumed after a restart. A key or section flow does not know
+is an error that names the file and the key.
 
 ### How a worker reports
 

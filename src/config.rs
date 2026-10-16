@@ -3,7 +3,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
 
 use crate::adapter::Adapter;
@@ -14,6 +14,7 @@ pub type PhaseMap = BTreeMap<String, Phase>;
 
 /// How to launch one agent: its command line, the first prompt it gets, and how to resume it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Agent {
     pub command: Vec<String>,
     pub prompt: String,
@@ -26,23 +27,28 @@ pub struct Agent {
     pub adapter: Option<Adapter>,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(default)]
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct Config {
-    pub agent: String,
     pub agents: BTreeMap<String, Agent>,
     /// Skill name -> phase: the built-in map with the file's entries over it.
     pub phases: PhaseMap,
+    pub worker: WorkerConfig,
     pub master: MasterConfig,
 }
 
-impl Default for Config {
-    fn default() -> Config {
-        Config {
+/// [worker]: what a flow runs when flow start names no agent.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WorkerConfig {
+    /// The agent flow start runs, "claude" unless set.
+    pub agent: String,
+}
+
+impl Default for WorkerConfig {
+    fn default() -> WorkerConfig {
+        WorkerConfig {
             agent: "claude".to_string(),
-            agents: BTreeMap::new(),
-            phases: PhaseMap::new(),
-            master: MasterConfig::default(),
         }
     }
 }
@@ -77,7 +83,7 @@ impl Config {
         let mut config = match config_file(flow_config, xdg_config, home) {
             None => Config::default(),
             Some(file) => match fs::read_to_string(&file) {
-                Ok(text) => toml::from_str::<Config>(&text)
+                Ok(text) => Config::parse(&text)
                     .with_context(|| format!("{} is not valid", file.display()))?,
                 Err(error) if error.kind() == ErrorKind::NotFound => Config::default(),
                 Err(error) => {
@@ -88,6 +94,16 @@ impl Config {
         };
         config.add_builtins();
         Ok(config)
+    }
+
+    /// The file's text as a Config; refuses the top-level `agent` key, naming [worker] agent.
+    fn parse(text: &str) -> Result<Config> {
+        let read = |error: toml::de::Error| anyhow!("{}", error.to_string().trim_end());
+        let table: toml::Table = toml::from_str(text).map_err(read)?;
+        if table.contains_key("agent") {
+            bail!("the top-level `agent` key is now `agent` under [worker]");
+        }
+        toml::from_str(text).map_err(read)
     }
 
     /// The built-in agents and phases alone, as if there were no config file.
@@ -122,7 +138,7 @@ impl Config {
             .agents
             .keys()
             .map(String::as_str)
-            .filter(|name| *name != MASTER_AGENT && *name != self.agent);
+            .filter(|name| *name != MASTER_AGENT && *name != self.worker.agent);
         self.agent(None)
             .map(|(name, _)| name)
             .into_iter()
@@ -132,7 +148,7 @@ impl Config {
 
     /// The named agent, or the default one.
     pub fn agent(&self, name: Option<&str>) -> Option<(&str, &Agent)> {
-        let name = name.unwrap_or(&self.agent);
+        let name = name.unwrap_or(&self.worker.agent);
         self.agents
             .get_key_value(name)
             .map(|(name, agent)| (name.as_str(), agent))
@@ -279,6 +295,7 @@ mod tests {
         fs::write(
             &file,
             r#"
+[worker]
 agent = "codex"
 
 [agents.codex]
@@ -316,23 +333,28 @@ prompt = "/design-code {request}"
         let dir = TempDir::new().unwrap();
         let xdg = dir.path().join("xdg");
         fs::create_dir_all(xdg.join("flow")).unwrap();
-        fs::write(xdg.join("flow/config.toml"), "agent = \"from-xdg\"\n").unwrap();
+        fs::write(
+            xdg.join("flow/config.toml"),
+            "[worker]\nagent = \"from-xdg\"\n",
+        )
+        .unwrap();
         let home = dir.path().join("home");
         fs::create_dir_all(home.join(".config/flow")).unwrap();
         fs::write(
             home.join(".config/flow/config.toml"),
-            "agent = \"from-home\"\n",
+            "[worker]\nagent = \"from-home\"\n",
         )
         .unwrap();
 
         assert_eq!(
             Config::load(None, Some(xdg), Some(home.clone()))
                 .unwrap()
+                .worker
                 .agent,
             "from-xdg"
         );
         assert_eq!(
-            Config::load(None, None, Some(home)).unwrap().agent,
+            Config::load(None, None, Some(home)).unwrap().worker.agent,
             "from-home"
         );
     }
@@ -341,7 +363,7 @@ prompt = "/design-code {request}"
     fn names_the_file_when_it_does_not_parse() {
         let dir = TempDir::new().unwrap();
         let file = dir.path().join("config.toml");
-        fs::write(&file, "agent = [").unwrap();
+        fs::write(&file, "[worker]\nagent = [").unwrap();
 
         let error = Config::load(Some(file.clone()), None, None).unwrap_err();
 
@@ -377,7 +399,7 @@ prompt = "/design-code {request}"
         let load = || Config::load(Some(file.clone()), None, None).unwrap();
 
         assert!(load().master.wake, "no file");
-        fs::write(&file, "agent = \"claude\"\n").unwrap();
+        fs::write(&file, "[worker]\nagent = \"claude\"\n").unwrap();
         assert!(load().master.wake, "no [master]");
         fs::write(&file, "[master]\nwake = false\n").unwrap();
         assert!(!load().master.wake);
@@ -421,11 +443,51 @@ prompt = "/design-code {request}"
     fn lists_the_agents_a_flow_can_run_the_default_first() {
         let dir = TempDir::new().unwrap();
         let file = dir.path().join("config.toml");
-        fs::write(&file, "agent = \"codex\"\n").unwrap();
+        fs::write(&file, "[worker]\nagent = \"codex\"\n").unwrap();
 
         let config = Config::load(Some(file), None, None).unwrap();
 
         assert_eq!(config.worker_agents(), ["codex", "claude"]);
         assert_eq!(Config::builtin().worker_agents(), ["claude", "codex"]);
+    }
+
+    #[test]
+    fn names_worker_agent_when_the_file_has_the_old_key() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        fs::write(&file, "agent = \"codex\"\n").unwrap();
+
+        let error = format!(
+            "{:#}",
+            Config::load(Some(file.clone()), None, None).unwrap_err()
+        );
+
+        assert!(error.contains(&file.display().to_string()), "{error}");
+        assert!(error.contains("[worker]"), "{error}");
+    }
+
+    #[test]
+    fn refuses_a_top_level_key_or_section_flow_does_not_know() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        let error = |text: &str| {
+            fs::write(&file, text).unwrap();
+            format!(
+                "{:#}",
+                Config::load(Some(file.clone()), None, None).unwrap_err()
+            )
+        };
+
+        let key = error("agnets = 1\n");
+        assert!(key.contains(&file.display().to_string()), "{key}");
+        assert!(key.contains("agnets"), "{key}");
+        assert!(key.contains("line 1"), "{key}");
+        assert!(!key.ends_with('\n'), "{key:?}");
+        let section = error("[mastr]\nwake = false\n");
+        assert!(section.contains("mastr"), "{section}");
+        let worker = error("[worker]\nagnet = \"codex\"\n");
+        assert!(worker.contains("agnet"), "{worker}");
+        let agent = error("[agents.pi]\ncommand = [\"pi\"]\nprompt = \"{request}\"\nresum = []\n");
+        assert!(agent.contains("resum"), "{agent}");
     }
 }
