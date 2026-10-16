@@ -1,6 +1,7 @@
 mod answer;
 mod calls;
 pub mod claude_code;
+pub mod codex;
 
 use std::path::Path;
 
@@ -27,13 +28,15 @@ ask the master or the user something, end your turn with the question.";
 #[serde(rename_all = "kebab-case")]
 pub enum Adapter {
     ClaudeCode,
+    Codex,
 }
 
 impl Adapter {
-    /// "claude-code" -> ClaudeCode; None for a name flow does not know.
+    /// "claude-code" -> ClaudeCode, "codex" -> Codex; None for a name flow does not know.
     pub fn named(name: &str) -> Option<Adapter> {
         match name {
             "claude-code" => Some(Adapter::ClaudeCode),
+            "codex" => Some(Adapter::Codex),
             _ => None,
         }
     }
@@ -41,6 +44,7 @@ impl Adapter {
     pub fn name(self) -> &'static str {
         match self {
             Adapter::ClaudeCode => "claude-code",
+            Adapter::Codex => "codex",
         }
     }
 
@@ -49,6 +53,10 @@ impl Adapter {
     pub fn wiring(self, flow_exe: &Path) -> Vec<String> {
         match self {
             Adapter::ClaudeCode => vec!["--settings".to_string(), claude_code::settings(flow_exe)]
+                .into_iter()
+                .chain(self.instruct(WORKER_PROMPT))
+                .collect(),
+            Adapter::Codex => codex::hooks(flow_exe, false)
                 .into_iter()
                 .chain(self.instruct(WORKER_PROMPT))
                 .collect(),
@@ -63,17 +71,20 @@ impl Adapter {
                 "--settings".to_string(),
                 claude_code::plain_settings(flow_exe),
             ],
+            Adapter::Codex => codex::hooks(flow_exe, false),
         }
     }
 
-    /// The arguments that run `<flow_exe> wait --master` in the master's session, inserted right
-    /// after the program; the master is no flow, so nothing else.
+    /// The arguments that bring the master its news, inserted right after the program: Claude
+    /// Code's `<flow_exe> wait --master` waiter; Codex's hooks with --master, which record its
+    /// session and hand news over at Stop. The master is no flow, so nothing else.
     pub fn master_wiring(self, flow_exe: &Path) -> Vec<String> {
         match self {
             Adapter::ClaudeCode => vec![
                 "--settings".to_string(),
                 claude_code::master_settings(flow_exe),
             ],
+            Adapter::Codex => codex::hooks(flow_exe, true),
         }
     }
 
@@ -81,6 +92,10 @@ impl Adapter {
     pub fn instruct(self, text: &str) -> Vec<String> {
         match self {
             Adapter::ClaudeCode => vec!["--append-system-prompt".to_string(), text.to_string()],
+            Adapter::Codex => vec![
+                "-c".to_string(),
+                format!("developer_instructions={}", codex::toml_string(text)),
+            ],
         }
     }
 
@@ -88,6 +103,7 @@ impl Adapter {
     pub fn translate(self, payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
         match self {
             Adapter::ClaudeCode => claude_code::translate(payload, phases),
+            Adapter::Codex => codex::translate(payload, phases),
         }
     }
 }
@@ -127,7 +143,9 @@ mod tests {
     fn knows_claude_code_by_name() {
         assert_eq!(Adapter::named("claude-code"), Some(Adapter::ClaudeCode));
         assert_eq!(Adapter::ClaudeCode.name(), "claude-code");
-        assert_eq!(Adapter::named("codex"), None);
+        assert_eq!(Adapter::named("codex"), Some(Adapter::Codex));
+        assert_eq!(Adapter::Codex.name(), "codex");
+        assert_eq!(Adapter::named("pi"), None);
     }
 
     #[test]
@@ -161,6 +179,27 @@ mod tests {
             Adapter::ClaudeCode.instruct("be brief"),
             ["--append-system-prompt", "be brief"]
         );
+    }
+
+    #[test]
+    fn codex_takes_instructions_as_config_and_its_hooks_on_every_launch() {
+        let exe = Path::new("/bin/flow");
+        let instructions = Adapter::Codex.instruct("be \"brief\"\nplease");
+        assert_eq!(instructions[0], "-c");
+        let parsed: toml::Table = toml::from_str(&instructions[1]).unwrap();
+        assert_eq!(
+            parsed["developer_instructions"].as_str(),
+            Some("be \"brief\"\nplease")
+        );
+
+        let worker = Adapter::Codex.wiring(exe);
+        assert_eq!(worker[..worker.len() - 2], codex::hooks(exe, false));
+        assert_eq!(
+            worker[worker.len() - 2..],
+            Adapter::Codex.instruct(WORKER_PROMPT)
+        );
+        assert_eq!(Adapter::Codex.plain_wiring(exe), codex::hooks(exe, false));
+        assert_eq!(Adapter::Codex.master_wiring(exe), codex::hooks(exe, true));
     }
 
     #[test]

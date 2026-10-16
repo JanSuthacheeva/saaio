@@ -367,7 +367,7 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 - [x] Record Codex hook payloads with the real CLI into `src/adapter/fixtures/codex/`: a probe hook that appends stdin, in a scratch repo under a private tmux (`tmux -L`), `~/.codex/config.toml` backed up and restored. Record user_prompt, user_prompt_skill, pre_bash_skill, pre_spawn_agent, post_bash, post_bash_merge_request, permission_bash, stop, stop_question, interrupt and subagent_bash, plus one rollout into `src/ui/peek/fixtures/codex-rollout.jsonl`
 - [x] Move turn_end/plain/sentences to adapter/answer.rs and tool_call/created_merge_request to adapter/calls.rs; WORKER_PROMPT harness-neutral in adapter.rs; add Adapter::instruct; claude_code tests unchanged and green
 - [x] Add EventKind::Session, view::Session and FlowView.session, fold apply and changes, PROTOCOL_VERSION 4; tests in fold/tests.rs and proto
-- [ ] Add adapter/codex.rs (hooks, toml_string, translate, session, mentioned_skill, read_skill, subagent); Adapter::Codex in named/name/wiring/plain_wiring/master_wiring/translate; table tests over the fixtures
+- [x] Add adapter/codex.rs (hooks, toml_string, translate, session, mentioned_skill, read_skill, subagent); Adapter::Codex in named/name/wiring/plain_wiring/master_wiring/translate; table tests over the fixtures
 
 ### Launch, delivery, hook
 - [ ] config: built-in codex agent, MasterConfig.agent, Config::master_agent and worker_agents, built-in master without the file argument; tests
