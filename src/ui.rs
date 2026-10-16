@@ -75,7 +75,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     terminal.clear()?;
     let home = env.home.map(|home| home.display().to_string());
     let mut app = App::new(outer.size()?)
-        .with_offset(outer::local_offset_secs())
+        .with_offset(crate::text::local_offset_secs())
         .with_home(home)
         .with_store(env.store.display().to_string());
     let client = Client::connect(

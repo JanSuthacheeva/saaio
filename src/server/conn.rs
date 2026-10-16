@@ -1,3 +1,4 @@
+use std::fs;
 use std::io::ErrorKind;
 use std::ops::ControlFlow;
 use std::os::unix::fs::PermissionsExt;
@@ -5,13 +6,13 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::mpsc::Sender;
 use std::time::Instant;
-use std::{fs, thread};
 
 use anyhow::{Context, Result, bail};
 
 use super::master::Start;
-use super::{ConnId, Event, FRAME_EVERY, Server, WRITE_TIMEOUT};
+use super::{ConnId, Event, FRAME_EVERY, Server, WRITE_TIMEOUT, spawn_named};
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Role, ServerMsg};
+use crate::server_log;
 
 impl Server {
     pub(super) fn message(&mut self, conn: ConnId, message: ClientMsg) -> ControlFlow<()> {
@@ -24,7 +25,7 @@ impl Server {
             }
             ClientMsg::Input(bytes) => {
                 if let Err(error) = self.host.write(&self.focus, &bytes) {
-                    eprintln!("{error:#}");
+                    server_log::write((self.clock)(), &format!("{error:#}"));
                 }
             }
             ClientMsg::Resize(size) => {
@@ -217,7 +218,7 @@ pub(super) fn bind(socket: &Path) -> Result<UnixListener> {
 }
 
 pub(super) fn accept_in_background(listener: UnixListener, events: Sender<Event>) {
-    thread::spawn(move || {
+    spawn_named("accept".to_string(), move || {
         for stream in listener.incoming().flatten() {
             if events.send(Event::Accepted(stream)).is_err() {
                 break;
@@ -227,7 +228,7 @@ pub(super) fn accept_in_background(listener: UnixListener, events: Sender<Event>
 }
 
 fn read_in_background(conn: ConnId, mut stream: UnixStream, events: Sender<Event>) {
-    thread::spawn(move || {
+    spawn_named(format!("conn {conn}"), move || {
         while let Ok(Some(message)) = proto::read_msg::<_, ClientMsg>(&mut stream) {
             if events.send(Event::Message(conn, message)).is_err() {
                 return;

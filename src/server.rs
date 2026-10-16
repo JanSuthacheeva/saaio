@@ -24,7 +24,8 @@ use signal_hook::iterator::Signals;
 use crate::config::Config;
 use crate::fold;
 use crate::launch::pane::LaunchEnv;
-use crate::proto::{ClientMsg, PaneKey, ServerMsg, Size};
+use crate::proto::{ClientMsg, PROTOCOL_VERSION, PaneKey, ServerMsg, Size};
+use crate::server_log;
 use crate::store::Store;
 use crate::view::Board;
 use conn::{accept_in_background, bind};
@@ -109,8 +110,9 @@ pub fn run(
     clock: fn() -> u64,
 ) -> Result<()> {
     let listener = bind(&paths.socket)?;
+    server_log::write(clock(), &format!("started (protocol {PROTOCOL_VERSION})"));
     if let Err(error) = master::ensure_instructions(&paths.instructions) {
-        eprintln!("{error:#}");
+        server_log::write(clock(), &format!("{error:#}"));
     }
     let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;
     let (events, inbox) = mpsc::channel();
@@ -148,6 +150,9 @@ pub fn run(
 
     let result = server.serve(&inbox);
     let _ = fs::remove_file(&paths.socket);
+    if result.is_ok() {
+        server_log::write(clock(), "stopped");
+    }
     result
 }
 
@@ -213,7 +218,10 @@ impl Server {
         if let Err(error) = fs::remove_file(&self.master_file)
             && error.kind() != ErrorKind::NotFound
         {
-            eprintln!("could not forget the master: {error}");
+            server_log::write(
+                (self.clock)(),
+                &format!("could not forget the master: {error}"),
+            );
         }
         let keys: Vec<PaneKey> = self.host.keys().cloned().collect();
         for key in &keys {
@@ -239,7 +247,7 @@ impl Server {
 
 fn stop_on_terminate(events: Sender<Event>) -> Result<()> {
     let mut signals = Signals::new([SIGTERM]).context("could not watch for SIGTERM")?;
-    thread::spawn(move || {
+    spawn_named("signals".to_string(), move || {
         for _ in signals.forever() {
             if events.send(Event::Terminate).is_err() {
                 return;
@@ -247,6 +255,14 @@ fn stop_on_terminate(events: Sender<Event>) -> Result<()> {
         }
     });
     Ok(())
+}
+
+/// Starts a thread with a name, so a panic in it says where it happened.
+pub(super) fn spawn_named<F: FnOnce() + Send + 'static>(name: String, body: F) {
+    thread::Builder::new()
+        .name(name)
+        .spawn(body)
+        .expect("the system could not start a thread");
 }
 
 #[cfg(test)]

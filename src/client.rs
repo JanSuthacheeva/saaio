@@ -14,6 +14,7 @@ use anyhow::{Context, Result, bail};
 use crate::launch::worktree;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, Role, ServerMsg};
 use crate::registry;
+use crate::server_log;
 use crate::store::Store;
 
 /// How long a new server gets to start listening.
@@ -256,7 +257,7 @@ pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Res
     if UnixStream::connect(socket).is_ok() {
         return Ok(());
     }
-    let log_path = socket.with_extension("log");
+    let log_path = server_log::path(socket);
     if let Some(dir) = socket.parent() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("could not create {}", dir.display()))?;

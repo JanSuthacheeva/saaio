@@ -214,15 +214,14 @@ Start and errors
 
 ## Tasks
 
-- [ ] Add `text::stamp` and move `local_offset_secs` into text.rs, with unit tests for midnight, negative offsets and a leap day
-- [ ] Add `build.rs` (FLOW_COMMIT) and `proto::BUILD`, `proto::Peer` with Display, `Hello { peer }`, `Detached { by }`, protocol 3; update proto round-trip tests
-- [ ] Add `server_log.rs`: `CAP`, `path`, `rotate`, `line`, `write`, `append`, `exit_on_panic`, `panic_text`, with unit and TempDir tests
-- [ ] `client`: `this_process` in Hello, `ensure_server` rotates, `stop_server(socket, clock)` appends its lines; client tests
-- [ ] `server`: `Stop` with Display, `Event::Signal` from `stop_on_signals` (WithOrigin; SIGTERM, SIGINT, SIGHUP), `handle`/`message` return `ControlFlow<Stop>`, `serve` returns `Stop`, `run` writes started/stopping/stopped; named threads
-- [ ] `server/conn.rs`: `peers`, attach/take-over/left/refused lines, `Detached { by }`, `Event::Unreadable` and `refuse_unreadable`; server tests for the take-over peer and a garbage hello
-- [ ] `server/panes.rs`, `server/host.rs`: `eprintln!` to `server_log::write`, named pane threads
-- [ ] `commands::server`: `exit_on_panic`, `failed:` line, `Document::Silent`
-- [ ] UI: `Detached { by }` message with ~; app test
-- [ ] `commands::ui`: `refuse_inside_own_flow` for ui and --stop; tests/cli.rs for the guard, the stop lines in server.log and rotation
+Regrouped during the build: dead code fails `clippy -D warnings`, so each task lands a unit with
+its first caller.
+
+- [x] Stamped lines: `text::stamp` (and `local_offset_secs` moved), `server_log` (`path`, `line`, `write`, `exit_on_panic`, `panic_text`), `server::run` writes started/stopped, `eprintln!` in server/ to `server_log::write`, named threads, `commands::server` (`exit_on_panic`, `failed:`, `Document::Silent`); unit tests for stamp, line, panic_text
+- [ ] Rotation: `server_log::CAP`, `rotate`, `ensure_server` rotates; TempDir tests and a client test
+- [ ] Stop reasons: `Stop` with Display, `Event::Signal` from `stop_on_signals` (WithOrigin; SIGTERM, SIGINT, SIGHUP), `handle`/`message` return `ControlFlow<Stop>`, `serve` returns `Stop` and writes `stopping:`; unit test for Display
+- [ ] Peers: `build.rs` (FLOW_COMMIT), `proto::BUILD`, `Peer` with Display, `Hello { peer }`, `Detached { by }`, protocol 3, `client::this_process`, `server/conn.rs` `peers` with attach/take-over/left/refused lines, `Event::Unreadable` and `refuse_unreadable`, `Stop::Asked(peer)`, the UI's take-over message with ~; proto, server and app tests
+- [ ] Stopper's lines: `server_log::append`, `stop_server(socket, clock)` appends its SIGTERM/SIGKILL/did-not-stop lines; tests/cli.rs checks the stopper's and the server's lines in server.log
+- [ ] Guard: `commands::ui::refuse_inside_own_flow` for ui and --stop; tests/cli.rs
 - [ ] CLAUDE.md: `server_log.rs`, `build.rs`, the scratch FLOW_HOME rule
 - [ ] E2E with a scratch FLOW_HOME in tmux: start flow ui, take it over from a second one, stop with C-space Q, start again, `flow ui --stop`, `kill -TERM`, a temporary panic in a thread; read server.log for each case

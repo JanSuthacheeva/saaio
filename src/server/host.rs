@@ -12,6 +12,7 @@ use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 
 use crate::launch::pane::PaneSpec;
 use crate::proto::{Frame, PaneInfo, PaneKey, PaneStatus, Size};
+use crate::server::spawn_named;
 use crate::server::terminal::Terminal;
 
 /// Lines of scrollback each pane keeps.
@@ -182,7 +183,7 @@ impl Host {
         let pid = process.pid;
         let exited = process.exited.clone();
         signal_group(pid, libc::SIGHUP);
-        thread::spawn(move || {
+        spawn_named(format!("pane {key} close"), move || {
             thread::sleep(CLOSE_GRACE);
             if !exited.load(Ordering::SeqCst) {
                 signal_group(pid, libc::SIGKILL);
@@ -278,7 +279,7 @@ impl Host {
         let (drained_tx, drained_rx) = mpsc::channel::<()>();
         let events = self.events.clone();
         let key = spec.key.clone();
-        thread::spawn(move || {
+        spawn_named(format!("pane {key} output"), move || {
             let mut buf = vec![0u8; 64 * 1024];
             loop {
                 match reader.read(&mut buf) {
@@ -300,7 +301,7 @@ impl Host {
         let events = self.events.clone();
         let key = spec.key;
         let done = exited.clone();
-        thread::spawn(move || {
+        spawn_named(format!("pane {key} wait"), move || {
             let code = child.wait().ok().map(|status| status.exit_code());
             let _ = drained_rx.recv_timeout(DRAIN);
             done.store(true, Ordering::SeqCst);

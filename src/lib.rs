@@ -11,6 +11,7 @@ mod launch;
 mod proto;
 mod registry;
 mod server;
+mod server_log;
 mod slots;
 mod store;
 mod text;
