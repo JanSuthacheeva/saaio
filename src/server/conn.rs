@@ -10,12 +10,12 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 
 use super::master::Start;
-use super::{ConnId, Event, FRAME_EVERY, Server, WRITE_TIMEOUT, spawn_named};
+use super::{ConnId, Event, FRAME_EVERY, Server, Stop, WRITE_TIMEOUT, spawn_named};
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Role, ServerMsg};
 use crate::server_log;
 
 impl Server {
-    pub(super) fn message(&mut self, conn: ConnId, message: ClientMsg) -> ControlFlow<()> {
+    pub(super) fn message(&mut self, conn: ConnId, message: ClientMsg) -> ControlFlow<Stop> {
         match message {
             ClientMsg::Hello { version, role } => self.hello(conn, version, role),
             ClientMsg::Focus(key) => {
@@ -47,7 +47,7 @@ impl Server {
                 self.send_panes();
                 self.send_full_frame();
             }
-            ClientMsg::StopServer => return ControlFlow::Break(()),
+            ClientMsg::StopServer => return ControlFlow::Break(Stop::Asked),
             ClientMsg::EndFlows => self.end_flows(),
         }
         ControlFlow::Continue(())

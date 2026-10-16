@@ -66,7 +66,7 @@ impl fmt::Display for Peer   // `pid 4321 in /Users/jan/projects/flow (flow 0.1.
 /// Why the server stops.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Stop {
-    /// A UI's StopServer; None when its hello never came.
+    /// A UI's StopServer; None when its hello never came (a unit `Asked` until the Peers task).
     Asked(Option<Peer>),
     /// SIGTERM, SIGINT or SIGHUP; `from` is the sender's pid when the system says.
     Signal { name: &'static str, from: Option<u32> },
@@ -80,6 +80,7 @@ pub fn run(…) -> Result<()>;                        // writes `started (flow {
 fn serve(&mut self, inbox: &Receiver<Event>) -> Result<Stop>;   // writes `stopping: {stop}` before self.stop
 fn handle(&mut self, event: Event) -> ControlFlow<Stop>;
 fn stop_on_signals(events: Sender<Event>) -> Result<()>;        // was stop_on_terminate; SignalsInfo<WithOrigin> for SIGTERM, SIGINT, SIGHUP; thread `signals`
+// WithOrigin needs signal-hook's `extended-siginfo` feature (its `cc` build dependency was already in Cargo.lock)
 ```
 
 `src/server/conn.rs` (modified)
@@ -219,7 +220,7 @@ its first caller.
 
 - [x] Stamped lines: `text::stamp` (and `local_offset_secs` moved), `server_log` (`path`, `line`, `write`, `exit_on_panic`, `panic_text`), `server::run` writes started/stopped, `eprintln!` in server/ to `server_log::write`, named threads, `commands::server` (`exit_on_panic`, `failed:`, `Document::Silent`); unit tests for stamp, line, panic_text
 - [x] Rotation: `server_log::CAP`, `rotate`, `ensure_server` rotates; TempDir tests and a client test
-- [ ] Stop reasons: `Stop` with Display, `Event::Signal` from `stop_on_signals` (WithOrigin; SIGTERM, SIGINT, SIGHUP), `handle`/`message` return `ControlFlow<Stop>`, `serve` returns `Stop` and writes `stopping:`; unit test for Display
+- [x] Stop reasons: `Stop` with Display, `Event::Signal` from `stop_on_signals` (WithOrigin; SIGTERM, SIGINT, SIGHUP), `handle`/`message` return `ControlFlow<Stop>`, `serve` returns `Stop` and writes `stopping:`; unit test for Display
 - [ ] Peers: `build.rs` (FLOW_COMMIT), `proto::BUILD`, `Peer` with Display, `Hello { peer }`, `Detached { by }`, protocol 3, `client::this_process`, `server/conn.rs` `peers` with attach/take-over/left/refused lines, `Event::Unreadable` and `refuse_unreadable`, `Stop::Asked(peer)`, the UI's take-over message with ~; proto, server and app tests
 - [ ] Stopper's lines: `server_log::append`, `stop_server(socket, clock)` appends its SIGTERM/SIGKILL/did-not-stop lines; tests/cli.rs checks the stopper's and the server's lines in server.log
 - [ ] Guard: `commands::ui::refuse_inside_own_flow` for ui and --stop; tests/cli.rs

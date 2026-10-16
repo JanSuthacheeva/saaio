@@ -8,6 +8,7 @@ mod conn;
 mod panes;
 
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use std::fs;
 use std::io::ErrorKind;
 use std::ops::ControlFlow;
@@ -18,8 +19,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use signal_hook::consts::SIGTERM;
-use signal_hook::iterator::Signals;
+use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
+use signal_hook::iterator::SignalsInfo;
+use signal_hook::iterator::exfiltrator::WithOrigin;
+use signal_hook::low_level::signal_name;
 
 use crate::config::Config;
 use crate::fold;
@@ -67,8 +70,36 @@ enum Event {
     Message(ConnId, ClientMsg),
     Gone(ConnId),
     Host(HostEvent),
-    /// SIGTERM: stop as StopServer does.
-    Terminate,
+    /// SIGTERM, SIGINT or SIGHUP: stop as StopServer does.
+    Signal {
+        name: &'static str,
+        from: Option<u32>,
+    },
+}
+
+/// Why the server stops.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Stop {
+    /// A UI's StopServer (C-space Q, then y, k or e).
+    Asked,
+    /// SIGTERM, SIGINT or SIGHUP; `from` is the sender's pid when the system says.
+    Signal {
+        name: &'static str,
+        from: Option<u32>,
+    },
+}
+
+impl fmt::Display for Stop {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Stop::Asked => write!(f, "StopServer"),
+            Stop::Signal {
+                name,
+                from: Some(pid),
+            } => write!(f, "{name} from pid {pid}"),
+            Stop::Signal { name, from: None } => write!(f, "{name}"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -100,7 +131,8 @@ struct Server {
     events: Sender<Event>,
 }
 
-/// Binds the socket (removing a stale one), opens the master, then loops until StopServer or SIGTERM.
+/// Binds the socket (removing a stale one), opens the master, then loops until StopServer or a
+/// stopping signal; logs the start, the reason and the end.
 pub fn run(
     paths: &ServerPaths,
     store: Store,
@@ -116,7 +148,7 @@ pub fn run(
     }
     let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;
     let (events, inbox) = mpsc::channel();
-    stop_on_terminate(events.clone())?;
+    stop_on_signals(events.clone())?;
     let host = Host::new(START_SIZE, forward_host_events(events.clone()));
     let mut server = Server {
         store,
@@ -150,14 +182,14 @@ pub fn run(
 
     let result = server.serve(&inbox);
     let _ = fs::remove_file(&paths.socket);
-    if result.is_ok() {
-        server_log::write(clock(), "stopped");
-    }
-    result
+    result?;
+    server_log::write(clock(), "stopped");
+    Ok(())
 }
 
 impl Server {
-    fn serve(&mut self, inbox: &Receiver<Event>) -> Result<()> {
+    /// Runs until something stops the server; why, once its panes are closed.
+    fn serve(&mut self, inbox: &Receiver<Event>) -> Result<Stop> {
         loop {
             let watch = WATCH_EVERY.saturating_sub(self.refreshed_at.elapsed());
             let wait = if self.dirty {
@@ -167,9 +199,10 @@ impl Server {
             };
             match inbox.recv_timeout(wait) {
                 Ok(event) => {
-                    if self.handle(event).is_break() {
+                    if let ControlFlow::Break(stop) = self.handle(event) {
+                        server_log::write((self.clock)(), &format!("stopping: {stop}"));
                         self.stop(inbox);
-                        return Ok(());
+                        return Ok(stop);
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
@@ -183,12 +216,12 @@ impl Server {
     }
 
     /// One event; Break once the server should stop.
-    fn handle(&mut self, event: Event) -> ControlFlow<()> {
+    fn handle(&mut self, event: Event) -> ControlFlow<Stop> {
         match event {
             Event::Accepted(stream) => self.accept(stream),
             Event::Message(conn, message) => return self.message(conn, message),
             Event::Gone(conn) => self.drop_conn(conn),
-            Event::Terminate => return ControlFlow::Break(()),
+            Event::Signal { name, from } => return ControlFlow::Break(Stop::Signal { name, from }),
             Event::Host(HostEvent::Output(key, bytes)) => {
                 self.host.feed(&key, &bytes);
                 if key == self.focus {
@@ -245,11 +278,19 @@ impl Server {
     }
 }
 
-fn stop_on_terminate(events: Sender<Event>) -> Result<()> {
-    let mut signals = Signals::new([SIGTERM]).context("could not watch for SIGTERM")?;
+/// SIGTERM, SIGINT and SIGHUP stop the server as StopServer does, with who sent them.
+fn stop_on_signals(events: Sender<Event>) -> Result<()> {
+    let mut signals = SignalsInfo::<WithOrigin>::new([SIGTERM, SIGINT, SIGHUP])
+        .context("could not watch for SIGTERM, SIGINT and SIGHUP")?;
     spawn_named("signals".to_string(), move || {
-        for _ in signals.forever() {
-            if events.send(Event::Terminate).is_err() {
+        for origin in signals.forever() {
+            let event = Event::Signal {
+                name: signal_name(origin.signal).unwrap_or("a signal"),
+                from: origin
+                    .process
+                    .and_then(|process| u32::try_from(process.pid).ok()),
+            };
+            if events.send(event).is_err() {
                 return;
             }
         }

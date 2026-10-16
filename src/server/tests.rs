@@ -530,3 +530,14 @@ fn replaces_a_stale_socket_but_not_a_live_one() {
     assert!(error.to_string().contains("already runs"), "{error}");
     drop(listener);
 }
+
+#[test]
+fn says_why_it_stops() {
+    let signal = |from| Stop::Signal {
+        name: "SIGTERM",
+        from,
+    };
+    assert_eq!(signal(Some(2810)).to_string(), "SIGTERM from pid 2810");
+    assert_eq!(signal(None).to_string(), "SIGTERM");
+    assert_eq!(Stop::Asked.to_string(), "StopServer");
+}
