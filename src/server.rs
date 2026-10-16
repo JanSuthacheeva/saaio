@@ -14,9 +14,12 @@ use std::ops::ControlFlow;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::thread;
 use std::time::{Duration, Instant};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
+use signal_hook::consts::SIGTERM;
+use signal_hook::iterator::Signals;
 
 use crate::config::Config;
 use crate::fold;
@@ -63,6 +66,8 @@ enum Event {
     Message(ConnId, ClientMsg),
     Gone(ConnId),
     Host(HostEvent),
+    /// SIGTERM: stop as StopServer does.
+    Terminate,
 }
 
 #[derive(Debug)]
@@ -94,7 +99,7 @@ struct Server {
     events: Sender<Event>,
 }
 
-/// Binds the socket (removing a stale one), opens the master, then loops until StopServer.
+/// Binds the socket (removing a stale one), opens the master, then loops until StopServer or SIGTERM.
 pub fn run(
     paths: &ServerPaths,
     store: Store,
@@ -109,6 +114,7 @@ pub fn run(
     }
     let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;
     let (events, inbox) = mpsc::channel();
+    stop_on_terminate(events.clone())?;
     let host = Host::new(START_SIZE, forward_host_events(events.clone()));
     let mut server = Server {
         store,
@@ -177,6 +183,7 @@ impl Server {
             Event::Accepted(stream) => self.accept(stream),
             Event::Message(conn, message) => return self.message(conn, message),
             Event::Gone(conn) => self.drop_conn(conn),
+            Event::Terminate => return ControlFlow::Break(()),
             Event::Host(HostEvent::Output(key, bytes)) => {
                 self.host.feed(&key, &bytes);
                 if key == self.focus {
@@ -228,6 +235,18 @@ impl Server {
             self.drop_conn(conn);
         }
     }
+}
+
+fn stop_on_terminate(events: Sender<Event>) -> Result<()> {
+    let mut signals = Signals::new([SIGTERM]).context("could not watch for SIGTERM")?;
+    thread::spawn(move || {
+        for _ in signals.forever() {
+            if events.send(Event::Terminate).is_err() {
+                return;
+            }
+        }
+    });
+    Ok(())
 }
 
 #[cfg(test)]

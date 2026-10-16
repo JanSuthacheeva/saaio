@@ -3,6 +3,7 @@ use std::io::{Read, Write};
 use std::ops::{Deref, DerefMut};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
+use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::thread;
@@ -1366,6 +1367,32 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     assert!(server.wait().unwrap().success());
     assert!(!socket.exists());
     assert!(!home.path().join("master.json").exists());
+}
+
+#[test]
+fn ui_stop_ends_a_server_that_speaks_another_protocol() {
+    let home = TempDir::new().unwrap();
+    let socket = home.path().join("server.sock");
+    let listen = "import socket, sys, time\n\
+        server = socket.socket(socket.AF_UNIX)\n\
+        server.bind(sys.argv[1])\n\
+        server.listen()\n\
+        time.sleep(60)\n";
+    let stranger = Command::new("python3")
+        .args(["-c", listen])
+        .arg(&socket)
+        .spawn()
+        .unwrap();
+    let mut stranger = Running(stranger);
+    wait_for_socket(&socket);
+
+    let stopped = flow(home.path(), &["ui", "--stop"]);
+
+    assert_eq!(
+        stdout(&stopped).trim(),
+        "stopped the flow server and every session in it"
+    );
+    assert!(stranger.wait().unwrap().signal().is_some());
 }
 
 #[test]

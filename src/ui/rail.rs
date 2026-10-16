@@ -44,7 +44,7 @@ impl Rail<'_> {
             }
             let key = PaneKey::Flow(flow.id.clone());
             let focused = *sidebar.focus == key;
-            let tone = theme.state_style(flow.state);
+            let tone = theme.flow_style(flow);
             let digit = sidebar::digit(index);
             let lead = if focused {
                 vec![

@@ -304,3 +304,21 @@ fn asks_for_every_project_again_every_two_seconds_while_in_view() {
     app.on_tick(NOW + 9_000);
     assert_eq!(app.overview_due(), vec![], "not once the board is gone");
 }
+
+#[test]
+fn a_working_card_takes_the_color_of_its_phase() {
+    let mut app = board_app();
+    app.on_input(Routed::Command(Command::Board));
+    let terminal = render_at(&app, FLEET);
+    let buffer = terminal.backend().buffer();
+    let review = Theme::default().phase.review.fg.unwrap();
+    let line = row(&terminal, 10);
+    let x = |text: &str| line[..line.find(text).unwrap()].chars().count() as u16 + layout::MARGIN;
+
+    assert_eq!(buffer[(x("◓"), 10 + layout::MARGIN)].fg, review, "spinner");
+    assert_eq!(
+        buffer[(x("reviewing"), 10 + layout::MARGIN)].fg,
+        review,
+        "the state label"
+    );
+}

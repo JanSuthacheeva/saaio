@@ -222,7 +222,7 @@ impl App {
                 .unwrap_or_else(|| sidebar.label(flow).content.to_string());
             text.push(Line::from(vec![
                 Span::raw("  "),
-                Span::styled(sidebar.glyph(flow.state), theme.state_style(flow.state)),
+                Span::styled(sidebar.glyph(flow.state), theme.flow_style(flow)),
                 Span::styled(format!(" {:name_width$}  ", flow.name), theme.ui.strong),
                 Span::styled(clip(&doing, 44), theme.ui.muted),
             ]));
