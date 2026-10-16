@@ -99,14 +99,14 @@ pub fn run(
     store: Store,
     config: Config,
     env: LaunchEnv,
+    cwd: &Path,
     clock: fn() -> u64,
 ) -> Result<()> {
     let listener = bind(&paths.socket)?;
     if let Err(error) = master::ensure_instructions(&paths.instructions) {
         eprintln!("{error:#}");
     }
-    let cwd = std::env::current_dir().context("could not read the current directory")?;
-    let (record, start) = MasterRecord::load_or_create(&paths.master, &cwd)?;
+    let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;
     let (events, inbox) = mpsc::channel();
     let host = Host::new(START_SIZE, forward_host_events(events.clone()));
     let mut server = Server {
@@ -729,8 +729,16 @@ mod tests {
             phases: crate::config::builtin_phases(),
             master: crate::config::MasterConfig::default(),
         };
-        let handle =
-            thread::spawn(move || run(&thread_paths, store, config, LaunchEnv::default(), || 0));
+        let handle = thread::spawn(move || {
+            run(
+                &thread_paths,
+                store,
+                config,
+                LaunchEnv::default(),
+                &std::env::current_dir().unwrap(),
+                || 0,
+            )
+        });
         let deadline = Instant::now() + Duration::from_secs(5);
         while UnixStream::connect(&paths.socket).is_err() {
             assert!(Instant::now() < deadline, "the server did not start");

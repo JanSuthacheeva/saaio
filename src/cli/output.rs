@@ -7,11 +7,11 @@ use crate::event::{Mode, Phase};
 use crate::text::short_duration;
 use crate::view::{Board, FlowView, Projects, State, Workspace};
 
-pub const DESCRIPTION: &str =
+pub(crate) const DESCRIPTION: &str =
     "Tracks parallel feature flows: what each is doing, where it is blocked, how far it got";
 
 /// List views cut long texts to this many chars, with a hint; --full lifts it.
-pub const LIST_TEXT_LIMIT: usize = 80;
+pub(crate) const LIST_TEXT_LIMIT: usize = 80;
 
 /// What a successful command prints: TOON for agents, JSON for programs, a line for people (flow ui).
 #[derive(Debug, PartialEq, Eq)]
@@ -19,6 +19,8 @@ pub enum Document {
     Toon(String),
     Json(String),
     Text(String),
+    /// News that wakes a Claude Code session: printed on stderr, exit 2 (`flow wait`).
+    Wake(String),
     /// Nothing at all: what `flow hook` answers, since a hook's stdout can reach the model.
     Silent,
 }
@@ -32,9 +34,13 @@ pub struct Failure {
 }
 
 impl Document {
+    #[must_use]
     pub fn text(&self) -> &str {
         match self {
-            Document::Toon(text) | Document::Json(text) | Document::Text(text) => text,
+            Document::Toon(text)
+            | Document::Json(text)
+            | Document::Text(text)
+            | Document::Wake(text) => text,
             Document::Silent => "",
         }
     }
@@ -51,6 +57,7 @@ impl Failure {
     }
 
     /// Exit code 2: clap's message and where to read the usage.
+    #[must_use]
     pub fn usage(clap_error: &clap::Error) -> Failure {
         let rendered = clap_error.to_string();
         let message = rendered
@@ -78,6 +85,7 @@ impl Failure {
     }
 
     /// error: ..., help[n]: ...
+    #[must_use]
     pub fn to_toon(&self) -> String {
         #[derive(Serialize)]
         struct ErrorDocument<'a> {
@@ -106,13 +114,13 @@ impl From<std::io::Error> for Failure {
 }
 
 /// bin, description, then the list view.
-pub fn home(board: &Board, bin: &str, warnings: &[String]) -> Document {
+pub(crate) fn home(board: &Board, bin: &str, warnings: &[String]) -> Document {
     list(board, Some(bin), warnings, false)
 }
 
 /// count, needs_you, flows[n]{name,state,phase,tasks,age}, blockers[n]{name,blocker}, warnings, help;
 /// "flows: none tracked" when empty.
-pub fn status_list(board: &Board, warnings: &[String], full: bool) -> Document {
+pub(crate) fn status_list(board: &Board, warnings: &[String], full: bool) -> Document {
     list(board, None, warnings, full)
 }
 
@@ -208,7 +216,7 @@ fn list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool) -> Do
 }
 
 /// Every project's flows in one list with a project column, blockers likewise.
-pub fn status_all(projects: &Projects, warnings: &[String], full: bool) -> Document {
+pub(crate) fn status_all(projects: &Projects, warnings: &[String], full: bool) -> Document {
     #[derive(Serialize)]
     struct AllDocument<'a> {
         count: usize,
@@ -302,7 +310,7 @@ pub fn status_all(projects: &Projects, warnings: &[String], full: bool) -> Docum
 
 /// One flow with its steps, decisions and timeline, and for a started flow where its code is:
 /// branch, worktree and whether the worktree is still there (`worktree_exists`).
-pub fn status_detail(
+pub(crate) fn status_detail(
     flow: &FlowView,
     now: u64,
     full: bool,
@@ -430,13 +438,13 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>) -> Vec<String> {
 
 /// Whether flow ui opens a started worker now or once it runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Opening {
+pub(crate) enum Opening {
     Running,
     WhenUiRuns,
 }
 
 /// flow, id, worktree, branch, slot, setup (ran / none / failed: ...), agent, pane, help.
-pub fn started(
+pub(crate) fn started(
     flow: &FlowView,
     workspace: &Workspace,
     setup: &Setup,
@@ -478,7 +486,7 @@ pub fn started(
 }
 
 /// flow, id, existing (true when `new` found the unfinished flow of that name), how to use it.
-pub fn created(flow: &FlowView, existing: bool) -> Document {
+pub(crate) fn created(flow: &FlowView, existing: bool) -> Document {
     #[derive(Serialize)]
     struct Created<'a> {
         flow: &'a str,
@@ -504,7 +512,7 @@ pub fn created(flow: &FlowView, existing: bool) -> Document {
 }
 
 /// flow, state, phase, and the next step that fits the new state.
-pub fn reported(flow: &FlowView) -> Document {
+pub(crate) fn reported(flow: &FlowView) -> Document {
     #[derive(Serialize)]
     struct Reported<'a> {
         flow: &'a str,
@@ -531,7 +539,7 @@ pub fn reported(flow: &FlowView) -> Document {
 }
 
 /// sent, the flow's state, and who wakes whom now.
-pub fn sent(flow: &FlowView) -> Document {
+pub(crate) fn sent(flow: &FlowView) -> Document {
     #[derive(Serialize)]
     struct Sent<'a> {
         sent: &'a str,
@@ -549,7 +557,7 @@ pub fn sent(flow: &FlowView) -> Document {
 }
 
 /// What a worker reads when flow wakes it: each of the master's messages, indented.
-pub fn news_for_worker(messages: &[&str]) -> String {
+pub(crate) fn news_for_worker(messages: &[&str]) -> String {
     messages
         .iter()
         .flat_map(|message| {
@@ -562,7 +570,7 @@ pub fn news_for_worker(messages: &[&str]) -> String {
 
 /// What the master reads when flow wakes it: changed[n]{name,state,mode,says}, and who answers
 /// by the flows' modes.
-pub fn news_for_master(flows: &[&FlowView]) -> String {
+pub(crate) fn news_for_master(flows: &[&FlowView]) -> String {
     #[derive(Serialize)]
     struct Changed {
         name: String,
@@ -606,7 +614,7 @@ pub fn news_for_master(flows: &[&FlowView]) -> String {
 }
 
 /// skipped: no flow id, and how to give one.
-pub fn skipped() -> Document {
+pub(crate) fn skipped() -> Document {
     #[derive(Serialize)]
     struct Skipped {
         skipped: &'static str,
@@ -619,13 +627,13 @@ pub fn skipped() -> Document {
 }
 
 /// How `flow remove` says a branch has work no other branch has; flow ui asks before deleting it.
-pub const UNMERGED: &str = "on no other branch";
+pub(crate) const UNMERGED: &str = "on no other branch";
 /// How `flow remove` says a worktree has uncommitted work; flow ui asks before discarding it.
-pub const UNCOMMITTED: &str = "has uncommitted work";
+pub(crate) const UNCOMMITTED: &str = "has uncommitted work";
 
 /// What `flow start` did with the repo's .flow/setup.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Setup {
+pub(crate) enum Setup {
     Ran,
     None,
     Failed(String),
@@ -644,7 +652,7 @@ impl fmt::Display for Setup {
 
 /// What became of a flow's worktree when it was cleared or removed.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Retired {
+pub(crate) enum Retired {
     NoWorktree,
     Removed,
     /// Kept for its uncommitted work, at this path.
@@ -664,7 +672,7 @@ impl fmt::Display for Retired {
 
 /// What became of a flow's branch once its worktree was gone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BranchFate {
+pub(crate) enum BranchFate {
     NoBranch,
     Deleted,
     Kept,
@@ -689,7 +697,12 @@ fn pane_name(closing: Closing) -> &'static str {
 }
 
 /// removed, pane (closed, none or timed out), worktree, branch (deleted, kept or none), help.
-pub fn removed(name: &str, pane: Closing, worktree: &Retired, branch: BranchFate) -> Document {
+pub(crate) fn removed(
+    name: &str,
+    pane: Closing,
+    worktree: &Retired,
+    branch: BranchFate,
+) -> Document {
     #[derive(Serialize)]
     struct Removed<'a> {
         removed: &'a str,
@@ -715,7 +728,7 @@ pub fn removed(name: &str, pane: Closing, worktree: &Retired, branch: BranchFate
 }
 
 /// cleared: n, names[n], kept[n]{name,path} for worktrees with uncommitted work, help.
-pub fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
+pub(crate) fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
     #[derive(Serialize)]
     struct Kept<'a> {
         name: &'a str,
@@ -746,7 +759,7 @@ pub fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
 }
 
 /// Text cut to `limit` chars with " (truncated, N chars - use --full)" unless `full`.
-pub fn truncated(text: &str, limit: usize, full: bool) -> String {
+pub(crate) fn truncated(text: &str, limit: usize, full: bool) -> String {
     let length = text.chars().count();
     if full || length <= limit {
         return text.to_string();

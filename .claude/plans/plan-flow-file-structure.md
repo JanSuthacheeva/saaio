@@ -66,7 +66,7 @@ use flow::cli::output::{Document, Failure};
 
 fn main() -> ExitCode;   // try_parse; DisplayHelp/DisplayVersion print, exit 0; else fail(&Failure::usage)
 fn env() -> Env;         // FLOW_HOME FLOW_CONFIG FLOW_ID HOME XDG_STATE_HOME XDG_CONFIG_HOME CLAUDE_CONFIG_DIR
-fn now_ms() -> u64;
+fn now_ms() -> u64;      // cli::unix_ms(SystemTime::now()), the crate's one clock conversion
 fn answer(result: Result<Document, Failure>) -> ExitCode;
     // Toon/Json/Text -> println, 0; Silent -> 0; Wake(news) -> eprintln, 2; Err -> fail
 fn fail(failure: &Failure) -> ExitCode;   // println!(to_toon), ExitCode::from(code)
@@ -89,6 +89,7 @@ mod env;
 pub mod output;
 
 pub use env::Env;
+pub use crate::event::unix_ms;   // for main's now_ms
 
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 #[derive(Debug, Parser)]
@@ -210,6 +211,8 @@ impl Failure { pub fn error(..); pub fn usage(..); pub fn to_toon(&self) -> Stri
 impl From<anyhow::Error> for Failure; impl From<std::io::Error> for Failure;
 pub fn truncated(text: &str, limit: usize, full: bool) -> String;
 fn toon<T: Serialize>(document: &T) -> String;   // visible to the family modules
+// Only Document and Failure (with text, usage, to_toon) are pub: main uses them. Everything else
+// in output is pub(crate), so pedantic's public-API lints stay quiet and dead code still warns.
 pub mod flow; pub mod news; pub mod remove; pub mod start; pub mod status;
 
 // output/status.rs  home, status_list, status_all, status_detail (+ list, detail_help, row types, NEW_HELP)
@@ -367,7 +370,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 - [x] Add `text.rs` (plural, short_duration from output.rs; long_duration, clock from ui/board.rs) and `ui/fit.rs` (columns, spans_width, tail, clip, clip_place, wrap, split from sidebar.rs) with their tests moved; update every import
 
 ### 2. Library and binary
-- [ ] Add `lib.rs` and `cli.rs`: move the module tree to lib.rs and main.rs's handlers into cli.rs as they are; add `cli/env.rs` with `Env` and its methods (`pub use env::Env`) replacing locate_store, load_config, config_dir, env_path, bin_path; `Document::Wake`; main.rs becomes main, env, now_ms, answer, fail; `ui::run` and `server::run` take the clock and the cwd; unit tests for `Env`
+- [x] Add `lib.rs` and `cli.rs`: move the module tree to lib.rs and main.rs's handlers into cli.rs as they are; add `cli/env.rs` with `Env` and its methods (`pub use env::Env`) replacing locate_store, load_config, config_dir, env_path, bin_path; `Document::Wake`; main.rs becomes main, env, now_ms, answer, fail; `ui::run` and `server::run` take the clock and the cwd; unit tests for `Env`
 - [ ] Add `deliver.rs` with WorkerNews (News carries messages), worker_news, master_news; wait formats with output::news_for_worker / news_for_master; unit tests on a temp store
 
 ### 3. Commands
@@ -377,7 +380,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 - [ ] `ui.rs` (with stop_server), `server.rs`, `wait.rs`, `hook.rs` with their `Args`; `cli.rs` is only Cli, Command and run; unit tests for `cli::run` without a store
 
 ### 4. Output
-- [ ] Move `output.rs` to `cli/output.rs` (Document, Failure, toon, truncated, DESCRIPTION, LIST_TEXT_LIMIT) and split `output/status.rs`, `flow.rs`, `start.rs`, `remove.rs`, `news.rs`, each with its tests; update ui's imports of UNCOMMITTED and UNMERGED
+- [ ] Split `cli/output.rs` (moved there in 2.1, so main could name `cli::output`; keeps Document, Failure, toon, truncated, DESCRIPTION, LIST_TEXT_LIMIT) into `output/status.rs`, `flow.rs`, `start.rs`, `remove.rs`, `news.rs`, each with its tests
 
 ### 5. Core
 - [ ] Split `launch.rs` into `launch/name.rs`, `worktree.rs`, `pane.rs` with their tests; move taken_slots and free_slot to `slots.rs`

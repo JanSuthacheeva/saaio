@@ -10,8 +10,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
 
 use crate::branching::Branching;
+use crate::cli::output;
 use crate::launch::WORKTREES_DIR;
-use crate::output;
 use crate::proto::{ClientMsg, Modes, PaneInfo, PaneKey, PaneStatus, ServerMsg, Size};
 use crate::text::plural;
 use crate::ui::board::{self, BoardState, BoardView};
