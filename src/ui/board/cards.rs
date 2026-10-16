@@ -245,8 +245,11 @@ impl BoardView<'_> {
             State::Idle => "ready".into(),
             State::Delegated if short => "agent".into(),
             State::Delegated => format!("{} · agent", flow.phase.map_or("working", gerund)).into(),
-            State::Done if flow.merge_request.is_some() => "MR open".into(),
-            State::Done => "done".into(),
+            State::Done => match flow.merge_request.as_deref() {
+                Some(url) if url.contains("/pull/") => "PR open".into(),
+                Some(_) => "MR open".into(),
+                None => "done".into(),
+            },
             State::Ended => "ended".into(),
         };
         Span::styled(text, theme.flow_style(flow))
@@ -488,6 +491,30 @@ mod tests {
         assert_eq!(card[0], " 2 ● shop-230-rate-…  waiting ");
         assert_eq!(card[1], "   ●───○───○───○  design", "no room for the mode");
         assert_eq!(styles.0, styles.1, "the question reads as text");
+    }
+
+    #[test]
+    fn names_a_github_pull_request_a_pr() {
+        let pull = flow(
+            "shop-240",
+            Mode::Auto,
+            vec![EventKind::MergeRequest {
+                url: "https://github.com/acme/shop/pull/418".into(),
+            }],
+        );
+        let merge = flow(
+            "shop-241",
+            Mode::Auto,
+            vec![EventKind::MergeRequest {
+                url: "https://gitlab.com/shop/-/merge_requests/9".into(),
+            }],
+        );
+
+        let labels = with_view(vec![], |view| {
+            [&pull, &merge].map(|flow| view.state_label(Some(flow), false).content.to_string())
+        });
+
+        assert_eq!(labels, ["PR open", "MR open"]);
     }
 
     #[test]

@@ -9,6 +9,9 @@ use crate::ui::fit::{clip, clip_place, columns, spans_width};
 use crate::ui::theme::Theme;
 use crate::view::State;
 
+/// The fewest columns a cut branch keeps in the title before it goes.
+const BRANCH_KEPT: usize = 12;
+
 impl App {
     /// The row above the pane that names the session, on the panel color: what is in view on the
     /// left, a notice or the rail's hint on the right. The left is fitted so the right stays.
@@ -77,7 +80,8 @@ impl App {
             let place = format!("{branch} · slot {slot}");
             let lead = "  · ";
             let fitted = clip(&place, room(spans_width(&title) + columns(lead)));
-            if !fitted.is_empty() {
+            // A branch cut to a few letters says nothing; it goes whole.
+            if fitted == place || columns(&fitted) >= BRANCH_KEPT {
                 title.push(Span::styled(format!("{lead}{fitted}"), theme.ui.faint));
             }
         }

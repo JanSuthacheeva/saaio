@@ -556,3 +556,19 @@ fn a_working_flow_takes_the_color_of_its_phase() {
     assert_eq!(buffer[(dot + 8, track)].fg, review, "current");
     assert_eq!(buffer[(dot + 12, track)].fg, faint, "open");
 }
+
+#[test]
+fn a_branch_too_cut_to_read_leaves_the_title() {
+    let narrow = Size { cols: 96, rows: 30 };
+    let mut app = App::new(narrow);
+    app.on_server(ServerMsg::Board(fleet()));
+    app.on_input(Routed::Command(Command::Focus(2)));
+
+    let title = row(&render_at(&app, narrow), 0);
+
+    assert!(
+        title.starts_with(" ● shop-230  ●───○───○───○ design "),
+        "{title}"
+    );
+    assert!(!title.contains("· …"), "{title}");
+}
