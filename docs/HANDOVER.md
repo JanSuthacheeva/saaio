@@ -312,6 +312,10 @@ server's typing.
 - **Extensions:** glab and ClickUp as data sources (ticket as the request, MR and pipeline status
   per flow); the new-flow dialog's "from ClickUp" list in the design waits for this.
   Decide whether both should match.
+- **Notifications (first after 0.1).** When a flow turns waiting or blocked and you are not looking at
+  it, flow ui sends a terminal notification: OSC 9, OSC 777 (Ghostty, iTerm2), the bell as fallback, so
+  no OS-specific code. A switch in `config.toml`. Today only a master that pushes to your phone covers
+  this; without a master, or with flow ui in the background, a waiting flow goes unnoticed.
 - **Subagents in the sidebar.** `delegated` shows one foreground subagent's task; background
   subagents (`run_in_background`) are not counted, so a worker running three in parallel looks merely
   working. Count every running subagent from the harness's start and stop hooks (Claude Code's
