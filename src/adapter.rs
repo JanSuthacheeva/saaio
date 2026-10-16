@@ -2,6 +2,7 @@ pub mod claude_code;
 
 use std::path::Path;
 
+use serde::Deserialize;
 use serde_json::Value;
 
 use crate::config::PhaseMap;
@@ -11,7 +12,8 @@ use crate::event::{EventKind, Phase};
 pub const REPORT_TEXT_LIMIT: usize = 200;
 
 /// A harness flow observes through its own hooks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Adapter {
     ClaudeCode,
 }
@@ -40,6 +42,17 @@ impl Adapter {
                 claude_code::settings(flow_exe),
                 "--append-system-prompt".to_string(),
                 claude_code::WORKER_PROMPT.to_string(),
+            ],
+        }
+    }
+
+    /// The arguments that make a plain session report to `<flow_exe> hook <name>`: no master
+    /// waiter, no worker prompt, since it is the user's own.
+    pub fn plain_wiring(self, flow_exe: &Path) -> Vec<String> {
+        match self {
+            Adapter::ClaudeCode => vec![
+                "--settings".to_string(),
+                claude_code::plain_settings(flow_exe),
             ],
         }
     }
@@ -78,6 +91,14 @@ pub fn cut(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_same_name_from_a_config_file_and_the_command_line() {
+        let adapter: Adapter = serde_json::from_value(Value::from("claude-code")).unwrap();
+
+        assert_eq!(adapter, Adapter::ClaudeCode);
+        assert_eq!(Adapter::named(adapter.name()), Some(adapter));
+    }
 
     fn phases() -> PhaseMap {
         PhaseMap::from([

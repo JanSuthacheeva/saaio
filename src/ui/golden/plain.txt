@@ -1,0 +1,44 @@
+
+  ○ scratch  idle  · ~/scratch                                                                              │ ▚▄▞ flow
+                                                                                                            ├────────────────────────────────────────
+                                                                                                            │ 0   master
+                                                                                                            │     ~/projects/shop · main
+                                                                                                            │
+                                                                                                            │ NEEDS YOU 2
+                                                                                                            │ 1 ● shop-221                       29m
+                                                                                                            │     ●───●───○───○ implement        4/9
+                                                                                                            │     migration needs a default value f…
+                                                                                                            │
+                                                                                                            │ 2 ● shop-230                       31m
+                                                                                                            │     ●───○───○───○ design        guided
+                                                                                                            │     Which approach: a channel column …
+                                                                                                            │
+                                                                                                            │ READY 1
+                                                                                                            │▌3 ○ scratch                        12m
+                                                                                                            │▌    idle                         plain
+                                                                                                            │▌    The tree has 14 files under src.
+                                                                                                            │
+                           ╭ not open ───────────────────────────────────────────╮                          │ RUNNING 1
+                           │ flow ui has no session for this flow.               │                          │ 4 ◓ export-csv                      1h
+                           │ C-space r resumes it   C-space 0 back to the master │                          │     ●───●───●───○ review           6/6
+                           ╰─────────────────────────────────────────────────────╯                          │     agent: review changes
+                                                                                                            │
+                                                                                                            │ DONE 2
+                                                                                                            │ 5 ✓ shop-198                        2h
+                                                                                                            │     ●───●───●───● MR !418        in 0s
+                                                                                                            │
+                                                                                                            │ 6 ○ notes                           3h
+                                                                                                            │     ended                        in 0s
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │ C-space ? keys
+

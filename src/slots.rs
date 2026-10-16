@@ -1,18 +1,19 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::ErrorKind;
-use std::os::fd::AsRawFd;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::registry::Registry;
+use crate::store::write_atomic;
+use crate::view::FlowView;
 
 /// Slots across every project: FLOW_SLOT, which setup hooks turn into ports.
 pub const MAX_SLOTS: u8 = 20;
 
 /// slots/<n>: which flow in which store took slot n.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Claim {
     pub store: PathBuf,
     pub flow: String,
@@ -46,10 +47,7 @@ impl Slots {
         let Some(slot) = free else {
             return Ok(None);
         };
-        let path = self.path(slot);
-        let fresh = path.with_extension(format!("{}.tmp", std::process::id()));
-        fs::write(&fresh, serde_json::to_string(claim)?)
-            .and_then(|()| fs::rename(&fresh, &path))
+        write_atomic(&self.path(slot), serde_json::to_string(claim)?.as_bytes())
             .with_context(|| format!("could not claim slot {slot}"))?;
         Ok(Some(slot))
     }
@@ -61,15 +59,15 @@ impl Slots {
         if self.read(slot).as_ref() != Some(claim) {
             return Ok(());
         }
-        match fs::remove_file(self.path(slot)) {
-            Err(error) if error.kind() != ErrorKind::NotFound => {
-                Err(error).with_context(|| format!("could not release slot {slot}"))
-            }
-            _ => Ok(()),
+        if let Err(error) = fs::remove_file(self.path(slot))
+            && error.kind() != ErrorKind::NotFound
+        {
+            return Err(error).with_context(|| format!("could not release slot {slot}"));
         }
+        Ok(())
     }
 
-    /// An exclusive flock on slots/.lock, released when the file closes.
+    /// An exclusive lock on slots/.lock, released when the file closes.
     fn lock(&self) -> Result<File> {
         fs::create_dir_all(&self.dir)
             .with_context(|| format!("could not create {}", self.dir.display()))?;
@@ -79,10 +77,7 @@ impl Slots {
             .write(true)
             .open(self.dir.join(".lock"))
             .with_context(|| format!("could not open {}", self.dir.join(".lock").display()))?;
-        // SAFETY: flock only takes the descriptor, which lives as long as `file`.
-        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } != 0 {
-            return Err(std::io::Error::last_os_error()).context("could not lock the slots");
-        }
+        file.lock().context("could not lock the slots")?;
         Ok(file)
     }
 
@@ -97,6 +92,22 @@ impl Slots {
     }
 }
 
+/// The slots unfinished flows hold.
+pub fn taken_slots(flows: &[FlowView]) -> Vec<u8> {
+    flows
+        .iter()
+        .filter(|flow| !flow.is_finished())
+        .filter_map(|flow| flow.workspace.as_ref().and_then(|workspace| workspace.slot))
+        .collect()
+}
+
+/// The lowest slot 1..=MAX_SLOTS no unfinished flow of this project holds; flow start decides across
+/// projects.
+pub fn free_slot(flows: &[FlowView]) -> Option<u8> {
+    let held = taken_slots(flows);
+    (1..=MAX_SLOTS).find(|slot| !held.contains(slot))
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Barrier};
@@ -105,6 +116,53 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::event::{Event, EventKind, Mode};
+    use crate::fold;
+
+    fn flow_in_slot(slot: u8, finished: bool) -> FlowView {
+        let mut events = vec![Event::new(
+            0,
+            EventKind::Started {
+                name: format!("f{slot}"),
+                request: "x".into(),
+                mode: Mode::Guided,
+            },
+        )];
+        events.push(Event::new(
+            1,
+            EventKind::Workspace {
+                path: "/p".into(),
+                branch: Some("b".into()),
+                slot: Some(slot),
+                window: None,
+                agent: "claude".into(),
+            },
+        ));
+        if finished {
+            events.push(Event::new(2, EventKind::Ended));
+        }
+        fold::fold("id", &events, None, 3).unwrap()
+    }
+
+    #[test]
+    fn gives_the_lowest_slot_no_running_flow_holds() {
+        assert_eq!(free_slot(&[]), Some(1));
+        assert_eq!(
+            free_slot(&[flow_in_slot(1, false), flow_in_slot(3, false)]),
+            Some(2)
+        );
+        assert_eq!(free_slot(&[flow_in_slot(1, true)]), Some(1));
+        let full: Vec<FlowView> = (1..=MAX_SLOTS)
+            .map(|slot| flow_in_slot(slot, false))
+            .collect();
+        assert_eq!(free_slot(&full), None);
+    }
+
+    #[test]
+    fn lists_the_slots_of_unfinished_flows() {
+        let flows = [flow_in_slot(4, false), flow_in_slot(2, true)];
+        assert_eq!(taken_slots(&flows), vec![4]);
+    }
 
     fn slots(dir: &TempDir) -> Slots {
         Slots::at(&Registry::at(dir.path().to_path_buf()))
@@ -186,7 +244,7 @@ mod tests {
             .collect();
 
         let mut taken: Vec<u8> = handles.into_iter().map(|h| h.join().unwrap()).collect();
-        taken.sort();
+        taken.sort_unstable();
 
         assert_eq!(taken, (1..=8).collect::<Vec<u8>>());
     }

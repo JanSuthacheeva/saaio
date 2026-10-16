@@ -1,4 +1,6 @@
-use ratatui::layout::Rect;
+use std::io::Write;
+
+use ratatui::layout::{Position, Rect};
 
 /// What raw keyboard and mouse bytes from the real terminal turn into.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,10 +15,17 @@ pub enum Routed {
     Click { col: u16, row: u16 },
 }
 
+/// Which way C-space j / k moves the peek cursor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step {
+    Next,
+    Prev,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     Focus(u8),
-    Cursor(i8),
+    Cursor(Step),
     Jump,
     Reopen,
     NewFlow,
@@ -28,7 +37,7 @@ pub enum Command {
     StopServer,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Key {
     Char(char),
     Enter,
@@ -127,15 +136,9 @@ pub fn decode(bytes: &[u8]) -> Vec<Key> {
             '\t' => Key::Tab,
             '\x7f' | '\x08' => Key::Backspace,
             '\x1b' => match chars.peek() {
-                Some('[') | Some('O') => {
+                Some('[' | 'O') => {
                     chars.next();
-                    let mut last = None;
-                    for next in chars.by_ref() {
-                        if next.is_ascii_alphabetic() || next == '~' {
-                            last = Some(next);
-                            break;
-                        }
-                    }
+                    let last = chars.find(|next| next.is_ascii_alphabetic() || *next == '~');
                     match last {
                         Some('A') => Key::Up,
                         Some('B') => Key::Down,
@@ -154,6 +157,7 @@ pub fn decode(bytes: &[u8]) -> Vec<Key> {
     keys
 }
 
+#[derive(Debug)]
 enum AfterPrefix {
     Command(Command),
     Literal,
@@ -170,8 +174,8 @@ fn command_after_prefix(rest: &[u8]) -> (AfterPrefix, usize) {
     }
     let command = match rest[0] {
         digit @ b'0'..=b'9' => Command::Focus(digit - b'0'),
-        b'j' => Command::Cursor(1),
-        b'k' => Command::Cursor(-1),
+        b'j' => Command::Cursor(Step::Next),
+        b'k' => Command::Cursor(Step::Prev),
         b'\r' => Command::Jump,
         b'r' => Command::Reopen,
         b'n' => Command::NewFlow,
@@ -216,6 +220,7 @@ fn csi_len(bytes: &[u8]) -> Option<usize> {
         .map(|end| end + 3)
 }
 
+#[derive(Debug, Clone, Copy)]
 struct MouseEvent {
     button: u16,
     col: u16,
@@ -248,20 +253,14 @@ fn route_mouse(
     routed: &mut Vec<Routed>,
     modal: bool,
 ) {
-    let inside = event.col >= pane.x
-        && event.col < pane.x + pane.width
-        && event.row >= pane.y
-        && event.row < pane.y + pane.height;
-    if inside && !modal {
-        plain.extend_from_slice(
-            format!(
-                "\x1b[<{};{};{}{}",
-                event.button,
-                event.col - pane.x + 1,
-                event.row - pane.y + 1,
-                if event.press { 'M' } else { 'm' }
-            )
-            .as_bytes(),
+    if pane.contains(Position::new(event.col, event.row)) && !modal {
+        let _ = write!(
+            plain,
+            "\x1b[<{};{};{}{}",
+            event.button,
+            event.col - pane.x + 1,
+            event.row - pane.y + 1,
+            if event.press { 'M' } else { 'm' }
         );
         return;
     }
@@ -337,7 +336,7 @@ mod tests {
         assert_eq!(route(&mut router, b"\x00"), vec![]);
         assert_eq!(
             route(&mut router, b"j"),
-            vec![Routed::Command(Command::Cursor(1))]
+            vec![Routed::Command(Command::Cursor(Step::Next))]
         );
         assert_eq!(route(&mut router, b"j"), vec![Routed::Pane(b"j".to_vec())]);
     }

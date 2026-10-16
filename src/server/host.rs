@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::fmt;
+use std::io::{ErrorKind, Read, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
@@ -9,8 +10,9 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 
-use crate::launch::PaneSpec;
+use crate::launch::pane::PaneSpec;
 use crate::proto::{Frame, PaneInfo, PaneKey, PaneStatus, Size};
+use crate::server::spawn_named;
 use crate::server::terminal::Terminal;
 
 /// Lines of scrollback each pane keeps.
@@ -21,19 +23,21 @@ const CLOSE_GRACE: Duration = Duration::from_secs(3);
 const DRAIN: Duration = Duration::from_millis(500);
 
 /// What the pane threads report to the thread that owns the Host.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum HostEvent {
     Output(PaneKey, Vec<u8>),
     Exited(PaneKey, Option<u32>),
 }
 
 /// Every pane: a PTY, the process in it and the Terminal showing its screen.
+#[derive(Debug)]
 pub struct Host {
     panes: BTreeMap<PaneKey, Pane>,
     size: Size,
     events: Sender<HostEvent>,
 }
 
+#[derive(Debug)]
 struct Pane {
     term: Terminal,
     process: Option<Process>,
@@ -44,8 +48,17 @@ struct Pane {
 struct Process {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
-    pid: i32,
+    pid: libc::pid_t,
     exited: Arc<AtomicBool>,
+}
+
+impl fmt::Debug for Process {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Process")
+            .field("pid", &self.pid)
+            .field("exited", &self.exited)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Host {
@@ -62,7 +75,7 @@ impl Host {
         if let Some(pane) = self.panes.get(&spec.key)
             && pane.status == PaneStatus::Running
         {
-            bail!("{} is already running", describe(&spec.key));
+            bail!("{} is already running", spec.key);
         }
         let key = spec.key.clone();
         match self.spawn(spec) {
@@ -126,7 +139,7 @@ impl Host {
             process
                 .writer
                 .write_all(bytes)
-                .with_context(|| format!("could not write to {}", describe(key)))?;
+                .with_context(|| format!("could not write to {key}"))?;
         }
         Ok(())
     }
@@ -170,7 +183,7 @@ impl Host {
         let pid = process.pid;
         let exited = process.exited.clone();
         signal_group(pid, libc::SIGHUP);
-        thread::spawn(move || {
+        spawn_named(format!("pane {key} close"), move || {
             thread::sleep(CLOSE_GRACE);
             if !exited.load(Ordering::SeqCst) {
                 signal_group(pid, libc::SIGKILL);
@@ -207,6 +220,21 @@ impl Host {
         })
     }
 
+    /// Where the pane stands; None when there is no such pane.
+    pub fn status(&self, key: &PaneKey) -> Option<&PaneStatus> {
+        self.panes.get(key).map(|pane| &pane.status)
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item = &PaneKey> {
+        self.panes.keys()
+    }
+
+    pub fn any_running(&self) -> bool {
+        self.panes
+            .values()
+            .any(|pane| pane.status == PaneStatus::Running)
+    }
+
     pub fn panes(&self) -> Vec<PaneInfo> {
         self.panes
             .iter()
@@ -240,9 +268,10 @@ impl Host {
             .spawn_command(command)
             .with_context(|| format!("could not start {program}"))?;
         drop(pair.slave);
-        let pid = child
+        let id = child
             .process_id()
-            .context("the started process has no id")? as i32;
+            .context("the started process has no id")?;
+        let pid = libc::pid_t::try_from(id).with_context(|| format!("pid {id} is out of range"))?;
         let mut reader = pair.master.try_clone_reader()?;
         let writer = pair.master.take_writer()?;
         let exited = Arc::new(AtomicBool::new(false));
@@ -250,10 +279,11 @@ impl Host {
         let (drained_tx, drained_rx) = mpsc::channel::<()>();
         let events = self.events.clone();
         let key = spec.key.clone();
-        thread::spawn(move || {
+        spawn_named(format!("pane {key} output"), move || {
             let mut buf = vec![0u8; 64 * 1024];
             loop {
                 match reader.read(&mut buf) {
+                    Err(error) if error.kind() == ErrorKind::Interrupted => {}
                     Ok(0) | Err(_) => break,
                     Ok(read) => {
                         if events
@@ -271,7 +301,7 @@ impl Host {
         let events = self.events.clone();
         let key = spec.key;
         let done = exited.clone();
-        thread::spawn(move || {
+        spawn_named(format!("pane {key} wait"), move || {
             let code = child.wait().ok().map(|status| status.exit_code());
             let _ = drained_rx.recv_timeout(DRAIN);
             done.store(true, Ordering::SeqCst);
@@ -297,17 +327,10 @@ fn pty_size(size: Size) -> PtySize {
 }
 
 /// The child leads its own session (portable-pty calls setsid), so its group id is its pid.
-fn signal_group(pid: i32, signal: libc::c_int) {
+fn signal_group(pid: libc::pid_t, signal: libc::c_int) {
     // SAFETY: kill only sends a signal; a stale group id fails with ESRCH and changes nothing.
     unsafe {
         libc::kill(-pid, signal);
-    }
-}
-
-fn describe(key: &PaneKey) -> String {
-    match key {
-        PaneKey::Master => "the master".to_string(),
-        PaneKey::Flow(id) => format!("flow {id}"),
     }
 }
 

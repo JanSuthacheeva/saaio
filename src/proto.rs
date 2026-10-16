@@ -1,4 +1,8 @@
+use std::borrow::Cow;
+use std::fmt;
 use std::io::{ErrorKind, Read, Write};
+use std::ops::BitOr;
+use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 use serde::de::DeserializeOwned;
@@ -6,8 +10,42 @@ use serde::{Deserialize, Serialize};
 
 use crate::view::Board;
 
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 3;
+/// This binary: `0.1.0 2904734`, the commit from build.rs, `unknown` outside a git checkout.
+pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("FLOW_COMMIT"));
 pub const MAX_MESSAGE: usize = 8 << 20;
+
+/// The process at the other end: what the log and a dropped UI say about it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Peer {
+    pub pid: u32,
+    pub cwd: PathBuf,
+    pub build: String,
+}
+
+impl Peer {
+    /// Its folder, or "an unknown folder" when the process could not read its own.
+    pub fn folder(&self) -> Cow<'_, str> {
+        if self.cwd.as_os_str().is_empty() {
+            Cow::Borrowed("an unknown folder")
+        } else {
+            self.cwd.to_string_lossy()
+        }
+    }
+}
+
+/// pid 4321 in /Users/jan/projects/flow (flow 0.1.0 2904734)
+impl fmt::Display for Peer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "pid {} in {} (flow {})",
+            self.pid,
+            self.folder(),
+            self.build
+        )
+    }
+}
 
 /// Which session a pane runs: the master, or the worker of a flow id.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -16,24 +54,36 @@ pub enum PaneKey {
     Flow(String),
 }
 
+/// the master, flow 7f3c
+impl fmt::Display for PaneKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PaneKey::Master => f.write_str("the master"),
+            PaneKey::Flow(id) => write!(f, "flow {id}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Size {
     pub cols: u16,
     pub rows: u16,
 }
 
-/// Attach draws the panes; Control sends one request (flow remove, flow ui --stop).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Attach draws the panes; Control sends one request (flow remove, flow clear).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     Attach { size: Size },
     Control,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientMsg {
+    /// `peer` comes last, so a server of an older protocol still reads the version and refuses.
     Hello {
         version: u32,
         role: Role,
+        peer: Peer,
     },
     Focus(PaneKey),
     Input(Vec<u8>),
@@ -47,7 +97,7 @@ pub enum ClientMsg {
     EndFlows,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ServerMsg {
     Welcome {
         version: u32,
@@ -60,8 +110,10 @@ pub enum ServerMsg {
     Frame(Frame),
     /// The flow's pane exited after CloseFlow.
     Closed(String),
-    /// Another flow ui attached.
-    Detached,
+    /// Another flow ui attached: the process `by`.
+    Detached {
+        by: Peer,
+    },
     /// CloseFlow found no pane for the flow.
     NotOpen(String),
     /// Where the master runs: its directory and the branch checked out there.
@@ -71,13 +123,13 @@ pub enum ServerMsg {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PaneInfo {
     pub key: PaneKey,
     pub status: PaneStatus,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PaneStatus {
     Running,
     Exited { code: Option<u32> },
@@ -85,7 +137,7 @@ pub enum PaneStatus {
 }
 
 /// Rows of one pane: all of them when full, else only the changed ones.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Frame {
     pub key: PaneKey,
     pub full: bool,
@@ -95,7 +147,7 @@ pub struct Frame {
     pub history: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cell {
     pub text: String,
     pub fg: Color,
@@ -111,22 +163,30 @@ pub enum Color {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Flags(pub u8);
+pub struct Flags(u8);
 
 impl Flags {
-    pub const BOLD: u8 = 1;
-    pub const DIM: u8 = 1 << 1;
-    pub const ITALIC: u8 = 1 << 2;
-    pub const UNDERLINE: u8 = 1 << 3;
-    pub const REVERSE: u8 = 1 << 4;
-    pub const STRIKE: u8 = 1 << 5;
+    pub const BOLD: Flags = Flags(1);
+    pub const DIM: Flags = Flags(1 << 1);
+    pub const ITALIC: Flags = Flags(1 << 2);
+    pub const UNDERLINE: Flags = Flags(1 << 3);
+    pub const REVERSE: Flags = Flags(1 << 4);
+    pub const STRIKE: Flags = Flags(1 << 5);
     /// The first column of a double-width character.
-    pub const WIDE: u8 = 1 << 6;
+    pub const WIDE: Flags = Flags(1 << 6);
     /// The column a double-width character covers after its first.
-    pub const SPACER: u8 = 1 << 7;
+    pub const SPACER: Flags = Flags(1 << 7);
 
-    pub fn has(self, flag: u8) -> bool {
-        self.0 & flag != 0
+    pub fn has(self, flag: Flags) -> bool {
+        self.0 & flag.0 != 0
+    }
+}
+
+impl BitOr for Flags {
+    type Output = Flags;
+
+    fn bitor(self, other: Flags) -> Flags {
+        Flags(self.0 | other.0)
     }
 }
 
@@ -217,7 +277,15 @@ mod tests {
             text: text.into(),
             fg: Color::Indexed(4),
             bg: Color::Rgb(1, 2, 3),
-            flags: Flags(Flags::BOLD | Flags::WIDE),
+            flags: Flags::BOLD | Flags::WIDE,
+        }
+    }
+
+    fn peer() -> Peer {
+        Peer {
+            pid: 4321,
+            cwd: "/Users/jan/projects/flow".into(),
+            build: "0.1.0 2904734".into(),
         }
     }
 
@@ -230,10 +298,12 @@ mod tests {
             ClientMsg::Hello {
                 version: PROTOCOL_VERSION,
                 role: Role::Attach { size },
+                peer: peer(),
             },
             ClientMsg::Hello {
                 version: PROTOCOL_VERSION,
                 role: Role::Control,
+                peer: peer(),
             },
             ClientMsg::Focus(PaneKey::Flow("7f3c".into())),
             ClientMsg::Input(vec![0, 27, b'[', b'A']),
@@ -293,7 +363,7 @@ mod tests {
                 history: None,
             }),
             ServerMsg::Closed("a".into()),
-            ServerMsg::Detached,
+            ServerMsg::Detached { by: peer() },
             ServerMsg::NotOpen("b".into()),
             ServerMsg::Master {
                 cwd: "/shop".into(),
@@ -329,6 +399,47 @@ mod tests {
             );
         }
         assert_eq!(read_msg::<_, ServerMsg>(&mut reader).unwrap(), None);
+    }
+
+    #[test]
+    fn an_older_server_still_reads_the_version_of_a_newer_hello() {
+        #[derive(Deserialize)]
+        enum OlderClientMsg {
+            Hello { version: u32, role: Role },
+        }
+        let mut wire = Vec::new();
+        write_msg(
+            &mut wire,
+            &ClientMsg::Hello {
+                version: PROTOCOL_VERSION,
+                role: Role::Control,
+                peer: peer(),
+            },
+        )
+        .unwrap();
+
+        let Some(OlderClientMsg::Hello { version, role }) =
+            read_msg(&mut Cursor::new(wire)).unwrap()
+        else {
+            panic!("no hello");
+        };
+        assert_eq!((version, role), (PROTOCOL_VERSION, Role::Control));
+    }
+
+    #[test]
+    fn names_a_peer_by_pid_folder_and_build() {
+        assert_eq!(
+            peer().to_string(),
+            "pid 4321 in /Users/jan/projects/flow (flow 0.1.0 2904734)"
+        );
+        let lost = Peer {
+            cwd: PathBuf::new(),
+            ..peer()
+        };
+        assert_eq!(
+            lost.to_string(),
+            "pid 4321 in an unknown folder (flow 0.1.0 2904734)"
+        );
     }
 
     #[test]

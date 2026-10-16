@@ -31,27 +31,13 @@ pass on what the user said, so act on them as you would on the user's own answer
 master or the user something, end your turn with the question.";
 /// plan-progress's report tool, whose answers carry the plan's task counts.
 const PLAN_PROGRESS_TOOL: &str = "mcp__plan-progress__report";
+/// How a Stop's background tasks list the watch Claude Code keeps on a published artifact.
+const ARTIFACT_WATCH_TYPE: &str = "monitor";
+const ARTIFACT_WATCH_PREFIX: &str = "live updates for artifact ";
 
-/// The --settings JSON: each event in EVENTS runs `<flow_exe> hook claude-code`, synchronously so
-/// the events reach the log in order; each in WAIT_EVENTS also arms `<flow_exe> wait`.
+/// The --settings JSON: report_hooks, and each event in WAIT_EVENTS also arms `<flow_exe> wait`.
 pub fn settings(flow_exe: &Path) -> String {
-    let handler = json!({
-        "type": "command",
-        "command": flow_exe.display().to_string(),
-        "args": ["hook", Adapter::ClaudeCode.name()],
-        "timeout": HOOK_TIMEOUT_SECS,
-    });
-    let mut hooks: serde_json::Map<String, Value> = EVENTS
-        .iter()
-        .map(|event| {
-            let entry = if event.ends_with("ToolUse") || *event == "PermissionRequest" {
-                json!({ "matcher": "*", "hooks": [handler] })
-            } else {
-                json!({ "hooks": [handler] })
-            };
-            (event.to_string(), json!([entry]))
-        })
-        .collect();
+    let mut hooks = report_hooks(flow_exe);
     let waiter = waiter(flow_exe, &["wait"]);
     for event in WAIT_EVENTS {
         let entry = hooks
@@ -63,6 +49,33 @@ pub fn settings(flow_exe: &Path) -> String {
             .push(waiter.clone());
     }
     json!({ "hooks": hooks }).to_string()
+}
+
+/// A plain session's --settings JSON: report_hooks alone; it waits for no master.
+pub fn plain_settings(flow_exe: &Path) -> String {
+    json!({ "hooks": report_hooks(flow_exe) }).to_string()
+}
+
+/// Each event in EVENTS runs `<flow_exe> hook claude-code`, synchronously so the events reach the
+/// log in order.
+fn report_hooks(flow_exe: &Path) -> serde_json::Map<String, Value> {
+    let handler = json!({
+        "type": "command",
+        "command": flow_exe.display().to_string(),
+        "args": ["hook", Adapter::ClaudeCode.name()],
+        "timeout": HOOK_TIMEOUT_SECS,
+    });
+    EVENTS
+        .iter()
+        .map(|event| {
+            let entry = if event.ends_with("ToolUse") || *event == "PermissionRequest" {
+                json!({ "matcher": "*", "hooks": [handler] })
+            } else {
+                json!({ "hooks": [handler] })
+            };
+            (event.to_string(), json!([entry]))
+        })
+        .collect()
 }
 
 /// The master's --settings JSON: only its waiter, `<flow_exe> wait --master`; the master is no
@@ -209,12 +222,21 @@ fn text_of(response: &Value) -> String {
 }
 
 /// What a turn ending with background work in flight waits for: the first running or pending
-/// task's description.
+/// task's description, artifact watches aside.
 fn running_background_task(tasks: &Value) -> Option<&str> {
     tasks.as_array()?.iter().find_map(|task| {
         let busy = matches!(task["status"].as_str(), Some("running" | "pending"));
-        busy.then(|| task["description"].as_str().unwrap_or("background work"))
+        (busy && !artifact_watch(task))
+            .then(|| task["description"].as_str().unwrap_or("background work"))
     })
+}
+
+/// A live subscription Claude Code keeps for a published artifact: it never finishes.
+fn artifact_watch(task: &Value) -> bool {
+    task["type"] == ARTIFACT_WATCH_TYPE
+        && task["description"]
+            .as_str()
+            .is_some_and(|description| description.starts_with(ARTIFACT_WATCH_PREFIX))
 }
 
 /// Waiting with the last sentence of the answer's last non-empty line that asks (ends in "?", or
@@ -284,11 +306,12 @@ fn sentences(text: &str) -> Vec<String> {
 
 /// "ok, 4/9 done" -> (4, 9); "ok, all 9 done" -> (9, 9).
 fn task_counts(result: &str) -> Option<(u32, u32)> {
-    if let Some(rest) = result.split("ok, all ").nth(1) {
-        let total: u32 = rest.split(' ').next()?.parse().ok()?;
-        if rest[total.to_string().len()..].starts_with(" done") {
-            return Some((total, total));
-        }
+    if let Some(rest) = result.split("ok, all ").nth(1)
+        && let Some((count, after)) = rest.split_once(' ')
+        && after.starts_with("done")
+    {
+        let total = count.parse().ok()?;
+        return Some((total, total));
     }
     let rest = result.split("ok, ").nth(1)?;
     let (counts, after) = rest.split_once(' ')?;
@@ -440,6 +463,49 @@ mod tests {
     }
 
     #[test]
+    fn an_artifact_watch_is_not_work_the_turn_waits_on() {
+        let link = "https://claude.ai/artifact/CUmbqod2Bv8mGRtioXWRH7";
+        assert_eq!(
+            events("stop_artifact_watch"),
+            vec![
+                EventKind::Answer { text: link.into() },
+                EventKind::Idle { note: link.into() }
+            ]
+        );
+    }
+
+    #[test]
+    fn a_pending_artifact_watch_is_not_work_either() {
+        let mut stop = fixture("stop_artifact_watch");
+        stop["background_tasks"][0]["status"] = json!("pending");
+        assert!(matches!(
+            translate(&stop, &phases()).last(),
+            Some(EventKind::Idle { .. })
+        ));
+    }
+
+    #[test]
+    fn a_subagent_running_beside_an_artifact_watch_is_delegated() {
+        let mut stop = fixture("stop_artifact_watch");
+        stop["background_tasks"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({
+                "id": "adfb26396b14a6b82",
+                "type": "subagent",
+                "status": "running",
+                "description": "background sleeper",
+                "agent_type": "general-purpose"
+            }));
+        assert_eq!(
+            translate(&stop, &phases()),
+            vec![EventKind::Delegated {
+                description: "background sleeper".into()
+            }]
+        );
+    }
+
+    #[test]
     fn a_question_or_a_permission_waits_for_you() {
         assert_eq!(events("pre_ask"), vec![waiting("Red or blue?")]);
         assert_eq!(
@@ -564,6 +630,7 @@ mod tests {
     fn reads_task_counts_merge_requests_and_typed_skills() {
         assert_eq!(task_counts("ok, 4/9 done - next: 2.4"), Some((4, 9)));
         assert_eq!(task_counts("ok, all 9 done - plan complete"), Some((9, 9)));
+        assert_eq!(task_counts("ok, all 09 done"), Some((9, 9)));
         assert_eq!(task_counts("refused: 2.4 matches two items"), None);
         assert_eq!(
             created_merge_request("gh pr create --fill", "https://github.com/a/b/pull/12\n"),
@@ -590,6 +657,30 @@ mod tests {
         }
         assert_eq!(settings["hooks"]["PreToolUse"][0]["matcher"], "*");
         assert_eq!(settings["hooks"]["Stop"][0].get("matcher"), None);
+    }
+
+    #[test]
+    fn a_plain_session_reports_but_neither_waits_nor_hears_of_the_master() {
+        let plain: Value = serde_json::from_str(&plain_settings(Path::new("/bin/flow"))).unwrap();
+
+        let hooks = plain["hooks"].as_object().unwrap();
+        assert_eq!(hooks.len(), EVENTS.len(), "no SessionStart waiter");
+        for event in EVENTS {
+            let handlers = hooks[event][0]["hooks"].as_array().unwrap();
+            assert_eq!(handlers.len(), 1, "{event}");
+            assert_eq!(
+                handlers[0]["args"],
+                json!(["hook", "claude-code"]),
+                "{event}"
+            );
+        }
+        assert_eq!(
+            Adapter::ClaudeCode.plain_wiring(Path::new("/bin/flow")),
+            [
+                "--settings".to_string(),
+                plain_settings(Path::new("/bin/flow"))
+            ]
+        );
     }
 
     #[test]

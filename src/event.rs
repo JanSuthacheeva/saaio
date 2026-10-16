@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
@@ -5,8 +7,11 @@ pub const EVENT_VERSION: u32 = 1;
 pub const TEXT_LIMIT: usize = 500;
 /// The longest message or answer: what the master tells a worker, a turn's whole closing message.
 pub const LONG_TEXT_LIMIT: usize = 4000;
+/// The longest request flow start and flow new take; past it they refuse. Kept whole, since it
+/// becomes the worker's prompt, one argv string (Linux refuses one over 128 KiB).
+pub const REQUEST_LIMIT: usize = 20_000;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Event {
     pub v: u32,
     pub at: u64,
@@ -15,7 +20,7 @@ pub struct Event {
 }
 
 /// One line per event: {"v":1,"at":1791945698308,"kind":"blocked","reason":"..."}
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum EventKind {
     Started {
@@ -65,8 +70,8 @@ pub enum EventKind {
     Ended,
     Workspace {
         path: String,
-        branch: String,
-        slot: u8,
+        branch: Option<String>,
+        slot: Option<u8>,
         window: Option<String>,
         agent: String,
     },
@@ -81,20 +86,34 @@ pub enum Phase {
     MergeRequest,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Mode {
+    #[default]
     Guided,
     Auto,
+    /// An agent in a folder: no worktree, branch, slot, prompt or master.
+    #[value(skip)]
+    Plain,
+}
+
+/// A time as Unix ms, the clock every event and log uses; 0 before 1970.
+#[must_use]
+pub fn unix_ms(time: SystemTime) -> u64 {
+    time.duration_since(UNIX_EPOCH).map_or(0, |since| {
+        u64::try_from(since.as_millis()).unwrap_or(u64::MAX)
+    })
 }
 
 impl Event {
-    /// An event of the current version at `at` (Unix ms), each text cut to TEXT_LIMIT chars.
-    pub fn new(at: u64, kind: EventKind) -> Event {
+    /// An event of the current version at `at` (Unix ms), each text cut to its limit, except a
+    /// Started request: it is the worker's prompt, kept whole (its command checks REQUEST_LIMIT).
+    pub fn new(at: u64, mut kind: EventKind) -> Event {
+        kind.cut_texts();
         Event {
             v: EVENT_VERSION,
             at,
-            kind: kind.with_texts_cut(),
+            kind,
         }
     }
 
@@ -113,48 +132,40 @@ impl Event {
 }
 
 impl EventKind {
-    fn with_texts_cut(self) -> EventKind {
+    fn cut_texts(&mut self) {
         match self {
-            EventKind::Started {
-                name,
-                request,
-                mode,
-            } => EventKind::Started {
-                name: cut(name),
-                request: cut(request),
-                mode,
-            },
-            EventKind::Delegated { description } => EventKind::Delegated {
-                description: cut(description),
-            },
-            EventKind::Waiting { question } => EventKind::Waiting {
-                question: cut(question),
-            },
-            EventKind::Idle { note } => EventKind::Idle { note: cut(note) },
-            EventKind::Blocked { reason } => EventKind::Blocked {
-                reason: cut(reason),
-            },
-            EventKind::Decision { text } => EventKind::Decision { text: cut(text) },
-            EventKind::MergeRequest { url } => EventKind::MergeRequest { url: cut(url) },
-            EventKind::Message { text } => EventKind::Message {
-                text: cut_to(text, LONG_TEXT_LIMIT),
-            },
-            EventKind::Answer { text } => EventKind::Answer {
-                text: cut_to(text, LONG_TEXT_LIMIT),
-            },
-            other => other,
+            EventKind::Started { name: text, .. }
+            | EventKind::Delegated { description: text }
+            | EventKind::Waiting { question: text }
+            | EventKind::Idle { note: text }
+            | EventKind::Blocked { reason: text }
+            | EventKind::Decision { text }
+            | EventKind::MergeRequest { url: text } => cut_to(text, TEXT_LIMIT),
+            EventKind::Message { text } | EventKind::Answer { text } => {
+                cut_to(text, LONG_TEXT_LIMIT);
+            }
+            _ => {}
         }
     }
 }
 
-fn cut(text: String) -> String {
-    cut_to(text, TEXT_LIMIT)
+fn cut_to(text: &mut String, limit: usize) {
+    if let Some((end, _)) = text.char_indices().nth(limit) {
+        text.truncate(end);
+    }
 }
 
-fn cut_to(text: String, limit: usize) -> String {
-    match text.char_indices().nth(limit) {
-        Some((end, _)) => text[..end].to_string(),
-        None => text,
+impl Mode {
+    /// auto, guided, plain - the new-flow dialog's order.
+    pub const ALL: [Mode; 3] = [Mode::Auto, Mode::Guided, Mode::Plain];
+
+    /// The name the command line and the logs use: guided, auto, plain.
+    pub fn name(self) -> &'static str {
+        match self {
+            Mode::Guided => "guided",
+            Mode::Auto => "auto",
+            Mode::Plain => "plain",
+        }
     }
 }
 
@@ -166,6 +177,16 @@ impl Phase {
         Phase::Review,
         Phase::MergeRequest,
     ];
+
+    /// Where the phase stands in ALL.
+    pub fn index(self) -> usize {
+        match self {
+            Phase::Design => 0,
+            Phase::Implement => 1,
+            Phase::Review => 2,
+            Phase::MergeRequest => 3,
+        }
+    }
 
     /// The name the command line and the logs use: design, implement, review, merge-request.
     pub fn name(self) -> &'static str {
@@ -182,12 +203,28 @@ impl Phase {
 mod tests {
     use super::*;
 
+    #[test]
+    fn names_modes_and_phases_as_the_log_does() {
+        for mode in Mode::ALL {
+            assert_eq!(serde_json::to_value(mode).unwrap(), mode.name());
+        }
+        for (index, phase) in Phase::ALL.into_iter().enumerate() {
+            assert_eq!(serde_json::to_value(phase).unwrap(), phase.name());
+            assert_eq!(phase.index(), index);
+        }
+    }
+
     fn every_kind() -> Vec<EventKind> {
         vec![
             EventKind::Started {
                 name: "shop-221".into(),
                 request: "SHOP-221 add CSV export".into(),
                 mode: Mode::Auto,
+            },
+            EventKind::Started {
+                name: "scratch".into(),
+                request: String::new(),
+                mode: Mode::Plain,
             },
             EventKind::Phase {
                 phase: Phase::MergeRequest,
@@ -211,6 +248,13 @@ mod tests {
                 url: "https://gitlab.com/acme/shop/-/merge_requests/88".into(),
             },
             EventKind::Ended,
+            EventKind::Workspace {
+                path: "/Users/jan/scratch".into(),
+                branch: None,
+                slot: None,
+                window: None,
+                agent: "claude".into(),
+            },
         ]
     }
 
@@ -250,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn cuts_every_text_to_the_limit_in_characters() {
+    fn cuts_every_text_to_the_limit_in_characters_but_the_request() {
         let long = "ä".repeat(TEXT_LIMIT + 20);
         let event = Event::new(
             0,
@@ -265,7 +309,10 @@ mod tests {
             panic!("kind changed");
         };
         assert_eq!(name.chars().count(), TEXT_LIMIT);
-        assert_eq!(request.chars().count(), TEXT_LIMIT);
+        assert_eq!(
+            request, long,
+            "the request is the worker's prompt, kept whole"
+        );
 
         let short = Event::new(
             0,
@@ -279,6 +326,27 @@ mod tests {
                 question: "ok?".into()
             }
         );
+    }
+
+    #[test]
+    fn reads_a_workspace_line_written_before_plain_sessions() {
+        let line = r#"{"v":1,"at":7,"kind":"workspace","path":"/repo/.flow/worktrees/shop-221","branch":"flow/shop-221","slot":2,"window":"flow-ui","agent":"claude"}"#;
+
+        let Some(Event {
+            kind: EventKind::Workspace { branch, slot, .. },
+            ..
+        }) = Event::from_line(line)
+        else {
+            panic!("an old workspace line parses");
+        };
+        assert_eq!(branch.as_deref(), Some("flow/shop-221"));
+        assert_eq!(slot, Some(2));
+    }
+
+    #[test]
+    fn plain_is_not_a_mode_flag_takes() {
+        assert!(Mode::from_str("plain", false).is_err());
+        assert_eq!(Mode::from_str("auto", false), Ok(Mode::Auto));
     }
 
     #[test]

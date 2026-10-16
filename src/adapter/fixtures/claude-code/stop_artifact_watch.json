@@ -1,0 +1,23 @@
+{
+ "session_id": "7f3c0000-0000-4000-8000-000000000000",
+ "transcript_path": "/home/dev/.claude/projects/-repo/7f3c.jsonl",
+ "cwd": "/repo",
+ "scratchpad_dir": "/tmp/claude/scratchpad",
+ "prompt_id": "27ff23b8-b8c4-498c-bf42-62cd1cb7950c",
+ "permission_mode": "acceptEdits",
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "Stop",
+ "stop_hook_active": false,
+ "last_assistant_message": "https://claude.ai/artifact/CUmbqod2Bv8mGRtioXWRH7",
+ "background_tasks": [
+  {
+   "id": "syefqintk",
+   "type": "monitor",
+   "status": "running",
+   "description": "live updates for artifact https://claude.ai/artifact/CUmbqod2Bv8mGRtioXWRH7 (auto-armed on publish)"
+  }
+ ],
+ "session_crons": []
+}

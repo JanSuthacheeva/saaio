@@ -1,5 +1,6 @@
 use std::fs::OpenOptions;
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
+use std::os::fd::AsRawFd;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
@@ -10,14 +11,20 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
-use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, Role, ServerMsg};
+use crate::launch::worktree;
+use crate::proto::{self, BUILD, ClientMsg, PROTOCOL_VERSION, Peer, Role, ServerMsg};
 use crate::registry;
+use crate::server_log;
 use crate::store::Store;
 
 /// How long a new server gets to start listening.
 const START_WAIT: Duration = Duration::from_secs(2);
 /// How long the server gets to answer a hello.
 const HELLO_WAIT: Duration = Duration::from_secs(5);
+/// How long a stopped server gets to close its panes (3.5 s) and exit before SIGKILL.
+const STOP_WAIT: Duration = Duration::from_secs(5);
+/// How long a killed server gets to stop listening.
+const KILL_WAIT: Duration = Duration::from_secs(1);
 
 /// What became of a flow's pane when `flow remove` or `flow clear` asked the server to close it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +36,7 @@ pub enum Closing {
 }
 
 /// One connection to the session server.
+#[derive(Debug)]
 pub struct Client {
     stream: UnixStream,
 }
@@ -36,20 +44,8 @@ pub struct Client {
 impl Client {
     /// Connects and says hello; None when no server listens; Err when it refuses (another protocol version).
     pub fn connect(socket: &Path, role: Role) -> Result<Option<Client>> {
-        let mut stream = match UnixStream::connect(socket) {
-            Ok(stream) => stream,
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    ErrorKind::NotFound | ErrorKind::ConnectionRefused
-                ) =>
-            {
-                return Ok(None);
-            }
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("could not connect to {}", socket.display()));
-            }
+        let Some(mut stream) = dial(socket)? else {
+            return Ok(None);
         };
         stream.set_read_timeout(Some(HELLO_WAIT))?;
         proto::write_msg(
@@ -57,6 +53,7 @@ impl Client {
             &ClientMsg::Hello {
                 version: PROTOCOL_VERSION,
                 role,
+                peer: this_process(),
             },
         )?;
         match proto::read_msg::<_, ServerMsg>(&mut stream)
@@ -89,6 +86,131 @@ impl Client {
             stream: self.stream.try_clone()?,
         })
     }
+}
+
+/// This process as a Peer: its pid, current folder (empty when it cannot be read) and BUILD.
+fn this_process() -> Peer {
+    Peer {
+        pid: std::process::id(),
+        cwd: std::env::current_dir().unwrap_or_default(),
+        build: BUILD.to_string(),
+    }
+}
+
+/// None when no server listens on `socket`.
+fn dial(socket: &Path) -> Result<Option<UnixStream>> {
+    match UnixStream::connect(socket) {
+        Ok(stream) => Ok(Some(stream)),
+        Err(error)
+            if matches!(
+                error.kind(),
+                ErrorKind::NotFound | ErrorKind::ConnectionRefused
+            ) =>
+        {
+            Ok(None)
+        }
+        Err(error) => {
+            Err(error).with_context(|| format!("could not connect to {}", socket.display()))
+        }
+    }
+}
+
+/// Stops the server on `socket` with SIGTERM, SIGKILL when it still listens after STOP_WAIT;
+/// false when none runs. A signal, not a message, so it stops a server of any protocol version.
+/// Each step goes into server.log, as the server cannot log a SIGKILL or who sent it.
+pub fn stop_server(socket: &Path, clock: fn() -> u64) -> Result<bool> {
+    let Some(stream) = dial(socket)? else {
+        return Ok(false);
+    };
+    let pid = peer_pid(&stream).with_context(|| {
+        format!(
+            "could not tell which process listens on {}",
+            socket.display()
+        )
+    })?;
+    drop(stream);
+    let log = server_log::path(socket);
+    // A log that cannot be written never keeps the server from stopping.
+    let note = |text: String| {
+        let _ = server_log::append(&log, clock(), &text);
+    };
+    note(format!(
+        "flow ui --stop (flow {BUILD}) sends SIGTERM to pid {pid}"
+    ));
+    for (signal, wait) in [(libc::SIGTERM, STOP_WAIT), (libc::SIGKILL, KILL_WAIT)] {
+        if signal == libc::SIGKILL {
+            note(format!(
+                "pid {pid} still listens after {} s; sends SIGKILL",
+                STOP_WAIT.as_secs()
+            ));
+        }
+        // SAFETY: kill only sends a signal; a pid that already exited fails with ESRCH.
+        unsafe {
+            libc::kill(pid, signal);
+        }
+        if stops_listening(socket, wait) {
+            return Ok(true);
+        }
+    }
+    note(format!("pid {pid} did not stop"));
+    bail!("the flow server (pid {pid}) did not stop")
+}
+
+fn stops_listening(socket: &Path, wait: Duration) -> bool {
+    let deadline = Instant::now() + wait;
+    while UnixStream::connect(socket).is_ok() {
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    true
+}
+
+/// The pid of the process at the other end of a Unix socket.
+#[cfg(target_os = "macos")]
+fn peer_pid(stream: &UnixStream) -> io::Result<libc::pid_t> {
+    let mut pid: libc::pid_t = 0;
+    let mut len = libc::socklen_t::try_from(size_of::<libc::pid_t>()).expect("a pid fits");
+    // SAFETY: getsockopt writes at most len bytes into pid, which is that big.
+    let result = unsafe {
+        libc::getsockopt(
+            stream.as_raw_fd(),
+            libc::SOL_LOCAL,
+            libc::LOCAL_PEERPID,
+            (&raw mut pid).cast(),
+            &raw mut len,
+        )
+    };
+    if result == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(pid)
+}
+
+/// The pid of the process at the other end of a Unix socket.
+#[cfg(target_os = "linux")]
+fn peer_pid(stream: &UnixStream) -> io::Result<libc::pid_t> {
+    let mut cred = libc::ucred {
+        pid: 0,
+        uid: 0,
+        gid: 0,
+    };
+    let mut len = libc::socklen_t::try_from(size_of::<libc::ucred>()).expect("a ucred fits");
+    // SAFETY: getsockopt writes at most len bytes into cred, which is that big.
+    let result = unsafe {
+        libc::getsockopt(
+            stream.as_raw_fd(),
+            libc::SOL_SOCKET,
+            libc::SO_PEERCRED,
+            (&raw mut cred).cast(),
+            &raw mut len,
+        )
+    };
+    if result == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(cred.pid)
 }
 
 /// Asks a running server to end a flow's pane and waits for it; the outcome when there is no server or no pane.
@@ -143,37 +265,51 @@ fn socket_path_for(root: &Path, tmp: &Path) -> PathBuf {
     ))
 }
 
-/// Starts `<exe> server` in its own session with output to server.log unless one listens;
-/// waits up to 2 s for the socket.
+/// `<exe> server` with `env` and without the hook variables of the session it starts from, so a
+/// flow ui opened inside a worker gives its panes none of that worker's identity or slot.
+fn server_command(exe: &Path, env: &[(String, String)]) -> Command {
+    let mut command = Command::new(exe);
+    command.arg("server");
+    for var in worktree::HOOK_VARS {
+        command.env_remove(var);
+    }
+    command.envs(env.iter().map(|(key, value)| (key, value)));
+    command
+}
+
+/// Starts `<exe> server` in its own session with output to server.log unless one listens, moving a
+/// log past server_log::CAP to server.log.1 first; waits up to 2 s for the socket.
 pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Result<()> {
     if UnixStream::connect(socket).is_ok() {
         return Ok(());
     }
-    let log_path = socket.with_extension("log");
+    let log_path = server_log::path(socket);
     if let Some(dir) = socket.parent() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("could not create {}", dir.display()))?;
         std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
             .with_context(|| format!("could not restrict {}", dir.display()))?;
     }
+    // A log that cannot be moved aside is only longer; it never keeps the server from starting.
+    let _ = server_log::rotate(&log_path, server_log::CAP);
     let log = OpenOptions::new()
         .create(true)
         .append(true)
         .open(&log_path)
         .with_context(|| format!("could not open {}", log_path.display()))?;
-    let mut command = Command::new(exe);
+    let mut command = server_command(exe, env);
     command
-        .arg("server")
-        .env_remove("FLOW_ID")
-        .envs(env.iter().map(|(key, value)| (key, value)))
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log);
-    // SAFETY: setsid only detaches the child from this terminal's session, so closing the
-    // terminal does not hang up the server; it touches no memory shared with the parent.
+    // A session of its own, so closing this terminal does not hang up the server.
+    // SAFETY: pre_exec runs between fork and exec, where only async-signal-safe calls are
+    // allowed; setsid is one, and the closure allocates nothing.
     unsafe {
         command.pre_exec(|| {
-            libc::setsid();
+            if libc::setsid() == -1 {
+                return Err(io::Error::last_os_error());
+            }
             Ok(())
         });
     }
@@ -197,6 +333,46 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    #[test]
+    fn starts_the_server_without_the_identity_of_the_session_it_starts_from() {
+        let command = server_command(
+            Path::new("/bin/flow"),
+            &[("FLOW_HOME".to_string(), "/state".to_string())],
+        );
+
+        let envs: Vec<(String, Option<String>)> = command
+            .get_envs()
+            .map(|(key, value)| {
+                (
+                    key.to_string_lossy().into_owned(),
+                    value.map(|value| value.to_string_lossy().into_owned()),
+                )
+            })
+            .collect();
+        for var in [
+            "FLOW_ID",
+            "FLOW_NAME",
+            "FLOW_SLOT",
+            "FLOW_WORKTREE",
+            "FLOW_REPO",
+        ] {
+            assert!(envs.contains(&(var.to_string(), None)), "{var}: {envs:?}");
+        }
+        assert!(envs.contains(&("FLOW_HOME".to_string(), Some("/state".to_string()))));
+    }
+
+    #[test]
+    fn knows_the_process_at_the_other_end_of_a_socket() {
+        let dir = TempDir::new().unwrap();
+        let socket = dir.path().join("server.sock");
+        let _listener = UnixListener::bind(&socket).unwrap();
+
+        let stream = UnixStream::connect(&socket).unwrap();
+
+        let pid = peer_pid(&stream).unwrap();
+        assert_eq!(u32::try_from(pid).unwrap(), std::process::id());
+    }
 
     /// Answers one hello with `reply`, then keeps the connection open until dropped.
     fn fake_server(socket: &Path, reply: ServerMsg) -> thread::JoinHandle<Option<ClientMsg>> {
@@ -228,6 +404,7 @@ mod tests {
             Some(ClientMsg::Hello {
                 version: PROTOCOL_VERSION,
                 role: Role::Control,
+                peer: this_process(),
             })
         );
     }
@@ -253,6 +430,23 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn moves_a_full_log_aside_before_it_starts_a_server() {
+        let dir = TempDir::new().unwrap();
+        let socket = dir.path().join("server.sock");
+        let log = dir.path().join("server.log");
+        let full = vec![b'x'; usize::try_from(server_log::CAP).unwrap() + 1];
+        std::fs::write(&log, &full).unwrap();
+
+        let _ = ensure_server(&socket, Path::new("/usr/bin/true"), &[]);
+
+        assert_eq!(
+            std::fs::read(dir.path().join("server.log.1")).unwrap(),
+            full
+        );
+        assert_eq!(std::fs::metadata(&log).unwrap().len(), 0);
     }
 
     #[test]

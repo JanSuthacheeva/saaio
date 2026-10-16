@@ -1,5 +1,7 @@
 pub mod app;
 pub mod board;
+pub mod dialog;
+pub mod fit;
 pub mod input;
 pub mod layout;
 pub mod newflow;
@@ -15,7 +17,7 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use ratatui::Terminal;
@@ -28,20 +30,21 @@ use signal_hook::iterator::Signals;
 use crate::branching::Branching;
 use crate::client::Client;
 use crate::proto::{Role, ServerMsg};
-use app::{App, Effect, Job};
+use app::{App, Effect, Job, JobError};
 use input::Router;
 use outer::Outer;
 use peek::PeekCache;
 use theme::Theme;
 use theme_file::ThemeWatch;
 
+#[derive(Debug)]
 enum Event {
     Input(Vec<u8>),
     Server(ServerMsg),
     ServerGone,
     Resize,
     Tick,
-    Ran(Job, Result<String, String>),
+    Ran(Job, Result<String, JobError>),
 }
 
 /// How often spinners turn.
@@ -52,6 +55,7 @@ const TICKS_PER_PEEK: u32 = 10;
 const TICKS_PER_THEME: u32 = 10;
 
 /// What flow ui reads from where it runs: Claude's home for the peek, the user's home for ~.
+#[derive(Debug)]
 pub struct UiEnv {
     pub claude_home: PathBuf,
     pub home: Option<PathBuf>,
@@ -64,13 +68,14 @@ pub struct UiEnv {
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
-pub fn run(socket: &Path, env: UiEnv) -> Result<String> {
+pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let mut outer = Outer::enter()?;
     // Before any thread reads stdin: creating the terminal asks for the cursor position.
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     terminal.clear()?;
     let home = env.home.map(|home| home.display().to_string());
     let mut app = App::new(outer.size()?)
+        .with_offset(crate::text::local_offset_secs())
         .with_home(home)
         .with_store(env.store.display().to_string());
     let client = Client::connect(
@@ -91,10 +96,10 @@ pub fn run(socket: &Path, env: UiEnv) -> Result<String> {
     let mut router = Router::default();
     let mut peek = PeekCache::new(env.claude_home);
     let mut ticks: u32 = 0;
-    let mut themes = ThemeWatch::new(env.theme_dir.clone());
-    let mut theme = Theme::builtin();
+    let mut themes = ThemeWatch::new(env.theme_dir);
+    let mut theme = Theme::default();
     reload_theme(&mut themes, &mut theme, &mut app);
-    app.on_tick(now_ms());
+    app.on_tick(clock());
     loop {
         let mut effects = Vec::new();
         let mut redraw = false;
@@ -122,7 +127,7 @@ pub fn run(socket: &Path, env: UiEnv) -> Result<String> {
                     vec![]
                 }
                 Event::Tick => {
-                    redraw |= app.on_tick(now_ms());
+                    redraw |= app.on_tick(clock());
                     ticks = ticks.wrapping_add(1);
                     if ticks.is_multiple_of(TICKS_PER_PEEK) {
                         redraw |= peek.refresh(app.peeked());
@@ -137,7 +142,7 @@ pub fn run(socket: &Path, env: UiEnv) -> Result<String> {
         for effect in effects {
             match effect {
                 Effect::Send(message) => writer.send(&message)?,
-                Effect::Mirror(modes) => outer.mirror(&modes)?,
+                Effect::Mirror(modes) => outer.mirror(modes)?,
                 Effect::LoadBranching(repo) => {
                     let branching = Branching::load(&repo).map_err(|error| format!("{error:#}"));
                     app.on_branching(&repo, branching);
@@ -191,17 +196,10 @@ fn run_job(exe: &Path, job: Job, events: Sender<Event>) {
                 output.status.success(),
                 &String::from_utf8_lossy(&output.stdout),
             ),
-            Err(error) => Err(format!("could not run flow: {error}")),
+            Err(error) => Err(JobError::other(format!("could not run flow: {error}"))),
         };
         let _ = events.send(Event::Ran(job, result));
     });
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|since| since.as_millis() as u64)
-        .unwrap_or_default()
 }
 
 fn tick(events: Sender<Event>) {
@@ -242,19 +240,12 @@ fn read_stdin(events: Sender<Event>) {
 
 fn read_server(mut client: Client, events: Sender<Event>) {
     thread::spawn(move || {
-        loop {
-            match client.recv() {
-                Ok(Some(message)) => {
-                    if events.send(Event::Server(message)).is_err() {
-                        return;
-                    }
-                }
-                Ok(None) | Err(_) => {
-                    let _ = events.send(Event::ServerGone);
-                    return;
-                }
+        while let Ok(Some(message)) = client.recv() {
+            if events.send(Event::Server(message)).is_err() {
+                return;
             }
         }
+        let _ = events.send(Event::ServerGone);
     });
 }
 

@@ -1,27 +1,21 @@
 use std::collections::HashSet;
 
-use crate::adapter::Adapter;
-use crate::config::{Agent, Config};
-use crate::launch::{self, LaunchEnv, PaneSpec};
+use crate::config::Config;
+use crate::launch::pane::{self, LaunchEnv, PaneSpec};
 use crate::proto::PaneKey;
 use crate::view::FlowView;
 
 /// What the server should open and close to match the flows on the board.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct Wanted {
     pub open: Vec<PaneSpec>,
     pub close: Vec<PaneKey>,
     pub failed: Vec<(PaneKey, String)>,
 }
 
-/// Why worker_spec found no command for an agent: an adapter flow does not know, or no way to resume.
-pub fn unopenable(name: &str, agent: &Agent) -> String {
-    match &agent.adapter {
-        Some(adapter) if Adapter::named(adapter).is_none() => {
-            format!("agent {name} uses adapter {adapter}, which flow does not know")
-        }
-        _ => format!("agent {name} cannot resume a session"),
-    }
+/// Why worker_spec found no command for an agent: it has no way to resume.
+pub fn unopenable(name: &str) -> String {
+    format!("agent {name} cannot resume a session")
 }
 
 /// Opens every unfinished flow with a workspace not in known; closes worker panes whose flow is gone;
@@ -48,9 +42,9 @@ pub fn reconcile(
                 .push((key, format!("no agent named {}", space.agent)));
             continue;
         };
-        match launch::worker_spec(flow, agent, env) {
+        match pane::worker_spec(flow, agent, env) {
             Some(spec) => wanted.open.push(spec),
-            None => wanted.failed.push((key, unopenable(name, agent))),
+            None => wanted.failed.push((key, unopenable(name))),
         }
     }
     for key in open {
@@ -69,7 +63,7 @@ mod tests {
     use crate::config::{Agent, builtin_agents};
     use crate::event::{Event, EventKind, Mode};
     use crate::fold;
-    use crate::launch::HOSTED;
+    use crate::launch::pane::HOSTED;
 
     fn config() -> Config {
         let mut agents = builtin_agents();
@@ -104,8 +98,8 @@ mod tests {
                 1,
                 EventKind::Workspace {
                     path: format!("/repo/.flow/worktrees/{id}"),
-                    branch: format!("flow/{id}"),
-                    slot: 1,
+                    branch: Some(format!("flow/{id}")),
+                    slot: Some(1),
                     window: window.map(String::from),
                     agent: agent.into(),
                 },
@@ -212,12 +206,6 @@ mod tests {
         );
 
         assert_eq!(keys(&wanted), vec![worker("fresh-aider")]);
-        let mut odd = builtin_agents()["claude"].clone();
-        odd.adapter = Some("codex".into());
-        assert_eq!(
-            unopenable("claude", &odd),
-            "agent claude uses adapter codex, which flow does not know"
-        );
         assert_eq!(
             wanted.failed,
             vec![

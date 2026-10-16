@@ -105,7 +105,11 @@ way from the home view and hints, created a flow, reported phase and tasks, and 
 Claude Code hooks (2.1.300, recorded):
 - `Stop` carries `background_tasks`: `[{"id", "type": "subagent", "status": "running",
   "description", "agent_type"}]` while background work is in flight, `[]` otherwise. flow reads a
-  running or pending task as `delegated` (fixture `stop_background.json`).
+  running or pending task as `delegated` (fixture `stop_background.json`). Publishing a claude.ai
+  Artifact arms a live subscription that stays there as `{"type": "monitor", "status": "running",
+  "description": "live updates for artifact <url> (auto-armed on publish)"}` (2.1.301) and never
+  finishes, so flow skips it and the turn ends idle or waiting (fixture `stop_artifact_watch.json`).
+  The skip matches that wording, so re-record the fixture with the others on a Claude Code upgrade.
 - A subagent's hooks fire with `agent_id` set; a phase skill it starts (`review-changes` in a
   fresh agent) reaches PreToolUse Skill only when the skill exists (an unknown skill is refused
   before any hook).
@@ -230,14 +234,20 @@ See README "The master and its workers" and `.claude/plans/plan-flow-talk.md`. D
 - One waiter per session (`waits/<key>.pid`, last claim wins); the master's `waits/master.seen`
   keeps what it was woken for, so nothing wakes it twice.
 
+## Plain sessions (built 2026-10-16)
+
+See README "Plain sessions" and `.claude/plans/plan-flow-plain-sessions.md`. Decisions:
+- Plain is a third `Mode` (`plain`), not a `--mode` value: `flow start --plain <folder>` picks it,
+  and refuses a request, `--mode` or `--type` with it. The dialog's mode row is auto, guided, plain.
+- Its Workspace is the folder with `branch` and `slot` null, which made `VIEW_VERSION` and
+  `PROTOCOL_VERSION` 2. The server did not change: it opens whatever the log records.
+- It is the user's own: no first prompt, no worker system prompt, no `flow wait` hook; it never
+  wakes the master and `flow send` refuses it. The reporting hooks stay, so its state shows.
+- `repo_of` is None without a branch, so `flow remove` never tears down or checks a folder flow did
+  not create, even one inside `.flow/worktrees`.
+
 ## Future improvements
 
-- **Plain sessions (flow ui as a plain session manager, like herdr).** Open Claude in a folder you
-  name, with no worktree, no `flow/<name>` branch, no `/ship-feature` prompt and no port slot. It shows
-  in the sidebar and resumes after a restart like any worker. A third choice in the new-flow dialog
-  next to auto and guided, and a flag on `flow start`. Small, because the server already opens
-  whatever the log records: the Workspace event would carry the folder and no branch, and
-  `worker_spec` would skip the prompt.
 - **Working across repos.** One flow ui already shows every repo's flows and the master can
   `cd` anywhere to `flow start`; three gaps remain:
   - the new-flow dialog takes the repo of the session in view; give it a repo field, prefilled

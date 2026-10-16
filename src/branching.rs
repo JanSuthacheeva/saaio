@@ -5,7 +5,7 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
-use crate::launch;
+use crate::launch::name;
 
 /// A repo's branch convention, from `[branch]` in its `.flow/config.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -18,7 +18,7 @@ pub struct Branching {
     pub types: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct RepoConfig {
     branch: Option<Branching>,
 }
@@ -32,7 +32,9 @@ impl Branching {
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
             Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error).with_context(|| path.display().to_string()),
+            Err(error) => {
+                return Err(error).with_context(|| format!("could not read {}", path.display()));
+            }
         };
         let config: RepoConfig =
             toml::from_str(&text).with_context(|| format!("{} is not valid", path.display()))?;
@@ -72,8 +74,8 @@ pub fn branch_name(
     let filled = branching
         .name
         .replace("{type}", kind.unwrap_or(""))
-        .replace("{ticket}", launch::ticket(request).unwrap_or(""))
-        .replace("{slug}", &launch::slug(request))
+        .replace("{ticket}", name::ticket(request).unwrap_or(""))
+        .replace("{slug}", &name::slug(request))
         .replace("{name}", name);
     let tidy: Vec<String> = filled
         .split('/')

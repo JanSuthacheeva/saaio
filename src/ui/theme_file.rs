@@ -9,7 +9,7 @@ use toml::{Table, Value};
 use crate::store::Stamp;
 #[cfg(test)]
 use crate::ui::theme::MARK;
-use crate::ui::theme::{KIWI, Palette, Theme};
+use crate::ui::theme::{KIWI, Palette, PaletteKey, Theme, hex};
 
 pub const THEME_FILE: &str = "theme.toml";
 pub const THEMES_DIR: &str = "themes";
@@ -18,8 +18,8 @@ const EXTENDS_LIMIT: usize = 4;
 /// What a theme extends when it names nothing.
 const DEFAULT_BASE: &str = "terminal";
 
-/// One theme file: what it extends, its colors by key from [ui] and [state], and whether the
-/// terminal's font has Nerd Font icons.
+/// One theme file: what it extends, its colors by key from [ui], [state] and [phase], and
+/// whether the terminal's font has Nerd Font icons.
 #[derive(Debug)]
 struct ThemeFile {
     path: PathBuf,
@@ -32,34 +32,8 @@ struct ThemeFile {
 /// built-in terminal theme when there is no theme.toml. Also every file it read or would read, so a
 /// watcher sees one appear.
 pub fn load(dir: &Path) -> (Result<Theme>, Vec<PathBuf>) {
-    let first = dir.join(THEME_FILE);
-    let mut files = vec![first.clone()];
-    let mut chain = Vec::new();
-    let mut next = Some(first);
-    let result = loop {
-        let Some(path) = next.take() else {
-            break Ok(());
-        };
-        let file = match read(&path) {
-            Ok(Some(file)) => file,
-            Ok(None) if chain.is_empty() => break Ok(()),
-            Ok(None) => break Err(anyhow!("{} does not exist", path.display())),
-            Err(error) => break Err(error),
-        };
-        if Palette::named(&file.extends).is_none() {
-            if chain.len() + 1 >= EXTENDS_LIMIT {
-                break Err(anyhow!(
-                    "{} extends more than {EXTENDS_LIMIT} themes deep",
-                    dir.join(THEME_FILE).display()
-                ));
-            }
-            let base = dir.join(THEMES_DIR).join(format!("{}.toml", file.extends));
-            files.push(base.clone());
-            next = Some(base);
-        }
-        chain.push(file);
-    };
-    let theme = result.and_then(|()| {
+    let mut files = vec![dir.join(THEME_FILE)];
+    let theme = chain(dir, &mut files).and_then(|chain| {
         let base = chain
             .last()
             .map_or(DEFAULT_BASE, |file| file.extends.as_str());
@@ -79,6 +53,34 @@ pub fn load(dir: &Path) -> (Result<Theme>, Vec<PathBuf>) {
         Ok(theme)
     });
     (theme, files)
+}
+
+/// theme.toml and every theme file it extends, nearest first; each file it reads or would read is
+/// added to `files`.
+fn chain(dir: &Path, files: &mut Vec<PathBuf>) -> Result<Vec<ThemeFile>> {
+    let mut chain = Vec::new();
+    let mut next = files.last().cloned();
+    while let Some(path) = next.take() {
+        let Some(file) = read(&path)? else {
+            if chain.is_empty() {
+                break;
+            }
+            bail!("{} does not exist", path.display());
+        };
+        if Palette::named(&file.extends).is_none() {
+            if chain.len() + 1 >= EXTENDS_LIMIT {
+                bail!(
+                    "{} extends more than {EXTENDS_LIMIT} themes deep",
+                    dir.join(THEME_FILE).display()
+                );
+            }
+            let base = dir.join(THEMES_DIR).join(format!("{}.toml", file.extends));
+            files.push(base.clone());
+            next = Some(base);
+        }
+        chain.push(file);
+    }
+    Ok(chain)
 }
 
 /// The file at `path`, None when it does not exist.
@@ -104,7 +106,7 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
             ("extends", _) => bail!("extends must be a theme's name"),
             ("nerd_font", Value::Boolean(on)) => nerd_font = Some(on),
             ("nerd_font", _) => bail!("nerd_font is true or false"),
-            ("ui" | "state", Value::Table(section)) => colors.extend(section),
+            ("ui" | "state" | "phase", Value::Table(section)) => colors.extend(section),
             // The design's [glyphs] comes later; a file that has it still loads.
             ("glyphs", Value::Table(_)) => {}
             (key, _) => bail!("unknown key {key}"),
@@ -122,31 +124,33 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
 /// order in the file.
 fn apply(file: &ThemeFile, palette: &mut Palette) -> Result<()> {
     let mut references = Vec::new();
-    for (key, value) in &file.colors {
-        if palette.get(key).is_none() {
-            bail!("unknown key {key}");
-        }
+    for (name, value) in &file.colors {
+        let Some(key) = PaletteKey::named(name) else {
+            bail!("unknown key {name}");
+        };
         match value {
-            Value::String(name) if palette.get(name).is_some() => references.push((key, name)),
+            Value::String(other) if let Some(other) = PaletteKey::named(other) => {
+                references.push((key, other));
+            }
             value => {
-                palette.set(key, color(value, palette).with_context(|| key.clone())?);
+                *palette.color_mut(key) = color(value, palette).with_context(|| name.clone())?;
             }
         }
     }
     // A key naming a key that itself still names another waits for it; none moving is a loop.
     while !references.is_empty() {
-        let pending: Vec<String> = references.iter().map(|(key, _)| (*key).clone()).collect();
+        let pending: Vec<PaletteKey> = references.iter().map(|&(key, _)| key).collect();
         let before = references.len();
-        references.retain(|(key, name)| {
-            if pending.contains(name) {
+        references.retain(|&(key, other)| {
+            if pending.contains(&other) {
                 return true;
             }
-            let color = palette.get(name).expect("a reference names a known key");
-            palette.set(key, color);
+            *palette.color_mut(key) = palette.color(other);
             false
         });
         if references.len() == before {
-            bail!("{} name each other", pending.join(", "));
+            let names: Vec<&str> = pending.iter().map(|key| key.name()).collect();
+            bail!("{} name each other", names.join(", "));
         }
     }
     Ok(())
@@ -160,12 +164,14 @@ fn color(value: &Value, palette: &Palette) -> Result<Color> {
             .map_err(|_| anyhow!("{index} is no ANSI index (0-255)")),
         Value::String(text) if text == "default" => Ok(Color::Reset),
         Value::String(text) => match text.strip_prefix('#') {
-            Some(hex) if hex.len() == 6 => u32::from_str_radix(hex, 16)
-                .map(|rgb| Color::Rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8))
-                .map_err(|_| anyhow!("{text} is no #rrggbb color")),
+            Some(digits) if digits.len() == 6 && digits.bytes().all(|b| b.is_ascii_hexdigit()) => {
+                u32::from_str_radix(digits, 16)
+                    .map(hex)
+                    .map_err(|_| anyhow!("{text} is no #rrggbb color"))
+            }
             Some(_) => bail!("{text} is no #rrggbb color"),
-            None => palette
-                .get(text)
+            None => PaletteKey::named(text)
+                .map(|key| palette.color(key))
                 .ok_or_else(|| anyhow!("{text} is no color and no key")),
         },
         _ => bail!("a color is \"#rrggbb\", an ANSI index, \"default\" or another key"),
@@ -215,8 +221,6 @@ fn stamp_of(path: &Path) -> Option<Stamp> {
 
 #[cfg(test)]
 mod tests {
-    use std::thread;
-    use std::time::Duration;
 
     use ratatui::style::Style;
     use tempfile::TempDir;
@@ -243,7 +247,7 @@ mod tests {
 
         let (theme, files) = load(dir.path());
 
-        assert_eq!(theme.unwrap().palette, Palette::named("terminal").unwrap());
+        assert_eq!(theme.unwrap().palette, Palette::TERMINAL);
         assert_eq!(files, vec![dir.path().join("theme.toml")]);
     }
 
@@ -258,7 +262,7 @@ mod tests {
 
         let palette = theme(&dir).palette;
 
-        let flow = Palette::named("flow").unwrap();
+        let flow = Palette::FLOW;
         assert_eq!(palette.accent, Color::Rgb(0xd9, 0x82, 0x5b));
         assert_eq!(palette.rule, Color::Indexed(8));
         assert_eq!(palette.ended, Color::Reset);
@@ -318,15 +322,28 @@ mod tests {
         assert_eq!(palette.accent, Color::Rgb(0xcb, 0x91, 0x68));
         assert_eq!(palette.muted, palette.accent);
         assert_eq!(palette.ended, Color::Rgb(0x74, 0x69, 0x65));
-        assert_eq!(
-            palette.background,
-            Palette::named("flow-light").unwrap().background
-        );
+        assert_eq!(palette.background, Palette::FLOW_LIGHT.background);
         assert_eq!(files[1], dir.path().join("themes/noctalia.toml"));
         assert_eq!(
             theme(&dir).ui.background,
             Style::default().bg(palette.background)
         );
+    }
+
+    #[test]
+    fn colors_the_phases_from_their_own_section() {
+        let dir = TempDir::new().unwrap();
+        write(
+            &dir,
+            "theme.toml",
+            "extends = \"flow\"\n[phase]\nmerge-request = \"#cb9168\"\nreview = \"done\"\n",
+        );
+
+        let palette = theme(&dir).palette;
+
+        assert_eq!(palette.merge_request, Color::Rgb(0xcb, 0x91, 0x68));
+        assert_eq!(palette.review, Palette::FLOW.done);
+        assert_eq!(palette.design, Palette::FLOW.design);
     }
 
     #[test]
@@ -336,6 +353,10 @@ mod tests {
             (
                 "[ui]\naccent = \"#d9825\"\n",
                 "accent: #d9825 is no #rrggbb color",
+            ),
+            (
+                "[ui]\naccent = \"#+9825b\"\n",
+                "accent: #+9825b is no #rrggbb color",
             ),
             ("[ui]\nacent = \"#d9825b\"\n", "unknown key acent"),
             ("[ui]\naccent = 300\n", "300 is no ANSI index"),
@@ -376,7 +397,7 @@ mod tests {
         let mut watch = ThemeWatch::new(dir.path().to_path_buf());
 
         let first = watch.changed().expect("the first look loads");
-        assert_eq!(first.unwrap().palette, Palette::named("terminal").unwrap());
+        assert_eq!(first.unwrap().palette, Palette::TERMINAL);
         assert!(watch.changed().is_none());
 
         write(&dir, "theme.toml", "extends = \"noctalia\"\n");
@@ -392,17 +413,14 @@ mod tests {
         assert_eq!(theme.palette.accent, Color::Indexed(3));
         assert!(watch.changed().is_none());
 
-        thread::sleep(Duration::from_millis(10));
-        write(&dir, "themes/noctalia.toml", "[ui]\naccent = 4\n");
+        // A new length, so the change shows on filesystems whose mtimes are a second coarse.
+        write(&dir, "themes/noctalia.toml", "[ui]\naccent = 42\n");
         assert_eq!(
             watch.changed().unwrap().unwrap().palette.accent,
-            Color::Indexed(4)
+            Color::Indexed(42)
         );
 
         fs::remove_file(dir.path().join("theme.toml")).unwrap();
-        assert_eq!(
-            watch.changed().unwrap().unwrap().palette,
-            Palette::named("terminal").unwrap()
-        );
+        assert_eq!(watch.changed().unwrap().unwrap().palette, Palette::TERMINAL);
     }
 }

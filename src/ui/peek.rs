@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
@@ -29,7 +30,7 @@ pub enum PeekLine {
     Now(String),
     /// Where an ended flow's code is: its branch and worktree.
     Code {
-        branch: String,
+        branch: Option<String>,
         worktree: String,
         exists: bool,
     },
@@ -77,7 +78,7 @@ fn parse(text: &str, cut: bool) -> Vec<PeekLine> {
         let Ok(entry) = serde_json::from_str::<Value>(line) else {
             continue;
         };
-        if entry["isSidechain"] == Value::Bool(true) {
+        if entry["isSidechain"] == true {
             continue;
         }
         let Some(blocks) = entry["message"]["content"].as_array() else {
@@ -161,13 +162,15 @@ fn target(input: &Value) -> String {
 
 /// The first non-empty line of a tool result, given as text or as text blocks.
 fn first_line(content: &Value) -> Option<String> {
-    let text = match content {
-        Value::String(text) => text.clone(),
-        Value::Array(blocks) => blocks
-            .iter()
-            .filter_map(|block| block["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n"),
+    let text: Cow<str> = match content {
+        Value::String(text) => Cow::Borrowed(text),
+        Value::Array(blocks) => Cow::Owned(
+            blocks
+                .iter()
+                .filter_map(|block| block["text"].as_str())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ),
         _ => return None,
     };
     text.lines()
@@ -182,7 +185,8 @@ pub struct PeekCache {
     claude_home: PathBuf,
     flow: Option<String>,
     file: Option<PathBuf>,
-    len: u64,
+    /// The transcript's length when last read; None to read it again.
+    len: Option<u64>,
     lines: Vec<PeekLine>,
 }
 
@@ -192,7 +196,7 @@ impl PeekCache {
             claude_home,
             flow: None,
             file: None,
-            len: 0,
+            len: None,
             lines: Vec::new(),
         }
     }
@@ -208,7 +212,7 @@ impl PeekCache {
         if self.flow.as_deref() != Some(flow.id.as_str()) {
             self.flow = Some(flow.id.clone());
             self.file = None;
-            self.len = u64::MAX;
+            self.len = None;
         }
         if self.file.is_none() {
             self.file = transcript(&self.claude_home, &flow.id);
@@ -219,10 +223,10 @@ impl PeekCache {
             .and_then(|file| fs::metadata(file).ok())
             .map_or(0, |metadata| metadata.len());
         let code = code_of(flow);
-        if len == self.len && self.lines.first() == code.as_ref() {
+        if self.len == Some(len) && self.lines.first() == code.as_ref() {
             return false;
         }
-        self.len = len;
+        self.len = Some(len);
         self.lines = code.into_iter().collect();
         if let Some(file) = &self.file {
             self.lines
@@ -254,19 +258,19 @@ mod tests {
 
     use super::*;
 
-    fn line(value: Value) -> String {
+    fn line(value: &Value) -> String {
         value.to_string()
     }
 
-    fn assistant(blocks: Value) -> String {
+    fn assistant(blocks: &Value) -> String {
         line(
-            serde_json::json!({"type": "assistant", "isSidechain": false, "message": {"content": blocks}}),
+            &serde_json::json!({"type": "assistant", "isSidechain": false, "message": {"content": blocks}}),
         )
     }
 
-    fn result(id: &str, content: Value) -> String {
+    fn result(id: &str, content: &Value) -> String {
         line(
-            serde_json::json!({"type": "user", "isSidechain": false, "message": {"content": [
+            &serde_json::json!({"type": "user", "isSidechain": false, "message": {"content": [
                 {"type": "tool_result", "tool_use_id": id, "content": content}
             ]}}),
         )
@@ -288,29 +292,29 @@ mod tests {
             dir.path(),
             &[
                 line(
-                    serde_json::json!({"type": "user", "message": {"content": "add the limiter"}}),
+                    &serde_json::json!({"type": "user", "message": {"content": "add the limiter"}}),
                 ),
-                assistant(serde_json::json!([
+                assistant(&serde_json::json!([
                     {"type": "thinking", "thinking": "hm"},
                     {"type": "tool_use", "id": "a", "name": "Edit", "input": {"file_path": "app/Throttle.php"}},
                 ])),
-                result("a", serde_json::json!("Added 22 lines\nmore")),
-                assistant(serde_json::json!([
+                result("a", &serde_json::json!("Added 22 lines\nmore")),
+                assistant(&serde_json::json!([
                     {"type": "tool_use", "id": "b", "name": "Bash", "input": {"command": "php artisan test\n--filter x"}},
                 ])),
                 result(
                     "b",
-                    serde_json::json!([{"type": "text", "text": "\n  Tests: 3 passed"}]),
+                    &serde_json::json!([{"type": "text", "text": "\n  Tests: 3 passed"}]),
                 ),
                 line(
-                    serde_json::json!({"type": "assistant", "isSidechain": true, "message": {"content": [
+                    &serde_json::json!({"type": "assistant", "isSidechain": true, "message": {"content": [
                         {"type": "text", "text": "a subagent talking"}
                     ]}}),
                 ),
                 assistant(
-                    serde_json::json!([{"type": "text", "text": "The limiter keys on the user id."}]),
+                    &serde_json::json!([{"type": "text", "text": "The limiter keys on the user id."}]),
                 ),
-                assistant(serde_json::json!([
+                assistant(&serde_json::json!([
                     {"type": "tool_use", "id": "c", "name": "Write", "input": {"file_path": "ThrottleTest.php"}},
                 ])),
             ],
@@ -339,10 +343,10 @@ mod tests {
     #[test]
     fn skips_a_truncated_last_line_and_a_cut_first_one() {
         let dir = TempDir::new().unwrap();
-        let filler = assistant(serde_json::json!([{"type": "text", "text": "x".repeat(70_000)}]));
+        let filler = assistant(&serde_json::json!([{"type": "text", "text": "x".repeat(70_000)}]));
         let mut lines = vec![
             filler,
-            assistant(serde_json::json!([{"type": "text", "text": "kept"}])),
+            assistant(&serde_json::json!([{"type": "text", "text": "kept"}])),
         ];
         lines.push("{\"type\": \"assistant\", \"message\": {\"content\": [".to_string());
         let file = write(dir.path(), &lines);
@@ -358,19 +362,19 @@ mod tests {
     #[test]
     fn reads_further_back_past_a_large_attachment() {
         let dir = TempDir::new().unwrap();
-        let attachment = line(serde_json::json!({
+        let attachment = line(&serde_json::json!({
             "type": "attachment",
             "attachment": {"type": "prompt_snapshot", "text": "x".repeat(200_000)}
         }));
         let file = write(
             dir.path(),
             &[
-                assistant(serde_json::json!([
+                assistant(&serde_json::json!([
                     {"type": "tool_use", "id": "a", "name": "Bash", "input": {"command": "ls"}},
                 ])),
-                result("a", serde_json::json!(".git")),
+                result("a", &serde_json::json!(".git")),
                 attachment,
-                assistant(serde_json::json!([{"type": "text", "text": "Done."}])),
+                assistant(&serde_json::json!([{"type": "text", "text": "Done."}])),
             ],
         );
 

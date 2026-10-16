@@ -20,6 +20,8 @@ flow                                    home view: every flow and what needs you
 flow ui [--stop]                        the terminal UI: the master, every worker, the board
 flow start <request> [--name <name>] [--mode guided|auto] [--agent <name>] [--type <type>]
                                         a worker in its own worktree, opened in flow ui
+flow start --plain <folder> [--name <name>] [--agent <name>]
+                                        a plain session: an agent in a folder, no worktree or flow
 flow new --name <name> --request <text> [--mode guided|auto]
 flow report [--flow <name|id>] <event>  the flow comes from --flow or $FLOW_ID
 flow status [<name|id>] [--json] [--full]
@@ -60,8 +62,8 @@ next `flow ui` attaches again. The master runs in the folder of the first `flow 
 orchestrator instructions in `master.md` beside `config.toml` (flow writes the default and
 updates it with flow while you have not edited it; your edits are never overwritten).
 
-Every unfinished flow with a worktree gets its own session: `flow start` records the flow and
-the server opens it within half a second. The sidebar on the right groups the workers under
+Every unfinished flow with a worktree, and every plain session, gets its own session: `flow start`
+records it and the server opens it within half a second. The sidebar on the right groups the workers under
 NEEDS YOU, READY (idle: a turn ended, nothing asked), RUNNING and DONE with their steps, tasks and
 what they ask or do.
 
@@ -71,7 +73,7 @@ Keys, after the prefix `C-space` (`C-space C-space` sends one through):
 | --- | --- |
 | `0`-`9` | jump to a session; 0 is the master, 1 the top of the sidebar |
 | `j` `k`, `enter` | move the peek over the workers (their latest tool calls and text, read from Claude's transcript), jump in |
-| `n` | start a flow: request, mode, what it creates |
+| `n` | start a flow: request, mode, what it creates; or, in plain mode, a session in a folder |
 | `o` | the board: a card per session and the selected flow's timeline, decisions and steps; `a` there shows every project's flows (read-only for other projects) |
 | `b` | fold the sidebar to a rail and back |
 | `r` | resume a session that exited, or an ended flow |
@@ -101,13 +103,19 @@ nerd_font = true        # the font has Nerd Font icons: a kiwi bird as the mark
 accent = "#d9825b"
 [state]
 ended = "faint"
+[phase]
+merge-request = "#d08ad6"
 ```
 
 Keys: `[ui]` background, panel, selection, rule, text, strong, muted, faint, accent; `[state]`
-working, waiting, blocked, done, ended. A key left out keeps the base's value. `nerd_font` (default
-false) shows flow's mark as a kiwi bird, which needs a Nerd Font; without it the mark is a goose
-in flight, `▚▄▞`, in block characters every font has. The mark takes the theme's accent either way. `flow` and `flow-light` are the design's dark
-and light colors. A tool can keep a theme in `~/.config/flow/themes/<name>.toml` for `extends` to
+working, waiting, blocked, done, ended; `[phase]` design, implement, review, merge-request. A
+working flow takes its phase's color, and `working` only until it reaches its first phase; a flow
+that waits, is blocked or is done keeps its state's color. The terminal theme colors the phases
+with 256-color indexes, since terminals often repaint ANSI blue, magenta and cyan. A key left out
+keeps the base's value. `nerd_font` (default false) shows flow's mark as a kiwi bird, which needs a
+Nerd Font; without it the mark is a goose in flight, `▚▄▞`, in block characters every font has.
+The mark takes the theme's accent either way. `flow` and `flow-light` are the design's dark and
+light colors. A tool can keep a theme in `~/.config/flow/themes/<name>.toml` for `extends` to
 name; a Noctalia template that writes `themes/noctalia.toml` makes flow follow Noctalia live. A
 broken file keeps the last theme and says why in the title row.
 
@@ -131,6 +139,26 @@ of `git status` through `.git/info/exclude`), runs the repo's setup hook there, 
 flow's workspace; flow ui then opens the agent in it with `FLOW_ID` set, so it reports into the
 flow (`pane: when flow ui runs` when no flow ui runs yet). The name comes from the ticket key
 (`SHOP-217` -> `shop-217`) or the first four words.
+
+### Plain sessions
+
+For tinkering, `flow start --plain <folder>` (or plain mode in `C-space n`) opens the agent in a
+folder of your choice, which need not be a repository:
+
+```
+$ flow start --plain ~/scratch
+flow: scratch
+id: 9b1d0e7a-4f2c-4b8e-9d6a-3c5e1f2a7b40
+folder: /Users/jan/scratch
+agent: claude
+pane: opening
+```
+
+No worktree, no branch, no slot and no first prompt: the agent opens at an empty prompt. It shows
+in the sidebar with a `plain` tag and resumes after a restart like any worker. It is yours, not the
+master's: it gets no worker prompt, never wakes the master, and `flow send` refuses it. Its hooks
+still report, so its state shows. The name is the folder's (`--name` overrides). `flow remove`
+forgets it and never touches the folder.
 
 ### Agents
 
@@ -333,9 +361,9 @@ Programs read `flow status --json`: the whole board, nothing truncated, camelCas
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "now": 1791953473760,
-  "count": 1,
+  "count": 2,
   "needsYou": 1,
   "flows": [
     {
@@ -362,13 +390,41 @@ Programs read `flow status --json`: the whole board, nothing truncated, camelCas
       "changedAt": 1791953413760,
       "workspace": null,
       "answer": null
+    },
+    {
+      "id": "9b1d0e7a-4f2c-4b8e-9d6a-3c5e1f2a7b40",
+      "name": "scratch",
+      "request": "",
+      "mode": "plain",
+      "phase": null,
+      "state": "idle",
+      "blocker": null,
+      "delegate": null,
+      "tasks": null,
+      "review": null,
+      "mergeRequest": null,
+      "decisions": [],
+      "steps": [],
+      "timeline": [{ "at": 1791952213760, "text": "started", "tone": "neutral" }],
+      "startedAt": 1791952213760,
+      "changedAt": 1791953113760,
+      "workspace": {
+        "path": "/Users/jan/scratch",
+        "branch": null,
+        "slot": null,
+        "window": "flow-ui",
+        "agent": "claude"
+      },
+      "answer": null
     }
   ]
 }
 ```
 
 Timeline tones: `neutral`, `progress`, `attention`, `problem`, `success`. `answer` is the last
-turn's whole closing message, as the worker's harness reported it.
+turn's whole closing message, as the worker's harness reported it. A plain session (`mode:
+plain`) has no steps, and its workspace is its folder, with `branch` and `slot` null. Version 2
+made them nullable.
 
 ## Where the logs live
 
