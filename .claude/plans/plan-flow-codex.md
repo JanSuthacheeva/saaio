@@ -242,6 +242,8 @@ fn paste(text: &str) -> Vec<u8>;
 
 // src/ui/peek.rs (modified) + src/ui/peek/claude.rs, src/ui/peek/codex.rs (split: one parser each)
 pub enum Format { Claude, Codex }
+/// Shared by both parsers: a result goes right under its call; an unanswered last call is Now.
+struct Lines { peek: Vec<PeekLine>, running: HashMap<String, usize> }   // text, call, answer, finish
 pub fn transcript_of(flow: &FlowView, claude_home: &Path) -> Option<(PathBuf, Format)>;
 pub fn tail(file: &Path, max: usize, format: Format) -> Result<Vec<PeekLine>>;
 // peek/claude.rs: today's parse; peek/codex.rs:
@@ -384,7 +386,7 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 - [x] Store::busy; server/news.rs: deliver_news, server_delivered, paste; Server typed_at and quiet; conn.rs records input; server/tests.rs cases with a codex-adapter cat agent
 
 ### UI
-- [ ] peek split into peek/claude.rs and peek/codex.rs; Format, transcript_of, tail with format; PeekCache uses transcript_of; codex parser tests over the recorded rollout
+- [x] peek split into peek/claude.rs and peek/codex.rs; Format, transcript_of, tail with format; PeekCache uses transcript_of; codex parser tests over the recorded rollout
 - [ ] Config::worker_agents; new-flow dialog agent row (NewFlowForm agents/agent, Field::Agent, picked_agent, view.rs), UiEnv.agents, Job::Start --agent; tests and a golden screen
 
 ### Docs and setup

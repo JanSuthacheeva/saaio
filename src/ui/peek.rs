@@ -1,3 +1,6 @@
+mod claude;
+mod codex;
+
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -17,14 +20,14 @@ const MAX_TAIL_BYTES: u64 = 4 * 1024 * 1024;
 /// How many transcript lines the peek keeps.
 pub const PEEK_LINES: usize = 12;
 
-/// One line of what a worker did lately, read from Claude Code's transcript, never from its screen.
+/// One line of what a worker did lately, read from its harness's transcript, never from its screen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PeekLine {
     /// ⏺ Name(target)
     Tool { name: String, target: String },
     /// ⎿ the first line of what the tool answered
     Result(String),
-    /// ⏺ what Claude said
+    /// ⏺ what the agent said
     Text(String),
     /// A tool still running.
     Now(String),
@@ -36,18 +39,28 @@ pub enum PeekLine {
     },
 }
 
-/// <claude home>/projects/*/<id>.jsonl: a worker's session id is its flow id.
-pub fn transcript(claude_home: &Path, id: &str) -> Option<PathBuf> {
-    let name = format!("{id}.jsonl");
-    fs::read_dir(claude_home.join("projects"))
-        .ok()?
-        .flatten()
-        .map(|entry| entry.path().join(&name))
-        .find(|file| file.is_file())
+/// Whose transcript a file is: Claude Code's session JSONL or Codex's rollout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Format {
+    Claude,
+    Codex,
+}
+
+/// The flow's transcript: the one its harness reported (Codex's rollout), else Claude Code's,
+/// found by the flow id it runs as.
+pub fn transcript_of(flow: &FlowView, claude_home: &Path) -> Option<(PathBuf, Format)> {
+    let reported = flow
+        .session
+        .as_ref()
+        .and_then(|session| session.transcript.as_ref());
+    match reported {
+        Some(path) => Some((PathBuf::from(path), Format::Codex)),
+        None => claude::transcript(claude_home, &flow.id).map(|file| (file, Format::Claude)),
+    }
 }
 
 /// The last `max` lines worth showing, read from the end of the file: 64 KiB, more when that holds too few.
-pub fn tail(file: &Path, max: usize) -> Result<Vec<PeekLine>> {
+pub fn tail(file: &Path, max: usize, format: Format) -> Result<Vec<PeekLine>> {
     let mut handle =
         File::open(file).with_context(|| format!("could not open {}", file.display()))?;
     let len = handle.metadata()?.len();
@@ -57,7 +70,11 @@ pub fn tail(file: &Path, max: usize) -> Result<Vec<PeekLine>> {
         handle.seek(SeekFrom::Start(start))?;
         let mut bytes = Vec::new();
         handle.read_to_end(&mut bytes)?;
-        let mut peek = parse(&String::from_utf8_lossy(&bytes), start > 0);
+        let text = String::from_utf8_lossy(&bytes);
+        let mut peek = match format {
+            Format::Claude => claude::parse(&text, start > 0),
+            Format::Codex => codex::parse(&text, start > 0),
+        };
         if peek.len() >= max || start == 0 || window >= MAX_TAIL_BYTES {
             let skip = peek.len().saturating_sub(max);
             return Ok(peek.split_off(skip));
@@ -66,69 +83,54 @@ pub fn tail(file: &Path, max: usize) -> Result<Vec<PeekLine>> {
     }
 }
 
-/// The peek lines in a stretch of transcript; `cut` when its first line is the end of a longer one.
-fn parse(text: &str, cut: bool) -> Vec<PeekLine> {
-    let mut lines = text.lines();
-    if cut {
-        lines.next();
-    }
-    let mut peek = Vec::new();
-    let mut running: HashMap<String, usize> = HashMap::new();
-    for line in lines {
-        let Ok(entry) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-        if entry["isSidechain"] == true {
-            continue;
+/// Peek lines in the order they happened: a tool's result goes right under its call, however
+/// many calls ran in between; a call still unanswered at the end is shown running.
+#[derive(Debug, Default)]
+struct Lines {
+    peek: Vec<PeekLine>,
+    running: HashMap<String, usize>,
+}
+
+impl Lines {
+    fn text(&mut self, text: &str) {
+        let text = text.trim();
+        if !text.is_empty() {
+            self.peek.push(PeekLine::Text(text.to_string()));
         }
-        let Some(blocks) = entry["message"]["content"].as_array() else {
-            continue;
+    }
+
+    fn call(&mut self, id: Option<&str>, name: String, target: String) {
+        if let Some(id) = id {
+            self.running.insert(id.to_string(), self.peek.len());
+        }
+        self.peek.push(PeekLine::Tool { name, target });
+    }
+
+    /// The result of call `id`, by its first line; nothing for a call it never saw.
+    fn answer(&mut self, id: &str, first: Option<String>) {
+        let Some(at) = self.running.remove(id) else {
+            return;
         };
-        for block in blocks {
-            match (entry["type"].as_str(), block["type"].as_str()) {
-                (Some("assistant"), Some("text")) => {
-                    if let Some(text) = block["text"].as_str().map(str::trim)
-                        && !text.is_empty()
-                    {
-                        peek.push(PeekLine::Text(text.to_string()));
-                    }
+        if let Some(first) = first {
+            self.peek.insert(at + 1, PeekLine::Result(first));
+            for index in self.running.values_mut() {
+                if *index > at {
+                    *index += 1;
                 }
-                (Some("assistant"), Some("tool_use")) => {
-                    let name = block["name"].as_str().unwrap_or("Tool").to_string();
-                    let target = target(&block["input"]);
-                    if let Some(id) = block["id"].as_str() {
-                        running.insert(id.to_string(), peek.len());
-                    }
-                    peek.push(PeekLine::Tool { name, target });
-                }
-                (Some("user"), Some("tool_result")) => {
-                    let Some(at) = block["tool_use_id"]
-                        .as_str()
-                        .and_then(|id| running.remove(id))
-                    else {
-                        continue;
-                    };
-                    if let Some(first) = first_line(&block["content"]) {
-                        peek.insert(at + 1, PeekLine::Result(first));
-                        for index in running.values_mut() {
-                            if *index > at {
-                                *index += 1;
-                            }
-                        }
-                    }
-                }
-                _ => {}
             }
         }
     }
-    let last_running = running.values().max().copied();
-    if let Some(at) = last_running
-        && at + 1 == peek.len()
-        && let PeekLine::Tool { name, target } = &peek[at]
-    {
-        peek[at] = PeekLine::Now(call(name, target));
+
+    fn finish(mut self) -> Vec<PeekLine> {
+        let last_running = self.running.values().max().copied();
+        if let Some(at) = last_running
+            && at + 1 == self.peek.len()
+            && let PeekLine::Tool { name, target } = &self.peek[at]
+        {
+            self.peek[at] = PeekLine::Now(call(name, target));
+        }
+        self.peek
     }
-    peek
 }
 
 /// Name(target) as Claude Code shows a tool call.
@@ -138,26 +140,6 @@ pub fn call(name: &str, target: &str) -> String {
     } else {
         format!("{name}({target})")
     }
-}
-
-/// The argument that says what a tool works on: a path, a command, a pattern or a description.
-fn target(input: &Value) -> String {
-    [
-        "file_path",
-        "path",
-        "command",
-        "pattern",
-        "description",
-        "skill",
-        "url",
-        "query",
-        "prompt",
-    ]
-    .iter()
-    .find_map(|key| input[*key].as_str())
-    .and_then(|value| value.lines().next())
-    .unwrap_or("")
-    .to_string()
 }
 
 /// The first non-empty line of a tool result, given as text or as text blocks.
@@ -184,7 +166,7 @@ fn first_line(content: &Value) -> Option<String> {
 pub struct PeekCache {
     claude_home: PathBuf,
     flow: Option<String>,
-    file: Option<PathBuf>,
+    file: Option<(PathBuf, Format)>,
     /// The transcript's length when last read; None to read it again.
     len: Option<u64>,
     lines: Vec<PeekLine>,
@@ -215,12 +197,12 @@ impl PeekCache {
             self.len = None;
         }
         if self.file.is_none() {
-            self.file = transcript(&self.claude_home, &flow.id);
+            self.file = transcript_of(flow, &self.claude_home);
         }
         let len = self
             .file
             .as_ref()
-            .and_then(|file| fs::metadata(file).ok())
+            .and_then(|(file, _)| fs::metadata(file).ok())
             .map_or(0, |metadata| metadata.len());
         let code = code_of(flow);
         if self.len == Some(len) && self.lines.first() == code.as_ref() {
@@ -228,9 +210,9 @@ impl PeekCache {
         }
         self.len = Some(len);
         self.lines = code.into_iter().collect();
-        if let Some(file) = &self.file {
+        if let Some((file, format)) = &self.file {
             self.lines
-                .extend(tail(file, PEEK_LINES).unwrap_or_default());
+                .extend(tail(file, PEEK_LINES, *format).unwrap_or_default());
         }
         true
     }
@@ -321,7 +303,7 @@ mod tests {
         );
 
         assert_eq!(
-            tail(&file, 10).unwrap(),
+            tail(&file, 10, Format::Claude).unwrap(),
             vec![
                 PeekLine::Tool {
                     name: "Edit".into(),
@@ -337,7 +319,11 @@ mod tests {
                 PeekLine::Now("Write(ThrottleTest.php)".into()),
             ]
         );
-        assert_eq!(tail(&file, 2).unwrap().len(), 2, "keeps the last lines");
+        assert_eq!(
+            tail(&file, 2, Format::Claude).unwrap().len(),
+            2,
+            "keeps the last lines"
+        );
     }
 
     #[test]
@@ -351,9 +337,12 @@ mod tests {
         lines.push("{\"type\": \"assistant\", \"message\": {\"content\": [".to_string());
         let file = write(dir.path(), &lines);
 
-        assert_eq!(tail(&file, 1).unwrap(), vec![PeekLine::Text("kept".into())]);
         assert_eq!(
-            tail(&file, 10).unwrap().len(),
+            tail(&file, 1, Format::Claude).unwrap(),
+            vec![PeekLine::Text("kept".into())]
+        );
+        assert_eq!(
+            tail(&file, 10, Format::Claude).unwrap().len(),
             2,
             "reads on past the cut line"
         );
@@ -379,7 +368,7 @@ mod tests {
         );
 
         assert_eq!(
-            tail(&file, 10).unwrap(),
+            tail(&file, 10, Format::Claude).unwrap(),
             vec![
                 PeekLine::Tool {
                     name: "Bash".into(),
@@ -392,16 +381,39 @@ mod tests {
     }
 
     #[test]
-    fn finds_a_transcript_in_any_project_folder() {
+    fn reads_a_codex_worker_from_the_rollout_its_hooks_named() {
         let dir = TempDir::new().unwrap();
-        let project = dir.path().join("projects/-tmp-repo");
-        fs::create_dir_all(&project).unwrap();
-        write(&project, &[]);
+        let events = [
+            crate::event::Event::new(
+                0,
+                crate::event::EventKind::Started {
+                    name: "csv".into(),
+                    request: "add csv".into(),
+                    mode: crate::event::Mode::Guided,
+                },
+            ),
+            crate::event::Event::new(
+                1,
+                crate::event::EventKind::Session {
+                    id: "01a1".into(),
+                    transcript: Some("/home/dev/.codex/sessions/rollout-01a1.jsonl".into()),
+                },
+            ),
+        ];
+        let codex = crate::fold::fold("7f3c", &events, None, 2).unwrap();
+        let claude = crate::fold::fold("7f3c", &events[..1], None, 2).unwrap();
 
         assert_eq!(
-            transcript(dir.path(), "7f3c"),
-            Some(project.join("7f3c.jsonl"))
+            transcript_of(&codex, dir.path()),
+            Some((
+                PathBuf::from("/home/dev/.codex/sessions/rollout-01a1.jsonl"),
+                Format::Codex
+            ))
         );
-        assert_eq!(transcript(dir.path(), "nope"), None);
+        assert_eq!(
+            transcript_of(&claude, dir.path()),
+            None,
+            "no Claude transcript yet"
+        );
     }
 }
