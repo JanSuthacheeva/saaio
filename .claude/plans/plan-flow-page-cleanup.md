@@ -48,4 +48,4 @@ const PREVIOUS_DEFAULTS: [&str; 3] = [
 ## Tasks
 
 - [x] Copy `master.md` to `master-v3.md`, add it to `PREVIOUS_DEFAULTS`, add the review-pages bullet to `master.md`; `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check` pass
-- [ ] End-to-end: with `FLOW_HOME` and `XDG_CONFIG_HOME` in a scratch dir and `master.md` holding the v3 text, start `flow server`; check `master.md` now holds the new text, then stop the server
+- [x] End-to-end: with `FLOW_HOME` and `XDG_CONFIG_HOME` in a scratch dir and `master.md` holding the v3 text, start `flow server`; check `master.md` now holds the new text, then stop the server
