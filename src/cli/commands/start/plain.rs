@@ -50,7 +50,7 @@ pub(super) fn open(
 }
 
 /// `given` made absolute: a leading ~ from $HOME (the dialog passes it unexpanded), relative to
-/// `cwd`; fails unless it is an existing folder.
+/// `cwd`; fails unless it is an existing folder, naming it with ~ for $HOME.
 fn resolve(given: &Path, cwd: &Path, home: Option<&Path>) -> Result<PathBuf, Failure> {
     let expanded = match (given.strip_prefix("~"), home) {
         (Ok(rest), Some(home)) => home.join(rest),
@@ -58,10 +58,16 @@ fn resolve(given: &Path, cwd: &Path, home: Option<&Path>) -> Result<PathBuf, Fai
     };
     match expanded.canonicalize() {
         Ok(folder) if folder.is_dir() => Ok(folder),
-        _ => Err(Failure::error(
-            format!("no folder {}", expanded.display()),
-            vec!["Name an existing folder".to_string()],
-        )),
+        _ => {
+            let shown = match home.and_then(|home| expanded.strip_prefix(home).ok()) {
+                Some(rest) => Path::new("~").join(rest),
+                None => expanded,
+            };
+            Err(Failure::error(
+                format!("no folder {}", shown.display()),
+                vec!["Name an existing folder".to_string()],
+            ))
+        }
     }
 }
 
