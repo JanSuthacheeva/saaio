@@ -371,3 +371,50 @@ The session stops; flow remove
 
 - [x] `master.md` line on plain sessions; README (`flow start --plain`, the dialog's plain mode); HANDOVER: move plain sessions from Future improvements to a built section
 - [x] End to end (run with the release build in an isolated FLOW_HOME, state, config and tmux server, a stub agent logging its argv, instead of `cargo install`, which would cut the live flow ui off its running server at PROTOCOL_VERSION 2): `flow start --plain` in a scratch folder and from the dialog in a real `flow ui`, see it in the sidebar, quit and restart flow ui and see it resume, `flow remove` it and check the folder is still there
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and the code the diff calls; `flow start
+--plain`, `status`, `status --json`, `send` and the usage errors were run against a debug build in a
+scratch FLOW_HOME.
+
+### Fixed
+
+- A usage error after a conflict said "Run `flow start --plain --help` for the usage", which itself
+  fails (`--plain` misses its folder): clap's usage line holds the flags used, and `Failure::usage`
+  only stopped at `<` and `[`. It now stops at the first flag; test in `cli/output.rs` (d8cd546).
+
+### Open
+
+- A fresh plain session shows `working` (spinner, RUNNING group) while its agent sits at an empty
+  prompt, until the user's first turn ends: `Folding::new` starts every flow as Working and nothing
+  arrives before the first `UserPromptSubmit` (`flow status` right after `flow start --plain` says
+  `state: working`; `tests/cli.rs` asserts it). Recommend starting a plain session as `idle` in
+  `fold` (pure, no stored data changes), or arming a `SessionStart` report hook for it; a
+  user-visible choice, so left to you.
+- Pre-existing, not from this branch: a flag missing its value (`flow start --name`,
+  `flow report --flow`) answers "Run `flow --help`", since clap renders no usage line for that error.
+  Recommend passing the subcommand from argv into `Failure::usage`.
+- A binary from before this branch skips a plain session's `started` line (unknown mode) and so does
+  not see the flow; a `workspace` line with null branch is skipped the same way. Nothing is
+  rewritten, so no data is lost, and PROTOCOL_VERSION 2 keeps an old flow ui off a new server.
+  Install the new binary before starting plain sessions.
+
+### Where to look
+
+1. `src/launch/worktree.rs` `repo_of` -> `src/cli/commands/retire.rs` (`refuse_uncommitted_work`,
+   `retire_worktree`, `branch_of`): `branch: None` is what keeps remove and clear from tearing down
+   or checking a folder flow did not create, even one inside `.flow/worktrees`.
+2. `src/launch/pane.rs` `worker_spec`: plain sessions get `plain_argv` and `plain_wiring` fresh and
+   on resume, so they never get the worker prompt or the `flow wait` hook.
+3. `src/cli/commands/start/plain.rs` `resolve`: `~` expansion, relative folders against the dialog's
+   repo, the error naming the folder.
+4. `src/ui/newflow.rs` `on_key`: one text box editing request or folder by mode.
+
+Routine and skimmable: the `Option` branch/slot plumbing through the readers, the `VIEW_VERSION`
+test updates, goldens, `master-v4.md` (the old default kept verbatim), README and HANDOVER.
+
+### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at d8cd546.
+The fix is small and was re-read in a separate pass, not by an independent reviewer.
