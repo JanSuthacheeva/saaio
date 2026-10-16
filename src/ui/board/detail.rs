@@ -363,4 +363,28 @@ mod tests {
         assert_eq!(rows[3], "steps");
         assert_eq!(rows[4], "design ✓ 2m   implement ● 27m   review ○   MR ○");
     }
+
+    #[test]
+    fn the_current_step_takes_the_color_of_its_phase_by_default() {
+        let flow = flow(
+            "shop-221",
+            Mode::Auto,
+            vec![EventKind::Phase {
+                phase: Phase::Implement,
+            }],
+        );
+        let area = Rect::new(0, 0, 60, 3);
+        let mut buf = Buffer::empty(area);
+
+        let (implement, working) = with_view(vec![flow.clone()], |view| {
+            view.render_facts(&flow, area, &mut buf);
+            let theme = view.theme();
+            (theme.phase.implement.fg, theme.state.working.fg)
+        });
+
+        let row = rows(&buf)[1].clone();
+        let x = row[..row.find('●').unwrap()].chars().count() as u16;
+        assert_ne!(implement, working);
+        assert_eq!(Some(buf[(x, 1)].fg), implement);
+    }
 }
