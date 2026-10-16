@@ -8,7 +8,10 @@ fn main() {
     let commit = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=FLOW_COMMIT={commit}");
     if let Some(dir) = git(&["rev-parse", "--git-dir"]) {
-        watch(&Path::new(&dir).join("HEAD"));
+        let dir = Path::new(&dir);
+        watch(&dir.join("HEAD"));
+        // Every commit appends here, also one that creates a branch's loose ref after a pack.
+        watch(&dir.join("logs").join("HEAD"));
     }
     if let Some(common) = git(&["rev-parse", "--git-common-dir"]) {
         let common = Path::new(&common);

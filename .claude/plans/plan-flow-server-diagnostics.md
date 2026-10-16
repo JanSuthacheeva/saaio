@@ -140,7 +140,7 @@ pub fn local_offset_secs() -> i64;   // moved from ui/outer.rs
 
 `build.rs` (new): sets `FLOW_COMMIT` from `git rev-parse --short HEAD`, else `unknown`;
 `rerun-if-changed` on the git dir's `HEAD` and the ref it points to (via `git rev-parse --git-dir`
-and `--git-common-dir`, plus `packed-refs`).
+and `--git-common-dir`, plus `packed-refs` and the git dir's `logs/HEAD`, which a commit after a `git pack-refs` changes when no loose ref is watched).
 
 `CLAUDE.md` (modified): `server_log.rs` in Architecture; `build.rs` in Structure; a rule that E2E
 runs of `flow ui`, `flow server` and `flow ui --stop` use a scratch `FLOW_HOME`.
