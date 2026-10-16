@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use crate::event::{Mode, Phase};
@@ -90,6 +92,20 @@ pub struct Tasks {
 pub struct ReviewCount {
     pub fixed: u32,
     pub open: u32,
+}
+
+/// 4/9
+impl fmt::Display for Tasks {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}/{}", self.done, self.total)
+    }
+}
+
+/// 2 fixed, 1 open
+impl fmt::Display for ReviewCount {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} fixed, {} open", self.fixed, self.open)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

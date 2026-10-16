@@ -62,7 +62,7 @@ impl Host {
         if let Some(pane) = self.panes.get(&spec.key)
             && pane.status == PaneStatus::Running
         {
-            bail!("{} is already running", describe(&spec.key));
+            bail!("{} is already running", spec.key);
         }
         let key = spec.key.clone();
         match self.spawn(spec) {
@@ -126,7 +126,7 @@ impl Host {
             process
                 .writer
                 .write_all(bytes)
-                .with_context(|| format!("could not write to {}", describe(key)))?;
+                .with_context(|| format!("could not write to {}", key))?;
         }
         Ok(())
     }
@@ -302,13 +302,6 @@ fn signal_group(pid: i32, signal: libc::c_int) {
     // SAFETY: kill only sends a signal; a stale group id fails with ESRCH and changes nothing.
     unsafe {
         libc::kill(-pid, signal);
-    }
-}
-
-fn describe(key: &PaneKey) -> String {
-    match key {
-        PaneKey::Master => "the master".to_string(),
-        PaneKey::Flow(id) => format!("flow {id}"),
     }
 }
 

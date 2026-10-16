@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::{ErrorKind, Read, Write};
 
 use anyhow::{Context, Result, bail};
@@ -14,6 +15,16 @@ pub const MAX_MESSAGE: usize = 8 << 20;
 pub enum PaneKey {
     Master,
     Flow(String),
+}
+
+/// the master, flow 7f3c
+impl fmt::Display for PaneKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PaneKey::Master => f.write_str("the master"),
+            PaneKey::Flow(id) => write!(f, "flow {id}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

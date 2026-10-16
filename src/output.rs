@@ -167,7 +167,10 @@ fn list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool) -> Do
                         .phase
                         .map(|phase| phase.name().to_string())
                         .unwrap_or_default(),
-                    tasks: tasks_text(flow),
+                    tasks: flow
+                        .tasks
+                        .map(|tasks| tasks.to_string())
+                        .unwrap_or_default(),
                     age: short_duration(board.now.saturating_sub(flow.changed_at)),
                 })
                 .collect(),
@@ -259,7 +262,10 @@ pub fn status_all(projects: &Projects, warnings: &[String], full: bool) -> Docum
                 .phase
                 .map(|phase| phase.name().to_string())
                 .unwrap_or_default(),
-            tasks: tasks_text(flow),
+            tasks: flow
+                .tasks
+                .map(|tasks| tasks.to_string())
+                .unwrap_or_default(),
             age: short_duration(projects.now.saturating_sub(flow.changed_at)),
         })
         .collect::<Vec<_>>();
@@ -361,10 +367,8 @@ pub fn status_detail(
         phase: flow.phase.map(|phase| phase.name()),
         blocker: flow.blocker.as_deref().map(cut),
         delegate: flow.delegate.as_deref().map(cut),
-        tasks: flow.tasks.map(|_| tasks_text(flow)),
-        review: flow
-            .review
-            .map(|review| format!("{} fixed, {} open", review.fixed, review.open)),
+        tasks: flow.tasks.map(|tasks| tasks.to_string()),
+        review: flow.review.map(|review| review.to_string()),
         merge_request: flow.merge_request.clone(),
         branch: flow.workspace.as_ref().map(|space| space.branch.clone()),
         worktree: flow.workspace.as_ref().map(|space| space.path.clone()),
@@ -424,12 +428,6 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>) -> Vec<String> {
     }
     help.push("Run `flow` for all flows".to_string());
     help
-}
-
-fn tasks_text(flow: &FlowView) -> String {
-    flow.tasks
-        .map(|tasks| format!("{}/{}", tasks.done, tasks.total))
-        .unwrap_or_default()
 }
 
 /// The kebab-case name serde gives a unit enum value.

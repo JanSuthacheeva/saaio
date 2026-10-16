@@ -37,7 +37,7 @@ any other that turns out to be noise, each named.
 
 ### 1. Conversions and common traits
 - [x] `impl From<anyhow::Error> for Failure`, replacing `Failure::from_io`
-- [ ] `Display` for `Tasks`, `ReviewCount`, `PaneKey` (replacing `describe`)
+- [x] `Display` for `Tasks`, `ReviewCount`, `PaneKey` (replacing `describe`)
 - [ ] `From` between `view::Workspace` and `EventKind::Workspace`
 - [ ] `Default` for `Config` and `MasterConfig` via `#[serde(default)]`; `Mode` default via `#[default]` + `default_value_t`
 - [ ] `Theme`: `const fn hex` with `to_be_bytes`, palette consts, `impl Default`; `Theme::state` -> `state_style`, `tone_style`

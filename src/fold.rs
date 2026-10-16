@@ -210,16 +210,17 @@ impl Folding {
                 });
             }
             EventKind::Review { fixed, open } => {
-                self.view.review = Some(ReviewCount {
+                let review = ReviewCount {
                     fixed: *fixed,
                     open: *open,
-                });
+                };
+                self.view.review = Some(review);
                 let tone = if *open > 0 {
                     Tone::Attention
                 } else {
                     Tone::Progress
                 };
-                self.note(at, format!("review: {fixed} fixed, {open} open"), tone);
+                self.note(at, format!("review: {review}"), tone);
             }
             EventKind::MergeRequest { url } => {
                 if self.view.phase != Some(Phase::MergeRequest) {

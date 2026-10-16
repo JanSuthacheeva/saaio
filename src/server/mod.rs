@@ -396,7 +396,7 @@ impl Server {
     /// Opens a pane once more with the agent's first command: its resume failed before the agent
     /// ever saved the session.
     fn open_fresh(&mut self, key: &PaneKey) {
-        eprintln!("resuming {key:?} failed, starting it fresh");
+        eprintln!("resuming {key} failed, starting it fresh");
         let PaneKey::Flow(id) = key else {
             self.open_master(true);
             return;
