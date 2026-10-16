@@ -690,16 +690,25 @@ fn hook(home: &Path, flow_id: Option<&str>, payload: &str) -> Output {
 
 /// Runs `flow hook <args>` with a hook payload on stdin.
 fn hook_with(home: &Path, args: &[&str], flow_id: Option<&str>, payload: &str) -> Output {
+    feed(hook_command(home, args, flow_id), payload)
+}
+
+/// `flow hook <args>` for the flow `flow_id`, not yet run.
+fn hook_command(home: &Path, args: &[&str], flow_id: Option<&str>) -> Command {
     let mut command = flow_command(home);
-    command
-        .arg("hook")
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    command.arg("hook").args(args);
     if let Some(id) = flow_id {
         command.env("FLOW_ID", id);
     }
+    command
+}
+
+/// Runs `command` with `payload` on stdin.
+fn feed(mut command: Command, payload: &str) -> Output {
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     let mut child = command.spawn().unwrap();
     child
         .stdin
@@ -913,6 +922,58 @@ fn a_merge_request_of_a_forks_upstream_counts() {
     assert!(
         status.contains("https://github.com/shop/app/pull/12"),
         "gh pr create in a fork opens it upstream: {status}"
+    );
+}
+
+#[test]
+fn a_merge_request_counts_through_an_ssh_host_alias() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let repo = home.path().join("work");
+    fs::create_dir_all(&repo).unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &["remote", "add", "origin", "git@github-work:shop/app.git"],
+    ] {
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(args)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?}");
+    }
+    let workspace = format!(
+        "{{\"v\":1,\"at\":2,\"kind\":\"workspace\",\"path\":\"{}\",\"branch\":\"flow/shop-221\",\"slot\":1,\"window\":null,\"agent\":\"claude\"}}\n",
+        repo.display()
+    );
+    let mut log = fs::OpenOptions::new()
+        .append(true)
+        .open(home.path().join(format!("flows/{id}.jsonl")))
+        .unwrap();
+    log.write_all(workspace.as_bytes()).unwrap();
+    let bin = home.path().join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    fs::write(
+        bin.join("ssh"),
+        "#!/bin/sh\nfor host; do :; done\nif [ \"$host\" = github-work ]; then echo 'hostname github.com'; else echo \"hostname $host\"; fi\n",
+    )
+    .unwrap();
+    set_executable(&bin.join("ssh"));
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+
+    let mut command = hook_command(home.path(), &["claude-code"], Some(&id));
+    command.env("PATH", path);
+    let output = feed(
+        command,
+        r#"{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"gh pr create --fill"},"tool_response":{"stdout":"https://github.com/shop/app/pull/12\n"}}"#,
+    );
+    assert!(output.status.success());
+
+    let status = stdout(&flow(home.path(), &["status", "shop-221"]));
+    assert!(
+        status.contains("https://github.com/shop/app/pull/12"),
+        "origin git@github-work: is github.com: {status}"
     );
 }
 

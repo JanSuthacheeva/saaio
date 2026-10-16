@@ -16,8 +16,9 @@ pub fn created_merge_request(command: &str, output: &str) -> Option<String> {
 
 /// True when `url` is a merge request of the repo `remote` (a remote URL in any form git takes:
 /// git@host:path.git, https://host/path, ssh://user@host:port/path) points to: same host, its path
-/// followed by /pull/ or /-/merge_requests/.
-pub fn in_repo(url: &str, remote: &str) -> bool {
+/// followed by /pull/ or /-/merge_requests/. An SSH remote's host may be an alias from the ssh
+/// config: when only the host differs, `real_host` names the host it stands for.
+pub fn in_repo(url: &str, remote: &str, real_host: impl Fn(&str) -> Option<String>) -> bool {
     let (Some((host, path)), Some((repo_host, repo_path))) =
         (host_and_path(url), host_and_path(remote))
     else {
@@ -26,10 +27,21 @@ pub fn in_repo(url: &str, remote: &str) -> bool {
     let rest = path
         .strip_prefix(&repo_path)
         .and_then(|rest| rest.strip_prefix('/'));
-    host == repo_host
-        && !repo_path.is_empty()
+    let same_repo = !repo_path.is_empty()
         && rest
-            .is_some_and(|rest| rest.starts_with("pull/") || rest.starts_with("-/merge_requests/"))
+            .is_some_and(|rest| rest.starts_with("pull/") || rest.starts_with("-/merge_requests/"));
+    same_repo
+        && (host == repo_host
+            || is_ssh(remote)
+                && real_host(&repo_host).is_some_and(|real| real.to_lowercase() == host))
+}
+
+/// git@host:path or ssh:// (git+ssh://, ssh+git://): a remote ssh connects to.
+fn is_ssh(remote: &str) -> bool {
+    match remote.trim().split_once("://") {
+        Some((scheme, _)) => matches!(scheme, "ssh" | "git+ssh" | "ssh+git"),
+        None => true,
+    }
 }
 
 /// A URL's or remote's host (no user or port) and path (no .git, no slashes around), lowercase.
@@ -207,6 +219,14 @@ mod tests {
         );
     }
 
+    fn no_alias(_: &str) -> Option<String> {
+        None
+    }
+
+    fn never_asked(host: &str) -> Option<String> {
+        panic!("asked ssh for {host}")
+    }
+
     #[test]
     fn a_merge_request_belongs_to_the_repo_its_origin_names() {
         let pull = "https://github.com/shop/app/pull/12";
@@ -217,28 +237,64 @@ mod tests {
             "https://jan@github.com/Shop/App.git",
             "ssh://git@github.com:22/shop/app.git",
         ] {
-            assert!(in_repo(pull, remote), "{remote}");
+            assert!(in_repo(pull, remote, no_alias), "{remote}");
         }
         assert!(
-            !in_repo(pull, "git@github.com:shop/app-admin.git"),
+            !in_repo(pull, "git@github.com:shop/app-admin.git", no_alias),
             "another repo"
         );
         assert!(
-            !in_repo(pull, "git@gitlab.com:shop/app.git"),
+            !in_repo(pull, "git@gitlab.com:shop/app.git", no_alias),
             "another host"
         );
         assert!(!in_repo(
             "https://github.com/probe/repo/pull/7",
-            "git@github.com:shop/app.git"
+            "git@github.com:shop/app.git",
+            no_alias
         ));
         assert!(!in_repo(
             "https://github.com/shop/app/issues/3",
-            "git@github.com:shop/app.git"
+            "git@github.com:shop/app.git",
+            no_alias
         ));
         assert!(in_repo(
             "https://gitlab.com/group/sub/app/-/merge_requests/7",
-            "git@gitlab.com:group/sub/app.git"
+            "git@gitlab.com:group/sub/app.git",
+            no_alias
         ));
-        assert!(!in_repo(pull, ""), "no origin");
+        assert!(!in_repo(pull, "", no_alias), "no origin");
+    }
+
+    #[test]
+    fn an_ssh_remote_through_a_host_alias_names_the_real_host() {
+        let pull = "https://github.com/shop/app/pull/12";
+        let github = |alias: &str| (alias == "github-work").then(|| "GitHub.com".to_string());
+
+        assert!(
+            in_repo(pull, "git@github-work:shop/app.git", github),
+            "an alias"
+        );
+        assert!(
+            in_repo(pull, "ssh://git@github-work/shop/app.git", github),
+            "an alias in ssh:// form"
+        );
+        assert!(
+            in_repo(pull, "git@github.com:shop/app.git", never_asked),
+            "a plain host matches without ssh"
+        );
+        assert!(
+            !in_repo(pull, "git@gitlab-work:shop/app.git", |alias: &str| Some(
+                alias.to_string()
+            )),
+            "an unknown alias is only itself"
+        );
+        assert!(
+            !in_repo(pull, "https://github-work/shop/app.git", never_asked),
+            "an https remote is never an ssh alias"
+        );
+        assert!(
+            !in_repo(pull, "git@github-work:shop/admin.git", never_asked),
+            "another repo needs no ssh"
+        );
     }
 }
