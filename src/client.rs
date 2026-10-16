@@ -1,5 +1,5 @@
 use std::fs::OpenOptions;
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
@@ -169,11 +169,14 @@ pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Res
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log);
-    // SAFETY: setsid only detaches the child from this terminal's session, so closing the
-    // terminal does not hang up the server; it touches no memory shared with the parent.
+    // A session of its own, so closing this terminal does not hang up the server.
+    // SAFETY: pre_exec runs between fork and exec, where only async-signal-safe calls are
+    // allowed; setsid is one, and the closure allocates nothing.
     unsafe {
         command.pre_exec(|| {
-            libc::setsid();
+            if libc::setsid() == -1 {
+                return Err(io::Error::last_os_error());
+            }
             Ok(())
         });
     }

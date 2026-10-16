@@ -27,10 +27,10 @@ any other that turns out to be noise, each named.
 - [x] main: `bin_path` shortens HOME with `Path::strip_prefix` (main.rs:1083)
 - [x] ui: `draw_dialog` and the new-flow error row cannot overflow or underflow on extreme sizes (app.rs:1376, newflow.rs:204)
 - [x] ui: `shown_request` trims by display width (newflow.rs:137); one shared width helper on `unicode-width`
-- [x] ui: clicks use `Rect::contains` (app.rs:904, input.rs:251)
+- [x] ui: clicks use `Rect::contains` (app.rs:904, input.rs:251); idiom only, a click past the last row already found no pane
 - [x] theme_file: a color needs six ASCII hex digits (theme_file.rs:163)
-- [ ] workspace: an empty hook argv is an error, not a panic (workspace.rs:97)
-- [ ] client: the spawned server is reaped (client.rs:180); `setsid` failure is returned and the SAFETY comment names async-signal-safety
+- [x] workspace: the worktree removal uses `split_first` like `run` (an empty argv cannot happen, idiom only)
+- [x] client: `setsid` failure is returned and the SAFETY comment names async-signal-safety (no reaper: `flow ui` quits on ServerGone, so init reaps the server)
 - [ ] host: the PTY reader retries on `Interrupted` (host.rs:256)
 - [ ] claude_code: `task_counts` parses "all N done" with `split_once` (claude_code.rs:289)
 - [ ] registry: store roots are written and read as raw OS bytes (registry.rs:46)
