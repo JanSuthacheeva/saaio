@@ -128,6 +128,8 @@ call site listed uses `flow_style`, no `state_style` call with a flow at hand is
 - The rail, the title row and the detail view's glyph and current step have no color test of their
   own; each is the same one-line swap the sidebar and board tests cover. Recommendation: accept.
 
+Decided 2026-10-16: both left as recommended.
+
 **Where to look**
 
 1. `src/ui/theme.rs` `flow_style`: the one rule (Working or Delegated with a phase -> phase color).
