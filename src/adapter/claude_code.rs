@@ -461,6 +461,16 @@ mod tests {
     }
 
     #[test]
+    fn a_pending_artifact_watch_is_not_work_either() {
+        let mut stop = fixture("stop_artifact_watch");
+        stop["background_tasks"][0]["status"] = json!("pending");
+        assert!(matches!(
+            translate(&stop, &phases()).last(),
+            Some(EventKind::Idle { .. })
+        ));
+    }
+
+    #[test]
     fn a_subagent_running_beside_an_artifact_watch_is_delegated() {
         let mut stop = fixture("stop_artifact_watch");
         stop["background_tasks"]
