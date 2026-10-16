@@ -372,6 +372,13 @@ The session stops; flow remove
 - [x] `master.md` line on plain sessions; README (`flow start --plain`, the dialog's plain mode); HANDOVER: move plain sessions from Future improvements to a built section
 - [x] End to end (run with the release build in an isolated FLOW_HOME, state, config and tmux server, a stub agent logging its argv, instead of `cargo install`, which would cut the live flow ui off its running server at PROTOCOL_VERSION 2): `flow start --plain` in a scratch folder and from the dialog in a real `flow ui`, see it in the sidebar, quit and restart flow ui and see it resume, `flow remove` it and check the folder is still there
 
+### After the review
+
+Decided by Jan: build both, no new hook.
+
+- [ ] A plain session starts `idle` in `fold` (`Folding::new`), so a fresh one sits in READY at its empty prompt instead of RUNNING; fold test, `tests/cli.rs` asserts `state: idle`
+- [ ] `Failure::usage` names the subcommand when clap prints no usage line (a flag missing its value: `flow start --name`), taken from argv; test in `cli/output.rs` and `tests/cli.rs`
+
 ## Review
 
 Reviewed in an isolated context against this plan, CLAUDE.md and the code the diff calls; `flow start
