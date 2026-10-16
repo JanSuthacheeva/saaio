@@ -44,24 +44,51 @@ th { background:var(--subtle); font-weight:600; }
 
 <main>
 <header style="display:flex;flex-direction:column;gap:8px">
-  <p class="meta">flow · design-code · implementation · 2026-10-16 · approaches: <a href="https://claude.ai/artifact/3y32yGaMR3cZwCBcYsVGm5">Codex Workers</a></p>
+  <p class="meta">flow · design-code · implementation · revision 2 · 2026-10-16 · approaches: <a href="https://claude.ai/artifact/3y32yGaMR3cZwCBcYsVGm5">Codex Workers</a></p>
   <h1>Codex workers and master</h1>
 </header>
 
 <section class="card">
+  <h2>Revision 2: after merging main</h2>
+  <p class="meta">2026-10-16. Codex facts re-checked at <code>openai/codex@6ae8b8a</code> (latest release 0.163.0). Its hooks, CLI, TUI and rollout code have not changed since the first read.</p>
+  <ul>
+    <li><b>New file layout.</b> Every unit moved to main's library structure:
+      <ul>
+        <li>the hook command is now <code>cli/commands/hook.rs</code>;</li>
+        <li>the launch code is <code>launch/pane.rs</code>;</li>
+        <li>the server is split into <code>server.rs</code>, <code>conn.rs</code> and <code>panes.rs</code>, and typing news gets its own <code>server/news.rs</code>;</li>
+        <li>the shared adapter helpers go to <code>adapter/answer.rs</code> and <code>adapter/calls.rs</code>;</li>
+        <li>peek splits into <code>peek/claude.rs</code> and <code>peek/codex.rs</code>.</li>
+      </ul></li>
+    <li><b>Already on main.</b> <code>deliver.rs</code> and <code>Document::Wake</code> (exit 2 with news on stderr) exist. The plan reuses them and only adds <code>deliver::master_news_now</code>, the same lookup without the 2 s settle.</li>
+    <li><b>Plain sessions.</b> A plain Codex session gets the report hooks only, through <code>plain_wiring</code>. It gets no worker prompt and no news. The dialog's agent row applies to plain sessions too.</li>
+    <li><b>Protocol.</b> <code>FlowView.session</code> changes the Board that postcard sends, so <code>PROTOCOL_VERSION</code> goes from 3 to 4. <code>VIEW_VERSION</code> stays 2, because the JSON change is additive.</li>
+    <li><b>New Codex details.</b>
+      <ul>
+        <li><code>spawn_agent</code> has no description, so delegated shows the first line of its <code>message</code>.</li>
+        <li>Bash's <code>tool_response</code> is a plain string, which is what the merge-request match reads.</li>
+        <li>Rollout outputs can be arrays of items.</li>
+        <li>A bracketed paste plus <code>\r</code> submits safely.</li>
+      </ul></li>
+    <li><b>New and set aside: <code>codex queue</code>.</b> Codex 0.163.0 can start a turn on an idle thread with <code>codex queue --thread &lt;id&gt; --message</code>, but only through its shared daemon. A session started with <code>-c</code> overrides, which our hooks need, runs its own embedded server, and queue refuses that. Server typing stays. HANDOVER notes queue as the replacement once the daemon takes per-session hooks.</li>
+    <li><b>E2E.</b> Runs go on a scratch <code>FLOW_HOME</code>, never on the real store.</li>
+  </ul>
+</section>
+
+<section class="card">
   <h2>1. Decision recap</h2>
-  <p>Approach A: <code>Adapter::Codex</code> passes flow's hooks to every Codex launch as <code>-c hooks.*</code> arguments. You trust them once in Codex's own review, and flow learns each Codex session id from its hooks.</p>
+  <p>Approach A: <code>Adapter::Codex</code> passes flow's hooks as <code>-c hooks.*</code> on every Codex launch. You trust them once in Codex's own review. flow learns each session id from the hooks.</p>
   <p>A Codex session cannot wake itself, so news reaches it two ways:</p>
   <ul>
     <li><b>Busy:</b> from its synchronous Stop hook.</li>
-    <li><b>Idle:</b> <code>flow server</code> types it in, but only when the session is idle and no key has gone into that pane for 10 s.</li>
+    <li><b>Idle:</b> <code>flow server</code> types it in, when the session is idle and no key has gone into that pane for 10 s.</li>
   </ul>
-  <p>Decided in phase 2:</p>
+  <p>Decided earlier:</p>
   <ul>
-    <li>Codex can be the master, chosen with <code>[master] agent = "codex"</code>.</li>
-    <li>A new <code>session</code> event holds the session id and transcript path.</li>
-    <li>A Codex peek and an agent row in the new-flow dialog are both in scope.</li>
-    <li>Skills stay agent-agnostic.</li>
+    <li>Codex can be the master, through <code>[master] agent = "codex"</code>.</li>
+    <li>A <code>session</code> event goes in the log.</li>
+    <li>The Codex peek and the dialog's agent row are in scope.</li>
+    <li>The skills stay agent-agnostic: an Artifact where the tool exists, lavish otherwise.</li>
   </ul>
 </section>
 
@@ -69,229 +96,213 @@ th { background:var(--subtle); font-weight:600; }
   <h2>2. Structure overview</h2>
   <div class="mer"><pre class="mermaid">
 flowchart TB
-  subgraph cli["flow CLI (main.rs)"]
-    hook["hook(): HookOutcome *"]
-    wait["wait()"]
-    start["start()"]
+  subgraph cli["cli/commands/"]
+    hook["hook.rs *"]
+    wait["wait.rs"]
+    uicmd["ui.rs *"]
   end
-  subgraph adapter["adapter/"]
-    amod["mod.rs: Adapter *"]
-    codex["codex.rs (new)"]
+  subgraph adapter["adapter.rs + adapter/"]
+    amod["adapter.rs: Adapter *"]
+    codex["codex.rs"]
+    answer["answer.rs"]
+    calls["calls.rs"]
     cc["claude_code.rs *"]
   end
-  deliver["deliver.rs (new)"]
-  wake["wake.rs"]
+  deliver["deliver.rs *"]
   store["store.rs *"]
   fold["fold.rs *"]
-  event["event.rs *"]
   view["view.rs *"]
-  launch["launch.rs *"]
+  proto["proto.rs *"]
+  pane["launch/pane.rs *"]
   config["config.rs *"]
-  subgraph server["server/"]
-    smod["mod.rs: deliver_news (new)"]
+  subgraph server["server.rs + server/"]
+    news["news.rs"]
+    panes["panes.rs *"]
+    conn["conn.rs *"]
     master["master.rs *"]
-    reconcile["reconcile.rs"]
   end
   subgraph ui["ui/"]
     peek["peek.rs *"]
+    pcodex["peek/codex.rs"]
     newflow["newflow.rs *"]
-    app["app.rs *"]
   end
-  hook --> amod --> codex
+  hook --> amod
+  amod --> codex
   amod --> cc
+  codex --> answer
+  codex --> calls
+  cc --> answer
+  cc --> calls
   hook --> deliver
   wait --> deliver
-  smod --> deliver
-  deliver --> wake
+  news --> deliver
   deliver --> store
-  hook --> fold --> event
-  fold --> view
-  smod --> reconcile --> launch --> amod
-  smod --> master --> amod
-  launch --> config
+  hook --> fold --> view
+  panes --> pane --> amod
+  panes --> master --> amod
+  pane --> config
+  conn --> news
+  peek --> pcodex
   peek --> view
-  app --> newflow
+  proto --> view
+  uicmd --> config
   classDef new stroke:#7b5eaf,stroke-width:3px
-  class codex,deliver,smod new
+  class codex,answer,calls,news,pcodex new
   </pre></div>
-  <p class="meta">Thick border: new. An asterisk: modified. Everything else exists unchanged.</p>
+  <p class="meta">Thick border: new. An asterisk: modified.</p>
 </section>
 
 <section class="card">
   <h2>3. Units</h2>
 
   <div class="unit">
-    <h3><code>src/adapter/mod.rs</code> <span class="tag mod">modified</span></h3>
-    <p>How flow observes a harness. Gains the Codex variant, the instruction arguments, and the capability that says whether a session wakes itself.</p>
-<pre><code>pub enum Adapter { ClaudeCode, Codex }
+    <h3><code>src/adapter.rs</code> <span class="tag mod">modified</span></h3>
+    <p>How flow observes a harness. It gains the Codex variant, the instruction arguments, and whether a session wakes itself.</p>
+<pre><code>pub mod claude_code;
+pub mod codex;
+mod answer;
+mod calls;
+pub enum Adapter { ClaudeCode, Codex }          // serde kebab-case: "codex"
 impl Adapter {
-    pub fn named(name: &amp;str) -&gt; Option&lt;Adapter&gt;;            // + "codex"
-    pub fn name(self) -&gt; &amp;'static str;
-    /// Hooks and WORKER_PROMPT (through instruct), inserted after the program.
+    pub fn named(name: &amp;str) -&gt; Option&lt;Adapter&gt;;  // + "codex"
+    /// Report hooks, the master hand-over (Codex: at Stop) and WORKER_PROMPT through instruct.
     pub fn wiring(self, flow_exe: &amp;Path) -&gt; Vec&lt;String&gt;;
-    /// The master's hooks: Claude its waiter when `wake`; Codex its hooks always
-    /// (they record its session), the Stop delivery only when `wake`.
-    pub fn master_wiring(self, flow_exe: &amp;Path, wake: bool) -&gt; Vec&lt;String&gt;;   // + wake
-    /// Arguments that add `text` to the session's instructions:
-    /// Claude ["--append-system-prompt", text]; Codex ["-c", "developer_instructions=&lt;toml string&gt;"].
+    /// Report hooks only: no prompt, no news.
+    pub fn plain_wiring(self, flow_exe: &amp;Path) -&gt; Vec&lt;String&gt;;
+    /// Claude: its waiter. Codex: its hooks with --master.
+    pub fn master_wiring(self, flow_exe: &amp;Path) -&gt; Vec&lt;String&gt;;
+    /// Claude ["--append-system-prompt", text]; Codex ["-c", "developer_instructions=&lt;toml&gt;"].
     pub fn instruct(self, text: &amp;str) -&gt; Vec&lt;String&gt;;
-    /// True when the session wakes itself for news (Claude: asyncRewake flow wait);
-    /// false when flow hands news over at Stop and flow server types it in (Codex).
+    /// Claude true (asyncRewake flow wait); Codex false (Stop hand-over, server typing).
     pub fn wakes_itself(self) -&gt; bool;
     pub fn translate(self, payload: &amp;Value, phases: &amp;PhaseMap) -&gt; Vec&lt;EventKind&gt;;
 }
-/// Moved from claude_code.rs; harness-neutral now ("the flow master is the agent session ...").
-pub const WORKER_PROMPT: &amp;str;
-// moved here from claude_code.rs so both adapters share them (unchanged bodies):
+/// Moved here, harness-neutral: "the flow master is the agent session that coordinates
+/// the workers ... hook feedback or a prompt that starts with \"message from the flow master:\""
+pub const WORKER_PROMPT: &amp;str;</code></pre>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/adapter/answer.rs</code>, <code>src/adapter/calls.rs</code> <span class="tag new">new</span></h3>
+    <p>The helpers both adapters share, moved out of <code>claude_code.rs</code> with their bodies unchanged.</p>
+<pre><code>// answer.rs: how a turn's closing message reads
 pub fn turn_end(answer: &amp;str) -&gt; EventKind;
-pub fn created_merge_request(command: &amp;str, stdout: &amp;str) -&gt; Option&lt;String&gt;;
-pub fn tool_call(name: &amp;str, input: &amp;Value, cwd: &amp;str) -&gt; String;</code></pre>
+fn plain(line: &amp;str) -&gt; String;
+fn sentences(text: &amp;str) -&gt; Vec&lt;String&gt;;
+// calls.rs: how a tool call reads
+pub fn tool_call(name: &amp;str, input: &amp;Value, cwd: &amp;str) -&gt; String;
+pub fn created_merge_request(command: &amp;str, stdout: &amp;str) -&gt; Option&lt;String&gt;;</code></pre>
   </div>
 
   <div class="unit">
     <h3><code>src/adapter/codex.rs</code> <span class="tag new">new</span></h3>
-    <p>Pure. It holds Codex's hook arguments and turns one Codex hook payload into flow events.</p>
-<pre><code>/// UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop, Interrupt.
-const EVENTS: [&amp;str; 6];
+    <p>Pure. It holds Codex's hook arguments and turns one Codex payload into flow events.</p>
+<pre><code>const EVENTS: [&amp;str; 6];   // UserPromptSubmit PreToolUse PostToolUse PermissionRequest Stop Interrupt
 const HOOK_TIMEOUT_SECS: u64 = 10;
-/// -c check_for_update_on_startup=false, then one -c hooks.&lt;Event&gt;=[{hooks=[{type="command",
-/// command="'&lt;flow_exe&gt;' hook codex [--master]",timeout=10}]}] per event, synchronous.
+/// -c check_for_update_on_startup=false, then per event -c hooks.&lt;Event&gt;=[{hooks=[{type="command",
+/// command="'&lt;flow_exe&gt;' hook codex[ --master]",timeout=10}]}], synchronous.
 pub fn hooks(flow_exe: &amp;Path, master: bool) -&gt; Vec&lt;String&gt;;
 pub fn translate(payload: &amp;Value, phases: &amp;PhaseMap) -&gt; Vec&lt;EventKind&gt;;
-/// The `session` event every payload with a session_id means (fold::changes drops repeats).
 fn session(payload: &amp;Value) -&gt; Option&lt;EventKind&gt;;
-/// "$design-code fix it" -&gt; "design-code": a skill mentioned first in the prompt.
-fn mentioned_skill(prompt: &amp;str) -&gt; Option&lt;&amp;str&gt;;
-/// A shell command that reads ".../skills/&lt;name&gt;/SKILL.md" -&gt; name: how Codex starts a skill.
-fn read_skill(command: &amp;str) -&gt; Option&lt;&amp;str&gt;;
-/// A TOML basic string: quotes, backslashes and newlines escaped.
+fn mentioned_skill(prompt: &amp;str) -&gt; Option&lt;&amp;str&gt;;   // first "$name"
+fn read_skill(command: &amp;str) -&gt; Option&lt;&amp;str&gt;;       // ".../skills/&lt;name&gt;/SKILL.md"
+fn subagent(input: &amp;Value) -&gt; String;                // message's first line, else agent_type
 pub fn toml_string(text: &amp;str) -&gt; String;</code></pre>
   </div>
 
   <div class="unit">
-    <h3><code>src/adapter/claude_code.rs</code> <span class="tag mod">modified</span></h3>
-    <p>Its helpers and <code>WORKER_PROMPT</code> move to <code>mod.rs</code>. <code>wiring</code> builds the instruction argument through <code>instruct</code>. The behaviour stays the same.</p>
-  </div>
-
-  <div class="unit">
-    <h3><code>src/deliver.rs</code> <span class="tag new">new</span></h3>
-    <p>Takes a session's news out of the store and marks it delivered or seen. <code>flow wait</code>, <code>flow hook</code> and <code>flow server</code> all deliver through it, so nothing goes out twice.</p>
-<pre><code>/// Moved from main.rs: Some(None) while there is nothing; None when the flow is finished or gone.
-pub fn worker_news(store: &amp;Store, id: &amp;str, now: u64) -&gt; Option&lt;Option&lt;String&gt;&gt;;
-/// The flows that stopped since the master last saw them, marked seen; None when there are none.
-/// main::master_news keeps its SETTLE pause around this.
-pub fn master_news(store: &amp;Store, flows: &amp;[FlowView]) -&gt; Option&lt;String&gt;;</code></pre>
-  </div>
-
-  <div class="unit">
-    <h3><code>src/event.rs</code>, <code>src/fold.rs</code>, <code>src/view.rs</code> <span class="tag mod">modified</span></h3>
-<pre><code>// event.rs
-EventKind::Session { id: String, transcript: Option&lt;String&gt; }   // {"kind":"session","id":..,"transcript":..}
-// view.rs
-pub struct FlowView { /* ... */ pub session: Option&lt;Session&gt; }
+    <h3><code>src/event.rs</code>, <code>src/view.rs</code>, <code>src/fold.rs</code>, <code>src/proto.rs</code> <span class="tag mod">modified</span></h3>
+<pre><code>EventKind::Session { id: String, transcript: Option&lt;String&gt; }
+pub struct FlowView { /* ... */ pub session: Option&lt;Session&gt; }   // VIEW_VERSION stays 2
 pub struct Session { pub id: String, pub transcript: Option&lt;String&gt; }
-// fold.rs
-// Folding::apply: Session -&gt; view.session; no timeline entry, no state change.
-// changes(): Session is a change only when id or transcript differs from the last one.</code></pre>
+// fold: apply sets view.session (no timeline, no state); changes() only on a new id or transcript
+// proto: PROTOCOL_VERSION 3 -&gt; 4</code></pre>
   </div>
 
   <div class="unit">
-    <h3><code>src/store.rs</code> <span class="tag mod">modified</span></h3>
-    <p>Two small files under <code>waits/</code>, next to the waiter's pid and delivered count.</p>
-<pre><code>/// waits/&lt;key&gt;.busy: present from UserPromptSubmit to Stop of a session flow server types into.
-pub fn set_busy(&amp;self, waiter: &amp;Waiter, busy: bool) -&gt; Result&lt;()&gt;;
+    <h3><code>src/store.rs</code>, <code>src/deliver.rs</code> <span class="tag mod">modified</span></h3>
+<pre><code>// store.rs, under waits/
+pub fn set_busy(&amp;self, waiter: &amp;Waiter, busy: bool) -&gt; Result&lt;()&gt;;   // &lt;key&gt;.busy
 pub fn busy(&amp;self, waiter: &amp;Waiter) -&gt; bool;
-/// waits/master.session: the master's own session id, when its harness chose it (Codex).
-pub fn set_master_session(&amp;self, id: &amp;str) -&gt; Result&lt;()&gt;;
-pub fn master_session(&amp;self) -&gt; Option&lt;String&gt;;</code></pre>
+pub fn set_master_session(&amp;self, id: &amp;str) -&gt; Result&lt;()&gt;;            // master.session
+pub fn master_session(&amp;self) -&gt; Option&lt;String&gt;;
+// deliver.rs (worker_news and master_news exist)
+/// Stopped flows marked seen, at once: for the Stop hand-over and the server.
+pub fn master_news_now(store: &amp;Store, flows: &amp;[FlowView]) -&gt; Vec&lt;FlowView&gt;;</code></pre>
   </div>
 
   <div class="unit">
-    <h3><code>src/config.rs</code> <span class="tag mod">modified</span></h3>
-<pre><code>pub struct MasterConfig { pub wake: bool, #[serde(default)] pub agent: Option&lt;String&gt; }
+    <h3><code>src/config.rs</code>, <code>src/launch/pane.rs</code> <span class="tag mod">modified</span></h3>
+<pre><code>pub struct MasterConfig { pub wake: bool, pub agent: Option&lt;String&gt; }
 impl Config {
-    /// [master] agent, else the "master" agent, else the default agent.
-    pub fn master_agent(&amp;self) -&gt; Option&lt;(&amp;str, &amp;Agent)&gt;;
-    /// Agents a flow can run: every one but MASTER_AGENT, the default first.
-    pub fn worker_agents(&amp;self) -&gt; Vec&lt;&amp;str&gt;;
+    pub fn master_agent(&amp;self) -&gt; Option&lt;(&amp;str, &amp;Agent)&gt;;   // [master] agent, "master", default
+    pub fn worker_agents(&amp;self) -&gt; Vec&lt;&amp;str&gt;;                 // all but master, default first
 }
-// builtin_agents(): + codex
-//   command ["codex", "{prompt}"], prompt "$ship-feature {request}",
-//   resume ["codex", "resume", "{session}"], adapter "codex"
-// builtin master: drops "--append-system-prompt-file {instructions}"; master.rs adds the
-//   instructions through Adapter::instruct for every adapter</code></pre>
-  </div>
-
-  <div class="unit">
-    <h3><code>src/launch.rs</code> <span class="tag mod">modified</span></h3>
-<pre><code>/// + {session}: the harness's session id, flow.session's (else the flow id, which is Claude's).
+// builtin "codex": ["codex","{prompt}"], "$ship-feature {request}", resume ["codex","resume","{session}"]
+// builtin "master": no "--append-system-prompt-file"; master.rs instructs
+// pane.rs
 pub fn resume_argv(agent: &amp;Agent, id: &amp;str, name: &amp;str, session: &amp;str) -&gt; Option&lt;Vec&lt;String&gt;&gt;;
-/// Must resume, the template names {session} and no session is known (the session never had
-/// a turn): the agent's fresh command instead.
+/// A {session} template with no session yet: the fresh or plain command.
 pub fn worker_spec(flow: &amp;FlowView, agent: &amp;Agent, env: &amp;LaunchEnv) -&gt; Option&lt;PaneSpec&gt;;</code></pre>
   </div>
 
   <div class="unit">
-    <h3><code>src/main.rs</code> <span class="tag mod">modified</span></h3>
-<pre><code>Command::Hook { adapter: String, #[arg(long)] master: bool }
-/// Whose hook: a worker's flow ($FLOW_ID), the master's (--master), or neither.
+    <h3><code>src/cli/commands/hook.rs</code> <span class="tag mod">modified</span></h3>
+<pre><code>pub struct Args { adapter: String, #[arg(long)] master: bool }
 enum Hooked { Flow(String), Master, Nobody }
-/// News handed over at Stop: printed to stderr, exit 2, and the harness goes on with it.
-struct HookOutcome { news: Option&lt;String&gt; }
-fn hook(store: &amp;Store, config: &amp;Config, adapter: &amp;str, hooked: Hooked, payload: &amp;str, now: u64) -&gt; HookOutcome;
-// ui(): UiEnv { agents: config.worker_agents(), .. }</code></pre>
+/// Document::Wake(news) when a Stop hands news over, else Silent.
+pub fn run(args: &amp;Args, env: &amp;Env, clock: fn() -&gt; u64) -&gt; Document;
+fn hook(store: &amp;Store, config: &amp;Config, adapter: Adapter, hooked: &amp;Hooked,
+        payload: &amp;Value, now: u64) -&gt; Option&lt;String&gt;;
+/// Stop of a session that does not wake itself: its news after appending Working; else idle.
+fn hand_over(store: &amp;Store, hooked: &amp;Hooked, now: u64) -&gt; Option&lt;String&gt;;</code></pre>
   </div>
 
   <div class="unit">
-    <h3><code>src/server/master.rs</code> <span class="tag mod">modified</span></h3>
-<pre><code>/// master.md beside config.toml: its path for {instructions}, its text for Adapter::instruct.
-pub struct Instructions { pub path: PathBuf, pub text: String }
+    <h3><code>src/server/master.rs</code>, <code>panes.rs</code>, <code>conn.rs</code>, <code>server.rs</code> <span class="tag mod">modified</span></h3>
+<pre><code>pub struct Instructions { pub path: PathBuf, pub text: String }
 impl MasterRecord {
-    /// + the adapter's instruct(text) and master_wiring(wake) after the program;
-    /// {session} = `session` (Codex's, from store.master_session()) else self.session;
-    /// fresh when it must resume a {session} template and none is known.
-    pub fn spec(&amp;self, fresh: bool, agent: &amp;Agent, env: &amp;LaunchEnv,
+    /// + instruct(text), master_wiring, {session}; fresh when a {session} template has none.
+    pub fn spec(&amp;self, start: Start, agent: &amp;Agent, env: &amp;LaunchEnv,
                 instructions: &amp;Instructions, wake: bool, session: Option&lt;&amp;str&gt;) -&gt; Option&lt;PaneSpec&gt;;
 }
-// master.md: harness-neutral wording ("one agent session per flow"); the old text joins PREVIOUS_DEFAULTS</code></pre>
+// master.md harness-neutral; the current text becomes master-v5.md
+// panes.rs open_master: config.master_agent(), Instructions, store.master_session()
+// conn.rs ClientMsg::Input: typed_at.insert(focus, now)
+// server.rs Server { typed_at: HashMap&lt;PaneKey, Instant&gt;, quiet: Duration }; serve() calls deliver_news</code></pre>
   </div>
 
   <div class="unit">
-    <h3><code>src/server/mod.rs</code> <span class="tag mod">modified</span></h3>
-<pre><code>/// No key into a pane for this long before flow server types news into it.
-const QUIET: Duration = Duration::from_secs(10);
-struct Server { /* ... */ typed_at: HashMap&lt;PaneKey, Instant&gt; }   // set on ClientMsg::Input
-/// Every tick: for each open pane whose adapter does not wake itself, when not store.busy and
-/// quiet for QUIET, takes its news (deliver::) and writes paste(news).
-fn deliver_news(&amp;mut self);
-/// The waiter a pane delivers for, when its agent's adapter does not wake itself.
-fn server_delivered(&amp;self, key: &amp;PaneKey) -&gt; Option&lt;Waiter&gt;;
-/// Bracketed paste of `text`, then Enter: one prompt, however many lines.
-fn paste(text: &amp;str) -&gt; Vec&lt;u8&gt;;
-// open_master(): config.master_agent(); Instructions read from master.md; store.master_session()</code></pre>
+    <h3><code>src/server/news.rs</code> <span class="tag new">new</span></h3>
+    <p>News for sessions that cannot wake themselves, typed into their pane.</p>
+<pre><code>pub(super) const QUIET: Duration = Duration::from_secs(10);
+impl Server {
+    /// Each open pane whose adapter does not wake itself (no plain flows; the master only with
+    /// [master] wake): when not busy and quiet, take its news and write paste(news).
+    pub(super) fn deliver_news(&amp;mut self);
+    fn server_delivered(&amp;self, key: &amp;PaneKey) -&gt; Option&lt;Waiter&gt;;
+}
+fn paste(text: &amp;str) -&gt; Vec&lt;u8&gt;;   // ESC[200~ text ESC[201~ "\r"</code></pre>
   </div>
 
   <div class="unit">
-    <h3><code>src/ui/peek.rs</code> <span class="tag mod">modified</span></h3>
+    <h3><code>src/ui/peek.rs</code> + <code>peek/claude.rs</code>, <code>peek/codex.rs</code> <span class="tag mod">modified, split</span></h3>
 <pre><code>pub enum Format { Claude, Codex }
-/// The flow's transcript: flow.session.transcript (Codex rollout), else the Claude lookup by id.
 pub fn transcript_of(flow: &amp;FlowView, claude_home: &amp;Path) -&gt; Option&lt;(PathBuf, Format)&gt;;
-pub fn tail(file: &amp;Path, max: usize, format: Format) -&gt; Result&lt;Vec&lt;PeekLine&gt;&gt;;   // + format
-/// response_item lines: message (assistant output_text) -&gt; Text, function_call -&gt; Tool,
-/// function_call_output -&gt; Result, an unanswered last call -&gt; Now.
-fn parse_codex(text: &amp;str, cut: bool) -&gt; Vec&lt;PeekLine&gt;;</code></pre>
+pub fn tail(file: &amp;Path, max: usize, format: Format) -&gt; Result&lt;Vec&lt;PeekLine&gt;&gt;;
+// peek/claude.rs: today's parser, moved. peek/codex.rs:
+fn parse(text: &amp;str, cut: bool) -&gt; Vec&lt;PeekLine&gt;;
+// message output_text -&gt; Text; function_call / custom_tool_call / local_shell_call -&gt; Tool;
+// its output (string or text items) -&gt; Result; an unanswered last call -&gt; Now</code></pre>
   </div>
 
   <div class="unit">
-    <h3><code>src/ui/newflow.rs</code>, <code>src/ui/app.rs</code>, <code>src/ui/mod.rs</code> <span class="tag mod">modified</span></h3>
-<pre><code>// newflow.rs
-pub struct NewFlowForm { /* ... */ pub agents: Vec&lt;String&gt;, pub agent: usize }
-enum Field { Request, Type, Agent, Mode }   // Agent row only with two or more agents
-pub fn new(repo: PathBuf, agents: Vec&lt;String&gt;) -&gt; NewFlowForm;
-/// The picked agent when it is not the default (the first).
-pub fn picked_agent(&amp;self) -&gt; Option&lt;&amp;str&gt;;
-// app.rs  Job::Start args: + ["--agent", name] when picked_agent()
-// mod.rs  UiEnv { agents: Vec&lt;String&gt;, .. }</code></pre>
+    <h3><code>src/ui/newflow.rs</code> (+ <code>view.rs</code>), <code>ui/app</code>, <code>cli/commands/ui.rs</code> <span class="tag mod">modified</span></h3>
+<pre><code>pub struct NewFlowForm { /* ... */ pub agents: Vec&lt;String&gt;, pub agent: usize }
+enum Field { /* ... */ Agent }   // only with two or more agents, every mode
+pub fn new(repo: PathBuf, place: String, agents: Vec&lt;String&gt;) -&gt; NewFlowForm;
+pub fn picked_agent(&amp;self) -&gt; Option&lt;&amp;str&gt;;   // None for the default
+// Job::Start args + ["--agent", name]; UiEnv { agents: config.worker_agents(), .. }</code></pre>
   </div>
 </section>
 
@@ -300,12 +311,11 @@ pub fn picked_agent(&amp;self) -&gt; Option&lt;&amp;str&gt;;
   <div class="scroll"><table>
     <tr><th>Data</th><th>Shape</th><th>Crosses</th></tr>
     <tr><td><code>session</code> event</td><td><code>{"v":1,"at":..,"kind":"session","id":"01a14222-...","transcript":"/Users/../rollout-...jsonl"}</code></td><td>flow hook -&gt; the log -&gt; fold</td></tr>
-    <tr><td><code>FlowView.session</code></td><td><code>{"id":..,"transcript":..}</code> or absent</td><td><code>--json</code> contract (additive), server -&gt; ui Board</td></tr>
-    <tr><td><code>waits/&lt;key&gt;.busy</code></td><td>empty file, present while a turn runs</td><td>flow hook -&gt; flow server</td></tr>
-    <tr><td><code>waits/master.session</code></td><td>the Codex master's session id, one line</td><td>flow hook --master -&gt; flow server</td></tr>
-    <tr><td><code>[master] agent</code></td><td><code>agent = "codex"</code> in config.toml</td><td>you -&gt; flow server</td></tr>
-    <tr><td>built-in <code>codex</code> agent</td><td>command, prompt <code>$ship-feature {request}</code>, resume with <code>{session}</code>, adapter <code>codex</code></td><td>config -&gt; launch</td></tr>
-    <tr><td>Codex payload</td><td><code>session_id, turn_id, transcript_path, cwd, hook_event_name, model, permission_mode, prompt | tool_name, tool_input, tool_response | last_assistant_message</code></td><td>Codex -&gt; flow hook (stdin)</td></tr>
+    <tr><td><code>FlowView.session</code></td><td><code>{"id":..,"transcript":..}</code> or absent</td><td><code>--json</code> (additive), the Board over protocol 4</td></tr>
+    <tr><td><code>waits/&lt;key&gt;.busy</code></td><td>an empty file, present while a turn runs</td><td>flow hook -&gt; flow server</td></tr>
+    <tr><td><code>waits/master.session</code></td><td>the Codex master's session id</td><td>flow hook --master -&gt; flow server</td></tr>
+    <tr><td><code>[master] agent</code></td><td><code>agent = "codex"</code></td><td>config.toml -&gt; flow server</td></tr>
+    <tr><td>Codex payload</td><td><code>session_id, transcript_path, cwd, hook_event_name, model, turn_id, permission_mode | prompt | tool_name, tool_input, tool_response (string for Bash) | last_assistant_message</code></td><td>Codex -&gt; flow hook (stdin)</td></tr>
   </table></div>
 </section>
 
@@ -315,72 +325,70 @@ pub fn picked_agent(&amp;self) -&gt; Option&lt;&amp;str&gt;;
   <h3>a. Start a Codex worker</h3>
   <div class="mer"><pre class="mermaid">
 sequenceDiagram
-  participant U as flow start / dialog
-  participant S as Server
-  participant L as launch
+  participant U as dialog / flow start
+  participant P as Server (panes.rs)
+  participant L as launch::pane
   participant A as Adapter::Codex
   participant H as Host
-  U->>S: Workspace event (agent codex) in the log
-  S->>L: reconcile -> worker_spec(flow, agent, env)
-  L->>A: wiring(flow_exe)
+  U->>P: Workspace event, agent codex
+  P->>L: reconcile -> worker_spec
+  L->>A: wiring / plain_wiring
   A-->>L: -c hooks.*, -c update off, -c developer_instructions
-  L-->>S: PaneSpec codex ... "$ship-feature req"
-  S->>H: open(spec)
-  H--)S: Err -> Blocked "could not start the agent"
+  L-->>P: PaneSpec codex ... "$ship-feature req"
+  P->>H: open(spec)
+  H--)P: Err -> Blocked
   </pre></div>
   <ol class="steps">
-    <li><code>App -&gt; Job::Start::args(): ["start", req, "--mode", m, "--agent", "codex"]</code></li>
-    <li><code>main::start -> config.agent(Some("codex")): (&amp;str, &amp;Agent)</code>, then the Workspace event</li>
-    <li><code>Server::refresh -> reconcile -> launch::worker_spec(flow, agent, env): Option&lt;PaneSpec&gt;</code></li>
-    <li><code>worker_spec -> Adapter::Codex.wiring(flow_exe): Vec&lt;String&gt;</code>, spliced in after "codex"</li>
-    <li><code>Server::open_worker -> Host::open(spec)</code>, then Workspace window = HOSTED</li>
-    <li class="err">Host::open fails: <code>Blocked "could not start the agent: ..."</code> in the log, so the sidebar shows it.</li>
-    <li class="err">First run: Codex's hooks review shows in the pane. Until you press <code>t</code>, the hooks do not run and the flow stays in its started state.</li>
+    <li><code>App -&gt; Job::Start::args(): [.., "--agent", "codex"] -&gt; commands::start</code> appends the Workspace event</li>
+    <li><code>Server::refresh (panes.rs) -&gt; reconcile -&gt; pane::worker_spec(flow, agent, env)</code></li>
+    <li><code>worker_spec -&gt; Adapter::Codex.wiring(flow_exe)</code> (plain: <code>plain_wiring</code>), spliced in after "codex"</li>
+    <li><code>open_worker -&gt; Host::open(spec)</code>, then Workspace window = HOSTED</li>
+    <li class="err">Host::open fails: <code>Blocked "could not start the agent: .."</code>.</li>
+    <li class="err">First run: Codex's hooks review shows in the pane, and nothing is reported until you press <code>t</code>.</li>
   </ol>
 
   <h3>b. A Codex hook event</h3>
   <div class="mer"><pre class="mermaid">
 sequenceDiagram
   participant C as codex
-  participant M as main::hook
+  participant K as commands::hook
   participant A as codex::translate
   participant F as fold
   participant St as Store
   participant D as deliver
-  C->>M: stdin JSON, FLOW_ID
-  M->>A: translate(payload, phases)
-  A-->>M: [Session, Working | Phase | Waiting | Answer+Idle ...]
+  C->>K: stdin JSON, FLOW_ID
+  K->>A: translate(payload, phases)
+  A-->>K: [Session, Working | Phase | Waiting | Answer+Idle]
   loop each kind
-    M->>F: changes(id, events, kind, now)
-    M->>St: append when true
+    K->>F: changes(id, events, kind, now)
+    K->>St: append when true
   end
   alt UserPromptSubmit
-    M->>St: set_busy(flow, true)
+    K->>St: set_busy(true)
   else Stop
-    M->>D: worker_news(store, id, now)
-    alt news
-      M->>St: append Working
-      M-->>C: stderr news, exit 2: Codex goes on
-    else none
-      M->>St: set_busy(flow, false)
+    K->>D: worker_news(store, id, now)
+    alt News
+      K->>St: append Working
+      K-->>C: Document::Wake: stderr, exit 2
+    else Nothing
+      K->>St: set_busy(false)
     end
   end
   </pre></div>
   <ol class="steps">
-    <li><code>codex -> sh -lc "'flow' hook codex"</code> with the payload on stdin and FLOW_ID in its environment</li>
-    <li><code>main -> hook(store, config, "codex", Hooked::Flow(id), payload, now): HookOutcome</code></li>
-    <li><code>hook -> Adapter::Codex.translate(payload, phases): Vec&lt;EventKind&gt;</code></li>
-    <li><code>hook -> fold::changes(id, events, kind, now): bool -> Store::append</code></li>
-    <li><code>hook -> Store::set_busy(&amp;Waiter::Flow(id), true)</code> on UserPromptSubmit</li>
-    <li>On Stop, when <code>!wakes_itself()</code>: <code>hook -> deliver::worker_news(store, id, now)</code>. With news, it appends Working and returns <code>HookOutcome { news }</code>, and main prints it and exits 2. Without, it calls <code>set_busy(false)</code>.</li>
-    <li class="err">No FLOW_ID and no --master, bad JSON, or an unknown flow: one stderr line, nothing appended, exit 0. Codex logs it and goes on.</li>
+    <li><code>codex -&gt; sh -lc "'flow' hook codex" -&gt; cli::run -&gt; commands::hook::run(args, env, clock)</code></li>
+    <li><code>run -&gt; hook(store, config, Adapter::Codex, &amp;Hooked::Flow(id), &amp;payload, now)</code></li>
+    <li><code>hook -&gt; Adapter::translate -&gt; fold::changes -&gt; Store::append</code></li>
+    <li><code>hook -&gt; Store::set_busy(&amp;Waiter::Flow(id), true)</code> on UserPromptSubmit</li>
+    <li>On Stop: <code>hand_over -&gt; deliver::worker_news</code>. <code>News</code> appends Working and returns <code>Document::Wake(news::for_worker(..))</code>, so main exits 2. Otherwise it calls <code>set_busy(false)</code> and returns <code>Silent</code>.</li>
+    <li class="err">No FLOW_ID and no --master, bad JSON, or an unknown flow: one stderr line, nothing appended, <code>Silent</code>.</li>
   </ol>
 
   <h3>c. Resume a Codex worker</h3>
   <ol class="steps">
-    <li><code>Server::reopen_worker / refresh -> launch::worker_spec(flow, agent, env)</code></li>
-    <li><code>worker_spec -> resume_argv(agent, id, name, flow.session.id): ["codex","resume","01a1..."]</code>, then the wiring after "codex"</li>
-    <li class="err">No session known, because the worker never had a turn: <code>agent_argv</code>, so it starts fresh with the prompt again.</li>
+    <li><code>Server::reopen_worker / refresh -&gt; pane::worker_spec</code></li>
+    <li><code>worker_spec -&gt; resume_argv(agent, id, name, session.id): ["codex", &lt;wiring&gt;, "resume", "01a1..."]</code></li>
+    <li class="err">No session yet: the fresh or plain command.</li>
     <li class="err">Resume exits non-zero within RESUME_GRACE: <code>open_fresh</code>, as today.</li>
   </ol>
 
@@ -389,78 +397,80 @@ sequenceDiagram
 sequenceDiagram
   participant Ma as master (flow send)
   participant St as Store
-  participant S as Server tick
+  participant N as Server (news.rs)
   participant D as deliver
   participant H as Host
   participant C as codex
   Ma->>St: append Message
-  S->>S: server_delivered(key): Waiter::Flow(id)
-  S->>St: busy(waiter)? false
-  S->>S: typed_at[key] older than QUIET
-  S->>D: worker_news(store, id, now)
-  D->>St: set_delivered
-  D-->>S: Some(news)
-  S->>H: write(key, paste(news))
+  N->>N: server_delivered(key): Flow(id)
+  N->>St: busy? false
+  N->>N: typed_at older than quiet
+  N->>D: worker_news
+  D-->>N: News(msgs)
+  N->>H: write(key, paste(for_worker(msgs)))
   H->>C: bracketed paste + Enter
-  C->>S: UserPromptSubmit hook -> busy, working
+  C->>St: UserPromptSubmit hook: busy, working
   </pre></div>
   <ol class="steps">
-    <li><code>Server::serve -> refresh -> deliver_news()</code> every tick, before refresh's early return</li>
-    <li><code>deliver_news -> server_delivered(&amp;key): Option&lt;Waiter&gt;</code>, which looks up the agent's adapter and <code>!wakes_itself()</code></li>
-    <li><code>deliver_news -> Store::busy(&amp;waiter): bool</code> and <code>typed_at[key].elapsed() &gt;= QUIET</code></li>
-    <li><code>deliver_news -> deliver::worker_news(store, id, now): Option&lt;Option&lt;String&gt;&gt;</code></li>
-    <li><code>deliver_news -> Host::write(&amp;key, &amp;paste(&amp;news))</code></li>
-    <li class="err">Write fails because the pane is gone: one stderr line. The news is already marked delivered, so it is lost the same way a dead <code>flow wait</code> loses it today.</li>
-    <li class="err">You type in that pane within 10 s: it waits. If text is left unsent in Codex's prompt, the news is appended after it.</li>
+    <li><code>Server::serve -&gt; deliver_news()</code> every tick, before refresh's early return</li>
+    <li><code>deliver_news -&gt; server_delivered(&amp;key): Option&lt;Waiter&gt;</code>: the agent's adapter, <code>!wakes_itself()</code>, not plain</li>
+    <li><code>deliver_news -&gt; !Store::busy(&amp;waiter)</code>, and <code>typed_at[key]</code> is older than quiet</li>
+    <li><code>deliver_news -&gt; deliver::worker_news -&gt; Host::write(&amp;key, &amp;paste(..))</code></li>
+    <li class="err">Write fails: a server.log line. The news is already marked delivered, the same as with a dead <code>flow wait</code>.</li>
+    <li class="err">You type in that pane within 10 s: it waits. Text left unsent in Codex's prompt gets the news appended after it.</li>
   </ol>
 
   <h3>e. Codex as the master</h3>
   <ol class="steps">
-    <li><code>Server::open_master -> Config::master_agent(): ("codex", &amp;Agent)</code></li>
-    <li><code>open_master -> MasterRecord::spec(fresh, agent, env, &amp;instructions, wake, store.master_session()): PaneSpec</code></li>
-    <li><code>spec -> Adapter::Codex.instruct(&amp;instructions.text) + master_wiring(flow_exe, wake)</code>, so it runs <code>codex -c ... [resume &lt;sid&gt;]</code></li>
-    <li><code>codex -> flow hook codex --master -> hook(.., Hooked::Master, ..)</code>, then <code>Store::set_master_session(session_id)</code> and <code>set_busy(Master, ..)</code></li>
-    <li>On Stop with wake: <code>hook -> deliver::master_news(store, flows)</code>, which exits 2 with the news. Idle: <code>Server::deliver_news</code> with <code>Waiter::Master</code>.</li>
-    <li class="err"><code>[master] agent</code> names no agent: <code>Host::fail(Master, "no agent named X")</code>, as today.</li>
+    <li><code>Server::open_master (panes.rs) -&gt; Config::master_agent(): ("codex", &amp;Agent)</code></li>
+    <li><code>open_master -&gt; MasterRecord::spec(start, agent, env, &amp;instructions, wake, store.master_session())</code></li>
+    <li><code>spec -&gt; Adapter::Codex.instruct(&amp;instructions.text) + master_wiring(flow_exe)</code></li>
+    <li><code>codex -&gt; flow hook codex --master -&gt; Hooked::Master</code>: <code>set_master_session(session_id)</code> and the busy marks</li>
+    <li>Stop with wake: <code>deliver::master_news_now</code>, then <code>Wake(news::for_master(..))</code>. Idle: <code>deliver_news</code> with <code>Waiter::Master</code>.</li>
+    <li class="err"><code>[master] agent</code> names no agent: <code>Host::fail(Master, "no agent named X")</code>.</li>
   </ol>
 
   <h3>f. Peek at a Codex worker</h3>
   <ol class="steps">
-    <li><code>PeekCache::refresh(flow) -> peek::transcript_of(flow, claude_home): Option&lt;(PathBuf, Format::Codex)&gt;</code></li>
-    <li><code>PeekCache -> peek::tail(file, max, Format::Codex) -> parse_codex(text, cut): Vec&lt;PeekLine&gt;</code></li>
-    <li class="err">No session yet, a missing file, or a <code>.jsonl.zst</code> rollout: an empty peek, as for a Claude worker without a transcript.</li>
+    <li><code>PeekCache::refresh(flow) -&gt; peek::transcript_of(flow, claude_home): (rollout, Format::Codex)</code></li>
+    <li><code>PeekCache -&gt; peek::tail(file, max, Format::Codex) -&gt; peek::codex::parse</code></li>
+    <li class="err">No session yet, no file, or a <code>.jsonl.zst</code> rollout: an empty peek.</li>
   </ol>
 </section>
 
 <section class="card">
   <h2>6. Conventions followed</h2>
   <ul>
-    <li>Codex's <code>hooks()</code> mirrors <code>claude_code::settings</code> (<code>src/adapter/claude_code.rs:38</code>): one handler per event, exec of the flow binary, synchronous, a 10 s timeout.</li>
-    <li>The wiring is spliced right after the program, as in <code>launch::worker_spec</code> (<code>src/launch.rs:138</code>) and <code>MasterRecord::spec</code> (<code>src/server/master.rs:100</code>).</li>
-    <li>Translation tests are table tests over recorded payloads in <code>src/adapter/fixtures/codex/</code>, as in <code>fixtures/claude-code/</code>.</li>
-    <li>Only changes are appended, through <code>fold::changes</code> (<code>src/fold.rs:39</code>). A repeated <code>session</code> adds no line.</li>
-    <li>News bookkeeping stays in <code>waits/</code> (<code>src/store.rs:213-245</code>). <code>deliver.rs</code> is what <code>main::worker_news</code> was (<code>src/main.rs:394</code>), moved so the server can call it.</li>
-    <li>The dialog row copies the type row (<code>src/ui/newflow.rs:66-120</code>): Tab moves to it, and h/l and space cycle it.</li>
-    <li><b>Deviation:</b> the server writes into a PTY on its own, which HANDOVER rejected for Claude. It is limited to adapters that cannot wake themselves, and guarded by busy and QUIET.</li>
-    <li><b>Deviation:</b> the built-in Claude master gets <code>master.md</code> as text through <code>--append-system-prompt</code> instead of <code>-file</code>, so both harnesses take instructions one way.</li>
+    <li><code>codex::hooks</code> mirrors <code>claude_code::report_hooks</code> (<code>src/adapter/claude_code.rs:61</code>): one synchronous handler per event, running the flow binary, with a 10 s timeout.</li>
+    <li>The wiring is spliced after the program, as in <code>pane::worker_spec</code> (<code>src/launch/pane.rs:79</code>) and <code>MasterRecord::spec</code> (<code>src/server/master.rs:113</code>).</li>
+    <li>Stop's exit 2 is the existing <code>Document::Wake</code> that <code>flow wait</code> returns (<code>src/cli/commands/wait.rs:31</code>).</li>
+    <li>News bookkeeping stays in <code>deliver.rs</code> and <code>waits/</code>. <code>master_news_now</code> is <code>master_news</code> (<code>src/deliver.rs:44</code>) without its settle pause.</li>
+    <li>File layout follows CLAUDE.md Structure:
+      <ul>
+        <li>one responsibility per file;</li>
+        <li><code>foo.rs</code> beside <code>foo/</code>;</li>
+        <li>the peek parsers and the shared adapter helpers split along real seams;</li>
+        <li>server work lives in its own child file of <code>impl Server</code>, as <code>conn.rs</code> and <code>panes.rs</code> do.</li>
+      </ul></li>
+    <li>The dialog's agent row copies its type row, in <code>src/ui/newflow.rs</code> and <code>newflow/view.rs</code>.</li>
+    <li><b>Deviation:</b> the server writes into a PTY on its own, which HANDOVER rejected for Claude. It is limited to adapters that cannot wake themselves, and guarded by busy and quiet.</li>
+    <li><b>Deviation:</b> the Claude master gets <code>master.md</code> as text through <code>--append-system-prompt</code> instead of <code>-file</code>, so both harnesses take instructions one way.</li>
   </ul>
 </section>
 
 <section class="card">
   <h2>7. Test seams</h2>
   <ul>
-    <li><code>codex::translate</code>: table tests over Codex payloads recorded with the real CLI.</li>
-    <li><code>codex::hooks</code> and <code>toml_string</code>: every event runs the exe, the result parses as TOML, and multiline text survives.</li>
-    <li><code>Adapter::instruct</code>, <code>wakes_itself</code> and <code>wiring</code>: unit tests per variant.</li>
-    <li><code>fold</code>: <code>session</code> sets <code>view.session</code>, and <code>changes</code> is false for a repeat.</li>
-    <li><code>launch::resume_argv</code> and <code>worker_spec</code>: <code>{session}</code> is filled, and a missing session falls back to a fresh start.</li>
-    <li><code>deliver</code>: tempdir Store tests. News is taken once, and a second call finds none.</li>
-    <li><code>config</code>: the built-in codex agent, <code>[master] agent</code>, and <code>worker_agents</code> without master.</li>
-    <li><code>master.rs spec</code>: a Codex master gets its instructions and hooks, and a missing session starts it fresh.</li>
-    <li><code>server</code>: a fake agent (<code>cat</code>) with <code>adapter = "codex"</code>. A message is typed only when the pane is not busy and quiet, using an injected QUIET.</li>
-    <li><code>peek::parse_codex</code>: a recorded rollout fixture.</li>
-    <li><code>newflow</code>: the agent row shows with two agents and adds <code>--agent</code>. Plus a golden screen of the dialog.</li>
-    <li><code>tests/cli.rs</code>: <code>flow hook codex</code> on Stop with a pending message exits 2 with it on stderr. Without one it exits 0, silent.</li>
+    <li><code>codex::translate</code>: table tests over payloads recorded with the real CLI, in <code>adapter/fixtures/codex/</code>.</li>
+    <li><code>codex::hooks</code> and <code>toml_string</code>: the values parse as TOML, and multiline text round-trips.</li>
+    <li><code>Adapter</code>: <code>instruct</code>, <code>wakes_itself</code>, <code>wiring</code> and <code>plain_wiring</code> per variant. The claude_code tests stay green after the move.</li>
+    <li><code>fold/tests.rs</code>: <code>session</code> sets the view, and a repeat is no change. <code>proto</code>: the round-trip at version 4.</li>
+    <li><code>launch/pane.rs</code>: <code>{session}</code> is filled, and a missing session falls back to a fresh or plain start.</li>
+    <li><code>store</code> and <code>deliver</code>: the busy marks, <code>master_session</code>, and <code>master_news_now</code> taking once.</li>
+    <li><code>config</code> and <code>master.rs</code>: the codex agent, <code>[master] agent</code>, <code>worker_agents</code>, the Codex master spec, and the Claude master's instruct.</li>
+    <li><code>server/tests.rs</code>: a <code>cat</code> agent on the codex adapter with a small quiet. A message is typed only when the pane is not busy and quiet, never twice, and never into a plain session.</li>
+    <li><code>peek/codex.rs</code>: a recorded rollout. <code>newflow</code>: the agent row and <code>--agent</code>, plus a golden screen.</li>
+    <li><code>tests/cli.rs</code>: <code>flow hook codex</code> on Stop exits 2 with pending news and 0 without. <code>--master</code> writes <code>master.session</code>.</li>
   </ul>
 </section>
 
@@ -468,21 +478,21 @@ sequenceDiagram
   <h2>8. Assumptions</h2>
   <ol>
     <li>Codex's SessionEnd reason is always "other", so a Codex worker never logs <code>ended</code> from a hook. You end it with C-space Q or <code>flow remove</code>.</li>
-    <li>Plan-mode and async questions (<code>request_user_input</code>) are invisible to hooks. They read as working until Stop.</li>
+    <li>Plan-mode and async questions are invisible to hooks. They read as working until Stop.</li>
     <li>plan-progress is a Claude Code mod, so a Codex worker shows no task bar.</li>
-    <li>A Codex subagent is <code>spawn_agent</code>, which maps to delegated with its description. The field name will be confirmed from a recorded fixture.</li>
-    <li><code>-c</code> options before <code>resume</code> apply to the resumed session. This will be checked in the end-to-end run.</li>
-    <li>Codex rollouts older than 7 days are compressed to <code>.jsonl.zst</code> and show an empty peek.</li>
-    <li><code>FlowView.session</code> is additive, so <code>VIEW_VERSION</code> stays. An old flow binary reading a log with <code>session</code> reports that flow as unreadable until it is updated.</li>
-    <li>The agent row in the new-flow dialog lists every agent but <code>master</code>, and shows only when there are two or more.</li>
+    <li>A <code>.jsonl.zst</code> rollout shows an empty peek.</li>
+    <li><code>VIEW_VERSION</code> stays 2 and <code>PROTOCOL_VERSION</code> goes to 4.</li>
+    <li>The agent row lists every agent but <code>master</code>, and shows only with two or more.</li>
+    <li>A paste of more than 1000 chars shows as a placeholder in Codex's composer and is still sent whole.</li>
   </ol>
 </section>
 
 <section class="card">
   <h2>9. Decided in review</h2>
   <ol>
-    <li>The agent-skills get linked into <code>~/.agents/skills</code> through <code>dotfiles-v2</code> as the last task, before the end-to-end run. Their content stays agent-agnostic.</li>
-    <li>Codex is signed in again, so payloads are recorded from the real CLI.</li>
+    <li>The agent-skills get linked into <code>~/.agents/skills</code>. Their content stays agent-agnostic.</li>
+    <li>Codex is signed in. Fixtures are recorded from the real CLI, ideally after updating it from 0.144.1 to 0.163.0.</li>
+    <li>E2E runs use a scratch <code>FLOW_HOME</code>.</li>
   </ol>
 </section>
 </main>
