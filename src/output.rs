@@ -1,7 +1,10 @@
+use std::fmt;
+
 use serde::Serialize;
 
+use crate::client::Closing;
 use crate::event::Mode;
-use crate::view::{Board, FlowView, Projects, State};
+use crate::view::{Board, FlowView, Projects, State, Workspace};
 
 pub const DESCRIPTION: &str =
     "Tracks parallel feature flows: what each is doing, where it is blocked, how far it got";
@@ -438,7 +441,12 @@ pub enum Opening {
 }
 
 /// flow, id, worktree, branch, slot, setup (ran / none / failed: ...), agent, pane, help.
-pub fn started(flow: &FlowView, setup: &str, opening: Opening) -> Document {
+pub fn started(
+    flow: &FlowView,
+    workspace: &Workspace,
+    setup: &Setup,
+    opening: Opening,
+) -> Document {
     #[derive(Serialize)]
     struct Started<'a> {
         flow: &'a str,
@@ -446,15 +454,11 @@ pub fn started(flow: &FlowView, setup: &str, opening: Opening) -> Document {
         worktree: &'a str,
         branch: &'a str,
         slot: u8,
-        setup: &'a str,
+        setup: String,
         agent: &'a str,
         pane: &'a str,
         help: Vec<String>,
     }
-    let workspace = flow
-        .workspace
-        .as_ref()
-        .expect("a started flow has a workspace");
     let (pane, watch) = match opening {
         Opening::Running => (
             "opening",
@@ -471,7 +475,7 @@ pub fn started(flow: &FlowView, setup: &str, opening: Opening) -> Document {
         worktree: &workspace.path,
         branch: &workspace.branch,
         slot: workspace.slot,
-        setup,
+        setup: setup.to_string(),
         agent: &workspace.agent,
         pane,
         help: vec![watch, "Run `flow` for all flows".to_string()],
@@ -619,25 +623,88 @@ pub fn skipped() -> Document {
     }))
 }
 
-/// removed: name, window (closed / gone / none), worktree (removed / kept: path / none), help.
-/// removed, pane (closed / none / timed out), worktree, help.
 /// How `flow remove` says a branch has work no other branch has; flow ui asks before deleting it.
 pub const UNMERGED: &str = "on no other branch";
 /// How `flow remove` says a worktree has uncommitted work; flow ui asks before discarding it.
 pub const UNCOMMITTED: &str = "has uncommitted work";
 
-/// removed, pane, worktree, branch (deleted, kept or none), help.
-pub fn removed(name: &str, pane: &str, worktree: &str, branch: &str) -> Document {
+/// What `flow start` did with the repo's .flow/setup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Setup {
+    Ran,
+    None,
+    Failed(String),
+}
+
+/// ran, none, failed: why
+impl fmt::Display for Setup {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Setup::Ran => f.write_str("ran"),
+            Setup::None => f.write_str("none"),
+            Setup::Failed(reason) => write!(f, "failed: {reason}"),
+        }
+    }
+}
+
+/// What became of a flow's worktree when it was cleared or removed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Retired {
+    NoWorktree,
+    Removed,
+    /// Kept for its uncommitted work, at this path.
+    Kept(String),
+}
+
+/// none, removed, kept: path
+impl fmt::Display for Retired {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Retired::NoWorktree => f.write_str("none"),
+            Retired::Removed => f.write_str("removed"),
+            Retired::Kept(path) => write!(f, "kept: {path}"),
+        }
+    }
+}
+
+/// What became of a flow's branch once its worktree was gone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BranchFate {
+    NoBranch,
+    Deleted,
+    Kept,
+}
+
+impl BranchFate {
+    pub fn name(self) -> &'static str {
+        match self {
+            BranchFate::NoBranch => "none",
+            BranchFate::Deleted => "deleted",
+            BranchFate::Kept => "kept",
+        }
+    }
+}
+
+fn pane_name(closing: Closing) -> &'static str {
+    match closing {
+        Closing::Closed => "closed",
+        Closing::NoServer | Closing::NoPane => "none",
+        Closing::TimedOut => "timed out",
+    }
+}
+
+/// removed, pane (closed, none or timed out), worktree, branch (deleted, kept or none), help.
+pub fn removed(name: &str, pane: Closing, worktree: &Retired, branch: BranchFate) -> Document {
     #[derive(Serialize)]
     struct Removed<'a> {
         removed: &'a str,
         pane: &'a str,
-        worktree: &'a str,
+        worktree: String,
         branch: &'a str,
         help: Vec<String>,
     }
     let mut help = Vec::new();
-    if let Some(path) = worktree.strip_prefix("kept: ") {
+    if let Retired::Kept(path) = worktree {
         help.push(format!(
             "Run `git worktree remove --force {path}` to discard what is left"
         ));
@@ -645,9 +712,9 @@ pub fn removed(name: &str, pane: &str, worktree: &str, branch: &str) -> Document
     help.push("Run `flow` to see what is left".to_string());
     Document::Toon(toon(&Removed {
         removed: name,
-        pane,
-        worktree,
-        branch,
+        pane: pane_name(pane),
+        worktree: worktree.to_string(),
+        branch: branch.name(),
         help,
     }))
 }
