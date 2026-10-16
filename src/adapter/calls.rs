@@ -1,20 +1,89 @@
 use serde_json::Value;
 
-/// The URL `gh pr create` or `glab mr create` printed: the first http(s) URL in its stdout.
-pub fn created_merge_request(command: &str, stdout: &str) -> Option<String> {
-    let words: Vec<&str> = command.split_whitespace().collect();
-    let creates = words.windows(3).any(|window| {
-        let tool = (window[0], window[1]);
-        let opens = tool == ("gh", "pr") || tool == ("glab", "mr");
-        opens && (window[2] == "create" || window[2] == "new")
-    });
-    if !creates {
+/// The merge request a shell command created: when one of its simple commands runs `gh pr create`
+/// or `glab mr create` (`mr new`), the last merge request URL in its output. Words that only appear
+/// inside a quoted string or as another program's arguments create nothing.
+pub fn created_merge_request(command: &str, output: &str) -> Option<String> {
+    if !simple_commands(command).iter().any(|words| creates(words)) {
         return None;
     }
-    stdout
+    output
         .split_whitespace()
-        .find(|word| word.starts_with("https://") || word.starts_with("http://"))
+        .filter(|word| word.starts_with("https://") || word.starts_with("http://"))
+        .rfind(|url| url.contains("/pull/") || url.contains("/-/merge_requests/"))
         .map(String::from)
+}
+
+/// `gh pr create ...` or `glab mr create|new ...`, after any VAR=value assignments.
+fn creates(words: &[String]) -> bool {
+    let mut words = words
+        .iter()
+        .map(String::as_str)
+        .skip_while(|word| is_assignment(word));
+    let program = words
+        .next()
+        .map(|program| program.rsplit('/').next().unwrap_or(program));
+    let (noun, verb) = (words.next(), words.next());
+    matches!(
+        (program, noun, verb),
+        (Some("gh"), Some("pr"), Some("create"))
+            | (Some("glab"), Some("mr"), Some("create" | "new"))
+    )
+}
+
+fn is_assignment(word: &str) -> bool {
+    word.split_once('=').is_some_and(|(name, _)| {
+        !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    })
+}
+
+/// The words of each simple command in a shell line, split at ; & | and newlines outside quotes,
+/// with quotes and backslashes taken out as the shell would.
+fn simple_commands(line: &str) -> Vec<Vec<String>> {
+    let mut commands = Vec::new();
+    let mut words: Vec<String> = Vec::new();
+    let mut word = String::new();
+    let mut quote: Option<char> = None;
+    let mut chars = line.chars();
+    let mut started = false;
+    while let Some(c) = chars.next() {
+        match (quote, c) {
+            (Some(open), c) if c == open => quote = None,
+            (Some('"'), '\\') => word.extend(chars.next()),
+            (Some(_), c) => word.push(c),
+            (None, '\'' | '"') => {
+                quote = Some(c);
+                started = true;
+            }
+            (None, '\\') => {
+                word.extend(chars.next());
+                started = true;
+            }
+            (None, c) if c.is_whitespace() || matches!(c, ';' | '&' | '|') => {
+                if started {
+                    words.push(std::mem::take(&mut word));
+                    started = false;
+                }
+                if (c == '\n' || matches!(c, ';' | '&' | '|')) && !words.is_empty() {
+                    commands.push(std::mem::take(&mut words));
+                }
+            }
+            (None, c) => {
+                word.push(c);
+                started = true;
+            }
+        }
+        if quote.is_some() {
+            started = true;
+        }
+    }
+    if started {
+        words.push(word);
+    }
+    if !words.is_empty() {
+        commands.push(words);
+    }
+    commands
 }
 
 /// Name(target) for a permission question: Bash(command), Write(file_path), ...; a path inside the
@@ -50,13 +119,59 @@ mod tests {
 
     #[test]
     fn finds_the_merge_request_a_create_command_printed() {
+        let created = |command| created_merge_request(command, "https://github.com/a/b/pull/12\n");
+
         assert_eq!(
-            created_merge_request("gh pr create --fill", "https://github.com/a/b/pull/12\n"),
+            created("gh pr create --fill"),
             Some("https://github.com/a/b/pull/12".into())
         );
-        assert_eq!(created_merge_request("git push", "https://x.y/z"), None);
+        assert_eq!(
+            created("cd /repo && PATH=/opt/bin:$PATH gh pr create --title 'x; y'"),
+            Some("https://github.com/a/b/pull/12".into()),
+            "after other commands and variables"
+        );
+        assert_eq!(
+            created_merge_request(
+                "glab mr create --fill --yes",
+                "Creating merge request\nhttps://gitlab.com/g/s/r/-/merge_requests/7\n"
+            ),
+            Some("https://gitlab.com/g/s/r/-/merge_requests/7".into())
+        );
+        assert_eq!(
+            created_merge_request("git push", "https://github.com/a/b/pull/12"),
+            None
+        );
         assert_eq!(
             created_merge_request("glab mr create", "error: no permission"),
+            None
+        );
+        assert_eq!(
+            created_merge_request(
+                "gh pr create",
+                "see https://docs.github.com/en/pull-requests"
+            ),
+            None,
+            "a link in the output that names no merge request"
+        );
+    }
+
+    #[test]
+    fn a_create_command_named_in_text_creates_nothing() {
+        let probe =
+            "Creating pull request for probe into main\nhttps://github.com/probe/repo/pull/7\n";
+
+        assert_eq!(
+            created_merge_request(
+                "tmux -L flowrec set-buffer -- 'Run exactly: PATH=/tmp/bin:$PATH gh pr create --fill'",
+                probe
+            ),
+            None,
+            "today's case: the words were inside a quoted string"
+        );
+        assert_eq!(created_merge_request(r#"echo "gh pr create""#, probe), None);
+        assert_eq!(created_merge_request("echo gh pr create", probe), None);
+        assert_eq!(
+            created_merge_request("grep -r 'glab mr create' docs", probe),
             None
         );
     }
