@@ -18,8 +18,8 @@ const EXTENDS_LIMIT: usize = 4;
 /// What a theme extends when it names nothing.
 const DEFAULT_BASE: &str = "terminal";
 
-/// One theme file: what it extends, its colors by key from [ui] and [state], and whether the
-/// terminal's font has Nerd Font icons.
+/// One theme file: what it extends, its colors by key from [ui], [state] and [phase], and
+/// whether the terminal's font has Nerd Font icons.
 #[derive(Debug)]
 struct ThemeFile {
     path: PathBuf,
@@ -106,7 +106,7 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
             ("extends", _) => bail!("extends must be a theme's name"),
             ("nerd_font", Value::Boolean(on)) => nerd_font = Some(on),
             ("nerd_font", _) => bail!("nerd_font is true or false"),
-            ("ui" | "state", Value::Table(section)) => colors.extend(section),
+            ("ui" | "state" | "phase", Value::Table(section)) => colors.extend(section),
             // The design's [glyphs] comes later; a file that has it still loads.
             ("glyphs", Value::Table(_)) => {}
             (key, _) => bail!("unknown key {key}"),
@@ -328,6 +328,22 @@ mod tests {
             theme(&dir).ui.background,
             Style::default().bg(palette.background)
         );
+    }
+
+    #[test]
+    fn colors_the_phases_from_their_own_section() {
+        let dir = TempDir::new().unwrap();
+        write(
+            &dir,
+            "theme.toml",
+            "extends = \"flow\"\n[phase]\nmerge-request = \"#cb9168\"\nreview = \"done\"\n",
+        );
+
+        let palette = theme(&dir).palette;
+
+        assert_eq!(palette.merge_request, Color::Rgb(0xcb, 0x91, 0x68));
+        assert_eq!(palette.review, Palette::FLOW.done);
+        assert_eq!(palette.design, Palette::FLOW.design);
     }
 
     #[test]
