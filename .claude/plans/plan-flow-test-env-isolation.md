@@ -38,3 +38,20 @@ None. No production code, flag or output changes.
 - [x] `flow_command` clears every inherited FLOW_* variable and points XDG_CONFIG_HOME and
       CLAUDE_CONFIG_DIR into the test's folder; `FLOW_MASTER=1 cargo test` and a run with every
       FLOW_* of a worker pane set both pass
+
+## Review
+
+Reviewed `flow/test-env-isolation` against `main` (commits 1418ce1, e44b8c6) in a context that did
+not write it.
+
+- **Fixed** - nothing; no finding could be shown.
+- **Open** - none. Checked and let go: `main.rs` `env()` reads exactly FLOW_HOME, FLOW_CONFIG,
+  FLOW_ID, FLOW_MASTER, HOME, XDG_STATE_HOME, XDG_CONFIG_HOME and CLAUDE_CONFIG_DIR, so after
+  `flow_command` only HOME still comes from the shell, as the plan intends. `env_remove` followed
+  by `env` for FLOW_HOME and FLOW_CONFIG sets them (the later call wins). Tests that set HOME
+  (`the_home_view_shortens_the_binary_only_inside_home`, `start_plain_takes_a_name_and_a_folder_under_home`)
+  still work since FLOW_CONFIG and CLAUDE_CONFIG_DIR take precedence over HOME. The direct `git`
+  and `python3` spawns in `tests/cli.rs` inherit the shell, but neither reads FLOW_*.
+- **Where to look** - `tests/cli.rs` `flow_command`: the one changed function; the rest is routine.
+- **Checks** - `cargo test` (also with FLOW_MASTER=1 and worker FLOW_* set), `cargo fmt --check`
+  and `cargo clippy --all-targets -- -D warnings` passed at e44b8c6; only the plan changed since.
