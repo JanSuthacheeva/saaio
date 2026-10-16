@@ -9,7 +9,7 @@ use crate::branching::{self, Branching};
 use crate::event::Mode;
 use crate::launch;
 use crate::ui::input::Key;
-use crate::ui::sidebar::{clip, clip_place, columns, split, tail};
+use crate::ui::sidebar::{clip, clip_place, columns, spans_width, split, tail};
 use crate::ui::theme::Theme;
 use crate::view::FlowView;
 
@@ -274,7 +274,7 @@ impl Widget for NewFlowView<'_> {
                 Span::styled(branch, theme.ui.text),
             ];
             let worktree = format!("{}/{name}", launch::WORKTREES_DIR);
-            if Line::from(spans.clone()).width() + worktree.len() + 20 <= width {
+            if spans_width(&spans) + worktree.len() + 20 <= width {
                 spans.push(Span::styled("  ·  ", theme.ui.faint));
                 spans.push(Span::styled(worktree, theme.ui.text));
             }

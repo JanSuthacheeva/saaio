@@ -289,7 +289,7 @@ impl Sidebar<'_> {
     fn status(&self, flow: &FlowView) -> Option<&PaneStatus> {
         self.panes
             .iter()
-            .find(|pane| pane.key == PaneKey::Flow(flow.id.clone()))
+            .find(|pane| matches!(&pane.key, PaneKey::Flow(id) if *id == flow.id))
             .map(|pane| &pane.status)
     }
 
@@ -497,7 +497,7 @@ fn plain(line: Line<'static>) -> Row {
 
 /// `left` and `right` on one line of `width`, the left clipped when both do not fit.
 pub fn split(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: usize) -> Line<'static> {
-    let right_width: usize = right.iter().map(Span::width).sum();
+    let right_width = spans_width(&right);
     let room = width.saturating_sub(right_width);
     let mut spans = Vec::new();
     let mut used = 0;
@@ -548,6 +548,11 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
 /// The columns `text` takes on a terminal.
 pub fn columns(text: &str) -> usize {
     text.width()
+}
+
+/// The columns a run of spans takes.
+pub fn spans_width(spans: &[Span]) -> usize {
+    spans.iter().map(Span::width).sum()
 }
 
 /// The end of `text` that fits in `room` columns.

@@ -59,7 +59,7 @@ any other that turns out to be noise, each named.
 - [x] fold: `changes` chains instead of copying the log, `shown` compares references, `views(&[FlowLog])`
 - [x] output: rows borrow (`&'a str`), blocker via `as_deref`; launch `strip_prefix`
 - [x] event: `cut_to` truncates, `cut_texts(&mut self)`; main: drop needless clones, `branch_of` borrows
-- [ ] ui app: `mem::replace` for the view, `workers()` iterator, `worker(id)`, borrowed dialog data, `Removal::of(String)`, no clone-to-measure
+- [x] ui app: `mem::replace` for the view, `worker(id)` and `in_view(id)` (`workers()` keeps its Vec: it is indexed, and a handful of refs costs nothing), borrowed dialog data, `Removal::of(String)`, no clone-to-measure
 - [ ] ui views: `matches!` for pane keys, `unicode-width` helper, board/peek/theme_file clones
 - [ ] server: `Host::status` / `Host::keys`, no double key clone, early return; workspace `git` helper with `Command::arg(path)`; registry `sort_by_cached_key`
 

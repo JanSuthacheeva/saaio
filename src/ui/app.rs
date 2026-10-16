@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::mem;
 use std::path::{Path, PathBuf};
 
 use ratatui::Frame as TuiFrame;
@@ -18,7 +19,7 @@ use crate::ui::newflow::{FormAction, NewFlowForm, NewFlowView};
 use crate::ui::peek::PeekLine;
 use crate::ui::rail::Rail;
 use crate::ui::screen::{Screen, ScreenView};
-use crate::ui::sidebar::{self, Sidebar, clip, clip_place};
+use crate::ui::sidebar::{self, Sidebar, clip, clip_place, columns, spans_width};
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Projects, State};
 
@@ -58,9 +59,9 @@ pub struct Removal {
 }
 
 impl Removal {
-    pub fn of(name: &str) -> Removal {
+    pub fn of(name: impl Into<String>) -> Removal {
         Removal {
-            name: name.to_string(),
+            name: name.into(),
             force: false,
             delete_unmerged: false,
         }
@@ -377,25 +378,21 @@ impl App {
     /// The flow under the sidebar cursor, for the peek.
     pub fn peeked(&self) -> Option<&FlowView> {
         let id = self.cursor.as_deref()?;
-        self.workers().into_iter().find(|flow| flow.id == id)
+        self.worker(id)
     }
 
     pub fn draw(&self, frame: &mut TuiFrame, theme: &Theme, peek: &[PeekLine]) {
         frame.render_widget(Block::default().style(theme.ui.background), frame.area());
         if let View::Board(state) = self.view {
             let back = match &self.focus {
-                PaneKey::Master => "master".to_string(),
-                PaneKey::Flow(id) => self
-                    .workers()
-                    .into_iter()
-                    .find(|flow| &flow.id == id)
-                    .map_or(id.clone(), |flow| flow.name.clone()),
+                PaneKey::Master => "master",
+                PaneKey::Flow(id) => self.worker(id).map_or(id.as_str(), |flow| &flow.name),
             };
             frame.render_widget(
                 BoardView {
                     sidebar: self.sidebar(theme, &[]),
                     state,
-                    back: &back,
+                    back,
                     offset_secs: self.offset_secs,
                     notice: self.notice.as_deref(),
                     projects: self.projects.as_ref(),
@@ -463,7 +460,7 @@ impl App {
             View::Stop(ref unfinished) => self.draw_stop(frame, areas.pane, theme, unfinished),
             View::Confirm { ref question, .. } => {
                 let text = vec![
-                    Line::styled(question.clone(), theme.ui.text),
+                    Line::styled(question.as_str(), theme.ui.text),
                     Line::from(vec![
                         Span::styled("y", theme.ui.key),
                         Span::styled(" yes, any other key keeps the flow", theme.ui.muted),
@@ -500,14 +497,13 @@ impl App {
                 frame.render_widget(Paragraph::new(hint).alignment(Alignment::Right), edge);
             }
             View::NewFlow(ref form) => {
-                let flows: Vec<FlowView> = self.workers().into_iter().cloned().collect();
                 let repo = form.repo.display().to_string();
                 let screen = frame.area();
                 frame.buffer_mut().set_style(screen, Modifier::DIM);
                 frame.render_widget(
                     NewFlowView {
                         form,
-                        flows: &flows,
+                        flows: self.board.as_ref().map_or(&[], |board| &board.flows),
                         place: &self.tilde(&repo),
                         theme,
                     },
@@ -612,53 +608,41 @@ impl App {
     }
 
     fn on_key(&mut self, key: Key) -> Vec<Effect> {
-        if let View::Board(state) = self.view {
-            return self.on_board_key(state, key);
-        }
-        if let View::History(back) = self.view {
-            return self.on_history_key(back, key);
-        }
-        if let View::NewFlow(form) = &mut self.view {
-            return match form.on_key(key) {
-                FormAction::Edit => vec![],
-                FormAction::Cancel => {
-                    self.view = View::Panes;
+        match mem::replace(&mut self.view, View::Panes) {
+            View::Board(state) => {
+                self.view = View::Board(state);
+                self.on_board_key(state, key)
+            }
+            View::History(back) => {
+                self.view = View::History(back);
+                self.on_history_key(back, key)
+            }
+            View::NewFlow(mut form) => match form.on_key(key) {
+                FormAction::Edit => {
+                    self.view = View::NewFlow(form);
                     vec![]
                 }
+                FormAction::Cancel => vec![],
                 FormAction::Submit => {
-                    let job = Job::Start(form.clone());
-                    self.view = View::Panes;
                     self.notice = Some("starting the flow…".to_string());
-                    vec![Effect::Run(job)]
+                    vec![Effect::Run(Job::Start(form))]
                 }
-            };
+            },
+            View::Stop(unfinished) => self.on_stop_key(unfinished, key),
+            View::Confirm { then, .. } if key == Key::Char('y') => self.remove(then),
+            View::Confirm { .. } | View::Help | View::Panes => vec![],
         }
-        if let View::Stop(unfinished) = &self.view {
-            let unfinished = unfinished.clone();
-            return self.on_stop_key(&unfinished, key);
-        }
-        if let View::Confirm { then, .. } = &self.view {
-            let then = then.clone();
-            self.view = View::Panes;
-            if key != Key::Char('y') {
-                return vec![];
-            }
-            return self.remove(then);
-        }
-        self.view = View::Panes;
-        vec![]
     }
 
     /// With every worker finished: y stops, any other key keeps flow running. With some unfinished:
     /// k keeps them for the next flow ui, e ends them, esc goes back.
-    fn on_stop_key(&mut self, unfinished: &[String], key: Key) -> Vec<Effect> {
+    fn on_stop_key(&mut self, unfinished: Vec<String>, key: Key) -> Vec<Effect> {
         let stop =
             |message: String| vec![Effect::Send(ClientMsg::StopServer), Effect::Quit(message)];
         if unfinished.is_empty() {
             if key == Key::Char('y') {
                 return stop("stopped flow and every session in it".to_string());
             }
-            self.view = View::Panes;
             return vec![];
         }
         match key {
@@ -691,11 +675,11 @@ impl App {
                 effects.extend(stop(message));
                 effects
             }
-            Key::Esc => {
-                self.view = View::Panes;
+            Key::Esc => vec![],
+            _ => {
+                self.view = View::Stop(unfinished);
                 vec![]
             }
-            _ => vec![],
         }
     }
 
@@ -773,20 +757,12 @@ impl App {
 
     /// Keys on every project's board: the cards of other projects are only shown.
     fn on_all_key(&mut self, state: BoardState, key: Key) -> Vec<Effect> {
-        let flows: Vec<(String, String, FlowView)> = self
-            .projects
-            .as_ref()
-            .map(|projects| {
-                board::every_flow(projects)
-                    .into_iter()
-                    .map(|(project, flow)| {
-                        (project.name.clone(), project.root.clone(), flow.clone())
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
         if let Some(step) = board_step(key) {
-            self.view = View::Board(state.moved(step, flows.len()));
+            let cards = self
+                .projects
+                .as_ref()
+                .map_or(0, |projects| board::every_flow(projects).len());
+            self.view = View::Board(state.moved(step, cards));
             return vec![];
         }
         let enter = key == Key::Enter;
@@ -796,18 +772,26 @@ impl App {
                 vec![]
             }
             Key::Enter | Key::Char('x') => {
-                let Some((project, root, flow)) = flows.get(state.selected) else {
+                let selected = self.projects.as_ref().and_then(|projects| {
+                    board::every_flow(projects)
+                        .get(state.selected)
+                        .map(|(project, flow)| {
+                            let here = self.here.as_ref() == Some(&project.root);
+                            (here, project.name.clone(), (*flow).clone())
+                        })
+                });
+                let Some((here, project, flow)) = selected else {
                     return vec![];
                 };
-                if self.here.as_ref() != Some(root) {
+                if !here {
                     self.notice = Some(format!("{} runs in project {project}", flow.name));
                     return vec![];
                 }
                 if !enter {
-                    return self.clear(Some(flow.clone()));
+                    return self.clear(Some(flow));
                 }
                 self.view = View::Panes;
-                self.focus(PaneKey::Flow(flow.id.clone()))
+                self.focus(PaneKey::Flow(flow.id))
             }
             other => self.on_any_board_key(other),
         }
@@ -852,11 +836,9 @@ impl App {
             return None;
         };
         match self.status(&self.focus) {
-            Some(PaneStatus::Exited { .. } | PaneStatus::Failed { .. }) => self
-                .workers()
-                .into_iter()
-                .find(|flow| &flow.id == id)
-                .map(|flow| flow.name.clone()),
+            Some(PaneStatus::Exited { .. } | PaneStatus::Failed { .. }) => {
+                self.worker(id).map(|flow| flow.name.clone())
+            }
             _ => None,
         }
     }
@@ -864,7 +846,7 @@ impl App {
     /// Over a worker whose session ended: x cleans the flow up, r resumes it, esc goes to the master.
     fn on_ended_key(&mut self, name: String, bytes: &[u8]) -> Vec<Effect> {
         match bytes {
-            b"x" | b"X" => self.remove(Removal::of(&name)),
+            b"x" | b"X" => self.remove(Removal::of(name)),
             b"r" | b"R" => vec![Effect::Send(ClientMsg::Reopen(self.focus.clone()))],
             [0x1b] => self.focus(PaneKey::Master),
             _ => vec![],
@@ -884,7 +866,7 @@ impl App {
                 if let View::Board(state) = &mut self.view {
                     state.selected = 0;
                 }
-                self.remove(Removal::of(&flow.name))
+                self.remove(Removal::of(flow.name))
             }
             _ => {
                 self.notice = Some("only a finished flow can be cleared".to_string());
@@ -985,9 +967,7 @@ impl App {
         let worktree = match &self.focus {
             PaneKey::Master => None,
             PaneKey::Flow(id) => self
-                .workers()
-                .into_iter()
-                .find(|flow| &flow.id == id)
+                .worker(id)
                 .and_then(|flow| flow.workspace.as_ref())
                 .map(|space| space.path.clone()),
         };
@@ -1017,7 +997,7 @@ impl App {
         let ids: Vec<String> = self
             .workers()
             .into_iter()
-            .filter(|flow| self.focus != PaneKey::Flow(flow.id.clone()))
+            .filter(|flow| !self.in_view(&flow.id))
             .map(|flow| flow.id.clone())
             .collect();
         let at = self
@@ -1031,6 +1011,15 @@ impl App {
             (Some(at), Step::Prev) => at.checked_sub(1),
         };
         self.cursor = next.and_then(|index| ids.get(index)).cloned();
+    }
+
+    fn worker(&self, id: &str) -> Option<&FlowView> {
+        self.workers().into_iter().find(|flow| flow.id == id)
+    }
+
+    /// Whether the flow's pane is the one in view.
+    fn in_view(&self, id: &str) -> bool {
+        matches!(&self.focus, PaneKey::Flow(focused) if focused == id)
     }
 
     fn workers(&self) -> Vec<&FlowView> {
@@ -1166,14 +1155,14 @@ impl App {
                 (None, _) => None,
             };
             if let Some(place) = place {
-                let fitted = clip_place(&place, room(Line::from(title.clone()).width() + 2));
+                let fitted = clip_place(&place, room(spans_width(&title) + 2));
                 if !fitted.is_empty() {
                     title.push(Span::styled(format!("  {fitted}"), theme.ui.faint));
                 }
             }
             return Line::from(title);
         };
-        let Some(flow) = self.workers().into_iter().find(|flow| &flow.id == id) else {
+        let Some(flow) = self.worker(id) else {
             return Line::styled(format!(" {id}"), theme.ui.strong);
         };
         let sidebar = self.sidebar(theme, &[]);
@@ -1192,9 +1181,8 @@ impl App {
         title.push(sidebar.label(flow));
         if let Some(space) = &flow.workspace {
             let place = format!("{} · slot {}", space.branch, space.slot);
-            let lead = "  · ".to_string();
-            let used = Line::from(title.clone()).width() + lead.chars().count();
-            let fitted = clip(&place, room(used));
+            let lead = "  · ";
+            let fitted = clip(&place, room(spans_width(&title) + columns(lead)));
             if !fitted.is_empty() {
                 title.push(Span::styled(format!("{lead}{fitted}"), theme.ui.faint));
             }
@@ -1218,7 +1206,7 @@ impl App {
             .workers()
             .into_iter()
             .enumerate()
-            .find(|(_, flow)| flow.needs_you() && self.focus != PaneKey::Flow(flow.id.clone()));
+            .find(|(_, flow)| flow.needs_you() && !self.in_view(&flow.id));
         if let Some((index, flow)) = next {
             let what = match flow.state {
                 State::Waiting => "is waiting",
@@ -1263,7 +1251,7 @@ impl App {
             Span::styled("master", theme.ui.text),
         ];
         if let Some(place) = &self.master {
-            let room = (area.width as usize).saturating_sub(Line::from(left.clone()).width() + 3);
+            let room = usize::from(area.width).saturating_sub(spans_width(&left) + 3);
             left.push(Span::styled(
                 format!("  {}", clip_place(place, room)),
                 theme.ui.faint,

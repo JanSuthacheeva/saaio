@@ -93,7 +93,7 @@ pub fn run(socket: &Path, env: UiEnv) -> Result<String> {
     let mut router = Router::default();
     let mut peek = PeekCache::new(env.claude_home);
     let mut ticks: u32 = 0;
-    let mut themes = ThemeWatch::new(env.theme_dir.clone());
+    let mut themes = ThemeWatch::new(env.theme_dir);
     let mut theme = Theme::default();
     reload_theme(&mut themes, &mut theme, &mut app);
     app.on_tick(now_ms());
