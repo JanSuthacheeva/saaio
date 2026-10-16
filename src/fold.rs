@@ -1,7 +1,7 @@
 use crate::event::{Event, EventKind, Mode, Phase};
 use crate::store::FlowLog;
 use crate::view::{
-    Board, FlowView, ReviewCount, State, Step, StepStatus, Tasks, TimelineEntry, Tone,
+    Board, FlowView, ReviewCount, Session, State, Step, StepStatus, Tasks, TimelineEntry, Tone,
     VIEW_VERSION, Workspace,
 };
 
@@ -37,7 +37,7 @@ pub fn fold<'a>(
 }
 
 /// True when appending `kind` changes what the flow shows: its state, phase, blocker, delegate,
-/// tasks, review, merge request, decisions or answer; every message does. Adapters skip the rest,
+/// tasks, review, merge request, decisions, answer or session; every message does. Adapters skip the rest,
 /// so a log does not grow by a line for every tool call.
 pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
     if matches!(kind, EventKind::Message { .. }) {
@@ -66,6 +66,7 @@ fn shown(view: &FlowView) -> impl PartialEq + '_ {
         &view.decisions,
         view.timeline.last().map(|entry| entry.text.as_str()),
         view.answer.as_deref(),
+        view.session.as_ref(),
     )
 }
 
@@ -138,6 +139,7 @@ impl Folding {
             changed_at: at,
             workspace: None,
             answer: None,
+            session: None,
         };
         Folding {
             view,
@@ -251,6 +253,12 @@ impl Folding {
             }
             EventKind::Answer { text } => {
                 self.view.answer = Some(text.clone());
+            }
+            EventKind::Session { id, transcript } => {
+                self.view.session = Some(Session {
+                    id: id.clone(),
+                    transcript: transcript.clone(),
+                });
             }
             EventKind::Ended => {
                 if self.view.state != State::Done {

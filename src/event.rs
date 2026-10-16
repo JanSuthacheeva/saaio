@@ -68,6 +68,11 @@ pub enum EventKind {
         text: String,
     },
     Ended,
+    /// The harness's own session id and transcript, for one that picks them itself (Codex).
+    Session {
+        id: String,
+        transcript: Option<String>,
+    },
     Workspace {
         path: String,
         branch: Option<String>,

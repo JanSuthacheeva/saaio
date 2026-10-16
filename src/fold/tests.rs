@@ -77,6 +77,30 @@ fn keeps_the_last_answer_whole() {
 }
 
 #[test]
+fn keeps_the_harness_session_without_showing_it() {
+    let session = |id: &str| EventKind::Session {
+        id: id.into(),
+        transcript: Some(format!("/home/dev/.codex/sessions/rollout-{id}.jsonl")),
+    };
+    let events = vec![started(0), at(1, session("01a1"))];
+
+    let flow = fold("x", &events, None, 2).unwrap();
+
+    assert_eq!(
+        flow.session,
+        Some(Session {
+            id: "01a1".into(),
+            transcript: Some("/home/dev/.codex/sessions/rollout-01a1.jsonl".into()),
+        })
+    );
+    assert_eq!(flow.timeline.len(), 1, "a session adds no entry");
+    assert_eq!(flow.state, fold("x", &events[..1], None, 2).unwrap().state);
+    assert!(!changes("x", &events, &session("01a1"), 2), "a repeat");
+    assert!(changes("x", &events, &session("02b2"), 2), "a new session");
+    assert_eq!(fold("x", &events[..1], None, 2).unwrap().session, None);
+}
+
+#[test]
 fn a_new_idle_note_counts_as_a_change() {
     let idle = |note: &str| EventKind::Idle { note: note.into() };
     let events = vec![

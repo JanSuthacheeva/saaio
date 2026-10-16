@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::view::Board;
 
-pub const PROTOCOL_VERSION: u32 = 3;
+pub const PROTOCOL_VERSION: u32 = 4;
 /// This binary: `0.1.0 2904734`, the commit from build.rs, `unknown` outside a git checkout.
 pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("FLOW_COMMIT"));
 pub const MAX_MESSAGE: usize = 8 << 20;
@@ -260,7 +260,31 @@ mod tests {
     use std::io::Cursor;
 
     use super::*;
-    use crate::view::VIEW_VERSION;
+    use crate::event::{Event, EventKind, Mode};
+    use crate::fold;
+    use crate::view::{FlowView, VIEW_VERSION};
+
+    /// A flow whose harness picked its own session, as a Codex worker's does.
+    fn flow_with_session() -> FlowView {
+        let events = [
+            Event::new(
+                1,
+                EventKind::Started {
+                    name: "csv".into(),
+                    request: "add csv".into(),
+                    mode: Mode::Guided,
+                },
+            ),
+            Event::new(
+                2,
+                EventKind::Session {
+                    id: "01a1".into(),
+                    transcript: Some("/home/dev/.codex/sessions/rollout-01a1.jsonl".into()),
+                },
+            ),
+        ];
+        fold::fold("7f3c", &events, None, 3).unwrap()
+    }
 
     /// Hands out one byte per read, like a socket under load.
     struct Trickle(Cursor<Vec<u8>>);
@@ -331,6 +355,13 @@ mod tests {
                 count: 0,
                 needs_you: 0,
                 flows: vec![],
+            }),
+            ServerMsg::Board(Board {
+                version: VIEW_VERSION,
+                now: 5,
+                count: 1,
+                needs_you: 0,
+                flows: vec![flow_with_session()],
             }),
             ServerMsg::Panes(vec![
                 PaneInfo {
