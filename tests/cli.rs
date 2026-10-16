@@ -1705,6 +1705,36 @@ fn ui_refuses_inside_a_worker_on_its_own_store_and_points_to_a_scratch_home() {
 }
 
 #[test]
+fn ui_refuses_a_prefix_the_panes_need_before_it_starts_anything() {
+    let home = TempDir::new().unwrap();
+    let config = home.path().join("no-config.toml");
+    fs::write(&config, "[ui]\nprefix = \"C-c\"\n").unwrap();
+
+    let refused = flow(home.path(), &["ui"]);
+
+    assert_eq!(refused.status.code(), Some(1));
+    let text = stdout(&refused);
+    assert!(text.contains(&config.display().to_string()), "{text}");
+    assert!(
+        text.contains(
+            "C-c interrupts the agent in a pane; pick another prefix, such as C-space or C-b"
+        ),
+        "{text}"
+    );
+    assert!(
+        !home.path().join("server.sock").exists(),
+        "no server started"
+    );
+
+    fs::write(&config, "[ui]\nprefix = \"Ctrl+b\"\n").unwrap();
+    let unknown = stdout(&flow(home.path(), &["ui"]));
+    assert!(
+        unknown.contains("unknown prefix \\\"Ctrl+b\\\": use C-space or C-a to C-z"),
+        "{unknown}"
+    );
+}
+
+#[test]
 fn ui_stop_ends_a_server_that_speaks_another_protocol() {
     let home = TempDir::new().unwrap();
     let socket = home.path().join("server.sock");
