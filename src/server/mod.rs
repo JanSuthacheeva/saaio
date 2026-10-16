@@ -392,7 +392,7 @@ impl Server {
         };
         match launch::worker_spec(&flow, agent, &self.env) {
             Some(spec) => self.open_worker(spec),
-            None => self.host.fail(key, reconcile::unopenable(name, agent)),
+            None => self.host.fail(key, reconcile::unopenable(name)),
         }
     }
 

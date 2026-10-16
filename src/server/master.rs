@@ -6,7 +6,6 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::launch::{self, LaunchEnv, PaneSpec};
 use crate::proto::PaneKey;
@@ -105,7 +104,7 @@ impl MasterRecord {
             .into_iter()
             .map(|part| part.replace("{instructions}", &instructions))
             .collect();
-        if wake && let Some(adapter) = agent.adapter.as_deref().and_then(Adapter::named) {
+        if wake && let Some(adapter) = agent.adapter {
             let at = 1.min(argv.len());
             argv.splice(at..at, adapter.master_wiring(&env.flow_exe));
         }
@@ -279,20 +278,20 @@ mod tests {
                 record.spec(start, master, &env, md, false).unwrap().argv[1..]
             );
         }
-        let unknown = Agent {
-            adapter: Some("codex".into()),
+        let plain = Agent {
+            adapter: None,
             ..master.clone()
         };
         assert_eq!(
             record
-                .spec(Start::Fresh, &unknown, &env, md, true)
+                .spec(Start::Fresh, &plain, &env, md, true)
                 .unwrap()
                 .argv,
             record
-                .spec(Start::Fresh, &unknown, &env, md, false)
+                .spec(Start::Fresh, &plain, &env, md, false)
                 .unwrap()
                 .argv,
-            "an adapter flow does not know wires nothing in"
+            "an agent without an adapter has nothing to wire in"
         );
     }
 }

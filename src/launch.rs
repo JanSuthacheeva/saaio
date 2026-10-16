@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 
-use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::proto::PaneKey;
 use crate::slots::MAX_SLOTS;
@@ -127,20 +126,15 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>> {
 /// The agent's command the first time, its resume command once it ran somewhere (window set:
 /// HOSTED, or a tmux window from before flow ui), since its session id is taken from then on;
 /// either way with the agent's adapter wired in right after the program. None when the flow has
-/// no workspace, must resume and the agent has no resume template, or the agent names an adapter
-/// flow does not know.
+/// no workspace, or must resume and the agent has no resume template.
 pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec> {
     let space = flow.workspace.as_ref()?;
-    let adapter = match &agent.adapter {
-        Some(name) => Some(Adapter::named(name)?),
-        None => None,
-    };
     let mut argv = if space.window.is_some() {
         resume_argv(agent, &flow.id, &flow.name)?
     } else {
         agent_argv(agent, &flow.id, &flow.name, &flow.request)
     };
-    if let Some(adapter) = adapter {
+    if let Some(adapter) = agent.adapter {
         let at = 1.min(argv.len());
         argv.splice(at..at, adapter.wiring(&env.flow_exe));
     }
@@ -596,7 +590,7 @@ mod tests {
     fn wires_the_agents_adapter_in_after_the_program_fresh_and_resumed() {
         let agents = crate::config::builtin_agents();
         let mut claude = agents["claude"].clone();
-        claude.adapter = Some("claude-code".into());
+        claude.adapter = Some(crate::adapter::Adapter::ClaudeCode);
         let env = LaunchEnv {
             flow_exe: PathBuf::from("/bin/flow"),
             ..LaunchEnv::default()
@@ -613,8 +607,6 @@ mod tests {
         assert_eq!(fresh.argv[3], "--append-system-prompt");
         assert_eq!(&fresh.argv[5..7], ["-n", "shop-217"]);
         assert_eq!(&resumed.argv[7..], ["--resume", "7f3c"]);
-        claude.adapter = Some("codex".into());
-        assert_eq!(worker_spec(&worker(None), &claude, &env), None);
     }
 
     #[test]

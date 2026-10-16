@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
+use crate::adapter::Adapter;
 use crate::event::Phase;
 
 /// Skill name -> the phase it starts, for adapters that see skills start.
@@ -22,7 +23,7 @@ pub struct Agent {
     /// The harness flow observes it through ("claude-code"); without one, flow ui shows only
     /// whether its process runs.
     #[serde(default)]
-    pub adapter: Option<String>,
+    pub adapter: Option<Adapter>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -125,9 +126,6 @@ fn strings(parts: &[&str]) -> Vec<String> {
     parts.iter().copied().map(String::from).collect()
 }
 
-/// The adapter the built-in agents report through.
-const CLAUDE_CODE: &str = "claude-code";
-
 /// The agent flow ui runs as its master when there is one; else the default agent.
 pub const MASTER_AGENT: &str = "master";
 
@@ -138,7 +136,7 @@ pub fn builtin_agents() -> BTreeMap<String, Agent> {
     let claude = Agent {
         command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
         prompt: "/ship-feature {request}".to_string(),
-        adapter: Some(CLAUDE_CODE.to_string()),
+        adapter: Some(Adapter::ClaudeCode),
         resume: Some(strings(&["claude", "-n", "{name}", "--resume", "{id}"])),
     };
     let master = Agent {
@@ -152,7 +150,7 @@ pub fn builtin_agents() -> BTreeMap<String, Agent> {
             "{instructions}",
         ]),
         prompt: String::new(),
-        adapter: Some(CLAUDE_CODE.to_string()),
+        adapter: Some(Adapter::ClaudeCode),
         resume: Some(strings(&[
             "claude",
             "-n",
@@ -225,12 +223,12 @@ mod tests {
         );
         assert_eq!(config.phases["design-code"], Phase::Design);
         assert_eq!(
-            none.agent(None).unwrap().1.adapter.as_deref(),
-            Some("claude-code")
+            none.agent(None).unwrap().1.adapter,
+            Some(Adapter::ClaudeCode)
         );
         assert_eq!(
-            none.agent(Some(MASTER_AGENT)).unwrap().1.adapter.as_deref(),
-            Some("claude-code")
+            none.agent(Some(MASTER_AGENT)).unwrap().1.adapter,
+            Some(Adapter::ClaudeCode)
         );
     }
 
@@ -311,6 +309,25 @@ prompt = "/design-code {request}"
             format!("{error:#}").contains(&file.display().to_string()),
             "{error:#}"
         );
+    }
+
+    #[test]
+    fn refuses_an_adapter_flow_does_not_know() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        fs::write(
+            &file,
+            "[agents.aider]\ncommand = [\"aider\"]\nprompt = \"{request}\"\nadapter = \"claud-code\"\n",
+        )
+        .unwrap();
+
+        let error = format!(
+            "{:#}",
+            Config::load(Some(file.clone()), None, None).unwrap_err()
+        );
+
+        assert!(error.contains(&file.display().to_string()), "{error}");
+        assert!(error.contains("claud-code"), "{error}");
     }
 
     #[test]

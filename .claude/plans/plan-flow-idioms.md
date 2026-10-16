@@ -53,7 +53,7 @@ any other that turns out to be noise, each named.
 - [x] proto: typed `Flags` with `BitOr`; terminal `Arc<Mutex<Size>>`
 - [x] ui: `Command::Cursor(Step)`; one `Group` enum for fold, sidebar and rail; `digit: Option<usize>` on board cards; peek `len: Option<u64>`
 - [x] theme: `PaletteKey` with `named` / `name` (the crate's convention, not `FromStr`), `Palette::color` / `color_mut`
-- [ ] config: `Agent.adapter: Option<Adapter>`, bad names fail `Config::load` (test)
+- [x] config: `Agent.adapter: Option<Adapter>`, bad names fail `Config::load` (test)
 
 ### 3. Borrowing and allocation
 - [ ] fold: `changes` chains instead of copying the log, `shown` compares references, `views(&[FlowLog])`
