@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::adapter::answer::turn_end;
 use crate::adapter::calls::{created_merge_request, tool_call};
-use crate::adapter::{Adapter, cut, phase_of};
+use crate::adapter::{Adapter, Turn, cut, phase_of};
 use crate::config::PhaseMap;
 use crate::event::{EventKind, Phase};
 
@@ -165,6 +165,16 @@ fn subagent(input: &Value) -> String {
 /// `text` in single quotes for `$SHELL -lc`, a quote inside it closed and escaped.
 fn shell_quoted(text: &str) -> String {
     format!("'{}'", text.replace('\'', r"'\''"))
+}
+
+/// A prompt begins a turn, a Stop ends it, an Esc interrupts it.
+pub fn turn(payload: &Value) -> Option<Turn> {
+    match payload["hook_event_name"].as_str()? {
+        "UserPromptSubmit" => Some(Turn::Began),
+        "Stop" => Some(Turn::Ended),
+        "Interrupt" => Some(Turn::Interrupted),
+        _ => None,
+    }
 }
 
 /// `text` as a TOML basic string, for a `-c key=value` Codex parses as TOML.

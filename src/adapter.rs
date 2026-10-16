@@ -23,6 +23,21 @@ hook feedback or as a prompt that starts with \"message from the flow master:\";
 you asked or pass on what the user said, so act on them as you would on the user's own answer. To \
 ask the master or the user something, end your turn with the question.";
 
+/// What a fresh Codex master is asked first, so its first turn runs at once.
+pub const MASTER_OPENING: &str = "flow ui just started you. Run `flow status` and say in one line \
+what needs the user, if anything.";
+
+/// Where a session's turn stands after a hook event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Turn {
+    /// It runs a turn: flow types nothing into it.
+    Began,
+    /// It ended its turn and its hook can hand news over (exit 2).
+    Ended,
+    /// It was stopped mid-turn and waits at its prompt; its hook can hand nothing over.
+    Interrupted,
+}
+
 /// A harness flow observes through its own hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -75,20 +90,6 @@ impl Adapter {
         }
     }
 
-    /// The arguments that bring the master its news, inserted right after the program: Claude
-    /// Code's `<flow_exe> wait --master` waiter; Codex's hooks, which in the master's pane
-    /// (FLOW_MASTER) record its session and hand news over at Stop. The master is no flow, so
-    /// nothing else.
-    pub fn master_wiring(self, flow_exe: &Path) -> Vec<String> {
-        match self {
-            Adapter::ClaudeCode => vec![
-                "--settings".to_string(),
-                claude_code::master_settings(flow_exe),
-            ],
-            Adapter::Codex => codex::hooks(flow_exe),
-        }
-    }
-
     /// The arguments that add `text` to the session's instructions.
     pub fn instruct(self, text: &str) -> Vec<String> {
         match self {
@@ -106,6 +107,45 @@ impl Adapter {
         match self {
             Adapter::ClaudeCode => true,
             Adapter::Codex => false,
+        }
+    }
+
+    /// The master's command line, `argv` being its agent's: right after the program its news wiring
+    /// (Claude Code's `flow wait --master` waiter when it `wake`s; Codex's hooks always, which in the
+    /// master's pane record its session and hand news over at Stop) and its instructions; and,
+    /// when it starts `fresh`, an opening prompt for a harness that hears of news only after its
+    /// first turn (Codex: before it, its pane may still show a trust prompt, so flow types nothing).
+    pub fn wire_master(
+        self,
+        mut argv: Vec<String>,
+        flow_exe: &Path,
+        instructions: &str,
+        wake: bool,
+        fresh: bool,
+    ) -> Vec<String> {
+        let mut wiring = match self {
+            Adapter::ClaudeCode if wake => vec![
+                "--settings".to_string(),
+                claude_code::master_settings(flow_exe),
+            ],
+            Adapter::ClaudeCode => Vec::new(),
+            Adapter::Codex => codex::hooks(flow_exe),
+        };
+        wiring.extend(self.instruct(instructions));
+        let at = 1.min(argv.len());
+        argv.splice(at..at, wiring);
+        if fresh && self == Adapter::Codex {
+            argv.push(MASTER_OPENING.to_string());
+        }
+        argv
+    }
+
+    /// Where a hook event leaves the session's turn, for a harness flow hands news to at its Stop
+    /// (Codex); None for one that wakes itself, or an event that is neither.
+    pub fn turn(self, payload: &Value) -> Option<Turn> {
+        match self {
+            Adapter::ClaudeCode => None,
+            Adapter::Codex => codex::turn(payload),
         }
     }
 
@@ -209,9 +249,51 @@ mod tests {
             Adapter::Codex.instruct(WORKER_PROMPT)
         );
         assert_eq!(Adapter::Codex.plain_wiring(exe), codex::hooks(exe));
-        assert_eq!(Adapter::Codex.master_wiring(exe), codex::hooks(exe));
         assert!(!Adapter::Codex.wakes_itself());
         assert!(Adapter::ClaudeCode.wakes_itself());
+    }
+
+    #[test]
+    fn wires_each_master_its_own_way() {
+        let exe = Path::new("/bin/flow");
+        let argv = || vec!["agent".to_string(), "-n".to_string(), "master".to_string()];
+
+        let quiet = Adapter::ClaudeCode.wire_master(argv(), exe, "md", false, true);
+        assert_eq!(
+            quiet,
+            ["agent", "--append-system-prompt", "md", "-n", "master"]
+        );
+        let woken = Adapter::ClaudeCode.wire_master(argv(), exe, "md", true, true);
+        assert_eq!(woken[1], "--settings");
+        assert_eq!(woken[3..], quiet[1..]);
+
+        let fresh = Adapter::Codex.wire_master(argv(), exe, "md", false, true);
+        let hooks = codex::hooks(exe);
+        assert_eq!(fresh[1..=hooks.len()], hooks[..], "hooks even without wake");
+        assert_eq!(fresh.last().map(String::as_str), Some(MASTER_OPENING));
+        let resumed = Adapter::Codex.wire_master(argv(), exe, "md", true, false);
+        assert_eq!(resumed.last().map(String::as_str), Some("master"));
+    }
+
+    #[test]
+    fn reads_where_a_codex_turn_stands() {
+        let event = |name: &str| serde_json::json!({ "hook_event_name": name });
+
+        assert_eq!(
+            Adapter::Codex.turn(&event("UserPromptSubmit")),
+            Some(Turn::Began)
+        );
+        assert_eq!(Adapter::Codex.turn(&event("Stop")), Some(Turn::Ended));
+        assert_eq!(
+            Adapter::Codex.turn(&event("Interrupt")),
+            Some(Turn::Interrupted)
+        );
+        assert_eq!(Adapter::Codex.turn(&event("PreToolUse")), None);
+        assert_eq!(
+            Adapter::ClaudeCode.turn(&event("Stop")),
+            None,
+            "it wakes itself"
+        );
     }
 
     #[test]

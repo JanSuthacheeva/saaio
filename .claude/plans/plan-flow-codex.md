@@ -111,6 +111,8 @@ impl Adapter {
     pub fn wiring(self, flow_exe: &Path) -> Vec<String>;
     /// Report hooks only: no prompt, no news.
     pub fn plain_wiring(self, flow_exe: &Path) -> Vec<String>;
+    /// Replaced during the build by wire_master(argv, flow_exe, instructions, wake, fresh) -> Vec<String>
+    /// and turn(payload) -> Option<Turn>, so callers know no harness specifics.
     /// Claude: its waiter (only called when wake, as today). Codex: the same hooks as a worker's; FLOW_MASTER=1 in the master's pane makes hook hand
     /// news over at Stop.
     pub fn master_wiring(self, flow_exe: &Path) -> Vec<String>;
@@ -414,4 +416,4 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 - [x] calls::in_repo(url, remote) and workspace::origin_url(dir): `flow hook` drops a merge request whose URL is not of the worktree's origin repo (host and path); tests/cli.rs: the probe URL leaves the flow undone, the repo's own pull request counts
 
 ### A fresh Codex master's first turn (decided after the end-to-end run)
-- [ ] Adapter::master_opening(self) -> Option<&'static str> (Claude Code None, Codex a one-line prompt); MasterRecord::spec appends it as the last argument on a fresh start only, so a fresh Codex master has its first turn at once (after Codex's own startup prompts), records its session and gets news from then on; master.rs tests (fresh has it, resumed and Claude not); a scratch-store check that a fresh Codex master records master.session without being typed to
+- [ ] Adapter::wire_master(argv, flow_exe, instructions, wake, fresh) builds the master's argv (news wiring, instructions, and for Codex on a fresh start MASTER_OPENING as the last argument), and Adapter::turn(payload) -> Option<Turn> (Began, Ended, Interrupted) tells flow hook where a turn stands, so no caller knows harness specifics; MasterRecord::spec calls wire_master and appends nothing itself as the last argument on a fresh start only, so a fresh Codex master has its first turn at once (after Codex's own startup prompts), records its session and gets news from then on; master.rs tests (fresh has it, resumed and Claude not); a scratch-store check that a fresh Codex master records master.session without being typed to

@@ -130,13 +130,8 @@ impl MasterRecord {
             .map(|part| part.replace("{instructions}", &path))
             .collect();
         if let Some(adapter) = agent.adapter {
-            let mut wiring = Vec::new();
-            if wake || !adapter.wakes_itself() {
-                wiring.extend(adapter.master_wiring(&env.flow_exe));
-            }
-            wiring.extend(adapter.instruct(&instructions.text));
-            let at = 1.min(argv.len());
-            argv.splice(at..at, wiring);
+            let fresh = start == Start::Fresh;
+            argv = adapter.wire_master(argv, &env.flow_exe, &instructions.text, wake, fresh);
         }
         Some(PaneSpec {
             key: PaneKey::Master,
@@ -273,6 +268,13 @@ mod tests {
                 quiet.argv[1..3],
                 ["--append-system-prompt", "# You are the master"]
             );
+            assert!(
+                !quiet
+                    .argv
+                    .iter()
+                    .any(|arg| arg == crate::adapter::MASTER_OPENING),
+                "Claude Code wakes itself"
+            );
             let woken = record().spec(start, master, &env, &md, true, None).unwrap();
             assert_eq!(woken.argv[0], "claude");
             assert_eq!(woken.argv[1], "--settings");
@@ -308,11 +310,17 @@ mod tests {
             .spec(Start::Resume, codex, &env, &md, true, None)
             .unwrap();
 
+        let opening = crate::adapter::MASTER_OPENING;
         assert_eq!(fresh.argv[0], "codex");
         assert_eq!(
-            fresh.argv[1..],
+            fresh.argv[1..=wired.len()],
             wired[..],
-            "no prompt; hooks even without wake"
+            "hooks even without wake"
+        );
+        assert_eq!(
+            fresh.argv[wired.len() + 1..],
+            [opening],
+            "a first turn at once, so it gets news from the start"
         );
         assert_eq!(resumed.argv[1..=wired.len()], wired[..]);
         assert_eq!(resumed.argv[wired.len() + 1..], ["resume", "01a1"]);

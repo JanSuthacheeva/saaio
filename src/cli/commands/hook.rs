@@ -4,7 +4,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::views;
-use crate::adapter::{Adapter, calls};
+use crate::adapter::{Adapter, Turn, calls};
 use crate::cli::Env;
 use crate::cli::output::{Document, news};
 use crate::config::Config;
@@ -90,13 +90,10 @@ fn hook(
             Waiter::Flow(id)
         }
     };
-    if adapter.wakes_itself() {
-        return None;
-    }
-    match payload["hook_event_name"].as_str() {
-        Some("UserPromptSubmit") => mark_busy(store, &waiter, true),
-        Some("Interrupt") => mark_busy(store, &waiter, false),
-        Some("Stop") => {
+    match adapter.turn(payload)? {
+        Turn::Began => mark_busy(store, &waiter, true),
+        Turn::Interrupted => mark_busy(store, &waiter, false),
+        Turn::Ended => {
             let wakes = !matches!(waiter, Waiter::Master) || config.master.wake;
             let news = if wakes {
                 hand_over(store, &waiter, now)
@@ -108,7 +105,6 @@ fn hook(
             }
             return news;
         }
-        _ => {}
     }
     None
 }
