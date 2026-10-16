@@ -254,7 +254,8 @@ shows `branch · slot N`.
   cards, detail, peek and chrome show `~/scratch` (done in the build).
 - Board detail draws no steps column without steps.
 
-`src/server/master.md` (modified): one line, plain sessions are the user's own; leave them alone.
+`src/server/master.md` (modified): one line, plain sessions are the user's own; leave them alone. The text before
+it is kept as `master-v4.md` in `PREVIOUS_DEFAULTS`, so unedited copies update.
 
 ## Data
 
@@ -368,5 +369,5 @@ The session stops; flow remove
 
 ### Docs and check
 
-- [ ] `master.md` line on plain sessions; README (`flow start --plain`, the dialog's plain mode); HANDOVER: move plain sessions from Future improvements to a built section
+- [x] `master.md` line on plain sessions; README (`flow start --plain`, the dialog's plain mode); HANDOVER: move plain sessions from Future improvements to a built section
 - [ ] End to end: `cargo install --path .`, `flow start --plain` in a scratch folder and from the dialog in a real `flow ui`, see it in the sidebar, quit and restart flow ui and see it resume, `flow remove` it and check the folder is still there
