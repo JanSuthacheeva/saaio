@@ -77,7 +77,7 @@ fn record_master_turn(store: &Store, kinds: &[EventKind], now: u64);
 `src/server/panes.rs` (modified): `open_pane` also calls `store.forget_master_turn()` when it
 opens `PaneKey::Master`; an error goes to server.log and the pane still opens.
 
-`src/proto.rs` (modified):
+`src/proto.rs` (modified): `PROTOCOL_VERSION` 5, so a running older server refuses the new UI.
 
 ```rust
 /// Where the master runs, and where its turn stands.
@@ -130,7 +130,7 @@ pub changed: &'a HashMap<PaneKey, u64>,
 
 - `MasterTurn { state: State, at: u64 }`: hook to store (JSON), server to UI (postcard).
 - `waits/master.turn`: `{"state":"waiting","at":1792157011000}`.
-- `ServerMsg::Master` + `turn: Option<MasterTurn>`.
+- `ServerMsg::Master` + `turn: Option<MasterTurn>`. `PROTOCOL_VERSION` 4 -> 5.
 - `App.changed`, `Sidebar.changed`: keyed by `PaneKey`.
 
 ## Call chains
@@ -203,7 +203,7 @@ The master's pane opens again:
 
 - [x] Add `view::MasterTurn` and `fold::master_state(kinds)` with unit tests for last-kind-wins and kinds that say no state
 - [x] Add `Store::master_turn`, `set_master_turn`, `forget_master_turn` (`waits/master.turn`) with round-trip, forget-twice and unparsable-file tests
-- [ ] Give the Claude Code master the report hooks: `claude_code::master_settings(flow_exe, wake)` with `arm`, `Adapter::wire_master` always wiring it, doc comments in `adapter.rs` and `server/master.rs`; update the settings and wire_master tests
+- [x] Give the Claude Code master the report hooks: `claude_code::master_settings(flow_exe, wake)` with `arm`, `Adapter::wire_master` always wiring it, doc comments in `adapter.rs` and `server/master.rs`; update the settings and wire_master tests
 - [x] Add `record_master_turn` to `flow hook`'s master arm, with `tests/cli.rs` cases: a prompt writes working, a Stop writes idle, a repeated tool call leaves the file untouched
 - [ ] Send the turn: `ServerMsg::Master { turn }` from `send_master`, `open_pane` forgets the master's turn; server test over the socket
 - [ ] Key `App.changed` and `Sidebar.changed` by `PaneKey`; existing tests pass unchanged in behaviour

@@ -359,6 +359,7 @@ fn a_long_place_loses_its_middle_but_keeps_the_branch_and_the_corner() {
     fleet.on_server(ServerMsg::Master {
         cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
         branch: Some("main".into()),
+        turn: None,
     });
 
     let narrow = Size { cols: 90, rows: 20 };
@@ -366,6 +367,7 @@ fn a_long_place_loses_its_middle_but_keeps_the_branch_and_the_corner() {
     folded.on_server(ServerMsg::Master {
         cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
         branch: Some("main".into()),
+        turn: None,
     });
     let folded = render_at(&folded, narrow);
     let top = row(&folded, 0);

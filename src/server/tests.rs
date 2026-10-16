@@ -11,6 +11,7 @@ use crate::event::{Event as LogEvent, EventKind};
 use crate::launch::pane::HOSTED;
 use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
 use crate::store::Waiter;
+use crate::view::{MasterTurn, State};
 
 /// A server whose master is `cat`, run on its own thread.
 fn start(dir: &Path) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
@@ -162,6 +163,47 @@ fn a_ui_attaches_types_into_the_master_and_sees_it() {
     handle.join().unwrap().unwrap();
     assert!(!paths.socket.exists());
     assert!(!paths.master.exists(), "a stop ends the master for good");
+}
+
+#[test]
+fn tells_the_ui_where_the_masters_turn_stands_from_its_start() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let old = MasterTurn {
+        state: State::Waiting,
+        at: 1,
+    };
+    store.set_master_turn(&old).unwrap();
+    let (paths, handle) = start(dir.path());
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+
+    let first = loop {
+        if let ServerMsg::Master { turn, .. } = recv(&mut ui) {
+            break turn;
+        }
+    };
+    assert_eq!(first, None, "a master that opens starts without a turn");
+    let working = MasterTurn {
+        state: State::Working,
+        at: 2,
+    };
+    store.set_master_turn(&working).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        assert!(Instant::now() < deadline, "the turn never reached the ui");
+        if let ServerMsg::Master { turn, .. } = recv(&mut ui) {
+            assert_eq!(turn, Some(working));
+            break;
+        }
+    }
+
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
 }
 
 /// A flow with a worktree at dir/<name>, as `flow start` leaves it.

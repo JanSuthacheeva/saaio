@@ -13,7 +13,7 @@ impl App {
     pub fn on_server(&mut self, message: ServerMsg) -> Vec<Effect> {
         match message {
             ServerMsg::Welcome { .. } | ServerMsg::Closed(_) | ServerMsg::NotOpen(_) => vec![],
-            ServerMsg::Master { cwd, branch } => {
+            ServerMsg::Master { cwd, branch, .. } => {
                 let place = self.tilde(&cwd);
                 self.master_cwd = Some(cwd);
                 self.master = Some(match branch {

@@ -219,6 +219,7 @@ fn shows_where_the_master_runs_with_home_as_a_tilde() {
     let master = ServerMsg::Master {
         cwd: "/Users/jan/projects/shop".into(),
         branch: Some("main".into()),
+        turn: None,
     };
     let mut alone = App::new(FLEET).with_home(Some("/Users/jan".into()));
     alone.on_server(master.clone());

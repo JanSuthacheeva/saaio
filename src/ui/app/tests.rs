@@ -222,6 +222,7 @@ fn board_app() -> App {
     app.on_server(ServerMsg::Master {
         cwd: "/Users/jan/projects/shop".into(),
         branch: Some("main".into()),
+        turn: None,
     });
     app
 }

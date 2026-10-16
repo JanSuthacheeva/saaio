@@ -40,6 +40,7 @@ fn every_view_looks_as_it_did() {
     alone.on_server(ServerMsg::Master {
         cwd: "/Users/jan/projects/shop".into(),
         branch: Some("main".into()),
+        turn: None,
     });
     golden("master-alone", &render_at(&alone, FLEET));
     alone.on_input(Routed::Command(Command::Board));
