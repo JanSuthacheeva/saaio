@@ -56,6 +56,8 @@ fn artifact_watch(task: &Value) -> bool;
 - [x] `artifact_watch` and the skip in `running_background_task`, with tests for a watch alone (idle) and a watch beside a running subagent (delegated)
 - [x] Docs: the `background_tasks` fact in `docs/HANDOVER.md` names the artifact watch and that it is skipped
 - [x] End-to-end check: the same real worker publishing an artifact ends its turn idle (or waiting) and wakes the master
+- [ ] From the review (decided: keep the wording match): a test that a `pending` artifact watch is skipped too
+- [ ] From the review: `docs/HANDOVER.md` says to re-record `stop_artifact_watch.json` on Claude Code upgrades
 
 ## Review
 
