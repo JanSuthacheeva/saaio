@@ -42,6 +42,8 @@ fn every_view_looks_as_it_did() {
         branch: Some("main".into()),
     });
     golden("master-alone", &render_at(&alone, FLEET));
+    alone.on_input(Routed::Command(Command::Board));
+    golden("empty-board", &render_at(&alone, FLEET));
 
     let fleet = board_app();
     golden("fleet", &render_at(&fleet, FLEET));

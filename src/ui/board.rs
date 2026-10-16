@@ -9,6 +9,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 
 use crate::proto::{PaneKey, PaneStatus};
+use crate::text::plural;
 use crate::ui::fit::split;
 use crate::ui::sidebar::{self, Sidebar};
 use crate::ui::theme::Theme;
@@ -96,8 +97,9 @@ impl BoardView<'_> {
                 .filter(|flow| states.contains(&flow.state))
                 .count()
         };
+        let sessions = flows.len() + 1;
         let mut right = vec![Span::styled(
-            format!("{} sessions", flows.len() + 1),
+            format!("{sessions} session{}", plural(sessions)),
             theme.ui.faint,
         )];
         let parts = [

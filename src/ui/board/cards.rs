@@ -94,7 +94,10 @@ impl BoardView<'_> {
             ),
             Line::styled(format!("   {place}"), theme.ui.faint),
             Line::styled(
-                format!("   {workers} worker{}", plural(workers)),
+                match workers {
+                    0 => "   no workers yet".to_string(),
+                    _ => format!("   {workers} worker{}", plural(workers)),
+                },
                 theme.ui.faint,
             ),
             Line::styled(format!("   {status}"), theme.state.waiting),
@@ -380,6 +383,19 @@ mod tests {
         assert_eq!(card[1], "   ~/shop · main");
         assert_eq!(card[2], "   2 workers");
         assert_eq!(card[3], "   ", "no notice while the master runs");
+    }
+
+    #[test]
+    fn a_master_alone_says_there_are_no_workers_yet() {
+        let (card, header) = with_view(vec![], |view| {
+            (
+                view.master_card(30).map(|line| text(&line)),
+                text(&view.header(60)),
+            )
+        });
+
+        assert_eq!(card[2], "   no workers yet");
+        assert!(header.ends_with(" 1 session "), "{header}");
     }
 
     #[test]

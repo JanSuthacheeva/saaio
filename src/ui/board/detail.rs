@@ -104,7 +104,10 @@ impl BoardView<'_> {
         let flows = sidebar::workers(self.board());
         let count = flows.len();
         let place = clip_place(self.sidebar.master.unwrap_or(""), width.saturating_sub(24));
-        let mut facts = vec![format!("{count} worker{}", plural(count))];
+        let mut facts = vec![match count {
+            0 => "no workers yet".to_string(),
+            _ => format!("{count} worker{}", plural(count)),
+        }];
         if !place.is_empty() {
             facts.insert(0, place);
         }
@@ -177,7 +180,12 @@ impl BoardView<'_> {
             lines.push(Line::styled(format!("  {label}"), theme.ui.faint));
             lines.extend(entries);
         }
-        if lines.is_empty() {
+        if lines.is_empty() && count == 0 {
+            lines.push(Line::from(vec![
+                Span::styled("  n", theme.ui.key),
+                Span::styled(" starts a flow", theme.ui.faint),
+            ]));
+        } else if lines.is_empty() {
             lines.push(Line::styled("  nothing needs you", theme.ui.faint));
         }
         for (line, row) in lines.iter().zip(area.rows().skip(2)) {

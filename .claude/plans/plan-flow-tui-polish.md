@@ -342,7 +342,7 @@ The first worker starts:
 
 - [x] Remove `Chrome::Solo`, `Areas::bar` and `draw_bar`; the sidebar shows with only the master and `Sidebar::empty_rows`; update layout tests and the solo golden
 - [x] Add `RAIL_BELOW`, `App.rail: Option<bool>` and `App::folded`; C-space b sets the choice; tests for width and override in app/tests/panes.rs
-- [ ] Board header `1 session`, master card and master detail `no workers yet` / `n starts a flow`; add the empty-board golden
+- [x] Board header `1 session`, master card and master detail `no workers yet` / `n starts a flow`; add the empty-board golden
 
 ### Hints and labels (items 1, 5, 7)
 
