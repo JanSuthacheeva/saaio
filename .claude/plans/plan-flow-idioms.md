@@ -36,7 +36,7 @@ any other that turns out to be noise, each named.
 - [x] registry: store roots are written and read as raw OS bytes (registry.rs:46)
 
 ### 1. Conversions and common traits
-- [ ] `impl From<anyhow::Error> for Failure`, replacing `Failure::from_io`
+- [x] `impl From<anyhow::Error> for Failure`, replacing `Failure::from_io`
 - [ ] `Display` for `Tasks`, `ReviewCount`, `PaneKey` (replacing `describe`)
 - [ ] `From` between `view::Workspace` and `EventKind::Workspace`
 - [ ] `Default` for `Config` and `MasterConfig` via `#[serde(default)]`; `Mode` default via `#[default]` + `default_value_t`

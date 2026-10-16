@@ -73,11 +73,6 @@ impl Failure {
         }
     }
 
-    /// Exit code 1: the error chain as the message.
-    pub fn from_io(error: anyhow::Error) -> Failure {
-        Failure::error(format!("{error:#}"), Vec::new())
-    }
-
     /// error: ..., help[n]: ...
     pub fn to_toon(&self) -> String {
         #[derive(Serialize)]
@@ -90,6 +85,19 @@ impl Failure {
             error: &self.message,
             help: &self.help,
         })
+    }
+}
+
+/// Exit code 1: the error chain as the message.
+impl From<anyhow::Error> for Failure {
+    fn from(error: anyhow::Error) -> Failure {
+        Failure::error(format!("{error:#}"), Vec::new())
+    }
+}
+
+impl From<std::io::Error> for Failure {
+    fn from(error: std::io::Error) -> Failure {
+        Failure::from(anyhow::Error::from(error))
     }
 }
 
@@ -1101,7 +1109,7 @@ mod tests {
     fn names_the_whole_error_chain_for_io_failures() {
         let error = anyhow::anyhow!("Permission denied").context("could not create flow in /x");
 
-        let failure = Failure::from_io(error);
+        let failure = Failure::from(error);
 
         assert_eq!(failure.code, 1);
         assert_eq!(
