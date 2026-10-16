@@ -382,8 +382,9 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
   once it had a turn, the server typed a worker's new question into it while idle and it relayed it.
 - Found and fixed: a command reading several SKILL.md files (phase missed); master and worker hooks
   undoing each other's Codex trust (now one definition, FLOW_MASTER=1 marks the master).
-- Open: a fresh Codex master hears of stopped flows only after its first turn (the server types only
-  into a session past Codex's startup prompts).
+- Decided after the run: a fresh Codex master starts with a short opening prompt (Adapter::wire_master),
+  so it has its first turn once Codex's startup prompts are done; checked on a scratch store: it
+  recorded its session untouched and got a stopped worker typed in.
 
 ## Tasks
 
@@ -416,4 +417,4 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 - [x] calls::in_repo(url, remote) and workspace::origin_url(dir): `flow hook` drops a merge request whose URL is not of the worktree's origin repo (host and path); tests/cli.rs: the probe URL leaves the flow undone, the repo's own pull request counts
 
 ### A fresh Codex master's first turn (decided after the end-to-end run)
-- [ ] Adapter::wire_master(argv, flow_exe, instructions, wake, fresh) builds the master's argv (news wiring, instructions, and for Codex on a fresh start MASTER_OPENING as the last argument), and Adapter::turn(payload) -> Option<Turn> (Began, Ended, Interrupted) tells flow hook where a turn stands, so no caller knows harness specifics; MasterRecord::spec calls wire_master and appends nothing itself as the last argument on a fresh start only, so a fresh Codex master has its first turn at once (after Codex's own startup prompts), records its session and gets news from then on; master.rs tests (fresh has it, resumed and Claude not); a scratch-store check that a fresh Codex master records master.session without being typed to
+- [x] Adapter::wire_master(argv, flow_exe, instructions, wake, fresh) builds the master's argv (news wiring, instructions, and for Codex on a fresh start MASTER_OPENING as the last argument), and Adapter::turn(payload) -> Option<Turn> (Began, Ended, Interrupted) tells flow hook where a turn stands, so no caller knows harness specifics; MasterRecord::spec calls wire_master and appends nothing itself as the last argument on a fresh start only, so a fresh Codex master has its first turn at once (after Codex's own startup prompts), records its session and gets news from then on; master.rs tests (fresh has it, resumed and Claude not); a scratch-store check that a fresh Codex master records master.session without being typed to
