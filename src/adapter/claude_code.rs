@@ -31,6 +31,9 @@ pass on what the user said, so act on them as you would on the user's own answer
 master or the user something, end your turn with the question.";
 /// plan-progress's report tool, whose answers carry the plan's task counts.
 const PLAN_PROGRESS_TOOL: &str = "mcp__plan-progress__report";
+/// How a Stop's background tasks list the watch Claude Code keeps on a published artifact.
+const ARTIFACT_WATCH_TYPE: &str = "monitor";
+const ARTIFACT_WATCH_PREFIX: &str = "live updates for artifact ";
 
 /// The --settings JSON: each event in EVENTS runs `<flow_exe> hook claude-code`, synchronously so
 /// the events reach the log in order; each in WAIT_EVENTS also arms `<flow_exe> wait`.
@@ -220,10 +223,10 @@ fn running_background_task(tasks: &Value) -> Option<&str> {
 
 /// A live subscription Claude Code keeps for a published artifact: it never finishes.
 fn artifact_watch(task: &Value) -> bool {
-    task["type"] == "monitor"
+    task["type"] == ARTIFACT_WATCH_TYPE
         && task["description"]
             .as_str()
-            .is_some_and(|description| description.starts_with("live updates for artifact "))
+            .is_some_and(|description| description.starts_with(ARTIFACT_WATCH_PREFIX))
 }
 
 /// Waiting with the last sentence of the answer's last non-empty line that asks (ends in "?", or
