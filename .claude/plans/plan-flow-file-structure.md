@@ -274,7 +274,8 @@ pub fn clock(ms: u64, offset_secs: i64) -> String;
 ```rust
 // ui.rs  pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String>;   // drops ui::now_ms
 // app.rs            View, App, new, with_offset, with_store, with_home, say, say_about_file, areas,
-//                   is_modal, peeked; worker, workers, in_view, status, tilde, focused_repo, sidebar
+//                   is_modal, peeked; worker, workers, in_view, status, tilde, focused_repo, sidebar,
+//                   ended_worker (private: the children, as descendants, call them)
 // app/effect.rs     Effect, Job (+ args, dir), Removal (+ of), outcome; app.rs re-exports them (pub use effect::{..}), App's outputs
 // app/messages.rs   impl App { on_server, on_ran, on_branching, on_tick, overview_due, on_resize,
 //                              ask_overview, here_first }
@@ -396,7 +397,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 
 ### 7. UI
 - [x] Add `ui/dialog.rs` (draw_dialog, draw_help, draw_not_running, draw_no_session) and `ui/app/effect.rs` (Effect, Job, Removal, outcome)
-- [ ] Split App's methods into `app/messages.rs`, `app/keys.rs`, `app/board_keys.rs`, `app/draw.rs`
+- [x] Split App's methods into `app/messages.rs`, `app/keys.rs`, `app/board_keys.rs`, `app/draw.rs`
 - [ ] Move App's tests to `app/tests.rs` (fixtures) and `app/tests/{panes,sidebar,board,dialogs,golden}.rs`; goldens unchanged
 - [ ] Split `ui/board.rs` into board.rs, `board/cards.rs`, `board/detail.rs`; add unit tests for cards (master card, flow card states, digits) and detail (timeline, facts) rendering into a Buffer
 - [ ] Split `ui/sidebar.rs` into sidebar.rs, `sidebar/rows.rs`, `sidebar/labels.rs` with its tests
