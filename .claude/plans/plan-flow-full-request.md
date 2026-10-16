@@ -91,8 +91,12 @@ flow new --name x --request "<request>":
 
 ## Tasks
 
-- [ ] Add the CLI repro test in `tests/cli.rs`: a 600-char request reaches the worker's prompt and `flow status --json` whole (fails today)
-- [ ] Stop cutting the Started request in `EventKind::cut_texts`, add `REQUEST_LIMIT`, update the `event.rs` unit test; the repro passes
-- [ ] Add `commands::check_request` and call it first in `start::run` and `new::run`, with CLI tests: 20,001 chars refused by both (no flow, no branch), 20,000 taken
+Build note: tasks 1 and 2 are one commit, so no commit holds a failing test; `REQUEST_LIMIT` came
+with task 3, its first user (clippy refuses dead code).
+
+
+- [x] Add the CLI repro test in `tests/cli.rs`: a 600-char request reaches the worker's prompt and `flow status --json` whole (fails today)
+- [x] Stop cutting the Started request in `EventKind::cut_texts`, update the `event.rs` unit test; the repro passes
+- [ ] Add `REQUEST_LIMIT` and `commands::check_request` and call it first in `start::run` and `new::run`, with CLI tests: 20,001 chars refused by both (no flow, no branch), 20,000 taken
 - [ ] Add a `status.rs` case: a long request is cut with the `--full` hint
 - [ ] End-to-end: `cargo install --path .`, start a long request in a scratch repo, check the worker's prompt and `flow status` output; check a 20,001-char start is refused
