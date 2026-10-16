@@ -73,6 +73,16 @@ pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
+/// What hook_env sets: a worker's identity, which a session flow ui starts from inside one must
+/// not pass on.
+pub const HOOK_VARS: [&str; 5] = [
+    "FLOW_ID",
+    "FLOW_NAME",
+    "FLOW_SLOT",
+    "FLOW_WORKTREE",
+    "FLOW_REPO",
+];
+
 /// FLOW_ID, FLOW_NAME, FLOW_SLOT (when it has one), FLOW_WORKTREE, FLOW_REPO for the hooks.
 pub fn hook_env(id: &str, name: &str, repo: &Path, workspace: &Workspace) -> Vec<(String, String)> {
     [

@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
+use crate::launch::worktree;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, Role, ServerMsg};
 use crate::registry;
 use crate::store::Store;
@@ -144,6 +145,18 @@ fn socket_path_for(root: &Path, tmp: &Path) -> PathBuf {
     ))
 }
 
+/// `<exe> server` with `env` and without the hook variables of the session it starts from, so a
+/// flow ui opened inside a worker gives its panes none of that worker's identity or slot.
+fn server_command(exe: &Path, env: &[(String, String)]) -> Command {
+    let mut command = Command::new(exe);
+    command.arg("server");
+    for var in worktree::HOOK_VARS {
+        command.env_remove(var);
+    }
+    command.envs(env.iter().map(|(key, value)| (key, value)));
+    command
+}
+
 /// Starts `<exe> server` in its own session with output to server.log unless one listens;
 /// waits up to 2 s for the socket.
 pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Result<()> {
@@ -162,11 +175,8 @@ pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Res
         .append(true)
         .open(&log_path)
         .with_context(|| format!("could not open {}", log_path.display()))?;
-    let mut command = Command::new(exe);
+    let mut command = server_command(exe, env);
     command
-        .arg("server")
-        .env_remove("FLOW_ID")
-        .envs(env.iter().map(|(key, value)| (key, value)))
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log);
@@ -201,6 +211,34 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    #[test]
+    fn starts_the_server_without_the_identity_of_the_session_it_starts_from() {
+        let command = server_command(
+            Path::new("/bin/flow"),
+            &[("FLOW_HOME".to_string(), "/state".to_string())],
+        );
+
+        let envs: Vec<(String, Option<String>)> = command
+            .get_envs()
+            .map(|(key, value)| {
+                (
+                    key.to_string_lossy().into_owned(),
+                    value.map(|value| value.to_string_lossy().into_owned()),
+                )
+            })
+            .collect();
+        for var in [
+            "FLOW_ID",
+            "FLOW_NAME",
+            "FLOW_SLOT",
+            "FLOW_WORKTREE",
+            "FLOW_REPO",
+        ] {
+            assert!(envs.contains(&(var.to_string(), None)), "{var}: {envs:?}");
+        }
+        assert!(envs.contains(&("FLOW_HOME".to_string(), Some("/state".to_string()))));
+    }
 
     /// Answers one hello with `reply`, then keeps the connection open until dropped.
     fn fake_server(socket: &Path, reply: ServerMsg) -> thread::JoinHandle<Option<ClientMsg>> {
