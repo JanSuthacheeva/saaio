@@ -11,7 +11,7 @@ use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
 
 use crate::branching::Branching;
 use crate::launch::WORKTREES_DIR;
-use crate::output;
+use crate::output::{self, plural};
 use crate::proto::{ClientMsg, Modes, PaneInfo, PaneKey, PaneStatus, ServerMsg, Size};
 use crate::ui::board::{self, BoardState, BoardView};
 use crate::ui::input::{Command, Key, Routed, Step};
@@ -670,13 +670,13 @@ impl App {
             Key::Char('k') => stop(format!(
                 "stopped flow; {} unfinished flow{} resume the next time you run `flow ui`",
                 unfinished.len(),
-                if unfinished.len() == 1 { "" } else { "s" }
+                plural(unfinished.len())
             )),
             Key::Char('e') => {
                 let mut message = format!(
                     "stopped flow and ended {} flow{}; their code stays until `flow clear`:",
                     unfinished.len(),
-                    if unfinished.len() == 1 { "" } else { "s" }
+                    plural(unfinished.len())
                 );
                 for flow in self
                     .workers()
@@ -1091,7 +1091,7 @@ impl App {
         let mut text = vec![Line::styled(
             format!(
                 "{count} flow{} {} not finished:",
-                if count == 1 { "" } else { "s" },
+                plural(count),
                 if count == 1 { "is" } else { "are" }
             ),
             theme.ui.text,

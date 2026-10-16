@@ -204,12 +204,7 @@ impl Sidebar<'_> {
             }
         };
 
-        let digit = if index < 9 {
-            (index + 1).to_string()
-        } else {
-            " ".to_string()
-        };
-        let mut first = lead(&format!("{digit} "));
+        let mut first = lead(&format!("{} ", digit(index)));
         first.push(Span::styled(self.glyph(flow.state), tone));
         first.push(Span::styled(
             format!(" {}", flow.name),
@@ -320,7 +315,7 @@ impl Sidebar<'_> {
                 }
                 PeekLine::Now(call) => body.push(vec![
                     Span::raw(" "),
-                    Span::styled(glyphs.spinner[self.spin % glyphs.spinner.len()], tone),
+                    Span::styled(self.spinner(), tone),
                     Span::styled(format!(" {}", clip(call, text_width)), theme.ui.muted),
                 ]),
                 PeekLine::Code {
@@ -374,10 +369,15 @@ impl Sidebar<'_> {
         rows
     }
 
+    fn spinner(&self) -> &'static str {
+        let spinner = self.theme.glyphs.spinner;
+        spinner[self.spin % spinner.len()]
+    }
+
     pub fn glyph(&self, state: State) -> &'static str {
         let glyphs = &self.theme.glyphs;
         match state {
-            State::Working | State::Delegated => glyphs.spinner[self.spin % glyphs.spinner.len()],
+            State::Working | State::Delegated => self.spinner(),
             State::Waiting => glyphs.waiting,
             State::Idle => glyphs.idle,
             State::Blocked | State::NotResponding => glyphs.blocked,
@@ -480,6 +480,15 @@ impl Widget for Sidebar<'_> {
             }
             buf.set_line(line.x, line.y, &row.line, line.width);
         }
+    }
+}
+
+/// The digit that focuses the worker at `index` among them: 1-9, then none.
+pub fn digit(index: usize) -> String {
+    if index < 9 {
+        (index + 1).to_string()
+    } else {
+        " ".to_string()
     }
 }
 

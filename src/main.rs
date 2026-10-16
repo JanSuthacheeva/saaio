@@ -868,7 +868,7 @@ fn refuse_unmerged_commits(flow: &FlowView) -> Result<(), Failure> {
         Ok(Some(count)) if count > 0 => Err(Failure::error(
             format!(
                 "{branch} has {count} commit{} {}",
-                if count == 1 { "" } else { "s" },
+                output::plural(count),
                 output::UNMERGED
             ),
             vec![

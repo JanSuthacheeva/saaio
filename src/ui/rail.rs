@@ -49,11 +49,7 @@ impl Rail<'_> {
             let key = PaneKey::Flow(flow.id.clone());
             let focused = *sidebar.focus == key;
             let tone = theme.state_style(flow.state);
-            let digit = if index < 9 {
-                (index + 1).to_string()
-            } else {
-                " ".to_string()
-            };
+            let digit = sidebar::digit(index);
             let lead = if focused {
                 vec![
                     Span::styled(theme.glyphs.cursor, tone),

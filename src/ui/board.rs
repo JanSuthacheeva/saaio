@@ -8,7 +8,7 @@ use ratatui::widgets::{Block, BorderType, Widget};
 
 use crate::event::Mode;
 use crate::event::Phase;
-use crate::output::short_duration;
+use crate::output::{plural, short_duration};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::ui::sidebar::{self, Sidebar, clip, clip_place, split, wrap};
 use crate::ui::theme::Theme;
@@ -207,7 +207,7 @@ impl BoardView<'_> {
             ]),
             Line::styled(format!("   {place}"), theme.ui.faint),
             Line::styled(
-                format!("   {workers} worker{}", if workers == 1 { "" } else { "s" }),
+                format!("   {workers} worker{}", plural(workers)),
                 theme.ui.faint,
             ),
             Line::styled(format!("   {status}"), theme.state.waiting),
@@ -551,10 +551,7 @@ impl BoardView<'_> {
         let flows = sidebar::workers(self.board());
         let count = flows.len();
         let place = clip_place(self.sidebar.master.unwrap_or(""), width.saturating_sub(24));
-        let mut facts = vec![format!(
-            "{count} worker{}",
-            if count == 1 { "" } else { "s" }
-        )];
+        let mut facts = vec![format!("{count} worker{}", plural(count))];
         if !place.is_empty() {
             facts.insert(0, place);
         }
@@ -800,10 +797,6 @@ impl Widget for BoardView<'_> {
             self.render_detail(detail, buf);
         }
     }
-}
-
-fn plural(count: usize) -> &'static str {
-    if count == 1 { "" } else { "s" }
 }
 
 fn gerund(phase: Phase) -> &'static str {

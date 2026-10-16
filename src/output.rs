@@ -744,6 +744,11 @@ pub fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
     }))
 }
 
+/// "s" unless there is exactly one: `format!("{n} flow{}", plural(n))`.
+pub fn plural<N: PartialEq + From<u8>>(count: N) -> &'static str {
+    if count == N::from(1) { "" } else { "s" }
+}
+
 /// 45s, 12m, 3h, 2d.
 pub fn short_duration(ms: u64) -> String {
     let seconds = ms / 1_000;
