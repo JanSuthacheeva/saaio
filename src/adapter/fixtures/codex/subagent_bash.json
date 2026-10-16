@@ -1,0 +1,16 @@
+{
+ "session_id": "01a14000-0000-7000-8000-000000000000",
+ "turn_id": "01a143b4-4263-7863-8e91-ffa45e5f7f31",
+ "agent_id": "01a143b4-4222-70b3-ba16-feae5a6e397c",
+ "agent_type": "default",
+ "transcript_path": "/home/dev/.codex/sessions/2026/10/16/rollout-2026-10-16T14-54-09-01a143b4-4222-70b3-ba16-feae5a6e397c.jsonl",
+ "cwd": "/repo",
+ "hook_event_name": "PreToolUse",
+ "model": "gpt-6-luna",
+ "permission_mode": "default",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "ls -Ap | grep -v '/$' | wc -l"
+ },
+ "tool_use_id": "exec-9b538cff-7317-4af2-af47-89a58ddb47af"
+}

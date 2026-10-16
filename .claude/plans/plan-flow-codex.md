@@ -62,17 +62,25 @@ The Codex facts were checked again at `openai/codex@6ae8b8aa7c60` (latest releas
   - `Bash` input is `{"command": ..}`. Its `tool_response` is a JSON string, the output text with no exit
     code (core/src/tools/context.rs:438), and its PostToolUse comes when the process ends.
   - `apply_patch`, `mcp__server__tool`.
-  - `spawn_agent` input: `message`, `items`, `agent_type`, `fork_context`, `model`, `reasoning_effort`, with
-    no description (multi_agents_spec.rs:610).
+  - Recorded on 0.163.0: the subagent tool reaches hooks as `collaborationspawn_agent` (namespace + name),
+    input `{task_name, fork_turns, message}`, and `message` is encrypted (`gAAAA...`). It returns at once;
+    the main agent then waits with `collaborationwait_agent`. A subagent's own tool calls carry `agent_id`.
+  - PermissionRequest's `tool_input` adds `description`, the reason Codex gives.
+  - Concurrent hooks run in parallel, so their payloads can arrive at the same time.
 - **CLI.**
   - There is no session-id flag. `codex resume <SESSION_ID|name>` works from any folder.
-  - Root `-c` options apply to `resume`, with resume-level `-c` over them (cli/src/main.rs:2643, 1505).
+  - Root `-c` options apply to `resume`, with resume-level `-c` over them (cli/src/main.rs:2643, 1505). Probed on 0.163.0: `codex <-c hooks> resume <id>` keeps the
+    session id, fires SessionStart with `source: "resume"`, and runs the trusted hooks without a new review.
   - Keys: `developer_instructions` (config_toml.rs:254), `check_for_update_on_startup` (:529),
     `projects.<path>.trust_level` (:611). A worktree resolves to the main repo's trust (git-utils/src/trust.rs:16).
 - **Skills.**
   - Locations: `~/.agents/skills`, a repo's `.agents/skills`, `.codex/skills`, and the deprecated `$CODEX_HOME/skills`.
   - Called as `$name` in the prompt, or read through Bash. There is no skill hook event.
-- **Rollout.** `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl` holds lines of the form
+- **Rollout.** Recorded on 0.163.0, shell calls are code-mode `custom_tool_call` lines named `exec`, whose
+  `input` is a JS script calling `tools.exec_command({cmd:"..."})`. Their `custom_tool_call_output.output` is
+  text items, the first being "Script completed / Wall time / Output:". Subagent tools are `function_call`
+  lines with a `namespace`.
+  `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl` holds lines of the form
   `{timestamp, ordinal?, type, payload}` (history/src/lib.rs:369).
   - `response_item` payloads: `message{role, content[{type:"output_text",text}]}`;
     `function_call{name, arguments: string, call_id}`;
@@ -137,7 +145,7 @@ pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind>;
 fn session(payload: &Value) -> Option<EventKind>;           // Session { id: session_id, transcript: transcript_path }
 fn mentioned_skill(prompt: &str) -> Option<&str>;           // first "$name" token
 fn read_skill(command: &str) -> Option<&str>;               // ".../skills/<name>/SKILL.md" -> name
-fn subagent(input: &Value) -> String;                       // first line of message, else agent_type, else "a subagent"
+fn subagent(input: &Value) -> String;                       // task_name, else agent_type, else "a subagent"
 pub fn toml_string(text: &str) -> String;                   // TOML basic string: escapes " \ and control chars
 
 // src/adapter/claude_code.rs (modified): helpers and WORKER_PROMPT moved out; settings take the prompt
@@ -234,7 +242,8 @@ pub fn tail(file: &Path, max: usize, format: Format) -> Result<Vec<PeekLine>>;
 // peek/claude.rs: today's parse; peek/codex.rs:
 fn parse(text: &str, cut: bool) -> Vec<PeekLine>;
 // message (assistant output_text) -> Text; function_call / custom_tool_call / local_shell_call -> Tool;
-// its output (string, or the text items joined) -> Result; an unanswered last call -> Now.
+// custom_tool_call "exec" -> Bash(cmd from its tools.exec_command({cmd:"..."})); its output -> Result:
+// the first text item after the "Script completed" header; an unanswered last call -> Now.
 
 // src/ui/newflow.rs (+ newflow/view.rs draws the row)
 pub struct NewFlowForm { /* ... */ pub agents: Vec<String>, pub agent: usize }
@@ -252,8 +261,9 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 - **UserPromptSubmit:** `working`. Also `phase` when the prompt's first `$name` is in the phase map.
 - **PreToolUse:**
   - `Bash` whose command reads `.../skills/<name>/SKILL.md`: the phase of `name`.
-  - `spawn_agent`: `delegated` with `subagent(input)`.
-- **PostToolUse:** `working`. For `Bash`, also `merge-request` when `gh pr create` or `glab mr create`
+  - a tool named `*spawn_agent`: `delegated` with `subagent(input)`.
+- **PostToolUse:** `working`, except for `*spawn_agent`: the main agent waits next, and `*wait_agent`'s
+  PostToolUse means it goes on. For `Bash`, also `merge-request` when `gh pr create` or `glab mr create`
   printed a URL in the string `tool_response`.
 - **PermissionRequest:** `waiting` with `permission: Name(target)`.
 - **Stop:** `answer` with `last_assistant_message`, then `answer::turn_end`.
@@ -354,7 +364,7 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 ## Tasks
 
 ### Adapter
-- [ ] Record Codex hook payloads with the real CLI into `src/adapter/fixtures/codex/`: a probe hook that appends stdin, in a scratch repo under a private tmux (`tmux -L`), `~/.codex/config.toml` backed up and restored. Record user_prompt, user_prompt_skill, pre_bash_skill, pre_spawn_agent, post_bash, post_bash_merge_request, permission_bash, stop, stop_question, interrupt and subagent_bash, plus one rollout into `src/ui/peek/fixtures/codex-rollout.jsonl`
+- [x] Record Codex hook payloads with the real CLI into `src/adapter/fixtures/codex/`: a probe hook that appends stdin, in a scratch repo under a private tmux (`tmux -L`), `~/.codex/config.toml` backed up and restored. Record user_prompt, user_prompt_skill, pre_bash_skill, pre_spawn_agent, post_bash, post_bash_merge_request, permission_bash, stop, stop_question, interrupt and subagent_bash, plus one rollout into `src/ui/peek/fixtures/codex-rollout.jsonl`
 - [ ] Move turn_end/plain/sentences to adapter/answer.rs and tool_call/created_merge_request to adapter/calls.rs; WORKER_PROMPT harness-neutral in adapter.rs; add Adapter::instruct and wakes_itself; claude_code tests unchanged and green
 - [ ] Add EventKind::Session, view::Session and FlowView.session, fold apply and changes, PROTOCOL_VERSION 4; tests in fold/tests.rs and proto
 - [ ] Add adapter/codex.rs (hooks, toml_string, translate, session, mentioned_skill, read_skill, subagent); Adapter::Codex in named/name/wiring/plain_wiring/master_wiring/translate; table tests over the fixtures
