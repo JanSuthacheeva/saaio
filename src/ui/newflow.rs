@@ -16,7 +16,7 @@ const BODY_WIDTH: u16 = 72;
 /// The body's rows without the type and agent rows: label, text box, error, mode, creates.
 const BODY_ROWS: u16 = 7;
 
-/// What `C-space n` asks before it runs `flow start`.
+/// What the prefix and `n` ask before it runs `flow start`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewFlowForm {
     pub request: String,

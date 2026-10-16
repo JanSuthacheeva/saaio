@@ -57,17 +57,18 @@ to the same state, so retries are harmless.
 
 `flow ui` is home: one Claude Code session, the master, almost full screen, and every worker
 beside it. It starts a session server (`flow server`) when none runs; the server owns every
-session, so closing the terminal, a crash of the UI or `C-space d` leaves them running, and the
-next `flow ui` attaches again. The master runs in the folder of the first `flow ui` with the
-orchestrator instructions in `master.md` beside `config.toml` (flow writes the default and
-updates it with flow while you have not edited it; your edits are never overwritten).
+session, so closing the terminal, a crash of the UI or detaching (prefix `d`) leaves them
+running, and the next `flow ui` attaches again. The master runs in the folder of the first
+`flow ui` with the orchestrator instructions in `master.md` beside `config.toml` (flow writes the
+default and updates it with flow while you have not edited it; your edits are never overwritten).
 
 Every unfinished flow with a worktree, and every plain session, gets its own session: `flow start`
 records it and the server opens it within half a second. The sidebar on the right groups the workers under
 NEEDS YOU, READY (idle: a turn ended, nothing asked), RUNNING and DONE with their steps, tasks and
 what they ask or do.
 
-Keys, after the prefix `C-space` (`C-space C-space` sends one through):
+Keys, after the prefix (`C-space` unless `[ui] prefix` sets another; the prefix twice sends one
+through):
 
 | Key | Does |
 | --- | --- |
@@ -77,14 +78,26 @@ Keys, after the prefix `C-space` (`C-space C-space` sends one through):
 | `o` | the board: a card per session and the selected flow's timeline, decisions and steps; `a` there shows every project's flows (read-only for other projects) |
 | `b` | fold the sidebar to a rail and back |
 | `r` | resume a session that exited, or an ended flow |
-
-When a worker's session ends, its pane offers `x` to clean the flow up (worktree, branch, flow;
-it asks first before discarding uncommitted changes or commits on no other branch), `r` to resume
-it and `esc` to go back to the master.
 | `[` | scroll back through the session's history |
 | `d` | detach |
 | `Q` | stop: lists unfinished workers; `k` keeps them for the next `flow ui`, `e` ends them |
 | `?` | every key |
+
+When a worker's session ends, its pane offers `x` to clean the flow up (worktree, branch, flow;
+it asks first before discarding uncommitted changes or commits on no other branch), `r` to resume
+it and `esc` to go back to the master.
+
+Another prefix goes in `~/.config/flow/config.toml`; flow ui's hints and help then name it:
+
+```toml
+[ui]
+prefix = "C-b"                # C-space, or C-a to C-z
+```
+
+The keys a pane needs are refused: C-c, C-d, C-z, C-s and C-q, and C-h, C-i, C-j and C-m, which
+are the same bytes as backspace, tab, newline and enter. A prefix flow ui also uses as a key, such
+as C-b paging back in the history, reaches it pressed twice. A new prefix applies at the next
+`flow ui`.
 
 `flow ui --stop` stops the server and every session, keeping unfinished flows for the next
 start. After a crash or a reboot the next `flow ui` resumes the master and every worker
@@ -146,8 +159,8 @@ flow (`pane: when flow ui runs` when no flow ui runs yet). The name comes from t
 
 ### Plain sessions
 
-For tinkering, `flow start --plain <folder>` (or plain mode in `C-space n`) opens the agent in a
-folder of your choice, which need not be a repository:
+For tinkering, `flow start --plain <folder>` (or plain mode in the new-flow dialog, prefix `n`)
+opens the agent in a folder of your choice, which need not be a repository:
 
 ```
 $ flow start --plain ~/scratch

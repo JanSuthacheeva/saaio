@@ -7,6 +7,7 @@ use ratatui::widgets::{Block, BorderType, Clear, Widget};
 use crate::proto::PaneStatus;
 use crate::ui::fit::columns;
 use crate::ui::hints::{self, Hint};
+use crate::ui::prefix::Prefix;
 use crate::ui::theme::Theme;
 
 /// Rows between the border and the body, above and below it.
@@ -148,8 +149,10 @@ impl Widget for Dialog<'_> {
     }
 }
 
-/// Every key behind C-space.
-pub fn help(theme: &Theme) -> Dialog<'_> {
+/// Every key behind the prefix.
+pub fn help(prefix: Prefix, theme: &Theme) -> Dialog<'_> {
+    let name = prefix.name();
+    let itself = format!("send {name} itself");
     let keys = [
         ("0-9", "jump to a session (0 is the master)"),
         ("j k", "move the peek over the workers"),
@@ -161,17 +164,17 @@ pub fn help(theme: &Theme) -> Dialog<'_> {
         ("[", "scroll back through the history"),
         ("d", "detach; every session keeps running"),
         ("Q", "stop flow"),
-        ("C-space", "send C-space itself"),
+        (name.as_str(), itself.as_str()),
         ("?", "these keys"),
     ];
     let mut body = vec![Line::from(vec![
-        Span::styled("C-space", theme.ui.key),
+        Span::styled(name.clone(), theme.ui.key),
         Span::styled(" then", theme.ui.muted),
     ])];
     for (key, what) in keys {
         body.push(Line::from(vec![
             Span::styled(format!("  {key:<9}"), theme.ui.key),
-            Span::styled(what, theme.ui.text),
+            Span::styled(what.to_string(), theme.ui.text),
         ]));
     }
     Dialog {
@@ -185,6 +188,7 @@ pub fn help(theme: &Theme) -> Dialog<'_> {
 pub fn not_running<'a>(
     status: &PaneStatus,
     worker: Option<&str>,
+    prefix: Prefix,
     theme: &'a Theme,
 ) -> Option<Dialog<'a>> {
     let (title, first, border) = match status {
@@ -206,8 +210,8 @@ pub fn not_running<'a>(
             Hint::new("esc", "back to master").kept(),
         ],
         None => vec![
-            Hint::new("C-space r", "resumes it").kept(),
-            Hint::new("C-space Q", "stops flow"),
+            Hint::new(prefix.then("r"), "resumes it").kept(),
+            Hint::new(prefix.then("Q"), "stops flow"),
         ],
     };
     Some(Dialog {
@@ -218,11 +222,11 @@ pub fn not_running<'a>(
 }
 
 /// A worker pane flow ui has no session for, such as a flow that ended before it opened.
-pub fn no_session(theme: &Theme) -> Dialog<'_> {
+pub fn no_session(prefix: Prefix, theme: &Theme) -> Dialog<'_> {
     Dialog {
         keys: vec![
-            Hint::new("C-space r", "resumes it").kept(),
-            Hint::new("C-space 0", "back to the master"),
+            Hint::new(prefix.then("r"), "resumes it").kept(),
+            Hint::new(prefix.then("0"), "back to the master"),
         ],
         ..Dialog::new(
             "not open",

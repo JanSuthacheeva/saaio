@@ -250,4 +250,5 @@ mod board;
 mod dialogs;
 mod golden;
 mod panes;
+mod prefix;
 mod sidebar;

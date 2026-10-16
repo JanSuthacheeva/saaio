@@ -5,7 +5,7 @@ use crate::proto::Size;
 /// Columns of the sidebar and of the rail, without the line that separates them from the pane.
 pub const SIDEBAR_WIDTH: u16 = 40;
 pub const RAIL_WIDTH: u16 = 6;
-/// Below this many columns the sidebar folds to the rail until C-space b says otherwise.
+/// Below this many columns the sidebar folds to the rail until the prefix and b say otherwise.
 pub const RAIL_BELOW: u16 = 110;
 /// Cells left blank on every side, so nothing touches the terminal's edge.
 pub const MARGIN: u16 = 1;

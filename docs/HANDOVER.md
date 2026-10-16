@@ -212,14 +212,15 @@ install the ambient-context hook (AXI principle 7).
 The vision below is built as `flow ui`, see README and `.claude/plans/plan-flow-ui.md`. Decisions:
 - Our own multiplexer, not tmux or herdr: `flow server` (started by `flow ui`, a new session via
   setsid) owns every PTY and its terminal emulator (alacritty_terminal, kitty keyboard off so
-  C-space stays a NUL byte); `flow ui` is a client over a Unix socket. Sessions survive the UI.
+  the prefix, C-space unless `[ui] prefix` sets another, stays one control byte); `flow ui` is a
+  client over a Unix socket. Sessions survive the UI.
 - The log is the only way a pane opens: the server reconciles every unfinished flow with a
   workspace; once opened it records `Workspace.window = "flow-ui"`, so later opens resume.
 - One thread owns all server state; only the focused pane streams (changed rows, at most 60/s).
   Idle: about 0.15 % CPU and 3-5 MB each for server and UI.
 - The master keeps its session across crashes (master.json), starts fresh after a stop, and runs
   the built-in `master` agent with `master.md` appended to its system prompt.
-- `C-space Q` keeps or ends unfinished flows; ended flows keep branch and worktree until `flow clear`.
+- The prefix then `Q` keeps or ends unfinished flows; ended flows keep branch and worktree until `flow clear`.
 - Later: see Future improvements.
 
 ## The master and its workers talk (built 2026-10-15)
@@ -312,6 +313,10 @@ server's typing.
 - **Extensions:** glab and ClickUp as data sources (ticket as the request, MR and pipeline status
   per flow); the new-flow dialog's "from ClickUp" list in the design waits for this.
   Decide whether both should match.
+- **Notifications (first after 0.1).** When a flow turns waiting or blocked and you are not looking at
+  it, flow ui sends a terminal notification: OSC 9, OSC 777 (Ghostty, iTerm2), the bell as fallback, so
+  no OS-specific code. A switch in `config.toml`. Today only a master that pushes to your phone covers
+  this; without a master, or with flow ui in the background, a waiting flow goes unnoticed.
 - **Subagents in the sidebar.** `delegated` shows one foreground subagent's task; background
   subagents (`run_in_background`) are not counted, so a worker running three in parallel looks merely
   working. Count every running subagent from the harness's start and stop hooks (Claude Code's
