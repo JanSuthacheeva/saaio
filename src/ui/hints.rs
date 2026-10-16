@@ -11,7 +11,7 @@ const GAP: &str = "   ";
 /// One key and what it does; `active` false draws both faint, for a key that does nothing now.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hint {
-    pub key: &'static str,
+    pub key: Cow<'static, str>,
     pub label: Cow<'static, str>,
     pub active: bool,
     /// Kept when the row is too narrow: esc and ? stay as the others go.
@@ -19,9 +19,9 @@ pub struct Hint {
 }
 
 impl Hint {
-    pub fn new(key: &'static str, label: impl Into<Cow<'static, str>>) -> Hint {
+    pub fn new(key: impl Into<Cow<'static, str>>, label: impl Into<Cow<'static, str>>) -> Hint {
         Hint {
-            key,
+            key: key.into(),
             label: label.into(),
             active: true,
             kept: false,
@@ -41,8 +41,8 @@ impl Hint {
 
     fn width(&self) -> usize {
         match self.label.as_ref() {
-            "" => columns(self.key),
-            label => columns(self.key) + 1 + columns(label),
+            "" => columns(&self.key),
+            label => columns(&self.key) + 1 + columns(label),
         }
     }
 }
@@ -72,7 +72,7 @@ pub fn line(hints: &[Hint], width: usize, theme: &Theme) -> Line<'static> {
         } else {
             (theme.ui.faint, theme.ui.faint)
         };
-        spans.push(Span::styled(hint.key, key));
+        spans.push(Span::styled(hint.key.clone(), key));
         if !hint.label.is_empty() {
             spans.push(Span::styled(format!(" {}", hint.label), label));
         }

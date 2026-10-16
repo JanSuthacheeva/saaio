@@ -222,7 +222,7 @@ Regrouped during the build into vertical slices: a `Prefix` nobody reads fails t
 so each task brings a piece of it together with its first reader.
 
 - [x] The configured key routes input: `Prefix` (`try_from`, `byte`, `kitty`, `NEEDED`) with unit tests for every accepted name, each refused key and unknown spellings; `UiConfig` / `Config.ui` with config tests (loads C-b, defaults to C-space, refuses an unknown `[ui]` key and `prefix = "C-c"` naming the file); `Router::new` / `command_after_prefix(&self)` with input tests for a C-b router (plain byte, kitty form, twice sends one, NUL passes through); `UiEnv.prefix` from `commands::ui`
-- [ ] Make `Hint::key` a `Cow<'static, str>`
+- [x] Make `Hint::key` a `Cow<'static, str>`
 - [ ] Every hint names the configured key: `Prefix::name` / `then` with unit tests, `App::with_prefix`, `Sidebar.prefix`, `dialog::help` / `not_running` / `no_session`, chrome title row, master card, peek hint; app tests with a C-b App for each place; goldens unchanged
 - [ ] Name the configured key in `flow status`'s resume hint (`detail`, `detail_help`) with a cli test
 - [ ] E2E cli test: `flow ui` with `prefix = "C-c"` exits 1 with the reason
