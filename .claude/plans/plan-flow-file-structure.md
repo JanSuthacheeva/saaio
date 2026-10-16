@@ -299,6 +299,7 @@ pub fn clock(ms: u64, offset_secs: i64) -> String;
 //                   footer, status }; impl Widget
 // sidebar/rows.rs   impl Sidebar { master_rows, flow_rows, insert_peek, peek_rows }
 // sidebar/labels.rs impl Sidebar { spinner, glyph, steps, label, state_label, note }; last_note, merge_request
+//                   sidebar.rs re-exports last_note (pub use labels::last_note) for the board
 ```
 
 ## Data
@@ -401,7 +402,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 - [x] Split App's methods into `app/messages.rs`, `app/keys.rs`, `app/board_keys.rs`, `app/draw.rs`
 - [x] Move App's tests to `app/tests.rs` (fixtures) and `app/tests/{panes,sidebar,board,dialogs,golden}.rs`; goldens unchanged
 - [x] Split `ui/board.rs` into board.rs, `board/cards.rs`, `board/detail.rs`; add unit tests for cards (master card, flow card states, digits) and detail (timeline, facts) rendering into a Buffer
-- [ ] Split `ui/sidebar.rs` into sidebar.rs, `sidebar/rows.rs`, `sidebar/labels.rs` with its tests
+- [x] Split `ui/sidebar.rs` into sidebar.rs, `sidebar/rows.rs`, `sidebar/labels.rs` with its tests
 
 ### 8. Rules and docs
 - [ ] CLAUDE.md: a Structure section with the rules above, the Architecture list for the new files, Build Commands unchanged; README mentions of moved files
