@@ -90,4 +90,4 @@ any other that turns out to be noise, each named.
 
 ### 9. Lint gate and end to end
 - [x] `[lints.clippy]` pedantic table in Cargo.toml; clippy, fmt, tests green
-- [ ] end to end: install, run `flow start`, `flow status`, `flow ui` with flows, `flow remove`, `flow clear` like a user
+- [x] end to end: run `flow start`, `flow status`, `flow ui` with flows, `flow remove`, `flow clear` like a user (the debug build with an isolated state folder: installing would replace the binary the live flow session runs)
