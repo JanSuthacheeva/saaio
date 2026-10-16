@@ -14,6 +14,7 @@ pub type PhaseMap = BTreeMap<String, Phase>;
 
 /// How to launch one agent: its command line, the first prompt it gets, and how to resume it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Agent {
     pub command: Vec<String>,
     pub prompt: String,
@@ -486,5 +487,7 @@ prompt = "/design-code {request}"
         assert!(section.contains("mastr"), "{section}");
         let worker = error("[worker]\nagnet = \"codex\"\n");
         assert!(worker.contains("agnet"), "{worker}");
+        let agent = error("[agents.pi]\ncommand = [\"pi\"]\nprompt = \"{request}\"\nresum = []\n");
+        assert!(agent.contains("resum"), "{agent}");
     }
 }

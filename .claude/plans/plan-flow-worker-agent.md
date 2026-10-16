@@ -71,7 +71,8 @@ impl Config {
 
 ## Assumptions
 
-- `[worker]` refuses unknown keys, like `[master]`.
+- `[worker]` and each `[agents.<name>]` refuse unknown keys, like `[master]` (found in
+  review: the README promised it for every key).
 - Rust names stay `agent` (`config.worker.agent`, `Config::agent`).
 - Old plans and `docs/design/` pages stay as written.
 - HANDOVER gets one line beside the `[master] agent` line.
