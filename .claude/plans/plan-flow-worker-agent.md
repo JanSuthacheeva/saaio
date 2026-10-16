@@ -83,3 +83,33 @@ impl Config {
 - [x] End-to-end test in `tests/cli.rs`: `flow start` with the old key exits 1 naming `[worker] agent`
 - [x] README and HANDOVER on `[worker] agent`
 - [x] End-to-end check: run `flow start` with an old-style and a new-style config against a scratch FLOW_HOME
+
+## Review
+
+Reviewed in an isolated agent against this plan, `CLAUDE.md` and the callers of `Config`.
+
+**Fixed**
+- `[agents.<name>]` silently ignored an unknown key (`resum = [...]` dropped the resume command),
+  though the README now says every unknown key is an error naming it. `Agent` gets
+  `deny_unknown_fields`; the test adds an `[agents.pi] resum` case. 04da2f9.
+
+**Open**
+- None blocking. The fix to `Agent` was reviewed by the same agent in a second pass, not
+  independently.
+- Note: a running `flow server` keeps the config it started with; a user who moves `agent` under
+  `[worker]` needs `flow ui --stop` and a new `flow ui`. Pre-existing, no change recommended.
+- Note: `flow hook` falls back to the built-in config on an old-style file (by design, so workers
+  keep reporting), so custom `[phases]` are ignored by hooks until the file is fixed. Pre-existing.
+- Jan's own `~/.config/flow` has no `config.toml`, so nothing breaks on install.
+
+**Where to look**
+1. `src/config.rs` `Config::parse`: the table pre-check for `agent`, then the second parse of the
+   text so serde's errors keep line and column.
+2. `src/config.rs` the `deny_unknown_fields` on `Config`, `WorkerConfig`, `Agent`: every config
+   with a typo now fails `flow start`, `flow ui` and `flow server` (exit 1, file named).
+3. `tests/cli.rs` `start_refuses_a_config_with_the_top_level_agent_key`.
+Routine, skim: the `config.agent` -> `config.worker.agent` call sites, test fixtures using
+`..Config::default()`, README/HANDOVER/CLAUDE.md lines.
+
+**Checks**
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt` pass at 04da2f9.
