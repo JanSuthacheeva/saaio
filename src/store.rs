@@ -14,7 +14,7 @@ const WAITS_DIR: &str = "waits";
 const SEEN_FILE: &str = "master.seen";
 
 /// One flow's events and its last heartbeat, as read from disk.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlowLog {
     pub id: String,
     pub events: Vec<Event>,

@@ -7,7 +7,7 @@ use crate::proto::PaneKey;
 use crate::view::FlowView;
 
 /// What the server should open and close to match the flows on the board.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct Wanted {
     pub open: Vec<PaneSpec>,
     pub close: Vec<PaneKey>,

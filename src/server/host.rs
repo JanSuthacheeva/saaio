@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fmt;
 use std::io::{ErrorKind, Read, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -21,19 +22,21 @@ const CLOSE_GRACE: Duration = Duration::from_secs(3);
 const DRAIN: Duration = Duration::from_millis(500);
 
 /// What the pane threads report to the thread that owns the Host.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum HostEvent {
     Output(PaneKey, Vec<u8>),
     Exited(PaneKey, Option<u32>),
 }
 
 /// Every pane: a PTY, the process in it and the Terminal showing its screen.
+#[derive(Debug)]
 pub struct Host {
     panes: BTreeMap<PaneKey, Pane>,
     size: Size,
     events: Sender<HostEvent>,
 }
 
+#[derive(Debug)]
 struct Pane {
     term: Terminal,
     process: Option<Process>,
@@ -46,6 +49,15 @@ struct Process {
     writer: Box<dyn Write + Send>,
     pid: i32,
     exited: Arc<AtomicBool>,
+}
+
+impl fmt::Debug for Process {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Process")
+            .field("pid", &self.pid)
+            .field("exited", &self.exited)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Host {

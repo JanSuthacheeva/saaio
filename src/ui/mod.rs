@@ -35,6 +35,7 @@ use peek::PeekCache;
 use theme::Theme;
 use theme_file::ThemeWatch;
 
+#[derive(Debug)]
 enum Event {
     Input(Vec<u8>),
     Server(ServerMsg),
@@ -52,6 +53,7 @@ const TICKS_PER_PEEK: u32 = 10;
 const TICKS_PER_THEME: u32 = 10;
 
 /// What flow ui reads from where it runs: Claude's home for the peek, the user's home for ~.
+#[derive(Debug)]
 pub struct UiEnv {
     pub claude_home: PathBuf,
     pub home: Option<PathBuf>,

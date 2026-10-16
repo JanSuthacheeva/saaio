@@ -111,6 +111,7 @@ fn group(flow: &FlowView) -> u8 {
     }
 }
 
+#[derive(Debug)]
 struct Folding {
     view: FlowView,
     durations: [Option<u64>; 4],

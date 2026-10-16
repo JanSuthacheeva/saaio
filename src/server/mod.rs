@@ -45,6 +45,7 @@ const START_SIZE: Size = Size {
     rows: 40,
 };
 
+#[derive(Debug, Clone)]
 pub struct ServerPaths {
     pub socket: PathBuf,
     pub master: PathBuf,
@@ -54,6 +55,7 @@ pub struct ServerPaths {
 
 type ConnId = u64;
 
+#[derive(Debug)]
 enum Event {
     Accepted(UnixStream),
     Message(ConnId, ClientMsg),
@@ -61,11 +63,13 @@ enum Event {
     Host(HostEvent),
 }
 
+#[derive(Debug)]
 struct Conn {
     stream: UnixStream,
     role: Option<Role>,
 }
 
+#[derive(Debug)]
 struct Server {
     store: Store,
     clock: fn() -> u64,
@@ -739,11 +743,7 @@ mod tests {
             master: dir.join("master.json"),
             instructions: dir.join("master.md"),
         };
-        let thread_paths = ServerPaths {
-            socket: paths.socket.clone(),
-            master: paths.master.clone(),
-            instructions: paths.instructions.clone(),
-        };
+        let thread_paths = paths.clone();
         let store = Store::at(dir.to_path_buf());
         let config = Config {
             agent: "claude".into(),

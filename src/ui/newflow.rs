@@ -140,6 +140,7 @@ impl NewFlowForm {
 }
 
 /// The dialog, centered in `area`: request, mode and what the start creates.
+#[derive(Debug)]
 pub struct NewFlowView<'a> {
     pub form: &'a NewFlowForm,
     pub flows: &'a [FlowView],

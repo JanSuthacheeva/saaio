@@ -29,6 +29,7 @@ pub enum Closing {
 }
 
 /// One connection to the session server.
+#[derive(Debug)]
 pub struct Client {
     stream: UnixStream,
 }

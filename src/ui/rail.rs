@@ -9,6 +9,7 @@ use crate::ui::sidebar::{self, Sidebar};
 use crate::view::State;
 
 /// The sidebar folded to a digit and a glyph per session, for more room in the pane.
+#[derive(Debug)]
 pub struct Rail<'a> {
     pub sidebar: Sidebar<'a>,
 }

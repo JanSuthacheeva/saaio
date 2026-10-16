@@ -18,7 +18,7 @@ pub struct Branching {
     pub types: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct RepoConfig {
     branch: Option<Branching>,
 }

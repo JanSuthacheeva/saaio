@@ -12,7 +12,7 @@ use crate::event::Phase;
 pub type PhaseMap = BTreeMap<String, Phase>;
 
 /// How to launch one agent: its command line, the first prompt it gets, and how to resume it.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Agent {
     pub command: Vec<String>,
     pub prompt: String,
@@ -47,7 +47,7 @@ impl Default for Config {
 }
 
 /// [master]: how the master works with its workers.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct MasterConfig {
     /// flow wakes the master when a worker stops (wake = false: it learns only from flow status).

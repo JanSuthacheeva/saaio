@@ -23,6 +23,7 @@ const PEEK_ROWS: usize = 14;
 const PEEK_MIN_ROWS: usize = 4;
 
 /// The right-hand overview: the master, then every worker grouped by what it needs.
+#[derive(Debug)]
 pub struct Sidebar<'a> {
     pub board: &'a Board,
     pub panes: &'a [PaneInfo],
@@ -40,6 +41,7 @@ pub struct Sidebar<'a> {
 }
 
 /// One row of the sidebar and the pane a click on it focuses.
+#[derive(Debug)]
 struct Row {
     line: Line<'static>,
     key: Option<PaneKey>,

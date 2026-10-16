@@ -12,7 +12,7 @@ use crate::registry::Registry;
 pub const MAX_SLOTS: u8 = 20;
 
 /// slots/<n>: which flow in which store took slot n.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Claim {
     pub store: PathBuf,
     pub flow: String,

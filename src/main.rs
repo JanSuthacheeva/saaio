@@ -579,6 +579,7 @@ fn new_flow(
 }
 
 /// What `flow start` was asked for.
+#[derive(Debug)]
 struct Launch {
     request: String,
     name: Option<String>,
@@ -919,6 +920,7 @@ fn clear(store: &Store, now: u64) -> Result<Document, Failure> {
 }
 
 /// What happened to a flow's worktree when it was cleared or removed.
+#[derive(Debug)]
 enum Retired {
     None,
     Removed,

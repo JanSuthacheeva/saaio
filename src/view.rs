@@ -6,7 +6,7 @@ use crate::event::{EventKind, Mode, Phase};
 
 pub const VIEW_VERSION: u32 = 1;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Board {
     pub version: u32,
@@ -16,7 +16,7 @@ pub struct Board {
     pub flows: Vec<FlowView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlowView {
     pub id: String,
@@ -42,7 +42,7 @@ pub struct FlowView {
 
 /// Where a started flow's worker runs: its worktree, branch, port slot, window (flow-ui once
 /// flow ui opened it; a tmux window id from before) and agent.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
     pub path: String,
@@ -66,7 +66,7 @@ pub enum State {
     Ended,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Step {
     pub phase: Phase,
@@ -121,7 +121,7 @@ impl fmt::Display for ReviewCount {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimelineEntry {
     pub at: u64,
     pub text: String,
@@ -146,7 +146,7 @@ impl Board {
 }
 
 /// What `flow status --all --json` prints: a board per project.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Projects {
     pub version: u32,
@@ -155,7 +155,7 @@ pub struct Projects {
 }
 
 /// One registered store: its project name, its folder and its flows.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
     pub name: String,

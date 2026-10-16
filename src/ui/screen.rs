@@ -35,6 +35,7 @@ impl Screen {
 }
 
 /// The focused pane, its default-colored cells in the theme's text and background.
+#[derive(Debug)]
 pub struct ScreenView<'a> {
     pub screen: &'a Screen,
     pub text: TuiColor,

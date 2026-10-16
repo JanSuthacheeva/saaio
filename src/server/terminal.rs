@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::{Arc, Mutex};
 
 use alacritty_terminal::event::{Event, EventListener};
@@ -28,8 +29,16 @@ pub struct Terminal {
     listener: Listener,
 }
 
+impl fmt::Debug for Terminal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Terminal")
+            .field("listener", &self.listener)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Collects what the emulator wants written back to the program.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 struct Listener {
     replies: Arc<Mutex<Vec<u8>>>,
     size: Arc<Mutex<(u16, u16)>>,
@@ -58,6 +67,7 @@ impl EventListener for Listener {
     }
 }
 
+#[derive(Debug)]
 struct Dims {
     cols: usize,
     rows: usize,

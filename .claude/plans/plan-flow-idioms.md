@@ -42,7 +42,7 @@ any other that turns out to be noise, each named.
 - [x] `Default` for `Config` and `MasterConfig` via `#[serde(default)]`; `Mode` default via `#[default]` + `default_value_t`
 - [x] `Theme`: `const fn hex` with `to_be_bytes`, palette consts, `impl Default`; `Theme::state` -> `state_style`, `tone_style`
 - [x] `Key`, `MouseEvent` `Copy`; `Modes` by value
-- [ ] `Debug` on every type, `Eq` where every field is `Eq`, `ServerPaths: Clone`
+- [x] `Debug` on every type, `Eq` where every field is `Eq`, `ServerPaths: Clone`
 - [ ] lossless casts via `From`; `pid` as `libc::pid_t` via `try_from`
 
 ### 2. Typed values

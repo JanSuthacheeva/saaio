@@ -12,14 +12,14 @@ pub const HOSTED: &str = "flow-ui";
 
 /// What the server passes on to every pane: FLOW_HOME, when it was set for the server, and the
 /// flow binary a worker's hooks run.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LaunchEnv {
     pub flow_home: Option<PathBuf>,
     pub flow_exe: PathBuf,
 }
 
 /// Exactly what a pane runs: its command line, directory and environment.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PaneSpec {
     pub key: PaneKey,
     pub argv: Vec<String>,

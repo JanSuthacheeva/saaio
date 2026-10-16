@@ -10,7 +10,7 @@ pub const DESCRIPTION: &str =
 pub const LIST_TEXT_LIMIT: usize = 80;
 
 /// What a successful command prints: TOON for agents, JSON for programs, a line for people (flow ui).
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Document {
     Toon(String),
     Json(String),
@@ -20,7 +20,7 @@ pub enum Document {
 }
 
 /// An error an agent can act on: a message and next steps, printed as TOON on stdout.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Failure {
     pub message: String,
     pub help: Vec<String>,
@@ -114,7 +114,7 @@ pub fn status_list(board: &Board, warnings: &[String], full: bool) -> Document {
 
 const NEW_HELP: &str = "Run `flow new --name <name> --request <text>` to track a new flow";
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct ListDocument<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     bin: Option<&'a str>,
@@ -130,14 +130,14 @@ struct ListDocument<'a> {
     help: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(untagged)]
 enum FlowRows {
     None(&'static str),
     Rows(Vec<FlowRow>),
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct FlowRow {
     name: String,
     state: String,
@@ -146,7 +146,7 @@ struct FlowRow {
     age: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct BlockerRow {
     name: String,
     blocker: String,

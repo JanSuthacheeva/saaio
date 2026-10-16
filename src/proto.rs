@@ -34,13 +34,13 @@ pub struct Size {
 }
 
 /// Attach draws the panes; Control sends one request (flow remove, flow ui --stop).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     Attach { size: Size },
     Control,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientMsg {
     Hello {
         version: u32,
@@ -58,7 +58,7 @@ pub enum ClientMsg {
     EndFlows,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ServerMsg {
     Welcome {
         version: u32,
@@ -82,13 +82,13 @@ pub enum ServerMsg {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PaneInfo {
     pub key: PaneKey,
     pub status: PaneStatus,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PaneStatus {
     Running,
     Exited { code: Option<u32> },
@@ -96,7 +96,7 @@ pub enum PaneStatus {
 }
 
 /// Rows of one pane: all of them when full, else only the changed ones.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Frame {
     pub key: PaneKey,
     pub full: bool,
@@ -106,7 +106,7 @@ pub struct Frame {
     pub history: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cell {
     pub text: String,
     pub fg: Color,

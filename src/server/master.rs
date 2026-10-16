@@ -39,7 +39,7 @@ pub fn ensure_instructions(file: &Path) -> Result<()> {
 }
 
 /// The master's session id and the directory it runs in, kept across server restarts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MasterRecord {
     pub session: String,
     pub cwd: PathBuf,

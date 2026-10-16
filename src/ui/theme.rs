@@ -3,7 +3,7 @@ use ratatui::style::{Color, Modifier, Style};
 use crate::view::{State, Tone};
 
 /// The colors a theme file names, by its keys; Color::Reset is "default", the terminal's own.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Palette {
     pub background: Color,
     pub panel: Color,

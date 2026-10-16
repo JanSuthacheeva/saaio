@@ -53,6 +53,7 @@ impl BoardState {
 }
 
 /// Every session as a card, and the timeline, decisions and steps of the selected one.
+#[derive(Debug)]
 pub struct BoardView<'a> {
     pub sidebar: Sidebar<'a>,
     pub state: BoardState,
@@ -395,6 +396,7 @@ impl BoardView<'_> {
         let card_width = inner.saturating_sub(gap * (COLUMNS as u16 - 1)) / COLUMNS as u16;
 
         // Rows from the top of the first project: each project's line, then its rows of cards.
+        #[derive(Debug)]
         enum Item<'p> {
             Project(&'p Project),
             Card(&'p FlowView, usize, u16),

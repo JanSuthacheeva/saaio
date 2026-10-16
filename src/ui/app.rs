@@ -123,7 +123,7 @@ impl Job {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Effect {
     Send(ClientMsg),
     /// Read the repo's branch convention for the new-flow dialog; answered by on_branching.
@@ -156,6 +156,7 @@ pub fn outcome(success: bool, stdout: &str) -> Result<String, String> {
 }
 
 /// What flow ui shows and what it does with input; no I/O of its own.
+#[derive(Debug)]
 pub struct App {
     size: Size,
     screen: Screen,
