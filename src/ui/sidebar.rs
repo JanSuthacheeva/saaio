@@ -113,7 +113,9 @@ impl Sidebar<'_> {
                     theme.ui.faint
                 };
                 block.push(plain(Line::from(vec![
-                    Span::styled(format!(" {} ", heading.label()), theme.ui.faint),
+                    Span::raw(" "),
+                    theme.heading(heading.label()),
+                    Span::raw(" "),
                     Span::styled(count.to_string(), tone),
                 ])));
             }
