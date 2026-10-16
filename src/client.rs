@@ -251,8 +251,8 @@ fn server_command(exe: &Path, env: &[(String, String)]) -> Command {
     command
 }
 
-/// Starts `<exe> server` in its own session with output to server.log unless one listens;
-/// waits up to 2 s for the socket.
+/// Starts `<exe> server` in its own session with output to server.log unless one listens, moving a
+/// log past server_log::CAP to server.log.1 first; waits up to 2 s for the socket.
 pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Result<()> {
     if UnixStream::connect(socket).is_ok() {
         return Ok(());
@@ -264,6 +264,8 @@ pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Res
         std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
             .with_context(|| format!("could not restrict {}", dir.display()))?;
     }
+    // A log that cannot be moved aside is only longer; it never keeps the server from starting.
+    let _ = server_log::rotate(&log_path, server_log::CAP);
     let log = OpenOptions::new()
         .create(true)
         .append(true)
@@ -401,6 +403,23 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn moves_a_full_log_aside_before_it_starts_a_server() {
+        let dir = TempDir::new().unwrap();
+        let socket = dir.path().join("server.sock");
+        let log = dir.path().join("server.log");
+        let full = vec![b'x'; usize::try_from(server_log::CAP).unwrap() + 1];
+        std::fs::write(&log, &full).unwrap();
+
+        let _ = ensure_server(&socket, Path::new("/usr/bin/true"), &[]);
+
+        assert_eq!(
+            std::fs::read(dir.path().join("server.log.1")).unwrap(),
+            full
+        );
+        assert_eq!(std::fs::metadata(&log).unwrap().len(), 0);
     }
 
     #[test]

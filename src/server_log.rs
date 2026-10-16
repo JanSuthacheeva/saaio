@@ -1,4 +1,5 @@
 use std::backtrace::Backtrace;
+use std::fs;
 use std::io::{self, Write};
 use std::panic::Location;
 use std::path::{Path, PathBuf};
@@ -6,9 +7,27 @@ use std::{process, thread};
 
 use crate::text;
 
+/// The size past which ensure_server moves server.log to server.log.1.
+pub const CAP: u64 = 1 << 20;
+
 /// server.log beside the socket.
 pub fn path(socket: &Path) -> PathBuf {
     socket.with_extension("log")
+}
+
+/// Moves a log over `cap` bytes to `<log>.1`, replacing the one before; nothing when under it or
+/// missing.
+pub fn rotate(log: &Path, cap: u64) -> io::Result<()> {
+    match fs::metadata(log) {
+        Ok(meta) if meta.len() > cap => {
+            let mut old = log.as_os_str().to_owned();
+            old.push(".1");
+            fs::rename(log, old)
+        }
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 /// One line: `2026-10-16 13:39:54 +07:00 [2739] text`.
@@ -50,7 +69,29 @@ fn panic_text(thread: Option<&str>, location: Option<&Location>, message: &str) 
 
 #[cfg(test)]
 mod tests {
+    use tempfile::TempDir;
+
     use super::*;
+
+    #[test]
+    fn moves_a_log_over_the_cap_aside_and_keeps_one_under_it() {
+        let dir = TempDir::new().unwrap();
+        let log = dir.path().join("server.log");
+        let old = dir.path().join("server.log.1");
+
+        rotate(&log, 10).unwrap();
+        assert!(!log.exists());
+
+        fs::write(&log, "short").unwrap();
+        rotate(&log, 10).unwrap();
+        assert_eq!(fs::read_to_string(&log).unwrap(), "short");
+
+        fs::write(&old, "older").unwrap();
+        fs::write(&log, "longer than ten").unwrap();
+        rotate(&log, 10).unwrap();
+        assert!(!log.exists());
+        assert_eq!(fs::read_to_string(&old).unwrap(), "longer than ten");
+    }
 
     #[test]
     fn stamps_a_line_with_time_and_pid() {

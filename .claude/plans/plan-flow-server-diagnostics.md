@@ -218,7 +218,7 @@ Regrouped during the build: dead code fails `clippy -D warnings`, so each task l
 its first caller.
 
 - [x] Stamped lines: `text::stamp` (and `local_offset_secs` moved), `server_log` (`path`, `line`, `write`, `exit_on_panic`, `panic_text`), `server::run` writes started/stopped, `eprintln!` in server/ to `server_log::write`, named threads, `commands::server` (`exit_on_panic`, `failed:`, `Document::Silent`); unit tests for stamp, line, panic_text
-- [ ] Rotation: `server_log::CAP`, `rotate`, `ensure_server` rotates; TempDir tests and a client test
+- [x] Rotation: `server_log::CAP`, `rotate`, `ensure_server` rotates; TempDir tests and a client test
 - [ ] Stop reasons: `Stop` with Display, `Event::Signal` from `stop_on_signals` (WithOrigin; SIGTERM, SIGINT, SIGHUP), `handle`/`message` return `ControlFlow<Stop>`, `serve` returns `Stop` and writes `stopping:`; unit test for Display
 - [ ] Peers: `build.rs` (FLOW_COMMIT), `proto::BUILD`, `Peer` with Display, `Hello { peer }`, `Detached { by }`, protocol 3, `client::this_process`, `server/conn.rs` `peers` with attach/take-over/left/refused lines, `Event::Unreadable` and `refuse_unreadable`, `Stop::Asked(peer)`, the UI's take-over message with ~; proto, server and app tests
 - [ ] Stopper's lines: `server_log::append`, `stop_server(socket, clock)` appends its SIGTERM/SIGKILL/did-not-stop lines; tests/cli.rs checks the stopper's and the server's lines in server.log
