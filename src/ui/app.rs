@@ -802,7 +802,7 @@ impl App {
     /// Esc, q, o and n do the same on either board.
     fn on_any_board_key(&mut self, key: Key) -> Vec<Effect> {
         match key {
-            Key::Esc | Key::Char('q') | Key::Char('o') => {
+            Key::Esc | Key::Char('q' | 'o') => {
                 self.view = View::Panes;
                 vec![]
             }

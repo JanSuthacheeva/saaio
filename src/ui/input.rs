@@ -136,15 +136,9 @@ pub fn decode(bytes: &[u8]) -> Vec<Key> {
             '\t' => Key::Tab,
             '\x7f' | '\x08' => Key::Backspace,
             '\x1b' => match chars.peek() {
-                Some('[') | Some('O') => {
+                Some('[' | 'O') => {
                     chars.next();
-                    let mut last = None;
-                    for next in chars.by_ref() {
-                        if next.is_ascii_alphabetic() || next == '~' {
-                            last = Some(next);
-                            break;
-                        }
-                    }
+                    let last = chars.find(|next| next.is_ascii_alphabetic() || *next == '~');
                     match last {
                         Some('A') => Key::Up,
                         Some('B') => Key::Down,

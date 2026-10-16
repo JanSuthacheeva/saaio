@@ -204,9 +204,8 @@ impl Widget for NewFlowView<'_> {
             );
         }
 
-        let radio = |mode: Mode, label: &'static str| {
-            let on = form.mode == mode;
-            vec![
+        let radio = |on: bool, label: &str| {
+            [
                 Span::styled(
                     if on { "(•)" } else { "( )" },
                     if on { theme.ui.accent } else { theme.ui.faint },
@@ -214,36 +213,29 @@ impl Widget for NewFlowView<'_> {
                 Span::styled(format!(" {label}"), theme.ui.text),
             ]
         };
+        let heading = |field: Field, text: &'static str| {
+            let style = if form.field == field {
+                theme.ui.key
+            } else {
+                theme.ui.faint
+            };
+            Span::styled(text, style)
+        };
         let extra = form.extra_rows();
         if extra > 0 {
-            let mut row = vec![Span::styled(
-                " type    ",
-                if form.field == Field::Type {
-                    theme.ui.key
-                } else {
-                    theme.ui.faint
-                },
-            )];
+            let mut row = vec![heading(Field::Type, " type    ")];
             for (index, kind) in form.types().iter().enumerate() {
                 if index > 0 {
                     row.push(Span::raw("   "));
                 }
-                let on = index == form.kind;
-                row.push(Span::styled(
-                    if on { "(•)" } else { "( )" },
-                    if on { theme.ui.accent } else { theme.ui.faint },
-                ));
-                row.push(Span::styled(format!(" {kind}"), theme.ui.text));
+                row.extend(radio(index == form.kind, kind));
             }
             line(buf, 7, Line::from(row));
         }
-        let mut mode = vec![Span::styled(" mode    ", theme.ui.faint)];
-        if form.field == Field::Mode {
-            mode[0] = Span::styled(" mode    ", theme.ui.key);
-        }
-        mode.extend(radio(Mode::Auto, "auto"));
+        let mut mode = vec![heading(Field::Mode, " mode    ")];
+        mode.extend(radio(form.mode == Mode::Auto, "auto"));
         mode.push(Span::raw("     "));
-        mode.extend(radio(Mode::Guided, "guided"));
+        mode.extend(radio(form.mode == Mode::Guided, "guided"));
         mode.push(Span::styled(
             "       guided stops at every phase",
             theme.ui.faint,

@@ -7,6 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+use crate::event::Mode;
 use crate::output::short_duration;
 use crate::proto::{PaneInfo, PaneKey, PaneStatus};
 use crate::ui::layout::SIDEBAR_WIDTH;
@@ -79,30 +80,21 @@ impl Sidebar<'_> {
             plain(Line::styled("─".repeat(width), theme.ui.rule)),
         ];
         let master = *self.focus == PaneKey::Master;
+        let (cursor, digit, name) = if master {
+            (
+                Span::styled(theme.glyphs.cursor, theme.ui.accent),
+                theme.ui.strong,
+                theme.ui.strong,
+            )
+        } else {
+            (Span::raw(" "), theme.ui.faint, theme.ui.text)
+        };
         rows.push(Row {
             line: split(
                 vec![
-                    if master {
-                        Span::styled(theme.glyphs.cursor, theme.ui.accent)
-                    } else {
-                        Span::raw(" ")
-                    },
-                    Span::styled(
-                        "0   ",
-                        if master {
-                            theme.ui.strong
-                        } else {
-                            theme.ui.faint
-                        },
-                    ),
-                    Span::styled(
-                        "master",
-                        if master {
-                            theme.ui.strong
-                        } else {
-                            theme.ui.text
-                        },
-                    ),
+                    cursor,
+                    Span::styled("0   ", digit),
+                    Span::styled("master", name),
                 ],
                 vec![],
                 width,
@@ -249,23 +241,22 @@ impl Sidebar<'_> {
                 "in {} ",
                 short_duration(flow.changed_at.saturating_sub(flow.started_at))
             ),
-            Some(tasks) => format!("{}/{} ", tasks.done, tasks.total),
-            None if flow.mode == crate::event::Mode::Guided && !flow.is_finished() => {
-                "guided ".to_string()
-            }
+            Some(tasks) => format!("{tasks} "),
+            None if flow.mode == Mode::Guided => "guided ".to_string(),
             None => String::new(),
         };
 
+        let lit = selected || changed;
         let mut rows = vec![
             Row {
                 line: split(first, vec![right], width),
                 key: Some(key.clone()),
-                selected: selected || changed,
+                selected: lit,
             },
             Row {
                 line: split(second, vec![Span::styled(detail, theme.ui.faint)], width),
                 key: Some(key.clone()),
-                selected: selected || changed,
+                selected: lit,
             },
         ];
         if let Some((text, style)) = self.note(flow, status) {
@@ -280,7 +271,7 @@ impl Sidebar<'_> {
             rows.push(Row {
                 line: Line::from(third),
                 key: Some(key),
-                selected: selected || changed,
+                selected: lit,
             });
         }
         rows
@@ -425,11 +416,17 @@ impl Sidebar<'_> {
 
     pub fn label(&self, flow: &FlowView) -> Span<'static> {
         let theme = self.theme;
+        match (flow.state, flow.merge_request.as_deref()) {
+            (State::Done | State::Ended, Some(url)) => {
+                Span::styled(merge_request(url), theme.ui.faint)
+            }
+            _ => self.state_label(flow),
+        }
+    }
+
+    fn state_label(&self, flow: &FlowView) -> Span<'static> {
+        let theme = self.theme;
         match flow.state {
-            State::Done | State::Ended if flow.merge_request.is_some() => Span::styled(
-                merge_request(flow.merge_request.as_deref().unwrap_or_default()),
-                theme.ui.faint,
-            ),
             State::Done => Span::styled("done", theme.state.done),
             State::Ended => Span::styled("ended", theme.state.ended),
             State::NotResponding => Span::styled("not responding", theme.state.blocked),

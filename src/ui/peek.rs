@@ -78,7 +78,7 @@ fn parse(text: &str, cut: bool) -> Vec<PeekLine> {
         let Ok(entry) = serde_json::from_str::<Value>(line) else {
             continue;
         };
-        if entry["isSidechain"] == Value::Bool(true) {
+        if entry["isSidechain"] == true {
             continue;
         }
         let Some(blocks) = entry["message"]["content"].as_array() else {

@@ -186,7 +186,7 @@ mod tests {
             .collect();
 
         let mut taken: Vec<u8> = handles.into_iter().map(|h| h.join().unwrap()).collect();
-        taken.sort();
+        taken.sort_unstable();
 
         assert_eq!(taken, (1..=8).collect::<Vec<u8>>());
     }

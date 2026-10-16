@@ -254,7 +254,7 @@ mod tests {
     use crate::fold;
 
     fn strings(items: &[&str]) -> Vec<String> {
-        items.iter().map(|item| item.to_string()).collect()
+        items.iter().copied().map(String::from).collect()
     }
 
     fn flow_in_slot(slot: u8, finished: bool) -> FlowView {
