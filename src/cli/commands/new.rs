@@ -1,4 +1,4 @@
-use super::views;
+use super::{check_request, views};
 use crate::cli::output::{Document, Failure, flow};
 use crate::event::{Event, EventKind, Mode};
 use crate::fold;
@@ -16,6 +16,7 @@ pub struct Args {
 
 /// Tracks a new flow, or returns the unfinished flow of that name.
 pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
+    check_request(&args.request)?;
     let (flows, _) = views(store, now);
     if let Some(existing) = fold::resolve(&flows, &args.name).filter(|flow| !flow.is_finished()) {
         return Ok(flow::created(existing, true));

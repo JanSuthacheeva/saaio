@@ -634,6 +634,34 @@ resume = ["sh", "-c", "echo resumed {{name}} >> {log}; exec cat"]"#,
     assert!(again.wait().unwrap().success());
 }
 
+#[test]
+fn the_worker_gets_the_whole_request_however_long() {
+    let lab = Lab::new();
+    let prompts = lab.home.join("prompts");
+    fs::create_dir_all(&prompts).unwrap();
+    lab.agent(&format!(
+        r#"command = ["sh", "-c", "printf %s \"$1\" > {dir}/{{name}}; exec cat", "sh", "{{prompt}}"]
+prompt = "{{request}}"
+resume = ["cat"]"#,
+        dir = prompts.display()
+    ));
+    let request = format!("SHOP-300 {} the tail", "word ".repeat(120));
+    let mut server = lab.server();
+
+    assert!(lab.start(&[&request]).status.success());
+
+    let prompt = || fs::read_to_string(prompts.join("shop-300")).unwrap_or_default();
+    wait_until(Duration::from_secs(10), "the worker never ran", || {
+        !prompt().is_empty()
+    });
+    assert_eq!(prompt(), request);
+    let board: serde_json::Value =
+        serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+    assert_eq!(board["flows"][0]["request"], request.as_str());
+    assert!(lab.run(&["ui", "--stop"]).status.success());
+    assert!(server.wait().unwrap().success());
+}
+
 /// Runs `flow hook claude-code` with a hook payload on stdin, as Claude Code does.
 fn hook(home: &Path, flow_id: Option<&str>, payload: &str) -> Output {
     let mut command = flow_command(home);
@@ -747,6 +775,31 @@ fn start_refuses_outside_a_repository() {
         "{}",
         stdout(&output)
     );
+}
+
+#[test]
+fn start_and_new_refuse_a_request_over_the_limit_before_making_anything() {
+    let lab = Lab::new();
+    let long = format!("SHOP-301 {}", "ä".repeat(20_000 - 9 + 1));
+    let refused = |output: Output| {
+        assert_eq!(output.status.code(), Some(1), "{}", stdout(&output));
+        stdout(&output)
+    };
+
+    let text = refused(lab.start(&[&long]));
+    assert!(
+        text.contains("the request is 20001 chars, over 20000"),
+        "{text}"
+    );
+    assert!(text.contains("name it in the request"), "{text}");
+    let text = refused(lab.run(&["new", "--name", "shop-301", "--request", &long]));
+    assert!(text.contains("over 20000"), "{text}");
+    assert!(stdout(&lab.run(&["status"])).contains("count: 0"));
+    assert!(lab.branches().is_empty());
+
+    let fits = &long[..long.len() - "ä".len()];
+    assert!(lab.start(&[fits]).status.success());
+    assert_eq!(lab.branches(), ["flow/shop-301"]);
 }
 
 #[test]

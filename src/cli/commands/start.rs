@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::views;
+use super::{check_request, views};
 use crate::branching::{self, Branching};
 use crate::cli::output::start::{self, Opening, Setup};
 use crate::cli::output::{Document, Failure};
@@ -42,6 +42,7 @@ pub fn run(
     cwd: &Path,
     now: u64,
 ) -> Result<Document, Failure> {
+    check_request(&args.request)?;
     let Some((agent_name, _)) = config.agent(args.agent.as_deref()) else {
         let known: Vec<&str> = config.agents.keys().map(String::as_str).collect();
         return Err(Failure::error(

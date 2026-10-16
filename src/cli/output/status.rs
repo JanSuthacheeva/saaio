@@ -533,4 +533,19 @@ mod tests {
         let full = detail(&answered, 10 * MIN, true, None).text().to_string();
         assert!(!full.contains("use --full"), "{full}");
     }
+
+    #[test]
+    fn the_detail_cuts_a_long_request_that_full_shows_whole() {
+        let mut long = flow("shop-300", vec![], MIN);
+        long.request = format!("SHOP-300 {} the tail", "word ".repeat(120));
+
+        let short = detail(&long, MIN, false, None).text().to_string();
+        assert!(
+            short.contains("(truncated, 618 chars - use --full)"),
+            "{short}"
+        );
+        assert!(!short.contains("the tail"), "{short}");
+        let full = detail(&long, MIN, true, None).text().to_string();
+        assert!(full.contains(&format!("{}\n", long.request)), "{full}");
+    }
 }

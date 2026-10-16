@@ -7,6 +7,9 @@ pub const EVENT_VERSION: u32 = 1;
 pub const TEXT_LIMIT: usize = 500;
 /// The longest message or answer: what the master tells a worker, a turn's whole closing message.
 pub const LONG_TEXT_LIMIT: usize = 4000;
+/// The longest request flow start and flow new take; past it they refuse. Kept whole, since it
+/// becomes the worker's prompt, one argv string (Linux refuses one over 128 KiB).
+pub const REQUEST_LIMIT: usize = 20_000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Event {
@@ -100,7 +103,8 @@ pub fn unix_ms(time: SystemTime) -> u64 {
 }
 
 impl Event {
-    /// An event of the current version at `at` (Unix ms), each text cut to TEXT_LIMIT chars.
+    /// An event of the current version at `at` (Unix ms), each text cut to its limit, except a
+    /// Started request: it is the worker's prompt, kept whole (its command checks REQUEST_LIMIT).
     pub fn new(at: u64, mut kind: EventKind) -> Event {
         kind.cut_texts();
         Event {
@@ -127,11 +131,8 @@ impl Event {
 impl EventKind {
     fn cut_texts(&mut self) {
         match self {
-            EventKind::Started { name, request, .. } => {
-                cut_to(name, TEXT_LIMIT);
-                cut_to(request, TEXT_LIMIT);
-            }
-            EventKind::Delegated { description: text }
+            EventKind::Started { name: text, .. }
+            | EventKind::Delegated { description: text }
             | EventKind::Waiting { question: text }
             | EventKind::Idle { note: text }
             | EventKind::Blocked { reason: text }
@@ -282,7 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn cuts_every_text_to_the_limit_in_characters() {
+    fn cuts_every_text_to_the_limit_in_characters_but_the_request() {
         let long = "ä".repeat(TEXT_LIMIT + 20);
         let event = Event::new(
             0,
@@ -297,7 +298,10 @@ mod tests {
             panic!("kind changed");
         };
         assert_eq!(name.chars().count(), TEXT_LIMIT);
-        assert_eq!(request.chars().count(), TEXT_LIMIT);
+        assert_eq!(
+            request, long,
+            "the request is the worker's prompt, kept whole"
+        );
 
         let short = Event::new(
             0,
