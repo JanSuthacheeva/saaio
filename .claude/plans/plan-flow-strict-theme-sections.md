@@ -133,6 +133,10 @@ the title row; no `[glyphs]`. `docs/HANDOVER.md` row 9: `[glyphs]` is rejected u
 
 - Tasks 1 and 2 are one commit: `Section` and `PaletteKey::section` are dead code (a clippy error)
   until `parse` uses them.
+- Found end to end: a fixed theme repainted but its error stayed in the title row until a key.
+  Added `App::take_back(&mut self, prefix: &str)` (clears the notice when it starts with `prefix`),
+  called by `reload_theme` with `THEME_NOTICE` ("theme: ") when the theme reads again; test in
+  `app/tests/board.rs`.
 
 ## Assumptions
 
@@ -149,4 +153,4 @@ the title row; no `[glyphs]`. `docs/HANDOVER.md` row 9: `[glyphs]` is rejected u
 - [x] theme_file parse walks DeTable: Entry, colors, plain, at, line; apply takes Entry; read and load drop their path context; [glyphs] rejected; says_what_is_wrong_and_where cases with path:line, dotted and inline-table tests
 - [x] Fixtures noctalia.toml and noctalia-template.toml with tests that noctalia loads and the template parses
 - [x] README Themes and HANDOVER row 9 updated
-- [ ] End to end: flow ui on a scratch FLOW_HOME and XDG_CONFIG_HOME shows a wrong-section error with file and line, and repaints once fixed
+- [x] End to end: flow ui on a scratch FLOW_HOME and XDG_CONFIG_HOME shows a wrong-section error with file and line, and repaints once fixed

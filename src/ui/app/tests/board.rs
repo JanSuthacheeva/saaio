@@ -322,3 +322,19 @@ fn a_working_card_takes_the_color_of_its_phase() {
         "the state label"
     );
 }
+
+#[test]
+fn a_notice_is_taken_back_only_when_it_is_the_one_meant() {
+    let mut app = board_app();
+
+    app.say("theme: theme.toml:7: review belongs in [phase], not [state]".to_string());
+    app.take_back("theme: ");
+    assert_eq!(app.notice, None);
+
+    app.say("only a finished flow can be cleared".to_string());
+    app.take_back("theme: ");
+    assert_eq!(
+        app.notice.as_deref(),
+        Some("only a finished flow can be cleared")
+    );
+}
