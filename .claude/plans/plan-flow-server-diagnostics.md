@@ -269,3 +269,20 @@ from pid <stopper>`, `ui left`, `stopped`, and the dropped UI printed who took o
 **Checks**: `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`
 pass with the build.rs fix. The fix was not reviewed by a separate agent; it was re-read and
 re-run against its reproducer.
+
+### Second review (a387795..b818076)
+
+Isolated review of the task under "After the review": `Peer::folder()`.
+
+**Fixed** - nothing; no findings.
+
+**Open** - none. Checked: `Display` (and so every `server.log` line naming a peer) and the UI's
+take-over message both go through `folder()`; no other reader formats `Peer::cwd`; both new test
+cases fail without the change (the old output was `pid 4321 in  (flow ...)`); `tilde` leaves
+`an unknown folder` alone.
+
+**Where to look** - `src/proto.rs` `Peer::folder` and `src/ui/app/messages.rs` `Detached`; a
+five-line change, routine.
+
+**Checks**: `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`
+passed at b818076; no code changed since.
