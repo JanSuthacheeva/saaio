@@ -142,14 +142,22 @@ fn strings(parts: &[&str]) -> Vec<String> {
 pub const MASTER_AGENT: &str = "master";
 
 /// claude: ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"], prompt "/ship-feature {request}",
-/// resumed with ["claude", "-n", "{name}", "--resume", "{id}"]; master: claude with the orchestrator
-/// instructions appended to its system prompt ({instructions}, the master.md beside config.toml).
+/// resumed with ["claude", "-n", "{name}", "--resume", "{id}"]; codex: ["codex", "{prompt}"], prompt
+/// "$ship-feature {request}", resumed by the session Codex picked ({session}); master: claude with the
+/// orchestrator instructions appended to its system prompt ({instructions}, the master.md beside
+/// config.toml).
 pub fn builtin_agents() -> BTreeMap<String, Agent> {
     let claude = Agent {
         command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
         prompt: "/ship-feature {request}".to_string(),
         adapter: Some(Adapter::ClaudeCode),
         resume: Some(strings(&["claude", "-n", "{name}", "--resume", "{id}"])),
+    };
+    let codex = Agent {
+        command: strings(&["codex", "{prompt}"]),
+        prompt: "$ship-feature {request}".to_string(),
+        adapter: Some(Adapter::Codex),
+        resume: Some(strings(&["codex", "resume", "{session}"])),
     };
     let master = Agent {
         command: strings(&[
@@ -175,6 +183,7 @@ pub fn builtin_agents() -> BTreeMap<String, Agent> {
     };
     BTreeMap::from([
         ("claude".to_string(), claude),
+        ("codex".to_string(), codex),
         (MASTER_AGENT.to_string(), master),
     ])
 }
@@ -203,7 +212,15 @@ mod tests {
             agent.resume.as_deref(),
             Some(&["claude", "-n", "{name}", "--resume", "{id}"].map(String::from)[..])
         );
-        assert!(config.agent(Some("codex")).is_none());
+        let (_, codex) = config.agent(Some("codex")).unwrap();
+        assert_eq!(codex.command, ["codex", "{prompt}"]);
+        assert_eq!(codex.prompt, "$ship-feature {request}");
+        assert_eq!(
+            codex.resume.as_deref(),
+            Some(&["codex", "resume", "{session}"].map(String::from)[..])
+        );
+        assert_eq!(codex.adapter, Some(Adapter::Codex));
+        assert!(config.agent(Some("pi")).is_none());
         let (_, master) = config.agent(Some(MASTER_AGENT)).unwrap();
         assert!(
             master

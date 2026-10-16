@@ -370,18 +370,18 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 - [x] Add adapter/codex.rs (hooks, toml_string, translate, session, mentioned_skill, read_skill, subagent); Adapter::Codex in named/name/wiring/plain_wiring/master_wiring/translate; table tests over the fixtures
 
 ### Launch, delivery, hook
-- [ ] config: built-in codex agent, MasterConfig.agent, Config::master_agent and worker_agents, built-in master without the file argument; tests
+- [x] config: built-in codex agent; tests (master_agent, [master] agent and the master without the file argument move to the master task, worker_agents to the dialog task: a unit lands with its first caller, since private modules warn on dead code)
 - [ ] launch/pane.rs: {session} in resume_argv; worker_spec fills it from flow.session and falls back to the fresh or plain command; tests
 - [ ] store busy marks and master_session; deliver::master_news_now (master_news uses it); tests
 - [ ] commands/hook.rs: Adapter::wakes_itself, Args.master, Hooked, hand_over, busy marks, Document::Wake on a Stop with news; tests/cli.rs cases
 
 ### Server
-- [ ] server/master.rs: Instructions, spec with instruct, master_wiring and session; panes.rs open_master through Config::master_agent and store.master_session; master.md harness-neutral with master-v5.md kept; tests
+- [ ] config MasterConfig.agent and Config::master_agent, built-in master without the file argument; server/master.rs: Instructions, spec with instruct, master_wiring and session; panes.rs open_master through Config::master_agent and store.master_session; master.md harness-neutral with master-v5.md kept; tests
 - [ ] server/news.rs: deliver_news, server_delivered, paste; Server typed_at and quiet; conn.rs records input; server/tests.rs cases with a codex-adapter cat agent
 
 ### UI
 - [ ] peek split into peek/claude.rs and peek/codex.rs; Format, transcript_of, tail with format; PeekCache uses transcript_of; codex parser tests over the recorded rollout
-- [ ] New-flow dialog agent row (NewFlowForm agents/agent, Field::Agent, picked_agent, view.rs), UiEnv.agents, Job::Start --agent; tests and a golden screen
+- [ ] Config::worker_agents; new-flow dialog agent row (NewFlowForm agents/agent, Field::Agent, picked_agent, view.rs), UiEnv.agents, Job::Start --agent; tests and a golden screen
 
 ### Docs and setup
 - [ ] Docs: README (Codex agent, [master] agent, trusting the hooks once), CLAUDE.md (adapter/codex.rs, answer.rs, calls.rs, server/news.rs, peek/, plan list), HANDOVER (Codex facts, decisions, codex queue for later), plan-flow-adapters.md pointer to this plan
