@@ -35,6 +35,6 @@ None. No production code, flag or output changes.
 
 ## Tasks
 
-- [ ] `flow_command` clears every inherited FLOW_* variable and points XDG_CONFIG_HOME and
+- [x] `flow_command` clears every inherited FLOW_* variable and points XDG_CONFIG_HOME and
       CLAUDE_CONFIG_DIR into the test's folder; `FLOW_MASTER=1 cargo test` and a run with every
       FLOW_* of a worker pane set both pass
