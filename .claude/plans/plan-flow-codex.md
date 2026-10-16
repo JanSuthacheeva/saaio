@@ -168,6 +168,7 @@ pub fn set_busy(&self, waiter: &Waiter, busy: bool) -> Result<()>;   // waits/<k
 pub fn busy(&self, waiter: &Waiter) -> bool;
 pub fn set_master_session(&self, id: &str) -> Result<()>;            // waits/master.session
 pub fn master_session(&self) -> Option<String>;
+pub fn forget_master_session(&self) -> Result<()>;               // a fresh master starts a new session
 
 // src/deliver.rs (modified: it exists on main)
 /// The flows that stopped since the master last saw them, marked seen, at once (no SETTLE): for the
@@ -375,7 +376,7 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 - [x] Store set_busy and master_session, deliver::master_news_now (master_news uses it), Adapter::wakes_itself; commands/hook.rs: Args.master, Hooked, hand_over, busy marks, Document::Wake on a Stop with news; tests/cli.rs cases
 
 ### Server
-- [ ] config MasterConfig.agent and Config::master_agent, built-in master without the file argument; server/master.rs: Instructions, spec with instruct, master_wiring and session; panes.rs open_master through Config::master_agent and store.master_session; master.md harness-neutral with master-v5.md kept; tests
+- [x] config MasterConfig.agent and Config::master_agent, built-in master without the file argument; server/master.rs: Instructions, spec with instruct, master_wiring and session; panes.rs open_master through Config::master_agent and store.master_session; master.md harness-neutral with master-v5.md kept; tests
 - [ ] Store::busy; server/news.rs: deliver_news, server_delivered, paste; Server typed_at and quiet; conn.rs records input; server/tests.rs cases with a codex-adapter cat agent
 
 ### UI

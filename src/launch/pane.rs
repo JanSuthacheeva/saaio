@@ -96,7 +96,7 @@ pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<Pa
 }
 
 /// True when the agent resumes by the session its harness picked, not by flow's id.
-fn names_session(agent: &Agent) -> bool {
+pub fn names_session(agent: &Agent) -> bool {
     agent
         .resume
         .iter()

@@ -257,6 +257,17 @@ impl Store {
         self.write_wait(MASTER_SESSION_FILE, id)
     }
 
+    /// Forgets the master's session, as a fresh master starts a new one.
+    pub fn forget_master_session(&self) -> Result<()> {
+        let file = self.root.join(WAITS_DIR).join(MASTER_SESSION_FILE);
+        match fs::remove_file(&file) {
+            Err(error) if error.kind() != ErrorKind::NotFound => {
+                Err(error).with_context(|| format!("could not remove {}", file.display()))
+            }
+            _ => Ok(()),
+        }
+    }
+
     pub fn master_session(&self) -> Option<String> {
         let id = self.read_wait(MASTER_SESSION_FILE)?;
         Some(id.trim().to_string()).filter(|id| !id.is_empty())

@@ -1,8 +1,9 @@
+use std::fs;
 use std::sync::mpsc::{self, Sender};
 use std::time::Instant;
 
 use super::host::HostEvent;
-use super::master::Start;
+use super::master::{Instructions, Start};
 use super::reconcile::{self, Wanted};
 use super::{ConnId, Event, Server, spawn_named};
 use crate::event::{Event as LogEvent, EventKind};
@@ -67,21 +68,38 @@ impl Server {
     }
 
     pub(super) fn open_master(&mut self, start: Start) {
-        let master = self
-            .config
-            .agent(Some(crate::config::MASTER_AGENT))
-            .or_else(|| self.config.agent(None));
-        let Some((name, agent)) = master else {
-            let reason = format!("no agent named {}", self.config.agent);
+        let Some((name, agent)) = self.config.master_agent() else {
+            let missing = self
+                .config
+                .master
+                .agent
+                .as_ref()
+                .unwrap_or(&self.config.agent);
+            let reason = format!("no agent named {missing}");
             self.host.fail(PaneKey::Master, reason);
             return;
+        };
+        if start == Start::Fresh
+            && let Err(error) = self.store.forget_master_session()
+        {
+            server_log::write((self.clock)(), &format!("{error:#}"));
+        }
+        let text = fs::read_to_string(&self.instructions).unwrap_or_else(|error| {
+            let file = self.instructions.display();
+            server_log::write((self.clock)(), &format!("could not read {file}: {error}"));
+            String::new()
+        });
+        let instructions = Instructions {
+            path: self.instructions.clone(),
+            text,
         };
         match self.record.spec(
             start,
             agent,
             &self.env,
-            &self.instructions,
+            &instructions,
             self.config.master.wake,
+            self.store.master_session().as_deref(),
         ) {
             Some(spec) => match self.host.open(spec) {
                 Ok(()) if start == Start::Resume => {

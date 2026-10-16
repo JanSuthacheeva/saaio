@@ -53,11 +53,16 @@ impl Default for Config {
 pub struct MasterConfig {
     /// flow wakes the master when a worker stops (wake = false: it learns only from flow status).
     pub wake: bool,
+    /// The agent flow ui runs as its master, "codex" for one; else MASTER_AGENT.
+    pub agent: Option<String>,
 }
 
 impl Default for MasterConfig {
     fn default() -> MasterConfig {
-        MasterConfig { wake: true }
+        MasterConfig {
+            wake: true,
+            agent: None,
+        }
     }
 }
 
@@ -102,6 +107,15 @@ impl Config {
         self.phases = phases;
     }
 
+    /// The master's agent: [master] agent, else MASTER_AGENT, else the default agent; None when
+    /// [master] names an agent there is none of.
+    pub fn master_agent(&self) -> Option<(&str, &Agent)> {
+        match &self.master.agent {
+            Some(name) => self.agent(Some(name)),
+            None => self.agent(Some(MASTER_AGENT)).or_else(|| self.agent(None)),
+        }
+    }
+
     /// The named agent, or the default one.
     pub fn agent(&self, name: Option<&str>) -> Option<(&str, &Agent)> {
         let name = name.unwrap_or(&self.agent);
@@ -138,14 +152,14 @@ fn strings(parts: &[&str]) -> Vec<String> {
     parts.iter().copied().map(String::from).collect()
 }
 
-/// The agent flow ui runs as its master when there is one; else the default agent.
+/// The agent flow ui runs as its master when there is one and [master] names no other; else the
+/// default agent.
 pub const MASTER_AGENT: &str = "master";
 
 /// claude: ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"], prompt "/ship-feature {request}",
 /// resumed with ["claude", "-n", "{name}", "--resume", "{id}"]; codex: ["codex", "{prompt}"], prompt
-/// "$ship-feature {request}", resumed by the session Codex picked ({session}); master: claude with the
-/// orchestrator instructions appended to its system prompt ({instructions}, the master.md beside
-/// config.toml).
+/// "$ship-feature {request}", resumed by the session Codex picked ({session}); master: claude, to
+/// which flow server adds the orchestrator instructions (the master.md beside config.toml).
 pub fn builtin_agents() -> BTreeMap<String, Agent> {
     let claude = Agent {
         command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
@@ -160,26 +174,10 @@ pub fn builtin_agents() -> BTreeMap<String, Agent> {
         resume: Some(strings(&["codex", "resume", "{session}"])),
     };
     let master = Agent {
-        command: strings(&[
-            "claude",
-            "-n",
-            "{name}",
-            "--session-id",
-            "{id}",
-            "--append-system-prompt-file",
-            "{instructions}",
-        ]),
+        command: strings(&["claude", "-n", "{name}", "--session-id", "{id}"]),
         prompt: String::new(),
         adapter: Some(Adapter::ClaudeCode),
-        resume: Some(strings(&[
-            "claude",
-            "-n",
-            "{name}",
-            "--resume",
-            "{id}",
-            "--append-system-prompt-file",
-            "{instructions}",
-        ])),
+        resume: Some(strings(&["claude", "-n", "{name}", "--resume", "{id}"])),
     };
     BTreeMap::from([
         ("claude".to_string(), claude),
@@ -222,10 +220,9 @@ mod tests {
         assert_eq!(codex.adapter, Some(Adapter::Codex));
         assert!(config.agent(Some("pi")).is_none());
         let (_, master) = config.agent(Some(MASTER_AGENT)).unwrap();
-        assert!(
-            master
-                .command
-                .ends_with(&["--append-system-prompt-file", "{instructions}"].map(String::from))
+        assert_eq!(
+            master.command,
+            ["claude", "-n", "{name}", "--session-id", "{id}"]
         );
         assert_eq!(master.prompt, "");
     }
@@ -374,6 +371,35 @@ prompt = "/design-code {request}"
         assert!(
             Config::load(Some(file.clone()), None, None).is_err(),
             "a typo is an error"
+        );
+    }
+
+    #[test]
+    fn runs_the_master_agent_unless_the_file_names_another() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        let load = || Config::load(Some(file.clone()), None, None).unwrap();
+
+        assert_eq!(
+            load().master_agent().map(|(name, _)| name),
+            Some(MASTER_AGENT)
+        );
+        fs::write(&file, "[master]\nagent = \"codex\"\n").unwrap();
+        assert_eq!(load().master_agent().map(|(name, _)| name), Some("codex"));
+        fs::write(&file, "[master]\nagent = \"pi\"\n").unwrap();
+        assert_eq!(
+            load().master_agent().map(|(name, _)| name),
+            None,
+            "no such agent"
+        );
+        let builtin = Config::builtin();
+        let (_, master) = builtin.master_agent().unwrap();
+        assert!(
+            !master
+                .command
+                .iter()
+                .any(|part| part.contains("{instructions}")),
+            "the server adds the instructions through the adapter"
         );
     }
 }
