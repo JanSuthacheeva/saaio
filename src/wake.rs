@@ -27,11 +27,12 @@ pub fn undelivered(events: &[Event], delivered: usize) -> Vec<&str> {
         .collect()
 }
 
-/// Flows whose state needs the master and that changed since it last saw them, oldest first.
+/// Flows whose state needs the master and that changed since it last saw them, oldest first; never
+/// a plain session, which is the user's own.
 pub fn changed_flows<'a>(flows: &'a [FlowView], seen: &Seen) -> Vec<&'a FlowView> {
     let mut changed: Vec<&FlowView> = flows
         .iter()
-        .filter(|flow| needs_master(flow.state))
+        .filter(|flow| needs_master(flow.state) && !flow.is_plain())
         .filter(|flow| seen.get(&flow.id) != Some(&mark(flow)))
         .collect();
     changed.sort_by_key(|flow| flow.changed_at);
@@ -169,6 +170,14 @@ mod tests {
             1,
             "the same change, gone silent"
         );
+    }
+
+    #[test]
+    fn never_wakes_the_master_for_a_plain_session() {
+        let mut plain = flow("scratch", vec![(5, waiting("Which?"))]);
+        plain.mode = Mode::Plain;
+
+        assert!(changed_flows(&[plain], &Seen::new()).is_empty());
     }
 
     #[test]

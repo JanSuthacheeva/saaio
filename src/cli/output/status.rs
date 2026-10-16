@@ -201,7 +201,8 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
 }
 
 /// One flow with its steps, decisions and timeline, and for a started flow where its code is:
-/// branch, worktree and whether the worktree is still there (`worktree_exists`).
+/// branch, worktree and whether the worktree is still there (`worktree_exists`), or a plain
+/// session's folder.
 pub(crate) fn detail(
     flow: &FlowView,
     now: u64,
@@ -212,6 +213,7 @@ pub(crate) fn detail(
     struct DetailDocument {
         name: String,
         id: String,
+        #[serde(skip_serializing_if = "String::is_empty")]
         request: String,
         mode: &'static str,
         state: &'static str,
@@ -228,11 +230,14 @@ pub(crate) fn detail(
         #[serde(skip_serializing_if = "Option::is_none")]
         merge_request: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        folder: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         branch: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         worktree: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         worktree_exists: Option<bool>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
         steps: Vec<StepRow>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         decisions: Vec<String>,
@@ -256,6 +261,10 @@ pub(crate) fn detail(
     }
 
     let cut = |text: &str| truncated(text, LIST_TEXT_LIMIT, full);
+    let (plain, worktree) = match &flow.workspace {
+        Some(space) if flow.is_plain() => (Some(space), None),
+        space => (None, space.as_ref()),
+    };
     let document = DetailDocument {
         name: flow.name.clone(),
         id: flow.id.clone(),
@@ -268,12 +277,10 @@ pub(crate) fn detail(
         tasks: flow.tasks.map(|tasks| tasks.to_string()),
         review: flow.review.map(|review| review.to_string()),
         merge_request: flow.merge_request.clone(),
-        branch: flow
-            .workspace
-            .as_ref()
-            .and_then(|space| space.branch.clone()),
-        worktree: flow.workspace.as_ref().map(|space| space.path.clone()),
-        worktree_exists: flow.workspace.as_ref().and(worktree_exists),
+        folder: plain.map(|space| space.path.clone()),
+        branch: worktree.and_then(|space| space.branch.clone()),
+        worktree: worktree.map(|space| space.path.clone()),
+        worktree_exists: worktree.and(worktree_exists),
         steps: flow
             .steps
             .iter()

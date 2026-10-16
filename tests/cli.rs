@@ -1144,6 +1144,47 @@ fn remove_tears_down_and_forgets_a_running_flow() {
 }
 
 #[test]
+fn remove_forgets_a_plain_session_and_leaves_its_folder_alone() {
+    let lab = Lab::new();
+    lab.hook("teardown", "#!/bin/sh\ntouch \"$FLOW_REPO/torn-down\"\n");
+    let folder = lab.repo.join(".flow/worktrees/mine");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join("notes.txt"), "keep").unwrap();
+    assert!(
+        lab.start(&["--plain", ".flow/worktrees/mine"])
+            .status
+            .success()
+    );
+
+    let detail = stdout(&lab.run(&["status", "mine"]));
+    assert!(
+        detail.contains(&format!(
+            "mode: plain\nstate: working\nfolder: {}\n",
+            folder.display()
+        )),
+        "{detail}"
+    );
+    assert!(
+        ["branch:", "worktree:", "request:", "steps"]
+            .iter()
+            .all(|field| !detail.contains(field)),
+        "{detail}"
+    );
+
+    let output = lab.run(&["remove", "mine"]);
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(text.contains("worktree: none\nbranch: none"), "{text}");
+    assert_eq!(
+        fs::read_to_string(folder.join("notes.txt")).unwrap(),
+        "keep"
+    );
+    assert!(!lab.repo.join("torn-down").exists(), "no teardown");
+    assert!(stdout(&flow(&lab.home, &["status"])).contains("count: 0"));
+}
+
+#[test]
 fn start_names_the_branch_after_the_repos_convention() {
     let lab = Lab::new();
     fs::create_dir_all(lab.repo.join(".flow")).unwrap();
@@ -1394,6 +1435,20 @@ fn send_refuses_what_has_no_worker_to_read_it() {
     let long = "x".repeat(4001);
     assert!(refused(&["send", "live", &long], None).contains("over 4000"));
     assert!(refused(&["send", "live", "hi"], Some("cccc")).contains("only the master sends"));
+    seed(
+        home.path(),
+        "dddd",
+        &[
+            r#"{"v":1,"at":1000,"kind":"started","name":"scratch","request":"","mode":"plain"}"#,
+            r#"{"v":1,"at":1500,"kind":"workspace","path":"/tmp","branch":null,"slot":null,"window":"flow-ui","agent":"claude"}"#,
+        ],
+    );
+    let plain = refused(&["send", "scratch", "hi"], None);
+    assert!(
+        plain.contains("scratch is a plain session; it is not the master's")
+            && plain.contains("Plain sessions are the user's own"),
+        "{plain}"
+    );
     let log = fs::read_to_string(home.path().join("flows/cccc.jsonl")).unwrap();
     assert!(!log.contains("message"), "{log}");
 }

@@ -183,7 +183,9 @@ fn resolve(given: &Path, cwd: &Path, home: Option<&Path>) -> Result<PathBuf, Fai
 `src/cli/commands/send.rs` (modified): refuses a plain session, `"{name} is a plain session; it is
 not the master's"`, help `"Plain sessions are the user's own"`.
 
-`src/cli/commands/retire.rs` (modified): `branch_of` reads `space.branch.as_deref()?`.
+`src/cli/commands/retire.rs` (modified): `branch_of` reads `space.branch.as_deref()?`;
+`refuse_uncommitted_work` checks only a worktree remove tears down (`repo_of` Some), so a plain
+session's dirty folder does not block its remove (found in the build).
 
 `src/cli/output/start.rs` (modified)
 
@@ -350,7 +352,7 @@ The session stops; flow remove
 ### Commands
 
 - [x] `start::Args` with `--plain` and optional request, `pick_agent` and `opening` lifted out, `start/plain.rs` `open` + `resolve`, `worktree::folder_workspace` (moved here, its first user), `output::start::opened`, `cli.rs` passes home; `tests/cli.rs`: plain start outside git, no worktree or slot file, request + `--plain` exits 2, missing folder exits 1, `~` expanded
-- [ ] `send` refuses a plain session; `wake::changed_flows` skips plain sessions; `status::detail` shows the folder; tests in `wake` and `tests/cli.rs` (send refused, remove keeps the folder)
+- [x] `send` refuses a plain session; `wake::changed_flows` skips plain sessions; `status::detail` shows the folder; tests in `wake` and `tests/cli.rs` (send refused, remove keeps the folder)
 
 ### flow ui
 
