@@ -389,7 +389,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 
 ### 5. Core
 - [x] Split `launch.rs` into `launch/name.rs`, `worktree.rs`, `pane.rs` with their tests; move taken_slots and free_slot to `slots.rs`
-- [ ] Move fold's tests to `fold/tests.rs`
+- [x] Move fold's tests to `fold/tests.rs`
 
 ### 6. Server
 - [ ] Split `server.rs` into server.rs (run, serve, handle, stop), `server/conn.rs`, `server/panes.rs`, `server/tests.rs`
