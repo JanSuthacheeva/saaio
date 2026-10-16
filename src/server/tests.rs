@@ -612,15 +612,20 @@ fn types_the_masters_message_into_an_idle_codex_worker_once() {
     let busy = started_flow(&store, dir.path(), "busy", "codex");
     had_a_turn(&store, &csv);
     had_a_turn(&store, &busy);
-    store.set_busy(&Waiter::Flow(busy.clone()), true).unwrap();
+    store.set_busy(&Waiter::Flow(csv.clone()), true).unwrap();
     let (paths, handle) = start_with_agents(
         dir.path(),
         BTreeMap::from([("codex".to_string(), fake_codex(dir.path()))]),
     );
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !dir.path().join("busy/typed").exists() {
+        assert!(Instant::now() < deadline, "the busy worker never started");
+        thread::sleep(Duration::from_millis(20));
+    }
+    store.set_busy(&Waiter::Flow(busy.clone()), true).unwrap();
 
     tell(&store, &csv, "Tabs.");
     tell(&store, &busy, "Spaces.");
-    let deadline = Instant::now() + Duration::from_secs(5);
     while !typed(dir.path(), "csv").contains("Tabs.") {
         assert!(
             Instant::now() < deadline,
@@ -634,7 +639,11 @@ fn types_the_masters_message_into_an_idle_codex_worker_once() {
     let text = typed(dir.path(), "csv");
     assert!(text.contains("message from the flow master:"), "{text:?}");
     assert_eq!(text.matches("Tabs.").count(), 1, "once: {text:?}");
-    assert_eq!(store.delivered(&csv), 1);
+    assert_eq!(
+        store.delivered(&csv),
+        1,
+        "a busy mark from before its pane opened is stale"
+    );
     assert_eq!(
         typed(dir.path(), "busy"),
         "",
