@@ -105,7 +105,7 @@ impl BoardView<'_> {
         width: usize,
     ) -> [Line<'static>; 4] {
         let theme = self.theme();
-        let tone = theme.state_style(flow.state);
+        let tone = theme.flow_style(flow);
         let digit = match number {
             Some(number @ 1..=9) => number.to_string(),
             _ => " ".to_string(),
@@ -202,11 +202,7 @@ impl BoardView<'_> {
             State::Done => "done".into(),
             State::Ended => "ended".into(),
         };
-        let style = match flow.state {
-            State::Idle => theme.ui.muted,
-            state => theme.state_style(state),
-        };
-        Span::styled(text, style)
+        Span::styled(text, theme.flow_style(flow))
     }
 
     pub(super) fn render_cards(&self, area: Rect, buf: &mut Buffer) -> u16 {

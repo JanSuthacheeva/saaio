@@ -52,13 +52,13 @@ impl App {
         };
         let sidebar = self.sidebar(theme, &[]);
         let lead = if flow.needs_you() {
-            Span::styled(theme.glyphs.cursor, theme.state_style(flow.state))
+            Span::styled(theme.glyphs.cursor, theme.flow_style(flow))
         } else {
             Span::raw(" ")
         };
         let mut title = vec![
             lead,
-            Span::styled(sidebar.glyph(flow.state), theme.state_style(flow.state)),
+            Span::styled(sidebar.glyph(flow.state), theme.flow_style(flow)),
             Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
         ];
         let steps = sidebar.steps(flow);
@@ -119,7 +119,7 @@ impl App {
                     index + 1,
                     flow.name
                 ),
-                theme.state_style(flow.state),
+                theme.flow_style(flow),
             ));
             spans.push(Span::styled(
                 format!("  {}  ", theme.glyphs.separator),

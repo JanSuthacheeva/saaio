@@ -28,7 +28,7 @@ impl Sidebar<'_> {
     pub fn steps(&self, flow: &FlowView) -> Vec<Span<'static>> {
         let theme = self.theme;
         let glyphs = &theme.glyphs;
-        let tone = theme.state_style(flow.state);
+        let tone = theme.flow_style(flow);
         let mut spans = Vec::new();
         for (index, step) in flow.steps.iter().enumerate() {
             let (glyph, style) = match step.status {

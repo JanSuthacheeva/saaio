@@ -496,3 +496,28 @@ fn what_is_done_takes_the_color_of_where_the_flow_is() {
     assert_eq!(buffer[(x + 4, y)].fg, blocked, "current");
     assert_eq!(buffer[(x + 8, y)].fg, faint, "open");
 }
+
+#[test]
+fn a_working_flow_takes_the_color_of_its_phase() {
+    let theme = Theme::default();
+    let review = theme.phase.review.fg.unwrap();
+    let faint = theme.ui.faint.fg.unwrap();
+    let terminal = render_at(&with_fleet(), FLEET);
+    let buffer = terminal.backend().buffer();
+    let name = (0..FLEET.rows)
+        .find(|&y| side(&terminal, y).contains("export-csv"))
+        .expect("export-csv's row")
+        + layout::MARGIN;
+    let spinner = (0..FLEET.cols)
+        .find(|&x| theme.glyphs.spinner.contains(&buffer[(x, name)].symbol()))
+        .expect("the spinner");
+    let track = name + 1;
+    let dot = (0..FLEET.cols)
+        .find(|&x| buffer[(x, track)].symbol() == "●")
+        .unwrap();
+
+    assert_eq!(buffer[(spinner, name)].fg, review, "spinner");
+    assert_eq!(buffer[(dot, track)].fg, review, "done");
+    assert_eq!(buffer[(dot + 8, track)].fg, review, "current");
+    assert_eq!(buffer[(dot + 12, track)].fg, faint, "open");
+}

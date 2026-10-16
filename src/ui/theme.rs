@@ -1,6 +1,7 @@
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::view::{State, Tone};
+use crate::event::Phase;
+use crate::view::{FlowView, State, Tone};
 
 /// The colors a theme file names, by its keys; Color::Reset is "default", the terminal's own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,6 +20,10 @@ pub struct Palette {
     pub blocked: Color,
     pub done: Color,
     pub ended: Color,
+    pub design: Color,
+    pub implement: Color,
+    pub review: Color,
+    pub merge_request: Color,
 }
 
 impl Palette {
@@ -38,6 +43,10 @@ impl Palette {
         blocked: Color::Red,
         done: Color::Green,
         ended: Color::DarkGray,
+        design: Color::Indexed(141),
+        implement: Color::Indexed(75),
+        review: Color::Indexed(80),
+        merge_request: Color::Indexed(176),
     };
 
     /// The design's dark colors.
@@ -56,6 +65,10 @@ impl Palette {
         blocked: hex(0xf0717f),
         done: hex(0x93c46d),
         ended: hex(0x6c6c78),
+        design: hex(0xb392f0),
+        implement: hex(0x7aa7ff),
+        review: hex(0x56c2c2),
+        merge_request: hex(0xe07fd0),
     };
 
     /// The design's light colors.
@@ -74,6 +87,10 @@ impl Palette {
         blocked: hex(0xc2283f),
         done: hex(0x3d7a22),
         ended: hex(0x73737c),
+        design: hex(0x7a4fc9),
+        implement: hex(0x2f5fd0),
+        review: hex(0x13807f),
+        merge_request: hex(0xb0399c),
     };
 
     /// "terminal", "flow" or "flow-light"; None for another name.
@@ -102,6 +119,10 @@ impl Palette {
             PaletteKey::Blocked => self.blocked,
             PaletteKey::Done => self.done,
             PaletteKey::Ended => self.ended,
+            PaletteKey::Design => self.design,
+            PaletteKey::Implement => self.implement,
+            PaletteKey::Review => self.review,
+            PaletteKey::MergeRequest => self.merge_request,
         }
     }
 
@@ -121,11 +142,15 @@ impl Palette {
             PaletteKey::Blocked => &mut self.blocked,
             PaletteKey::Done => &mut self.done,
             PaletteKey::Ended => &mut self.ended,
+            PaletteKey::Design => &mut self.design,
+            PaletteKey::Implement => &mut self.implement,
+            PaletteKey::Review => &mut self.review,
+            PaletteKey::MergeRequest => &mut self.merge_request,
         }
     }
 }
 
-/// A color a theme file can set, by its key in [ui] or [state].
+/// A color a theme file can set, by its key in [ui], [state] or [phase].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaletteKey {
     Background,
@@ -142,10 +167,14 @@ pub enum PaletteKey {
     Blocked,
     Done,
     Ended,
+    Design,
+    Implement,
+    Review,
+    MergeRequest,
 }
 
 impl PaletteKey {
-    pub const ALL: [PaletteKey; 14] = [
+    pub const ALL: [PaletteKey; 18] = [
         PaletteKey::Background,
         PaletteKey::Panel,
         PaletteKey::Selection,
@@ -160,6 +189,10 @@ impl PaletteKey {
         PaletteKey::Blocked,
         PaletteKey::Done,
         PaletteKey::Ended,
+        PaletteKey::Design,
+        PaletteKey::Implement,
+        PaletteKey::Review,
+        PaletteKey::MergeRequest,
     ];
 
     /// The key a theme file writes: accent, working, ...
@@ -179,6 +212,10 @@ impl PaletteKey {
             PaletteKey::Blocked => "blocked",
             PaletteKey::Done => "done",
             PaletteKey::Ended => "ended",
+            PaletteKey::Design => "design",
+            PaletteKey::Implement => "implement",
+            PaletteKey::Review => "review",
+            PaletteKey::MergeRequest => "merge-request",
         }
     }
 
@@ -199,6 +236,7 @@ pub const fn hex(rgb: u32) -> Color {
 pub struct Theme {
     pub ui: UiTokens,
     pub state: StateTokens,
+    pub phase: PhaseTokens,
     pub glyphs: Glyphs,
     pub palette: Palette,
 }
@@ -226,6 +264,14 @@ pub struct StateTokens {
     pub blocked: Style,
     pub done: Style,
     pub ended: Style,
+}
+
+#[derive(Debug, Clone)]
+pub struct PhaseTokens {
+    pub design: Style,
+    pub implement: Style,
+    pub review: Style,
+    pub merge_request: Style,
 }
 
 /// flow's mark: a goose in flight, in block characters every font has.
@@ -303,6 +349,12 @@ impl Theme {
                 done: fg(palette.done),
                 ended: fg(palette.ended),
             },
+            phase: PhaseTokens {
+                design: fg(palette.design),
+                implement: fg(palette.implement),
+                review: fg(palette.review),
+                merge_request: fg(palette.merge_request),
+            },
             glyphs: Glyphs {
                 mark: MARK,
                 waiting: "●",
@@ -339,6 +391,23 @@ impl Theme {
         }
     }
 
+    pub fn phase_style(&self, phase: Phase) -> Style {
+        match phase {
+            Phase::Design => self.phase.design,
+            Phase::Implement => self.phase.implement,
+            Phase::Review => self.phase.review,
+            Phase::MergeRequest => self.phase.merge_request,
+        }
+    }
+
+    /// The phase's color while the flow works in one, else its state's.
+    pub fn flow_style(&self, flow: &FlowView) -> Style {
+        match (flow.state, flow.phase) {
+            (State::Working | State::Delegated, Some(phase)) => self.phase_style(phase),
+            (state, _) => self.state_style(state),
+        }
+    }
+
     pub fn tone_style(&self, tone: Tone) -> Style {
         match tone {
             Tone::Neutral => self.ui.muted,
@@ -353,6 +422,7 @@ impl Theme {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::event::Mode;
 
     #[test]
     fn the_terminal_theme_looks_as_flow_always_did() {
@@ -397,6 +467,96 @@ mod tests {
         for key in PaletteKey::ALL {
             assert_eq!(PaletteKey::named(key.name()), Some(key));
         }
+    }
+
+    fn flow(state: State, phase: Option<Phase>) -> FlowView {
+        FlowView {
+            id: "shop-217".into(),
+            name: "shop-217".into(),
+            request: String::new(),
+            mode: Mode::Guided,
+            phase,
+            state,
+            blocker: None,
+            delegate: None,
+            tasks: None,
+            review: None,
+            merge_request: None,
+            decisions: Vec::new(),
+            steps: Vec::new(),
+            timeline: Vec::new(),
+            started_at: 0,
+            changed_at: 0,
+            workspace: None,
+            answer: None,
+        }
+    }
+
+    #[test]
+    fn a_working_flow_takes_the_color_of_its_phase() {
+        let theme = Theme::from_palette(Palette::FLOW);
+        let phase = |phase| Style::default().fg(Palette::FLOW.color(phase));
+
+        assert_eq!(
+            theme.flow_style(&flow(State::Working, Some(Phase::Design))),
+            phase(PaletteKey::Design)
+        );
+        assert_eq!(
+            theme.flow_style(&flow(State::Delegated, Some(Phase::Review))),
+            phase(PaletteKey::Review)
+        );
+        assert_eq!(
+            theme.flow_style(&flow(State::Working, Some(Phase::MergeRequest))),
+            phase(PaletteKey::MergeRequest)
+        );
+        assert_eq!(
+            theme.flow_style(&flow(State::Working, None)),
+            theme.state.working,
+            "no phase yet"
+        );
+        assert_eq!(
+            theme.flow_style(&flow(State::Waiting, Some(Phase::Implement))),
+            theme.state.waiting,
+            "a flow that needs you keeps the state's color"
+        );
+        assert_eq!(
+            theme.flow_style(&flow(State::Idle, Some(Phase::Implement))),
+            theme.ui.muted
+        );
+    }
+
+    #[test]
+    fn the_built_in_themes_color_each_phase() {
+        let phases = |palette: Palette| {
+            [
+                palette.design,
+                palette.implement,
+                palette.review,
+                palette.merge_request,
+            ]
+        };
+
+        assert_eq!(
+            phases(Palette::TERMINAL),
+            [
+                Color::Indexed(141),
+                Color::Indexed(75),
+                Color::Indexed(80),
+                Color::Indexed(176)
+            ]
+        );
+        assert_eq!(
+            phases(Palette::FLOW),
+            [hex(0xb392f0), hex(0x7aa7ff), hex(0x56c2c2), hex(0xe07fd0)]
+        );
+        assert_eq!(
+            phases(Palette::FLOW_LIGHT),
+            [hex(0x7a4fc9), hex(0x2f5fd0), hex(0x13807f), hex(0xb0399c)]
+        );
+        assert_eq!(
+            PaletteKey::named("merge-request"),
+            Some(PaletteKey::MergeRequest)
+        );
     }
 
     #[test]

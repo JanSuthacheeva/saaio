@@ -68,7 +68,7 @@ impl Sidebar<'_> {
         let key = PaneKey::Flow(flow.id.clone());
         let selected = *self.focus == key || self.cursor == Some(flow.id.as_str());
         let changed = self.changed.contains_key(&flow.id);
-        let tone = theme.state_style(flow.state);
+        let tone = theme.flow_style(flow);
         let status = self.status(flow);
         let lead = |rest: &str| -> Vec<Span<'static>> {
             if selected {
@@ -168,7 +168,7 @@ impl Sidebar<'_> {
     fn peek_rows(&self, flow: &FlowView, budget: usize) -> Vec<Row> {
         let theme = self.theme;
         let glyphs = &theme.glyphs;
-        let tone = theme.state_style(flow.state);
+        let tone = theme.flow_style(flow);
         let text_width = WIDTH - 4;
         let mut body: Vec<Vec<Span<'static>>> = Vec::new();
         for line in self.peek {

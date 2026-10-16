@@ -100,8 +100,8 @@ Call sites (modified), `state_style(flow.state)` -> `flow_style(flow)` wherever 
 
 ## Tasks
 
-- [ ] Palette, PaletteKey and PhaseTokens get the four phase colors with the built-in values; Theme::phase_style and Theme::flow_style, with unit tests
+- [x] Palette, PaletteKey and PhaseTokens get the four phase colors with the built-in values; Theme::phase_style and Theme::flow_style, with unit tests
 - [ ] theme_file reads a [phase] section, with a test that merge-request overrides the base
-- [ ] Every flow-colored call site uses flow_style, with a sidebar test for the delegated flow in review
+- [x] Every flow-colored call site uses flow_style, with a sidebar test for the delegated flow in review
 - [ ] README theme keys name [phase]
 - [ ] End to end: flow ui with the noctalia theme draws working flows in their phase colors
