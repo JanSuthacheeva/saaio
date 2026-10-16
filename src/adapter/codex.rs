@@ -7,7 +7,7 @@ use crate::adapter::answer::turn_end;
 use crate::adapter::calls::{created_merge_request, tool_call};
 use crate::adapter::{Adapter, cut, phase_of};
 use crate::config::PhaseMap;
-use crate::event::EventKind;
+use crate::event::{EventKind, Phase};
 
 /// The hook events flow listens to.
 const EVENTS: [&str; 6] = [
@@ -59,8 +59,7 @@ pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
         return input["command"]
             .as_str()
             .filter(|_| reads)
-            .and_then(read_skill)
-            .and_then(|skill| phase_of(skill, phases))
+            .and_then(|command| read_phase(command, phases))
             .map(|phase| vec![EventKind::Phase { phase }])
             .unwrap_or_default();
     }
@@ -77,8 +76,8 @@ pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
             description: cut(&subagent(input)),
         }),
         "PreToolUse" if tool == "Bash" => {
-            let skill = input["command"].as_str().and_then(read_skill);
-            if let Some(phase) = skill.and_then(|skill| phase_of(skill, phases)) {
+            let command = input["command"].as_str().unwrap_or("");
+            if let Some(phase) = read_phase(command, phases) {
                 kinds.push(EventKind::Phase { phase });
             }
         }
@@ -137,11 +136,17 @@ fn mentioned_skill(prompt: &str) -> Option<&str> {
     })
 }
 
-/// The skill whose SKILL.md a shell command reads: ".../skills/<name>/SKILL.md" -> name.
-fn read_skill(command: &str) -> Option<&str> {
+/// The phase of the first skill a shell command reads whose name is in the map: Codex reads
+/// ".../skills/<name>/SKILL.md", often several in one command.
+fn read_phase(command: &str, phases: &PhaseMap) -> Option<Phase> {
+    read_skills(command).find_map(|skill| phase_of(skill, phases))
+}
+
+/// The skills whose SKILL.md a shell command reads: ".../skills/<name>/SKILL.md" -> name.
+fn read_skills(command: &str) -> impl Iterator<Item = &str> {
     command
         .split(|c: char| c.is_whitespace() || c == '\'' || c == '"')
-        .find_map(|word| {
+        .filter_map(|word| {
             let dir = word.strip_suffix("/SKILL.md")?;
             let (parent, name) = dir.rsplit_once('/')?;
             let in_skills = parent == "skills" || parent.ends_with("/skills");
@@ -186,7 +191,6 @@ pub fn toml_string(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event::Phase;
 
     fn fixture(name: &str) -> Value {
         let path = format!(
@@ -248,6 +252,15 @@ mod tests {
                 phase: Phase::Design
             }])
         );
+    }
+
+    #[test]
+    fn finds_the_phase_skill_among_several_read_at_once() {
+        let command = "cat /home/dev/.agents/skills/clickup-axi/SKILL.md && \
+                       sed -n 1,200p '/home/dev/.agents/skills/demo-skill/SKILL.md'";
+
+        assert_eq!(read_phase(command, &phases()), Some(Phase::Design));
+        assert_eq!(read_phase("cat README.md", &phases()), None);
     }
 
     #[test]

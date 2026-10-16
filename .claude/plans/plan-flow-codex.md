@@ -144,7 +144,7 @@ pub fn hooks(flow_exe: &Path, master: bool) -> Vec<String>;
 pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind>;
 fn session(payload: &Value) -> Option<EventKind>;           // Session { id: session_id, transcript: transcript_path }
 fn mentioned_skill(prompt: &str) -> Option<&str>;           // first "$name" token
-fn read_skill(command: &str) -> Option<&str>;               // ".../skills/<name>/SKILL.md" -> name
+fn read_phase(command: &str, phases: &PhaseMap) -> Option<Phase>;  // the first ".../skills/<name>/SKILL.md" in the map; a command often reads several
 fn subagent(input: &Value) -> String;                       // task_name, else agent_type, else "a subagent"
 pub fn toml_string(text: &str) -> String;                   // TOML basic string: escapes " \ and control chars
 
