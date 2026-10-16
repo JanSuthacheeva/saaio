@@ -104,4 +104,4 @@ Call sites (modified), `state_style(flow.state)` -> `flow_style(flow)` wherever 
 - [x] theme_file reads a [phase] section, with a test that merge-request overrides the base
 - [x] Every flow-colored call site uses flow_style, with a sidebar test for the delegated flow in review
 - [x] README theme keys name [phase]
-- [ ] End to end: flow ui with the noctalia theme draws working flows in their phase colors
+- [x] End to end: flow ui with the noctalia theme draws working flows in their phase colors
