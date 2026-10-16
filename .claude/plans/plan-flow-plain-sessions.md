@@ -334,7 +334,7 @@ The session stops; flow remove
 ### Data
 
 - [x] `Mode::Plain` (`#[value(skip)]`), `name()`; `FlowView::is_plain`; event tests for a plain Started round-trip (`Mode::ALL` and removing `toggled()` moved to the dialog task, whose code first uses them; `fold::finish` moved here, the first user of `is_plain`)
-- [ ] `Workspace.branch`/`slot` as Option in `EventKind::Workspace` and `view::Workspace`, every reader adjusted (`slots::taken_slots`, `worktree::{workspace_for, hook_env, worktree_add_argv}`, `retire::branch_of`, `output::start::started`, `output::status::detail`, chrome, cards, detail, peek, keys); tests: an old Workspace line parses, a null one round-trips
+- [x] `Workspace.branch`/`slot` as Option in `EventKind::Workspace` and `view::Workspace`, every reader adjusted (`slots::taken_slots`, `worktree::{workspace_for, hook_env, worktree_add_argv}`, `retire::branch_of`, `output::start::started`, `output::status::detail`, chrome, cards, detail, peek, keys); tests: an old Workspace line parses, a null one round-trips
 - [ ] `VIEW_VERSION` and `PROTOCOL_VERSION` to 2; test boards use `VIEW_VERSION` instead of `1` (sidebar, app tests, status output tests); `view.rs` test, `tests/cli.rs` board version, README `--json` example with a plain session's workspace
 - [x] `fold::finish` leaves steps empty for a plain session, with a fold test (built with the first task)
 

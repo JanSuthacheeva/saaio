@@ -206,8 +206,8 @@ mod tests {
                 1,
                 EventKind::Workspace {
                     path: "/repo/.flow/worktrees/shop-217".into(),
-                    branch: "flow/shop-217".into(),
-                    slot: 2,
+                    branch: Some("flow/shop-217".into()),
+                    slot: Some(2),
                     window: window.map(String::from),
                     agent: "claude".into(),
                 },

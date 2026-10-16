@@ -205,8 +205,8 @@ mod tests {
                 0,
                 EventKind::Workspace {
                     path: format!("/shop/{id}"),
-                    branch: format!("flow/{id}"),
-                    slot: 1,
+                    branch: Some(format!("flow/{id}")),
+                    slot: Some(1),
                     window: None,
                     agent: "claude".into(),
                 },

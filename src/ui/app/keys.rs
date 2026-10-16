@@ -169,7 +169,7 @@ impl App {
                             message,
                             "\n  {}  {}  {}",
                             flow.name,
-                            space.branch,
+                            space.branch.as_deref().unwrap_or_default(),
                             self.tilde(&space.path)
                         );
                     }

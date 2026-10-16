@@ -167,8 +167,8 @@ fn started_flow(store: &Store, dir: &Path, name: &str, agent: &str) -> String {
     fs::create_dir_all(&path).unwrap();
     let workspace = EventKind::Workspace {
         path: path.display().to_string(),
-        branch: format!("flow/{name}"),
-        slot: 1,
+        branch: Some(format!("flow/{name}")),
+        slot: Some(1),
         window: None,
         agent: agent.into(),
     };

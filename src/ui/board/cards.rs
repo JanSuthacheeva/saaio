@@ -131,7 +131,7 @@ impl BoardView<'_> {
         );
         let third = if flow.is_finished() {
             let text = match &flow.workspace {
-                Some(space) => space.branch.clone(),
+                Some(space) => space.branch.clone().unwrap_or_default(),
                 None => String::new(),
             };
             split(

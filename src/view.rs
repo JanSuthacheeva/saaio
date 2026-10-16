@@ -46,8 +46,8 @@ pub struct FlowView {
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
     pub path: String,
-    pub branch: String,
-    pub slot: u8,
+    pub branch: Option<String>,
+    pub slot: Option<u8>,
     pub window: Option<String>,
     pub agent: String,
 }
@@ -301,8 +301,8 @@ mod tests {
             changed_at: 2,
             workspace: Some(Workspace {
                 path: "/repo/.flow/worktrees/shop-221".into(),
-                branch: "flow/shop-221".into(),
-                slot: 1,
+                branch: Some("flow/shop-221".into()),
+                slot: Some(1),
                 window: Some("@14".into()),
                 agent: "claude".into(),
             }),

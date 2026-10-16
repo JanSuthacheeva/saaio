@@ -652,8 +652,8 @@ fn resolves_an_id_then_the_unfinished_flow_then_the_newest_finished_one() {
 fn workspace(slot: u8, window: Option<&str>) -> EventKind {
     EventKind::Workspace {
         path: "/repo/.flow/worktrees/shop-221".into(),
-        branch: "flow/shop-221".into(),
-        slot,
+        branch: Some("flow/shop-221".into()),
+        slot: Some(slot),
         window: window.map(String::from),
         agent: "claude".into(),
     }
@@ -674,7 +674,7 @@ fn keeps_the_last_workspace_without_changing_the_state() {
         flow.workspace.as_ref().and_then(|ws| ws.window.as_deref()),
         Some("@14")
     );
-    assert_eq!(flow.workspace.as_ref().map(|ws| ws.slot), Some(1));
+    assert_eq!(flow.workspace.as_ref().and_then(|ws| ws.slot), Some(1));
     assert_eq!(flow.state, State::Working);
     assert_eq!(flow.changed_at, 0);
     assert_eq!(texts(&flow), vec!["started"]);

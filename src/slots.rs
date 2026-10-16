@@ -97,7 +97,7 @@ pub fn taken_slots(flows: &[FlowView]) -> Vec<u8> {
     flows
         .iter()
         .filter(|flow| !flow.is_finished())
-        .filter_map(|flow| flow.workspace.as_ref().map(|workspace| workspace.slot))
+        .filter_map(|flow| flow.workspace.as_ref().and_then(|workspace| workspace.slot))
         .collect()
 }
 
@@ -132,8 +132,8 @@ mod tests {
             1,
             EventKind::Workspace {
                 path: "/p".into(),
-                branch: "b".into(),
-                slot,
+                branch: Some("b".into()),
+                slot: Some(slot),
                 window: None,
                 agent: "claude".into(),
             },

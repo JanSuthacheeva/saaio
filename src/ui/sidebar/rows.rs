@@ -203,10 +203,12 @@ impl Sidebar<'_> {
                     worktree,
                     exists,
                 } => {
-                    body.push(vec![
-                        Span::styled(" branch   ", theme.ui.faint),
-                        Span::styled(clip(branch, text_width - 6), theme.ui.muted),
-                    ]);
+                    if let Some(branch) = branch {
+                        body.push(vec![
+                            Span::styled(" branch   ", theme.ui.faint),
+                            Span::styled(clip(branch, text_width - 6), theme.ui.muted),
+                        ]);
+                    }
                     let place = if *exists {
                         clip(worktree, text_width - 6)
                     } else {

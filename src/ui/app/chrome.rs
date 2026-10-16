@@ -64,8 +64,10 @@ impl App {
         title.extend(sidebar.steps(flow));
         title.push(Span::raw(" "));
         title.push(sidebar.label(flow));
-        if let Some(space) = &flow.workspace {
-            let place = format!("{} · slot {}", space.branch, space.slot);
+        if let Some(space) = &flow.workspace
+            && let (Some(branch), Some(slot)) = (&space.branch, space.slot)
+        {
+            let place = format!("{branch} · slot {slot}");
             let lead = "  · ";
             let fitted = clip(&place, room(spans_width(&title) + columns(lead)));
             if !fitted.is_empty() {

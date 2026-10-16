@@ -97,5 +97,5 @@ pub fn drop_branch(flow: &FlowView, unmerged: Unmerged) -> BranchFate {
 /// The repository and branch of a started flow.
 fn branch_of(flow: &FlowView) -> Option<(PathBuf, &str)> {
     let space = flow.workspace.as_ref()?;
-    Some((worktree::repo_of(space)?, &space.branch))
+    Some((worktree::repo_of(space)?, space.branch.as_deref()?))
 }

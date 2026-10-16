@@ -76,8 +76,8 @@ fn worker(id: &str, mode: crate::event::Mode, age: u64, events: Vec<EventKind>) 
             at,
             EventKind::Workspace {
                 path: format!("/shop/.flow/worktrees/{id}"),
-                branch: format!("flow/{id}"),
-                slot: 1,
+                branch: Some(format!("flow/{id}")),
+                slot: Some(1),
                 window: Some("flow-ui".into()),
                 agent: "claude".into(),
             },

@@ -29,8 +29,8 @@ pub(super) fn flow(name: &str, mode: Mode, events: Vec<EventKind>) -> FlowView {
             0,
             EventKind::Workspace {
                 path: format!("/shop/.flow/worktrees/{name}"),
-                branch: format!("flow/{name}"),
-                slot: 1,
+                branch: Some(format!("flow/{name}")),
+                slot: Some(1),
                 window: None,
                 agent: "claude".into(),
             },

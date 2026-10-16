@@ -70,8 +70,8 @@ pub enum EventKind {
     Ended,
     Workspace {
         path: String,
-        branch: String,
-        slot: u8,
+        branch: Option<String>,
+        slot: Option<u8>,
         window: Option<String>,
         agent: String,
     },
@@ -252,6 +252,13 @@ mod tests {
                 url: "https://gitlab.com/acme/shop/-/merge_requests/88".into(),
             },
             EventKind::Ended,
+            EventKind::Workspace {
+                path: "/Users/jan/scratch".into(),
+                branch: None,
+                slot: None,
+                window: None,
+                agent: "claude".into(),
+            },
         ]
     }
 
@@ -323,6 +330,21 @@ mod tests {
                 question: "ok?".into()
             }
         );
+    }
+
+    #[test]
+    fn reads_a_workspace_line_written_before_plain_sessions() {
+        let line = r#"{"v":1,"at":7,"kind":"workspace","path":"/repo/.flow/worktrees/shop-221","branch":"flow/shop-221","slot":2,"window":"flow-ui","agent":"claude"}"#;
+
+        let Some(Event {
+            kind: EventKind::Workspace { branch, slot, .. },
+            ..
+        }) = Event::from_line(line)
+        else {
+            panic!("an old workspace line parses");
+        };
+        assert_eq!(branch.as_deref(), Some("flow/shop-221"));
+        assert_eq!(slot, Some(2));
     }
 
     #[test]

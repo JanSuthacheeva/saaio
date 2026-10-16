@@ -46,8 +46,8 @@ impl BoardView<'_> {
         facts.push(flow.request.clone());
         facts.push(flow.mode.name().to_string());
         if let Some(space) = &flow.workspace {
-            facts.push(space.branch.clone());
-            facts.push(format!("slot {}", space.slot));
+            facts.extend(space.branch.clone());
+            facts.extend(space.slot.map(|slot| format!("slot {slot}")));
         }
         facts.push(format!(
             "started {} ago",

@@ -8,16 +8,20 @@ pub const WORKTREES_DIR: &str = ".flow/worktrees";
 pub fn workspace_for(repo: &Path, name: &str, branch: String, slot: u8, agent: &str) -> Workspace {
     Workspace {
         path: repo.join(WORKTREES_DIR).join(name).display().to_string(),
-        branch,
-        slot,
+        branch: Some(branch),
+        slot: Some(slot),
         window: None,
         agent: agent.to_string(),
     }
 }
 
-/// git -C <repo> worktree add -b <branch> <path>
+/// git -C <repo> worktree add -b <branch> <path>; workspace_for always sets the branch.
 pub fn worktree_add_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
     let repo = repo.display().to_string();
+    let branch = workspace
+        .branch
+        .as_deref()
+        .expect("a worktree flow has a branch");
     [
         "git",
         "-C",
@@ -25,7 +29,7 @@ pub fn worktree_add_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
         "worktree",
         "add",
         "-b",
-        &workspace.branch,
+        branch,
         &workspace.path,
     ]
     .map(String::from)
@@ -55,16 +59,17 @@ pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// FLOW_ID, FLOW_NAME, FLOW_SLOT, FLOW_WORKTREE, FLOW_REPO for the hooks.
+/// FLOW_ID, FLOW_NAME, FLOW_SLOT (when it has one), FLOW_WORKTREE, FLOW_REPO for the hooks.
 pub fn hook_env(id: &str, name: &str, repo: &Path, workspace: &Workspace) -> Vec<(String, String)> {
     [
-        ("FLOW_ID", id.to_string()),
-        ("FLOW_NAME", name.to_string()),
-        ("FLOW_SLOT", workspace.slot.to_string()),
-        ("FLOW_WORKTREE", workspace.path.clone()),
-        ("FLOW_REPO", repo.display().to_string()),
+        Some(("FLOW_ID", id.to_string())),
+        Some(("FLOW_NAME", name.to_string())),
+        workspace.slot.map(|slot| ("FLOW_SLOT", slot.to_string())),
+        Some(("FLOW_WORKTREE", workspace.path.clone())),
+        Some(("FLOW_REPO", repo.display().to_string())),
     ]
     .into_iter()
+    .flatten()
     .map(|(key, value)| (key.to_string(), value))
     .collect()
 }
@@ -79,8 +84,8 @@ mod tests {
         let workspace = shop();
 
         assert_eq!(workspace.path, "/repo/.flow/worktrees/shop-217");
-        assert_eq!(workspace.branch, "flow/shop-217");
-        assert_eq!(workspace.slot, 2);
+        assert_eq!(workspace.branch.as_deref(), Some("flow/shop-217"));
+        assert_eq!(workspace.slot, Some(2));
         assert_eq!(workspace.window, None);
         assert_eq!(workspace.agent, "claude");
         assert_eq!(

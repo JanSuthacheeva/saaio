@@ -268,7 +268,10 @@ pub(crate) fn detail(
         tasks: flow.tasks.map(|tasks| tasks.to_string()),
         review: flow.review.map(|review| review.to_string()),
         merge_request: flow.merge_request.clone(),
-        branch: flow.workspace.as_ref().map(|space| space.branch.clone()),
+        branch: flow
+            .workspace
+            .as_ref()
+            .and_then(|space| space.branch.clone()),
         worktree: flow.workspace.as_ref().map(|space| space.path.clone()),
         worktree_exists: flow.workspace.as_ref().and(worktree_exists),
         steps: flow
@@ -305,10 +308,11 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>) -> Vec<String> {
         && flow.state == State::Ended
     {
         help.push("C-space r in flow ui resumes it".to_string());
-        if worktree_exists == Some(false) {
+        if let Some(branch) = &space.branch
+            && worktree_exists == Some(false)
+        {
             help.push(format!(
-                "Its worktree is gone; its commits stay on {}",
-                space.branch
+                "Its worktree is gone; its commits stay on {branch}"
             ));
         }
     }
