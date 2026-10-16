@@ -231,6 +231,10 @@ so each task brings a piece of it together with its first reader.
 - [x] Reword master.md (current text to master-v7.md in `PREVIOUS_DEFAULTS`), README keys section and `[ui]` example, HANDOVER lines
 - [x] End-to-end check: flow ui on a scratch FLOW_HOME with `[ui] prefix = "C-b"`: C-b ? shows the help naming C-b, C-b d detaches, C-b C-b reaches the pane, the sidebar footer reads C-b; then `prefix = "C-c"` refuses to start
 
+Decided after review:
+
+- [x] README `[ui]` paragraph: the prefix twice reaches a key flow ui uses itself, such as C-b paging back in the history
+
 ## Review
 
 Reviewed 2026-10-16 against this plan, isolated from the build.

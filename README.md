@@ -95,7 +95,8 @@ prefix = "C-b"                # C-space, or C-a to C-z
 ```
 
 The keys a pane needs are refused: C-c, C-d, C-z, C-s and C-q, and C-h, C-i, C-j and C-m, which
-are the same bytes as backspace, tab, newline and enter. A new prefix applies at the next
+are the same bytes as backspace, tab, newline and enter. A prefix flow ui also uses as a key, such
+as C-b paging back in the history, reaches it pressed twice. A new prefix applies at the next
 `flow ui`.
 
 `flow ui --stop` stops the server and every session, keeping unfinished flows for the next
