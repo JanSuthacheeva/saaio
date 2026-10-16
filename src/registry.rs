@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::store::Store;
+use crate::store::{Store, write_atomic};
 
 /// The folder every store registers in and slots are claimed in: the default store's folder,
 /// $XDG_STATE_HOME/flow or ~/.local/state/flow, whatever FLOW_HOME says.
@@ -46,11 +46,9 @@ impl Registry {
         let stores = self.root.join("stores");
         fs::create_dir_all(&stores)
             .with_context(|| format!("could not create {}", stores.display()))?;
-        let fresh = entry.with_extension(format!("{}.tmp", std::process::id()));
         let mut line = store.root().as_os_str().as_bytes().to_vec();
         line.push(b'\n');
-        fs::write(&fresh, line)
-            .and_then(|()| fs::rename(&fresh, &entry))
+        write_atomic(&entry, &line)
             .with_context(|| format!("could not register {}", store.root().display()))
     }
 

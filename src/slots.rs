@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::registry::Registry;
+use crate::store::write_atomic;
 
 /// Slots across every project: FLOW_SLOT, which setup hooks turn into ports.
 pub const MAX_SLOTS: u8 = 20;
@@ -45,10 +46,7 @@ impl Slots {
         let Some(slot) = free else {
             return Ok(None);
         };
-        let path = self.path(slot);
-        let fresh = path.with_extension(format!("{}.tmp", std::process::id()));
-        fs::write(&fresh, serde_json::to_string(claim)?)
-            .and_then(|()| fs::rename(&fresh, &path))
+        write_atomic(&self.path(slot), serde_json::to_string(claim)?.as_bytes())
             .with_context(|| format!("could not claim slot {slot}"))?;
         Ok(Some(slot))
     }
