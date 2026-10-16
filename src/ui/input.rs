@@ -2,12 +2,14 @@ use std::io::Write;
 
 use ratatui::layout::{Position, Rect};
 
+use crate::ui::prefix::Prefix;
+
 /// What raw keyboard and mouse bytes from the real terminal turn into.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Routed {
     /// Bytes for the focused pane, unchanged except for mouse coordinates.
     Pane(Vec<u8>),
-    /// The key after C-space.
+    /// The key after the prefix.
     Command(Command),
     /// Keys for a modal view (a dialog, the board).
     View(Vec<Key>),
@@ -52,20 +54,35 @@ pub enum Key {
     Other,
 }
 
-/// The prefix as a terminal without the kitty keyboard protocol sends it (C-space is NUL).
-const PREFIX: u8 = 0x00;
-/// The prefix as a terminal with the kitty keyboard protocol sends it.
-const KITTY_PREFIX: &[u8] = b"\x1b[32;5u";
-
-/// Splits raw input at the C-space prefix; remembers a prefix whose key has not arrived yet.
-#[derive(Debug, Default)]
+/// Splits raw input at the prefix; remembers a prefix whose key has not arrived yet.
+#[derive(Debug)]
 pub struct Router {
+    /// The prefix as a terminal without the kitty keyboard protocol sends it (C-space is NUL).
+    prefix: u8,
+    /// The prefix as a terminal with the kitty keyboard protocol sends it.
+    kitty: Vec<u8>,
     prefixed: bool,
     pending: Vec<u8>,
 }
 
+impl Default for Router {
+    fn default() -> Router {
+        Router::new(Prefix::default())
+    }
+}
+
 impl Router {
-    /// Splits bytes at C-space (NUL or CSI 32;5u): the next key is a Command, C-space twice sends one.
+    pub fn new(prefix: Prefix) -> Router {
+        Router {
+            prefix: prefix.byte(),
+            kitty: prefix.kitty(),
+            prefixed: false,
+            pending: Vec::new(),
+        }
+    }
+
+    /// Splits bytes at the prefix (its byte or its kitty form): the next key is a Command, the
+    /// prefix twice sends one.
     /// In a modal view every key is decoded for the view instead. SGR mouse events inside `pane`
     /// are rewritten to pane coordinates; outside it they become Routed::Click for the UI.
     pub fn route(&mut self, bytes: &[u8], modal: bool, pane: Rect) -> Vec<Routed> {
@@ -78,26 +95,26 @@ impl Router {
             let rest = &input[at..];
             if self.prefixed {
                 self.prefixed = false;
-                let (command, used) = command_after_prefix(rest);
+                let (command, used) = self.command_after_prefix(rest);
                 at += used;
                 match command {
                     AfterPrefix::Command(command) => {
                         flush(&mut plain, modal, &mut routed);
                         routed.push(Routed::Command(command));
                     }
-                    AfterPrefix::Literal => plain.push(PREFIX),
+                    AfterPrefix::Literal => plain.push(self.prefix),
                     AfterPrefix::Nothing => {}
                 }
                 continue;
             }
-            if rest[0] == PREFIX {
+            if rest[0] == self.prefix {
                 self.prefixed = true;
                 at += 1;
                 continue;
             }
-            if rest.starts_with(KITTY_PREFIX) {
+            if rest.starts_with(&self.kitty) {
                 self.prefixed = true;
-                at += KITTY_PREFIX.len();
+                at += self.kitty.len();
                 continue;
             }
             if rest.starts_with(b"\x1b[") {
@@ -122,6 +139,39 @@ impl Router {
         }
         flush(&mut plain, modal, &mut routed);
         routed
+    }
+
+    /// The command a key after the prefix means, and how many bytes the key took.
+    fn command_after_prefix(&self, rest: &[u8]) -> (AfterPrefix, usize) {
+        if rest[0] == self.prefix {
+            return (AfterPrefix::Literal, 1);
+        }
+        if rest.starts_with(&self.kitty) {
+            return (AfterPrefix::Literal, self.kitty.len());
+        }
+        let command = match rest[0] {
+            digit @ b'0'..=b'9' => Command::Focus(digit - b'0'),
+            b'j' => Command::Cursor(Step::Next),
+            b'k' => Command::Cursor(Step::Prev),
+            b'\r' => Command::Jump,
+            b'r' => Command::Reopen,
+            b'n' => Command::NewFlow,
+            b'o' => Command::Board,
+            b'b' => Command::Rail,
+            b'[' => Command::History,
+            b'?' => Command::Help,
+            b'd' => Command::Detach,
+            b'Q' => Command::StopServer,
+            _ => {
+                let used = if rest[0] == 0x1b {
+                    csi_len(rest).unwrap_or(1)
+                } else {
+                    utf8_len(rest[0])
+                };
+                return (AfterPrefix::Nothing, used.min(rest.len()));
+            }
+        };
+        (AfterPrefix::Command(command), 1)
     }
 }
 
@@ -162,39 +212,6 @@ enum AfterPrefix {
     Command(Command),
     Literal,
     Nothing,
-}
-
-/// The command a key after the prefix means, and how many bytes the key took.
-fn command_after_prefix(rest: &[u8]) -> (AfterPrefix, usize) {
-    if rest[0] == PREFIX {
-        return (AfterPrefix::Literal, 1);
-    }
-    if rest.starts_with(KITTY_PREFIX) {
-        return (AfterPrefix::Literal, KITTY_PREFIX.len());
-    }
-    let command = match rest[0] {
-        digit @ b'0'..=b'9' => Command::Focus(digit - b'0'),
-        b'j' => Command::Cursor(Step::Next),
-        b'k' => Command::Cursor(Step::Prev),
-        b'\r' => Command::Jump,
-        b'r' => Command::Reopen,
-        b'n' => Command::NewFlow,
-        b'o' => Command::Board,
-        b'b' => Command::Rail,
-        b'[' => Command::History,
-        b'?' => Command::Help,
-        b'd' => Command::Detach,
-        b'Q' => Command::StopServer,
-        _ => {
-            let used = if rest[0] == 0x1b {
-                csi_len(rest).unwrap_or(1)
-            } else {
-                utf8_len(rest[0])
-            };
-            return (AfterPrefix::Nothing, used.min(rest.len()));
-        }
-    };
-    (AfterPrefix::Command(command), 1)
 }
 
 fn flush(plain: &mut Vec<u8>, modal: bool, routed: &mut Vec<Routed>) {
@@ -327,6 +344,33 @@ mod tests {
         );
         assert_eq!(route(&mut router, b"\x00\x00"), vec![Routed::Pane(vec![0])]);
         assert_eq!(route(&mut router, b"\x00x"), vec![]);
+    }
+
+    #[test]
+    fn splits_at_the_configured_prefix_and_passes_c_space_through() {
+        let mut router = Router::new(Prefix::try_from("C-b".to_string()).unwrap());
+
+        assert_eq!(
+            route(&mut router, b"a\x02d\x00"),
+            vec![
+                Routed::Pane(b"a".to_vec()),
+                Routed::Command(Command::Detach),
+                Routed::Pane(vec![0]),
+            ]
+        );
+        assert_eq!(
+            route(&mut router, b"\x1b[98;5u?"),
+            vec![Routed::Command(Command::Help)]
+        );
+        assert_eq!(
+            route(&mut router, b"\x1b[32;5u"),
+            vec![Routed::Pane(b"\x1b[32;5u".to_vec())]
+        );
+        assert_eq!(route(&mut router, b"\x02\x02"), vec![Routed::Pane(vec![2])]);
+        assert_eq!(
+            route(&mut router, b"\x02\x1b[98;5u"),
+            vec![Routed::Pane(vec![2])]
+        );
     }
 
     #[test]

@@ -8,6 +8,7 @@ use serde::Deserialize;
 
 use crate::adapter::Adapter;
 use crate::event::Phase;
+use crate::ui::prefix::Prefix;
 
 /// Skill name -> the phase it starts, for adapters that see skills start.
 pub type PhaseMap = BTreeMap<String, Phase>;
@@ -35,6 +36,7 @@ pub struct Config {
     pub phases: PhaseMap,
     pub worker: WorkerConfig,
     pub master: MasterConfig,
+    pub ui: UiConfig,
 }
 
 /// [worker]: what a flow runs when flow start names no agent.
@@ -70,6 +72,14 @@ impl Default for MasterConfig {
             agent: None,
         }
     }
+}
+
+/// [ui]: how flow ui takes keys.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct UiConfig {
+    /// The key before every flow ui command, C-space unless set.
+    pub prefix: Prefix,
 }
 
 impl Config {
@@ -489,5 +499,30 @@ prompt = "/design-code {request}"
         assert!(worker.contains("agnet"), "{worker}");
         let agent = error("[agents.pi]\ncommand = [\"pi\"]\nprompt = \"{request}\"\nresum = []\n");
         assert!(agent.contains("resum"), "{agent}");
+    }
+
+    #[test]
+    fn reads_the_ui_prefix_and_refuses_one_a_pane_needs() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        let load = |text: &str| {
+            fs::write(&file, text).unwrap();
+            Config::load(Some(file.clone()), None, None)
+        };
+
+        assert_eq!(Config::builtin().ui.prefix, Prefix::default());
+        assert_eq!(
+            load("[ui]\nprefix = \"C-b\"\n").unwrap().ui.prefix,
+            Prefix::try_from("C-b".to_string()).unwrap()
+        );
+        let needed = format!("{:#}", load("[ui]\nprefix = \"C-c\"\n").unwrap_err());
+        assert!(needed.contains(&file.display().to_string()), "{needed}");
+        assert!(needed.contains("line 2"), "{needed}");
+        assert!(
+            needed.contains("C-c interrupts the agent in a pane"),
+            "{needed}"
+        );
+        let unknown = format!("{:#}", load("[ui]\nprefx = \"C-b\"\n").unwrap_err());
+        assert!(unknown.contains("prefx"), "{unknown}");
     }
 }
