@@ -21,5 +21,5 @@ None. No code, flag or output changes.
 
 ## Tasks
 
-- [ ] LICENSE-MIT and LICENSE-APACHE at the repo root, `license` in Cargo.toml, a License section
+- [x] LICENSE-MIT and LICENSE-APACHE at the repo root, `license` in Cargo.toml, a License section
       in README.md; `cargo build` reads the manifest without warnings
