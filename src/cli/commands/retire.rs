@@ -2,11 +2,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::cli::output::Failure;
-use crate::cli::output::remove::{BranchFate, Retired, UNCOMMITTED, UNMERGED};
+use crate::cli::output::remove::{self, BranchFate, Retired};
 use crate::client::{self, Closing};
 use crate::launch::worktree;
 use crate::store::Store;
-use crate::text::plural;
 use crate::view::FlowView;
 use crate::workspace::{self, Hook};
 
@@ -37,19 +36,7 @@ pub fn refuse_uncommitted_work(flow: &FlowView) -> Result<(), Failure> {
     {
         return Ok(());
     }
-    Err(Failure::error(
-        format!("{} {} in {}", flow.name, UNCOMMITTED, space.path),
-        vec![
-            format!(
-                "Commit or stash it in {}, then run `flow remove {}` again",
-                space.path, flow.name
-            ),
-            format!(
-                "Run `flow remove {} --force` to discard the uncommitted work",
-                flow.name
-            ),
-        ],
-    ))
+    Err(remove::uncommitted(&flow.name, &space.path))
 }
 
 /// Fails before anything is touched when the flow's branch has commits on no other branch.
@@ -58,19 +45,7 @@ pub fn refuse_unmerged_commits(flow: &FlowView) -> Result<(), Failure> {
         return Ok(());
     };
     match workspace::commits_only_on(&repo, branch) {
-        Ok(Some(count)) if count > 0 => Err(Failure::error(
-            format!("{branch} has {count} commit{} {}", plural(count), UNMERGED),
-            vec![
-                format!(
-                    "Merge or push {branch}, then run `flow remove {}` again",
-                    flow.name
-                ),
-                format!(
-                    "Run `flow remove {} --delete-unmerged` to delete it with its commits",
-                    flow.name
-                ),
-            ],
-        )),
+        Ok(Some(count)) if count > 0 => Err(remove::unmerged(&flow.name, branch, count)),
         _ => Ok(()),
     }
 }

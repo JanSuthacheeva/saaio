@@ -30,7 +30,7 @@ use signal_hook::iterator::Signals;
 use crate::branching::Branching;
 use crate::client::Client;
 use crate::proto::{Role, ServerMsg};
-use app::{App, Effect, Job};
+use app::{App, Effect, Job, JobError};
 use input::Router;
 use outer::Outer;
 use peek::PeekCache;
@@ -44,7 +44,7 @@ enum Event {
     ServerGone,
     Resize,
     Tick,
-    Ran(Job, Result<String, String>),
+    Ran(Job, Result<String, JobError>),
 }
 
 /// How often spinners turn.
@@ -196,7 +196,7 @@ fn run_job(exe: &Path, job: Job, events: Sender<Event>) {
                 output.status.success(),
                 &String::from_utf8_lossy(&output.stdout),
             ),
-            Err(error) => Err(format!("could not run flow: {error}")),
+            Err(error) => Err(JobError::other(format!("could not run flow: {error}"))),
         };
         let _ = events.send(Event::Ran(job, result));
     });

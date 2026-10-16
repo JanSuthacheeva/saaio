@@ -412,6 +412,9 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 ### 9. End to end
 - [x] Run the before script against the new binary and diff: byte-identical stdout, stderr and exit codes; run `flow ui` against a temp store, start a flow, open the board, the help and the stop dialog, and detach
 
+### 10. Review decisions
+- [x] The UI's remove prompts match a typed `Refusal { Uncommitted, Unmerged }` (`cli/output/remove.rs`, beside `uncommitted()` and `unmerged()`, which build the refusals' messages) carried in the job result as `JobError { message, refusal }` (`ui/app/effect.rs`, from `outcome`), not text; the CLI prints the same bytes. Tests: `Refusal::of` reads each refusal from its own message, and `knows_each_refusal_from_what_flow_remove_prints` sends the TOON `flow remove` prints through `outcome`; rewording a refusal fails both
+
 ## Review
 
 Isolated review of `main..1b69fff` (21 commits). Method: every removed line of `src/` was matched
@@ -427,11 +430,11 @@ Nothing. No finding could be shown with a failing test or a wrong result.
 
 ### Open
 
-- `ui/app/messages.rs` matches `flow remove`'s stderr with `cli::output::remove::{UNCOMMITTED,
+- Decided: fix (task 10.1). `ui/app/messages.rs` matches `flow remove`'s stderr with `cli::output::remove::{UNCOMMITTED,
   UNMERGED}`, so the UI depends on the CLI's output module. It was the same coupling before
   (`crate::output`), and it is honest (the UI runs `flow remove` as a job and reads its error), so
   I recommend leaving it; a typed error code in the job result would remove it if it ever grows.
-- `flow server` now reads `current_dir` in `cli/commands/server.rs` before `server::run` instead of
+- Decided: leave. `flow server` now reads `current_dir` in `cli/commands/server.rs` before `server::run` instead of
   inside it, after loading the config. Only the order of two startup failures changes, and only
   when the cwd is unreadable; same message. Recommend leaving it.
 

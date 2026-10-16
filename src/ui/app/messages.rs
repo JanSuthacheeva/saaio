@@ -1,8 +1,10 @@
 use std::path::Path;
 
-use super::{App, CHANGE_SHOWN_MS, Effect, Job, OVERVIEW_EVERY_MS, Removal, TICKS_PER_AGE, View};
+use super::{
+    App, CHANGE_SHOWN_MS, Effect, Job, JobError, OVERVIEW_EVERY_MS, Removal, TICKS_PER_AGE, View,
+};
 use crate::branching::Branching;
-use crate::cli::output;
+use crate::cli::output::remove::Refusal;
 use crate::proto::{ClientMsg, PaneKey, ServerMsg, Size};
 use crate::ui::board::BoardState;
 use crate::view::{Projects, State};
@@ -70,14 +72,14 @@ impl App {
     }
 
     /// What a background flow command printed: the flow it started, or why it failed.
-    pub fn on_ran(&mut self, job: Job, result: Result<String, String>) {
+    pub fn on_ran(&mut self, job: Job, result: Result<String, JobError>) {
         if job != Job::Overview {
             self.notice = None;
         }
         match (job, result) {
             (Job::Overview, result) => {
                 self.overview_running = false;
-                match result.and_then(|json| {
+                match result.map_err(|error| error.message).and_then(|json| {
                     serde_json::from_str::<Projects>(&json).map_err(|error| error.to_string())
                 }) {
                     Ok(projects) => self.projects = Some(self.here_first(projects)),
@@ -86,10 +88,10 @@ impl App {
             }
             (Job::Start(_) | Job::Remove(_), Ok(_)) => {}
             (Job::Start(mut form), Err(error)) => {
-                form.error = Some(error);
+                form.error = Some(error.message);
                 self.view = View::NewFlow(form);
             }
-            (Job::Remove(removal), Err(error)) if error.contains(output::remove::UNCOMMITTED) => {
+            (Job::Remove(removal), Err(error)) if error.refusal == Some(Refusal::Uncommitted) => {
                 self.view = View::Confirm {
                     question: format!("{} has uncommitted changes. Discard them?", removal.name),
                     then: Removal {
@@ -98,16 +100,16 @@ impl App {
                     },
                 };
             }
-            (Job::Remove(removal), Err(error)) if error.contains(output::remove::UNMERGED) => {
+            (Job::Remove(removal), Err(error)) if error.refusal == Some(Refusal::Unmerged) => {
                 self.view = View::Confirm {
-                    question: format!("{error}. Delete it anyway?"),
+                    question: format!("{}. Delete it anyway?", error.message),
                     then: Removal {
                         delete_unmerged: true,
                         ..removal
                     },
                 };
             }
-            (Job::Remove(_), Err(error)) => self.notice = Some(error),
+            (Job::Remove(_), Err(error)) => self.notice = Some(error.message),
         }
     }
 

@@ -209,7 +209,9 @@ fn starts_from_a_workers_repo_and_clears_only_finished_flows() {
     );
     app.on_ran(
         Job::Remove(Removal::of("shop-198")),
-        Err("could not remove shop-198: permission denied".into()),
+        Err(JobError::other(
+            "could not remove shop-198: permission denied",
+        )),
     );
     assert_eq!(
         app.notice.as_deref(),
@@ -281,7 +283,10 @@ fn asks_for_every_project_again_every_two_seconds_while_in_view() {
 
     app.on_tick(NOW + 2_500);
     assert_eq!(app.overview_due(), vec![], "the first answer is still out");
-    app.on_ran(Job::Overview, Err("cannot find a state directory".into()));
+    app.on_ran(
+        Job::Overview,
+        Err(JobError::other("cannot find a state directory")),
+    );
     assert_eq!(
         app.notice.as_deref(),
         Some("cannot read every project: cannot find a state directory")

@@ -248,6 +248,6 @@ fn reads_what_a_flow_command_printed() {
     );
     assert_eq!(
         outcome(false, "error: all 20 slots are in use\nhelp[1]: ..."),
-        Err("all 20 slots are in use".into())
+        Err(JobError::other("all 20 slots are in use"))
     );
 }

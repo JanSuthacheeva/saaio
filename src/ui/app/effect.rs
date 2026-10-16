@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::cli::output::remove::Refusal;
 use crate::proto::{ClientMsg, Modes};
 use crate::ui::newflow::NewFlowForm;
 
@@ -85,12 +86,32 @@ pub enum Effect {
     Quit(String),
 }
 
+/// Why a flow command failed: its error, and the refusal it was, if flow ui asks about it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JobError {
+    pub message: String,
+    pub refusal: Option<Refusal>,
+}
+
+impl JobError {
+    /// An error flow ui only shows.
+    pub fn other(message: impl Into<String>) -> JobError {
+        JobError {
+            message: message.into(),
+            refusal: None,
+        }
+    }
+}
+
 /// What a flow command printed: its first line when it worked, the error without "error: " when not.
-pub fn outcome(success: bool, stdout: &str) -> Result<String, String> {
+pub fn outcome(success: bool, stdout: &str) -> Result<String, JobError> {
     let first = stdout.lines().next().unwrap_or("").trim();
     if success {
-        Ok(first.to_string())
-    } else {
-        Err(first.strip_prefix("error: ").unwrap_or(first).to_string())
+        return Ok(first.to_string());
     }
+    let message = first.strip_prefix("error: ").unwrap_or(first).to_string();
+    Err(JobError {
+        refusal: Refusal::of(&message),
+        message,
+    })
 }

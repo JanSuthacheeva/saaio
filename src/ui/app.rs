@@ -5,7 +5,7 @@ mod effect;
 mod keys;
 mod messages;
 
-pub use effect::{Effect, Job, Removal, outcome};
+pub use effect::{Effect, Job, JobError, Removal, outcome};
 
 use std::collections::HashMap;
 use std::path::PathBuf;

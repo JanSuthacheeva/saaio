@@ -2,14 +2,58 @@ use std::fmt;
 
 use serde::Serialize;
 
-use super::{Document, toon};
+use super::{Document, Failure, toon};
 use crate::client::Closing;
+use crate::text::plural;
 
-/// How `flow remove` says a branch has work no other branch has; flow ui asks before deleting it.
-pub(crate) const UNMERGED: &str = "on no other branch";
+/// How `flow remove` says a worktree has uncommitted work.
+const UNCOMMITTED: &str = "has uncommitted work";
+/// How `flow remove` says a branch has work no other branch has.
+const UNMERGED: &str = "on no other branch";
 
-/// How `flow remove` says a worktree has uncommitted work; flow ui asks before discarding it.
-pub(crate) const UNCOMMITTED: &str = "has uncommitted work";
+/// Work `flow remove` refuses to lose unless told to; flow ui asks the person instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Refusal {
+    /// The worktree has uncommitted work (--force discards it).
+    Uncommitted,
+    /// The branch has commits on no other branch (--delete-unmerged deletes them).
+    Unmerged,
+}
+
+impl Refusal {
+    /// The refusal a failure's message says, for a program that reads what `flow remove` printed.
+    pub(crate) fn of(message: &str) -> Option<Refusal> {
+        if message.contains(UNCOMMITTED) {
+            Some(Refusal::Uncommitted)
+        } else if message.contains(UNMERGED) {
+            Some(Refusal::Unmerged)
+        } else {
+            None
+        }
+    }
+}
+
+/// The refusal of flow `name`'s removal while its worktree at `path` has uncommitted work.
+pub(crate) fn uncommitted(name: &str, path: &str) -> Failure {
+    Failure::error(
+        format!("{name} {UNCOMMITTED} in {path}"),
+        vec![
+            format!("Commit or stash it in {path}, then run `flow remove {name}` again"),
+            format!("Run `flow remove {name} --force` to discard the uncommitted work"),
+        ],
+    )
+}
+
+/// The refusal of flow `name`'s removal while its `branch` has `count` commits on no other branch.
+pub(crate) fn unmerged(name: &str, branch: &str, count: u32) -> Failure {
+    Failure::error(
+        format!("{branch} has {count} commit{} {UNMERGED}", plural(count)),
+        vec![
+            format!("Merge or push {branch}, then run `flow remove {name}` again"),
+            format!("Run `flow remove {name} --delete-unmerged` to delete it with its commits"),
+        ],
+    )
+}
 
 /// What became of a flow's worktree when it was cleared or removed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,6 +166,19 @@ pub(crate) fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_each_refusal_back_from_its_own_message() {
+        let uncommitted = uncommitted("shop-230", "/shop/.flow/worktrees/shop-230");
+        let unmerged = unmerged("shop-230", "flow/shop-230", 2);
+
+        assert_eq!(
+            Refusal::of(&uncommitted.message),
+            Some(Refusal::Uncommitted)
+        );
+        assert_eq!(Refusal::of(&unmerged.message), Some(Refusal::Unmerged));
+        assert_eq!(Refusal::of("no flow named shop-230"), None);
+    }
 
     #[test]
     fn cleared_counts_and_names_the_removed_flows() {

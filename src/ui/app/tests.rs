@@ -6,7 +6,8 @@ use ratatui::style::Modifier;
 
 use super::*;
 use crate::branching::Branching;
-use crate::cli::output;
+use crate::cli::output::Failure;
+use crate::cli::output::remove::{self, Refusal};
 use crate::event::{Event, EventKind};
 use crate::fold;
 use crate::proto::{Cell, ClientMsg, Color, Flags, Frame, Mouse, ServerMsg};

@@ -56,6 +56,30 @@ fn offers_to_clean_up_a_worker_whose_session_ended() {
     );
 }
 
+/// What flow ui reads from `flow remove` when it fails with `failure`, as the binary prints it.
+fn printed(failure: &Failure) -> Result<String, JobError> {
+    outcome(false, &format!("{}\n", failure.to_toon()))
+}
+
+#[test]
+fn knows_each_refusal_from_what_flow_remove_prints() {
+    let uncommitted = printed(&remove::uncommitted("shop-230", "/shop")).unwrap_err();
+    let unmerged = printed(&remove::unmerged("shop-230", "flow/shop-230", 1)).unwrap_err();
+    let other = printed(&Failure::error("no flow named shop-230", Vec::new())).unwrap_err();
+
+    assert_eq!(uncommitted.refusal, Some(Refusal::Uncommitted));
+    assert_eq!(
+        uncommitted.message,
+        "shop-230 has uncommitted work in /shop"
+    );
+    assert_eq!(unmerged.refusal, Some(Refusal::Unmerged));
+    assert_eq!(
+        unmerged.message,
+        "flow/shop-230 has 1 commit on no other branch"
+    );
+    assert_eq!(other.refusal, None);
+}
+
 #[test]
 fn asks_before_a_clean_up_loses_work() {
     let mut app = board_app();
@@ -63,7 +87,7 @@ fn asks_before_a_clean_up_loses_work() {
 
     app.on_ran(
         Job::Remove(first.clone()),
-        Err(format!("shop-230 {} in /shop", output::remove::UNCOMMITTED)),
+        printed(&remove::uncommitted("shop-230", "/shop")),
     );
     assert!(app.is_modal());
     let screen: String = {
@@ -87,10 +111,7 @@ fn asks_before_a_clean_up_loses_work() {
 
     app.on_ran(
         Job::Remove(forced.clone()),
-        Err(format!(
-            "flow/shop-230 has 2 commits {}",
-            output::remove::UNMERGED
-        )),
+        printed(&remove::unmerged("shop-230", "flow/shop-230", 2)),
     );
     let View::Confirm { question, then } = &app.view else {
         panic!("expected a question: {:?}", app.view);
@@ -230,7 +251,7 @@ fn starts_a_flow_from_the_dialog_in_the_repo_in_view() {
     assert_eq!(job.dir(), Some(Path::new("/Users/jan/projects/shop")));
     assert!(!app.is_modal());
 
-    app.on_ran(job.clone(), Err("all 20 slots are in use".into()));
+    app.on_ran(job.clone(), Err(JobError::other("all 20 slots are in use")));
     let View::NewFlow(form) = &app.view else {
         panic!("the dialog comes back");
     };
