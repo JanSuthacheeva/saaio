@@ -41,12 +41,12 @@ pub struct Sidebar<'a> {
     pub theme: &'a Theme,
 }
 
-/// One row of the sidebar and the pane a click on it focuses.
+/// One row of the sidebar or the rail and the pane a click on it focuses.
 #[derive(Debug)]
-struct Row {
-    line: Line<'static>,
-    key: Option<PaneKey>,
-    selected: bool,
+pub(super) struct Row {
+    pub line: Line<'static>,
+    pub key: Option<PaneKey>,
+    pub selected: bool,
 }
 
 /// The flows that get a pane, in sidebar order (needs you, ready, running, done); digit n focuses the nth.
@@ -65,6 +65,27 @@ impl Sidebar<'_> {
     }
 
     fn rows(&self, height: u16) -> Vec<Row> {
+        let room = usize::from(height.saturating_sub(FOOTER_ROWS));
+        let mut rows = self.master_rows();
+        let listed = workers(self.board);
+        let mut flows = self.flow_blocks(&listed);
+        let used = rows.len() + flows.iter().map(Vec::len).sum::<usize>();
+        let budget = room.saturating_sub(used).min(PEEK_ROWS);
+        let peeked = self
+            .cursor
+            .and_then(|id| listed.iter().position(|flow| flow.id == id));
+        if let Some(index) = peeked
+            && budget >= PEEK_MIN_ROWS
+        {
+            self.insert_peek(&mut flows[index], listed[index], budget);
+        }
+        self.fit(&mut rows, flows, room);
+        rows.extend(self.footer());
+        rows
+    }
+
+    /// The header, its rule, the master and where it runs.
+    fn master_rows(&self) -> Vec<Row> {
         let theme = self.theme;
         let width = WIDTH;
         let mut rows = vec![
@@ -113,8 +134,12 @@ impl Sidebar<'_> {
             });
         }
         rows.push(plain(Line::raw("")));
+        rows
+    }
 
-        let listed = workers(self.board);
+    /// One block of rows per worker, each group's first led by its heading and count.
+    fn flow_blocks(&self, listed: &[&FlowView]) -> Vec<Vec<Row>> {
+        let theme = self.theme;
         let mut group = None;
         let mut flows = Vec::new();
         for (index, flow) in listed.iter().copied().enumerate() {
@@ -140,27 +165,21 @@ impl Sidebar<'_> {
             block.push(plain(Line::raw("")));
             flows.push(block);
         }
+        flows
+    }
 
-        let room = height.saturating_sub(FOOTER_ROWS) as usize;
-        let used = rows.len() + flows.iter().map(Vec::len).sum::<usize>();
-        let budget = room.saturating_sub(used).min(PEEK_ROWS);
-        let peeked = self.cursor.and_then(|id| {
-            workers(self.board)
-                .into_iter()
-                .position(|flow| flow.id == id)
-        });
-        if let Some(index) = peeked
-            && budget >= PEEK_MIN_ROWS
-        {
-            let flow = workers(self.board)[index];
-            let block = &mut flows[index];
-            let blank = block.pop();
-            if self.note(flow, self.status(flow)).is_some() {
-                block.pop();
-            }
-            block.extend(self.peek_rows(flow, budget));
-            block.extend(blank);
+    /// The peek in place of the flow's note, before its blank row.
+    fn insert_peek(&self, block: &mut Vec<Row>, flow: &FlowView, budget: usize) {
+        let blank = block.pop();
+        if self.note(flow, self.status(flow)).is_some() {
+            block.pop();
         }
+        block.extend(self.peek_rows(flow, budget));
+        block.extend(blank);
+    }
+
+    /// As many whole flow blocks as fit in `room` rows, "N more" for the rest, padded to `room`.
+    fn fit(&self, rows: &mut Vec<Row>, flows: Vec<Vec<Row>>, room: usize) {
         let mut used = rows.len();
         let shown = flows
             .iter()
@@ -170,19 +189,15 @@ impl Sidebar<'_> {
             })
             .count();
         let hidden = flows.len() - shown;
-        for block in flows.into_iter().take(shown) {
-            rows.extend(block);
-        }
+        rows.extend(flows.into_iter().take(shown).flatten());
         if hidden > 0 && rows.len() < room {
             rows.push(plain(Line::styled(
-                format!(" {} {hidden} more", theme.glyphs.more),
-                theme.ui.faint,
+                format!(" {} {hidden} more", self.theme.glyphs.more),
+                self.theme.ui.faint,
             )));
         }
         rows.truncate(room);
         rows.resize_with(room, || plain(Line::raw("")));
-        rows.extend(self.footer());
-        rows
     }
 
     fn flow_rows(&self, flow: &FlowView, index: usize) -> Vec<Row> {
@@ -492,7 +507,7 @@ pub fn digit(index: usize) -> String {
     }
 }
 
-fn plain(line: Line<'static>) -> Row {
+pub(super) fn plain(line: Line<'static>) -> Row {
     Row {
         line,
         key: None,
