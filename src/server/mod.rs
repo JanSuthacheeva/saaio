@@ -303,7 +303,7 @@ impl Server {
         for warning in warnings {
             eprintln!("{warning}");
         }
-        self.board = fold::board(fold::views(logs, now), now);
+        self.board = fold::board(fold::views(&logs, now), now);
         let open: Vec<PaneKey> = self.host.panes().into_iter().map(|pane| pane.key).collect();
         let wanted = reconcile(
             &self.board.flows,

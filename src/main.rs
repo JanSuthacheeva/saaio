@@ -1063,7 +1063,7 @@ fn held_slots(registry: &Registry, now: u64) -> Vec<u8> {
 /// Every flow folded; unreadable ones become warnings so the rest still shows.
 fn views(store: &Store, now: u64) -> (Vec<FlowView>, Vec<String>) {
     let (logs, warnings) = store.logs();
-    (fold::views(logs, now), warnings)
+    (fold::views(&logs, now), warnings)
 }
 
 fn no_flow(name: &str) -> Failure {

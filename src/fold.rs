@@ -9,20 +9,23 @@ use crate::view::{
 pub const SILENT_AFTER_MS: u64 = 90_000;
 
 /// One flow's view at `now`; None when the log has no Started event to name it.
-pub fn fold(id: &str, events: &[Event], last_beat: Option<u64>, now: u64) -> Option<FlowView> {
-    let start = events
-        .iter()
-        .position(|event| matches!(event.kind, EventKind::Started { .. }))?;
-    let EventKind::Started {
-        name,
-        request,
-        mode,
-    } = &events[start].kind
-    else {
-        unreachable!("position found a Started event");
-    };
-    let mut folding = Folding::new(id, name, request, *mode, events[start].at);
-    for event in &events[start + 1..] {
+pub fn fold<'a>(
+    id: &str,
+    events: impl IntoIterator<Item = &'a Event>,
+    last_beat: Option<u64>,
+    now: u64,
+) -> Option<FlowView> {
+    let mut events = events.into_iter();
+    let (name, request, mode, at) = events.by_ref().find_map(|event| match &event.kind {
+        EventKind::Started {
+            name,
+            request,
+            mode,
+        } => Some((name, request, *mode, event.at)),
+        _ => None,
+    })?;
+    let mut folding = Folding::new(id, name, request, mode, at);
+    for event in events {
         folding.apply(event);
     }
     let mut view = folding.finish(now);
@@ -34,8 +37,8 @@ pub fn fold(id: &str, events: &[Event], last_beat: Option<u64>, now: u64) -> Opt
 }
 
 /// True when appending `kind` changes what the flow shows: its state, phase, blocker, delegate,
-/// tasks, review, merge request, decisions or answer; every message does. Adapters skip the rest, so a log does not grow by a
-/// line for every tool call.
+/// tasks, review, merge request, decisions or answer; every message does. Adapters skip the rest,
+/// so a log does not grow by a line for every tool call.
 pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
     if matches!(kind, EventKind::Message { .. }) {
         return true;
@@ -43,31 +46,32 @@ pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
     let Some(before) = fold(id, events, None, now) else {
         return true;
     };
-    let mut after_events = events.to_vec();
-    after_events.push(Event::new(now, kind.clone()));
-    let Some(after) = fold(id, &after_events, None, now) else {
+    let next = Event::new(now, kind.clone());
+    let Some(after) = fold(id, events.iter().chain([&next]), None, now) else {
         return true;
-    };
-    let shown = |view: &FlowView| {
-        (
-            view.state,
-            view.phase,
-            view.blocker.clone(),
-            view.delegate.clone(),
-            view.tasks,
-            view.review,
-            view.merge_request.clone(),
-            view.decisions.clone(),
-            view.timeline.last().map(|entry| entry.text.clone()),
-            view.answer.clone(),
-        )
     };
     shown(&before) != shown(&after)
 }
 
+/// What a flow shows that an event can change.
+fn shown(view: &FlowView) -> impl PartialEq + '_ {
+    (
+        view.state,
+        view.phase,
+        view.blocker.as_deref(),
+        view.delegate.as_deref(),
+        view.tasks,
+        view.review,
+        view.merge_request.as_deref(),
+        &view.decisions,
+        view.timeline.last().map(|entry| entry.text.as_str()),
+        view.answer.as_deref(),
+    )
+}
+
 /// Every log that names its flow, folded at `now`.
-pub fn views(logs: Vec<FlowLog>, now: u64) -> Vec<FlowView> {
-    logs.into_iter()
+pub fn views(logs: &[FlowLog], now: u64) -> Vec<FlowView> {
+    logs.iter()
         .filter_map(|log| fold(&log.id, &log.events, log.beat, now))
         .collect()
 }

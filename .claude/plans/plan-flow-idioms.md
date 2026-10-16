@@ -56,7 +56,7 @@ any other that turns out to be noise, each named.
 - [x] config: `Agent.adapter: Option<Adapter>`, bad names fail `Config::load` (test)
 
 ### 3. Borrowing and allocation
-- [ ] fold: `changes` chains instead of copying the log, `shown` compares references, `views(&[FlowLog])`
+- [x] fold: `changes` chains instead of copying the log, `shown` compares references, `views(&[FlowLog])`
 - [ ] output: rows borrow (`&'a str`), blocker via `as_deref`; launch `strip_prefix`
 - [ ] event: `cut_to` truncates, `cut_texts(&mut self)`; main: drop needless clones, `branch_of` borrows
 - [ ] ui app: `mem::replace` for the view, `workers()` iterator, `worker(id)`, borrowed dialog data, `Removal::of(String)`, no clone-to-measure
