@@ -12,14 +12,21 @@ use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
 /// The flow binary with a test's own state: `home` as FLOW_HOME, the shared folder inside it, a
-/// config file that does not exist (so the built-in agents) and no FLOW_ID.
+/// config file that does not exist (so the built-in agents), no Claude Code home of the user's
+/// and no FLOW_* variable of the shell it runs in.
 fn flow_command(home: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_flow"));
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("FLOW_") {
+            command.env_remove(key);
+        }
+    }
     command
         .env("FLOW_HOME", home)
         .env("XDG_STATE_HOME", shared(home))
         .env("FLOW_CONFIG", home.join("no-config.toml"))
-        .env_remove("FLOW_ID");
+        .env("XDG_CONFIG_HOME", home.join("no-config-home"))
+        .env("CLAUDE_CONFIG_DIR", home.join("no-claude-home"));
     command
 }
 
