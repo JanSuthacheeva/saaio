@@ -94,8 +94,9 @@ pub fn run_hook(
 /// Removes a worktree; without force Ok(false) when git refuses (uncommitted work).
 pub fn remove_worktree(repo: &Path, workspace: &Workspace, force: bool) -> Result<bool> {
     let argv = worktree_remove_argv(repo, workspace, force);
-    let output = Command::new(&argv[0])
-        .args(&argv[1..])
+    let (program, args) = argv.split_first().context("empty command")?;
+    let output = Command::new(program)
+        .args(args)
         .output()
         .context("could not run git")?;
     Ok(output.status.success())
