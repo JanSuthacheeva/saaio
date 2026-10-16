@@ -154,3 +154,25 @@ the title row; no `[glyphs]`. `docs/HANDOVER.md` row 9: `[glyphs]` is rejected u
 - [x] Fixtures noctalia.toml and noctalia-template.toml with tests that noctalia loads and the template parses
 - [x] README Themes and HANDOVER row 9 updated
 - [x] End to end: flow ui on a scratch FLOW_HOME and XDG_CONFIG_HOME shows a wrong-section error with file and line, and repaints once fixed
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and main. Every changed line read;
+edge inputs probed with throwaway tests (non-ASCII syntax errors, CRLF, `[[ui]]`, `[state.x]`,
+`[ui.accent]`, quoted keys, inline tables, duplicate tables, an unclosed header at end of file,
+a datetime `extends`): each gives one line with the right `path:line` and no panic. Both fixtures
+are byte-identical to `~/.config/flow/themes/noctalia.toml` and dotfiles-v2's
+`noctalia/templates/flow.toml`.
+
+- **Fixed** - nothing; no finding that needed a code change.
+- **Open** - "With several mistakes the topmost is reported" holds only among structural mistakes.
+  Bad values are checked later, in `apply`, so `[ui]\naccent = "#d9825"\n[state]\nreview = 1`
+  reports line 4 (the wrong section) before line 2 (the bad color). Recommendation: accept it and
+  read the assumption as "the topmost structural mistake first, then the topmost bad value"; the
+  user still gets one true error at a time.
+- **Where to look** - `src/ui/theme_file.rs` `parse` to `colors`: the span sort and section check
+  carry the behaviour; `apply`: the `name each other` line comes from the first pending reference;
+  `src/ui.rs` `reload_theme` with `App::take_back`: a theme that reads again clears only a notice
+  starting `theme: `. `theme.rs` `section`, README, HANDOVER and the fixtures are routine.
+- **Checks** - `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`
+  passed at 73eeef1 (told, not rerun; no code changed since).
