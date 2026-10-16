@@ -32,34 +32,8 @@ struct ThemeFile {
 /// built-in terminal theme when there is no theme.toml. Also every file it read or would read, so a
 /// watcher sees one appear.
 pub fn load(dir: &Path) -> (Result<Theme>, Vec<PathBuf>) {
-    let first = dir.join(THEME_FILE);
-    let mut files = vec![first.clone()];
-    let mut chain = Vec::new();
-    let mut next = Some(first);
-    let result = loop {
-        let Some(path) = next.take() else {
-            break Ok(());
-        };
-        let file = match read(&path) {
-            Ok(Some(file)) => file,
-            Ok(None) if chain.is_empty() => break Ok(()),
-            Ok(None) => break Err(anyhow!("{} does not exist", path.display())),
-            Err(error) => break Err(error),
-        };
-        if Palette::named(&file.extends).is_none() {
-            if chain.len() + 1 >= EXTENDS_LIMIT {
-                break Err(anyhow!(
-                    "{} extends more than {EXTENDS_LIMIT} themes deep",
-                    dir.join(THEME_FILE).display()
-                ));
-            }
-            let base = dir.join(THEMES_DIR).join(format!("{}.toml", file.extends));
-            files.push(base.clone());
-            next = Some(base);
-        }
-        chain.push(file);
-    };
-    let theme = result.and_then(|()| {
+    let mut files = vec![dir.join(THEME_FILE)];
+    let theme = chain(dir, &mut files).and_then(|chain| {
         let base = chain
             .last()
             .map_or(DEFAULT_BASE, |file| file.extends.as_str());
@@ -79,6 +53,34 @@ pub fn load(dir: &Path) -> (Result<Theme>, Vec<PathBuf>) {
         Ok(theme)
     });
     (theme, files)
+}
+
+/// theme.toml and every theme file it extends, nearest first; each file it reads or would read is
+/// added to `files`.
+fn chain(dir: &Path, files: &mut Vec<PathBuf>) -> Result<Vec<ThemeFile>> {
+    let mut chain = Vec::new();
+    let mut next = files.last().cloned();
+    while let Some(path) = next.take() {
+        let Some(file) = read(&path)? else {
+            if chain.is_empty() {
+                break;
+            }
+            bail!("{} does not exist", path.display());
+        };
+        if Palette::named(&file.extends).is_none() {
+            if chain.len() + 1 >= EXTENDS_LIMIT {
+                bail!(
+                    "{} extends more than {EXTENDS_LIMIT} themes deep",
+                    dir.join(THEME_FILE).display()
+                );
+            }
+            let base = dir.join(THEMES_DIR).join(format!("{}.toml", file.extends));
+            files.push(base.clone());
+            next = Some(base);
+        }
+        chain.push(file);
+    }
+    Ok(chain)
 }
 
 /// The file at `path`, None when it does not exist.

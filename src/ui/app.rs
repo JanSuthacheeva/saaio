@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::mem;
 use std::path::{Path, PathBuf};
 
@@ -663,12 +664,13 @@ impl App {
                     .filter(|flow| unfinished.contains(&flow.id))
                 {
                     if let Some(space) = &flow.workspace {
-                        message.push_str(&format!(
+                        let _ = write!(
+                            message,
                             "\n  {}  {}  {}",
                             flow.name,
                             space.branch,
                             self.tilde(&space.path)
-                        ));
+                        );
                     }
                 }
                 let mut effects = vec![Effect::Send(ClientMsg::EndFlows)];
@@ -910,20 +912,20 @@ impl App {
 
     /// What a background flow command printed: the flow it started, or why it failed.
     pub fn on_ran(&mut self, job: Job, result: Result<String, String>) {
-        if job == Job::Overview {
-            self.overview_running = false;
-            match result.and_then(|json| {
-                serde_json::from_str::<Projects>(&json).map_err(|error| error.to_string())
-            }) {
-                Ok(projects) => self.projects = Some(self.here_first(projects)),
-                Err(error) => self.notice = Some(format!("cannot read every project: {error}")),
-            }
-            return;
+        if job != Job::Overview {
+            self.notice = None;
         }
-        self.notice = None;
         match (job, result) {
-            (Job::Overview, _) => {}
-            (Job::Start(_), Ok(_)) | (Job::Remove(_), Ok(_)) => {}
+            (Job::Overview, result) => {
+                self.overview_running = false;
+                match result.and_then(|json| {
+                    serde_json::from_str::<Projects>(&json).map_err(|error| error.to_string())
+                }) {
+                    Ok(projects) => self.projects = Some(self.here_first(projects)),
+                    Err(error) => self.notice = Some(format!("cannot read every project: {error}")),
+                }
+            }
+            (Job::Start(_) | Job::Remove(_), Ok(_)) => {}
             (Job::Start(mut form), Err(error)) => {
                 form.error = Some(error);
                 self.view = View::NewFlow(form);

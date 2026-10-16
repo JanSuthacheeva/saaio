@@ -67,7 +67,7 @@ any other that turns out to be noise, each named.
 - [x] let-else and let chains (main.rs, store.rs, master.rs), `while let` read loops (ui/mod.rs, server/mod.rs)
 - [x] fold: `find_map`, `Phase::index`, `Phase::ALL.len()`; launch `Option::filter`
 - [x] board `checked_add_signed`; `zip(area.rows())` loops in board, sidebar, rail, screen
-- [ ] `write!` instead of `push_str(&format!)`; `on_ran` one match arm; `Path::ancestors`; theme_file chain with `?`
+- [x] `write!` instead of `push_str(&format!)`; `on_ran` one match arm; `Path::ancestors`; theme_file chain with `?`
 - [ ] remaining small rewrites: input `find`, sidebar/newflow/peek tidy-ups, redundant closures, `map_or_else`
 
 ### 5. unsafe and RAII

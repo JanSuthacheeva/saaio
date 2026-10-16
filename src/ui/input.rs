@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use ratatui::layout::{Position, Rect};
 
 /// What raw keyboard and mouse bytes from the real terminal turn into.
@@ -258,15 +260,13 @@ fn route_mouse(
     modal: bool,
 ) {
     if pane.contains(Position::new(event.col, event.row)) && !modal {
-        plain.extend_from_slice(
-            format!(
-                "\x1b[<{};{};{}{}",
-                event.button,
-                event.col - pane.x + 1,
-                event.row - pane.y + 1,
-                if event.press { 'M' } else { 'm' }
-            )
-            .as_bytes(),
+        let _ = write!(
+            plain,
+            "\x1b[<{};{};{}{}",
+            event.button,
+            event.col - pane.x + 1,
+            event.row - pane.y + 1,
+            if event.press { 'M' } else { 'm' }
         );
         return;
     }
