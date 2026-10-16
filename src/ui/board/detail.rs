@@ -257,7 +257,7 @@ impl BoardView<'_> {
         for step in &flow.steps {
             let (glyph, style) = match step.status {
                 StepStatus::Done => (glyphs.done, theme.state.done),
-                StepStatus::Current => (glyphs.step_current, theme.flow_style(flow)),
+                StepStatus::Current => (glyphs.step_current, theme.step_style(flow)),
                 StepStatus::Open => (glyphs.step_open, theme.ui.faint),
             };
             if !steps.is_empty() {

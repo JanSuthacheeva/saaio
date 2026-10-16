@@ -497,12 +497,10 @@ fn what_is_done_takes_the_color_of_where_the_flow_is() {
     assert_eq!(buffer[(x + 8, y)].fg, faint, "open");
 }
 
-#[test]
-fn a_working_flow_takes_the_color_of_its_phase() {
-    let theme = Theme::default();
-    let review = theme.phase.review.fg.unwrap();
-    let faint = theme.ui.faint.fg.unwrap();
-    let terminal = render_at(&with_fleet(), FLEET);
+/// export-csv, delegated in review: the color of its spinner and of its done, current and open dots.
+fn export_csv_colors(level: PhaseColors) -> [ratatui::style::Color; 4] {
+    let theme = theme_at(level);
+    let terminal = render_with(&with_fleet(), FLEET, &theme);
     let buffer = terminal.backend().buffer();
     let name = (0..FLEET.rows)
         .find(|&y| side(&terminal, y).contains("export-csv"))
@@ -515,9 +513,34 @@ fn a_working_flow_takes_the_color_of_its_phase() {
     let dot = (0..FLEET.cols)
         .find(|&x| buffer[(x, track)].symbol() == "●")
         .unwrap();
+    [
+        buffer[(spinner, name)].fg,
+        buffer[(dot, track)].fg,
+        buffer[(dot + 8, track)].fg,
+        buffer[(dot + 12, track)].fg,
+    ]
+}
 
-    assert_eq!(buffer[(spinner, name)].fg, review, "spinner");
-    assert_eq!(buffer[(dot, track)].fg, review, "done");
-    assert_eq!(buffer[(dot + 8, track)].fg, review, "current");
-    assert_eq!(buffer[(dot + 12, track)].fg, faint, "open");
+#[test]
+fn the_phase_colors_level_decides_what_takes_the_color_of_the_phase() {
+    let theme = Theme::default();
+    let review = theme.phase.review.fg.unwrap();
+    let working = theme.state.working.fg.unwrap();
+    let faint = theme.ui.faint.fg.unwrap();
+
+    assert_eq!(
+        export_csv_colors(PhaseColors::Off),
+        [working, working, working, faint],
+        "off: state colors only"
+    );
+    assert_eq!(
+        export_csv_colors(PhaseColors::Steps),
+        [working, review, review, faint],
+        "steps: only the reached dots"
+    );
+    assert_eq!(
+        export_csv_colors(PhaseColors::Full),
+        [review, review, review, faint],
+        "full: spinner and dots"
+    );
 }

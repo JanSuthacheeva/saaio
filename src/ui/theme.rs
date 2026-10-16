@@ -231,12 +231,25 @@ pub const fn hex(rgb: u32) -> Color {
     Color::Rgb(r, g, b)
 }
 
+/// How much of a working flow takes its phase's color: theme.toml's phase_colors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PhaseColors {
+    /// State colors only.
+    Off,
+    /// The reached step dots; spinner, label, rail and title keep the state color.
+    #[default]
+    Steps,
+    /// Everything that takes the state color.
+    Full,
+}
+
 /// Every color and symbol flow ui draws with, by name; a theme file sets them through its Palette.
 #[derive(Debug, Clone)]
 pub struct Theme {
     pub ui: UiTokens,
     pub state: StateTokens,
     pub phase: PhaseTokens,
+    pub phase_colors: PhaseColors,
     pub glyphs: Glyphs,
     pub palette: Palette,
 }
@@ -355,6 +368,7 @@ impl Theme {
                 review: fg(palette.review),
                 merge_request: fg(palette.merge_request),
             },
+            phase_colors: PhaseColors::default(),
             glyphs: Glyphs {
                 mark: MARK,
                 waiting: "●",
@@ -400,10 +414,20 @@ impl Theme {
         }
     }
 
-    /// The phase's color while the flow works in one, else its state's.
+    /// The phase's color at Full while the flow works in one, else its state's.
     pub fn flow_style(&self, flow: &FlowView) -> Style {
+        self.tinted(flow, self.phase_colors == PhaseColors::Full)
+    }
+
+    /// The phase's color at Steps or Full while the flow works in one, else its state's.
+    pub fn step_style(&self, flow: &FlowView) -> Style {
+        self.tinted(flow, self.phase_colors != PhaseColors::Off)
+    }
+
+    /// The phase's color when `colored` and the flow works in one, else its state's.
+    fn tinted(&self, flow: &FlowView, colored: bool) -> Style {
         match (flow.state, flow.phase) {
-            (State::Working | State::Delegated, Some(phase)) => self.phase_style(phase),
+            (State::Working | State::Delegated, Some(phase)) if colored => self.phase_style(phase),
             (state, _) => self.state_style(state),
         }
     }
@@ -494,8 +518,9 @@ mod tests {
     }
 
     #[test]
-    fn a_working_flow_takes_the_color_of_its_phase() {
-        let theme = Theme::from_palette(Palette::FLOW);
+    fn at_full_a_working_flow_takes_the_color_of_its_phase() {
+        let mut theme = Theme::from_palette(Palette::FLOW);
+        theme.phase_colors = PhaseColors::Full;
         let phase = |phase| Style::default().fg(Palette::FLOW.color(phase));
 
         assert_eq!(
@@ -524,6 +549,33 @@ mod tests {
             theme.flow_style(&flow(State::Idle, Some(Phase::Implement))),
             theme.ui.muted
         );
+    }
+
+    #[test]
+    fn the_level_decides_what_takes_the_phase_color() {
+        let mut theme = Theme::from_palette(Palette::FLOW);
+        let review = theme.phase.review;
+        let working = theme.state.working;
+        let flow = flow(State::Delegated, Some(Phase::Review));
+        let styles = |theme: &Theme| (theme.step_style(&flow), theme.flow_style(&flow));
+
+        assert_eq!(theme.phase_colors, PhaseColors::Steps, "the default");
+        assert_eq!(styles(&theme), (review, working), "steps");
+        theme.phase_colors = PhaseColors::Off;
+        assert_eq!(styles(&theme), (working, working), "off");
+        theme.phase_colors = PhaseColors::Full;
+        assert_eq!(styles(&theme), (review, review), "full");
+    }
+
+    #[test]
+    fn a_waiting_flow_keeps_its_state_color_at_every_level() {
+        let mut theme = Theme::from_palette(Palette::FLOW);
+        let flow = flow(State::Waiting, Some(Phase::Implement));
+        for level in [PhaseColors::Off, PhaseColors::Steps, PhaseColors::Full] {
+            theme.phase_colors = level;
+            assert_eq!(theme.step_style(&flow), theme.state.waiting, "{level:?}");
+            assert_eq!(theme.flow_style(&flow), theme.state.waiting, "{level:?}");
+        }
     }
 
     #[test]

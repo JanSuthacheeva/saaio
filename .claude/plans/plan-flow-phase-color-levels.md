@@ -86,6 +86,12 @@ Call sites (modified): `sidebar/labels.rs` `Sidebar::steps` and the current step
 - app/tests/board.rs: the card's spinner and label per level.
 - Goldens are text only; regenerate to confirm no change.
 
+## Build notes
+
+- The call sites moved into the first task: the new default (Steps) changes what flow_style draws,
+  so the theme change and its callers only pass together. PhaseColors::named moved to the
+  theme_file task, its only caller.
+
 ## Assumptions
 
 - The detail view's current step is a step dot; its done steps stay green with a check.
@@ -94,8 +100,7 @@ Call sites (modified): `sidebar/labels.rs` `Sidebar::steps` and the current step
 
 ## Tasks
 
-- [ ] PhaseColors with named, Theme.phase_colors, step_style and flow_style through tinted, with unit tests per level
-- [ ] theme_file reads phase_colors (nearest wins, bad value errors), with tests
-- [ ] Sidebar::steps and the detail view's current step use step_style; sidebar and board tests per level; goldens regenerated unchanged
+- [x] PhaseColors, Theme.phase_colors, step_style and flow_style through tinted, with unit tests per level; Sidebar::steps and the detail view's current step use step_style; sidebar and board tests per level; goldens regenerated unchanged
+- [ ] PhaseColors::named; theme_file reads phase_colors (nearest wins, bad value errors), with tests
 - [ ] README Themes documents phase_colors
 - [ ] End to end: flow ui on a scratch FLOW_HOME with phase_colors off, steps and full
