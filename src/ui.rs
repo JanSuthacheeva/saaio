@@ -86,7 +86,8 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
         .with_offset(crate::text::local_offset_secs())
         .with_home(home)
         .with_store(env.store.display().to_string())
-        .with_agents(env.agents);
+        .with_agents(env.agents)
+        .with_prefix(env.prefix);
     let client = Client::connect(
         socket,
         Role::Attach {

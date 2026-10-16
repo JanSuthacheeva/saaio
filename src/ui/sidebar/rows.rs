@@ -251,7 +251,7 @@ impl Sidebar<'_> {
         }
         rows.push(row(vec![
             lead(),
-            Span::styled(" C-space enter", theme.ui.key),
+            Span::styled(format!(" {}", self.prefix.then("enter")), theme.ui.key),
             Span::styled(" jump in", theme.ui.faint),
         ]));
         rows

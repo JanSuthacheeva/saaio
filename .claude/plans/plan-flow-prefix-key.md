@@ -115,7 +115,8 @@ pub fn not_running<'a>(status: &PaneStatus, worker: Option<&str>, prefix: Prefix
 pub fn no_session(prefix: Prefix, theme: &Theme) -> Dialog<'_>;
 ```
 
-help: "{name} then", and the row "{name}  send {name} itself"; the key column widens to fit the name.
+help: "{name} then", and the row "{name}  send {name} itself"; the key column stays 9 wide, since
+the longest name, C-space, is 7.
 
 `src/ui/sidebar.rs`, `sidebar/rows.rs`, `app/chrome.rs`, `board/cards.rs` (modified)
 
@@ -223,7 +224,7 @@ so each task brings a piece of it together with its first reader.
 
 - [x] The configured key routes input: `Prefix` (`try_from`, `byte`, `kitty`, `NEEDED`) with unit tests for every accepted name, each refused key and unknown spellings; `UiConfig` / `Config.ui` with config tests (loads C-b, defaults to C-space, refuses an unknown `[ui]` key and `prefix = "C-c"` naming the file); `Router::new` / `command_after_prefix(&self)` with input tests for a C-b router (plain byte, kitty form, twice sends one, NUL passes through); `UiEnv.prefix` from `commands::ui`
 - [x] Make `Hint::key` a `Cow<'static, str>`
-- [ ] Every hint names the configured key: `Prefix::name` / `then` with unit tests, `App::with_prefix`, `Sidebar.prefix`, `dialog::help` / `not_running` / `no_session`, chrome title row, master card, peek hint; app tests with a C-b App for each place; goldens unchanged
+- [x] Every hint names the configured key: `Prefix::name` / `then` with unit tests, `App::with_prefix`, `Sidebar.prefix`, `dialog::help` / `not_running` / `no_session`, chrome title row, master card, peek hint; app tests with a C-b App for each place; goldens unchanged
 - [ ] Name the configured key in `flow status`'s resume hint (`detail`, `detail_help`) with a cli test
 - [ ] E2E cli test: `flow ui` with `prefix = "C-c"` exits 1 with the reason
 - [ ] Reword master.md (current text to master-v7.md in `PREVIOUS_DEFAULTS`), README keys section and `[ui]` example, HANDOVER lines

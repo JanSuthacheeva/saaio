@@ -45,6 +45,19 @@ impl TryFrom<String> for Prefix {
 }
 
 impl Prefix {
+    /// "C-space", "C-b".
+    pub fn name(self) -> String {
+        match self.letter() {
+            None => "C-space".to_string(),
+            Some(letter) => format!("C-{letter}"),
+        }
+    }
+
+    /// The name and the key after it: "C-b r".
+    pub fn then(self, key: &str) -> String {
+        format!("{} {key}", self.name())
+    }
+
     /// The byte a terminal without the kitty keyboard protocol sends.
     pub fn byte(self) -> u8 {
         self.0
@@ -73,16 +86,20 @@ mod tests {
     fn reads_c_space_and_every_letter_a_pane_does_not_need() {
         let space = parse("C-space").unwrap();
         assert_eq!(space, Prefix::default());
+        assert_eq!(space.name(), "C-space");
         assert_eq!(space.byte(), 0x00);
         assert_eq!(space.kitty(), b"\x1b[32;5u");
 
         let b = parse("C-b").unwrap();
+        assert_eq!(b.name(), "C-b");
+        assert_eq!(b.then("r"), "C-b r");
         assert_eq!(b.byte(), 0x02);
         assert_eq!(b.kitty(), b"\x1b[98;5u");
 
         for letter in 'a'..='z' {
             let name = format!("C-{letter}");
             if let Ok(prefix) = parse(&name) {
+                assert_eq!(prefix.name(), name);
                 assert_eq!(prefix.byte(), letter as u8 & 0x1f);
             }
         }

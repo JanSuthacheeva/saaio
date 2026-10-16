@@ -17,6 +17,7 @@ use crate::ui::fit;
 use crate::ui::layout::{self, Areas, Chrome};
 use crate::ui::newflow::NewFlowForm;
 use crate::ui::peek::PeekLine;
+use crate::ui::prefix::Prefix;
 use crate::ui::screen::Screen;
 use crate::ui::sidebar::{self, Sidebar};
 use crate::ui::theme::Theme;
@@ -83,6 +84,8 @@ pub struct App {
     overview_running: bool,
     /// The agents the new-flow dialog offers, the default first.
     agents: Vec<String>,
+    /// The key before every command, for the hints that name it.
+    prefix: Prefix,
 }
 
 impl App {
@@ -111,6 +114,7 @@ impl App {
             overview_at: 0,
             overview_running: false,
             agents: Vec::new(),
+            prefix: Prefix::default(),
         }
     }
 
@@ -154,6 +158,12 @@ impl App {
     /// The agents the new-flow dialog offers, the default first.
     pub fn with_agents(mut self, agents: Vec<String>) -> App {
         self.agents = agents;
+        self
+    }
+
+    /// The key before every command, for the hints that name it.
+    pub fn with_prefix(mut self, prefix: Prefix) -> App {
+        self.prefix = prefix;
         self
     }
 
@@ -266,6 +276,7 @@ impl App {
             spin: self.spin,
             changed: &self.changed,
             home: self.home.as_deref(),
+            prefix: self.prefix,
             theme,
         }
     }

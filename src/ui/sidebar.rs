@@ -15,6 +15,7 @@ use crate::ui::fit;
 use crate::ui::focus;
 use crate::ui::layout::SIDEBAR_WIDTH;
 use crate::ui::peek::PeekLine;
+use crate::ui::prefix::Prefix;
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Group};
 
@@ -32,7 +33,7 @@ pub struct Sidebar<'a> {
     pub board: &'a Board,
     pub panes: &'a [PaneInfo],
     pub focus: &'a PaneKey,
-    /// The flow whose peek shows (C-space j/k).
+    /// The flow whose peek shows (the prefix j/k).
     pub cursor: Option<&'a str>,
     pub peek: &'a [PeekLine],
     /// Where the master runs: ~/projects/shop · main.
@@ -43,6 +44,8 @@ pub struct Sidebar<'a> {
     pub changed: &'a HashMap<String, u64>,
     /// The user's home, shown as ~ in paths.
     pub home: Option<&'a str>,
+    /// The key before every command, for the hints that name it.
+    pub prefix: Prefix,
     pub theme: &'a Theme,
 }
 
@@ -179,14 +182,14 @@ impl Sidebar<'_> {
             .map(|pane| &pane.status)
     }
 
-    /// Under the master while there are no workers: "no workers yet" and C-space n.
+    /// Under the master while there are no workers: "no workers yet" and the prefix n.
     fn empty_rows(&self) -> Vec<Row> {
         let theme = self.theme;
         vec![
             plain(Line::styled(" no workers yet", theme.ui.faint)),
             plain(Line::from(vec![
                 Span::raw(" "),
-                Span::styled("C-space n", theme.ui.key),
+                Span::styled(self.prefix.then("n"), theme.ui.key),
                 Span::styled(" starts a flow", theme.ui.faint),
             ])),
         ]
@@ -197,7 +200,7 @@ impl Sidebar<'_> {
         let theme = self.theme;
         vec![plain(Line::from(vec![
             Span::raw(" "),
-            Span::styled("C-space", theme.ui.key),
+            Span::styled(self.prefix.name(), theme.ui.key),
             Span::raw(" "),
             Span::styled("?", theme.ui.key),
             Span::styled(" keys", theme.ui.faint),
@@ -282,6 +285,7 @@ mod tests {
             spin: 0,
             changed: &HashMap::new(),
             home: None,
+            prefix: Prefix::default(),
             theme: &theme,
         };
 
@@ -334,6 +338,7 @@ mod tests {
             spin: 0,
             changed: &changed,
             home: None,
+            prefix: Prefix::default(),
             theme: &theme,
         };
 
@@ -381,6 +386,7 @@ mod tests {
             spin: 0,
             changed: &HashMap::new(),
             home: None,
+            prefix: Prefix::default(),
             theme: &theme,
         }
         .render(area, &mut buf);
@@ -418,6 +424,7 @@ mod tests {
             spin: 0,
             changed: &HashMap::new(),
             home: None,
+            prefix: Prefix::default(),
             theme: &theme,
         };
 

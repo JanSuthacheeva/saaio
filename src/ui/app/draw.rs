@@ -50,8 +50,10 @@ impl App {
         let notice = match self.status(&self.focus) {
             Some(PaneStatus::Running) => None,
             Some(_) if asking => None,
-            Some(status) => dialog::not_running(status, self.ended_worker().as_deref(), theme),
-            None if self.focus != PaneKey::Master => Some(dialog::no_session(theme)),
+            Some(status) => {
+                dialog::not_running(status, self.ended_worker().as_deref(), self.prefix, theme)
+            }
+            None if self.focus != PaneKey::Master => Some(dialog::no_session(self.prefix, theme)),
             None => None,
         };
         if let Some(notice) = notice {
@@ -117,7 +119,7 @@ impl App {
                 },
                 areas.session(),
             ),
-            View::Help => frame.render_widget(dialog::help(theme), areas.session()),
+            View::Help => frame.render_widget(dialog::help(self.prefix, theme), areas.session()),
             View::Board(_) => {}
             View::History(back) => self.draw_history(frame, areas.pane, *back, theme),
             View::NewFlow(form) => {
