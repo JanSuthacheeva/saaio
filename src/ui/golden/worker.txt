@@ -1,5 +1,5 @@
 
- ▌● shop-230  ●───○───○───○ design  · flow/shop-230 · slot 1                                                │ ▚▄▞ flow
+  ● shop-230  ●───○───○───○ design  · flow/shop-230 · slot 1                                                │ ▚▄▞ flow
                                                                                                             ├────────────────────────────────────────
                                                                                                             │ 0   master
                                                                                                             │     ~/projects/shop · main

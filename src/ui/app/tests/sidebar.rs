@@ -79,7 +79,7 @@ fn focuses_a_worker_by_digit_or_click_and_marks_it() {
     let terminal = render_at(&app, FLEET);
     let title = row(&terminal, 0);
     assert!(
-        title.starts_with("▌● shop-230  ●───○───○───○ design  · flow/shop-230 · slot 1 "),
+        title.starts_with(" ● shop-230  ●───○───○───○ design  · flow/shop-230 · slot 1 "),
         "{title}"
     );
     assert!(
@@ -488,8 +488,9 @@ fn notes_stay_behind_the_names_but_the_selected_one() {
 }
 
 #[test]
-fn what_is_done_takes_the_color_of_where_the_flow_is() {
+fn only_the_current_step_takes_the_color_of_where_the_flow_is() {
     let theme = Theme::default();
+    let text = ratatui::style::Color::Reset;
     let blocked = theme.state.blocked.fg.unwrap();
     let faint = theme.ui.faint.fg.unwrap();
     let terminal = render_at(&with_fleet(), FLEET);
@@ -502,10 +503,10 @@ fn what_is_done_takes_the_color_of_where_the_flow_is() {
         .find(|&x| buffer[(x, y)].symbol() == "●")
         .unwrap();
 
-    assert_eq!(buffer[(x, y)].fg, blocked, "done");
+    assert_eq!(buffer[(x, y)].fg, text, "done");
     assert_eq!(
         buffer[(x + 1, y)].fg,
-        blocked,
+        text,
         "the join into the current step"
     );
     assert_eq!(buffer[(x + 4, y)].fg, blocked, "current");
@@ -532,7 +533,11 @@ fn a_working_flow_takes_the_color_of_its_phase() {
         .unwrap();
 
     assert_eq!(buffer[(spinner, name)].fg, review, "spinner");
-    assert_eq!(buffer[(dot, track)].fg, review, "done");
+    assert_eq!(
+        buffer[(dot, track)].fg,
+        ratatui::style::Color::Reset,
+        "done, in text"
+    );
     assert_eq!(buffer[(dot + 8, track)].fg, review, "current");
     assert_eq!(buffer[(dot + 12, track)].fg, faint, "open");
 }

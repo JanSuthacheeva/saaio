@@ -112,30 +112,36 @@ fn an_idle_flow_is_ready_not_running() {
 }
 
 #[test]
-fn a_worker_that_needs_you_leads_its_title_with_its_state_color() {
+fn a_worker_that_needs_you_says_so_with_its_glyph_not_a_bar() {
     let theme = Theme::default();
     let lead = |app: &App| {
         let terminal = render_at(app, FLEET);
-        let cell = terminal.backend().buffer()[(1, 1)].clone();
-        (cell.symbol().to_string(), cell.fg)
+        let buffer = terminal.backend().buffer();
+        let lead = buffer[(1, 1)].symbol().to_string();
+        (lead, buffer[(2, 1)].symbol().to_string(), buffer[(2, 1)].fg)
     };
     let mut app = with_fleet();
 
-    assert_eq!(lead(&app).0, " ", "the master");
     app.on_input(Routed::Command(Command::Focus(1)));
     assert_eq!(
         lead(&app),
-        ("▌".to_string(), theme.state.blocked.fg.unwrap()),
+        (
+            " ".to_string(),
+            "●".to_string(),
+            theme.state.blocked.fg.unwrap()
+        ),
         "shop-221 is blocked"
     );
     app.on_input(Routed::Command(Command::Focus(2)));
     assert_eq!(
         lead(&app),
-        ("▌".to_string(), theme.state.waiting.fg.unwrap()),
+        (
+            " ".to_string(),
+            "●".to_string(),
+            theme.state.waiting.fg.unwrap()
+        ),
         "shop-230 waits"
     );
-    app.on_input(Routed::Command(Command::Focus(3)));
-    assert_eq!(lead(&app).0, " ", "export-csv runs");
 }
 
 #[test]

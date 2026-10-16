@@ -23,25 +23,24 @@ impl Sidebar<'_> {
         }
     }
 
-    /// ●───●───○───○: what is done and the current step in the state's color, the rest faint;
-    /// all of it in the state's color once the flow is finished.
+    /// ●───●───○───○: done steps and the joins they reached in text, the current one in the flow's
+    /// color, the rest faint; all of it in text once the flow is finished.
     pub fn steps(&self, flow: &FlowView) -> Vec<Span<'static>> {
         let theme = self.theme;
         let glyphs = &theme.glyphs;
-        let tone = theme.flow_style(flow);
         let mut spans = Vec::new();
         for (index, step) in flow.steps.iter().enumerate() {
             let (glyph, style) = match step.status {
-                _ if flow.is_finished() => (glyphs.step_done, tone),
-                StepStatus::Done => (glyphs.step_done, tone),
-                StepStatus::Current => (glyphs.step_current, tone),
+                _ if flow.is_finished() => (glyphs.step_done, theme.ui.text),
+                StepStatus::Done => (glyphs.step_done, theme.ui.text),
+                StepStatus::Current => (glyphs.step_current, theme.flow_style(flow)),
                 StepStatus::Open => (glyphs.step_open, theme.ui.faint),
             };
             spans.push(Span::styled(glyph, style));
             if let Some(next) = flow.steps.get(index + 1) {
                 let reached = step.status == StepStatus::Done && next.status != StepStatus::Open;
                 let join = if flow.is_finished() || reached {
-                    tone
+                    theme.ui.text
                 } else {
                     theme.ui.faint
                 };
@@ -132,6 +131,66 @@ fn merge_request(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn colors_only_the_current_step() {
+        use crate::event::{Event, EventKind, Mode, Phase};
+        use crate::proto::PaneKey;
+        use crate::ui::theme::{Palette, Theme};
+        use crate::view::{Board, VIEW_VERSION};
+        let events = [
+            EventKind::Started {
+                name: "shop".into(),
+                request: "x".into(),
+                mode: Mode::Auto,
+            },
+            EventKind::Phase {
+                phase: Phase::Design,
+            },
+            EventKind::Phase {
+                phase: Phase::Implement,
+            },
+        ]
+        .map(|kind| Event::new(0, kind));
+        let flow = crate::fold::fold("id", &events, None, 0).unwrap();
+        let theme = Theme::from_palette(Palette::FLOW);
+        let board = Board {
+            version: VIEW_VERSION,
+            now: 0,
+            count: 0,
+            needs_you: 0,
+            flows: Vec::new(),
+        };
+        let sidebar = Sidebar {
+            board: &board,
+            panes: &[],
+            focus: &PaneKey::Master,
+            cursor: None,
+            peek: &[],
+            master: None,
+            now: 0,
+            spin: 0,
+            changed: &std::collections::HashMap::new(),
+            home: None,
+            theme: &theme,
+        };
+
+        let styles: Vec<_> = sidebar.steps(&flow).iter().map(|span| span.style).collect();
+
+        assert_eq!(
+            styles,
+            [
+                theme.ui.text,
+                theme.ui.text,
+                theme.phase.implement,
+                theme.ui.faint,
+                theme.ui.faint,
+                theme.ui.faint,
+                theme.ui.faint,
+            ],
+            "design done, its join reached, implement current, the rest open"
+        );
+    }
 
     #[test]
     fn a_note_is_what_the_flow_last_said_not_what_the_row_shows() {

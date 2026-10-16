@@ -335,7 +335,7 @@ The first worker starts:
 - [x] Replace `Row::selected` with `Mark`; sidebar rows draw the bar through `focus::mark` and the peek and changed rows through `focus::light`; the peek hint reads `C-space enter jump in`; sidebar tests per Mark
 - [x] Mark the rail's focused row, master included, with `focus::mark`
 - [x] Board cards: `focus::mark` instead of the accent border; the label through `fit::split` with a two-column gap; mode only when it fits; blocker and question in ui.text; cards tests at 30 columns
-- [ ] Calmer steps in `Sidebar::steps` (done in text, current in the flow's color, open faint); drop the title row's needs-you bar; update goldens
+- [x] Calmer steps in `Sidebar::steps` (done in text, current in the flow's color, open faint); drop the title row's needs-you bar; update goldens
 
 ### Layout and empty states (items 1, 6)
 

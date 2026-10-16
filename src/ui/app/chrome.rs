@@ -26,7 +26,7 @@ impl App {
     }
 
     /// The session in view: the master and its branch, or a worker's glyph, name, steps, phase and
-    /// branch; a worker that needs you leads with a bar in its state's color.
+    /// branch.
     fn title_line(&self, theme: &Theme, width: u16, right: usize) -> Line<'static> {
         let room = |used: usize| (width as usize).saturating_sub(right + 2 + used);
         let PaneKey::Flow(id) = &self.focus else {
@@ -51,13 +51,8 @@ impl App {
             return Line::styled(format!(" {id}"), theme.ui.strong);
         };
         let sidebar = self.sidebar(theme, &[]);
-        let lead = if flow.needs_you() {
-            Span::styled(theme.glyphs.cursor, theme.flow_style(flow))
-        } else {
-            Span::raw(" ")
-        };
         let mut title = vec![
-            lead,
+            Span::raw(" "),
             Span::styled(sidebar.glyph(flow.state), theme.flow_style(flow)),
             Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
         ];
