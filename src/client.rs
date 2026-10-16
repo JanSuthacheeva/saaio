@@ -1,5 +1,6 @@
 use std::fs::OpenOptions;
 use std::io::{self, ErrorKind};
+use std::os::fd::AsRawFd;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
@@ -19,6 +20,10 @@ use crate::store::Store;
 const START_WAIT: Duration = Duration::from_secs(2);
 /// How long the server gets to answer a hello.
 const HELLO_WAIT: Duration = Duration::from_secs(5);
+/// How long a stopped server gets to close its panes (3.5 s) and exit before SIGKILL.
+const STOP_WAIT: Duration = Duration::from_secs(5);
+/// How long a killed server gets to stop listening.
+const KILL_WAIT: Duration = Duration::from_secs(1);
 
 /// What became of a flow's pane when `flow remove` or `flow clear` asked the server to close it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,20 +43,8 @@ pub struct Client {
 impl Client {
     /// Connects and says hello; None when no server listens; Err when it refuses (another protocol version).
     pub fn connect(socket: &Path, role: Role) -> Result<Option<Client>> {
-        let mut stream = match UnixStream::connect(socket) {
-            Ok(stream) => stream,
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    ErrorKind::NotFound | ErrorKind::ConnectionRefused
-                ) =>
-            {
-                return Ok(None);
-            }
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("could not connect to {}", socket.display()));
-            }
+        let Some(mut stream) = dial(socket)? else {
+            return Ok(None);
         };
         stream.set_read_timeout(Some(HELLO_WAIT))?;
         proto::write_msg(
@@ -91,6 +84,106 @@ impl Client {
             stream: self.stream.try_clone()?,
         })
     }
+}
+
+/// None when no server listens on `socket`.
+fn dial(socket: &Path) -> Result<Option<UnixStream>> {
+    match UnixStream::connect(socket) {
+        Ok(stream) => Ok(Some(stream)),
+        Err(error)
+            if matches!(
+                error.kind(),
+                ErrorKind::NotFound | ErrorKind::ConnectionRefused
+            ) =>
+        {
+            Ok(None)
+        }
+        Err(error) => {
+            Err(error).with_context(|| format!("could not connect to {}", socket.display()))
+        }
+    }
+}
+
+/// Stops the server on `socket` with SIGTERM, SIGKILL when it still listens after STOP_WAIT;
+/// false when none runs. A signal, not a message, so it stops a server of any protocol version.
+pub fn stop_server(socket: &Path) -> Result<bool> {
+    let Some(stream) = dial(socket)? else {
+        return Ok(false);
+    };
+    let pid = peer_pid(&stream).with_context(|| {
+        format!(
+            "could not tell which process listens on {}",
+            socket.display()
+        )
+    })?;
+    drop(stream);
+    for (signal, wait) in [(libc::SIGTERM, STOP_WAIT), (libc::SIGKILL, KILL_WAIT)] {
+        // SAFETY: kill only sends a signal; a pid that already exited fails with ESRCH.
+        unsafe {
+            libc::kill(pid, signal);
+        }
+        if stops_listening(socket, wait) {
+            return Ok(true);
+        }
+    }
+    bail!("the flow server (pid {pid}) did not stop")
+}
+
+fn stops_listening(socket: &Path, wait: Duration) -> bool {
+    let deadline = Instant::now() + wait;
+    while UnixStream::connect(socket).is_ok() {
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    true
+}
+
+/// The pid of the process at the other end of a Unix socket.
+#[cfg(target_os = "macos")]
+fn peer_pid(stream: &UnixStream) -> io::Result<libc::pid_t> {
+    let mut pid: libc::pid_t = 0;
+    let mut len = libc::socklen_t::try_from(size_of::<libc::pid_t>()).expect("a pid fits");
+    // SAFETY: getsockopt writes at most len bytes into pid, which is that big.
+    let result = unsafe {
+        libc::getsockopt(
+            stream.as_raw_fd(),
+            libc::SOL_LOCAL,
+            libc::LOCAL_PEERPID,
+            (&raw mut pid).cast(),
+            &raw mut len,
+        )
+    };
+    if result == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(pid)
+}
+
+/// The pid of the process at the other end of a Unix socket.
+#[cfg(target_os = "linux")]
+fn peer_pid(stream: &UnixStream) -> io::Result<libc::pid_t> {
+    let mut cred = libc::ucred {
+        pid: 0,
+        uid: 0,
+        gid: 0,
+    };
+    let mut len = libc::socklen_t::try_from(size_of::<libc::ucred>()).expect("a ucred fits");
+    // SAFETY: getsockopt writes at most len bytes into cred, which is that big.
+    let result = unsafe {
+        libc::getsockopt(
+            stream.as_raw_fd(),
+            libc::SOL_SOCKET,
+            libc::SO_PEERCRED,
+            (&raw mut cred).cast(),
+            &raw mut len,
+        )
+    };
+    if result == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(cred.pid)
 }
 
 /// Asks a running server to end a flow's pane and waits for it; the outcome when there is no server or no pane.
@@ -238,6 +331,18 @@ mod tests {
             assert!(envs.contains(&(var.to_string(), None)), "{var}: {envs:?}");
         }
         assert!(envs.contains(&("FLOW_HOME".to_string(), Some("/state".to_string()))));
+    }
+
+    #[test]
+    fn knows_the_process_at_the_other_end_of_a_socket() {
+        let dir = TempDir::new().unwrap();
+        let socket = dir.path().join("server.sock");
+        let _listener = UnixListener::bind(&socket).unwrap();
+
+        let stream = UnixStream::connect(&socket).unwrap();
+
+        let pid = peer_pid(&stream).unwrap();
+        assert_eq!(u32::try_from(pid).unwrap(), std::process::id());
     }
 
     /// Answers one hello with `reply`, then keeps the connection open until dropped.

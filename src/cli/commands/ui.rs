@@ -2,8 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::Env;
 use crate::cli::output::{Document, Failure};
-use crate::client::{self, Client};
-use crate::proto::{ClientMsg, Role};
+use crate::client;
 use crate::store::Store;
 use crate::ui;
 
@@ -34,12 +33,10 @@ pub fn run(args: &Args, store: &Store, env: &Env, clock: fn() -> u64) -> Result<
 }
 
 fn stop_server(socket: &Path) -> Result<Document, Failure> {
-    let Some(mut control) = Client::connect(socket, Role::Control)? else {
-        return Ok(Document::Text("no flow server runs".to_string()));
+    let message = if client::stop_server(socket)? {
+        "stopped the flow server and every session in it"
+    } else {
+        "no flow server runs"
     };
-    control.send(&ClientMsg::StopServer)?;
-    while let Ok(Some(_)) = control.recv() {}
-    Ok(Document::Text(
-        "stopped the flow server and every session in it".to_string(),
-    ))
+    Ok(Document::Text(message.to_string()))
 }

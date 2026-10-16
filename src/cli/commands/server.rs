@@ -7,7 +7,7 @@ use crate::launch::pane::LaunchEnv;
 use crate::server::{self, ServerPaths};
 use crate::store::Store;
 
-/// The session server flow ui starts on its own; runs until StopServer.
+/// The session server flow ui starts on its own; runs until StopServer or SIGTERM.
 pub fn run(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
     let config = env.config()?;
     let config_dir = env
