@@ -1,9 +1,10 @@
 use std::io::Read;
+use std::path::Path;
 
 use serde_json::Value;
 
 use super::views;
-use crate::adapter::Adapter;
+use crate::adapter::{Adapter, calls};
 use crate::cli::Env;
 use crate::cli::output::{Document, news};
 use crate::config::Config;
@@ -12,6 +13,7 @@ use crate::event::{Event, EventKind};
 use crate::fold;
 use crate::store::{Store, Waiter};
 use crate::view::FlowView;
+use crate::workspace;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -125,6 +127,12 @@ fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, now: u64) -> Option<
         view.id.clone()
     };
     for kind in kinds {
+        if let EventKind::MergeRequest { url } = &kind
+            && !of_own_repo(store, &id, url, now)
+        {
+            eprintln!("flow hook: {url} is not a merge request of this flow's repository");
+            continue;
+        }
         let events = match store.events(&id) {
             Ok(events) => events,
             Err(error) => {
@@ -139,6 +147,14 @@ fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, now: u64) -> Option<
         }
     }
     Some(id)
+}
+
+/// True when `url` is a merge request of the repository the flow's worktree is in, by its origin.
+fn of_own_repo(store: &Store, id: &str, url: &str, now: u64) -> bool {
+    let events = store.events(id).unwrap_or_default();
+    let worktree = fold::fold(id, &events, None, now).and_then(|flow| flow.workspace);
+    let origin = worktree.and_then(|space| workspace::origin_url(Path::new(&space.path)));
+    origin.is_some_and(|origin| calls::in_repo(url, &origin))
 }
 
 /// The news a session's Stop hands over: a worker's messages from the master (its flow working

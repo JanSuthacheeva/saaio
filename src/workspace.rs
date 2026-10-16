@@ -149,6 +149,12 @@ pub fn branch_exists(repo: &Path, branch: &str) -> bool {
     .is_ok()
 }
 
+/// The URL of the origin remote of the repository `dir` is in; None without one.
+pub fn origin_url(dir: &Path) -> Option<String> {
+    let url = git(dir, &["remote", "get-url", "origin"]).ok()?;
+    Some(url.trim().to_string()).filter(|url| !url.is_empty())
+}
+
 /// git branch -D <branch>: the flow's branch once its worktree is gone.
 pub fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
     git(repo, &["branch", "-D", branch]).map(|_| ())

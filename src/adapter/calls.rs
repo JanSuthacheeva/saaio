@@ -14,6 +14,37 @@ pub fn created_merge_request(command: &str, output: &str) -> Option<String> {
         .map(String::from)
 }
 
+/// True when `url` is a merge request of the repo `remote` (an origin URL in any form git takes:
+/// git@host:path.git, https://host/path, ssh://user@host:port/path) points to: same host, its path
+/// followed by /pull/ or /-/merge_requests/.
+pub fn in_repo(url: &str, remote: &str) -> bool {
+    let (Some((host, path)), Some((repo_host, repo_path))) =
+        (host_and_path(url), host_and_path(remote))
+    else {
+        return false;
+    };
+    let rest = path
+        .strip_prefix(&repo_path)
+        .and_then(|rest| rest.strip_prefix('/'));
+    host == repo_host
+        && !repo_path.is_empty()
+        && rest
+            .is_some_and(|rest| rest.starts_with("pull/") || rest.starts_with("-/merge_requests/"))
+}
+
+/// A URL's or remote's host (no user or port) and path (no .git, no slashes around), lowercase.
+fn host_and_path(location: &str) -> Option<(String, String)> {
+    let location = location.trim();
+    let (authority, path) = match location.split_once("://") {
+        Some((_, rest)) => rest.split_once('/').unwrap_or((rest, "")),
+        None => location.split_once(':')?,
+    };
+    let host = authority.rsplit('@').next()?.split(':').next()?;
+    let path = path.trim_matches('/');
+    let path = path.strip_suffix(".git").unwrap_or(path);
+    (!host.is_empty()).then(|| (host.to_lowercase(), path.to_lowercase()))
+}
+
 /// `gh pr create ...` or `glab mr create|new ...`, after any VAR=value assignments.
 fn creates(words: &[String]) -> bool {
     let mut words = words
@@ -174,5 +205,40 @@ mod tests {
             created_merge_request("grep -r 'glab mr create' docs", probe),
             None
         );
+    }
+
+    #[test]
+    fn a_merge_request_belongs_to_the_repo_its_origin_names() {
+        let pull = "https://github.com/shop/app/pull/12";
+
+        for remote in [
+            "git@github.com:shop/app.git",
+            "https://github.com/shop/app",
+            "https://jan@github.com/Shop/App.git",
+            "ssh://git@github.com:22/shop/app.git",
+        ] {
+            assert!(in_repo(pull, remote), "{remote}");
+        }
+        assert!(
+            !in_repo(pull, "git@github.com:shop/app-admin.git"),
+            "another repo"
+        );
+        assert!(
+            !in_repo(pull, "git@gitlab.com:shop/app.git"),
+            "another host"
+        );
+        assert!(!in_repo(
+            "https://github.com/probe/repo/pull/7",
+            "git@github.com:shop/app.git"
+        ));
+        assert!(!in_repo(
+            "https://github.com/shop/app/issues/3",
+            "git@github.com:shop/app.git"
+        ));
+        assert!(in_repo(
+            "https://gitlab.com/group/sub/app/-/merge_requests/7",
+            "git@gitlab.com:group/sub/app.git"
+        ));
+        assert!(!in_repo(pull, ""), "no origin");
     }
 }

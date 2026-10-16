@@ -816,6 +816,60 @@ fn a_codex_master_records_its_session_and_reports_nothing() {
 }
 
 #[test]
+fn a_merge_request_counts_only_for_the_flows_own_repo() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let repo = home.path().join("shop");
+    fs::create_dir_all(&repo).unwrap();
+    let git = |args: &[&str]| {
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(args)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?}");
+    };
+    git(&["init", "-q"]);
+    git(&["remote", "add", "origin", "git@github.com:shop/app.git"]);
+    let workspace = format!(
+        "{{\"v\":1,\"at\":2,\"kind\":\"workspace\",\"path\":\"{}\",\"branch\":\"flow/shop-221\",\"slot\":1,\"window\":null,\"agent\":\"claude\"}}\n",
+        repo.display()
+    );
+    let mut log = fs::OpenOptions::new()
+        .append(true)
+        .open(home.path().join(format!("flows/{id}.jsonl")))
+        .unwrap();
+    log.write_all(workspace.as_bytes()).unwrap();
+    let created = |url: &str| {
+        format!(
+            r#"{{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{{"command":"gh pr create --fill"}},"tool_response":{{"stdout":"{url}\n"}}}}"#
+        )
+    };
+
+    let probe = hook(
+        home.path(),
+        Some(&id),
+        &created("https://github.com/probe/repo/pull/7"),
+    );
+    assert!(probe.status.success());
+    let status = stdout(&flow(home.path(), &["status", "shop-221"]));
+    assert!(!status.contains("probe/repo"), "today's case: {status}");
+    assert!(!status.contains("done"), "{status}");
+
+    hook(
+        home.path(),
+        Some(&id),
+        &created("https://github.com/shop/app/pull/12"),
+    );
+    let status = stdout(&flow(home.path(), &["status", "shop-221"]));
+    assert!(
+        status.contains("https://github.com/shop/app/pull/12"),
+        "{status}"
+    );
+}
+
+#[test]
 fn a_hook_keeps_reporting_when_the_config_does_not_load() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");
