@@ -219,17 +219,13 @@ fn main() -> ExitCode {
     if let Some(Command::Wait { master }) = &cli.command {
         return run_wait(*master);
     }
-    let Ok(store) = Store::locate(
-        env_path("FLOW_HOME"),
-        env_path("XDG_STATE_HOME"),
-        env_path("HOME"),
-    ) else {
+    let Some(store) = locate_store() else {
         return fail(&Failure::error(
             "cannot find a state directory",
             vec!["Set FLOW_HOME to a directory".to_string()],
         ));
     };
-    let Ok(registry) = Registry::locate(env_path("XDG_STATE_HOME"), env_path("HOME")) else {
+    let Some(registry) = Registry::locate(env_path("XDG_STATE_HOME"), env_path("HOME")) else {
         return fail(&Failure::error(
             "cannot find a state directory",
             vec!["Set HOME or XDG_STATE_HOME to a directory".to_string()],
@@ -272,11 +268,7 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
             agent,
             kind,
         }) => {
-            let config = Config::load(
-                env_path("FLOW_CONFIG"),
-                env_path("XDG_CONFIG_HOME"),
-                env_path("HOME"),
-            )?;
+            let config = load_config()?;
             let cwd = env::current_dir()?;
             start(
                 store,
@@ -330,19 +322,10 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
 /// `flow hook`: never prints to stdout (a hook's stdout can reach the model) and never fails (a
 /// failing hook shows the user a notice); what goes wrong goes to stderr, Claude Code's debug log.
 fn run_hook(adapter: &str) {
-    let store = match Store::locate(
-        env_path("FLOW_HOME"),
-        env_path("XDG_STATE_HOME"),
-        env_path("HOME"),
-    ) {
-        Ok(store) => store,
-        Err(error) => return eprintln!("flow hook: {error:#}"),
+    let Some(store) = locate_store() else {
+        return eprintln!("flow hook: cannot find a state directory");
     };
-    let config = match Config::load(
-        env_path("FLOW_CONFIG"),
-        env_path("XDG_CONFIG_HOME"),
-        env_path("HOME"),
-    ) {
+    let config = match load_config() {
         Ok(config) => config,
         Err(error) => return eprintln!("flow hook: {error:#}"),
     };
@@ -357,11 +340,7 @@ fn run_hook(adapter: &str) {
 /// `flow wait`: the news on stderr and exit 2, which makes Claude Code wake the session with it;
 /// exit 0 and nothing at all when the wait ends without news. Never prints to stdout.
 fn run_wait(master: bool) -> ExitCode {
-    let Ok(store) = Store::locate(
-        env_path("FLOW_HOME"),
-        env_path("XDG_STATE_HOME"),
-        env_path("HOME"),
-    ) else {
+    let Some(store) = locate_store() else {
         return ExitCode::SUCCESS;
     };
     let waiter = match env::var("FLOW_ID") {
@@ -515,13 +494,7 @@ fn ui(store: &Store) -> Result<Document, Failure> {
         claude_home,
         home: env_path("HOME").filter(|home| !home.as_os_str().is_empty()),
         store: store.root().to_path_buf(),
-        theme_dir: config::config_file(
-            env_path("FLOW_CONFIG"),
-            env_path("XDG_CONFIG_HOME"),
-            env_path("HOME"),
-        )
-        .and_then(|file| file.parent().map(Path::to_path_buf))
-        .unwrap_or_else(|| PathBuf::from(".")),
+        theme_dir: config_dir().unwrap_or_else(|| PathBuf::from(".")),
     };
     let message = ui::run(&socket, env)?;
     Ok(Document::Text(message))
@@ -539,18 +512,8 @@ fn stop_server(socket: &Path) -> Result<Document, Failure> {
 }
 
 fn server(store: Store) -> Result<Document, Failure> {
-    let config = Config::load(
-        env_path("FLOW_CONFIG"),
-        env_path("XDG_CONFIG_HOME"),
-        env_path("HOME"),
-    )?;
-    let config_dir = config::config_file(
-        env_path("FLOW_CONFIG"),
-        env_path("XDG_CONFIG_HOME"),
-        env_path("HOME"),
-    )
-    .and_then(|file| file.parent().map(Path::to_path_buf))
-    .unwrap_or_else(|| store.root().to_path_buf());
+    let config = load_config()?;
+    let config_dir = config_dir().unwrap_or_else(|| store.root().to_path_buf());
     let paths = server::ServerPaths {
         socket: client::socket_path(&store),
         master: store.root().join("master.json"),
@@ -1125,6 +1088,34 @@ fn no_flow(name: &str) -> Failure {
 fn fail(failure: &Failure) -> ExitCode {
     println!("{}", failure.to_toon());
     ExitCode::from(failure.code)
+}
+
+/// The store $FLOW_HOME, $XDG_STATE_HOME or $HOME point to.
+fn locate_store() -> Option<Store> {
+    Store::locate(
+        env_path("FLOW_HOME"),
+        env_path("XDG_STATE_HOME"),
+        env_path("HOME"),
+    )
+}
+
+/// The config file $FLOW_CONFIG, $XDG_CONFIG_HOME or $HOME point to.
+fn load_config() -> anyhow::Result<Config> {
+    Config::load(
+        env_path("FLOW_CONFIG"),
+        env_path("XDG_CONFIG_HOME"),
+        env_path("HOME"),
+    )
+}
+
+/// The folder of the config file, where master.md and theme.toml live.
+fn config_dir() -> Option<PathBuf> {
+    config::config_file(
+        env_path("FLOW_CONFIG"),
+        env_path("XDG_CONFIG_HOME"),
+        env_path("HOME"),
+    )
+    .and_then(|file| file.parent().map(Path::to_path_buf))
 }
 
 fn env_path(name: &str) -> Option<PathBuf> {

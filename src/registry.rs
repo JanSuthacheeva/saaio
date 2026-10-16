@@ -3,7 +3,7 @@ use std::fs;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 
 use crate::store::Store;
 
@@ -15,15 +15,17 @@ pub struct Registry {
 }
 
 impl Registry {
-    pub fn locate(xdg_state: Option<PathBuf>, home: Option<PathBuf>) -> Result<Registry> {
+    /// None when neither directory is set.
+    pub fn locate(xdg_state: Option<PathBuf>, home: Option<PathBuf>) -> Option<Registry> {
+        Registry::default_root(xdg_state, home).map(|root| Registry { root })
+    }
+
+    /// $XDG_STATE_HOME/flow, else $HOME/.local/state/flow; an empty value counts as unset.
+    pub fn default_root(xdg_state: Option<PathBuf>, home: Option<PathBuf>) -> Option<PathBuf> {
         let set = |path: Option<PathBuf>| path.filter(|path| !path.as_os_str().is_empty());
-        let root = set(xdg_state)
+        set(xdg_state)
             .map(|state| state.join("flow"))
-            .or_else(|| set(home).map(|home| home.join(".local/state/flow")));
-        match root {
-            Some(root) => Ok(Registry { root }),
-            None => bail!("cannot find a state directory"),
-        }
+            .or_else(|| set(home).map(|home| home.join(".local/state/flow")))
     }
 
     #[cfg(test)]
@@ -135,7 +137,7 @@ mod tests {
         let registry = Registry::locate(None, Some("/home".into())).unwrap();
         assert_eq!(registry.root(), Path::new("/home/.local/state/flow"));
 
-        assert!(Registry::locate(Some("".into()), None).is_err());
+        assert!(Registry::locate(Some("".into()), None).is_none());
     }
 
     #[test]

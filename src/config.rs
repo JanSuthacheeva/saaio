@@ -73,7 +73,7 @@ impl Config {
             None => Config::default(),
             Some(file) => match fs::read_to_string(&file) {
                 Ok(text) => toml::from_str::<Config>(&text)
-                    .with_context(|| format!("could not read {}", file.display()))?,
+                    .with_context(|| format!("{} is not valid", file.display()))?,
                 Err(error) if error.kind() == ErrorKind::NotFound => Config::default(),
                 Err(error) => {
                     return Err(error)

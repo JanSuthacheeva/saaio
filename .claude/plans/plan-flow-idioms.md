@@ -76,11 +76,11 @@ any other that turns out to be noise, each named.
 - [x] local UTC offset read moves out of board.rs to the I/O side, with `&raw`
 
 ### 6. Errors, dead code, docs
-- [ ] error context in store, config, branching; `Store::locate` / `Registry::locate` return `Option`, Store reuses `Registry::default_root`
+- [x] error context in store, config, branching; `Store::locate` / `Registry::locate` return `Option`, Store reuses `Registry::default_root`
 - [ ] remove `pane_env`'s `id` and `Conn.role`; fix stale and misplaced docs
 
 ### 7. Duplication and long functions
-- [ ] main: split `start`; `locate_store`, `load_config`, `config_dir`, `unix_ms`, `unused`
+- [ ] main: split `start` (done with 6.2); `locate_store`, `load_config`, `config_dir` (done with 7.1); `unix_ms`
 - [ ] one `write_atomic` for store, registry, slots
 - [ ] ui: split `App::draw`, newflow `render`, sidebar `render`; board `digit`, `card_rect`, one footer, `spinner`, shared `Row`, `plural`
 

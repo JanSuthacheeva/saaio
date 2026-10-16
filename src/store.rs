@@ -7,6 +7,7 @@ use anyhow::{Context, Result, bail};
 use uuid::Uuid;
 
 use crate::event::Event;
+use crate::registry::Registry;
 use crate::wake::Seen;
 
 /// What the waiters keep: each session's waiter pid, deliveries, the master's seen marks.
@@ -55,15 +56,11 @@ impl Store {
         flow_home: Option<PathBuf>,
         xdg_state: Option<PathBuf>,
         home: Option<PathBuf>,
-    ) -> Result<Store> {
-        let set = |path: Option<PathBuf>| path.filter(|path| !path.as_os_str().is_empty());
-        let root = set(flow_home)
-            .or_else(|| set(xdg_state).map(|state| state.join("flow")))
-            .or_else(|| set(home).map(|home| home.join(".local/state/flow")));
-        match root {
-            Some(root) => Ok(Store { root }),
-            None => bail!("cannot find a state directory"),
-        }
+    ) -> Option<Store> {
+        flow_home
+            .filter(|path| !path.as_os_str().is_empty())
+            .or_else(|| Registry::default_root(xdg_state, home))
+            .map(|root| Store { root })
     }
 
     /// The store in this folder, as the registry lists it.
@@ -125,7 +122,9 @@ impl Store {
         };
         let mut ids = Vec::new();
         for entry in entries {
-            let name = entry?.file_name();
+            let name = entry
+                .with_context(|| format!("could not list {}", flows.display()))?
+                .file_name();
             if let Some(id) = name.to_string_lossy().strip_suffix(".jsonl") {
                 ids.push(id.to_string());
             }
@@ -165,9 +164,13 @@ impl Store {
                     return Err(error).with_context(|| format!("could not read flow {id}"));
                 }
             };
-            let mut modified = log.modified()?;
+            let changed = |meta: &fs::Metadata| {
+                meta.modified()
+                    .with_context(|| format!("could not read when flow {id} changed"))
+            };
+            let mut modified = changed(&log)?;
             if let Ok(alive) = fs::metadata(self.alive(&id)) {
-                modified = modified.max(alive.modified()?);
+                modified = modified.max(changed(&alive)?);
             }
             stamps.push((
                 id,
@@ -369,7 +372,7 @@ mod tests {
             Store::locate(None, None, home).unwrap().root,
             Path::new("/home/jan/.local/state/flow")
         );
-        assert!(Store::locate(None, None, None).is_err());
+        assert!(Store::locate(None, None, None).is_none());
     }
 
     #[test]
