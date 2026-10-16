@@ -391,5 +391,5 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 
 ### Docs and setup
 - [x] Docs: README (Codex agent, [master] agent, trusting the hooks once), CLAUDE.md (adapter/codex.rs, answer.rs, calls.rs, server/news.rs, peek/, plan list), HANDOVER (Codex facts, decisions, codex queue for later), plan-flow-adapters.md pointer to this plan
-- [ ] Link design-code, implement-plan, review-changes, write-merge-request and ship-feature from ~/projects/agent-skills into ~/.agents/skills (as commit already is), recorded in dotfiles-v2 if it manages that folder
+- [x] Link design-code, implement-plan, review-changes, write-merge-request and ship-feature from ~/projects/agent-skills into ~/.agents/skills (as commit already is), recorded in dotfiles-v2 if it manages that folder
 - [ ] End-to-end on a scratch FLOW_HOME: in flow ui a Codex worker (after one hooks review) shows phase, a permission wait and waiting on a question; the master's `flow send` reaches it idle and busy; it resumes after `flow ui --stop`; peek shows its transcript; a plain Codex session reports; then `[master] agent = "codex"` runs a Codex master that is woken when the worker stops
