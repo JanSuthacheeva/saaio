@@ -251,3 +251,28 @@ fn reads_what_a_flow_command_printed() {
         Err(JobError::other("all 20 slots are in use"))
     );
 }
+
+#[test]
+fn reads_an_error_toon_quoted_without_its_quotes() {
+    let failure = Failure::error(
+        "could not create flow in /shop: Permission denied (os error 13)",
+        vec!["Set FLOW_HOME to a directory".to_string()],
+    );
+    let printed = format!("{}\n", failure.to_toon());
+    assert!(
+        printed.starts_with("error: \""),
+        "TOON quotes it: {printed}"
+    );
+
+    assert_eq!(
+        outcome(false, &printed),
+        Err(JobError::other(
+            "could not create flow in /shop: Permission denied (os error 13)"
+        ))
+    );
+    assert_eq!(
+        outcome(false, "error: \"say \\\"hi\\\": now\"\n"),
+        Err(JobError::other("say \"hi\": now")),
+        "escapes inside the quotes are undone"
+    );
+}

@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use serde::Deserialize;
+
 use crate::cli::output::remove::Refusal;
 use crate::proto::{ClientMsg, Modes};
 use crate::ui::newflow::NewFlowForm;
@@ -109,9 +111,21 @@ pub fn outcome(success: bool, stdout: &str) -> Result<String, JobError> {
     if success {
         return Ok(first.to_string());
     }
-    let message = first.strip_prefix("error: ").unwrap_or(first).to_string();
+    let message = error_message(first)
+        .unwrap_or_else(|| first.strip_prefix("error: ").unwrap_or(first).to_string());
     Err(JobError {
         refusal: Refusal::of(&message),
         message,
     })
+}
+
+/// The value of an `error: ...` line, decoded as TOON writes it (quoted when it holds `: `).
+fn error_message(line: &str) -> Option<String> {
+    #[derive(Deserialize)]
+    struct Printed {
+        error: String,
+    }
+    serde_toon::from_str::<Printed>(line)
+        .ok()
+        .map(|printed| printed.error)
 }

@@ -414,6 +414,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 
 ### 10. Review decisions
 - [x] The UI's remove prompts match a typed `Refusal { Uncommitted, Unmerged }` (`cli/output/remove.rs`, beside `uncommitted()` and `unmerged()`, which build the refusals' messages) carried in the job result as `JobError { message, refusal }` (`ui/app/effect.rs`, from `outcome`), not text; the CLI prints the same bytes. Tests: `Refusal::of` reads each refusal from its own message, and `knows_each_refusal_from_what_flow_remove_prints` sends the TOON `flow remove` prints through `outcome`; rewording a refusal fails both
+- [x] flow ui shows a failed command's error without TOON's quotes: `outcome` decodes the `error:` line as TOON (`error_message`), falling back to the raw text. Reproduced first in flow ui (a start against a read-only store showed `"could not create flow in …`). Test: `reads_an_error_toon_quoted_without_its_quotes`
 
 ## Review
 
