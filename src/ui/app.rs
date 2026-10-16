@@ -391,40 +391,13 @@ impl App {
     pub fn draw(&self, frame: &mut TuiFrame, theme: &Theme, peek: &[PeekLine]) {
         frame.render_widget(Block::default().style(theme.ui.background), frame.area());
         if let View::Board(state) = self.view {
-            let back = match &self.focus {
-                PaneKey::Master => "master",
-                PaneKey::Flow(id) => self.worker(id).map_or(id.as_str(), |flow| &flow.name),
-            };
-            frame.render_widget(
-                BoardView {
-                    sidebar: self.sidebar(theme, &[]),
-                    state,
-                    back,
-                    offset_secs: self.offset_secs,
-                    notice: self.notice.as_deref(),
-                    projects: self.projects.as_ref(),
-                    here: self.here.as_deref(),
-                },
-                layout::screen(self.size),
-            );
+            self.draw_board(frame, state, theme);
             return;
         }
         let areas = self.areas();
         self.draw_title(frame, areas.title, theme);
         if let Some(rule) = areas.rule {
-            let mut line =
-                vec![Line::styled(theme.glyphs.rule_v, theme.ui.rule); rule.height as usize];
-            // The sidebar's and the rail's header rule meets the line in its second row.
-            if let Some(joint) = line.get_mut(1) {
-                *joint = Line::styled(theme.glyphs.rule_joint, theme.ui.rule);
-            }
-            if self.rail {
-                let foot = line.len().saturating_sub(2);
-                if let Some(joint) = line.get_mut(foot) {
-                    *joint = Line::styled(theme.glyphs.rule_joint, theme.ui.rule);
-                }
-            }
-            frame.render_widget(Paragraph::new(line), rule);
+            self.draw_rule(frame, rule, theme);
         }
         frame.render_widget(
             ScreenView {
@@ -463,9 +436,50 @@ impl App {
             None if self.focus != PaneKey::Master => draw_no_session(frame, areas.pane, theme),
             None => {}
         }
-        match self.view {
-            View::Stop(ref unfinished) => self.draw_stop(frame, areas.pane, theme, unfinished),
-            View::Confirm { ref question, .. } => {
+        self.draw_view(frame, &areas, theme);
+    }
+
+    fn draw_board(&self, frame: &mut TuiFrame, state: BoardState, theme: &Theme) {
+        let back = match &self.focus {
+            PaneKey::Master => "master",
+            PaneKey::Flow(id) => self.worker(id).map_or(id.as_str(), |flow| &flow.name),
+        };
+        frame.render_widget(
+            BoardView {
+                sidebar: self.sidebar(theme, &[]),
+                state,
+                back,
+                offset_secs: self.offset_secs,
+                notice: self.notice.as_deref(),
+                projects: self.projects.as_ref(),
+                here: self.here.as_deref(),
+            },
+            layout::screen(self.size),
+        );
+    }
+
+    /// The line between the session and the sidebar or rail, joined to their header rules.
+    fn draw_rule(&self, frame: &mut TuiFrame, rule: Rect, theme: &Theme) {
+        let mut line =
+            vec![Line::styled(theme.glyphs.rule_v, theme.ui.rule); usize::from(rule.height)];
+        // The sidebar's and the rail's header rule meets the line in its second row.
+        if let Some(joint) = line.get_mut(1) {
+            *joint = Line::styled(theme.glyphs.rule_joint, theme.ui.rule);
+        }
+        if self.rail {
+            let foot = line.len().saturating_sub(2);
+            if let Some(joint) = line.get_mut(foot) {
+                *joint = Line::styled(theme.glyphs.rule_joint, theme.ui.rule);
+            }
+        }
+        frame.render_widget(Paragraph::new(line), rule);
+    }
+
+    /// The open dialog or overlay over the session, or the pane's cursor when there is none.
+    fn draw_view(&self, frame: &mut TuiFrame, areas: &Areas, theme: &Theme) {
+        match &self.view {
+            View::Stop(unfinished) => self.draw_stop(frame, areas.pane, theme, unfinished),
+            View::Confirm { question, .. } => {
                 let text = vec![
                     Line::styled(question.as_str(), theme.ui.text),
                     Line::from(vec![
@@ -503,7 +517,7 @@ impl App {
                 frame.render_widget(Clear, edge);
                 frame.render_widget(Paragraph::new(hint).alignment(Alignment::Right), edge);
             }
-            View::NewFlow(ref form) => {
+            View::NewFlow(form) => {
                 let repo = form.repo.display().to_string();
                 let screen = frame.area();
                 frame.buffer_mut().set_style(screen, Modifier::DIM);
