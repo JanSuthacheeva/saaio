@@ -325,10 +325,11 @@ fn run_hook(adapter: &str) {
     let Some(store) = locate_store() else {
         return eprintln!("flow hook: cannot find a state directory");
     };
-    let config = match load_config() {
-        Ok(config) => config,
-        Err(error) => return eprintln!("flow hook: {error:#}"),
-    };
+    // A broken config must not stop running workers from reporting; start and ui say it loudly.
+    let config = load_config().unwrap_or_else(|error| {
+        eprintln!("flow hook: {error:#}; using the built-in config");
+        Config::builtin()
+    });
     let mut payload = String::new();
     if let Err(error) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut payload) {
         return eprintln!("flow hook: could not read the event: {error}");

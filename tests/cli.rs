@@ -683,6 +683,27 @@ fn a_hook_event_reports_into_the_flow_silently_and_only_once() {
 }
 
 #[test]
+fn a_hook_keeps_reporting_when_the_config_does_not_load() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    fs::write(
+        home.path().join("no-config.toml"),
+        "[agents.aider]\ncommand = [\"aider\"]\nprompt = \"\"\nadapter = \"claud-code\"\n",
+    )
+    .unwrap();
+    let skill = r#"{"hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"design-code"}}"#;
+
+    let output = hook(home.path(), Some(&id), skill);
+
+    assert!(output.status.success());
+    assert!(output.stdout.is_empty(), "{}", stdout(&output));
+    let err = String::from_utf8_lossy(&output.stderr);
+    assert!(err.contains("no-config.toml is not valid"), "{err}");
+    let detail = stdout(&flow(home.path(), &["status", "shop-221"]));
+    assert!(detail.contains("phase: design"), "{detail}");
+}
+
+#[test]
 fn a_hook_never_fails_or_prints_whatever_it_gets() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");

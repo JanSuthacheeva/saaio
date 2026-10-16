@@ -81,13 +81,25 @@ impl Config {
                 }
             },
         };
-        let mut agents = builtin_agents();
-        agents.append(&mut config.agents);
-        config.agents = agents;
-        let mut phases = builtin_phases();
-        phases.append(&mut config.phases);
-        config.phases = phases;
+        config.add_builtins();
         Ok(config)
+    }
+
+    /// The built-in agents and phases alone, as if there were no config file.
+    pub fn builtin() -> Config {
+        let mut config = Config::default();
+        config.add_builtins();
+        config
+    }
+
+    /// The built-in agents and phases under what the file set.
+    fn add_builtins(&mut self) {
+        let mut agents = builtin_agents();
+        agents.append(&mut self.agents);
+        self.agents = agents;
+        let mut phases = builtin_phases();
+        phases.append(&mut self.phases);
+        self.phases = phases;
     }
 
     /// The named agent, or the default one.
