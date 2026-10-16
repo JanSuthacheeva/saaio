@@ -35,4 +35,9 @@ do their work.
 - `flow remove <name>` ends a flow and removes its worktree and branch; it refuses uncommitted work
   (`--force` discards it) and commits on no other branch (`--delete-unmerged` deletes them). `flow clear`
   cleans up finished flows. Ask before either, and before any of those flags.
+- A removed flow's worker may leave review pages: HTML under its worktree's `.lavish/`, and hosted pages
+  such as claude.ai Artifacts. When you ask to remove or clear a flow, offer in the same line to delete
+  them, and delete them only on the user's yes. Delete the `.lavish/` pages before the remove: they are
+  untracked files that block it. Find the hosted ones in the worker's answers (`flow status <name>
+  --full`) and in your harness's own list of pages, by title.
 - Keep your own context small: read `flow status`, not the workers' transcripts, and answer in a few lines.
