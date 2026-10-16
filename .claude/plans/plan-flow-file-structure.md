@@ -183,7 +183,7 @@ pub fn drop_branch(flow: &FlowView, unmerged: Unmerged) -> BranchFate;
 fn branch_of(flow: &FlowView) -> Option<(PathBuf, &str)>;
 // ui.rs
 pub struct Args { #[arg(long)] stop: bool }
-pub fn run(args: Args, store: &Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>;
+pub fn run(args: &Args, store: &Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>;
 fn stop_server(socket: &Path) -> Result<Document, Failure>;
 // server.rs
 pub fn run(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>;
@@ -377,7 +377,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 - [x] `cli/commands.rs` with views and no_flow; `home.rs`, `new.rs`, `report.rs` (ReportEvent moves here), `send.rs`, `status.rs`, each with its `Args`; `Command` uses tuple variants for them
 - [x] `start.rs` with `Args` replacing `Launch`, Rollback, pick_kind, claim_slot, held_slots, claim_is_live, free_branch, append_workspace
 - [x] `retire.rs` (Uncommitted, Unmerged, CLOSE_WAIT, refuse_*, close_pane, retire_worktree, drop_branch, branch_of), `remove.rs`, `clear.rs`
-- [ ] `ui.rs` (with stop_server), `server.rs`, `wait.rs`, `hook.rs` with their `Args`; `cli.rs` is only Cli, Command and run; unit tests for `cli::run` without a store
+- [x] `ui.rs` (with stop_server), `server.rs`, `wait.rs`, `hook.rs` with their `Args`; `cli.rs` is only Cli, Command and run; unit tests for `cli::run` without a store
 
 ### 4. Output
 - [ ] Split `cli/output.rs` (moved there in 2.1, so main could name `cli::output`; keeps Document, Failure, toon, truncated, DESCRIPTION, LIST_TEXT_LIMIT) into `output/status.rs`, `flow.rs`, `start.rs`, `remove.rs`, `news.rs`, each with its tests
