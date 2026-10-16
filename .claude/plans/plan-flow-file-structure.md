@@ -375,7 +375,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 
 ### 3. Commands
 - [x] `cli/commands.rs` with views and no_flow; `home.rs`, `new.rs`, `report.rs` (ReportEvent moves here), `send.rs`, `status.rs`, each with its `Args`; `Command` uses tuple variants for them
-- [ ] `start.rs` with `Args` replacing `Launch`, Rollback, pick_kind, claim_slot, held_slots, claim_is_live, free_branch, append_workspace
+- [x] `start.rs` with `Args` replacing `Launch`, Rollback, pick_kind, claim_slot, held_slots, claim_is_live, free_branch, append_workspace
 - [ ] `retire.rs` (Uncommitted, Unmerged, CLOSE_WAIT, refuse_*, close_pane, retire_worktree, drop_branch, branch_of), `remove.rs`, `clear.rs`
 - [ ] `ui.rs` (with stop_server), `server.rs`, `wait.rs`, `hook.rs` with their `Args`; `cli.rs` is only Cli, Command and run; unit tests for `cli::run` without a store
 

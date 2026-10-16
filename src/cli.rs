@@ -9,23 +9,21 @@ use std::time::Duration;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 
-use commands::{home, new, no_flow, report, send, status, views};
+use commands::{home, new, no_flow, report, send, start, status, views};
 
 pub use crate::event::unix_ms;
 pub use env::Env;
 
-use crate::cli::output::{BranchFate, Document, Failure, Opening, Retired, Setup};
+use crate::cli::output::{BranchFate, Document, Failure, Retired};
 use crate::client::{self, Client, Closing};
 use crate::config::Config;
 use crate::deliver::{self, WorkerNews};
-use crate::event::{Event, EventKind, Mode};
+use crate::event::Event;
 use crate::proto::{ClientMsg, Role};
-use crate::registry::Registry;
-use crate::slots::{Claim, Slots};
 use crate::store::{Store, Waiter};
 use crate::view::FlowView;
 use crate::workspace::Hook;
-use crate::{adapter, branching, fold, launch, server, slots, text, ui, view, workspace};
+use crate::{adapter, fold, launch, server, text, ui, workspace};
 
 /// How long `flow remove` and `flow clear` wait for a flow's session to end (SIGKILL comes after 3 s).
 const CLOSE_WAIT: Duration = Duration::from_secs(5);
@@ -48,21 +46,7 @@ enum Command {
     /// Every flow, or one flow with its phases, timeline and decisions
     Status(status::Args),
     /// Start a worker: a flow, a worktree, the setup hook and an agent flow ui opens
-    Start {
-        /// What to build, e.g. "SHOP-217 add CSV export"
-        request: String,
-        /// Flow name [default: from the ticket key or the first words]
-        #[arg(long)]
-        name: Option<String>,
-        #[arg(long, value_enum, default_value_t)]
-        mode: Mode,
-        /// Agent from the config [default: the config's agent, claude]
-        #[arg(long)]
-        agent: Option<String>,
-        /// Branch type from the repo's .flow/config.toml [default: its first]
-        #[arg(long = "type")]
-        kind: Option<String>,
-    },
+    Start(start::Args),
     /// Stop a flow's worker, tear down its worktree and forget it
     Remove {
         /// Flow name or id
@@ -138,29 +122,10 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
         Some(Command::New(args)) => new::run(args, store, now),
         Some(Command::Report(args)) => report::run(args, store, now),
         Some(Command::Status(args)) => status::run(&args, store, registry, now),
-        Some(Command::Start {
-            request,
-            name,
-            mode,
-            agent,
-            kind,
-        }) => {
+        Some(Command::Start(args)) => {
             let config = env.config()?;
             let cwd = std::env::current_dir()?;
-            start(
-                store,
-                registry,
-                &config,
-                &cwd,
-                &Launch {
-                    request,
-                    name,
-                    mode,
-                    agent,
-                    kind,
-                },
-                now,
-            )
+            start::run(&args, store, registry, &config, &cwd, now)
         }
         Some(Command::Remove {
             flow,
@@ -354,202 +319,6 @@ fn server(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failu
     Ok(Document::Text("flow server stopped".to_string()))
 }
 
-/// What `flow start` was asked for.
-#[derive(Debug)]
-struct Launch {
-    request: String,
-    name: Option<String>,
-    mode: Mode,
-    agent: Option<String>,
-    /// The branch type, from the repo's .flow/config.toml.
-    kind: Option<String>,
-}
-
-fn start(
-    store: &Store,
-    registry: &Registry,
-    config: &Config,
-    cwd: &Path,
-    launch: &Launch,
-    now: u64,
-) -> Result<Document, Failure> {
-    let Some((agent_name, _)) = config.agent(launch.agent.as_deref()) else {
-        let known: Vec<&str> = config.agents.keys().map(String::as_str).collect();
-        return Err(Failure::error(
-            format!(
-                "no agent named {}",
-                launch.agent.as_deref().unwrap_or(&config.agent)
-            ),
-            vec![format!("Agents: {}", known.join(", "))],
-        ));
-    };
-    let repo = workspace::repo_root(cwd).map_err(|_| {
-        Failure::error(
-            "flow start needs a git repository",
-            vec!["Run it inside the repository the flow works on".to_string()],
-        )
-    })?;
-    let branching = branching::Branching::load(&repo)?;
-    let kind = pick_kind(branching.as_ref(), launch.kind.as_deref())?;
-    let (flows, _) = views(store, now);
-    let taken: Vec<String> = flows
-        .iter()
-        .filter(|flow| !flow.is_finished())
-        .map(|flow| flow.name.clone())
-        .collect();
-    let name = launch::flow_name(launch.name.as_deref(), &launch.request, &taken);
-    let first = Event::new(
-        now,
-        EventKind::Started {
-            name: name.clone(),
-            request: launch.request.clone(),
-            mode: launch.mode,
-        },
-    );
-    let id = store.create(&first)?;
-    let mut rollback = Rollback::new(store, registry, &id);
-
-    // Claimed before the worktree and setup, so a second start cannot take the same slot meanwhile.
-    let claim = Claim {
-        store: store.root().to_path_buf(),
-        flow: id.clone(),
-    };
-    let slot = claim_slot(registry, &claim, &flows, now)?;
-    rollback.slot = Some((slot, claim));
-    let base = branching::branch_name(branching.as_ref(), kind.as_deref(), &launch.request, &name);
-    let space = launch::workspace_for(&repo, &name, free_branch(&repo, &base), slot, agent_name);
-    workspace::create_worktree(&repo, &space)?;
-    rollback.disarm();
-
-    let setup = match workspace::run_hook(
-        &repo,
-        Hook::Setup,
-        &space,
-        &launch::hook_env(&id, &name, &repo, &space),
-    ) {
-        Ok(true) => Setup::Ran,
-        Ok(false) => Setup::None,
-        Err(error) => {
-            let reason = format!("setup failed: {error}");
-            store.append(&id, &Event::new(now, EventKind::Blocked { reason }))?;
-            Setup::Failed(error.to_string())
-        }
-    };
-
-    // Only now, so flow server opens the worker once setup is done.
-    append_workspace(store, &id, &space, now)?;
-
-    let events = store.events(&id)?;
-    let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");
-    let opening = match Client::connect(&client::socket_path(store), Role::Control) {
-        Ok(None) => Opening::WhenUiRuns,
-        Ok(Some(_)) | Err(_) => Opening::Running,
-    };
-    Ok(output::started(&flow, &space, &setup, opening))
-}
-
-/// The branch type for a start: the one asked for or the repo's first, if the repo has types.
-fn pick_kind(
-    rules: Option<&branching::Branching>,
-    asked: Option<&str>,
-) -> Result<Option<String>, Failure> {
-    match rules {
-        Some(rules) => rules.pick_type(asked),
-        None if asked.is_some() => Err(anyhow::anyhow!(
-            "this repo has no {}, so no branch types",
-            branching::CONFIG_FILE
-        )),
-        None => Ok(None),
-    }
-    .map_err(|error| {
-        Failure::error(
-            format!("{error:#}"),
-            vec![format!(
-                "Name the types in {}: [branch] types = [\"feature\", \"bugfix\"]",
-                branching::CONFIG_FILE
-            )],
-        )
-    })
-}
-
-/// The lowest slot no unfinished flow in any project holds, claimed for this start.
-fn claim_slot(
-    registry: &Registry,
-    claim: &Claim,
-    flows: &[FlowView],
-    now: u64,
-) -> Result<u8, Failure> {
-    let mut held = held_slots(registry, now);
-    held.extend(launch::taken_slots(flows));
-    Slots::at(registry)
-        .claim(claim, &held, |claim| claim_is_live(claim, now))?
-        .ok_or_else(|| {
-            Failure::error(
-                format!("all {} slots are in use", slots::MAX_SLOTS),
-                vec![
-                    "Run `flow status --all` to see which flows hold them".to_string(),
-                    "Run `flow clear` in projects with finished flows".to_string(),
-                ],
-            )
-        })
-}
-
-/// `base`, or base-2, base-3, ... when the repo has that branch already.
-fn free_branch(repo: &Path, base: &str) -> String {
-    std::iter::once(base.to_string())
-        .chain((2..).map(|number| format!("{base}-{number}")))
-        .find(|branch| !workspace::branch_exists(repo, branch))
-        .expect("an unused suffix always exists")
-}
-
-/// Undoes a start that failed before its worktree existed: forgets the flow and gives its slot back.
-struct Rollback<'a> {
-    store: &'a Store,
-    slots: Slots,
-    id: String,
-    slot: Option<(u8, Claim)>,
-    armed: bool,
-}
-
-impl<'a> Rollback<'a> {
-    fn new(store: &'a Store, registry: &Registry, id: &str) -> Rollback<'a> {
-        Rollback {
-            store,
-            slots: Slots::at(registry),
-            id: id.to_string(),
-            slot: None,
-            armed: true,
-        }
-    }
-
-    fn disarm(&mut self) {
-        self.armed = false;
-    }
-}
-
-impl Drop for Rollback<'_> {
-    fn drop(&mut self) {
-        if !self.armed {
-            return;
-        }
-        if let Some((slot, claim)) = &self.slot {
-            let _ = self.slots.release(*slot, claim);
-        }
-        let _ = self.store.remove(&self.id);
-    }
-}
-
-fn append_workspace(
-    store: &Store,
-    id: &str,
-    space: &view::Workspace,
-    now: u64,
-) -> Result<(), Failure> {
-    store
-        .append(id, &Event::new(now, space.clone().into()))
-        .map_err(Failure::from)
-}
-
 fn remove(
     store: &Store,
     name: &str,
@@ -711,23 +480,4 @@ fn retire_worktree(flow: &FlowView, uncommitted: Uncommitted) -> Retired {
     } else {
         Retired::Kept(space.path.clone())
     }
-}
-
-/// Whether a claim's flow is still unfinished in its store.
-fn claim_is_live(claim: &Claim, now: u64) -> bool {
-    Store::at(claim.store.clone())
-        .events(&claim.flow)
-        .ok()
-        .and_then(|events| fold::fold(&claim.flow, &events, None, now))
-        .is_some_and(|flow| !flow.is_finished())
-}
-
-/// The slots unfinished flows hold in every registered store, claimed or not (flows started before
-/// claims existed).
-fn held_slots(registry: &Registry, now: u64) -> Vec<u8> {
-    registry
-        .stores()
-        .iter()
-        .flat_map(|store| launch::taken_slots(&views(store, now).0))
-        .collect()
 }

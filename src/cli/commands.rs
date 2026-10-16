@@ -2,6 +2,7 @@ pub(super) mod home;
 pub(super) mod new;
 pub(super) mod report;
 pub(super) mod send;
+pub(super) mod start;
 pub(super) mod status;
 
 use crate::cli::output::Failure;
