@@ -408,3 +408,7 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 - [x] Docs: README (Codex agent, [master] agent, trusting the hooks once), CLAUDE.md (adapter/codex.rs, answer.rs, calls.rs, server/news.rs, peek/, plan list), HANDOVER (Codex facts, decisions, codex queue for later), plan-flow-adapters.md pointer to this plan
 - [x] Link design-code, implement-plan, review-changes, write-merge-request and ship-feature from ~/projects/agent-skills into ~/.agents/skills (as commit already is), recorded in dotfiles-v2 if it manages that folder
 - [x] End-to-end on a scratch FLOW_HOME: in flow ui a Codex worker (after one hooks review) shows phase, a permission wait and waiting on a question; the master's `flow send` reaches it idle and busy; it resumes after `flow ui --stop`; peek shows its transcript; a plain Codex session reports; then `[master] agent = "codex"` runs a Codex master that is woken when the worker stops
+
+### Merge request detection (asked for during the build)
+- [x] calls::created_merge_request: only a simple command that runs `gh pr create` or `glab mr create|new` (quotes respected, VAR=value skipped) counts, and only a merge request URL in its output; tests include today's case (the words quoted inside a tmux set-buffer, https://github.com/probe/repo/pull/7 in the output)
+- [x] calls::in_repo(url, remote) and workspace::origin_url(dir): `flow hook` drops a merge request whose URL is not of the worktree's origin repo (host and path); tests/cli.rs: the probe URL leaves the flow undone, the repo's own pull request counts
