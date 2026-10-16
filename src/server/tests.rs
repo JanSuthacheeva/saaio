@@ -41,10 +41,9 @@ fn start_with_agents(
     let thread_paths = paths.clone();
     let store = Store::at(dir.to_path_buf());
     let config = Config {
-        agent: "claude".into(),
         agents,
         phases: crate::config::builtin_phases(),
-        master: crate::config::MasterConfig::default(),
+        ..Config::default()
     };
     let handle = thread::spawn(move || {
         run(

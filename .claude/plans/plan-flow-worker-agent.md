@@ -76,7 +76,7 @@ impl Config {
 
 ## Tasks
 
-- [ ] Add `WorkerConfig`, replace `Config.agent` with `Config.worker`, `deny_unknown_fields` on `Config`, `Config::parse` refusing the old key; update call sites; unit tests for the old key, an unknown top-level key and an unknown section
+- [x] Add `WorkerConfig`, replace `Config.agent` with `Config.worker`, `deny_unknown_fields` on `Config`, `Config::parse` refusing the old key; update call sites; unit tests for the old key, an unknown top-level key and an unknown section
 - [ ] End-to-end test in `tests/cli.rs`: `flow start` with the old key exits 1 naming `[worker] agent`
 - [ ] README and HANDOVER on `[worker] agent`
 - [ ] End-to-end check: run `flow start` with an old-style and a new-style config against a scratch FLOW_HOME
