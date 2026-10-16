@@ -80,7 +80,7 @@ any other that turns out to be noise, each named.
 - [x] remove `pane_env`'s `id` and `Conn.role`; fix stale and misplaced docs
 
 ### 7. Duplication and long functions
-- [ ] main: split `start` (done with 6.2); `locate_store`, `load_config`, `config_dir` (done with 7.1); `unix_ms`
+- [x] main: split `start` (done with 6.2); `locate_store`, `load_config`, `config_dir` (done with 7.1); `unix_ms`
 - [ ] one `write_atomic` for store, registry, slots
 - [ ] ui: split `App::draw`, newflow `render`, sidebar `render`; board `digit`, `card_rect`, one footer, `spinner`, shared `Row`, `plural`
 

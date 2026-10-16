@@ -15,7 +15,7 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result};
 use ratatui::Terminal;
@@ -27,6 +27,7 @@ use signal_hook::iterator::Signals;
 
 use crate::branching::Branching;
 use crate::client::Client;
+use crate::event::unix_ms;
 use crate::proto::{Role, ServerMsg};
 use app::{App, Effect, Job};
 use input::Router;
@@ -201,10 +202,7 @@ fn run_job(exe: &Path, job: Job, events: Sender<Event>) {
 }
 
 fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|since| since.as_millis() as u64)
-        .unwrap_or_default()
+    unix_ms(SystemTime::now())
 }
 
 fn tick(events: Sender<Event>) {

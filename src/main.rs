@@ -20,7 +20,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
@@ -1134,8 +1134,5 @@ fn bin_path() -> String {
 }
 
 fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
+    event::unix_ms(SystemTime::now())
 }

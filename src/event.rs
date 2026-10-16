@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
@@ -87,6 +89,13 @@ pub enum Mode {
     #[default]
     Guided,
     Auto,
+}
+
+/// A time as Unix ms, the clock every event and log uses; 0 before 1970.
+pub fn unix_ms(time: SystemTime) -> u64 {
+    time.duration_since(UNIX_EPOCH).map_or(0, |since| {
+        u64::try_from(since.as_millis()).unwrap_or(u64::MAX)
+    })
 }
 
 impl Event {

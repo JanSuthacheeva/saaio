@@ -1,12 +1,12 @@
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
 use anyhow::{Context, Result, bail};
 use uuid::Uuid;
 
-use crate::event::Event;
+use crate::event::{Event, unix_ms};
 use crate::registry::Registry;
 use crate::wake::Seen;
 
@@ -208,8 +208,7 @@ impl Store {
                 return Err(error).with_context(|| format!("could not read heartbeat of {id}"));
             }
         };
-        let since_epoch = modified.duration_since(UNIX_EPOCH).unwrap_or_default();
-        Ok(Some(since_epoch.as_millis() as u64))
+        Ok(Some(unix_ms(modified)))
     }
 
     /// Makes `pid` the session's one waiter; an older waiter sees it was replaced.
@@ -469,10 +468,7 @@ mod tests {
     }
 
     fn now_ms() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64
+        unix_ms(SystemTime::now())
     }
 
     #[test]
