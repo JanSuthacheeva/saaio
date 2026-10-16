@@ -92,6 +92,13 @@ impl State {
     }
 }
 
+/// Where the master's turn stands, as its hooks last said, and since when.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MasterTurn {
+    pub state: State,
+    pub at: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Step {

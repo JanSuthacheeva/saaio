@@ -104,6 +104,20 @@ pub fn resolve<'a>(flows: &'a [FlowView], name_or_id: &str) -> Option<&'a FlowVi
         .or_else(|| named().max_by_key(|flow| flow.changed_at))
 }
 
+/// The state the last of `kinds` that says one puts the master in: Working, Delegated,
+/// Waiting, Idle, Blocked or Ended; None when none says one (Answer, Session, Phase, ...).
+pub fn master_state(kinds: &[EventKind]) -> Option<State> {
+    kinds.iter().rev().find_map(|kind| match kind {
+        EventKind::Working => Some(State::Working),
+        EventKind::Delegated { .. } => Some(State::Delegated),
+        EventKind::Waiting { .. } => Some(State::Waiting),
+        EventKind::Idle { .. } => Some(State::Idle),
+        EventKind::Blocked { .. } => Some(State::Blocked),
+        EventKind::Ended => Some(State::Ended),
+        _ => None,
+    })
+}
+
 #[derive(Debug)]
 struct Folding {
     view: FlowView,

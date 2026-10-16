@@ -137,6 +137,46 @@ fn a_phase_a_delegate_starts_keeps_the_flow_delegated() {
     assert_eq!(flow.delegate.as_deref(), Some("reviewer"));
 }
 
+#[test]
+fn the_master_is_in_the_state_its_last_saying_kind_puts_it() {
+    let kinds = [
+        EventKind::Working,
+        EventKind::Answer {
+            text: "done".into(),
+        },
+        EventKind::Idle {
+            note: "done".into(),
+        },
+        EventKind::Session {
+            id: "s1".into(),
+            transcript: None,
+        },
+    ];
+
+    assert_eq!(master_state(&kinds), Some(State::Idle));
+    assert_eq!(
+        master_state(&[EventKind::Blocked {
+            reason: "may I?".into()
+        }]),
+        Some(State::Blocked)
+    );
+}
+
+#[test]
+fn kinds_that_say_no_state_leave_the_master_as_it_was() {
+    let kinds = [
+        EventKind::Answer {
+            text: "done".into(),
+        },
+        EventKind::Phase {
+            phase: Phase::Implement,
+        },
+    ];
+
+    assert_eq!(master_state(&kinds), None);
+    assert_eq!(master_state(&[]), None);
+}
+
 fn started(at: u64) -> Event {
     Event::new(
         at,
