@@ -230,3 +230,35 @@ so each task brings a piece of it together with its first reader.
 - [x] E2E cli test: `flow ui` with `prefix = "C-c"` exits 1 with the reason
 - [x] Reword master.md (current text to master-v7.md in `PREVIOUS_DEFAULTS`), README keys section and `[ui]` example, HANDOVER lines
 - [x] End-to-end check: flow ui on a scratch FLOW_HOME with `[ui] prefix = "C-b"`: C-b ? shows the help naming C-b, C-b d detaches, C-b C-b reaches the pane, the sidebar footer reads C-b; then `prefix = "C-c"` refuses to start
+
+## Review
+
+Reviewed 2026-10-16 against this plan, isolated from the build.
+
+**Fixed**
+- Comments in server.rs, layout.rs, newflow.rs, input.rs and app.rs still named `C-space` as the
+  key; the HANDOVER line "The prefix and `Q` keeps" misread; two README paragraphs ran past the
+  column (d1f8947).
+
+**Open**
+- A prefix shadows flow ui's own Ctrl keys in modal views. With `prefix = "C-b"` (the README's
+  own example) C-b no longer pages back in the history view; C-b then j moves the peek cursor
+  instead, and only C-b C-b pages (shown with a router probe: `\x02` in a modal view routes to
+  nothing, `\x02\x02` to `View([Ctrl('b')])`). The same holds for C-u, C-d, C-f in the history
+  and C-u, C-w in the new-flow request field. This is tmux's copy-mode trade-off and nothing
+  breaks, so I left it. Recommendation: say it in the README's `[ui]` paragraph (the prefix twice
+  reaches a key flow ui uses itself) rather than refuse C-b, C-u, C-f, C-w as prefixes.
+
+**Where to look**
+1. `src/ui/prefix.rs` `try_from`: the accepted names and the refused keys - the whole user
+   contract of the setting.
+2. `src/ui/input.rs` `Router::route` and `command_after_prefix`: the prefix byte is checked
+   before CSI parsing; the twice case pushes the legacy byte even for the kitty form (as before).
+3. `src/cli/commands/status.rs` `one_store`: an unreadable config silently falls back to
+   C-space for the hint, on purpose.
+
+Routine, skim: the `Hint::key` Cow change, the `prefix` field threaded through Sidebar and the
+dialogs, the test fixtures, master-v7.md (identical to the old master.md).
+
+**Checks**: `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`
+passed at 5345b42; d1f8947 changes only comments and docs, and clippy and fmt pass on it.
