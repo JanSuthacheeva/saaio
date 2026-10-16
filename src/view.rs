@@ -210,6 +210,11 @@ impl FlowView {
         matches!(self.state, State::Done | State::Ended)
     }
 
+    /// Started with --plain: no phases, no master.
+    pub fn is_plain(&self) -> bool {
+        self.mode == Mode::Plain
+    }
+
     pub fn group(&self) -> Group {
         if self.needs_you() {
             Group::NeedsYou
@@ -363,5 +368,13 @@ mod tests {
         assert!(flow(State::Ended).is_finished());
         assert!(!flow(State::Blocked).is_finished());
         assert!(!flow(State::Working).is_finished());
+    }
+
+    #[test]
+    fn is_plain_only_in_plain_mode() {
+        let mut plain = flow(State::Working);
+        assert!(!plain.is_plain());
+        plain.mode = Mode::Plain;
+        assert!(plain.is_plain());
     }
 }

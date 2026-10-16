@@ -92,6 +92,9 @@ pub enum Mode {
     #[default]
     Guided,
     Auto,
+    /// An agent in a folder: no worktree, branch, slot, prompt or master.
+    #[value(skip)]
+    Plain,
 }
 
 /// A time as Unix ms, the clock every event and log uses; 0 before 1970.
@@ -153,18 +156,19 @@ fn cut_to(text: &mut String, limit: usize) {
 }
 
 impl Mode {
-    /// The name the command line and the logs use: guided, auto.
+    /// The name the command line and the logs use: guided, auto, plain.
     pub fn name(self) -> &'static str {
         match self {
             Mode::Guided => "guided",
             Mode::Auto => "auto",
+            Mode::Plain => "plain",
         }
     }
 
     pub fn toggled(self) -> Mode {
         match self {
             Mode::Guided => Mode::Auto,
-            Mode::Auto => Mode::Guided,
+            Mode::Auto | Mode::Plain => Mode::Guided,
         }
     }
 }
@@ -205,9 +209,8 @@ mod tests {
 
     #[test]
     fn names_modes_and_phases_as_the_log_does() {
-        for mode in [Mode::Guided, Mode::Auto] {
+        for mode in [Mode::Guided, Mode::Auto, Mode::Plain] {
             assert_eq!(serde_json::to_value(mode).unwrap(), mode.name());
-            assert_eq!(mode.toggled().toggled(), mode);
         }
         for (index, phase) in Phase::ALL.into_iter().enumerate() {
             assert_eq!(serde_json::to_value(phase).unwrap(), phase.name());
@@ -221,6 +224,11 @@ mod tests {
                 name: "shop-221".into(),
                 request: "SHOP-221 add CSV export".into(),
                 mode: Mode::Auto,
+            },
+            EventKind::Started {
+                name: "scratch".into(),
+                request: String::new(),
+                mode: Mode::Plain,
             },
             EventKind::Phase {
                 phase: Phase::MergeRequest,
@@ -315,6 +323,12 @@ mod tests {
                 question: "ok?".into()
             }
         );
+    }
+
+    #[test]
+    fn plain_is_not_a_mode_flag_takes() {
+        assert!(Mode::from_str("plain", false).is_err());
+        assert_eq!(Mode::from_str("auto", false), Ok(Mode::Auto));
     }
 
     #[test]

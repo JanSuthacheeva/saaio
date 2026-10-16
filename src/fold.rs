@@ -291,6 +291,9 @@ impl Folding {
 
     fn finish(mut self, now: u64) -> FlowView {
         self.close_phase(self.stopped_at.unwrap_or(now));
+        if self.view.is_plain() {
+            return self.view;
+        }
         let current = self.view.phase.map(Phase::index);
         let is_done = self.view.state == State::Done;
         self.view.steps = Phase::ALL

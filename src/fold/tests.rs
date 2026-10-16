@@ -192,6 +192,23 @@ fn says_whether_an_event_changes_what_the_flow_shows() {
 }
 
 #[test]
+fn a_plain_session_has_no_steps_but_keeps_its_phase() {
+    let plain = at(
+        1,
+        EventKind::Started {
+            name: "scratch".into(),
+            request: String::new(),
+            mode: Mode::Plain,
+        },
+    );
+
+    let flow = view(&[plain, phase(2, Phase::Design)], 3);
+
+    assert!(flow.steps.is_empty());
+    assert_eq!(flow.phase, Some(Phase::Design));
+}
+
+#[test]
 fn needs_a_started_event_to_name_the_flow() {
     assert_eq!(fold("7f3c", &[at(1, EventKind::Working)], None, 2), None);
     assert_eq!(fold("7f3c", &[], None, 2), None);
