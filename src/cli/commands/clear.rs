@@ -1,6 +1,7 @@
 use super::retire::{Uncommitted, Unmerged, close_pane, drop_branch, retire_worktree};
 use super::views;
-use crate::cli::output::{self, Document, Failure, Retired};
+use crate::cli::output::remove::{self, Retired};
+use crate::cli::output::{Document, Failure};
 use crate::store::Store;
 
 /// Forgets the flows that are done or ended, with their panes, worktrees and merged branches.
@@ -21,5 +22,5 @@ pub fn run(store: &Store, now: u64) -> Result<Document, Failure> {
         })?;
         names.push(flow.name.clone());
     }
-    Ok(output::cleared(&names, &kept))
+    Ok(remove::cleared(&names, &kept))
 }

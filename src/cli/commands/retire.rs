@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::cli::output::{BranchFate, Failure, Retired, UNCOMMITTED, UNMERGED};
+use crate::cli::output::Failure;
+use crate::cli::output::remove::{BranchFate, Retired, UNCOMMITTED, UNMERGED};
 use crate::client::{self, Closing};
 use crate::launch;
 use crate::store::Store;

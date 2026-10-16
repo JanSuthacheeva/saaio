@@ -37,7 +37,7 @@ fn one_store(args: &Args, store: &Store, now: u64) -> Result<Document, Failure> 
         return Ok(if args.json {
             Document::Json(board.to_json())
         } else {
-            output::status_list(&board, &warnings, args.full)
+            output::status::list(&board, &warnings, args.full)
         });
     };
     let one = fold::resolve(&flows, name)
@@ -50,7 +50,7 @@ fn one_store(args: &Args, store: &Store, now: u64) -> Result<Document, Failure> 
             .workspace
             .as_ref()
             .map(|space| Path::new(&space.path).exists());
-        output::status_detail(&one, now, args.full, worktree_exists)
+        output::status::detail(&one, now, args.full, worktree_exists)
     })
 }
 
@@ -90,6 +90,6 @@ fn all_stores(registry: &Registry, json: bool, full: bool, now: u64) -> Result<D
     Ok(if json {
         Document::Json(projects.to_json())
     } else {
-        output::status_all(&projects, &warnings, full)
+        output::status::all(&projects, &warnings, full)
     })
 }

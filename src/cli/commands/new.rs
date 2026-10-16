@@ -1,5 +1,5 @@
 use super::views;
-use crate::cli::output::{self, Document, Failure};
+use crate::cli::output::{Document, Failure, flow};
 use crate::event::{Event, EventKind, Mode};
 use crate::fold;
 use crate::store::Store;
@@ -18,7 +18,7 @@ pub struct Args {
 pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
     let (flows, _) = views(store, now);
     if let Some(existing) = fold::resolve(&flows, &args.name).filter(|flow| !flow.is_finished()) {
-        return Ok(output::created(existing, true));
+        return Ok(flow::created(existing, true));
     }
     let first = Event::new(
         now,
@@ -30,5 +30,5 @@ pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
     );
     let id = store.create(&first)?;
     let created = fold::fold(&id, &[first], None, now).expect("a started flow folds");
-    Ok(output::created(&created, false))
+    Ok(flow::created(&created, false))
 }

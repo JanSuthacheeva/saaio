@@ -1,7 +1,7 @@
 use clap::Subcommand;
 
 use super::{no_flow, views};
-use crate::cli::output::{self, Document, Failure};
+use crate::cli::output::{Document, Failure, flow};
 use crate::event::{Event, EventKind, Phase};
 use crate::fold;
 use crate::store::Store;
@@ -71,7 +71,7 @@ impl ReportEvent {
 /// Appends one event to a flow; skipped without a flow, so an agent outside flow can report.
 pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
     let Some(name) = args.flow.filter(|name| !name.is_empty()) else {
-        return Ok(output::skipped());
+        return Ok(flow::skipped());
     };
     let (flows, _) = views(store, now);
     let id = fold::resolve(&flows, &name)
@@ -85,5 +85,5 @@ pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
     let events = store.events(&id)?;
     let beat = store.last_beat(&id)?;
     let reported = fold::fold(&id, &events, beat, now).expect("a resolved flow folds");
-    Ok(output::reported(&reported))
+    Ok(flow::reported(&reported))
 }

@@ -3,7 +3,8 @@ use super::retire::{
     refuse_unmerged_commits, retire_worktree,
 };
 use super::{no_flow, views};
-use crate::cli::output::{self, BranchFate, Document, Failure, Retired};
+use crate::cli::output::remove::{self, BranchFate, Retired};
+use crate::cli::output::{Document, Failure};
 use crate::fold;
 use crate::store::Store;
 
@@ -48,5 +49,5 @@ pub fn run(args: &Args, store: &Store, now: u64) -> Result<Document, Failure> {
     store
         .remove(&flow.id)
         .map_err(|error| Failure::from(error.context(format!("could not remove {}", flow.name))))?;
-    Ok(output::removed(&flow.name, pane, &retired, branch))
+    Ok(remove::removed(&flow.name, pane, &retired, branch))
 }

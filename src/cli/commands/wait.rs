@@ -2,7 +2,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::cli::Env;
-use crate::cli::output::{self, Document};
+use crate::cli::output::{Document, news};
 use crate::deliver::{self, WorkerNews};
 use crate::store::{Store, Waiter};
 use crate::view::FlowView;
@@ -48,13 +48,13 @@ fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
                 WorkerNews::Nothing => None,
                 WorkerNews::News(messages) => {
                     let messages: Vec<&str> = messages.iter().map(String::as_str).collect();
-                    Some(output::news_for_worker(&messages))
+                    Some(news::for_worker(&messages))
                 }
             },
             Waiter::Master => {
                 let changed = deliver::master_news(store, clock, &is_mine);
                 let changed: Vec<&FlowView> = changed.iter().collect();
-                (!changed.is_empty()).then(|| output::news_for_master(&changed))
+                (!changed.is_empty()).then(|| news::for_master(&changed))
             }
         };
         if news.is_some() {

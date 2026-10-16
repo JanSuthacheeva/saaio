@@ -952,7 +952,7 @@ impl App {
                 form.error = Some(error);
                 self.view = View::NewFlow(form);
             }
-            (Job::Remove(removal), Err(error)) if error.contains(output::UNCOMMITTED) => {
+            (Job::Remove(removal), Err(error)) if error.contains(output::remove::UNCOMMITTED) => {
                 self.view = View::Confirm {
                     question: format!("{} has uncommitted changes. Discard them?", removal.name),
                     then: Removal {
@@ -961,7 +961,7 @@ impl App {
                     },
                 };
             }
-            (Job::Remove(removal), Err(error)) if error.contains(output::UNMERGED) => {
+            (Job::Remove(removal), Err(error)) if error.contains(output::remove::UNMERGED) => {
                 self.view = View::Confirm {
                     question: format!("{error}. Delete it anyway?"),
                     then: Removal {
@@ -1670,7 +1670,7 @@ mod tests {
 
         app.on_ran(
             Job::Remove(first.clone()),
-            Err(format!("shop-230 {} in /shop", output::UNCOMMITTED)),
+            Err(format!("shop-230 {} in /shop", output::remove::UNCOMMITTED)),
         );
         assert!(app.is_modal());
         let screen: String = {
@@ -1694,7 +1694,10 @@ mod tests {
 
         app.on_ran(
             Job::Remove(forced.clone()),
-            Err(format!("flow/shop-230 has 2 commits {}", output::UNMERGED)),
+            Err(format!(
+                "flow/shop-230 has 2 commits {}",
+                output::remove::UNMERGED
+            )),
         );
         let View::Confirm { question, then } = &app.view else {
             panic!("expected a question: {:?}", app.view);

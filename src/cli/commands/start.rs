@@ -2,7 +2,8 @@ use std::path::Path;
 
 use super::views;
 use crate::branching::{self, Branching};
-use crate::cli::output::{self, Document, Failure, Opening, Setup};
+use crate::cli::output::start::{self, Opening, Setup};
+use crate::cli::output::{Document, Failure};
 use crate::client::{self, Client};
 use crate::config::Config;
 use crate::event::{Event, EventKind, Mode};
@@ -113,7 +114,7 @@ pub fn run(
         Ok(None) => Opening::WhenUiRuns,
         Ok(Some(_)) | Err(_) => Opening::Running,
     };
-    Ok(output::started(&flow, &space, &setup, opening))
+    Ok(start::started(&flow, &space, &setup, opening))
 }
 
 /// The branch type for a start: the one asked for or the repo's first, if the repo has types.

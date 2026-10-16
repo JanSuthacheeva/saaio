@@ -215,11 +215,14 @@ fn toon<T: Serialize>(document: &T) -> String;   // visible to the family module
 // in output is pub(crate), so pedantic's public-API lints stay quiet and dead code still warns.
 pub mod flow; pub mod news; pub mod remove; pub mod start; pub mod status;
 
-// output/status.rs  home, status_list, status_all, status_detail (+ list, detail_help, row types, NEW_HELP)
+// Family functions drop the family from their names (status::list, news::for_worker), as the
+// API guidelines advise against module-name stutter.
+// output/status.rs  home, list, all, detail (+ board_list, detail_help, row types, NEW_HELP)
 // output/flow.rs    created, reported, sent, skipped
 // output/start.rs   Opening, Setup (+ Display), started
 // output/remove.rs  UNMERGED, UNCOMMITTED, Retired, BranchFate (+ Display, name), removed, cleared, pane_name
-// output/news.rs    news_for_worker(messages: &[&str]) -> String, news_for_master(flows: &[&FlowView]) -> String
+// output/news.rs    for_worker(messages: &[&str]) -> String, for_master(flows: &[&FlowView]) -> String
+// output/fixtures.rs (test only) flow, sample_board, MIN: shared by the family tests
 ```
 
 ### deliver.rs
@@ -317,8 +320,8 @@ pub fn clock(ms: u64, offset_secs: i64) -> String;
 `flow wait [--master]`:
 1. cli::run -> wait::run(&args, env, clock) before any store lookup
 2. wait::run -> env.store() (None -> Silent); waiter from --master or env.flow_id() (None -> Silent)
-3. wait -> deliver::worker_news(..): Gone -> None, Nothing -> sleep, News(messages) -> output::news::news_for_worker(..)
-4. wait -> deliver::master_news(..): empty -> sleep, else output::news::news_for_master(..)
+3. wait -> deliver::worker_news(..): Gone -> None, Nothing -> sleep, News(messages) -> output::news::for_worker(..)
+4. wait -> deliver::master_news(..): empty -> sleep, else output::news::for_master(..)
 5. wait::run -> Document::Wake(news) | Document::Silent; main -> eprintln + exit 2 | exit 0
 
 `flow hook <adapter>`:
@@ -380,7 +383,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 - [x] `ui.rs` (with stop_server), `server.rs`, `wait.rs`, `hook.rs` with their `Args`; `cli.rs` is only Cli, Command and run; unit tests for `cli::run` without a store
 
 ### 4. Output
-- [ ] Split `cli/output.rs` (moved there in 2.1, so main could name `cli::output`; keeps Document, Failure, toon, truncated, DESCRIPTION, LIST_TEXT_LIMIT) into `output/status.rs`, `flow.rs`, `start.rs`, `remove.rs`, `news.rs`, each with its tests
+- [x] Split `cli/output.rs` (moved there in 2.1, so main could name `cli::output`; keeps Document, Failure, toon, truncated, DESCRIPTION, LIST_TEXT_LIMIT) into `output/status.rs`, `flow.rs`, `start.rs`, `remove.rs`, `news.rs`, each with its tests
 
 ### 5. Core
 - [ ] Split `launch.rs` into `launch/name.rs`, `worktree.rs`, `pane.rs` with their tests; move taken_slots and free_slot to `slots.rs`

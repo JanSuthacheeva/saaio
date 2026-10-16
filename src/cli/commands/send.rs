@@ -58,5 +58,5 @@ pub fn run(
         text: text.to_string(),
     };
     store.append(&flow.id, &Event::new(now, message))?;
-    Ok(output::sent(flow))
+    Ok(output::flow::sent(flow))
 }
