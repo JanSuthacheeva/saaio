@@ -99,6 +99,7 @@ second when it, or the theme it extends, changes. Without it flow uses the termi
 # Colors: "#rrggbb", an ANSI index, "default" (the terminal's), or another key.
 extends = "flow"        # terminal | flow | flow-light | a file in themes/, without .toml
 nerd_font = true        # the font has Nerd Font icons: a kiwi bird as the mark
+phase_colors = "steps"  # off | steps | full: how much of a working flow takes its phase's color
 [ui]
 accent = "#d9825b"
 [state]
@@ -107,17 +108,20 @@ ended = "faint"
 merge-request = "#d08ad6"
 ```
 
-Keys: `[ui]` background, panel, selection, rule, text, strong, muted, faint, accent; `[state]`
-working, waiting, blocked, done, ended; `[phase]` design, implement, review, merge-request. A
-working flow takes its phase's color, and `working` only until it reaches its first phase; a flow
-that waits, is blocked or is done keeps its state's color. The terminal theme colors the phases
-with 256-color indexes, since terminals often repaint ANSI blue, magenta and cyan. A key left out
-keeps the base's value. `nerd_font` (default false) shows flow's mark as a kiwi bird, which needs a
-Nerd Font; without it the mark is a goose in flight, `▚▄▞`, in block characters every font has.
-The mark takes the theme's accent either way. `flow` and `flow-light` are the design's dark and
-light colors. A tool can keep a theme in `~/.config/flow/themes/<name>.toml` for `extends` to
-name; a Noctalia template that writes `themes/noctalia.toml` makes flow follow Noctalia live. A
-broken file keeps the last theme and says why in the title row.
+Keys, each only in its own table: `[ui]` background, panel, selection, rule, text, strong, muted,
+faint, accent; `[state]` working, waiting, blocked, done, ended; `[phase]` design, implement,
+review, merge-request. `phase_colors` decides where a working flow shows its phase's color: `off`
+nowhere, `steps` (the default) in the current step dot, `full` also in the spinner, label, rail and
+title row. Done steps are plain text at every level. A flow works in `working` until it reaches its first phase; a flow that waits, is blocked
+or is done keeps its state's color at every level. The terminal theme colors the phases with
+256-color indexes, since terminals often repaint ANSI blue, magenta and cyan. A key left out keeps
+the base's value. `nerd_font` (default false) shows flow's mark as a kiwi bird, which needs a Nerd
+Font; without it the mark is a goose in flight, `▚▄▞`, in block characters every font has. The mark
+takes the theme's accent either way. `flow` and `flow-light` are the design's dark and light colors.
+A tool can keep a theme in `~/.config/flow/themes/<name>.toml` for `extends` to name; a Noctalia
+template that writes `themes/noctalia.toml` makes flow follow Noctalia live. A broken file keeps the
+last theme and says in the title row which file and line is wrong and why, such as `theme.toml:7:
+review belongs in [phase], not [state]`.
 
 ## Starting a worker
 
@@ -169,12 +173,13 @@ Claude Code and Codex are built in:
 - `codex`: `codex "$ship-feature <request>"`, resumed with `codex resume <session>`. Codex picks
   its own session id; flow learns it from the first hook.
 
-`flow start --agent codex` or the new-flow dialog's agent row picks one; `agent` in the config is
-the default. The master is the built-in `master` agent (Claude Code), or the agent `[master]
-agent` names; flow adds `master.md` to its instructions. Add or change agents in
+`flow start --agent codex` or the new-flow dialog's agent row picks one; `[worker] agent` in the
+config is the default. The master is the built-in `master` agent (Claude Code), or the agent
+`[master] agent` names; flow adds `master.md` to its instructions. Add or change agents in
 `~/.config/flow/config.toml` (or `$XDG_CONFIG_HOME/flow/config.toml`, or `$FLOW_CONFIG`):
 
 ```toml
+[worker]
 agent = "claude"              # the default for flow start
 
 [agents.claude]
@@ -192,7 +197,8 @@ agent = "codex"               # the master runs Codex; the default is the built-
 
 Placeholders: `{id}`, `{name}`, `{request}`, `{prompt}`, `{session}` (the session id the harness
 picked, for Codex) and `{instructions}` (the path of the master's `master.md`). An agent without
-`resume` starts fresh once and is not resumed after a restart.
+`resume` starts fresh once and is not resumed after a restart. A key or section flow does not know
+is an error that names the file and the key.
 
 ### How a worker reports
 

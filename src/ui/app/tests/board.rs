@@ -332,20 +332,42 @@ fn asks_for_every_project_again_every_two_seconds_while_in_view() {
 }
 
 #[test]
-fn a_working_card_takes_the_color_of_its_phase() {
+fn a_working_card_takes_the_color_of_its_phase_at_full_only() {
     let mut app = board_app();
     app.on_input(Routed::Command(Command::Board));
-    let terminal = render_at(&app, FLEET);
-    let buffer = terminal.backend().buffer();
-    let review = Theme::default().phase.review.fg.unwrap();
-    let line = row(&terminal, 10);
-    let x = |text: &str| line[..line.find(text).unwrap()].chars().count() as u16 + layout::MARGIN;
+    let theme = Theme::default();
+    let colors = |level| {
+        let terminal = render_with(&app, FLEET, &theme_at(level));
+        let buffer = terminal.backend().buffer();
+        let line = row(&terminal, 10);
+        let x =
+            |text: &str| line[..line.find(text).unwrap()].chars().count() as u16 + layout::MARGIN;
+        [
+            buffer[(x("◓"), 10 + layout::MARGIN)].fg,
+            buffer[(x("reviewing"), 10 + layout::MARGIN)].fg,
+        ]
+    };
+    let review = theme.phase.review.fg.unwrap();
+    let working = theme.state.working.fg.unwrap();
 
-    assert_eq!(buffer[(x("◓"), 10 + layout::MARGIN)].fg, review, "spinner");
+    assert_eq!(colors(PhaseColors::Off), [working, working], "off");
+    assert_eq!(colors(PhaseColors::Steps), [working, working], "steps");
+    assert_eq!(colors(PhaseColors::Full), [review, review], "full");
+}
+
+#[test]
+fn a_notice_is_taken_back_only_when_it_is_the_one_meant() {
+    let mut app = board_app();
+
+    app.say("theme: theme.toml:7: review belongs in [phase], not [state]".to_string());
+    app.take_back("theme: ");
+    assert_eq!(app.notice, None);
+
+    app.say("only a finished flow can be cleared".to_string());
+    app.take_back("theme: ");
     assert_eq!(
-        buffer[(x("reviewing"), 10 + layout::MARGIN)].fg,
-        review,
-        "the state label"
+        app.notice.as_deref(),
+        Some("only a finished flow can be cleared")
     );
 }
 

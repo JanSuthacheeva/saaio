@@ -160,7 +160,8 @@ fn empty_rows(&self) -> Vec<Row>;
   flow and the master get Mark::Focus, the peek and a changed flow Mark::Lit; the second row's right
   column is tasks only; a finished flow says `took 2h`; the peek's hint reads `C-space enter jump in`.
 - labels.rs `steps()`: done steps and reached joins in ui.text, the current one in
-  `theme.flow_style(flow)`, open ones faint; a finished flow draws every step in ui.text.
+  `theme.step_style(flow)` (main's phase_colors level), open ones faint; a finished flow draws every
+  step in ui.text.
 - sidebar.rs `render`: set_line, then focus::mark / focus::light by Mark.
 
 `src/ui/rail.rs` (modified): the focused row, the master included, gets focus::mark; the master's

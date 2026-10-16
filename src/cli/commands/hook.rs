@@ -154,7 +154,7 @@ fn of_own_repo(store: &Store, id: &str, url: &str, now: u64) -> bool {
     remotes
         .unwrap_or_default()
         .iter()
-        .any(|remote| calls::in_repo(url, remote))
+        .any(|remote| calls::in_repo(url, remote, workspace::ssh_hostname))
 }
 
 /// The news a session's Stop hands over: a worker's messages from the master (its flow working

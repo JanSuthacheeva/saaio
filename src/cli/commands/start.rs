@@ -129,7 +129,7 @@ fn pick_agent<'a>(config: &'a Config, asked: Option<&str>) -> Result<&'a str, Fa
     let Some((name, _)) = config.agent(asked) else {
         let known: Vec<&str> = config.agents.keys().map(String::as_str).collect();
         return Err(Failure::error(
-            format!("no agent named {}", asked.unwrap_or(&config.agent)),
+            format!("no agent named {}", asked.unwrap_or(&config.worker.agent)),
             vec![format!("Agents: {}", known.join(", "))],
         ));
     };

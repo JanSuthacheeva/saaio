@@ -26,7 +26,7 @@ ship-feature orchestrator skill (planned there, not written yet; see its plan pa
 | 5 | `flow start`: worktree, slot, setup hook, worker; `flow clear` tears down | this repo | **built**, plan `.claude/plans/plan-flow-start.md`, page `docs/design/start-implementation.html`; since flow ui the worker opens there, the tmux path is gone |
 | 7 | `flow ui`: session server owning every Claude session, master + workers, sidebar, peek, board, new flow, rail, restore | this repo | **built**, plan `.claude/plans/plan-flow-ui.md`, pages `docs/design/ui-approaches.html`, `docs/design/ui-implementation.html`, screens https://claude.ai/artifact/68Ff2wJP6BcYX6qy4hppXp |
 | 8 | One flow per project: slots shared across every project's store, `flow status --all`, the board's `a` | this repo, `src/registry.rs`, `src/slots.rs` | **built**, plan `.claude/plans/plan-flow-per-project.md`, pages `docs/design/projects-approaches.html`, `docs/design/projects-implementation.html`. Each tmux project session sets its own `FLOW_HOME`; stores register in the default folder's `stores/`, `flow start` claims `slots/<n>` (1-20) under a flock before setup |
-| 9 | Themes: theme.toml with extends (terminal, flow, flow-light, themes/<name>.toml), reloaded live; a Noctalia template in dotfiles-v2 | this repo, `src/ui/theme.rs`, `src/ui/theme_file.rs` | **built**, plan `.claude/plans/plan-flow-theme.md`, pages `docs/design/theme-*.html`. `[glyphs]` from the design is accepted and ignored for now |
+| 9 | Themes: theme.toml with extends (terminal, flow, flow-light, themes/<name>.toml), reloaded live; a Noctalia template in dotfiles-v2 | this repo, `src/ui/theme.rs`, `src/ui/theme_file.rs` | **built**, plan `.claude/plans/plan-flow-theme.md`, pages `docs/design/theme-*.html`. each key is checked against its own table (plan `.claude/plans/plan-flow-strict-theme-sections.md`); `[glyphs]` from the design is rejected until it is built |
 | 10 | Branch names after a repo's convention: `.flow/config.toml` `[branch] name`/`types`, `flow start --type`, a type row in the new-flow dialog | this repo, `src/branching.rs` | **built**, plan `.claude/plans/plan-flow-branch-names.md`, page `docs/design/branch-implementation.html` |
 | 11 | Codex as a second harness, for workers and the master | this repo, `src/adapter/codex.rs`, `src/server/news.rs` | **built**, plan `.claude/plans/plan-flow-codex.md`, pages `docs/design/codex-approaches.html`, `docs/design/codex-implementation.html` |
 | 6 | Auto mode + optional report line in the skills, `flow setup` hook | `~/projects/agent-skills` (+ this repo for setup) | not designed |
@@ -265,7 +265,8 @@ Codex facts" list every source line). Decisions:
   (`waits/<key>.busy` says idle). This is the one place flow writes into a PTY on its own.
 - Instructions go through `Adapter::instruct`: Codex `-c developer_instructions=<toml string>`,
   Claude Code `--append-system-prompt` (the master too, instead of `-file`).
-- `[master] agent` picks the master's agent; the dialog's agent row the worker's.
+- `[master] agent` picks the master's agent; `[worker] agent` the worker's default (the top-level
+  `agent` key is refused, naming it), the dialog's agent row the worker's.
 
 Verified on Codex 0.163.0 (recorded in `src/adapter/fixtures/codex/`):
 - The subagent tool is `collaborationspawn_agent` (namespace + name) with an encrypted `message`;

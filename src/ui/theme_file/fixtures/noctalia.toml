@@ -1,0 +1,19 @@
+# flow ui theme in Noctalia's colors. On the Linux desktop Noctalia writes this file on every theme
+# change; on this Mac it is a copy of the colors in ~/.config/tmux/themes/noctalia.conf (Sep 22).
+# State colors stay ANSI, the terminal's own palette, except working: the warm palette has no
+# blue (ANSI blue is the accent), so working takes the flow theme's blue to stay apart.
+extends = "terminal"
+
+[ui]
+background = "#242120"
+panel      = "#36312f"
+selection  = "#413b38"
+rule       = "#4b4441"
+text       = "#e5dec9"
+strong     = "#e5dec9"
+muted      = "#a69c99"
+faint      = "#746965"
+accent     = "#cb9168"
+
+[state]
+working = "#7aa7ff"

@@ -4,12 +4,15 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 use ratatui::style::Color;
-use toml::{Table, Value};
+use serde::Deserialize;
+use toml::Spanned;
+use toml::Value;
+use toml::de::{DeTable, DeValue, ValueDeserializer};
 
 use crate::store::Stamp;
 #[cfg(test)]
 use crate::ui::theme::MARK;
-use crate::ui::theme::{KIWI, Palette, PaletteKey, Theme, hex};
+use crate::ui::theme::{KIWI, Palette, PaletteKey, PhaseColors, Section, Theme, hex};
 
 pub const THEME_FILE: &str = "theme.toml";
 pub const THEMES_DIR: &str = "themes";
@@ -18,14 +21,23 @@ const EXTENDS_LIMIT: usize = 4;
 /// What a theme extends when it names nothing.
 const DEFAULT_BASE: &str = "terminal";
 
-/// One theme file: what it extends, its colors by key from [ui], [state] and [phase], and
-/// whether the terminal's font has Nerd Font icons.
+/// One theme file: what it extends, its colors from [ui], [state] and [phase], whether the
+/// terminal's font has Nerd Font icons, and how much of a working flow takes its phase's color.
 #[derive(Debug)]
 struct ThemeFile {
     path: PathBuf,
     extends: String,
-    colors: Vec<(String, Value)>,
+    colors: Vec<Entry>,
     nerd_font: Option<bool>,
+    phase_colors: Option<PhaseColors>,
+}
+
+/// One color a theme file sets, and the line it is on.
+#[derive(Debug)]
+struct Entry {
+    key: PaletteKey,
+    value: Value,
+    line: usize,
 }
 
 /// The theme in `dir`: theme.toml over what it extends, a built-in name or themes/<name>.toml; the
@@ -39,7 +51,7 @@ pub fn load(dir: &Path) -> (Result<Theme>, Vec<PathBuf>) {
             .map_or(DEFAULT_BASE, |file| file.extends.as_str());
         let mut palette = Palette::named(base).expect("a chain ends in a built-in theme");
         for file in chain.iter().rev() {
-            apply(file, &mut palette).with_context(|| file.path.display().to_string())?;
+            apply(file, &mut palette)?;
         }
         // The nearest file that says wins: theme.toml over what it extends.
         let nerd_font = chain
@@ -47,6 +59,10 @@ pub fn load(dir: &Path) -> (Result<Theme>, Vec<PathBuf>) {
             .find_map(|file| file.nerd_font)
             .unwrap_or(false);
         let mut theme = Theme::from_palette(palette);
+        theme.phase_colors = chain
+            .iter()
+            .find_map(|file| file.phase_colors)
+            .unwrap_or_default();
         if nerd_font {
             theme.glyphs.mark = KIWI;
         }
@@ -90,26 +106,57 @@ fn read(path: &Path) -> Result<Option<ThemeFile>> {
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error).with_context(|| path.display().to_string()),
     };
-    parse(path, &text)
-        .with_context(|| path.display().to_string())
-        .map(Some)
+    parse(path, &text).map(Some)
 }
 
+/// The file's keys from the top, each checked against where it belongs; errors say path:line.
 fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
-    let table: Table = text.parse()?;
+    let table = match DeTable::parse(text) {
+        Ok(table) => table.into_inner(),
+        Err(error) => {
+            let line = line(text, error.span().map_or(0, |span| span.start));
+            return Err(anyhow!("{}", error.message())).context(at(path, line));
+        }
+    };
+    let mut keys: Vec<_> = table.into_iter().collect();
+    keys.sort_by_key(|(key, _)| key.span().start);
     let mut extends = DEFAULT_BASE.to_string();
     let mut colors = Vec::new();
     let mut nerd_font = None;
-    for (key, value) in table {
-        match (key.as_str(), value) {
+    let mut phase_colors = None;
+    for (key, value) in keys {
+        let line = line(text, key.span().start);
+        let key = key.into_inner();
+        let place = || at(path, line);
+        if let Some(section) = Section::named(&key) {
+            let DeValue::Table(table) = value.into_inner() else {
+                return Err(anyhow!("[{key}] is a table of colors")).context(place());
+            };
+            colors.extend(self::colors(path, text, section, table)?);
+            continue;
+        }
+        match (key.as_ref(), plain(value).with_context(place)?) {
             ("extends", Value::String(name)) => extends = name,
-            ("extends", _) => bail!("extends must be a theme's name"),
+            ("extends", _) => {
+                return Err(anyhow!("extends must be a theme's name")).context(place());
+            }
             ("nerd_font", Value::Boolean(on)) => nerd_font = Some(on),
-            ("nerd_font", _) => bail!("nerd_font is true or false"),
-            ("ui" | "state" | "phase", Value::Table(section)) => colors.extend(section),
-            // The design's [glyphs] comes later; a file that has it still loads.
-            ("glyphs", Value::Table(_)) => {}
-            (key, _) => bail!("unknown key {key}"),
+            ("nerd_font", _) => return Err(anyhow!("nerd_font is true or false")).context(place()),
+            ("phase_colors", Value::String(name))
+                if let Some(level) = PhaseColors::named(&name) =>
+            {
+                phase_colors = Some(level);
+            }
+            ("phase_colors", _) => {
+                return Err(anyhow!("phase_colors is off, steps or full")).context(place());
+            }
+            (name, _) => {
+                let message = match PaletteKey::named(name) {
+                    Some(color) => format!("{name} belongs in [{}]", color.section().name()),
+                    None => format!("unknown key {name}"),
+                };
+                return Err(anyhow!(message)).context(place());
+            }
         }
     }
     Ok(ThemeFile {
@@ -117,40 +164,85 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
         extends,
         colors,
         nerd_font,
+        phase_colors,
     })
+}
+
+/// The colors of one section; a key of another section, or of none, is an error on its line.
+fn colors(path: &Path, text: &str, section: Section, table: DeTable) -> Result<Vec<Entry>> {
+    let mut keys: Vec<_> = table.into_iter().collect();
+    keys.sort_by_key(|(key, _)| key.span().start);
+    let mut entries = Vec::new();
+    for (name, value) in keys {
+        let line = line(text, name.span().start);
+        let name = name.into_inner();
+        let key = match PaletteKey::named(&name) {
+            Some(key) if key.section() == section => key,
+            Some(key) => {
+                return Err(anyhow!(
+                    "{name} belongs in [{}], not [{}]",
+                    key.section().name(),
+                    section.name()
+                ))
+                .context(at(path, line));
+            }
+            None => {
+                return Err(anyhow!("[{}] has no key {name}", section.name()))
+                    .context(at(path, line));
+            }
+        };
+        let value = plain(value).with_context(|| at(path, line))?;
+        entries.push(Entry { key, value, line });
+    }
+    Ok(entries)
+}
+
+/// A value of the file as a plain toml Value.
+fn plain(value: Spanned<DeValue>) -> Result<Value> {
+    Ok(Value::deserialize(ValueDeserializer::from(value))?)
+}
+
+/// "path:line", the context every error of a theme file carries.
+fn at(path: &Path, line: usize) -> String {
+    format!("{}:{line}", path.display())
+}
+
+/// The 1-based line `offset` is on.
+fn line(text: &str, offset: usize) -> usize {
+    text[..offset.min(text.len())].matches('\n').count() + 1
 }
 
 /// One file's colors over `palette`: values first, then keys that name another key, whatever their
 /// order in the file.
 fn apply(file: &ThemeFile, palette: &mut Palette) -> Result<()> {
     let mut references = Vec::new();
-    for (name, value) in &file.colors {
-        let Some(key) = PaletteKey::named(name) else {
-            bail!("unknown key {name}");
-        };
-        match value {
+    for entry in &file.colors {
+        match &entry.value {
             Value::String(other) if let Some(other) = PaletteKey::named(other) => {
-                references.push((key, other));
+                references.push((entry, other));
             }
             value => {
-                *palette.color_mut(key) = color(value, palette).with_context(|| name.clone())?;
+                *palette.color_mut(entry.key) = color(value, palette)
+                    .with_context(|| entry.key.name())
+                    .with_context(|| at(&file.path, entry.line))?;
             }
         }
     }
     // A key naming a key that itself still names another waits for it; none moving is a loop.
     while !references.is_empty() {
-        let pending: Vec<PaletteKey> = references.iter().map(|&(key, _)| key).collect();
+        let pending: Vec<PaletteKey> = references.iter().map(|(entry, _)| entry.key).collect();
         let before = references.len();
-        references.retain(|&(key, other)| {
+        references.retain(|&(entry, other)| {
             if pending.contains(&other) {
                 return true;
             }
-            *palette.color_mut(key) = palette.color(other);
+            *palette.color_mut(entry.key) = palette.color(other);
             false
         });
         if references.len() == before {
             let names: Vec<&str> = pending.iter().map(|key| key.name()).collect();
-            bail!("{} name each other", names.join(", "));
+            return Err(anyhow!("{} name each other", names.join(", ")))
+                .context(at(&file.path, references[0].0.line));
         }
     }
     Ok(())
@@ -257,7 +349,7 @@ mod tests {
         write(
             &dir,
             "theme.toml",
-            "extends = \"flow\"\n[ui]\naccent = \"#d9825b\"\nrule = 8\n[state]\nended = \"default\"\n[glyphs]\nmaster = \"o\"\n",
+            "extends = \"flow\"\n[ui]\naccent = \"#d9825b\"\nrule = 8\n[state]\nended = \"default\"\n",
         );
 
         let palette = theme(&dir).palette;
@@ -300,6 +392,41 @@ mod tests {
             format!("{error:#}").contains("nerd_font is true or false"),
             "{error:#}"
         );
+    }
+
+    #[test]
+    fn reads_how_much_takes_the_phase_color() {
+        let dir = TempDir::new().unwrap();
+        write(&dir, "theme.toml", "extends = \"flow\"\n");
+        assert_eq!(theme(&dir).phase_colors, PhaseColors::Steps, "the default");
+
+        write(&dir, "theme.toml", "extends = \"mine\"\n");
+        write(
+            &dir,
+            "themes/mine.toml",
+            "extends = \"flow\"\nphase_colors = \"full\"\n",
+        );
+        assert_eq!(
+            theme(&dir).phase_colors,
+            PhaseColors::Full,
+            "from the theme it extends"
+        );
+
+        write(
+            &dir,
+            "theme.toml",
+            "extends = \"mine\"\nphase_colors = \"off\"\n",
+        );
+        assert_eq!(
+            theme(&dir).phase_colors,
+            PhaseColors::Off,
+            "the nearer file wins"
+        );
+
+        write(&dir, "theme.toml", "phase_colors = \"loud\"\n");
+        assert!(error(&dir).contains("phase_colors is off, steps or full"));
+        write(&dir, "theme.toml", "phase_colors = true\n");
+        assert!(error(&dir).contains("phase_colors is off, steps or full"));
     }
 
     #[test]
@@ -352,29 +479,127 @@ mod tests {
         let cases = [
             (
                 "[ui]\naccent = \"#d9825\"\n",
-                "accent: #d9825 is no #rrggbb color",
+                "theme.toml:2: accent: #d9825 is no #rrggbb color",
             ),
             (
                 "[ui]\naccent = \"#+9825b\"\n",
-                "accent: #+9825b is no #rrggbb color",
+                "theme.toml:2: accent: #+9825b is no #rrggbb color",
             ),
-            ("[ui]\nacent = \"#d9825b\"\n", "unknown key acent"),
-            ("[ui]\naccent = 300\n", "300 is no ANSI index"),
-            ("[ui]\naccent = \"clay\"\n", "clay is no color and no key"),
+            (
+                "[ui]\nacent = \"#d9825b\"\n",
+                "theme.toml:2: [ui] has no key acent",
+            ),
+            (
+                "[ui]\naccent = 300\n",
+                "theme.toml:2: accent: 300 is no ANSI index",
+            ),
+            (
+                "[ui]\naccent = \"clay\"\n",
+                "theme.toml:2: accent: clay is no color and no key",
+            ),
+            (
+                "[state]\nreview = \"#d9825b\"\n",
+                "theme.toml:2: review belongs in [phase], not [state]",
+            ),
+            (
+                "[phase]\n\ndone = 2\n",
+                "theme.toml:3: done belongs in [state], not [phase]",
+            ),
+            (
+                "extends = \"flow\"\naccent = 3\n",
+                "theme.toml:2: accent belongs in [ui]",
+            ),
+            ("ui = 3\n", "theme.toml:1: [ui] is a table of colors"),
+            (
+                "[glyphs]\nmaster = \"o\"\n",
+                "theme.toml:1: unknown key glyphs",
+            ),
+            (
+                "extends = 1\n",
+                "theme.toml:1: extends must be a theme's name",
+            ),
             ("extends = \"gone\"\n", "themes/gone.toml does not exist"),
-            ("colors = 1\n", "unknown key colors"),
+            ("\ncolors = 1\n", "theme.toml:2: unknown key colors"),
+            (
+                "\nphase_colors = \"loud\"\n",
+                "theme.toml:2: phase_colors is off, steps or full",
+            ),
             (
                 "[ui]\naccent = \"muted\"\nmuted = \"accent\"\n",
-                "name each other",
+                "theme.toml:2: accent, muted name each other",
             ),
+            (
+                "[ui]\nzz = 1\n[state]\nreview = 1\n",
+                "theme.toml:2: [ui] has no key zz",
+            ),
+            ("[ui]\nzz = 1\naa = 1\n", "theme.toml:2: [ui] has no key zz"),
         ];
         for (text, expected) in cases {
             write(&dir, "theme.toml", text);
             let message = error(&dir);
             assert!(message.contains(expected), "{text}: {message}");
         }
+
         write(&dir, "theme.toml", "[ui]\naccent = \"#d9825\"\n");
-        assert!(error(&dir).contains("theme.toml"), "{}", error(&dir));
+        let path = dir.path().join("theme.toml");
+        assert!(
+            error(&dir).starts_with(&format!("{}:2: ", path.display())),
+            "{}",
+            error(&dir)
+        );
+
+        write(&dir, "theme.toml", "[ui]\naccent =\n");
+        let message = error(&dir);
+        assert!(
+            message.starts_with(&format!("{}:2: ", path.display())),
+            "{message}"
+        );
+        assert!(!message.contains('\n'), "one line: {message}");
+
+        write(&dir, "themes/mine.toml", "[ui]\naccent = 300\n");
+        write(&dir, "theme.toml", "extends = \"mine\"\n");
+        assert!(
+            error(&dir).contains("themes/mine.toml:2: accent: 300 is no ANSI index"),
+            "{}",
+            error(&dir)
+        );
+    }
+
+    #[test]
+    fn loads_the_noctalia_theme_and_reads_its_template() {
+        let dir = TempDir::new().unwrap();
+        write(&dir, "theme.toml", "extends = \"noctalia\"\n");
+        write(
+            &dir,
+            "themes/noctalia.toml",
+            include_str!("theme_file/fixtures/noctalia.toml"),
+        );
+
+        let palette = theme(&dir).palette;
+
+        assert_eq!(palette.accent, Color::Rgb(0xcb, 0x91, 0x68));
+        assert_eq!(palette.working, Color::Rgb(0x7a, 0xa7, 0xff));
+        assert_eq!(palette.done, Palette::TERMINAL.done);
+
+        let template = Path::new("noctalia-template.toml");
+        let file = parse(
+            template,
+            include_str!("theme_file/fixtures/noctalia-template.toml"),
+        )
+        .unwrap();
+        assert_eq!(file.extends, "terminal");
+        assert_eq!(file.colors.len(), 10);
+    }
+
+    #[test]
+    fn takes_dotted_keys_and_inline_tables_as_their_section() {
+        let dir = TempDir::new().unwrap();
+        write(&dir, "theme.toml", "ui.accent = 3\nstate = { done = 4 }\n");
+
+        let palette = theme(&dir).palette;
+
+        assert_eq!(palette.accent, Color::Indexed(3));
+        assert_eq!(palette.done, Color::Indexed(4));
     }
 
     #[test]

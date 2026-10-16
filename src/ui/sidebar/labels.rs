@@ -23,8 +23,8 @@ impl Sidebar<'_> {
         }
     }
 
-    /// ●───●───○───○: done steps and the joins they reached in text, the current one in the flow's
-    /// color, the rest faint; all of it in text once the flow is finished.
+    /// ●───●───○───○: done steps and the joins they reached in text, the current one in its phase's
+    /// color as phase_colors says (step_style), the rest faint; all of it in text once finished.
     pub fn steps(&self, flow: &FlowView) -> Vec<Span<'static>> {
         let theme = self.theme;
         let glyphs = &theme.glyphs;
@@ -33,7 +33,7 @@ impl Sidebar<'_> {
             let (glyph, style) = match step.status {
                 _ if flow.is_finished() => (glyphs.step_done, theme.ui.text),
                 StepStatus::Done => (glyphs.step_done, theme.ui.text),
-                StepStatus::Current => (glyphs.step_current, theme.flow_style(flow)),
+                StepStatus::Current => (glyphs.step_current, theme.step_style(flow)),
                 StepStatus::Open => (glyphs.step_open, theme.ui.faint),
             };
             spans.push(Span::styled(glyph, style));

@@ -12,6 +12,7 @@ use crate::event::{Event, EventKind};
 use crate::fold;
 use crate::proto::{Cell, ClientMsg, Color, Flags, Frame, Mouse, ServerMsg};
 use crate::ui::input::{Command, Key, Routed, Step};
+use crate::ui::theme::PhaseColors;
 use crate::view::{State, VIEW_VERSION};
 
 const SIZE: Size = Size { cols: 80, rows: 10 };
@@ -183,11 +184,21 @@ const FLEET: Size = Size {
 };
 
 fn render_at(app: &App, size: Size) -> Terminal<TestBackend> {
+    render_with(app, size, &Theme::default())
+}
+
+fn render_with(app: &App, size: Size, theme: &Theme) -> Terminal<TestBackend> {
     let mut terminal = Terminal::new(TestBackend::new(size.cols, size.rows)).unwrap();
+    terminal.draw(|frame| app.draw(frame, theme, &[])).unwrap();
     terminal
-        .draw(|frame| app.draw(frame, &Theme::default(), &[]))
-        .unwrap();
-    terminal
+}
+
+/// The default theme at `level`.
+fn theme_at(level: PhaseColors) -> Theme {
+    Theme {
+        phase_colors: level,
+        ..Theme::default()
+    }
 }
 
 /// Row `y` of the sidebar.

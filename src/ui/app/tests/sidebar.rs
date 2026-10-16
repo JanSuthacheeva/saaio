@@ -528,12 +528,10 @@ fn only_the_current_step_takes_the_color_of_where_the_flow_is() {
     assert_eq!(buffer[(x + 8, y)].fg, faint, "open");
 }
 
-#[test]
-fn a_working_flow_takes_the_color_of_its_phase() {
-    let theme = Theme::default();
-    let review = theme.phase.review.fg.unwrap();
-    let faint = theme.ui.faint.fg.unwrap();
-    let terminal = render_at(&with_fleet(), FLEET);
+/// export-csv, delegated in review: the color of its spinner and of its done, current and open dots.
+fn export_csv_colors(level: PhaseColors) -> [ratatui::style::Color; 4] {
+    let theme = theme_at(level);
+    let terminal = render_with(&with_fleet(), FLEET, &theme);
     let buffer = terminal.backend().buffer();
     let name = (0..FLEET.rows)
         .find(|&y| side(&terminal, y).contains("export-csv"))
@@ -546,15 +544,38 @@ fn a_working_flow_takes_the_color_of_its_phase() {
     let dot = (0..FLEET.cols)
         .find(|&x| buffer[(x, track)].symbol() == "●")
         .unwrap();
-
-    assert_eq!(buffer[(spinner, name)].fg, review, "spinner");
-    assert_eq!(
+    [
+        buffer[(spinner, name)].fg,
         buffer[(dot, track)].fg,
-        ratatui::style::Color::Reset,
-        "done, in text"
+        buffer[(dot + 8, track)].fg,
+        buffer[(dot + 12, track)].fg,
+    ]
+}
+
+#[test]
+fn the_phase_colors_level_decides_what_takes_the_color_of_the_phase() {
+    let theme = Theme::default();
+    let review = theme.phase.review.fg.unwrap();
+    let working = theme.state.working.fg.unwrap();
+    let faint = theme.ui.faint.fg.unwrap();
+    // A done dot is text at every level; only the current one takes a color.
+    let text = ratatui::style::Color::Reset;
+
+    assert_eq!(
+        export_csv_colors(PhaseColors::Off),
+        [working, text, working, faint],
+        "off: state colors only"
     );
-    assert_eq!(buffer[(dot + 8, track)].fg, review, "current");
-    assert_eq!(buffer[(dot + 12, track)].fg, faint, "open");
+    assert_eq!(
+        export_csv_colors(PhaseColors::Steps),
+        [working, text, review, faint],
+        "steps: only the current dot"
+    );
+    assert_eq!(
+        export_csv_colors(PhaseColors::Full),
+        [review, text, review, faint],
+        "full: spinner and the current dot"
+    );
 }
 
 #[test]

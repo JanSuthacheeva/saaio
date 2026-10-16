@@ -285,7 +285,7 @@ impl BoardView<'_> {
         for step in &flow.steps {
             let (glyph, style) = match step.status {
                 StepStatus::Done => (glyphs.done, theme.state.done),
-                StepStatus::Current => (glyphs.step_current, theme.flow_style(flow)),
+                StepStatus::Current => (glyphs.step_current, theme.step_style(flow)),
                 StepStatus::Open => (glyphs.step_open, theme.ui.faint),
             };
             if !steps.is_empty() {
@@ -440,5 +440,33 @@ mod tests {
         );
         assert!(rows[2].starts_with("────"), "{rows:#?}");
         assert_eq!(rows[3], " TIMELINE");
+    }
+
+    #[test]
+    fn the_current_step_takes_the_color_of_its_phase_by_default() {
+        let flow = flow(
+            "shop-221",
+            Mode::Auto,
+            vec![EventKind::Phase {
+                phase: Phase::Implement,
+            }],
+        );
+        let area = Rect::new(0, 0, 80, 6);
+        let mut buf = Buffer::empty(area);
+        let state = BoardState {
+            selected: 1,
+            all: false,
+        };
+
+        let (implement, working) = with_state(vec![flow], state, |view| {
+            view.render_detail(area, &mut buf);
+            let theme = view.theme();
+            (theme.phase.implement.fg, theme.state.working.fg)
+        });
+
+        let row = rows(&buf)[1].clone();
+        let x = row[..row.find('●').unwrap()].chars().count() as u16;
+        assert_ne!(implement, working);
+        assert_eq!(Some(buf[(x, 1)].fg), implement);
     }
 }

@@ -119,6 +119,17 @@ impl App {
         self.notice = Some(notice);
     }
 
+    /// Clears the notice when it starts with `prefix`, such as a theme error once the theme reads.
+    pub fn take_back(&mut self, prefix: &str) {
+        if self
+            .notice
+            .as_deref()
+            .is_some_and(|notice| notice.starts_with(prefix))
+        {
+            self.notice = None;
+        }
+    }
+
     /// say(), with the home folder in it written as ~.
     pub fn say_about_file(&mut self, notice: String) {
         let notice = match self.home.as_deref() {
