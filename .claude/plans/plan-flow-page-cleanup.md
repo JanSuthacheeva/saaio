@@ -49,3 +49,25 @@ const PREVIOUS_DEFAULTS: [&str; 3] = [
 
 - [x] Copy `master.md` to `master-v3.md`, add it to `PREVIOUS_DEFAULTS`, add the review-pages bullet to `master.md`; `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check` pass
 - [x] End-to-end: with `FLOW_HOME` and `XDG_CONFIG_HOME` in a scratch dir and `master.md` holding the v3 text, start `flow server`; check `master.md` now holds the new text, then stop the server
+
+## Review
+
+Reviewed `flow/offer-page-cleanup` against `main` (commits cdacb23..39385af) in an isolated context.
+
+- **Fixed** - nothing; no finding was proven.
+- **Open**
+  - A repo that gitignores `.lavish/` does not have its pages block `flow remove` (`has_uncommitted_work`
+    reads `git status --porcelain`, which skips ignored files), so "they are untracked files that block it"
+    is true only for the usual case. Harmless: deleting them first is right either way. Recommendation: keep.
+  - Hosted pages are found only in the worker's last answer (`--full`) and the harness's list by title; a
+    page announced in an earlier answer with an unrelated title can be missed. Accepted by the plan's
+    decision; recommendation: keep, revisit if pages get left behind in practice.
+- **Where to look**
+  1. `src/server/master.md`, the new bullet after `flow remove` / `flow clear`: the only behaviour change,
+     a prompt to the master. Read it as the master would: offer in the same line, delete only on yes,
+     `.lavish/` before the remove.
+  2. `src/server/master.rs` `PREVIOUS_DEFAULTS`: v3 added so an unedited master.md upgrades;
+     `replaces_an_earlier_default_nobody_edited` covers it.
+  - Routine, skim: `src/server/master-v3.md` is main's `master.md` byte for byte (checked with `cmp`).
+- **Checks** - `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check` passed at 37b14fb; later
+  commits change only this plan.
