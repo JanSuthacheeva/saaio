@@ -116,8 +116,10 @@ impl Palette {
     }
 }
 
-fn hex(rgb: u32) -> Color {
-    Color::Rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
+/// 0xrrggbb as a terminal color.
+pub const fn hex(rgb: u32) -> Color {
+    let [_, r, g, b] = rgb.to_be_bytes();
+    Color::Rgb(r, g, b)
 }
 
 /// Every color and symbol flow ui draws with, by name; a theme file sets them through its Palette.

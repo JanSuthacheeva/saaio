@@ -9,7 +9,7 @@ use toml::{Table, Value};
 use crate::store::Stamp;
 #[cfg(test)]
 use crate::ui::theme::MARK;
-use crate::ui::theme::{KIWI, Palette, Theme};
+use crate::ui::theme::{KIWI, Palette, Theme, hex};
 
 pub const THEME_FILE: &str = "theme.toml";
 pub const THEMES_DIR: &str = "themes";
@@ -160,9 +160,11 @@ fn color(value: &Value, palette: &Palette) -> Result<Color> {
             .map_err(|_| anyhow!("{index} is no ANSI index (0-255)")),
         Value::String(text) if text == "default" => Ok(Color::Reset),
         Value::String(text) => match text.strip_prefix('#') {
-            Some(hex) if hex.len() == 6 => u32::from_str_radix(hex, 16)
-                .map(|rgb| Color::Rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8))
-                .map_err(|_| anyhow!("{text} is no #rrggbb color")),
+            Some(digits) if digits.len() == 6 && digits.bytes().all(|b| b.is_ascii_hexdigit()) => {
+                u32::from_str_radix(digits, 16)
+                    .map(hex)
+                    .map_err(|_| anyhow!("{text} is no #rrggbb color"))
+            }
             Some(_) => bail!("{text} is no #rrggbb color"),
             None => palette
                 .get(text)
@@ -336,6 +338,10 @@ mod tests {
             (
                 "[ui]\naccent = \"#d9825\"\n",
                 "accent: #d9825 is no #rrggbb color",
+            ),
+            (
+                "[ui]\naccent = \"#+9825b\"\n",
+                "accent: #+9825b is no #rrggbb color",
             ),
             ("[ui]\nacent = \"#d9825b\"\n", "unknown key acent"),
             ("[ui]\naccent = 300\n", "300 is no ANSI index"),
