@@ -2,17 +2,17 @@
   master  main                                                                                              │ ▚▄▞ flow
                                                                                                             ├────────────────────────────────────────
                                                                                                             │▌0   master
-                                                                                                            │     ~/projects/shop · main
+                                                                                                            │▌    ~/projects/shop · main
                                                                                                             │
                                                                                                             │ NEEDS YOU 2
-                                                                                                            │▌1 ● shop-221                       29m
-                                                                                                            │▌    ●───●───○───○ implement        4/9
-                                                                                                            │▌ ─────────────────────────────────────
-                                                                                                            │▌ no transcript yet
-                                                                                                            │▌ enter jump in
+                                                                                                            │ 1 ● shop-221                       29m
+                                                                                                            │     ●───●───○───○ implement        4/9
+                                                                                                            │  ─────────────────────────────────────
+                                                                                                            │  no transcript yet
+                                                                                                            │  C-space enter jump in
                                                                                                             │
                                                                                                             │ 2 ● shop-230                       31m
-                                                                                                            │     ●───○───○───○ design        guided
+                                                                                                            │     ●───○───○───○ design
                                                                                                             │     Which approach: a channel column …
                                                                                                             │
                                                                                                             │ RUNNING 1
@@ -22,7 +22,7 @@
                                                                                                             │
                                                                                                             │ DONE 1
                                                                                                             │ 4 ✓ shop-198                        2h
-                                                                                                            │     ●───●───●───● MR !418        in 0s
+                                                                                                            │     ●───●───●───● MR !418      took 0s
                                                                                                             │
                                                                                                             │
                                                                                                             │

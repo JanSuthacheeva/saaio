@@ -72,8 +72,8 @@ pub struct App {
     master_cwd: Option<String>,
     /// A one-line message, such as why a flow command failed, until the next key.
     notice: Option<String>,
-    /// The sidebar folded to a rail (C-space b).
-    rail: bool,
+    /// The sidebar folded to a rail: Some once C-space b chose, None follows the width (RAIL_BELOW).
+    rail: Option<bool>,
     /// This project's store, to tell its flows from other projects'.
     here: Option<String>,
     /// Every project's flows, this project first, from the last `flow status --all`.
@@ -105,7 +105,7 @@ impl App {
             master: None,
             master_cwd: None,
             notice: None,
-            rail: false,
+            rail: None,
             here: None,
             projects: None,
             overview_at: 0,
@@ -163,16 +163,19 @@ impl App {
         self
     }
 
-    /// The bottom bar while the master is alone, the sidebar once there are workers.
+    /// The sidebar or rail, from the start: the master has its row even before there are workers.
     pub fn areas(&self) -> Areas {
-        let chrome = if self.workers().is_empty() {
-            Chrome::Solo
-        } else if self.rail {
+        let chrome = if self.folded() {
             Chrome::Rail
         } else {
             Chrome::Sidebar
         };
         layout::areas(self.size, chrome)
+    }
+
+    /// Whether the rail shows instead of the sidebar: the user's choice, else a narrow terminal.
+    fn folded(&self) -> bool {
+        self.rail.unwrap_or(self.size.cols < layout::RAIL_BELOW)
     }
 
     /// True while a dialog takes the keys instead of the pane.

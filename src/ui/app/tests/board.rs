@@ -13,23 +13,23 @@ fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
     assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
     assert!(
         row(&terminal, 3).starts_with("   0   master                              you "),
-        "only the selected card is outlined"
+        "only the selected card is marked"
     );
     assert!(row(&terminal, 3).contains(" 1 ● shop-221                        blocked "));
-    assert!(row(&terminal, 3).contains("│ 2 ● shop-230                waiting for you │"));
+    assert!(row(&terminal, 3).contains("▌ 2 ● shop-230                waiting for you  "));
     assert!(row(&terminal, 4).contains("     ~/projects/shop · main"));
     assert!(
         row(&terminal, 5).contains("   4/9 tasks"),
         "{}",
         row(&terminal, 5)
     );
-    let shop_230 = row(&terminal, 5)
-        .split('│')
-        .nth(1)
-        .unwrap_or_default()
-        .to_string();
+    let third = row(&terminal, 5);
+    let shop_230 = third.split("29m").nth(1).unwrap_or_default().trim();
     assert!(
-        shop_230.trim_start() == "31m ago ",
+        shop_230
+            .strip_prefix('▌')
+            .and_then(|rest| rest.strip_suffix("31m"))
+            .is_some_and(|gap| gap.trim().is_empty()),
         "a flow without tasks draws no bar: {shop_230:?}"
     );
     assert!(row(&terminal, 10).contains(" 3 ◓ export-csv            reviewing · agent "));
@@ -43,8 +43,23 @@ fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
             .starts_with(" 0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   a every project   esc back to shop-230")
     );
     let buffer = terminal.backend().buffer();
-    let accent = Theme::default().ui.accent.fg.unwrap();
-    assert_eq!(buffer[(100, 3)].fg, accent, "the selected card is outlined");
+    let theme = Theme::default();
+    let bar = (0..FLEET.cols)
+        .find(|&x| buffer[(x, 3 + layout::MARGIN)].symbol() == theme.glyphs.cursor)
+        .unwrap();
+    for y in 2..8 {
+        let card = buffer[(bar, y + layout::MARGIN)].clone();
+        assert_eq!(
+            card.symbol(),
+            theme.glyphs.cursor,
+            "the bar down the whole card"
+        );
+        assert_eq!(card.fg, theme.palette.accent);
+        assert_eq!(
+            buffer[(bar + 20, y + layout::MARGIN)].bg,
+            theme.palette.selection
+        );
+    }
     let blocked_at = row(&terminal, 2 + 1).find("blocked").unwrap();
     let blocked_x = row(&terminal, 3)[..blocked_at].chars().count() as u16 + layout::MARGIN;
     assert_eq!(
@@ -97,30 +112,36 @@ fn an_idle_flow_is_ready_not_running() {
 }
 
 #[test]
-fn a_worker_that_needs_you_leads_its_title_with_its_state_color() {
+fn a_worker_that_needs_you_says_so_with_its_glyph_not_a_bar() {
     let theme = Theme::default();
     let lead = |app: &App| {
         let terminal = render_at(app, FLEET);
-        let cell = terminal.backend().buffer()[(1, 1)].clone();
-        (cell.symbol().to_string(), cell.fg)
+        let buffer = terminal.backend().buffer();
+        let lead = buffer[(1, 1)].symbol().to_string();
+        (lead, buffer[(2, 1)].symbol().to_string(), buffer[(2, 1)].fg)
     };
     let mut app = with_fleet();
 
-    assert_eq!(lead(&app).0, " ", "the master");
     app.on_input(Routed::Command(Command::Focus(1)));
     assert_eq!(
         lead(&app),
-        ("▌".to_string(), theme.state.blocked.fg.unwrap()),
+        (
+            " ".to_string(),
+            "●".to_string(),
+            theme.state.blocked.fg.unwrap()
+        ),
         "shop-221 is blocked"
     );
     app.on_input(Routed::Command(Command::Focus(2)));
     assert_eq!(
         lead(&app),
-        ("▌".to_string(), theme.state.waiting.fg.unwrap()),
+        (
+            " ".to_string(),
+            "●".to_string(),
+            theme.state.waiting.fg.unwrap()
+        ),
         "shop-230 waits"
     );
-    app.on_input(Routed::Command(Command::Focus(3)));
-    assert_eq!(lead(&app).0, " ", "export-csv runs");
 }
 
 #[test]
@@ -139,7 +160,7 @@ fn the_board_shows_what_needs_you_under_the_master() {
         "{}",
         rows[at]
     );
-    assert_eq!(rows[at + 2].trim_end(), "  needs you");
+    assert_eq!(rows[at + 2].trim_end(), "  NEEDS YOU");
     assert!(
         rows[at + 3].starts_with("  ● shop-221  migration needs a default value"),
         "{}",
@@ -168,9 +189,14 @@ fn moves_over_the_board_and_jumps_into_a_card() {
     app.on_input(Routed::View(vec![Key::Char('2')]));
     let terminal = render_at(&app, FLEET);
     assert!(
-        row(&terminal, 19).contains("16:09  ● started"),
+        row(&terminal, 17).trim_start().starts_with("design ● 31m"),
+        "the steps under the header: {}",
+        row(&terminal, 17)
+    );
+    assert!(
+        row(&terminal, 20).contains("16:09  ● started"),
         "{}",
-        row(&terminal, 19)
+        row(&terminal, 20)
     );
 
     assert_eq!(
@@ -343,4 +369,80 @@ fn a_notice_is_taken_back_only_when_it_is_the_one_meant() {
         app.notice.as_deref(),
         Some("only a finished flow can be cleared")
     );
+}
+
+#[test]
+fn draws_the_keys_that_do_nothing_for_the_selected_card_faint() {
+    let theme = Theme::default();
+    let style_of = |app: &App, key: &str| {
+        let terminal = render_at(app, FLEET);
+        let footer = row(&terminal, 41);
+        let at = footer.find(&format!("   {key} ")).unwrap() + 3;
+        let x = footer[..at].chars().count() as u16 + layout::MARGIN;
+        let cell = terminal.backend().buffer()[(x, 41 + layout::MARGIN)].clone();
+        (cell.fg, cell.modifier)
+    };
+    let mut app = board_app();
+    app.on_input(Routed::Command(Command::Board));
+
+    assert_eq!(
+        style_of(&app, "x"),
+        (theme.palette.faint, ratatui::style::Modifier::empty()),
+        "the master cannot be cleared"
+    );
+    assert_eq!(style_of(&app, "n").1, ratatui::style::Modifier::BOLD);
+    let done = crate::ui::sidebar::workers(app.board.as_ref().unwrap())
+        .iter()
+        .position(|flow| flow.is_finished())
+        .unwrap();
+    app.view = View::Board(BoardState {
+        selected: done + 1,
+        all: false,
+    });
+    assert_eq!(
+        style_of(&app, "x").1,
+        ratatui::style::Modifier::BOLD,
+        "a finished flow can"
+    );
+}
+
+#[test]
+fn draws_enter_and_x_faint_on_a_card_of_another_project() {
+    let theme = Theme::default();
+    let style_of = |app: &App, key: &str| {
+        let terminal = render_at(app, FLEET);
+        let footer = row(&terminal, 41);
+        let at = footer.find(&format!("   {key} ")).unwrap() + 3;
+        let x = footer[..at].chars().count() as u16 + layout::MARGIN;
+        terminal.backend().buffer()[(x, 41 + layout::MARGIN)].fg
+    };
+    let mut app = board_app().with_store("/state/projects/shop".into());
+    app.on_input(Routed::Command(Command::Board));
+    app.on_input(Routed::View(vec![Key::Char('a')]));
+    let json = serde_json::to_string(&every_project()).unwrap();
+    app.on_ran(Job::Overview, Ok(json));
+    let finished = crate::ui::board::every_flow(app.projects.as_ref().unwrap())
+        .iter()
+        .position(|(_, flow)| flow.is_finished())
+        .unwrap();
+    app.view = View::Board(BoardState {
+        selected: finished,
+        all: true,
+    });
+    assert_ne!(
+        style_of(&app, "x"),
+        theme.palette.faint,
+        "a finished flow here"
+    );
+
+    app.view = View::Board(BoardState {
+        selected: 4,
+        all: true,
+    });
+    assert_eq!(
+        style_of(&app, "enter"),
+        theme.palette.faint,
+        "api-7 runs elsewhere"
+    );
+    assert_eq!(style_of(&app, "x"), theme.palette.faint);
 }

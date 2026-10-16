@@ -1,4 +1,5 @@
 use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::Span;
 
 use crate::event::Phase;
 use crate::view::{FlowView, State, Tone};
@@ -496,6 +497,11 @@ impl Theme {
         }
     }
 
+    /// A section's heading: its name in capitals, faint, as the sidebar's NEEDS YOU.
+    pub fn heading(&self, text: &str) -> Span<'static> {
+        Span::styled(text.to_uppercase(), self.ui.faint)
+    }
+
     pub fn tone_style(&self, tone: Tone) -> Style {
         match tone {
             Tone::Neutral => self.ui.muted,
@@ -579,6 +585,16 @@ mod tests {
         );
         assert!(Palette::named("flow-light").is_some());
         assert_eq!(Palette::named("solarized"), None);
+    }
+
+    #[test]
+    fn a_heading_is_its_name_in_faint_capitals() {
+        let theme = Theme::from_palette(Palette::FLOW);
+
+        let heading = theme.heading("last answer");
+
+        assert_eq!(heading.content, "LAST ANSWER");
+        assert_eq!(heading.style, theme.ui.faint);
     }
 
     #[test]

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flow ui Polish Approaches</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* One reading column (jasu.dev); each approach is a card with one diagram of what draws focus and dialogs. */
+:root {
+  --surface: #f8f9fb; --card: #eceff4; --ink: #2e3440; --muted: #4c566a; --subtle: #d8dee9;
+  --border: #d8dee9; --code-bg: #e5e9f0; --code-ink: #4b6c8a; --accent: #7b5eaf; --link: #4b6c8a;
+  --new: #7b5eaf; --mod: #d08770; --old: #4c566a;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --surface: #2e3440; --card: #3b4252; --ink: #eceff4; --muted: #93b1cc; --subtle: #434c5e;
+  --border: #4c566a; --code-bg: #3b4252; --code-ink: #88c0d0; --accent: #bd93f9; --link: #88c0d0;
+  --new: #bd93f9; --mod: #ebcb8b; --old: #93b1cc;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--surface); color: var(--ink); font: 18px/1.6 var(--sans); margin: 0; }
+.page { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 48px 72px; }
+.col { max-width: 720px; margin-inline: auto; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+h2 { font-size: 24px; line-height: 1.3; margin: 36px 0 0; text-wrap: balance; }
+h3 { font-size: 20px; margin: 0; }
+p { margin: 0; }
+.meta { font-size: 13px; color: var(--muted); }
+code { font-family: var(--mono); font-size: 0.78em; background: var(--code-bg); color: var(--code-ink); padding: 0.1em 0.35em; border-radius: 0.2rem; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+.pill { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em; padding: 2px 10px; border-radius: 99px; background: var(--accent); color: var(--surface); align-self: flex-start; }
+ul { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; }
+figure { margin: 0; display: grid; gap: 6px; }
+figure svg { width: 100%; height: auto; color: var(--ink); }
+figcaption { font-size: 13px; color: var(--muted); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.two > div { min-width: 0; }
+.label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.legend .n::before { background: var(--new); } .legend .m::before { background: var(--mod); } .legend .o::before { border: 1px solid var(--old); }
+.toggle { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); background: var(--card); color: var(--ink); border: 1px solid var(--border); border-radius: 99px; font: 600 13px var(--sans); padding: 6px 12px; cursor: pointer; }
+.toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.opt { border-left: 3px solid var(--border); padding-left: 14px; display: grid; gap: 4px; }
+.opt.pick { border-left-color: var(--accent); }
+@media (max-width: 560px) { .card { padding: 14px; } .two { grid-template-columns: 1fr; } }
+</style>
+
+<button class="toggle" id="theme" type="button">Dark</button>
+<main class="page"><div class="col">
+  <p class="meta">flow/tui-polish · 2026-10-16 · design-code step 2: pick an approach</p>
+  <h1>flow ui Polish Approaches</h1>
+  <p>You picked all nine findings from the <a href="https://claude.ai/artifact/CjhZ1YTchL5zyPfhTDE3mj">design review</a>. Most of them are local fixes with only one sensible shape: names cut with <code>split</code>, a plural, a hint string. Two decisions have real structural options. One is how a single focus look (item 9) and a single dialog frame (item 4) get shared. The other is what fills the board's detail panel (item 8).</p>
+
+  <h2>What exists today</h2>
+  <ul>
+    <li><strong>Focus is drawn in four places, each its own way.</strong> The sidebar paints <code>ui.selection</code> over a lit row (<code>sidebar.rs:173</code>) with a <code>▌</code> in the flow's state color (<code>sidebar/rows.rs:76</code>). The rail copies that (<code>rail.rs:51,77</code>). A board card gets an accent rounded border (<code>board/cards.rs:238</code>). New flow uses an accent border on the text box (<code>newflow/view.rs:105</code>), a bold label on the focused radio row (<code>:130</code>) and an accent <code>(•)</code> (<code>:118</code>).</li>
+    <li><strong>Dialogs:</strong> help, stop, confirm, not-running and no-session go through <code>draw_dialog</code> (<code>dialog.rs:10</code>). It draws a bordered paragraph with no vertical padding and no dimming. New flow draws its own frame (<code>newflow/view.rs:26</code>), and only it dims the screen (<code>app/draw.rs:154</code>).</li>
+    <li><strong>Chrome:</strong> <code>App::areas</code> chooses <code>Chrome::Solo</code> while there are no workers (<code>app.rs:156</code>, <code>layout.rs:78</code>), so the bottom bar turns into the sidebar when the first worker starts.</li>
+    <li><strong>Narrow width:</strong> the card label is painted over the name with <code>set_span</code> and is not fitted (<code>board/cards.rs:254</code>). The board footer is one fixed line (<code>board.rs:142</code>). The sidebar is always 40 columns (<code>layout.rs:6</code>).</li>
+    <li><strong>The detail panel</strong> has the data it needs already: <code>FlowView.answer</code> holds the last turn's whole closing message (<code>view.rs:39</code>), and <code>PeekCache</code> tails the transcript of the flow under the sidebar cursor (<code>peek.rs:166</code>, <code>ui.rs:136</code>).</li>
+  </ul>
+
+  <h2>Focus and dialogs</h2>
+  <div class="legend"><span class="n">new</span><span class="m">changed</span><span class="o">unchanged</span></div>
+
+  <section class="card">
+    <span class="pill">recommended</span>
+    <h3>A. Two shared pieces: <code>focus.rs</code> and a <code>Dialog</code></h3>
+    <p>A new <code>ui/focus.rs</code> owns the one focus look: it paints the selection fill over an area and draws a copper <code>▌</code> down its left edge. The sidebar, the rail, the board cards and new flow's fields all call it, so none of them draws focus itself. <code>dialog.rs</code> gets a <code>Dialog</code> struct (title, body, keys) with one <code>render</code> that dims the screen, clears, frames with padding and draws the key row under a <code>├─┤</code> rule. Every dialog is built on it, new flow included.</p>
+    <figure>
+      <svg viewBox="0 0 640 250" role="img" aria-label="Approach A: sidebar, rail, board and new flow all call focus::mark; help, stop, confirm, not running and new flow all render through Dialog">
+        <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g font-family="ui-monospace, Menlo, monospace" font-size="12" fill="currentColor">
+          <g fill="none" stroke="var(--mod)" stroke-width="1.5">
+            <rect x="10" y="20" width="110" height="30" rx="4"/><rect x="10" y="64" width="110" height="30" rx="4"/>
+            <rect x="10" y="108" width="110" height="30" rx="4"/><rect x="10" y="152" width="110" height="30" rx="4"/>
+            <rect x="520" y="20" width="110" height="30" rx="4"/><rect x="520" y="64" width="110" height="30" rx="4"/>
+            <rect x="520" y="108" width="110" height="30" rx="4"/><rect x="520" y="152" width="110" height="30" rx="4"/>
+          </g>
+          <text x="65" y="40" text-anchor="middle">sidebar</text><text x="65" y="84" text-anchor="middle">rail</text>
+          <text x="65" y="128" text-anchor="middle">board cards</text><text x="65" y="172" text-anchor="middle">new flow rows</text>
+          <text x="575" y="40" text-anchor="middle">help</text><text x="575" y="84" text-anchor="middle">stop, confirm</text>
+          <text x="575" y="128" text-anchor="middle">not running</text><text x="575" y="172" text-anchor="middle">new flow</text>
+          <rect x="190" y="80" width="110" height="44" rx="4" fill="none" stroke="var(--new)" stroke-width="2"/>
+          <text x="245" y="100" text-anchor="middle">focus.rs</text><text x="245" y="115" text-anchor="middle" font-size="11">fill + ▌</text>
+          <rect x="340" y="80" width="110" height="44" rx="4" fill="none" stroke="var(--new)" stroke-width="2"/>
+          <text x="395" y="100" text-anchor="middle">Dialog</text><text x="395" y="115" text-anchor="middle" font-size="11">dim, pad, keys</text>
+          <g stroke="currentColor" stroke-width="1.2" marker-end="url(#a)" fill="none">
+            <line x1="120" y1="35" x2="188" y2="92"/><line x1="120" y1="79" x2="188" y2="98"/>
+            <line x1="120" y1="123" x2="188" y2="106"/><line x1="120" y1="167" x2="188" y2="114"/>
+            <line x1="520" y1="35" x2="452" y2="92"/><line x1="520" y1="79" x2="452" y2="98"/>
+            <line x1="520" y1="123" x2="452" y2="106"/><line x1="520" y1="167" x2="452" y2="114"/>
+            <line x1="340" y1="102" x2="302" y2="102"/>
+          </g>
+          <text x="154" y="210" text-anchor="middle" font-size="11">mark(area)</text>
+          <text x="486" y="210" text-anchor="middle" font-size="11">Dialog::render</text>
+          <text x="321" y="94" text-anchor="middle" font-size="11">fields</text>
+        </g>
+      </svg>
+      <figcaption>Every focus mark goes through one function, every dialog through one frame. Dialog fields use the same focus mark.</figcaption>
+    </figure>
+    <div class="two">
+      <div><p class="label">Touches</p><p>new <code>ui/focus.rs</code>; <code>dialog.rs</code>, <code>sidebar/rows.rs</code>, <code>rail.rs</code>, <code>board/cards.rs</code>, <code>newflow/view.rs</code>, <code>app/draw.rs</code>; golden files.</p></div>
+      <div><p class="label">Costs</p><p>One more module. Every dialog's text moves into <code>Dialog</code> fields, so the stop and help bodies are rewritten. Golden files change across the board, which is expected.</p></div>
+    </div>
+    <p><strong>Fit:</strong> one responsibility per file (CLAUDE.md). Focus becomes a noun module, like <code>fit.rs</code> is for text in columns. It keeps the Elm core untouched: App still only says what is focused, and the widgets draw it.</p>
+  </section>
+
+  <section class="card">
+    <h3>B. Theme tokens only</h3>
+    <p>Add <code>ui.focus_bar</code> and <code>ui.focus_fill</code> to <code>UiTokens</code>, and fix each widget and each dialog where it stands to use them, adding the same padding and dim calls in each draw function.</p>
+    <figure>
+      <svg viewBox="0 0 640 170" role="img" aria-label="Approach B: each widget and dialog reads new theme tokens and draws focus and dialog frames itself">
+        <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g font-family="ui-monospace, Menlo, monospace" font-size="12" fill="currentColor">
+          <g fill="none" stroke="var(--mod)" stroke-width="1.5">
+            <rect x="10" y="20" width="110" height="30" rx="4"/><rect x="135" y="20" width="110" height="30" rx="4"/>
+            <rect x="260" y="20" width="110" height="30" rx="4"/><rect x="385" y="20" width="110" height="30" rx="4"/>
+            <rect x="510" y="20" width="120" height="30" rx="4"/>
+          </g>
+          <text x="65" y="40" text-anchor="middle">sidebar</text><text x="190" y="40" text-anchor="middle">rail</text>
+          <text x="315" y="40" text-anchor="middle">board cards</text><text x="440" y="40" text-anchor="middle">new flow</text>
+          <text x="570" y="40" text-anchor="middle">5 dialogs</text>
+          <rect x="245" y="110" width="150" height="40" rx="4" fill="none" stroke="var(--mod)" stroke-width="2"/>
+          <text x="320" y="134" text-anchor="middle">UiTokens +2</text>
+          <g stroke="currentColor" stroke-width="1.2" marker-end="url(#b)">
+            <line x1="65" y1="50" x2="260" y2="110"/><line x1="190" y1="50" x2="285" y2="110"/>
+            <line x1="315" y1="50" x2="315" y2="108"/><line x1="440" y1="50" x2="355" y2="110"/><line x1="570" y1="50" x2="385" y2="110"/>
+          </g>
+          <text x="470" y="90" font-size="11">each draws focus itself</text>
+        </g>
+      </svg>
+      <figcaption>The colors are shared, but the drawing is copied five times, so the looks can drift apart again.</figcaption>
+    </figure>
+    <div class="two">
+      <div><p class="label">Gains</p><p>No new module, and the smallest diff per file.</p></div>
+      <div><p class="label">Costs</p><p>The bar, the fill and the dialog padding are each written out in five places, which is how they drifted apart in the first place. Theme files gain keys users could set, which is public surface.</p></div>
+    </div>
+  </section>
+
+  <h2>Item 8: what fills the detail panel</h2>
+  <p>The panel has about 20 free rows under a 3-line timeline. In every option the steps move into the header strip under the flow's name, and the timeline keeps the left column.</p>
+  <div class="opt pick"><p><strong>a. The last answer (recommended).</strong> The right column shows <code>FlowView.answer</code>, the worker's whole closing message, wrapped and cut from the top to fit, with decisions above it when there are any. It is already in the board, so it needs no I/O and no new state. It is the text you would read before jumping in.</p></div>
+  <div class="opt"><p><strong>b. The live transcript.</strong> The same tool calls and text the peek shows, for the selected card: <code>App::peeked</code> would follow the board selection. It is livelier, but it reads the transcript every few ticks while the board is open, and it repeats what the peek already does.</p></div>
+  <div class="opt"><p><strong>c. More of the timeline.</strong> The timeline spans the full width with decisions under it. Nothing new, but most flows have fewer than 15 entries, so the panel stays half empty.</p></div>
+
+  <h2>Recommendation</h2>
+  <p><strong>A with 8a.</strong> The findings come from five widgets each drawing focus and frames their own way. Sharing the colors (B) fixes today's look but not the cause. A puts the look in one place, so a later dialog cannot drift, and 8a fills the panel with what you actually want to read using data flow ui already has.</p>
+  <p class="meta">Reply with A or B and a, b or c, or a mix. The implementation page with every signature and call chain comes next.</p>
+</div></main>
+<script>
+(function () {
+  var root = document.documentElement, btn = document.getElementById("theme");
+  function set(t) { root.setAttribute("data-theme", t); btn.textContent = t === "dark" ? "Light" : "Dark"; try { localStorage.setItem("theme", t); } catch (e) {} }
+  var saved = null; try { saved = localStorage.getItem("theme"); } catch (e) {}
+  set(saved === "dark" ? "dark" : "light");
+  btn.addEventListener("click", function () { set(root.getAttribute("data-theme") === "dark" ? "light" : "dark"); });
+})();
+</script>
+
+</html>

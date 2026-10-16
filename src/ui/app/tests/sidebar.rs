@@ -1,22 +1,34 @@
 use super::*;
 
 #[test]
-fn makes_room_for_the_sidebar_once_the_first_worker_shows_up() {
+fn shows_the_sidebar_from_the_start_and_keeps_the_pane_when_workers_come() {
     let mut app = App::new(FLEET);
+    let pane = app.areas().pane;
 
+    assert_eq!(app.areas().side.width, 40, "the master has its row");
     assert_eq!(
         app.on_server(ServerMsg::Board(fold::board(vec![], NOW))),
         vec![]
     );
-    assert_eq!(app.areas().side, None);
     assert_eq!(
         app.on_server(ServerMsg::Board(fleet())),
-        vec![Effect::Send(ClientMsg::Resize(Size {
-            cols: 107,
-            rows: 41
-        }))]
+        vec![],
+        "the first worker resizes nothing"
     );
-    assert_eq!(app.on_server(ServerMsg::Board(fleet())), vec![]);
+    assert_eq!(app.areas().pane, pane);
+}
+
+#[test]
+fn says_there_are_no_workers_yet_and_how_to_start_one() {
+    let mut app = App::new(FLEET);
+    app.on_server(ServerMsg::Board(fold::board(vec![], NOW)));
+
+    let terminal = render_at(&app, FLEET);
+
+    assert_eq!(side(&terminal, 2).trim_end(), "▌0   master");
+    assert_eq!(side(&terminal, 4).trim_end(), " no workers yet");
+    assert_eq!(side(&terminal, 5).trim_end(), " C-space n starts a flow");
+    assert_eq!(side(&terminal, 41).trim_end(), " C-space ? keys");
 }
 
 #[test]
@@ -46,7 +58,7 @@ fn draws_the_fleet_in_the_sidebar_grouped_by_what_it_needs() {
     );
     assert_eq!(
         side(&terminal, 10),
-        "     ●───○───○───○ design        guided "
+        "     ●───○───○───○ design               "
     );
     assert_eq!(side(&terminal, 13).trim_end(), " RUNNING 1");
     assert!(side(&terminal, 14).starts_with(" 3 ◓ export-csv"));
@@ -54,7 +66,7 @@ fn draws_the_fleet_in_the_sidebar_grouped_by_what_it_needs() {
     assert_eq!(side(&terminal, 18).trim_end(), " DONE 1");
     assert_eq!(
         side(&terminal, 20).trim_end(),
-        "     ●───●───●───● MR !418        in 0s",
+        "     ●───●───●───● MR !418      took 0s",
         "a finished flow says how long it took"
     );
     assert_eq!(side(&terminal, 40).trim_end(), "", "no rule above the hint");
@@ -79,7 +91,7 @@ fn focuses_a_worker_by_digit_or_click_and_marks_it() {
     let terminal = render_at(&app, FLEET);
     let title = row(&terminal, 0);
     assert!(
-        title.starts_with("▌● shop-230  ●───○───○───○ design  · flow/shop-230 · slot 1 "),
+        title.starts_with(" ● shop-230  ●───○───○───○ design  · flow/shop-230 · slot 1 "),
         "{title}"
     );
     assert!(
@@ -225,36 +237,36 @@ fn peeks_into_a_worker_under_the_cursor_and_jumps_in() {
     let terminal = render_peek(&app, &peek);
 
     assert!(
-        side(&terminal, 14).starts_with("▌3 ◓ export-csv"),
+        side(&terminal, 14).starts_with(" 3 ◓ export-csv"),
         "{}",
         side(&terminal, 14)
     );
     assert_eq!(
         side(&terminal, 15).trim_end(),
-        "▌    ●───●───●───○ review           6/6"
+        "     ●───●───●───○ review           6/6"
     );
     assert_eq!(
         side(&terminal, 16).trim_end(),
-        format!("▌ {}", "─".repeat(37))
+        format!("  {}", "─".repeat(37))
     );
     assert_eq!(
         side(&terminal, 17).trim_end(),
-        "▌ ⏺ Update(app/Http/Middleware/Thrott…)"
+        "  ⏺ Update(app/Http/Middleware/Thrott…)"
     );
-    assert_eq!(side(&terminal, 18).trim_end(), "▌     ⎿  Added 22 lines");
+    assert_eq!(side(&terminal, 18).trim_end(), "      ⎿  Added 22 lines");
     assert_eq!(
         side(&terminal, 19).trim_end(),
-        "▌ ⏺ The limiter keys on the user id, so"
+        "  ⏺ The limiter keys on the user id, so"
     );
     assert_eq!(
         side(&terminal, 20).trim_end(),
-        "▌   one export can't starve the rest."
+        "    one export can't starve the rest."
     );
     assert_eq!(
         side(&terminal, 21).trim_end(),
-        "▌ ◓ Write(ThrottleExportTest.php)"
+        "  ◓ Write(ThrottleExportTest.php)"
     );
-    assert_eq!(side(&terminal, 22).trim_end(), "▌ enter jump in");
+    assert_eq!(side(&terminal, 22).trim_end(), "  C-space enter jump in");
     assert_eq!(side(&terminal, 23).trim_end(), "");
     assert_eq!(side(&terminal, 24).trim_end(), " DONE 1");
     assert_eq!(side(&terminal, 41).trim_end(), " C-space ? keys");
@@ -305,8 +317,8 @@ fn peeks_at_where_an_ended_flows_code_is() {
 
     let terminal = render_peek(&app, &peek);
 
-    assert_eq!(side(&terminal, 22).trim_end(), "▌ branch   flow/shop-198");
-    assert_eq!(side(&terminal, 23).trim_end(), "▌ worktree gone");
+    assert_eq!(side(&terminal, 22).trim_end(), "  branch   flow/shop-198");
+    assert_eq!(side(&terminal, 23).trim_end(), "  worktree gone");
 }
 
 #[test]
@@ -335,7 +347,7 @@ fn peeks_at_an_ended_plain_sessions_folder_without_a_branch() {
         .collect();
 
     assert!(
-        rows.iter().any(|row| row == "▌ folder   ~/notes"),
+        rows.iter().any(|row| row == "  folder   ~/notes"),
         "{rows:#?}"
     );
     assert!(!rows.iter().any(|row| row.contains("branch")), "{rows:#?}");
@@ -350,21 +362,39 @@ fn a_long_place_loses_its_middle_but_keeps_the_branch_and_the_corner() {
     });
 
     let narrow = Size { cols: 90, rows: 20 };
-    let mut solo = App::new(narrow);
-    solo.on_server(ServerMsg::Master {
+    let mut folded = App::new(narrow);
+    folded.on_server(ServerMsg::Master {
         cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
         branch: Some("main".into()),
     });
-    let solo = render_at(&solo, narrow);
-    let top = row(&solo, 0);
+    let folded = render_at(&folded, narrow);
+    let top = row(&folded, 0);
     assert!(top.contains("/private/…/"), "{top}");
-    assert!(top.trim_end().ends_with("/repo · main"), "{top}");
+    assert!(
+        top.contains("/repo · main ") && top.contains("C-space b sidebar │"),
+        "with the rail the title says where the master runs: {top}"
+    );
 
     let screen = render_at(&fleet, FLEET);
     assert_eq!(
         side(&screen, 3).trim_end(),
-        "     /private/…/ui-look/repo · main"
+        "▌    /private/…/ui-look/repo · main"
     );
+}
+
+#[test]
+fn the_rail_marks_the_master_like_any_focused_row() {
+    let mut app = board_app();
+    app.on_input(Routed::Command(Command::Rail));
+    let terminal = render_at(&app, FLEET);
+    let rail = |y| row(&terminal, y).chars().skip(142).collect::<String>();
+    let theme = Theme::default();
+
+    assert_eq!(rail(2), "▌0    ");
+    assert_eq!(rail(4), " 1 ●  ");
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(143, 3)].fg, theme.palette.accent);
+    assert_eq!(buffer[(148, 3)].bg, theme.palette.selection);
 }
 
 #[test]
@@ -473,8 +503,9 @@ fn notes_stay_behind_the_names_but_the_selected_one() {
 }
 
 #[test]
-fn what_is_done_takes_the_color_of_where_the_flow_is() {
+fn only_the_current_step_takes_the_color_of_where_the_flow_is() {
     let theme = Theme::default();
+    let text = ratatui::style::Color::Reset;
     let blocked = theme.state.blocked.fg.unwrap();
     let faint = theme.ui.faint.fg.unwrap();
     let terminal = render_at(&with_fleet(), FLEET);
@@ -487,10 +518,10 @@ fn what_is_done_takes_the_color_of_where_the_flow_is() {
         .find(|&x| buffer[(x, y)].symbol() == "●")
         .unwrap();
 
-    assert_eq!(buffer[(x, y)].fg, blocked, "done");
+    assert_eq!(buffer[(x, y)].fg, text, "done");
     assert_eq!(
         buffer[(x + 1, y)].fg,
-        blocked,
+        text,
         "the join into the current step"
     );
     assert_eq!(buffer[(x + 4, y)].fg, blocked, "current");
@@ -527,20 +558,38 @@ fn the_phase_colors_level_decides_what_takes_the_color_of_the_phase() {
     let review = theme.phase.review.fg.unwrap();
     let working = theme.state.working.fg.unwrap();
     let faint = theme.ui.faint.fg.unwrap();
+    // A done dot is text at every level; only the current one takes a color.
+    let text = ratatui::style::Color::Reset;
 
     assert_eq!(
         export_csv_colors(PhaseColors::Off),
-        [working, working, working, faint],
+        [working, text, working, faint],
         "off: state colors only"
     );
     assert_eq!(
         export_csv_colors(PhaseColors::Steps),
-        [working, review, review, faint],
-        "steps: only the reached dots"
+        [working, text, review, faint],
+        "steps: only the current dot"
     );
     assert_eq!(
         export_csv_colors(PhaseColors::Full),
-        [review, review, review, faint],
-        "full: spinner and dots"
+        [review, text, review, faint],
+        "full: spinner and the current dot"
     );
+}
+
+#[test]
+fn a_branch_too_cut_to_read_leaves_the_title() {
+    let narrow = Size { cols: 96, rows: 30 };
+    let mut app = App::new(narrow);
+    app.on_server(ServerMsg::Board(fleet()));
+    app.on_input(Routed::Command(Command::Focus(2)));
+
+    let title = row(&render_at(&app, narrow), 0);
+
+    assert!(
+        title.starts_with(" ● shop-230  ●───○───○───○ design "),
+        "{title}"
+    );
+    assert!(!title.contains("· …"), "{title}");
 }

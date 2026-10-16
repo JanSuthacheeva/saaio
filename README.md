@@ -111,8 +111,8 @@ merge-request = "#d08ad6"
 Keys, each only in its own table: `[ui]` background, panel, selection, rule, text, strong, muted,
 faint, accent; `[state]` working, waiting, blocked, done, ended; `[phase]` design, implement,
 review, merge-request. `phase_colors` decides where a working flow shows its phase's color: `off`
-nowhere, `steps` (the default) in the reached step dots, `full` also in the spinner, label, rail and
-title row. A flow works in `working` until it reaches its first phase; a flow that waits, is blocked
+nowhere, `steps` (the default) in the current step dot, `full` also in the spinner, label, rail and
+title row. Done steps are plain text at every level. A flow works in `working` until it reaches its first phase; a flow that waits, is blocked
 or is done keeps its state's color at every level. The terminal theme colors the phases with
 256-color indexes, since terminals often repaint ANSI blue, magenta and cyan. A key left out keeps
 the base's value. `nerd_font` (default false) shows flow's mark as a kiwi bird, which needs a Nerd

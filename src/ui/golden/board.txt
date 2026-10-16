@@ -1,23 +1,23 @@
 
   ▚▄▞ flow board                                                                                      5 sessions · 2 need you · 1 delegated · 1 done
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  ╭─────────────────────────────────────────────╮
-  │ 0   master                              you │    1 ● shop-221                        blocked      2 ● shop-230                waiting for you
-  │   ~/projects/shop · main                    │      ●───●───○───○  implement                         ●───○───○───○  design  · guided
-  │   4 workers                                 │      4/9 tasks                         29m ago                                          31m ago
-  │                                             │      migration needs a default value for orde…        Which approach: a channel column or a jo…
-  ╰─────────────────────────────────────────────╯
+  ▌
+  ▌ 0   master                              you      1 ● shop-221                        blocked      2 ● shop-230                waiting for you
+  ▌   ~/projects/shop · main                           ●───●───○───○  implement                         ●───○───○───○  design  · guided
+  ▌   4 workers                                        4/9 tasks                             29m                                              31m
+  ▌                                                    migration needs a default value for orde…        Which approach: a channel column or a jo…
+  ▌
 
 
     3 ◓ export-csv            reviewing · agent      4 ✓ shop-198                        MR open
       ●───●───●───○  review                            ●───●───●───●  MR !418
-      6/6 tasks                          1h ago        flow/shop-198                      2h ago
+      6/6 tasks                              1h        flow/shop-198                          2h
       agent: review changes                            shop-198
 
 
   0 master  ~/projects/shop · main · 4 workers
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-   needs you
+   NEEDS YOU
    ● shop-221  migration needs a default value for orders.exported_at
    ● shop-230  Which approach: a channel column or a join table?
 

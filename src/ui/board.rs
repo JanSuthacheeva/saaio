@@ -9,7 +9,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 
 use crate::proto::{PaneKey, PaneStatus};
+use crate::text::plural;
 use crate::ui::fit::split;
+use crate::ui::hints::{self, Hint};
 use crate::ui::sidebar::{self, Sidebar};
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Project, Projects, State};
@@ -96,8 +98,9 @@ impl BoardView<'_> {
                 .filter(|flow| states.contains(&flow.state))
                 .count()
         };
+        let sessions = flows.len() + 1;
         let mut right = vec![Span::styled(
-            format!("{} sessions", flows.len() + 1),
+            format!("{sessions} session{}", plural(sessions)),
             theme.ui.faint,
         )];
         let parts = [
@@ -139,35 +142,71 @@ impl BoardView<'_> {
             .map(|pane| &pane.status)
     }
 
-    fn footer(&self) -> Line<'static> {
+    /// The selected card's flow, None for the master's.
+    fn selected(&self) -> Option<&FlowView> {
+        if self.state.all {
+            let projects = self.projects?;
+            return every_flow(projects)
+                .get(self.state.selected)
+                .map(|(_, flow)| *flow);
+        }
+        let at = self.state.selected.checked_sub(1)?;
+        sidebar::workers(self.board()).get(at).copied()
+    }
+
+    /// Whether enter and x act on the selected card: not on a flow of another project, which the
+    /// board only shows.
+    fn reachable(&self) -> bool {
+        if !self.state.all {
+            return true;
+        }
+        self.projects.is_some_and(|projects| {
+            every_flow(projects)
+                .get(self.state.selected)
+                .is_some_and(|(project, _)| self.here == Some(project.root.as_str()))
+        })
+    }
+
+    /// How many cards there are to move over.
+    fn cards(&self) -> usize {
+        match (self.state.all, self.projects) {
+            (true, Some(projects)) => every_flow(projects).len(),
+            (true, None) => 0,
+            (false, _) => sidebar::workers(self.board()).len() + 1,
+        }
+    }
+
+    /// Its keys for the selected card: those that do nothing for it drawn inactive, fitted to `width`.
+    fn footer(&self, width: usize) -> Line<'static> {
         let theme = self.theme();
         if let Some(notice) = self.notice {
             return Line::styled(format!(" {notice}"), theme.state.waiting);
         }
-        let key = |text: &'static str| Span::styled(text, theme.ui.key);
-        let hint = |text: &'static str| Span::styled(text, theme.ui.faint);
-        let mut spans = vec![Span::raw(" ")];
+        let active = |hint: Hint, on: bool| if on { hint } else { hint.inactive() };
+        let many = self.cards() > 1;
+        let reachable = self.reachable();
+        let finished = reachable && self.selected().is_some_and(FlowView::is_finished);
+        let mut hints = Vec::new();
         if !self.state.all {
-            spans.extend([key("0-9"), hint(" select   ")]);
+            hints.push(active(Hint::new("0-9", "select"), many));
         }
-        spans.extend([
-            key("h j k l"),
-            hint(" move   "),
-            key("enter"),
-            hint(" jump in   "),
-            key("n"),
-            hint(" new flow   "),
-            key("x"),
-            hint(" clear finished flow   "),
-            key("a"),
-            hint(if self.state.all {
-                " this project   "
-            } else {
-                " every project   "
-            }),
-            key("esc"),
-            Span::styled(format!(" back to {}", self.back), theme.ui.faint),
+        hints.extend([
+            active(Hint::new("h j k l", "move"), many),
+            active(Hint::new("enter", "jump in"), reachable),
+            Hint::new("n", "new flow"),
+            active(Hint::new("x", "clear finished flow"), finished),
+            Hint::new(
+                "a",
+                if self.state.all {
+                    "this project"
+                } else {
+                    "every project"
+                },
+            ),
+            Hint::new("esc", format!("back to {}", self.back)).kept(),
         ]);
+        let mut spans = vec![Span::raw(" ")];
+        spans.extend(hints::line(&hints, width.saturating_sub(2), theme).spans);
         Line::from(spans)
     }
 }
@@ -184,7 +223,7 @@ impl Widget for BoardView<'_> {
         buf.set_line(area.x, area.y + 1, &rule, area.width);
         let footer_y = area.y + area.height - 1;
         buf.set_line(area.x, footer_y - 1, &rule, area.width);
-        buf.set_line(area.x, footer_y, &self.footer(), area.width);
+        buf.set_line(area.x, footer_y, &self.footer(width), area.width);
 
         let cards = Rect::new(
             area.x,

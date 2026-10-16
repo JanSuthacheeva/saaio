@@ -1,0 +1,30 @@
+
+  ▚▄▞ flow board                                5 sessions · 2 need you · 1 delegated · 1 done
+ ──────────────────────────────────────────────────────────────────────────────────────────────
+  ▌
+  ▌ 0   master            you      1 ● shop-221      blocked      2 ● shop-230      waiting
+  ▌   ~/projects/shop · main         ●───●───○───○  implement       ●───○───○───○  design
+  ▌   4 workers                      4/9 tasks           29m                            31m
+  ▌                                  migration needs a defa…        Which approach: a chan…
+  ▌
+
+
+    3 ◓ export-csv      agent      4 ✓ shop-198      MR open
+      ●───●───●───○  review          ●───●───●───●  MR !418
+      6/6 tasks            1h        flow/shop-198        2h
+      agent: review changes          shop-198
+
+
+  0 master  ~/projects/shop · main · 4 workers
+ ──────────────────────────────────────────────────────────────────────────────────────────────
+   NEEDS YOU
+   ● shop-221  migration needs a default value for orders.exported_at
+   ● shop-230  Which approach: a channel column or a join table?
+
+
+
+
+
+ ──────────────────────────────────────────────────────────────────────────────────────────────
+  0-9 select   h j k l move   enter jump in   n new flow   esc back to master
+

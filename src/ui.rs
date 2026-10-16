@@ -2,6 +2,8 @@ pub mod app;
 pub mod board;
 pub mod dialog;
 pub mod fit;
+pub mod focus;
+pub mod hints;
 pub mod input;
 pub mod layout;
 pub mod newflow;

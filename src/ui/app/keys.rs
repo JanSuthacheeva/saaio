@@ -71,7 +71,7 @@ impl App {
             }
             Command::Rail => {
                 let before = self.areas().pane;
-                self.rail = !self.rail;
+                self.rail = Some(!self.folded());
                 self.cursor = None;
                 let after = self.areas();
                 if after.pane == before {
@@ -217,15 +217,13 @@ impl App {
     }
 
     fn on_click(&mut self, col: u16, row: u16) -> Vec<Effect> {
-        let Some(side) = self.areas().side else {
-            return vec![];
-        };
+        let side = self.areas().side;
         if !side.contains(Position::new(col, row)) {
             return vec![];
         }
         let theme = Theme::default();
         let sidebar = self.sidebar(&theme, &[]);
-        let key = if self.rail {
+        let key = if self.folded() {
             Rail { sidebar }.key_at(row - side.y, side.height)
         } else {
             sidebar.key_at(row - side.y, side.height)

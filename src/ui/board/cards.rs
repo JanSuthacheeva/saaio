@@ -1,17 +1,20 @@
 use std::borrow::Cow;
 
 use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
+use ratatui::layout::{Margin, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Widget};
 
 use super::{BoardView, CARD_ROWS, COLUMNS, DETAIL_ROWS, Item, card_rect, every_flow};
 use crate::event::{Mode, Phase};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::text::{plural, short_duration};
-use crate::ui::fit::{clip, clip_place, split};
+use crate::ui::fit::{clip, clip_place, columns, spans_width, split};
+use crate::ui::focus;
 use crate::ui::sidebar;
 use crate::view::{FlowView, Project, Projects, State};
+
+/// The columns of a name a card keeps before its state label says less.
+const NAME_KEPT: usize = 10;
 
 impl BoardView<'_> {
     pub(super) fn all_header(&self, width: usize) -> Line<'static> {
@@ -84,13 +87,20 @@ impl BoardView<'_> {
             _ => "",
         };
         [
-            Line::from(vec![
-                Span::styled(" 0   ", theme.ui.faint),
-                Span::styled("master", theme.ui.strong),
-            ]),
+            self.first_row(
+                vec![
+                    Span::styled(" 0   ", theme.ui.faint),
+                    Span::styled("master", theme.ui.strong),
+                ],
+                None,
+                width,
+            ),
             Line::styled(format!("   {place}"), theme.ui.faint),
             Line::styled(
-                format!("   {workers} worker{}", plural(workers)),
+                match workers {
+                    0 => "   no workers yet".to_string(),
+                    _ => format!("   {workers} worker{}", plural(workers)),
+                },
                 theme.ui.faint,
             ),
             Line::styled(format!("   {status}"), theme.state.waiting),
@@ -111,11 +121,15 @@ impl BoardView<'_> {
             _ => " ".to_string(),
         };
 
-        let first = Line::from(vec![
-            Span::styled(format!(" {digit} "), theme.ui.faint),
-            Span::styled(self.sidebar.glyph(flow.state), tone),
-            Span::styled(format!(" {}", flow.name), theme.ui.strong),
-        ]);
+        let first = self.first_row(
+            vec![
+                Span::styled(format!(" {digit} "), theme.ui.faint),
+                Span::styled(self.sidebar.glyph(flow.state), tone),
+                Span::styled(format!(" {}", flow.name), theme.ui.strong),
+            ],
+            Some(flow),
+            width,
+        );
 
         let mut second = vec![Span::raw("   ")];
         let steps = self.sidebar.steps(flow);
@@ -124,15 +138,16 @@ impl BoardView<'_> {
             second.push(Span::raw("  "));
         }
         second.push(self.sidebar.label(flow));
-        if matches!(flow.mode, Mode::Guided | Mode::Plain) && !flow.is_finished() {
-            second.push(Span::styled(
-                format!("  · {}", flow.mode.name()),
-                theme.ui.faint,
-            ));
+        let mode = format!("  · {}", flow.mode.name());
+        if matches!(flow.mode, Mode::Guided | Mode::Plain)
+            && !flow.is_finished()
+            && spans_width(&second) + columns(&mode) < width
+        {
+            second.push(Span::styled(mode, theme.ui.faint));
         }
 
         let ago = format!(
-            "{} ago ",
+            "{} ",
             short_duration(self.sidebar.now.saturating_sub(flow.changed_at))
         );
         let third = if flow.is_finished() {
@@ -165,8 +180,10 @@ impl BoardView<'_> {
         };
 
         let (note, style) = match flow.state {
-            State::Blocked | State::NotResponding => (flow.blocker.clone(), theme.state.blocked),
-            State::Waiting => (flow.blocker.clone(), theme.ui.muted),
+            // The glyph and the label say how it stands; what it asks reads as text.
+            State::Blocked | State::NotResponding | State::Waiting => {
+                (flow.blocker.clone(), theme.ui.text)
+            }
             State::Delegated => (
                 flow.delegate.as_ref().map(|text| format!("agent: {text}")),
                 theme.ui.faint,
@@ -184,9 +201,37 @@ impl BoardView<'_> {
         [first, Line::from(second), third, fourth]
     }
 
+    /// A card's first row: `left` cut with … to stay two columns clear of the state label; the
+    /// label says less when the name would keep fewer than NAME_KEPT columns.
+    fn first_row(
+        &self,
+        left: Vec<Span<'static>>,
+        flow: Option<&FlowView>,
+        width: usize,
+    ) -> Line<'static> {
+        let room = |label: &Span| width.saturating_sub(label.width() + 3);
+        let full = spans_width(&left);
+        let name = left.last().map_or(0, Span::width);
+        let mut label = self.state_label(flow, false);
+        if full > room(&label) && room(&label) + name < full + name.min(NAME_KEPT) {
+            label = self.state_label(flow, true);
+        }
+        let mut room = room(&label);
+        let mut fitted = Vec::new();
+        for span in left {
+            if room == 0 {
+                break;
+            }
+            let cut = clip(&span.content, room);
+            room = room.saturating_sub(columns(&cut));
+            fitted.push(Span::styled(cut, span.style));
+        }
+        split(fitted, vec![label, Span::raw(" ")], width)
+    }
+
     /// The label at a card's top right: its state in words, in the state's color, with no fill, as
-    /// Claude Code says a state in colored text.
-    fn state_label(&self, flow: Option<&FlowView>) -> Span<'static> {
+    /// Claude Code says a state in colored text; `short` for a narrow card.
+    fn state_label(&self, flow: Option<&FlowView>, short: bool) -> Span<'static> {
         let theme = self.theme();
         let Some(flow) = flow else {
             return Span::styled("you", theme.ui.accent);
@@ -194,12 +239,17 @@ impl BoardView<'_> {
         let text: Cow<'static, str> = match flow.state {
             State::Blocked => "blocked".into(),
             State::NotResponding => "not responding".into(),
+            State::Waiting if short => "waiting".into(),
             State::Waiting => "waiting for you".into(),
             State::Working => "working".into(),
             State::Idle => "ready".into(),
+            State::Delegated if short => "agent".into(),
             State::Delegated => format!("{} · agent", flow.phase.map_or("working", gerund)).into(),
-            State::Done if flow.merge_request.is_some() => "MR open".into(),
-            State::Done => "done".into(),
+            State::Done => match flow.merge_request.as_deref() {
+                Some(url) if url.contains("/pull/") => "PR open".into(),
+                Some(_) => "MR open".into(),
+                None => "done".into(),
+            },
             State::Ended => "ended".into(),
         };
         Span::styled(text, theme.flow_style(flow))
@@ -231,15 +281,8 @@ impl BoardView<'_> {
         rect: Rect,
         buf: &mut Buffer,
     ) {
-        let theme = self.theme();
-        // Only the selected card is outlined; the glyph and the state's words say the rest.
-        let block = Block::bordered()
-            .border_type(BorderType::Rounded)
-            .border_style(theme.ui.accent);
-        let body = block.inner(rect);
-        if selected {
-            block.render(rect, buf);
-        }
+        // Inside the rect by a cell, where a border would be, so a card keeps its place.
+        let body = rect.inner(Margin::new(1, 1));
         let width = body.width as usize;
         let lines = match flow {
             None => self.master_card(width),
@@ -248,10 +291,9 @@ impl BoardView<'_> {
         for (line, row) in lines.iter().zip(body.rows()) {
             buf.set_line(row.x, row.y, line, row.width);
         }
-        let label = self.state_label(flow);
-        let width = u16::try_from(label.width()).unwrap_or(u16::MAX);
-        let x = (body.x + body.width).saturating_sub(width.saturating_add(1));
-        buf.set_span(x, body.y, &label, width);
+        if selected {
+            focus::mark(buf, rect, self.theme());
+        }
     }
 
     /// Every project's row and cards, scrolled so the selected card shows; returns the last row used.
@@ -352,10 +394,23 @@ mod tests {
 
         let card = with_view(flows, |view| view.master_card(30).map(|line| text(&line)));
 
-        assert_eq!(card[0], " 0   master");
+        assert_eq!(card[0], format!(" 0   master{}you ", " ".repeat(30 - 15)));
         assert_eq!(card[1], "   ~/shop · main");
         assert_eq!(card[2], "   2 workers");
         assert_eq!(card[3], "   ", "no notice while the master runs");
+    }
+
+    #[test]
+    fn a_master_alone_says_there_are_no_workers_yet() {
+        let (card, header) = with_view(vec![], |view| {
+            (
+                view.master_card(30).map(|line| text(&line)),
+                text(&view.header(60)),
+            )
+        });
+
+        assert_eq!(card[2], "   no workers yet");
+        assert!(header.ends_with(" 1 session "), "{header}");
     }
 
     #[test]
@@ -379,11 +434,11 @@ mod tests {
                 .map(|line| text(&line))
         });
 
-        assert!(card[0].starts_with(" 1 "), "{card:#?}");
-        assert!(card[0].ends_with(" shop-221"), "{card:#?}");
+        assert!(card[0].starts_with(" 1 ● shop-221 "), "{card:#?}");
+        assert!(card[0].ends_with("  blocked "), "{card:#?}");
         assert!(card[1].ends_with("  · guided"), "{card:#?}");
         assert!(card[2].starts_with("   4/9 tasks"), "{card:#?}");
-        assert!(card[2].ends_with("27m ago "), "{card:#?}");
+        assert!(card[2].ends_with(" 27m "), "{card:#?}");
         assert_eq!(card[3], "   migration needs a default");
     }
 
@@ -410,6 +465,56 @@ mod tests {
                 format!("   {} add CSV export", name.to_uppercase())
             );
         }
+    }
+
+    #[test]
+    fn a_narrow_card_cuts_the_name_before_its_label_and_drops_the_mode() {
+        let waiting = flow(
+            "shop-230-rate-limit-the-export",
+            Mode::Guided,
+            vec![
+                EventKind::Phase {
+                    phase: Phase::Design,
+                },
+                EventKind::Waiting {
+                    question: "Which approach?".into(),
+                },
+            ],
+        );
+
+        let (card, styles) = with_view(vec![waiting.clone()], |view| {
+            let card = view.flow_card(&waiting, Some(2), 30);
+            let note = card[3].style;
+            (card.map(|line| text(&line)), (note, view.theme().ui.text))
+        });
+
+        assert_eq!(card[0], " 2 ● shop-230-rate-…  waiting ");
+        assert_eq!(card[1], "   ●───○───○───○  design", "no room for the mode");
+        assert_eq!(styles.0, styles.1, "the question reads as text");
+    }
+
+    #[test]
+    fn names_a_github_pull_request_a_pr() {
+        let pull = flow(
+            "shop-240",
+            Mode::Auto,
+            vec![EventKind::MergeRequest {
+                url: "https://github.com/acme/shop/pull/418".into(),
+            }],
+        );
+        let merge = flow(
+            "shop-241",
+            Mode::Auto,
+            vec![EventKind::MergeRequest {
+                url: "https://gitlab.com/shop/-/merge_requests/9".into(),
+            }],
+        );
+
+        let labels = with_view(vec![], |view| {
+            [&pull, &merge].map(|flow| view.state_label(Some(flow), false).content.to_string())
+        });
+
+        assert_eq!(labels, ["PR open", "MR open"]);
     }
 
     #[test]

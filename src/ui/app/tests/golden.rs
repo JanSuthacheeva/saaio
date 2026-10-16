@@ -36,12 +36,14 @@ fn golden(name: &str, terminal: &Terminal<TestBackend>) {
 
 #[test]
 fn every_view_looks_as_it_did() {
-    let mut solo = App::new(FLEET).with_home(Some("/Users/jan".into()));
-    solo.on_server(ServerMsg::Master {
+    let mut alone = App::new(FLEET).with_home(Some("/Users/jan".into()));
+    alone.on_server(ServerMsg::Master {
         cwd: "/Users/jan/projects/shop".into(),
         branch: Some("main".into()),
     });
-    golden("solo", &render_at(&solo, FLEET));
+    golden("master-alone", &render_at(&alone, FLEET));
+    alone.on_input(Routed::Command(Command::Board));
+    golden("empty-board", &render_at(&alone, FLEET));
 
     let fleet = board_app();
     golden("fleet", &render_at(&fleet, FLEET));
@@ -61,10 +63,35 @@ fn every_view_looks_as_it_did() {
     let mut board = board_app();
     board.on_input(Routed::Command(Command::Board));
     golden("board", &render_at(&board, FLEET));
+    let mut detail = board_app();
+    let mut fleet = super::fleet();
+    let blocked = fleet
+        .flows
+        .iter_mut()
+        .find(|flow| flow.name == "shop-221")
+        .unwrap();
+    blocked.decisions.push("exported_at stays nullable".into());
+    blocked.answer = Some(
+        "The migration adds orders.exported_at, but the column has no default and the \
+         table holds 2.1M rows. Which default should old orders get: their created_at, or null?"
+            .into(),
+    );
+    detail.on_server(ServerMsg::Board(fleet));
+    detail.view = View::Board(BoardState {
+        selected: 1,
+        all: false,
+    });
+    golden("board-detail", &render_at(&detail, FLEET));
+
+    let narrow = Size { cols: 96, rows: 30 };
+    board.on_resize(narrow);
+    golden("narrow-board", &render_at(&board, narrow));
 
     let mut new_flow = board_app().with_agents(vec!["claude".into(), "codex".into()]);
     new_flow.on_input(Routed::Command(Command::NewFlow));
     golden("new-flow", &render_at(&new_flow, FLEET));
+    new_flow.on_input(Routed::View(vec![Key::Tab]));
+    golden("new-flow-agent", &render_at(&new_flow, FLEET));
 
     let mut new_session = board_app();
     new_session.on_input(Routed::Command(Command::NewFlow));

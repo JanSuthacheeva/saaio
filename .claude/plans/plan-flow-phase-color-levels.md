@@ -7,9 +7,12 @@ Implementation page: https://claude.ai/artifact/9dkPyELqg5KoLch61tvEev (approach
 theme.toml gets a top-level `phase_colors = "off" | "steps" | "full"`, default `steps`:
 
 - `off`: state colors only, as before PR #20.
-- `steps`: only the reached step dots (and their joins, and the detail view's current step) take the
-  current phase's color; spinner, label, rail and title keep the state color.
-- `full`: today's look.
+- `steps`: only the current step dot (and the detail view's current step) takes the current
+  phase's color; spinner, label, rail and title keep the state color.
+- `full`: the spinner, label, rail and title take it too.
+
+Done dots and the joins between them are plain text at every level (decided with the tui polish
+merge, `plan-flow-tui-polish.md`): only the current step stands out.
 
 As today, dots take the phase color only while the flow is Working or Delegated in a phase. The
 nearest file that says wins, like `nerd_font`.
@@ -95,7 +98,7 @@ Call sites (modified): `sidebar/labels.rs` `Sidebar::steps` and the current step
 ## Assumptions
 
 - The detail view's current step is a step dot; its done steps stay green with a check.
-- Joins between reached dots follow the dots.
+- Joins between reached dots are plain text, like the done dots.
 - `full` is exactly today's look.
 
 ## Tasks
@@ -115,6 +118,14 @@ the sidebar's colors read from `capture-pane -e`:
 off    spinner=working  dots=●:working ●:working ●:working ○:faint
 steps  spinner=working  dots=●:review ●:review ●:review ○:faint
 full   spinner=review   dots=●:review ●:review ●:review ○:faint
+```
+
+After the tui polish merge the done dots read text at every level, the current one as above:
+
+```
+off    spinner=working  dots=●:text ●:text ●:working ○:faint
+steps  spinner=working  dots=●:text ●:text ●:review ○:faint
+full   spinner=review   dots=●:text ●:text ●:review ○:faint
 ```
 
 ## Review

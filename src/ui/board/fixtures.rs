@@ -47,6 +47,15 @@ pub(super) fn flow(name: &str, mode: Mode, events: Vec<EventKind>) -> FlowView {
 
 /// Runs `look` on a board view of `flows`, with the master in ~/shop.
 pub(super) fn with_view<R>(flows: Vec<FlowView>, look: impl FnOnce(&BoardView) -> R) -> R {
+    with_state(flows, BoardState::default(), look)
+}
+
+/// with_view, the board's cursor at `state`.
+pub(super) fn with_state<R>(
+    flows: Vec<FlowView>,
+    state: BoardState,
+    look: impl FnOnce(&BoardView) -> R,
+) -> R {
     let board: Board = fold::board(flows, NOW);
     let theme = Theme::default();
     let changed = HashMap::new();
@@ -64,7 +73,7 @@ pub(super) fn with_view<R>(flows: Vec<FlowView>, look: impl FnOnce(&BoardView) -
             home: None,
             theme: &theme,
         },
-        state: BoardState::default(),
+        state,
         back: "master",
         offset_secs: 0,
         notice: None,

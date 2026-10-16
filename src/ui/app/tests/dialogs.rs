@@ -142,7 +142,11 @@ fn keeps_or_ends_unfinished_flows_when_flow_stops() {
         "{dialog}"
     );
     assert!(
-        dialog.contains("e end them; branches and worktrees stay until flow clear"),
+        dialog.contains("Ended, branches and worktrees stay until flow clear."),
+        "{dialog}"
+    );
+    assert!(
+        dialog.contains("k keep them   e end them   esc keep flow running"),
         "{dialog}"
     );
 
@@ -232,17 +236,15 @@ fn starts_a_flow_from_the_dialog_in_the_repo_in_view() {
     let terminal = render_at(&app, FLEET);
     let dialog: String = (10..24).map(|y| row(&terminal, y) + "\n").collect();
     assert!(
-        dialog.contains(
-            "│ new flow                                                in ~/projects/shop │"
-        ),
+        dialog.contains("╭─ new flow ─") && dialog.contains(" in ~/projects/shop ─╮"),
         "{dialog}"
     );
     assert!(
-        dialog.contains("│ │ SHOP-240 rate-limit the export endpoint"),
+        dialog.contains("│ SHOP-240 rate-limit the export endpoint"),
         "{dialog}"
     );
     assert!(
-        dialog.contains("│ creates flow/shop-240  ·  .flow/worktrees/shop-240  ·  slot 2"),
+        dialog.contains("│  creates flow/shop-240  ·  .flow/worktrees/shop-240  ·  slot 2"),
         "{dialog}"
     );
     assert!(
@@ -289,11 +291,11 @@ fn opens_a_plain_session_from_the_dialog() {
 
     let terminal = render_at(&app, FLEET);
     let dialog: String = (10..24).map(|y| row(&terminal, y) + "\n").collect();
-    assert!(dialog.contains("│ new session "), "{dialog}");
-    assert!(dialog.contains("│ folder "), "{dialog}");
-    assert!(dialog.contains("│ │ ~/projects/scratch "), "{dialog}");
+    assert!(dialog.contains("╭─ new session ─"), "{dialog}");
+    assert!(dialog.contains("│▌ folder "), "{dialog}");
+    assert!(dialog.contains("│ ~/projects/scratch "), "{dialog}");
     assert!(
-        dialog.contains("│ opens in ~/projects/scratch  ·  no worktree, branch or slot"),
+        dialog.contains("│  opens in ~/projects/scratch  ·  no worktree, branch or slot"),
         "{dialog}"
     );
 
@@ -351,11 +353,11 @@ fn names_the_branch_after_the_repos_convention_in_the_dialog() {
     let terminal = render_at(&app, FLEET);
     let dialog: String = (10..26).map(|y| row(&terminal, y) + "\n").collect();
     assert!(
-        dialog.contains("│ type    ( ) feature   (•) bugfix"),
+        dialog.contains("│▌ type    ( ) feature   (•) bugfix"),
         "{dialog}"
     );
     assert!(
-        dialog.contains("│ creates bugfix/SHOP-240-fix-totals"),
+        dialog.contains("│  creates bugfix/SHOP-240-fix-totals"),
         "{dialog}"
     );
     let effects = app.on_input(Routed::View(vec![Key::Enter]));
@@ -401,7 +403,7 @@ fn the_new_flow_dialog_keeps_its_title_beside_a_long_place() {
         .expect("the dialog names itself");
 
     assert!(header.contains("in /private/…/"), "{header}");
-    assert!(header.contains("/ui-look/repo │"), "{header}");
+    assert!(header.contains("/ui-look/repo ─╮"), "{header}");
 }
 
 #[test]
@@ -422,7 +424,7 @@ fn keeps_what_a_new_flow_creates_inside_the_dialog() {
         .unwrap();
 
     assert!(
-        creates.contains("│ creates flow/list-the-files-here  ·  slot 2"),
+        creates.contains("│  creates flow/list-the-files-here  ·  slot 2"),
         "{creates}"
     );
     assert!(creates.contains("  │"), "{creates}");
@@ -440,7 +442,7 @@ fn picks_the_agent_in_the_dialog_when_there_are_two() {
     let terminal = render_at(&app, FLEET);
     let dialog: String = (10..26).map(|y| row(&terminal, y) + "\n").collect();
     assert!(
-        dialog.contains("│ agent   ( ) claude   (•) codex"),
+        dialog.contains("│▌ agent   ( ) claude   (•) codex"),
         "{dialog}"
     );
     let effects = app.on_input(Routed::View(vec![Key::Enter]));
