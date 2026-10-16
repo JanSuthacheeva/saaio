@@ -83,4 +83,4 @@ Errors: ssh missing or failing -> `None` -> `false`, as today; the hook prints i
 - [x] Add the E2E test in `tests/cli.rs` (alias origin, fake ssh on PATH) and see it fail
 - [x] Add `workspace::ssh_hostname(host)` with a unit test that an unknown name resolves to itself, skipped without ssh
 - [x] Give `calls::in_repo` the `real_host` resolver and `is_ssh`, with unit tests for an alias, a plain host, an unknown alias, an https remote and a non-matching path; pass `workspace::ssh_hostname` from `hook::of_own_repo`; the E2E test passes
-- [ ] End-to-end check: run `flow hook` by hand on a scratch store against a repo with an alias origin, and confirm the merge request is recorded
+- [x] End-to-end check: run `flow hook` by hand on a scratch store against a repo with an alias origin, and confirm the merge request is recorded
