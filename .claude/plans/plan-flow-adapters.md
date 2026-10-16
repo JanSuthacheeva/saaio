@@ -2,6 +2,8 @@
 
 Implementation page (review surface): `docs/design/adapters-implementation.html`; approaches: `docs/design/adapters-approaches.html`.
 
+Codex, the second adapter, is its own plan: `.claude/plans/plan-flow-codex.md`.
+
 ## Decision
 
 - Approach A: flow ui launches a Claude Code worker with `--settings '<json>'` hooks that run

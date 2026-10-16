@@ -28,6 +28,7 @@ ship-feature orchestrator skill (planned there, not written yet; see its plan pa
 | 8 | One flow per project: slots shared across every project's store, `flow status --all`, the board's `a` | this repo, `src/registry.rs`, `src/slots.rs` | **built**, plan `.claude/plans/plan-flow-per-project.md`, pages `docs/design/projects-approaches.html`, `docs/design/projects-implementation.html`. Each tmux project session sets its own `FLOW_HOME`; stores register in the default folder's `stores/`, `flow start` claims `slots/<n>` (1-20) under a flock before setup |
 | 9 | Themes: theme.toml with extends (terminal, flow, flow-light, themes/<name>.toml), reloaded live; a Noctalia template in dotfiles-v2 | this repo, `src/ui/theme.rs`, `src/ui/theme_file.rs` | **built**, plan `.claude/plans/plan-flow-theme.md`, pages `docs/design/theme-*.html`. `[glyphs]` from the design is accepted and ignored for now |
 | 10 | Branch names after a repo's convention: `.flow/config.toml` `[branch] name`/`types`, `flow start --type`, a type row in the new-flow dialog | this repo, `src/branching.rs` | **built**, plan `.claude/plans/plan-flow-branch-names.md`, page `docs/design/branch-implementation.html` |
+| 11 | Codex as a second harness, for workers and the master | this repo, `src/adapter/codex.rs`, `src/server/news.rs` | **built**, plan `.claude/plans/plan-flow-codex.md`, pages `docs/design/codex-approaches.html`, `docs/design/codex-implementation.html` |
 | 6 | Auto mode + optional report line in the skills, `flow setup` hook | `~/projects/agent-skills` (+ this repo for setup) | not designed |
 
 Each piece gets its own design-code round (approaches page, implementation page, plan)
@@ -245,6 +246,40 @@ See README "Plain sessions" and `.claude/plans/plan-flow-plain-sessions.md`. Dec
   wakes the master and `flow send` refuses it. The reporting hooks stay, so its state shows.
 - `repo_of` is None without a branch, so `flow remove` never tears down or checks a folder flow did
   not create, even one inside `.flow/worktrees`.
+
+## Codex (built 2026-10-16)
+
+See README "Agents", "How a worker reports" and `.claude/plans/plan-flow-codex.md` (its "Verified
+Codex facts" list every source line). Decisions:
+- Hooks per launch as `-c hooks.<Event>=[...]` (approach A); Codex's own review trusts them once and
+  stores the hash in `~/.codex/config.toml`. Rejected: `--dangerously-bypass-hook-trust` (runs
+  every untrusted hook, a cloned repo's too), installing into `~/.codex/hooks.json`, copying
+  Codex's trust hash.
+- Codex picks its own session id: a `session` event (`FlowView.session`, `PROTOCOL_VERSION` 4)
+  records it and the rollout path; `{session}` resumes it. A Codex master keeps it in
+  `waits/master.session`, forgotten when the master starts fresh. A session that never had a turn
+  starts again instead of resuming.
+- Codex cannot wake an idle session (no asyncRewake; an async hook's exit 2 is dropped), so:
+  its synchronous Stop hook hands the news over (exit 2), and flow server types news into an idle
+  pane as one bracketed paste after ten quiet seconds, only once the session had its first turn
+  (`waits/<key>.busy` says idle). This is the one place flow writes into a PTY on its own.
+- Instructions go through `Adapter::instruct`: Codex `-c developer_instructions=<toml string>`,
+  Claude Code `--append-system-prompt` (the master too, instead of `-file`).
+- `[master] agent` picks the master's agent; the dialog's agent row the worker's.
+
+Verified on Codex 0.163.0 (recorded in `src/adapter/fixtures/codex/`):
+- The subagent tool is `collaborationspawn_agent` (namespace + name) with an encrypted `message`;
+  delegated shows its `task_name`. It returns at once, `collaborationwait_agent` waits.
+- Bash's `tool_response` is the output string; PermissionRequest's input adds `description`.
+- SessionEnd's reason is always "other": no `/exit` event, so a Codex flow never ends from a hook.
+- `codex <-c hooks> resume <id>` keeps the id, fires SessionStart `source: "resume"`, and runs the
+  trusted hooks without a new review. Worktrees inherit the main repo's Codex trust.
+- The rollout's shell calls are code-mode `exec` scripts (`tools.exec_command({cmd:"..."})`).
+
+Later: `codex queue --thread <id> --message` (0.163.0, experimental) starts a turn on an idle
+thread, but only through Codex's shared daemon, and a session with `-c` overrides runs its own
+embedded server, which queue refuses. Once the daemon takes per-session hooks, queue replaces the
+server's typing.
 
 ## Future improvements
 
