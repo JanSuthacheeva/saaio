@@ -166,13 +166,14 @@ impl Sidebar<'_> {
             block.extend(self.peek_rows(flow, budget));
             block.extend(blank);
         }
-        let mut shown = 0;
-        for block in &flows {
-            if rows.len() + block.len() > room {
-                break;
-            }
-            shown += 1;
-        }
+        let mut used = rows.len();
+        let shown = flows
+            .iter()
+            .take_while(|block| {
+                used += block.len();
+                used <= room
+            })
+            .count();
         let hidden = flows.len() - shown;
         for block in flows.into_iter().take(shown) {
             rows.extend(block);
@@ -239,7 +240,7 @@ impl Sidebar<'_> {
         second.extend(self.steps(flow));
         second.push(Span::raw(" "));
         second.push(self.label(flow));
-        let detail = match flow.tasks {
+        let detail = match flow.tasks.filter(|tasks| tasks.total > 0) {
             // A finished flow says how long it took.
             _ if flow.is_finished() => format!(
                 "in {} ",
@@ -681,6 +682,114 @@ mod tests {
             EventKind::Working,
         ]);
         assert_eq!(last_note(&answered), None, "not the old question");
+    }
+
+    fn working(id: &str) -> FlowView {
+        use crate::event::{Event, EventKind, Mode};
+        let events = vec![
+            Event::new(
+                0,
+                EventKind::Started {
+                    name: id.into(),
+                    request: id.into(),
+                    mode: Mode::Auto,
+                },
+            ),
+            Event::new(
+                0,
+                EventKind::Workspace {
+                    path: format!("/shop/{id}"),
+                    branch: format!("flow/{id}"),
+                    slot: 1,
+                    window: None,
+                    agent: "claude".into(),
+                },
+            ),
+        ];
+        crate::fold::fold(id, &events, None, 0).unwrap()
+    }
+
+    #[test]
+    fn lists_the_flows_that_do_not_fit_as_more_and_cuts_none_in_half() {
+        let flows: Vec<FlowView> = ["a", "b", "c", "d", "e"].map(working).into();
+        let board = Board {
+            version: 1,
+            now: 0,
+            count: flows.len(),
+            needs_you: 0,
+            flows,
+        };
+        let theme = Theme::builtin();
+        let sidebar = Sidebar {
+            board: &board,
+            panes: &[],
+            focus: &PaneKey::Master,
+            cursor: None,
+            peek: &[],
+            master: None,
+            now: 0,
+            spin: 0,
+            changed: &HashMap::new(),
+            theme: &theme,
+        };
+
+        let text: Vec<String> = sidebar
+            .rows(14)
+            .iter()
+            .map(|row| {
+                row.line
+                    .spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect()
+            })
+            .collect();
+
+        assert!(text.iter().any(|row| row.ends_with(" 3 more")), "{text:#?}");
+        let started = text.iter().filter(|row| row.contains("starting")).count();
+        let listed = text
+            .iter()
+            .filter(|row| {
+                [" a ", " b ", " c ", " d ", " e "]
+                    .iter()
+                    .any(|n| row.contains(n))
+            })
+            .count();
+        assert_eq!(started, listed, "every listed flow shows both its rows");
+    }
+
+    #[test]
+    fn shows_no_task_count_before_there_are_tasks() {
+        let mut flow = working("a");
+        flow.tasks = Some(crate::view::Tasks { done: 0, total: 0 });
+        let board = Board {
+            version: 1,
+            now: 0,
+            count: 1,
+            needs_you: 0,
+            flows: vec![flow],
+        };
+        let theme = Theme::builtin();
+        let sidebar = Sidebar {
+            board: &board,
+            panes: &[],
+            focus: &PaneKey::Master,
+            cursor: None,
+            peek: &[],
+            master: None,
+            now: 0,
+            spin: 0,
+            changed: &HashMap::new(),
+            theme: &theme,
+        };
+
+        let rows = sidebar.flow_rows(&board.flows[0], 0);
+
+        assert!(
+            !rows[1].line.to_string().contains("0/0"),
+            "{}",
+            rows[1].line
+        );
     }
 
     #[test]
