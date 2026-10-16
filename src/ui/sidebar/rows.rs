@@ -27,6 +27,8 @@ impl Sidebar<'_> {
         let master = *self.focus == PaneKey::Master;
         let (digit, name, mark) = if master {
             (theme.ui.strong, theme.ui.strong, Mark::Focus)
+        } else if self.changed.contains_key(&PaneKey::Master) {
+            (theme.ui.faint, theme.ui.text, Mark::Lit)
         } else {
             (theme.ui.faint, theme.ui.text, Mark::None)
         };
@@ -34,8 +36,9 @@ impl Sidebar<'_> {
             line: split(
                 vec![
                     Span::raw(" "),
-                    Span::styled("0   ", digit),
-                    Span::styled("master", name),
+                    Span::styled("0 ", digit),
+                    self.master_glyph(),
+                    Span::styled(" master", name),
                 ],
                 vec![],
                 width,
@@ -55,6 +58,14 @@ impl Sidebar<'_> {
         }
         rows.push(plain(Line::raw("")));
         rows
+    }
+
+    /// Row 0's glyph in its state's color, or a blank while the master needs nothing.
+    pub fn master_glyph(&self) -> Span<'static> {
+        match self.master_state {
+            Some(state) => Span::styled(self.glyph(state), self.theme.state_style(state)),
+            None => Span::raw(" "),
+        }
     }
 
     pub(super) fn flow_rows(&self, flow: &FlowView, index: usize) -> Vec<Row> {

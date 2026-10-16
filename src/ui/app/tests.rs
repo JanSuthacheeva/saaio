@@ -171,6 +171,15 @@ fn fleet() -> Board {
     fold::board(flows, NOW)
 }
 
+/// Where the master's turn stands, as the server says it.
+fn master_at(state: State, at: u64) -> ServerMsg {
+    ServerMsg::Master {
+        cwd: "/Users/jan/projects/shop".into(),
+        branch: Some("main".into()),
+        turn: Some(MasterTurn { state, at }),
+    }
+}
+
 fn with_fleet() -> App {
     let mut app = App::new(FLEET);
     app.on_server(ServerMsg::Board(fleet()));

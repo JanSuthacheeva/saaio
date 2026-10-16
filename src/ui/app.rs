@@ -278,6 +278,7 @@ impl App {
             cursor: self.cursor.as_deref(),
             peek,
             master: self.master.as_deref(),
+            master_state: self.master_state(),
             now: self.now,
             spin: self.spin,
             changed: &self.changed,

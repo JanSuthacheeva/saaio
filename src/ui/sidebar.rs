@@ -16,7 +16,7 @@ use crate::ui::focus;
 use crate::ui::layout::SIDEBAR_WIDTH;
 use crate::ui::peek::PeekLine;
 use crate::ui::theme::Theme;
-use crate::view::{Board, FlowView, Group};
+use crate::view::{Board, FlowView, Group, State};
 
 const WIDTH: usize = SIDEBAR_WIDTH as usize;
 /// Rows the key hint takes at the bottom.
@@ -37,6 +37,8 @@ pub struct Sidebar<'a> {
     pub peek: &'a [PeekLine],
     /// Where the master runs: ~/projects/shop · main.
     pub master: Option<&'a str>,
+    /// Row 0's glyph: App::master_state.
+    pub master_state: Option<State>,
     pub now: u64,
     pub spin: usize,
     /// Panes whose state changed a moment ago; their rows stand out.
@@ -278,6 +280,7 @@ mod tests {
             cursor: None,
             peek: &[],
             master: None,
+            master_state: None,
             now: 0,
             spin: 0,
             changed: &HashMap::new(),
@@ -330,6 +333,7 @@ mod tests {
             cursor: Some("b"),
             peek: &[],
             master: None,
+            master_state: None,
             now: 0,
             spin: 0,
             changed: &changed,
@@ -377,6 +381,7 @@ mod tests {
             cursor: None,
             peek: &[],
             master: None,
+            master_state: None,
             now: 0,
             spin: 0,
             changed: &HashMap::new(),
@@ -414,6 +419,7 @@ mod tests {
             cursor: None,
             peek: &[],
             master: None,
+            master_state: None,
             now: 0,
             spin: 0,
             changed: &HashMap::new(),

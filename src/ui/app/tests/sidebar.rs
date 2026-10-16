@@ -480,15 +480,6 @@ fn a_row_stands_out_a_moment_after_its_flow_changed() {
     assert_ne!(background_of(&app, "shop-221"), selection);
 }
 
-/// Where the master's turn stands, as the server says it.
-fn master_at(state: State, at: u64) -> ServerMsg {
-    ServerMsg::Master {
-        cwd: "/shop".into(),
-        branch: None,
-        turn: Some(MasterTurn { state, at }),
-    }
-}
-
 #[test]
 fn the_master_waits_for_you_after_a_turn_you_did_not_see() {
     let mut app = with_fleet();
@@ -568,6 +559,57 @@ fn a_working_master_turns_the_spinner_and_its_row_lights_up_on_a_change() {
     let spin = app.spin;
     app.on_tick(NOW + 200);
     assert_eq!(app.spin, spin, "at rest");
+}
+
+#[test]
+fn the_masters_row_draws_its_glyph_in_its_states_color_and_lights_up() {
+    let theme = Theme::default();
+    let selection = theme.ui.selection.bg.unwrap();
+    let mut app = with_fleet();
+    app.on_input(Routed::Command(Command::Focus(1)));
+    let master_row = |app: &App| {
+        let terminal = render_at(app, FLEET);
+        let y = (0..FLEET.rows)
+            .find(|&y| side(&terminal, y).contains("master"))
+            .unwrap();
+        let x = layout::areas(FLEET, layout::Chrome::Sidebar).side.x;
+        let y_abs = layout::screen(FLEET).y + y;
+        let buffer = terminal.backend().buffer();
+        let cell = |dx: u16| buffer[(x + dx, y_abs)].clone();
+        (side(&terminal, y), cell(3).fg, cell(20).bg)
+    };
+    assert_eq!(master_row(&app).0.trim_end(), " 0   master");
+
+    app.on_server(master_at(State::Working, 1));
+    let (text, glyph, _) = master_row(&app);
+    assert!(
+        theme
+            .glyphs
+            .spinner
+            .iter()
+            .any(|frame| text.trim_end() == format!(" 0 {frame} master")),
+        "{text}"
+    );
+    assert_eq!(Some(glyph), theme.state.working.fg);
+
+    app.on_server(master_at(State::Idle, 2));
+    let (text, glyph, fill) = master_row(&app);
+    assert_eq!(
+        text.trim_end(),
+        format!(" 0 {} master", theme.glyphs.waiting)
+    );
+    assert_eq!(Some(glyph), theme.state.waiting.fg);
+    assert_eq!(fill, selection, "it just changed");
+    app.on_tick(NOW + CHANGE_SHOWN_MS);
+    assert_ne!(master_row(&app).2, selection);
+
+    app.on_input(Routed::Command(Command::Rail));
+    let terminal = render_at(&app, FLEET);
+    let rail = (0..FLEET.rows).map(|y| row(&terminal, y)).find(|line| {
+        line.trim_end()
+            .ends_with(&format!(" 0 {}", theme.glyphs.waiting))
+    });
+    assert!(rail.is_some(), "the rail shows it too");
 }
 
 #[test]
