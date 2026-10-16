@@ -35,7 +35,7 @@ pub struct Size {
 }
 
 /// Attach draws the panes; Control sends one request (flow remove, flow ui --stop).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     Attach { size: Size },
     Control,

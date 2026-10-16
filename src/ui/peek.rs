@@ -258,19 +258,19 @@ mod tests {
 
     use super::*;
 
-    fn line(value: Value) -> String {
+    fn line(value: &Value) -> String {
         value.to_string()
     }
 
-    fn assistant(blocks: Value) -> String {
+    fn assistant(blocks: &Value) -> String {
         line(
-            serde_json::json!({"type": "assistant", "isSidechain": false, "message": {"content": blocks}}),
+            &serde_json::json!({"type": "assistant", "isSidechain": false, "message": {"content": blocks}}),
         )
     }
 
-    fn result(id: &str, content: Value) -> String {
+    fn result(id: &str, content: &Value) -> String {
         line(
-            serde_json::json!({"type": "user", "isSidechain": false, "message": {"content": [
+            &serde_json::json!({"type": "user", "isSidechain": false, "message": {"content": [
                 {"type": "tool_result", "tool_use_id": id, "content": content}
             ]}}),
         )
@@ -292,29 +292,29 @@ mod tests {
             dir.path(),
             &[
                 line(
-                    serde_json::json!({"type": "user", "message": {"content": "add the limiter"}}),
+                    &serde_json::json!({"type": "user", "message": {"content": "add the limiter"}}),
                 ),
-                assistant(serde_json::json!([
+                assistant(&serde_json::json!([
                     {"type": "thinking", "thinking": "hm"},
                     {"type": "tool_use", "id": "a", "name": "Edit", "input": {"file_path": "app/Throttle.php"}},
                 ])),
-                result("a", serde_json::json!("Added 22 lines\nmore")),
-                assistant(serde_json::json!([
+                result("a", &serde_json::json!("Added 22 lines\nmore")),
+                assistant(&serde_json::json!([
                     {"type": "tool_use", "id": "b", "name": "Bash", "input": {"command": "php artisan test\n--filter x"}},
                 ])),
                 result(
                     "b",
-                    serde_json::json!([{"type": "text", "text": "\n  Tests: 3 passed"}]),
+                    &serde_json::json!([{"type": "text", "text": "\n  Tests: 3 passed"}]),
                 ),
                 line(
-                    serde_json::json!({"type": "assistant", "isSidechain": true, "message": {"content": [
+                    &serde_json::json!({"type": "assistant", "isSidechain": true, "message": {"content": [
                         {"type": "text", "text": "a subagent talking"}
                     ]}}),
                 ),
                 assistant(
-                    serde_json::json!([{"type": "text", "text": "The limiter keys on the user id."}]),
+                    &serde_json::json!([{"type": "text", "text": "The limiter keys on the user id."}]),
                 ),
-                assistant(serde_json::json!([
+                assistant(&serde_json::json!([
                     {"type": "tool_use", "id": "c", "name": "Write", "input": {"file_path": "ThrottleTest.php"}},
                 ])),
             ],
@@ -343,10 +343,10 @@ mod tests {
     #[test]
     fn skips_a_truncated_last_line_and_a_cut_first_one() {
         let dir = TempDir::new().unwrap();
-        let filler = assistant(serde_json::json!([{"type": "text", "text": "x".repeat(70_000)}]));
+        let filler = assistant(&serde_json::json!([{"type": "text", "text": "x".repeat(70_000)}]));
         let mut lines = vec![
             filler,
-            assistant(serde_json::json!([{"type": "text", "text": "kept"}])),
+            assistant(&serde_json::json!([{"type": "text", "text": "kept"}])),
         ];
         lines.push("{\"type\": \"assistant\", \"message\": {\"content\": [".to_string());
         let file = write(dir.path(), &lines);
@@ -362,19 +362,19 @@ mod tests {
     #[test]
     fn reads_further_back_past_a_large_attachment() {
         let dir = TempDir::new().unwrap();
-        let attachment = line(serde_json::json!({
+        let attachment = line(&serde_json::json!({
             "type": "attachment",
             "attachment": {"type": "prompt_snapshot", "text": "x".repeat(200_000)}
         }));
         let file = write(
             dir.path(),
             &[
-                assistant(serde_json::json!([
+                assistant(&serde_json::json!([
                     {"type": "tool_use", "id": "a", "name": "Bash", "input": {"command": "ls"}},
                 ])),
-                result("a", serde_json::json!(".git")),
+                result("a", &serde_json::json!(".git")),
                 attachment,
-                assistant(serde_json::json!([{"type": "text", "text": "Done."}])),
+                assistant(&serde_json::json!([{"type": "text", "text": "Done."}])),
             ],
         );
 

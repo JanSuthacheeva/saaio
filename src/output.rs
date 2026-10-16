@@ -745,7 +745,7 @@ pub fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
 }
 
 /// "s" unless there is exactly one: `format!("{n} flow{}", plural(n))`.
-pub fn plural<N: PartialEq + From<u8>>(count: N) -> &'static str {
+pub fn plural<N: Copy + PartialEq + From<u8>>(count: N) -> &'static str {
     if count == N::from(1) { "" } else { "s" }
 }
 

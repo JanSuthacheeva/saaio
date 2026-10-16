@@ -275,7 +275,7 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
                 registry,
                 &config,
                 &cwd,
-                Launch {
+                &Launch {
                     request,
                     name,
                     mode,
@@ -576,7 +576,7 @@ fn start(
     registry: &Registry,
     config: &Config,
     cwd: &Path,
-    launch: Launch,
+    launch: &Launch,
     now: u64,
 ) -> Result<Document, Failure> {
     let Some((agent_name, _)) = config.agent(launch.agent.as_deref()) else {

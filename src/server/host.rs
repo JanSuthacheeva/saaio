@@ -138,7 +138,7 @@ impl Host {
             process
                 .writer
                 .write_all(bytes)
-                .with_context(|| format!("could not write to {}", key))?;
+                .with_context(|| format!("could not write to {key}"))?;
         }
         Ok(())
     }
@@ -282,7 +282,7 @@ impl Host {
             let mut buf = vec![0u8; 64 * 1024];
             loop {
                 match reader.read(&mut buf) {
-                    Err(error) if error.kind() == ErrorKind::Interrupted => continue,
+                    Err(error) if error.kind() == ErrorKind::Interrupted => {}
                     Ok(0) | Err(_) => break,
                     Ok(read) => {
                         if events

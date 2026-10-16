@@ -983,10 +983,10 @@ mod tests {
         ui: &mut UnixStream,
         panes: &mut Vec<crate::proto::PaneInfo>,
         id: &str,
-        want: Option<PaneStatus>,
+        want: Option<&PaneStatus>,
     ) {
         let deadline = Instant::now() + Duration::from_secs(5);
-        while status_of(panes, id) != want {
+        while status_of(panes, id).as_ref() != want {
             assert!(
                 Instant::now() < deadline,
                 "{id} never became {want:?}: {panes:?}"
@@ -1014,7 +1014,7 @@ mod tests {
             },
         );
         let mut panes = Vec::new();
-        wait_for(&mut ui, &mut panes, &csv, Some(PaneStatus::Running));
+        wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
         assert_eq!(
             status_of(&panes, &old),
             None,
@@ -1027,12 +1027,12 @@ mod tests {
             &mut ui,
             &mut panes,
             &csv,
-            Some(PaneStatus::Exited { code: Some(0) }),
+            Some(&PaneStatus::Exited { code: Some(0) }),
         );
         proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(csv.clone()))).unwrap();
-        wait_for(&mut ui, &mut panes, &csv, Some(PaneStatus::Running));
+        wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
         proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(old.clone()))).unwrap();
-        wait_for(&mut ui, &mut panes, &old, Some(PaneStatus::Running));
+        wait_for(&mut ui, &mut panes, &old, Some(&PaneStatus::Running));
 
         proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
         handle.join().unwrap().unwrap();
@@ -1055,7 +1055,7 @@ mod tests {
             },
         );
         let mut panes = Vec::new();
-        wait_for(&mut ui, &mut panes, &csv, Some(PaneStatus::Running));
+        wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
 
         proto::write_msg(&mut ui, &ClientMsg::EndFlows).unwrap();
         proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
@@ -1082,7 +1082,7 @@ mod tests {
         let size = Size { cols: 30, rows: 4 };
         let mut first = connect(&paths.socket, Role::Attach { size });
         let mut panes = Vec::new();
-        wait_for(&mut first, &mut panes, &csv, Some(PaneStatus::Running));
+        wait_for(&mut first, &mut panes, &csv, Some(&PaneStatus::Running));
         proto::write_msg(&mut first, &ClientMsg::Focus(PaneKey::Flow(csv.clone()))).unwrap();
         proto::write_msg(&mut first, &ClientMsg::History(Some(3))).unwrap();
         drop(first);

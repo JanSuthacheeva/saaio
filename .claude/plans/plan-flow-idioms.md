@@ -89,5 +89,5 @@ any other that turns out to be noise, each named.
 - [x] cli helpers `flow_command`, `git`, `wait_until`; `Server` / waiter drop guards; imports and naming
 
 ### 9. Lint gate and end to end
-- [ ] `[lints.clippy]` pedantic table in Cargo.toml; clippy, fmt, tests green
+- [x] `[lints.clippy]` pedantic table in Cargo.toml; clippy, fmt, tests green
 - [ ] end to end: install, run `flow start`, `flow status`, `flow ui` with flows, `flow remove`, `flow clear` like a user

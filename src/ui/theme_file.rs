@@ -133,7 +133,7 @@ fn apply(file: &ThemeFile, palette: &mut Palette) -> Result<()> {
                 references.push((key, other));
             }
             value => {
-                *palette.color_mut(key) = color(value, palette).with_context(|| name.clone())?
+                *palette.color_mut(key) = color(value, palette).with_context(|| name.clone())?;
             }
         }
     }

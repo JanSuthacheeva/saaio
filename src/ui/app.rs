@@ -2345,7 +2345,7 @@ mod tests {
         let sections: Vec<String> = (0..FLEET.rows - 2)
             .map(|y| side(&terminal, y).trim_end().to_string())
             .filter(|line| {
-                line.starts_with(" ")
+                line.starts_with(' ')
                     && line
                         .trim()
                         .chars()
