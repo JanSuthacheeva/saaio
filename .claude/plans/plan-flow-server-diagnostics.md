@@ -227,6 +227,10 @@ its first caller.
 - [x] CLAUDE.md: `server_log.rs`, `build.rs`, the scratch FLOW_HOME rule
 - [x] E2E with a scratch FLOW_HOME in tmux: start flow ui, take it over from a second one, stop with C-space Q, start again, `flow ui --stop`, `kill -TERM`, a temporary panic in a thread; read server.log for each case
 
+### After the review
+
+- [ ] `Peer::folder()`: the folder, or `an unknown folder` when `this_process` could not read it; Display and the UI's take-over message use it; proto and app tests for an empty cwd
+
 ## Review
 
 Isolated review of `main..flow/server-diagnostics` against this plan and CLAUDE.md.
@@ -244,7 +248,7 @@ Isolated review of `main..flow/server-diagnostics` against this plan and CLAUDE.
 - `exit_on_panic` ends the server with exit 101 and leaves `server.sock` and `master.json`; the
   next `flow ui` replaces the stale socket and resumes the master. Decided in review; no change.
 - `this_process` falls back to an empty cwd (`pid N in  (flow ...)`) when the folder is gone.
-  Cosmetic; leave it.
+  Decided: fix it (task under After the review). Items 1 and 2: leave.
 
 **Where to look**
 1. `src/server/conn.rs` `hello` -> `drop_conn`: the take-over removes the old peer first so no
