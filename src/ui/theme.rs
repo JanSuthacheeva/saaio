@@ -223,6 +223,58 @@ impl PaletteKey {
     pub fn named(name: &str) -> Option<PaletteKey> {
         PaletteKey::ALL.into_iter().find(|key| key.name() == name)
     }
+
+    /// The table a theme file sets this key in.
+    pub fn section(self) -> Section {
+        match self {
+            PaletteKey::Background
+            | PaletteKey::Panel
+            | PaletteKey::Selection
+            | PaletteKey::Rule
+            | PaletteKey::Text
+            | PaletteKey::Strong
+            | PaletteKey::Muted
+            | PaletteKey::Faint
+            | PaletteKey::Accent => Section::Ui,
+            PaletteKey::Working
+            | PaletteKey::Waiting
+            | PaletteKey::Blocked
+            | PaletteKey::Done
+            | PaletteKey::Ended => Section::State,
+            PaletteKey::Design
+            | PaletteKey::Implement
+            | PaletteKey::Review
+            | PaletteKey::MergeRequest => Section::Phase,
+        }
+    }
+}
+
+/// A table of colors in a theme file: [ui], [state] or [phase].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Section {
+    Ui,
+    State,
+    Phase,
+}
+
+impl Section {
+    pub const ALL: [Section; 3] = [Section::Ui, Section::State, Section::Phase];
+
+    /// The table's name in a theme file: ui, state, phase.
+    pub fn name(self) -> &'static str {
+        match self {
+            Section::Ui => "ui",
+            Section::State => "state",
+            Section::Phase => "phase",
+        }
+    }
+
+    /// None for a table flow does not know.
+    pub fn named(name: &str) -> Option<Section> {
+        Section::ALL
+            .into_iter()
+            .find(|section| section.name() == name)
+    }
 }
 
 /// 0xrrggbb as a terminal color.
@@ -423,6 +475,44 @@ impl Theme {
 mod tests {
     use super::*;
     use crate::event::Mode;
+
+    #[test]
+    fn every_key_belongs_in_one_section() {
+        let names = |section| -> Vec<&str> {
+            PaletteKey::ALL
+                .into_iter()
+                .filter(|key| key.section() == section)
+                .map(PaletteKey::name)
+                .collect()
+        };
+
+        assert_eq!(
+            names(Section::Ui),
+            [
+                "background",
+                "panel",
+                "selection",
+                "rule",
+                "text",
+                "strong",
+                "muted",
+                "faint",
+                "accent"
+            ]
+        );
+        assert_eq!(
+            names(Section::State),
+            ["working", "waiting", "blocked", "done", "ended"]
+        );
+        assert_eq!(
+            names(Section::Phase),
+            ["design", "implement", "review", "merge-request"]
+        );
+        for section in Section::ALL {
+            assert_eq!(Section::named(section.name()), Some(section));
+        }
+        assert_eq!(Section::named("glyphs"), None);
+    }
 
     #[test]
     fn the_terminal_theme_looks_as_flow_always_did() {
