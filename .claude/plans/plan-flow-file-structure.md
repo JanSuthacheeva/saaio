@@ -294,6 +294,7 @@ pub fn clock(ms: u64, offset_secs: i64) -> String;
 // board/cards.rs    impl BoardView { all_header, project_line, master_card, flow_card, state_label,
 //                                    render_cards, render_card, render_projects }; gerund
 // board/detail.rs   impl BoardView { render_detail, render_master_detail, render_timeline, render_facts }
+// board/fixtures.rs (test only) flow, with_view, text, rows: a BoardView over given flows
 // sidebar.rs        Sidebar, Row, workers, digit, plain; impl { key_at, rows, flow_blocks, fit,
 //                   footer, status }; impl Widget
 // sidebar/rows.rs   impl Sidebar { master_rows, flow_rows, insert_peek, peek_rows }
@@ -399,7 +400,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 - [x] Add `ui/dialog.rs` (draw_dialog, draw_help, draw_not_running, draw_no_session) and `ui/app/effect.rs` (Effect, Job, Removal, outcome)
 - [x] Split App's methods into `app/messages.rs`, `app/keys.rs`, `app/board_keys.rs`, `app/draw.rs`
 - [x] Move App's tests to `app/tests.rs` (fixtures) and `app/tests/{panes,sidebar,board,dialogs,golden}.rs`; goldens unchanged
-- [ ] Split `ui/board.rs` into board.rs, `board/cards.rs`, `board/detail.rs`; add unit tests for cards (master card, flow card states, digits) and detail (timeline, facts) rendering into a Buffer
+- [x] Split `ui/board.rs` into board.rs, `board/cards.rs`, `board/detail.rs`; add unit tests for cards (master card, flow card states, digits) and detail (timeline, facts) rendering into a Buffer
 - [ ] Split `ui/sidebar.rs` into sidebar.rs, `sidebar/rows.rs`, `sidebar/labels.rs` with its tests
 
 ### 8. Rules and docs
