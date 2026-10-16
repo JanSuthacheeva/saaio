@@ -145,12 +145,16 @@ fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, now: u64) -> Option<
     Some(id)
 }
 
-/// True when `url` is a merge request of the repository the flow's worktree is in, by its origin.
+/// True when `url` is a merge request of the repository the flow's worktree is in, by any of its
+/// remotes: origin, or the upstream a fork's `gh pr create` opens it in.
 fn of_own_repo(store: &Store, id: &str, url: &str, now: u64) -> bool {
     let events = store.events(id).unwrap_or_default();
     let worktree = fold::fold(id, &events, None, now).and_then(|flow| flow.workspace);
-    let origin = worktree.and_then(|space| workspace::origin_url(Path::new(&space.path)));
-    origin.is_some_and(|origin| calls::in_repo(url, &origin))
+    let remotes = worktree.map(|space| workspace::remote_urls(Path::new(&space.path)));
+    remotes
+        .unwrap_or_default()
+        .iter()
+        .any(|remote| calls::in_repo(url, remote))
 }
 
 /// The news a session's Stop hands over: a worker's messages from the master (its flow working

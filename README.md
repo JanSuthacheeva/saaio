@@ -210,7 +210,7 @@ only what changes the flow:
 | the Agent tool | `delegated <description>` |
 | AskUserQuestion | `waiting <the question>` |
 | a permission prompt | `waiting permission: Bash(rm -rf build)` |
-| a tool finishing | `working`; plan-progress task counts and blocks; a merge request `gh pr create` / `glab mr create` printed, when it is one of the worktree's origin repo |
+| a tool finishing | `working`; plan-progress task counts and blocks; a merge request `gh pr create` / `glab mr create` printed, when it is one of a repo the worktree has as a remote (origin, or a fork's upstream) |
 | the end of a turn | `waiting <the question>` when Claude's last line asks one, else `idle <its last sentence>`; the whole closing message becomes the flow's `answer` |
 | `/exit` | `ended` (a hangup is not an end; flow ui resumes the worker) |
 
@@ -226,7 +226,7 @@ worktrees.
 | a shell command reading a skill's `SKILL.md` | `phase`, from the `[phases]` map |
 | a subagent (`spawn_agent`) | `delegated <its task name>`, until the main agent goes on |
 | a permission prompt | `waiting permission: Bash(touch notes.txt)` |
-| a tool finishing | `working`; a merge request `gh pr create` / `glab mr create` printed, when it is one of the worktree's origin repo |
+| a tool finishing | `working`; a merge request `gh pr create` / `glab mr create` printed, when it is one of a repo the worktree has as a remote (origin, or a fork's upstream) |
 | the end of a turn | as for Claude Code |
 | Esc | `idle interrupted` |
 

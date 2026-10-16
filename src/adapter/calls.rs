@@ -14,7 +14,7 @@ pub fn created_merge_request(command: &str, output: &str) -> Option<String> {
         .map(String::from)
 }
 
-/// True when `url` is a merge request of the repo `remote` (an origin URL in any form git takes:
+/// True when `url` is a merge request of the repo `remote` (a remote URL in any form git takes:
 /// git@host:path.git, https://host/path, ssh://user@host:port/path) points to: same host, its path
 /// followed by /pull/ or /-/merge_requests/.
 pub fn in_repo(url: &str, remote: &str) -> bool {
