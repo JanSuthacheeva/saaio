@@ -788,6 +788,24 @@ fn start_says_when_every_slot_is_taken() {
 }
 
 #[test]
+fn a_start_whose_worktree_fails_forgets_its_flow_and_gives_its_slot_back() {
+    let lab = Lab::new();
+    let worktrees = lab.repo.join(".flow/worktrees");
+    fs::create_dir_all(&worktrees).unwrap();
+    fs::write(worktrees.join("shop-9"), "in the way").unwrap();
+
+    let failed = lab.start(&["SHOP-9 export"]);
+
+    assert_eq!(failed.status.code(), Some(1), "{}", stdout(&failed));
+    let logs = fs::read_dir(lab.home.join("flows")).map_or(0, Iterator::count);
+    assert_eq!(logs, 0, "the failed start forgets its flow");
+    assert!(
+        !shared(&lab.home).join("flow/slots/1").exists(),
+        "the failed start gives its slot back"
+    );
+}
+
+#[test]
 fn projects_never_share_a_slot_and_show_up_together() {
     let shop = Lab::new();
     let mut api = Lab::new();
