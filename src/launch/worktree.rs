@@ -15,6 +15,17 @@ pub fn workspace_for(repo: &Path, name: &str, branch: String, slot: u8, agent: &
     }
 }
 
+/// A plain session's workspace: `folder`, no branch, no slot.
+pub fn folder_workspace(folder: &Path, agent: &str) -> Workspace {
+    Workspace {
+        path: folder.display().to_string(),
+        branch: None,
+        slot: None,
+        window: None,
+        agent: agent.to_string(),
+    }
+}
+
 /// git -C <repo> worktree add -b <branch> <path>; workspace_for always sets the branch.
 pub fn worktree_add_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
     let repo = repo.display().to_string();

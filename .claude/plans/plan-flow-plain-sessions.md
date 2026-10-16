@@ -160,6 +160,9 @@ fn pick_agent<'a>(config: &'a Config, asked: Option<&str>) -> Result<&'a str, Fa
 
 /// Whether flow ui opens the new agent now or once it runs.
 fn opening(store: &Store) -> Opening;
+
+/// The names unfinished flows hold; a new flow takes another.
+fn live_names(flows: &[FlowView]) -> Vec<String>;
 ```
 
 `src/cli.rs` passes `env.user_home()` to `start::run`.
@@ -168,9 +171,9 @@ fn opening(store: &Store) -> Opening;
 
 ```rust
 /// Started{mode: plain} and a Workspace with the folder; flow ui opens the agent there.
-pub(super) fn open(folder: &Path, name: Option<&str>, agent: Option<&str>, store: &Store,
-                   config: &Config, cwd: &Path, home: Option<&Path>, now: u64)
-                   -> Result<Document, Failure>;
+/// (Built taking `args` for --name and --agent, to stay within clippy's seven arguments.)
+pub(super) fn open(folder: &Path, args: &Args, store: &Store, config: &Config, cwd: &Path,
+                   home: Option<&Path>, now: u64) -> Result<Document, Failure>;
 
 /// `given` made absolute: a leading ~ from $HOME (the dialog passes it unexpanded), relative to
 /// `cwd`; fails unless it is an existing folder.
@@ -346,7 +349,7 @@ The session stops; flow remove
 
 ### Commands
 
-- [ ] `start::Args` with `--plain` and optional request, `pick_agent` and `opening` lifted out, `start/plain.rs` `open` + `resolve`, `worktree::folder_workspace` (moved here, its first user), `output::start::opened`, `cli.rs` passes home; `tests/cli.rs`: plain start outside git, no worktree or slot file, request + `--plain` exits 2, missing folder exits 1, `~` expanded
+- [x] `start::Args` with `--plain` and optional request, `pick_agent` and `opening` lifted out, `start/plain.rs` `open` + `resolve`, `worktree::folder_workspace` (moved here, its first user), `output::start::opened`, `cli.rs` passes home; `tests/cli.rs`: plain start outside git, no worktree or slot file, request + `--plain` exits 2, missing folder exits 1, `~` expanded
 - [ ] `send` refuses a plain session; `wake::changed_flows` skips plain sessions; `status::detail` shows the folder; tests in `wake` and `tests/cli.rs` (send refused, remove keeps the folder)
 
 ### flow ui

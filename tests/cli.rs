@@ -777,6 +777,139 @@ fn start_refuses_outside_a_repository() {
     );
 }
 
+/// The slots claimed in the lab's shared folder.
+fn claimed_slots(home: &Path) -> Vec<String> {
+    fs::read_dir(shared(home).join("flow/slots"))
+        .map(|entries| {
+            entries
+                .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+                .filter(|name| name.parse::<u8>().is_ok())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[test]
+fn start_plain_opens_an_agent_in_any_folder_without_a_worktree_branch_or_slot() {
+    let lab = Lab::new();
+    let scratch = lab.dir.path().canonicalize().unwrap().join("scratch");
+    fs::create_dir_all(&scratch).unwrap();
+
+    let output = flow_command(&lab.home)
+        .args(["start", "--plain"])
+        .arg(&scratch)
+        .current_dir(&scratch)
+        .output()
+        .unwrap();
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(
+        text.starts_with(
+            "flow: scratch
+"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!(
+            "folder: {}
+agent: claude
+pane: when flow ui runs",
+            scratch.display()
+        )),
+        "{text}"
+    );
+    assert!(!text.contains("branch"), "{text}");
+    assert!(!scratch.join(".flow").exists(), "no worktree");
+    assert!(claimed_slots(&lab.home).is_empty(), "no slot");
+
+    let board: serde_json::Value =
+        serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+    let session = &board["flows"][0];
+    assert_eq!(session["mode"], "plain");
+    assert_eq!(session["request"], "");
+    assert_eq!(session["steps"], serde_json::json!([]));
+    assert_eq!(session["workspace"]["path"], scratch.display().to_string());
+    assert_eq!(session["workspace"]["branch"], serde_json::Value::Null);
+    assert_eq!(session["workspace"]["slot"], serde_json::Value::Null);
+}
+
+#[test]
+fn start_plain_takes_a_name_and_a_folder_under_home() {
+    let lab = Lab::new();
+    let home = lab.dir.path().canonicalize().unwrap();
+    fs::create_dir_all(home.join("scratch")).unwrap();
+
+    let output = flow_command(&lab.home)
+        .args(["start", "--plain", "~/scratch", "--name", "Try It"])
+        .env("HOME", &home)
+        .current_dir(&lab.repo)
+        .output()
+        .unwrap();
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(
+        text.starts_with(
+            "flow: try-it
+"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!(
+            "folder: {}
+",
+            home.join("scratch").display()
+        )),
+        "{text}"
+    );
+}
+
+#[test]
+fn start_plain_refuses_a_request_mode_or_type_and_a_missing_folder() {
+    let lab = Lab::new();
+    let scratch = lab.repo.display().to_string();
+
+    for extra in [
+        vec!["SHOP-1 x"],
+        vec!["--mode", "auto"],
+        vec!["--type", "feature"],
+    ] {
+        let mut args = vec!["--plain", &scratch];
+        args.extend(extra.iter().copied());
+        let output = lab.start(&args);
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "{extra:?}: {}",
+            stdout(&output)
+        );
+    }
+    let plain_mode = lab.start(&["x", "--mode", "plain"]);
+    assert_eq!(plain_mode.status.code(), Some(2), "plain is no --mode");
+
+    let missing = lab.start(&["--plain", "nowhere"]);
+    let text = stdout(&missing);
+    assert_eq!(missing.status.code(), Some(1), "{text}");
+    assert!(
+        text.starts_with(&format!(
+            "error: no folder {}",
+            lab.repo.join("nowhere").display()
+        )),
+        "{text}"
+    );
+    assert!(text.contains("Name an existing folder"), "{text}");
+    let file = lab.repo.join("file.txt");
+    fs::write(&file, "x").unwrap();
+    assert_eq!(lab.start(&["--plain", "file.txt"]).status.code(), Some(1));
+
+    let board: serde_json::Value =
+        serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+    assert_eq!(board["count"], 0, "nothing written");
+}
+
 #[test]
 fn start_and_new_refuse_a_request_over_the_limit_before_making_anything() {
     let lab = Lab::new();

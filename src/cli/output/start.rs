@@ -31,16 +31,7 @@ pub(crate) fn started(
         pane: &'a str,
         help: Vec<String>,
     }
-    let (pane, watch) = match opening {
-        Opening::Running => (
-            "opening",
-            format!("flow ui opens {} in its sidebar", flow.name),
-        ),
-        Opening::WhenUiRuns => (
-            "when flow ui runs",
-            "Run `flow ui` to open the worker".to_string(),
-        ),
-    };
+    let (pane, watch) = pane(flow, opening, "worker");
     Document::Toon(toon(&Started {
         flow: &flow.name,
         id: &flow.id,
@@ -52,6 +43,42 @@ pub(crate) fn started(
         pane,
         help: vec![watch, "Run `flow` for all flows".to_string()],
     }))
+}
+
+/// flow, id, folder, agent, pane, help: a plain session.
+pub(crate) fn opened(flow: &FlowView, workspace: &Workspace, opening: Opening) -> Document {
+    #[derive(Serialize)]
+    struct Opened<'a> {
+        flow: &'a str,
+        id: &'a str,
+        folder: &'a str,
+        agent: &'a str,
+        pane: &'a str,
+        help: Vec<String>,
+    }
+    let (pane, watch) = pane(flow, opening, "session");
+    Document::Toon(toon(&Opened {
+        flow: &flow.name,
+        id: &flow.id,
+        folder: &workspace.path,
+        agent: &workspace.agent,
+        pane,
+        help: vec![watch, "Run `flow` for all flows".to_string()],
+    }))
+}
+
+/// The pane's state and how to watch it open.
+fn pane(flow: &FlowView, opening: Opening, what: &str) -> (&'static str, String) {
+    match opening {
+        Opening::Running => (
+            "opening",
+            format!("flow ui opens {} in its sidebar", flow.name),
+        ),
+        Opening::WhenUiRuns => (
+            "when flow ui runs",
+            format!("Run `flow ui` to open the {what}"),
+        ),
+    }
 }
 
 /// What `flow start` did with the repo's .flow/setup.

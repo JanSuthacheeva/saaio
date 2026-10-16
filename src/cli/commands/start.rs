@@ -1,4 +1,6 @@
-use std::path::Path;
+mod plain;
+
+use std::path::{Path, PathBuf};
 
 use super::{check_request, views};
 use crate::branching::{self, Branching};
@@ -19,7 +21,11 @@ use crate::workspace::{self, Hook};
 #[derive(Debug, clap::Args)]
 pub struct Args {
     /// What to build, e.g. "SHOP-217 add CSV export"
-    request: String,
+    #[arg(required_unless_present = "plain")]
+    request: Option<String>,
+    /// Open the agent in this folder instead: no worktree, branch, slot or prompt
+    #[arg(long, value_name = "FOLDER", conflicts_with_all = ["request", "mode", "kind"])]
+    plain: Option<PathBuf>,
     /// Flow name [default: from the ticket key or the first words]
     #[arg(long)]
     name: Option<String>,
@@ -33,26 +39,26 @@ pub struct Args {
     kind: Option<String>,
 }
 
-/// Starts a worker: a flow, a worktree, the setup hook, and the agent flow ui opens.
+/// Starts a worker: a flow, a worktree, the setup hook, and the agent flow ui opens; with --plain,
+/// plain::open.
 pub fn run(
     args: &Args,
     store: &Store,
     registry: &Registry,
     config: &Config,
     cwd: &Path,
+    home: Option<&Path>,
     now: u64,
 ) -> Result<Document, Failure> {
-    check_request(&args.request)?;
-    let Some((agent_name, _)) = config.agent(args.agent.as_deref()) else {
-        let known: Vec<&str> = config.agents.keys().map(String::as_str).collect();
-        return Err(Failure::error(
-            format!(
-                "no agent named {}",
-                args.agent.as_deref().unwrap_or(&config.agent)
-            ),
-            vec![format!("Agents: {}", known.join(", "))],
-        ));
-    };
+    if let Some(folder) = &args.plain {
+        return plain::open(folder, args, store, config, cwd, home, now);
+    }
+    let request = args
+        .request
+        .as_deref()
+        .expect("clap requires a request without --plain");
+    check_request(request)?;
+    let agent_name = pick_agent(config, args.agent.as_deref())?;
     let repo = workspace::repo_root(cwd).map_err(|_| {
         Failure::error(
             "flow start needs a git repository",
@@ -62,17 +68,12 @@ pub fn run(
     let branching = Branching::load(&repo)?;
     let kind = pick_kind(branching.as_ref(), args.kind.as_deref())?;
     let (flows, _) = views(store, now);
-    let taken: Vec<String> = flows
-        .iter()
-        .filter(|flow| !flow.is_finished())
-        .map(|flow| flow.name.clone())
-        .collect();
-    let name = name::flow_name(args.name.as_deref(), &args.request, &taken);
+    let name = name::flow_name(args.name.as_deref(), request, &live_names(&flows));
     let first = Event::new(
         now,
         EventKind::Started {
             name: name.clone(),
-            request: args.request.clone(),
+            request: request.to_string(),
             mode: args.mode,
         },
     );
@@ -86,7 +87,7 @@ pub fn run(
     };
     let slot = claim_slot(registry, &claim, &flows, now)?;
     rollback.slot = Some((slot, claim));
-    let base = branching::branch_name(branching.as_ref(), kind.as_deref(), &args.request, &name);
+    let base = branching::branch_name(branching.as_ref(), kind.as_deref(), request, &name);
     let space = worktree::workspace_for(&repo, &name, free_branch(&repo, &base), slot, agent_name);
     workspace::create_worktree(&repo, &space)?;
     rollback.disarm();
@@ -111,11 +112,36 @@ pub fn run(
 
     let events = store.events(&id)?;
     let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");
-    let opening = match Client::connect(&client::socket_path(store), Role::Control) {
+    Ok(start::started(&flow, &space, &setup, opening(store)))
+}
+
+/// The names unfinished flows hold; a new flow takes another.
+fn live_names(flows: &[FlowView]) -> Vec<String> {
+    flows
+        .iter()
+        .filter(|flow| !flow.is_finished())
+        .map(|flow| flow.name.clone())
+        .collect()
+}
+
+/// The config's agent `asked` names (or its default); the failure lists the agents.
+fn pick_agent<'a>(config: &'a Config, asked: Option<&str>) -> Result<&'a str, Failure> {
+    let Some((name, _)) = config.agent(asked) else {
+        let known: Vec<&str> = config.agents.keys().map(String::as_str).collect();
+        return Err(Failure::error(
+            format!("no agent named {}", asked.unwrap_or(&config.agent)),
+            vec![format!("Agents: {}", known.join(", "))],
+        ));
+    };
+    Ok(name)
+}
+
+/// Whether flow ui opens the new agent now or once it runs.
+fn opening(store: &Store) -> Opening {
+    match Client::connect(&client::socket_path(store), Role::Control) {
         Ok(None) => Opening::WhenUiRuns,
         Ok(Some(_)) | Err(_) => Opening::Running,
-    };
-    Ok(start::started(&flow, &space, &setup, opening))
+    }
 }
 
 /// The branch type for a start: the one asked for or the repo's first, if the repo has types.
