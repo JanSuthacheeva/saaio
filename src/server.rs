@@ -27,7 +27,7 @@ use signal_hook::low_level::signal_name;
 use crate::config::Config;
 use crate::fold;
 use crate::launch::pane::LaunchEnv;
-use crate::proto::{ClientMsg, PROTOCOL_VERSION, PaneKey, ServerMsg, Size};
+use crate::proto::{BUILD, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, ServerMsg, Size};
 use crate::server_log;
 use crate::store::Store;
 use crate::view::Board;
@@ -75,13 +75,15 @@ enum Event {
         name: &'static str,
         from: Option<u32>,
     },
+    /// A connection whose first message could not be read: a flow of an older protocol.
+    Unreadable(ConnId),
 }
 
 /// Why the server stops.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Stop {
-    /// A UI's StopServer (C-space Q, then y, k or e).
-    Asked,
+    /// A UI's StopServer (C-space Q, then y, k or e); None when its hello never came.
+    Asked(Option<Peer>),
     /// SIGTERM, SIGINT or SIGHUP; `from` is the sender's pid when the system says.
     Signal {
         name: &'static str,
@@ -92,7 +94,8 @@ enum Stop {
 impl fmt::Display for Stop {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Stop::Asked => write!(f, "StopServer"),
+            Stop::Asked(Some(peer)) => write!(f, "StopServer from {peer}"),
+            Stop::Asked(None) => write!(f, "StopServer"),
             Stop::Signal {
                 name,
                 from: Some(pid),
@@ -119,6 +122,8 @@ struct Server {
     instructions: PathBuf,
     host: Host,
     conns: HashMap<ConnId, UnixStream>,
+    /// Who each connection said it is.
+    peers: HashMap<ConnId, Peer>,
     next_conn: ConnId,
     attached: Option<ConnId>,
     focus: PaneKey,
@@ -142,7 +147,10 @@ pub fn run(
     clock: fn() -> u64,
 ) -> Result<()> {
     let listener = bind(&paths.socket)?;
-    server_log::write(clock(), &format!("started (protocol {PROTOCOL_VERSION})"));
+    server_log::write(
+        clock(),
+        &format!("started (flow {BUILD}, protocol {PROTOCOL_VERSION})"),
+    );
     if let Err(error) = master::ensure_instructions(&paths.instructions) {
         server_log::write(clock(), &format!("{error:#}"));
     }
@@ -166,6 +174,7 @@ pub fn run(
         instructions: paths.instructions.clone(),
         host,
         conns: HashMap::new(),
+        peers: HashMap::new(),
         next_conn: 0,
         attached: None,
         focus: PaneKey::Master,
@@ -221,6 +230,7 @@ impl Server {
             Event::Accepted(stream) => self.accept(stream),
             Event::Message(conn, message) => return self.message(conn, message),
             Event::Gone(conn) => self.drop_conn(conn),
+            Event::Unreadable(conn) => self.refuse_unreadable(conn),
             Event::Signal { name, from } => return ControlFlow::Break(Stop::Signal { name, from }),
             Event::Host(HostEvent::Output(key, bytes)) => {
                 self.host.feed(&key, &bytes);

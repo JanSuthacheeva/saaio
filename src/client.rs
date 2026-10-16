@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 
 use crate::launch::worktree;
-use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, Role, ServerMsg};
+use crate::proto::{self, BUILD, ClientMsg, PROTOCOL_VERSION, Peer, Role, ServerMsg};
 use crate::registry;
 use crate::server_log;
 use crate::store::Store;
@@ -53,6 +53,7 @@ impl Client {
             &ClientMsg::Hello {
                 version: PROTOCOL_VERSION,
                 role,
+                peer: this_process(),
             },
         )?;
         match proto::read_msg::<_, ServerMsg>(&mut stream)
@@ -84,6 +85,15 @@ impl Client {
         Ok(Client {
             stream: self.stream.try_clone()?,
         })
+    }
+}
+
+/// This process as a Peer: its pid, current folder and BUILD.
+fn this_process() -> Peer {
+    Peer {
+        pid: std::process::id(),
+        cwd: std::env::current_dir().unwrap_or_default(),
+        build: BUILD.to_string(),
     }
 }
 
@@ -378,6 +388,7 @@ mod tests {
             Some(ClientMsg::Hello {
                 version: PROTOCOL_VERSION,
                 role: Role::Control,
+                peer: this_process(),
             })
         );
     }

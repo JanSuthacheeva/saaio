@@ -11,13 +11,17 @@ use anyhow::{Context, Result, bail};
 
 use super::master::Start;
 use super::{ConnId, Event, FRAME_EVERY, Server, Stop, WRITE_TIMEOUT, spawn_named};
-use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Role, ServerMsg};
+use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, Role, ServerMsg};
 use crate::server_log;
 
 impl Server {
     pub(super) fn message(&mut self, conn: ConnId, message: ClientMsg) -> ControlFlow<Stop> {
         match message {
-            ClientMsg::Hello { version, role } => self.hello(conn, version, role),
+            ClientMsg::Hello {
+                version,
+                role,
+                peer,
+            } => self.hello(conn, version, role, peer),
             ClientMsg::Focus(key) => {
                 self.focus = key;
                 self.history = None;
@@ -47,14 +51,20 @@ impl Server {
                 self.send_panes();
                 self.send_full_frame();
             }
-            ClientMsg::StopServer => return ControlFlow::Break(Stop::Asked),
+            ClientMsg::StopServer => {
+                return ControlFlow::Break(Stop::Asked(self.peers.get(&conn).cloned()));
+            }
             ClientMsg::EndFlows => self.end_flows(),
         }
         ControlFlow::Continue(())
     }
 
-    fn hello(&mut self, conn: ConnId, version: u32, role: Role) {
+    fn hello(&mut self, conn: ConnId, version: u32, role: Role, peer: Peer) {
         if version != PROTOCOL_VERSION {
+            server_log::write(
+                (self.clock)(),
+                &format!("refused {peer}: protocol {version}"),
+            );
             self.send_to(
                 conn,
                 &ServerMsg::Refused {
@@ -67,15 +77,25 @@ impl Server {
             return;
         }
         if let Role::Attach { size } = role {
-            if let Some(old) = self.attached.replace(conn) {
-                self.send_to(old, &ServerMsg::Detached);
-                self.drop_conn(old);
-            }
+            let line = match self.attached.replace(conn) {
+                Some(old) => {
+                    let dropped = self.peers.remove(&old);
+                    self.send_to(old, &ServerMsg::Detached { by: peer.clone() });
+                    self.drop_conn(old);
+                    match dropped {
+                        Some(dropped) => format!("ui attached: {peer}; dropped {dropped}"),
+                        None => format!("ui attached: {peer}; dropped another"),
+                    }
+                }
+                None => format!("ui attached: {peer}"),
+            };
+            server_log::write((self.clock)(), &line);
             // A UI starts on the master, live; the server follows, whatever the last UI looked at.
             self.focus = PaneKey::Master;
             self.history = None;
             self.host.resize(size);
         }
+        self.peers.insert(conn, peer);
         self.send_to(
             conn,
             &ServerMsg::Welcome {
@@ -103,12 +123,31 @@ impl Server {
         read_in_background(conn, reader, self.events.clone());
     }
 
+    /// Refuses a connection whose first message could not be read: a flow of an older protocol,
+    /// which then says to run flow ui --stop.
+    pub(super) fn refuse_unreadable(&mut self, conn: ConnId) {
+        server_log::write((self.clock)(), "refused an unreadable hello");
+        self.send_to(
+            conn,
+            &ServerMsg::Refused {
+                reason: format!(
+                    "flow server runs protocol {PROTOCOL_VERSION} and could not read this flow's hello"
+                ),
+            },
+        );
+        self.drop_conn(conn);
+    }
+
+    /// Closes a connection and forgets it; the attached UI leaving is logged.
     pub(super) fn drop_conn(&mut self, conn: ConnId) {
         if let Some(stream) = self.conns.remove(&conn) {
             let _ = stream.shutdown(std::net::Shutdown::Both);
         }
+        let peer = self.peers.remove(&conn);
         if self.attached == Some(conn) {
             self.attached = None;
+            let who = peer.map_or_else(|| "a ui".to_string(), |peer| peer.to_string());
+            server_log::write((self.clock)(), &format!("ui left: {who}"));
         }
     }
 
@@ -229,9 +268,20 @@ pub(super) fn accept_in_background(listener: UnixListener, events: Sender<Event>
 
 fn read_in_background(conn: ConnId, mut stream: UnixStream, events: Sender<Event>) {
     spawn_named(format!("conn {conn}"), move || {
-        while let Ok(Some(message)) = proto::read_msg::<_, ClientMsg>(&mut stream) {
-            if events.send(Event::Message(conn, message)).is_err() {
-                return;
+        let mut first = true;
+        loop {
+            match proto::read_msg::<_, ClientMsg>(&mut stream) {
+                Ok(Some(message)) => {
+                    first = false;
+                    if events.send(Event::Message(conn, message)).is_err() {
+                        return;
+                    }
+                }
+                Err(_) if first => {
+                    let _ = events.send(Event::Unreadable(conn));
+                    return;
+                }
+                Ok(None) | Err(_) => break,
             }
         }
         let _ = events.send(Event::Gone(conn));

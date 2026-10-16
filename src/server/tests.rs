@@ -9,7 +9,7 @@ use super::*;
 use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
 use crate::launch::pane::HOSTED;
-use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Role};
+use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
 
 /// A server whose master is `cat`, run on its own thread.
 fn start(dir: &Path) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
@@ -63,7 +63,19 @@ fn start_with_agents(
     (paths, handle)
 }
 
+fn peer(pid: u32) -> Peer {
+    Peer {
+        pid,
+        cwd: "/work".into(),
+        build: "test".into(),
+    }
+}
+
 fn connect(socket: &Path, role: Role) -> UnixStream {
+    connect_as(socket, role, peer(1))
+}
+
+fn connect_as(socket: &Path, role: Role, peer: Peer) -> UnixStream {
     let mut stream = UnixStream::connect(socket).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
@@ -73,6 +85,7 @@ fn connect(socket: &Path, role: Role) -> UnixStream {
         &ClientMsg::Hello {
             version: PROTOCOL_VERSION,
             role,
+            peer,
         },
     )
     .unwrap();
@@ -430,14 +443,14 @@ fn a_second_ui_takes_over_and_an_old_protocol_is_refused() {
     let (paths, handle) = start(dir.path());
     let size = Size { cols: 20, rows: 4 };
 
-    let mut first = connect(&paths.socket, Role::Attach { size });
+    let mut first = connect_as(&paths.socket, Role::Attach { size }, peer(1));
     assert!(matches!(recv(&mut first), ServerMsg::Welcome { .. }));
-    let mut second = connect(&paths.socket, Role::Attach { size });
+    let mut second = connect_as(&paths.socket, Role::Attach { size }, peer(2));
     assert!(matches!(recv(&mut second), ServerMsg::Welcome { .. }));
 
     let mut told = false;
     while let Ok(Some(message)) = proto::read_msg::<_, ServerMsg>(&mut first) {
-        told |= message == ServerMsg::Detached;
+        told |= message == ServerMsg::Detached { by: peer(2) };
     }
     assert!(told);
 
@@ -448,10 +461,23 @@ fn a_second_ui_takes_over_and_an_old_protocol_is_refused() {
         &ClientMsg::Hello {
             version: PROTOCOL_VERSION + 1,
             role: Role::Control,
+            peer: peer(3),
         },
     )
     .unwrap();
     assert!(matches!(recv(&mut old), ServerMsg::Refused { .. }));
+
+    let mut unreadable = UnixStream::connect(&paths.socket).unwrap();
+    unreadable
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    let mut garbage = 3u32.to_le_bytes().to_vec();
+    garbage.extend([0xff, 0xff, 0xff]);
+    std::io::Write::write_all(&mut unreadable, &garbage).unwrap();
+    let ServerMsg::Refused { reason } = recv(&mut unreadable) else {
+        panic!("expected a refusal");
+    };
+    assert!(reason.contains("could not read"), "{reason}");
 
     proto::write_msg(&mut second, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
@@ -539,5 +565,9 @@ fn says_why_it_stops() {
     };
     assert_eq!(signal(Some(2810)).to_string(), "SIGTERM from pid 2810");
     assert_eq!(signal(None).to_string(), "SIGTERM");
-    assert_eq!(Stop::Asked.to_string(), "StopServer");
+    assert_eq!(Stop::Asked(None).to_string(), "StopServer");
+    assert_eq!(
+        Stop::Asked(Some(peer(4321))).to_string(),
+        "StopServer from pid 4321 in /work (flow test)"
+    );
 }
