@@ -610,6 +610,18 @@ fn status_says_where_a_flows_code_is_and_whether_its_worktree_is_left() {
         "{ended}"
     );
     assert!(ended.contains("C-space r in flow ui resumes it"), "{ended}");
+    let config = lab.home.join("no-config.toml");
+    fs::write(&config, "[ui]\nprefix = \"C-b\"\n").unwrap();
+    let ended = stdout(&lab.run(&["status", "shop-217"]));
+    assert!(ended.contains("C-b r in flow ui resumes it"), "{ended}");
+    fs::write(&config, "[ui]\nprefix = \"C-c\"\n").unwrap();
+    let broken = lab.run(&["status", "shop-217"]);
+    assert!(
+        broken.status.success(),
+        "a config flow ui refuses leaves status working"
+    );
+    assert!(stdout(&broken).contains("C-space r in flow ui resumes it"));
+    fs::remove_file(&config).unwrap();
     git(
         &lab.repo,
         &["worktree", "remove", worktree.to_str().unwrap()],

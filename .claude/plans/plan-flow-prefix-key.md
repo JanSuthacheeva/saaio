@@ -133,7 +133,8 @@ pub struct Sidebar<'a> { ..., pub prefix: Prefix, pub theme: &'a Theme }
 pub(crate) fn detail(flow: &FlowView, now: u64, full: bool, worktree_exists: Option<bool>,
     prefix: Prefix) -> Document;
 fn detail_help(flow: &FlowView, worktree_exists: Option<bool>, prefix: Prefix) -> Vec<String>;
-// commands/status.rs: env.config().map(|config| config.ui.prefix).unwrap_or_default()
+// commands/status.rs: run(args, store, registry, env: &Env, now) - it takes the Env now; only
+// the detail path reads env.config().map(|config| config.ui.prefix).unwrap_or_default()
 ```
 
 No code: README.md, docs/HANDOVER.md, src/server/master.md (current text kept as master-v7.md,
@@ -225,7 +226,7 @@ so each task brings a piece of it together with its first reader.
 - [x] The configured key routes input: `Prefix` (`try_from`, `byte`, `kitty`, `NEEDED`) with unit tests for every accepted name, each refused key and unknown spellings; `UiConfig` / `Config.ui` with config tests (loads C-b, defaults to C-space, refuses an unknown `[ui]` key and `prefix = "C-c"` naming the file); `Router::new` / `command_after_prefix(&self)` with input tests for a C-b router (plain byte, kitty form, twice sends one, NUL passes through); `UiEnv.prefix` from `commands::ui`
 - [x] Make `Hint::key` a `Cow<'static, str>`
 - [x] Every hint names the configured key: `Prefix::name` / `then` with unit tests, `App::with_prefix`, `Sidebar.prefix`, `dialog::help` / `not_running` / `no_session`, chrome title row, master card, peek hint; app tests with a C-b App for each place; goldens unchanged
-- [ ] Name the configured key in `flow status`'s resume hint (`detail`, `detail_help`) with a cli test
+- [x] Name the configured key in `flow status`'s resume hint (`detail`, `detail_help`) with a cli test
 - [ ] E2E cli test: `flow ui` with `prefix = "C-c"` exits 1 with the reason
 - [ ] Reword master.md (current text to master-v7.md in `PREVIOUS_DEFAULTS`), README keys section and `[ui]` example, HANDOVER lines
 - [ ] End-to-end check: flow ui on a scratch FLOW_HOME with `[ui] prefix = "C-b"`: C-b ? shows the help naming C-b, C-b d detaches, C-b C-b reaches the pane, the sidebar footer reads C-b; then `prefix = "C-c"` refuses to start

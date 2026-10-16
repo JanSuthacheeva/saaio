@@ -3,6 +3,7 @@ use serde::Serialize;
 use super::{DESCRIPTION, Document, LIST_TEXT_LIMIT, toon, truncated};
 use crate::event::Phase;
 use crate::text::short_duration;
+use crate::ui::prefix::Prefix;
 use crate::view::{Board, FlowView, Projects, State};
 
 /// bin, description, then the list view.
@@ -208,6 +209,7 @@ pub(crate) fn detail(
     now: u64,
     full: bool,
     worktree_exists: Option<bool>,
+    prefix: Prefix,
 ) -> Document {
     #[derive(Serialize)]
     struct DetailDocument {
@@ -304,17 +306,17 @@ pub(crate) fn detail(
                 text: cut(&entry.text),
             })
             .collect(),
-        help: detail_help(flow, worktree_exists),
+        help: detail_help(flow, worktree_exists, prefix),
     };
     Document::Toon(toon(&document))
 }
 
-fn detail_help(flow: &FlowView, worktree_exists: Option<bool>) -> Vec<String> {
+fn detail_help(flow: &FlowView, worktree_exists: Option<bool>, prefix: Prefix) -> Vec<String> {
     let mut help = Vec::new();
     if let Some(space) = &flow.workspace
         && flow.state == State::Ended
     {
-        help.push("C-space r in flow ui resumes it".to_string());
+        help.push(format!("{} in flow ui resumes it", prefix.then("r")));
         if let Some(branch) = &space.branch
             && worktree_exists == Some(false)
         {
@@ -506,7 +508,7 @@ mod tests {
         );
 
         assert_eq!(
-            detail(&flow, 10 * MIN, false, None).text(),
+            detail(&flow, 10 * MIN, false, None, Prefix::default()).text(),
             [
                 "name: shop-221",
                 "id: shop-221-id",
@@ -539,10 +541,14 @@ mod tests {
         let mut answered = flow("shop-217", vec![], 10 * MIN);
         answered.answer = Some(format!("Done. {}", "x".repeat(LIST_TEXT_LIMIT)));
 
-        let text = detail(&answered, 10 * MIN, false, None).text().to_string();
+        let text = detail(&answered, 10 * MIN, false, None, Prefix::default())
+            .text()
+            .to_string();
         assert!(text.contains("answer: \"Done. x"), "{text}");
         assert!(text.contains("use --full"), "{text}");
-        let full = detail(&answered, 10 * MIN, true, None).text().to_string();
+        let full = detail(&answered, 10 * MIN, true, None, Prefix::default())
+            .text()
+            .to_string();
         assert!(!full.contains("use --full"), "{full}");
     }
 
@@ -551,13 +557,17 @@ mod tests {
         let mut long = flow("shop-300", vec![], MIN);
         long.request = format!("SHOP-300 {} the tail", "word ".repeat(120));
 
-        let short = detail(&long, MIN, false, None).text().to_string();
+        let short = detail(&long, MIN, false, None, Prefix::default())
+            .text()
+            .to_string();
         assert!(
             short.contains("(truncated, 618 chars - use --full)"),
             "{short}"
         );
         assert!(!short.contains("the tail"), "{short}");
-        let full = detail(&long, MIN, true, None).text().to_string();
+        let full = detail(&long, MIN, true, None, Prefix::default())
+            .text()
+            .to_string();
         assert!(full.contains(&format!("{}\n", long.request)), "{full}");
     }
 }
