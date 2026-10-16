@@ -31,7 +31,7 @@ any other that turns out to be noise, each named.
 - [x] theme_file: a color needs six ASCII hex digits (theme_file.rs:163)
 - [x] workspace: the worktree removal uses `split_first` like `run` (an empty argv cannot happen, idiom only)
 - [x] client: `setsid` failure is returned and the SAFETY comment names async-signal-safety (no reaper: `flow ui` quits on ServerGone, so init reaps the server)
-- [ ] host: the PTY reader retries on `Interrupted` (host.rs:256)
+- [x] host: the PTY reader retries on `Interrupted` (host.rs:256)
 - [ ] claude_code: `task_counts` parses "all N done" with `split_once` (claude_code.rs:289)
 - [ ] registry: store roots are written and read as raw OS bytes (registry.rs:46)
 

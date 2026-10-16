@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
@@ -254,6 +254,7 @@ impl Host {
             let mut buf = vec![0u8; 64 * 1024];
             loop {
                 match reader.read(&mut buf) {
+                    Err(error) if error.kind() == ErrorKind::Interrupted => continue,
                     Ok(0) | Err(_) => break,
                     Ok(read) => {
                         if events
