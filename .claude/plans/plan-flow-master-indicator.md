@@ -69,8 +69,10 @@ fn arm(hooks: &mut serde_json::Map<String, Value>, waiter: &Value);
 `record_master_session`:
 
 ```rust
-/// Keeps the state the master's kinds put it in, with `now`, when it differs from the one kept:
-/// tool calls repeat Working, and an unchanged file keeps the server from resending.
+/// Keeps the state the master's kinds put it in, with `now`: always when it comes to rest (a
+/// turn woken by `flow wait` runs no prompt hook, so Idle can follow Idle), else when it differs
+/// from the one kept: tool calls repeat Working, and an unchanged file keeps the server from
+/// resending.
 fn record_master_turn(store: &Store, kinds: &[EventKind], now: u64);
 ```
 
@@ -142,7 +144,7 @@ The master calls a tool, gets a prompt, stops, asks permission:
 3. `hook -> record_master_session(store, &kinds)` (unchanged)
 4. `hook -> record_master_turn(store, &kinds, now)`
 5. `record_master_turn -> fold::master_state(&kinds): Option<State>`; None returns
-6. `record_master_turn -> Store::master_turn(): Option<MasterTurn>`; the same state returns
+6. `record_master_turn -> Store::master_turn(): Option<MasterTurn>`; the same Working or Delegated returns (a resting state is always written: a woken turn starts with no prompt hook)
 7. `record_master_turn -> Store::set_master_turn(&MasterTurn { state, at: now }): Result<()>`
 8. Error: a failed write goes to stderr; the hook stays silent and exits 0.
 

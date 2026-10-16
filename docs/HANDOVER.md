@@ -288,7 +288,8 @@ server's typing.
 See `.claude/plans/plan-flow-master-indicator.md`. Decisions:
 - The master runs the worker's reporting hooks too (Claude Code since now, also with `[master] wake
   = false`; Codex already did). Its `flow hook` (`FLOW_MASTER=1`) appends to no log: it keeps one
-  `MasterTurn { state, at }` in `waits/master.turn`, written only when the state changes, and
+  `MasterTurn { state, at }` in `waits/master.turn`, written when the state changes and at
+  every rest (a turn `flow wait` wakes runs no UserPromptSubmit, so Idle can follow Idle), and
   forgotten when the server opens the master's pane.
 - The server sends it with `ServerMsg::Master` (`PROTOCOL_VERSION` 5); whether you saw it is the
   UI's: a turn that ends, asks or wants permission while the master is not focused shows the

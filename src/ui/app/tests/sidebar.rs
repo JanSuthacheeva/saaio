@@ -541,6 +541,17 @@ fn looking_at_the_master_clears_its_dot() {
 }
 
 #[test]
+fn a_woken_turn_that_ends_idle_again_shows_the_dot_again() {
+    let mut app = with_fleet();
+    app.on_server(master_at(State::Idle, 2));
+    app.on_input(Routed::Command(Command::Focus(1)));
+    assert_eq!(app.master_state(), None);
+
+    app.on_server(master_at(State::Idle, 5));
+    assert_eq!(app.master_state(), Some(State::Waiting));
+}
+
+#[test]
 fn a_working_master_turns_the_spinner_and_its_row_lights_up_on_a_change() {
     let mut app = App::new(FLEET);
     app.on_server(ServerMsg::Board(fold::board(vec![], NOW)));

@@ -872,6 +872,24 @@ fn a_claude_code_master_keeps_where_its_turn_stands() {
 }
 
 #[test]
+fn a_woken_master_turn_that_ends_idle_again_is_a_new_turn() {
+    let home = TempDir::new().unwrap();
+    let turn = home.path().join("waits/master.turn");
+    fs::create_dir_all(home.path().join("waits")).unwrap();
+    fs::write(&turn, r#"{"state":"idle","at":1}"#).unwrap();
+    let stop = r#"{"hook_event_name":"Stop","last_assistant_message":"shop-221 is blocked."}"#;
+
+    master_hook(home.path(), stop);
+
+    let kept = fs::read_to_string(&turn).unwrap();
+    assert!(kept.contains(r#""state":"idle""#), "{kept}");
+    assert!(
+        !kept.contains(r#""at":1}"#),
+        "a turn woken by flow wait runs no prompt hook, so its end must still count: {kept}"
+    );
+}
+
+#[test]
 fn a_merge_request_counts_only_for_the_flows_own_repo() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");
