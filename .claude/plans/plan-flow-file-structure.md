@@ -362,8 +362,8 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 ## Tasks
 
 ### 1. Groundwork
-- [ ] Capture the before state: build the base commit's binary into the scratchpad and write a script that runs a fixed set of commands (home, new, report, status, status --json, status --all, send, remove, clear, usage errors, help) in a temp FLOW_HOME and saves stdout, stderr and exit codes
-- [ ] Module file style: `ui/mod.rs` -> `ui.rs`, `server/mod.rs` -> `server.rs`, `adapter/mod.rs` -> `adapter.rs`; add `mod_module_files = "warn"` to `[lints.clippy]`
+- [x] Capture the before state: build the base commit's binary into the scratchpad and write a script that runs a fixed set of commands (home, new, report, status, status --json, status --all, send, remove, clear, usage errors, help) in a temp FLOW_HOME and saves stdout, stderr and exit codes
+- [x] Module file style: `ui/mod.rs` -> `ui.rs`, `server/mod.rs` -> `server.rs`, `adapter/mod.rs` -> `adapter.rs`; add `mod_module_files = "warn"` to `[lints.clippy]`
 - [ ] Add `text.rs` (plural, short_duration from output.rs; long_duration, clock from ui/board.rs) and `ui/fit.rs` (columns, spans_width, tail, clip, clip_place, wrap, split from sidebar.rs) with their tests moved; update every import
 
 ### 2. Library and binary
