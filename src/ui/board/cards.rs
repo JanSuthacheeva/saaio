@@ -1,15 +1,15 @@
 use std::borrow::Cow;
 
 use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
+use ratatui::layout::{Margin, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Widget};
 
 use super::{BoardView, CARD_ROWS, COLUMNS, DETAIL_ROWS, Item, card_rect, every_flow};
 use crate::event::{Mode, Phase};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::text::{plural, short_duration};
-use crate::ui::fit::{clip, clip_place, split};
+use crate::ui::fit::{clip, clip_place, columns, spans_width, split};
+use crate::ui::focus;
 use crate::ui::sidebar;
 use crate::view::{FlowView, Project, Projects, State};
 
@@ -84,10 +84,14 @@ impl BoardView<'_> {
             _ => "",
         };
         [
-            Line::from(vec![
-                Span::styled(" 0   ", theme.ui.faint),
-                Span::styled("master", theme.ui.strong),
-            ]),
+            self.first_row(
+                vec![
+                    Span::styled(" 0   ", theme.ui.faint),
+                    Span::styled("master", theme.ui.strong),
+                ],
+                None,
+                width,
+            ),
             Line::styled(format!("   {place}"), theme.ui.faint),
             Line::styled(
                 format!("   {workers} worker{}", plural(workers)),
@@ -111,11 +115,15 @@ impl BoardView<'_> {
             _ => " ".to_string(),
         };
 
-        let first = Line::from(vec![
-            Span::styled(format!(" {digit} "), theme.ui.faint),
-            Span::styled(self.sidebar.glyph(flow.state), tone),
-            Span::styled(format!(" {}", flow.name), theme.ui.strong),
-        ]);
+        let first = self.first_row(
+            vec![
+                Span::styled(format!(" {digit} "), theme.ui.faint),
+                Span::styled(self.sidebar.glyph(flow.state), tone),
+                Span::styled(format!(" {}", flow.name), theme.ui.strong),
+            ],
+            Some(flow),
+            width,
+        );
 
         let mut second = vec![Span::raw("   ")];
         let steps = self.sidebar.steps(flow);
@@ -124,11 +132,12 @@ impl BoardView<'_> {
             second.push(Span::raw("  "));
         }
         second.push(self.sidebar.label(flow));
-        if matches!(flow.mode, Mode::Guided | Mode::Plain) && !flow.is_finished() {
-            second.push(Span::styled(
-                format!("  · {}", flow.mode.name()),
-                theme.ui.faint,
-            ));
+        let mode = format!("  · {}", flow.mode.name());
+        if matches!(flow.mode, Mode::Guided | Mode::Plain)
+            && !flow.is_finished()
+            && spans_width(&second) + columns(&mode) < width
+        {
+            second.push(Span::styled(mode, theme.ui.faint));
         }
 
         let ago = format!(
@@ -165,8 +174,10 @@ impl BoardView<'_> {
         };
 
         let (note, style) = match flow.state {
-            State::Blocked | State::NotResponding => (flow.blocker.clone(), theme.state.blocked),
-            State::Waiting => (flow.blocker.clone(), theme.ui.muted),
+            // The glyph and the label say how it stands; what it asks reads as text.
+            State::Blocked | State::NotResponding | State::Waiting => {
+                (flow.blocker.clone(), theme.ui.text)
+            }
             State::Delegated => (
                 flow.delegate.as_ref().map(|text| format!("agent: {text}")),
                 theme.ui.faint,
@@ -182,6 +193,27 @@ impl BoardView<'_> {
             style,
         );
         [first, Line::from(second), third, fourth]
+    }
+
+    /// A card's first row: `left` cut with … to stay two columns clear of the state label.
+    fn first_row(
+        &self,
+        left: Vec<Span<'static>>,
+        flow: Option<&FlowView>,
+        width: usize,
+    ) -> Line<'static> {
+        let right = vec![self.state_label(flow), Span::raw(" ")];
+        let mut room = width.saturating_sub(spans_width(&right) + 2);
+        let mut fitted = Vec::new();
+        for span in left {
+            if room == 0 {
+                break;
+            }
+            let cut = clip(&span.content, room);
+            room = room.saturating_sub(columns(&cut));
+            fitted.push(Span::styled(cut, span.style));
+        }
+        split(fitted, right, width)
     }
 
     /// The label at a card's top right: its state in words, in the state's color, with no fill, as
@@ -231,15 +263,8 @@ impl BoardView<'_> {
         rect: Rect,
         buf: &mut Buffer,
     ) {
-        let theme = self.theme();
-        // Only the selected card is outlined; the glyph and the state's words say the rest.
-        let block = Block::bordered()
-            .border_type(BorderType::Rounded)
-            .border_style(theme.ui.accent);
-        let body = block.inner(rect);
-        if selected {
-            block.render(rect, buf);
-        }
+        // Inside the rect by a cell, where a border would be, so a card keeps its place.
+        let body = rect.inner(Margin::new(1, 1));
         let width = body.width as usize;
         let lines = match flow {
             None => self.master_card(width),
@@ -248,10 +273,9 @@ impl BoardView<'_> {
         for (line, row) in lines.iter().zip(body.rows()) {
             buf.set_line(row.x, row.y, line, row.width);
         }
-        let label = self.state_label(flow);
-        let width = u16::try_from(label.width()).unwrap_or(u16::MAX);
-        let x = (body.x + body.width).saturating_sub(width.saturating_add(1));
-        buf.set_span(x, body.y, &label, width);
+        if selected {
+            focus::mark(buf, rect, self.theme());
+        }
     }
 
     /// Every project's row and cards, scrolled so the selected card shows; returns the last row used.
@@ -352,7 +376,7 @@ mod tests {
 
         let card = with_view(flows, |view| view.master_card(30).map(|line| text(&line)));
 
-        assert_eq!(card[0], " 0   master");
+        assert_eq!(card[0], format!(" 0   master{}you ", " ".repeat(30 - 15)));
         assert_eq!(card[1], "   ~/shop · main");
         assert_eq!(card[2], "   2 workers");
         assert_eq!(card[3], "   ", "no notice while the master runs");
@@ -379,8 +403,8 @@ mod tests {
                 .map(|line| text(&line))
         });
 
-        assert!(card[0].starts_with(" 1 "), "{card:#?}");
-        assert!(card[0].ends_with(" shop-221"), "{card:#?}");
+        assert!(card[0].starts_with(" 1 ● shop-221 "), "{card:#?}");
+        assert!(card[0].ends_with("  blocked "), "{card:#?}");
         assert!(card[1].ends_with("  · guided"), "{card:#?}");
         assert!(card[2].starts_with("   4/9 tasks"), "{card:#?}");
         assert!(card[2].ends_with("27m ago "), "{card:#?}");
@@ -410,6 +434,32 @@ mod tests {
                 format!("   {} add CSV export", name.to_uppercase())
             );
         }
+    }
+
+    #[test]
+    fn a_narrow_card_cuts_the_name_before_its_label_and_drops_the_mode() {
+        let waiting = flow(
+            "shop-230-rate-limit-the-export",
+            Mode::Guided,
+            vec![
+                EventKind::Phase {
+                    phase: Phase::Design,
+                },
+                EventKind::Waiting {
+                    question: "Which approach?".into(),
+                },
+            ],
+        );
+
+        let (card, styles) = with_view(vec![waiting.clone()], |view| {
+            let card = view.flow_card(&waiting, Some(2), 30);
+            let note = card[3].style;
+            (card.map(|line| text(&line)), (note, view.theme().ui.text))
+        });
+
+        assert_eq!(card[0], " 2 ● shop-2…  waiting for you ");
+        assert_eq!(card[1], "   ●───○───○───○  design", "no room for the mode");
+        assert_eq!(styles.0, styles.1, "the question reads as text");
     }
 
     #[test]

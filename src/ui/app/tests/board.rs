@@ -13,23 +13,23 @@ fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
     assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
     assert!(
         row(&terminal, 3).starts_with("   0   master                              you "),
-        "only the selected card is outlined"
+        "only the selected card is marked"
     );
     assert!(row(&terminal, 3).contains(" 1 ● shop-221                        blocked "));
-    assert!(row(&terminal, 3).contains("│ 2 ● shop-230                waiting for you │"));
+    assert!(row(&terminal, 3).contains("▌ 2 ● shop-230                waiting for you  "));
     assert!(row(&terminal, 4).contains("     ~/projects/shop · main"));
     assert!(
         row(&terminal, 5).contains("   4/9 tasks"),
         "{}",
         row(&terminal, 5)
     );
-    let shop_230 = row(&terminal, 5)
-        .split('│')
-        .nth(1)
-        .unwrap_or_default()
-        .to_string();
+    let third = row(&terminal, 5);
+    let shop_230 = third.split("29m ago").nth(1).unwrap_or_default().trim();
     assert!(
-        shop_230.trim_start() == "31m ago ",
+        shop_230
+            .strip_prefix('▌')
+            .and_then(|rest| rest.strip_suffix("31m ago"))
+            .is_some_and(|gap| gap.trim().is_empty()),
         "a flow without tasks draws no bar: {shop_230:?}"
     );
     assert!(row(&terminal, 10).contains(" 3 ◓ export-csv            reviewing · agent "));
@@ -43,8 +43,23 @@ fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
             .starts_with(" 0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   a every project   esc back to shop-230")
     );
     let buffer = terminal.backend().buffer();
-    let accent = Theme::default().ui.accent.fg.unwrap();
-    assert_eq!(buffer[(100, 3)].fg, accent, "the selected card is outlined");
+    let theme = Theme::default();
+    let bar = (0..FLEET.cols)
+        .find(|&x| buffer[(x, 3 + layout::MARGIN)].symbol() == theme.glyphs.cursor)
+        .unwrap();
+    for y in 2..8 {
+        let card = buffer[(bar, y + layout::MARGIN)].clone();
+        assert_eq!(
+            card.symbol(),
+            theme.glyphs.cursor,
+            "the bar down the whole card"
+        );
+        assert_eq!(card.fg, theme.palette.accent);
+        assert_eq!(
+            buffer[(bar + 20, y + layout::MARGIN)].bg,
+            theme.palette.selection
+        );
+    }
     let blocked_at = row(&terminal, 2 + 1).find("blocked").unwrap();
     let blocked_x = row(&terminal, 3)[..blocked_at].chars().count() as u16 + layout::MARGIN;
     assert_eq!(

@@ -8,12 +8,12 @@
                                                        migration needs a default value for orde…        Which approach: a channel column or a jo…
 
 
-  ╭─────────────────────────────────────────────╮
-  │ 3 ○ scratch                           ready │    4 ◓ export-csv            reviewing · agent      5 ✓ shop-198                        MR open
-  │   idle  · plain                             │      ●───●───●───○  review                            ●───●───●───●  MR !418
-  │                                     12m ago │      6/6 tasks                          1h ago        flow/shop-198                      2h ago
-  │   The tree has 14 files under src.          │      agent: review changes                            shop-198
-  ╰─────────────────────────────────────────────╯
+  ▌
+  ▌ 3 ○ scratch                           ready      4 ◓ export-csv            reviewing · agent      5 ✓ shop-198                        MR open
+  ▌   idle  · plain                                    ●───●───●───○  review                            ●───●───●───●  MR !418
+  ▌                                     12m ago        6/6 tasks                          1h ago        flow/shop-198                      2h ago
+  ▌   The tree has 14 files under src.                 agent: review changes                            shop-198
+  ▌
 
 
     6 ○ notes                             ended
