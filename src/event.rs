@@ -167,6 +167,16 @@ impl Phase {
         Phase::MergeRequest,
     ];
 
+    /// Where the phase stands in ALL.
+    pub fn index(self) -> usize {
+        match self {
+            Phase::Design => 0,
+            Phase::Implement => 1,
+            Phase::Review => 2,
+            Phase::MergeRequest => 3,
+        }
+    }
+
     /// The name the command line and the logs use: design, implement, review, merge-request.
     pub fn name(self) -> &'static str {
         match self {
@@ -188,8 +198,9 @@ mod tests {
             assert_eq!(serde_json::to_value(mode).unwrap(), mode.name());
             assert_eq!(mode.toggled().toggled(), mode);
         }
-        for phase in Phase::ALL {
+        for (index, phase) in Phase::ALL.into_iter().enumerate() {
             assert_eq!(serde_json::to_value(phase).unwrap(), phase.name());
+            assert_eq!(phase.index(), index);
         }
     }
 

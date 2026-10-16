@@ -159,11 +159,12 @@ fn worker_env(flow: &FlowView, space: &Workspace, env: &LaunchEnv) -> Vec<(Strin
 
 /// The repository a flow worktree belongs to: the path above .flow/worktrees/<name>.
 pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
-    let path = Path::new(&space.path);
-    let worktrees = path.parent()?;
-    worktrees
-        .ends_with(WORKTREES_DIR)
-        .then(|| worktrees.parent()?.parent().map(Path::to_path_buf))?
+    Path::new(&space.path)
+        .parent()
+        .filter(|worktrees| worktrees.ends_with(WORKTREES_DIR))?
+        .parent()?
+        .parent()
+        .map(Path::to_path_buf)
 }
 
 /// FLOW_ID (workers only), FLOW_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.

@@ -106,8 +106,8 @@ pub fn resolve<'a>(flows: &'a [FlowView], name_or_id: &str) -> Option<&'a FlowVi
 #[derive(Debug)]
 struct Folding {
     view: FlowView,
-    durations: [Option<u64>; 4],
-    entered: [bool; 4],
+    durations: [Option<u64>; Phase::ALL.len()],
+    entered: [bool; Phase::ALL.len()],
     phase_since: u64,
     stopped_at: Option<u64>,
 }
@@ -136,8 +136,8 @@ impl Folding {
         };
         Folding {
             view,
-            durations: [None; 4],
-            entered: [false; 4],
+            durations: [None; Phase::ALL.len()],
+            entered: [false; Phase::ALL.len()],
             phase_since: at,
             stopped_at: None,
         }
@@ -264,14 +264,14 @@ impl Folding {
     fn enter(&mut self, phase: Phase, at: u64) {
         self.close_phase(at);
         self.view.phase = Some(phase);
-        self.entered[index(phase)] = true;
+        self.entered[phase.index()] = true;
         self.phase_since = at;
     }
 
     fn close_phase(&mut self, until: u64) {
         if let Some(current) = self.view.phase {
             let spent = until.saturating_sub(self.phase_since);
-            let total = &mut self.durations[index(current)];
+            let total = &mut self.durations[current.index()];
             *total = Some(total.unwrap_or(0) + spent);
         }
     }
@@ -291,7 +291,7 @@ impl Folding {
 
     fn finish(mut self, now: u64) -> FlowView {
         self.close_phase(self.stopped_at.unwrap_or(now));
-        let current = self.view.phase.map(index);
+        let current = self.view.phase.map(Phase::index);
         let is_done = self.view.state == State::Done;
         self.view.steps = Phase::ALL
             .iter()
@@ -317,13 +317,6 @@ impl Folding {
             .collect();
         self.view
     }
-}
-
-fn index(phase: Phase) -> usize {
-    Phase::ALL
-        .iter()
-        .position(|candidate| *candidate == phase)
-        .expect("every phase is in ALL")
 }
 
 fn entry(at: u64, text: String, tone: Tone) -> TimelineEntry {
