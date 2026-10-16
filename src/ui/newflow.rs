@@ -9,7 +9,7 @@ use crate::branching::{self, Branching};
 use crate::event::Mode;
 use crate::launch;
 use crate::ui::input::Key;
-use crate::ui::sidebar::{clip, clip_place, split};
+use crate::ui::sidebar::{clip, clip_place, columns, split, tail};
 use crate::ui::theme::Theme;
 use crate::view::FlowView;
 
@@ -129,15 +129,13 @@ impl NewFlowForm {
             return None;
         }
         let dialog = dialog_area(area, self.extra_rows());
-        let typed = Span::raw(self.shown_request(dialog)).width() as u16;
+        let typed = u16::try_from(columns(self.shown_request(dialog))).unwrap_or(u16::MAX);
         Some((dialog.x + 3 + typed, dialog.y + 5))
     }
 
     /// The end of the request that fits the box.
-    fn shown_request(&self, dialog: Rect) -> String {
-        let room = dialog.width.saturating_sub(7) as usize;
-        let chars: Vec<char> = self.request.chars().collect();
-        chars[chars.len().saturating_sub(room)..].iter().collect()
+    fn shown_request(&self, dialog: Rect) -> &str {
+        tail(&self.request, usize::from(dialog.width.saturating_sub(7)))
     }
 }
 
@@ -381,6 +379,17 @@ mod tests {
         form.on_key(Key::Char('l'));
         assert_eq!(form.picked_type(), Some("bugfix"));
         assert_eq!(form.request, "", "the type row takes the keys");
+    }
+
+    #[test]
+    fn keeps_wide_characters_inside_the_request_box() {
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"));
+        typed(&mut form, &"界".repeat(60));
+        let dialog = dialog_area(Rect::new(0, 0, 100, 30), form.extra_rows());
+
+        let shown = form.shown_request(dialog);
+
+        assert_eq!(columns(shown), 70);
     }
 
     #[test]

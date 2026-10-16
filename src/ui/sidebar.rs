@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::output::short_duration;
 use crate::proto::{PaneInfo, PaneKey, PaneStatus};
@@ -503,7 +504,7 @@ pub fn split(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: usize) 
         if span.width() > left_room {
             let style = span.style;
             let cut = clip(&span.content, left_room.saturating_sub(1));
-            used += Span::raw(cut.as_str()).width();
+            used += columns(&cut);
             spans.push(Span::styled(cut, style));
             break;
         }
@@ -526,7 +527,7 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
             } else {
                 format!("{row} {word}")
             };
-            if Span::raw(next.as_str()).width() <= width {
+            if columns(&next) <= width {
                 row = next;
                 continue;
             }
@@ -542,15 +543,35 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
     rows
 }
 
+/// The columns `text` takes on a terminal.
+pub fn columns(text: &str) -> usize {
+    text.width()
+}
+
+/// The end of `text` that fits in `room` columns.
+pub fn tail(text: &str, room: usize) -> &str {
+    let mut used = 0;
+    let start = text
+        .char_indices()
+        .rev()
+        .take_while(|(_, c)| {
+            used += c.width().unwrap_or(0);
+            used <= room
+        })
+        .last()
+        .map_or(text.len(), |(index, _)| index);
+    &text[start..]
+}
+
 /// The text cut to `width` columns, ending in … when it was longer.
 pub fn clip(text: &str, width: usize) -> String {
-    if Span::raw(text).width() <= width {
+    if columns(text) <= width {
         return text.to_string();
     }
     let mut kept = String::new();
     let mut used = 0;
     for c in text.chars() {
-        let char_width = Span::raw(c.to_string()).width();
+        let char_width = c.width().unwrap_or(0);
         if used + char_width + 1 > width {
             break;
         }
@@ -593,7 +614,7 @@ pub fn last_note(flow: &FlowView) -> Option<String> {
 /// (/private/…/ui-look/repo · main), then its first folder; the branch goes only when the last
 /// folder alone does not fit beside it.
 pub fn clip_place(place: &str, width: usize) -> String {
-    let fits = |text: &str| Span::raw(text).width() <= width;
+    let fits = |text: &str| columns(text) <= width;
     if fits(place) {
         return place.to_string();
     }
@@ -811,6 +832,14 @@ mod tests {
                 "{width}"
             );
         }
+    }
+
+    #[test]
+    fn keeps_the_end_that_fits_in_columns() {
+        assert_eq!(tail("ab界", 4), "ab界");
+        assert_eq!(tail("ab界", 3), "b界");
+        assert_eq!(tail("ab界", 1), "");
+        assert_eq!(tail("", 5), "");
     }
 
     #[test]
