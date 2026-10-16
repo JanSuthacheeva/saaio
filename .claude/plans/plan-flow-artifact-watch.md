@@ -52,7 +52,7 @@ fn artifact_watch(task: &Value) -> bool;
 
 ## Tasks
 
-- [ ] Reproduce end to end: a real Claude worker publishes an artifact and its flow stays delegated; record its Stop payload as `stop_artifact_watch.json`
+- [x] Reproduce end to end: a real Claude worker publishes an artifact and its flow stays delegated; record its Stop payload as `stop_artifact_watch.json`
 - [ ] `artifact_watch` and the skip in `running_background_task`, with tests for a watch alone (idle) and a watch beside a running subagent (delegated)
 - [ ] Docs: the `background_tasks` fact in `docs/HANDOVER.md` names the artifact watch and that it is skipped
 - [ ] End-to-end check: the same real worker publishing an artifact ends its turn idle (or waiting) and wakes the master
