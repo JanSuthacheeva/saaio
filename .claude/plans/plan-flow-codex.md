@@ -419,6 +419,12 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 ### A fresh Codex master's first turn (decided after the end-to-end run)
 - [x] Adapter::wire_master(argv, flow_exe, instructions, wake, fresh) builds the master's argv (news wiring, instructions, and for Codex on a fresh start MASTER_OPENING as the last argument), and Adapter::turn(payload) -> Option<Turn> (Began, Ended, Interrupted) tells flow hook where a turn stands, so no caller knows harness specifics; MasterRecord::spec calls wire_master and appends nothing itself as the last argument on a fresh start only, so a fresh Codex master has its first turn at once (after Codex's own startup prompts), records its session and gets news from then on; master.rs tests (fresh has it, resumed and Claude not); a scratch-store check that a fresh Codex master records master.session without being typed to
 
+### Review follow-ups (decided 2026-10-16)
+- [ ] Clear a session's busy mark when the server opens its pane (open_worker and open_master, before Host::open): a fresh process is never mid-turn; server test sets busy after the pane opened
+- [ ] codex::turn returns None for a subagent's event (agent_id set), as translate does; test
+- [ ] client::server_command strips FLOW_MASTER with the hook variables; test
+- Not built: a user [agents.master] still passing --append-system-prompt-file gets master.md twice; a CHANGELOG line at the public release says so.
+
 ## Review
 
 Reviewed 2026-10-16 in a fresh context against this plan, CLAUDE.md and origin/main.
