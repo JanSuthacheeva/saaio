@@ -329,23 +329,14 @@ impl BoardView<'_> {
 
     fn render_cards(&self, area: Rect, buf: &mut Buffer) -> u16 {
         let flows = sidebar::workers(self.board());
-        let gap = 2;
-        let inner = area.width.saturating_sub(2);
-        let card_width = inner.saturating_sub(gap * (COLUMNS as u16 - 1)) / COLUMNS as u16;
         let mut bottom = area.y;
         for index in 0..=flows.len() {
-            let column = (index % COLUMNS) as u16;
             let row = (index / COLUMNS) as u16;
             let y = area.y + row * (CARD_ROWS + 1);
             if y + CARD_ROWS > area.y + area.height {
                 break;
             }
-            let rect = Rect::new(
-                area.x + 1 + column * (card_width + gap),
-                y,
-                card_width,
-                CARD_ROWS,
-            );
+            let rect = card_rect(area, index % COLUMNS, y);
             let flow = index.checked_sub(1).map(|at| flows[at]);
             self.render_card(flow, Some(index), index == self.state.selected, rect, buf);
             bottom = y + CARD_ROWS;
@@ -394,16 +385,7 @@ impl BoardView<'_> {
             buf.set_line(area.x, area.y, &line, area.width);
             return area.y + 1;
         }
-        let gap = 2;
-        let inner = area.width.saturating_sub(2);
-        let card_width = inner.saturating_sub(gap * (COLUMNS as u16 - 1)) / COLUMNS as u16;
-
         // Rows from the top of the first project: each project's line, then its rows of cards.
-        #[derive(Debug)]
-        enum Item<'p> {
-            Project(&'p Project),
-            Card(&'p FlowView, usize, u16),
-        }
         let mut items = Vec::new();
         let mut y: u16 = 0;
         let mut number = 0;
@@ -412,8 +394,12 @@ impl BoardView<'_> {
             y += 1;
             for (at, flow) in project.board.flows.iter().enumerate() {
                 let row = (at / COLUMNS) as u16;
-                let column = (at % COLUMNS) as u16;
-                items.push((y + row * (CARD_ROWS + 1), Item::Card(flow, number, column)));
+                let card = Item::Card {
+                    flow,
+                    number,
+                    column: at % COLUMNS,
+                };
+                items.push((y + row * (CARD_ROWS + 1), card));
                 number += 1;
             }
             let rows = project.board.flows.len().div_ceil(COLUMNS) as u16;
@@ -429,7 +415,9 @@ impl BoardView<'_> {
         let selected_bottom = items
             .iter()
             .find_map(|(top, item)| match item {
-                Item::Card(_, number, _) if *number == self.state.selected => Some(top + CARD_ROWS),
+                Item::Card { number, .. } if *number == self.state.selected => {
+                    Some(top + CARD_ROWS)
+                }
                 _ => None,
             })
             .unwrap_or(0);
@@ -438,7 +426,7 @@ impl BoardView<'_> {
         for (top, item) in &items {
             let height = match item {
                 Item::Project(_) => 1,
-                Item::Card(..) => CARD_ROWS,
+                Item::Card { .. } => CARD_ROWS,
             };
             if *top < scroll || top + height > scroll + room {
                 continue;
@@ -448,13 +436,12 @@ impl BoardView<'_> {
                 Item::Project(project) => {
                     buf.set_line(area.x, y, &self.project_line(project, width), area.width);
                 }
-                Item::Card(flow, number, column) => {
-                    let rect = Rect::new(
-                        area.x + 1 + column * (card_width + gap),
-                        y,
-                        card_width,
-                        CARD_ROWS,
-                    );
+                Item::Card {
+                    flow,
+                    number,
+                    column,
+                } => {
+                    let rect = card_rect(area, *column, y);
                     self.render_card(Some(flow), None, *number == self.state.selected, rect, buf);
                 }
             }
@@ -724,41 +711,30 @@ impl BoardView<'_> {
             return Line::styled(format!(" {notice}"), theme.state.waiting);
         }
         let key = |text: &'static str| Span::styled(text, theme.ui.key);
-        let hint = |text: String| Span::styled(text, theme.ui.faint);
-        if self.state.all {
-            return Line::from(vec![
-                Span::raw(" "),
-                key("h j k l"),
-                hint(" move   ".into()),
-                key("enter"),
-                hint(" jump in   ".into()),
-                key("n"),
-                hint(" new flow   ".into()),
-                key("x"),
-                hint(" clear finished flow   ".into()),
-                key("a"),
-                hint(" this project   ".into()),
-                key("esc"),
-                hint(format!(" back to {}", self.back)),
-            ]);
+        let hint = |text: &'static str| Span::styled(text, theme.ui.faint);
+        let mut spans = vec![Span::raw(" ")];
+        if !self.state.all {
+            spans.extend([key("0-9"), hint(" select   ")]);
         }
-        Line::from(vec![
-            Span::raw(" "),
-            key("0-9"),
-            hint(" select   ".into()),
+        spans.extend([
             key("h j k l"),
-            hint(" move   ".into()),
+            hint(" move   "),
             key("enter"),
-            hint(" jump in   ".into()),
+            hint(" jump in   "),
             key("n"),
-            hint(" new flow   ".into()),
+            hint(" new flow   "),
             key("x"),
-            hint(" clear finished flow   ".into()),
+            hint(" clear finished flow   "),
             key("a"),
-            hint(" every project   ".into()),
+            hint(if self.state.all {
+                " this project   "
+            } else {
+                " every project   "
+            }),
             key("esc"),
-            hint(format!(" back to {}", self.back)),
-        ])
+            Span::styled(format!(" back to {}", self.back), theme.ui.faint),
+        ]);
+        Line::from(spans)
     }
 }
 
@@ -817,6 +793,31 @@ pub fn long_duration(ms: u64) -> String {
         60..1_440 => format!("{}h {}m", minutes / 60, minutes % 60),
         _ => format!("{}d {}h", minutes / 1_440, minutes % 1_440 / 60),
     }
+}
+
+/// A row of every project's board: a project's line, or one of its cards.
+#[derive(Debug)]
+enum Item<'p> {
+    Project(&'p Project),
+    Card {
+        flow: &'p FlowView,
+        /// Its place among every project's cards, from 0.
+        number: usize,
+        column: usize,
+    },
+}
+
+/// The card in `column` with its top at `y`: the columns share the width less their gaps.
+fn card_rect(area: Rect, column: usize, y: u16) -> Rect {
+    const GAP: u16 = 2;
+    let columns = COLUMNS as u16;
+    let width = area
+        .width
+        .saturating_sub(2)
+        .saturating_sub(GAP * (columns - 1))
+        / columns;
+    let x = area.x + 1 + column as u16 * (width + GAP);
+    Rect::new(x, y, width, CARD_ROWS)
 }
 
 /// HH:MM of a Unix ms time in a zone `offset_secs` east of UTC.
