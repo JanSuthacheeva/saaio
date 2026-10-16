@@ -370,4 +370,4 @@ The session stops; flow remove
 ### Docs and check
 
 - [x] `master.md` line on plain sessions; README (`flow start --plain`, the dialog's plain mode); HANDOVER: move plain sessions from Future improvements to a built section
-- [ ] End to end: `cargo install --path .`, `flow start --plain` in a scratch folder and from the dialog in a real `flow ui`, see it in the sidebar, quit and restart flow ui and see it resume, `flow remove` it and check the folder is still there
+- [x] End to end (run with the release build in an isolated FLOW_HOME, state, config and tmux server, a stub agent logging its argv, instead of `cargo install`, which would cut the live flow ui off its running server at PROTOCOL_VERSION 2): `flow start --plain` in a scratch folder and from the dialog in a real `flow ui`, see it in the sidebar, quit and restart flow ui and see it resume, `flow remove` it and check the folder is still there
