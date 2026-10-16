@@ -102,7 +102,7 @@ impl MasterRecord {
                 };
                 pane::agent_argv(&bare, &self.session, MASTER_NAME, "")
             }
-            Start::Resume => pane::resume_argv(agent, &self.session, MASTER_NAME)?,
+            Start::Resume => pane::resume_argv(agent, &self.session, MASTER_NAME, &self.session)?,
         };
         let instructions = instructions.display().to_string();
         let mut argv: Vec<String> = argv
