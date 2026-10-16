@@ -189,7 +189,9 @@ pub(super) fn render_detail(&self, area: Rect, buf: &mut Buffer);
 fn render_answer(&self, flow: &FlowView, area: Rect, buf: &mut Buffer);   // was render_facts
 ```
 
-- cards: a blocker and a waiting question are both ui.text; ` · guided` only when it fits; ages
+- cards: the label says less (`waiting`, `agent`) when the name would keep fewer than 10
+  columns (NAME_KEPT), as the 96-column board showed `3 ◓ e…  reviewing · agent`;
+  a blocker and a waiting question are both ui.text; ` · guided` only when it fits; ages
   read `3m` as in the sidebar (no ` ago`); `set_span` of the label goes.
 - detail: render_master_detail says `no workers yet  n starts a flow` when there are none; the
   needs-you entries use ui.text for blockers and questions alike.
@@ -346,7 +348,7 @@ The first worker starts:
 
 ### Hints and labels (items 1, 5, 7)
 
-- [ ] Board footer through `hints::line` with inactive keys for the selected card; add the narrow-board golden at 96 columns
+- [x] Board footer through `hints::line` with inactive keys for the selected card; add the narrow-board golden at 96 columns
 - [ ] Labels: `took 2h`, tasks-only right column in the sidebar, `3m` ages on cards, `Theme::heading` for every section heading
 
 ### Detail panel (item 8)

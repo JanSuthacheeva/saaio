@@ -13,6 +13,9 @@ use crate::ui::focus;
 use crate::ui::sidebar;
 use crate::view::{FlowView, Project, Projects, State};
 
+/// The columns of a name a card keeps before its state label says less.
+const NAME_KEPT: usize = 10;
+
 impl BoardView<'_> {
     pub(super) fn all_header(&self, width: usize) -> Line<'static> {
         let theme = self.theme();
@@ -198,15 +201,22 @@ impl BoardView<'_> {
         [first, Line::from(second), third, fourth]
     }
 
-    /// A card's first row: `left` cut with … to stay two columns clear of the state label.
+    /// A card's first row: `left` cut with … to stay two columns clear of the state label; the
+    /// label says less when the name would keep fewer than NAME_KEPT columns.
     fn first_row(
         &self,
         left: Vec<Span<'static>>,
         flow: Option<&FlowView>,
         width: usize,
     ) -> Line<'static> {
-        let right = vec![self.state_label(flow), Span::raw(" ")];
-        let mut room = width.saturating_sub(spans_width(&right) + 2);
+        let room = |label: &Span| width.saturating_sub(label.width() + 3);
+        let full = spans_width(&left);
+        let name = left.last().map_or(0, Span::width);
+        let mut label = self.state_label(flow, false);
+        if full > room(&label) && room(&label) + name < full + name.min(NAME_KEPT) {
+            label = self.state_label(flow, true);
+        }
+        let mut room = room(&label);
         let mut fitted = Vec::new();
         for span in left {
             if room == 0 {
@@ -216,12 +226,12 @@ impl BoardView<'_> {
             room = room.saturating_sub(columns(&cut));
             fitted.push(Span::styled(cut, span.style));
         }
-        split(fitted, right, width)
+        split(fitted, vec![label, Span::raw(" ")], width)
     }
 
     /// The label at a card's top right: its state in words, in the state's color, with no fill, as
-    /// Claude Code says a state in colored text.
-    fn state_label(&self, flow: Option<&FlowView>) -> Span<'static> {
+    /// Claude Code says a state in colored text; `short` for a narrow card.
+    fn state_label(&self, flow: Option<&FlowView>, short: bool) -> Span<'static> {
         let theme = self.theme();
         let Some(flow) = flow else {
             return Span::styled("you", theme.ui.accent);
@@ -229,9 +239,11 @@ impl BoardView<'_> {
         let text: Cow<'static, str> = match flow.state {
             State::Blocked => "blocked".into(),
             State::NotResponding => "not responding".into(),
+            State::Waiting if short => "waiting".into(),
             State::Waiting => "waiting for you".into(),
             State::Working => "working".into(),
             State::Idle => "ready".into(),
+            State::Delegated if short => "agent".into(),
             State::Delegated => format!("{} · agent", flow.phase.map_or("working", gerund)).into(),
             State::Done if flow.merge_request.is_some() => "MR open".into(),
             State::Done => "done".into(),
@@ -473,7 +485,7 @@ mod tests {
             (card.map(|line| text(&line)), (note, view.theme().ui.text))
         });
 
-        assert_eq!(card[0], " 2 ● shop-2…  waiting for you ");
+        assert_eq!(card[0], " 2 ● shop-230-rate-…  waiting ");
         assert_eq!(card[1], "   ●───○───○───○  design", "no room for the mode");
         assert_eq!(styles.0, styles.1, "the question reads as text");
     }

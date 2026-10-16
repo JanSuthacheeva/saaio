@@ -343,3 +343,38 @@ fn a_working_card_takes_the_color_of_its_phase() {
         "the state label"
     );
 }
+
+#[test]
+fn draws_the_keys_that_do_nothing_for_the_selected_card_faint() {
+    let theme = Theme::default();
+    let style_of = |app: &App, key: &str| {
+        let terminal = render_at(app, FLEET);
+        let footer = row(&terminal, 41);
+        let at = footer.find(&format!("   {key} ")).unwrap() + 3;
+        let x = footer[..at].chars().count() as u16 + layout::MARGIN;
+        let cell = terminal.backend().buffer()[(x, 41 + layout::MARGIN)].clone();
+        (cell.fg, cell.modifier)
+    };
+    let mut app = board_app();
+    app.on_input(Routed::Command(Command::Board));
+
+    assert_eq!(
+        style_of(&app, "x"),
+        (theme.palette.faint, ratatui::style::Modifier::empty()),
+        "the master cannot be cleared"
+    );
+    assert_eq!(style_of(&app, "n").1, ratatui::style::Modifier::BOLD);
+    let done = crate::ui::sidebar::workers(app.board.as_ref().unwrap())
+        .iter()
+        .position(|flow| flow.is_finished())
+        .unwrap();
+    app.view = View::Board(BoardState {
+        selected: done + 1,
+        all: false,
+    });
+    assert_eq!(
+        style_of(&app, "x").1,
+        ratatui::style::Modifier::BOLD,
+        "a finished flow can"
+    );
+}
