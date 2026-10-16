@@ -120,7 +120,12 @@ impl Folding {
             request: request.to_string(),
             mode,
             phase: None,
-            state: State::Working,
+            // A plain session opens at an empty prompt; a flow's agent starts on its request.
+            state: if mode == Mode::Plain {
+                State::Idle
+            } else {
+                State::Working
+            },
             blocker: None,
             delegate: None,
             tasks: None,
@@ -291,6 +296,9 @@ impl Folding {
 
     fn finish(mut self, now: u64) -> FlowView {
         self.close_phase(self.stopped_at.unwrap_or(now));
+        if self.view.is_plain() {
+            return self.view;
+        }
         let current = self.view.phase.map(Phase::index);
         let is_done = self.view.state == State::Done;
         self.view.steps = Phase::ALL

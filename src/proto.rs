@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::view::Board;
 
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 pub const MAX_MESSAGE: usize = 8 << 20;
 
 /// Which session a pane runs: the master, or the worker of a flow id.

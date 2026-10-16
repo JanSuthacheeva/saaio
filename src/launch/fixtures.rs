@@ -16,3 +16,14 @@ pub(super) fn shop() -> Workspace {
         "claude",
     )
 }
+
+/// A plain session in /Users/jan/scratch: no branch, no slot.
+pub(super) fn scratch() -> Workspace {
+    Workspace {
+        path: "/Users/jan/scratch".into(),
+        branch: None,
+        slot: None,
+        window: None,
+        agent: "claude".into(),
+    }
+}

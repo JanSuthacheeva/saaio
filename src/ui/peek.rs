@@ -30,7 +30,7 @@ pub enum PeekLine {
     Now(String),
     /// Where an ended flow's code is: its branch and worktree.
     Code {
-        branch: String,
+        branch: Option<String>,
         worktree: String,
         exists: bool,
     },

@@ -29,8 +29,8 @@ pub(super) fn flow(name: &str, mode: Mode, events: Vec<EventKind>) -> FlowView {
             0,
             EventKind::Workspace {
                 path: format!("/shop/.flow/worktrees/{name}"),
-                branch: format!("flow/{name}"),
-                slot: 1,
+                branch: Some(format!("flow/{name}")),
+                slot: Some(1),
                 window: None,
                 agent: "claude".into(),
             },
@@ -61,6 +61,7 @@ pub(super) fn with_view<R>(flows: Vec<FlowView>, look: impl FnOnce(&BoardView) -
             now: NOW,
             spin: 0,
             changed: &changed,
+            home: None,
             theme: &theme,
         },
         state: BoardState::default(),

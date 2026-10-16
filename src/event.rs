@@ -70,8 +70,8 @@ pub enum EventKind {
     Ended,
     Workspace {
         path: String,
-        branch: String,
-        slot: u8,
+        branch: Option<String>,
+        slot: Option<u8>,
         window: Option<String>,
         agent: String,
     },
@@ -92,6 +92,9 @@ pub enum Mode {
     #[default]
     Guided,
     Auto,
+    /// An agent in a folder: no worktree, branch, slot, prompt or master.
+    #[value(skip)]
+    Plain,
 }
 
 /// A time as Unix ms, the clock every event and log uses; 0 before 1970.
@@ -153,18 +156,15 @@ fn cut_to(text: &mut String, limit: usize) {
 }
 
 impl Mode {
-    /// The name the command line and the logs use: guided, auto.
+    /// auto, guided, plain - the new-flow dialog's order.
+    pub const ALL: [Mode; 3] = [Mode::Auto, Mode::Guided, Mode::Plain];
+
+    /// The name the command line and the logs use: guided, auto, plain.
     pub fn name(self) -> &'static str {
         match self {
             Mode::Guided => "guided",
             Mode::Auto => "auto",
-        }
-    }
-
-    pub fn toggled(self) -> Mode {
-        match self {
-            Mode::Guided => Mode::Auto,
-            Mode::Auto => Mode::Guided,
+            Mode::Plain => "plain",
         }
     }
 }
@@ -205,9 +205,8 @@ mod tests {
 
     #[test]
     fn names_modes_and_phases_as_the_log_does() {
-        for mode in [Mode::Guided, Mode::Auto] {
+        for mode in Mode::ALL {
             assert_eq!(serde_json::to_value(mode).unwrap(), mode.name());
-            assert_eq!(mode.toggled().toggled(), mode);
         }
         for (index, phase) in Phase::ALL.into_iter().enumerate() {
             assert_eq!(serde_json::to_value(phase).unwrap(), phase.name());
@@ -221,6 +220,11 @@ mod tests {
                 name: "shop-221".into(),
                 request: "SHOP-221 add CSV export".into(),
                 mode: Mode::Auto,
+            },
+            EventKind::Started {
+                name: "scratch".into(),
+                request: String::new(),
+                mode: Mode::Plain,
             },
             EventKind::Phase {
                 phase: Phase::MergeRequest,
@@ -244,6 +248,13 @@ mod tests {
                 url: "https://gitlab.com/acme/shop/-/merge_requests/88".into(),
             },
             EventKind::Ended,
+            EventKind::Workspace {
+                path: "/Users/jan/scratch".into(),
+                branch: None,
+                slot: None,
+                window: None,
+                agent: "claude".into(),
+            },
         ]
     }
 
@@ -315,6 +326,27 @@ mod tests {
                 question: "ok?".into()
             }
         );
+    }
+
+    #[test]
+    fn reads_a_workspace_line_written_before_plain_sessions() {
+        let line = r#"{"v":1,"at":7,"kind":"workspace","path":"/repo/.flow/worktrees/shop-221","branch":"flow/shop-221","slot":2,"window":"flow-ui","agent":"claude"}"#;
+
+        let Some(Event {
+            kind: EventKind::Workspace { branch, slot, .. },
+            ..
+        }) = Event::from_line(line)
+        else {
+            panic!("an old workspace line parses");
+        };
+        assert_eq!(branch.as_deref(), Some("flow/shop-221"));
+        assert_eq!(slot, Some(2));
+    }
+
+    #[test]
+    fn plain_is_not_a_mode_flag_takes() {
+        assert!(Mode::from_str("plain", false).is_err());
+        assert_eq!(Mode::from_str("auto", false), Ok(Mode::Auto));
     }
 
     #[test]

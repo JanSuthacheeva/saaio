@@ -11,6 +11,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 
 use crate::proto::{PaneInfo, PaneKey, PaneStatus};
+use crate::ui::fit;
 use crate::ui::layout::SIDEBAR_WIDTH;
 use crate::ui::peek::PeekLine;
 use crate::ui::theme::Theme;
@@ -39,6 +40,8 @@ pub struct Sidebar<'a> {
     pub spin: usize,
     /// Flows whose state changed a moment ago, by id; their rows stand out.
     pub changed: &'a HashMap<String, u64>,
+    /// The user's home, shown as ~ in paths.
+    pub home: Option<&'a str>,
     pub theme: &'a Theme,
 }
 
@@ -60,6 +63,11 @@ pub fn workers(board: &Board) -> Vec<&FlowView> {
 }
 
 impl Sidebar<'_> {
+    /// `path` with ~ for the user's home.
+    pub fn tilde(&self, path: &str) -> String {
+        fit::tilde(path, self.home)
+    }
+
     /// The pane a click on this row of the sidebar focuses.
     pub fn key_at(&self, row: u16, height: u16) -> Option<PaneKey> {
         self.rows(height).into_iter().nth(row as usize)?.key
@@ -189,6 +197,7 @@ pub(super) fn plain(line: Line<'static>) -> Row {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::view::VIEW_VERSION;
 
     fn working(id: &str) -> FlowView {
         use crate::event::{Event, EventKind, Mode};
@@ -205,8 +214,8 @@ mod tests {
                 0,
                 EventKind::Workspace {
                     path: format!("/shop/{id}"),
-                    branch: format!("flow/{id}"),
-                    slot: 1,
+                    branch: Some(format!("flow/{id}")),
+                    slot: Some(1),
                     window: None,
                     agent: "claude".into(),
                 },
@@ -219,7 +228,7 @@ mod tests {
     fn lists_the_flows_that_do_not_fit_as_more_and_cuts_none_in_half() {
         let flows: Vec<FlowView> = ["a", "b", "c", "d", "e"].map(working).into();
         let board = Board {
-            version: 1,
+            version: VIEW_VERSION,
             now: 0,
             count: flows.len(),
             needs_you: 0,
@@ -236,6 +245,7 @@ mod tests {
             now: 0,
             spin: 0,
             changed: &HashMap::new(),
+            home: None,
             theme: &theme,
         };
 
@@ -269,7 +279,7 @@ mod tests {
         let mut flow = working("a");
         flow.tasks = Some(crate::view::Tasks { done: 0, total: 0 });
         let board = Board {
-            version: 1,
+            version: VIEW_VERSION,
             now: 0,
             count: 1,
             needs_you: 0,
@@ -286,6 +296,7 @@ mod tests {
             now: 0,
             spin: 0,
             changed: &HashMap::new(),
+            home: None,
             theme: &theme,
         };
 

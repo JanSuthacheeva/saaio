@@ -8,16 +8,31 @@ pub const WORKTREES_DIR: &str = ".flow/worktrees";
 pub fn workspace_for(repo: &Path, name: &str, branch: String, slot: u8, agent: &str) -> Workspace {
     Workspace {
         path: repo.join(WORKTREES_DIR).join(name).display().to_string(),
-        branch,
-        slot,
+        branch: Some(branch),
+        slot: Some(slot),
         window: None,
         agent: agent.to_string(),
     }
 }
 
-/// git -C <repo> worktree add -b <branch> <path>
+/// A plain session's workspace: `folder`, no branch, no slot.
+pub fn folder_workspace(folder: &Path, agent: &str) -> Workspace {
+    Workspace {
+        path: folder.display().to_string(),
+        branch: None,
+        slot: None,
+        window: None,
+        agent: agent.to_string(),
+    }
+}
+
+/// git -C <repo> worktree add -b <branch> <path>; workspace_for always sets the branch.
 pub fn worktree_add_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
     let repo = repo.display().to_string();
+    let branch = workspace
+        .branch
+        .as_deref()
+        .expect("a worktree flow has a branch");
     [
         "git",
         "-C",
@@ -25,7 +40,7 @@ pub fn worktree_add_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
         "worktree",
         "add",
         "-b",
-        &workspace.branch,
+        branch,
         &workspace.path,
     ]
     .map(String::from)
@@ -45,8 +60,11 @@ pub fn worktree_remove_argv(repo: &Path, workspace: &Workspace, force: bool) -> 
     argv
 }
 
-/// The repository a flow worktree belongs to: the path above .flow/worktrees/<name>.
+/// The repository a flow worktree belongs to: the path above .flow/worktrees/<name>. None for a
+/// plain session (no branch), even one opened inside a worktree, so remove never tears down a folder
+/// it did not create.
 pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
+    space.branch.as_ref()?;
     Path::new(&space.path)
         .parent()
         .filter(|worktrees| worktrees.ends_with(WORKTREES_DIR))?
@@ -55,16 +73,27 @@ pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// FLOW_ID, FLOW_NAME, FLOW_SLOT, FLOW_WORKTREE, FLOW_REPO for the hooks.
+/// What hook_env sets: a worker's identity, which a session flow ui starts from inside one must
+/// not pass on.
+pub const HOOK_VARS: [&str; 5] = [
+    "FLOW_ID",
+    "FLOW_NAME",
+    "FLOW_SLOT",
+    "FLOW_WORKTREE",
+    "FLOW_REPO",
+];
+
+/// FLOW_ID, FLOW_NAME, FLOW_SLOT (when it has one), FLOW_WORKTREE, FLOW_REPO for the hooks.
 pub fn hook_env(id: &str, name: &str, repo: &Path, workspace: &Workspace) -> Vec<(String, String)> {
     [
-        ("FLOW_ID", id.to_string()),
-        ("FLOW_NAME", name.to_string()),
-        ("FLOW_SLOT", workspace.slot.to_string()),
-        ("FLOW_WORKTREE", workspace.path.clone()),
-        ("FLOW_REPO", repo.display().to_string()),
+        Some(("FLOW_ID", id.to_string())),
+        Some(("FLOW_NAME", name.to_string())),
+        workspace.slot.map(|slot| ("FLOW_SLOT", slot.to_string())),
+        Some(("FLOW_WORKTREE", workspace.path.clone())),
+        Some(("FLOW_REPO", repo.display().to_string())),
     ]
     .into_iter()
+    .flatten()
     .map(|(key, value)| (key.to_string(), value))
     .collect()
 }
@@ -72,15 +101,15 @@ pub fn hook_env(id: &str, name: &str, repo: &Path, workspace: &Workspace) -> Vec
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::launch::fixtures::{shop, strings};
+    use crate::launch::fixtures::{scratch, shop, strings};
 
     #[test]
     fn places_the_worktree_inside_the_repo_on_its_own_branch() {
         let workspace = shop();
 
         assert_eq!(workspace.path, "/repo/.flow/worktrees/shop-217");
-        assert_eq!(workspace.branch, "flow/shop-217");
-        assert_eq!(workspace.slot, 2);
+        assert_eq!(workspace.branch.as_deref(), Some("flow/shop-217"));
+        assert_eq!(workspace.slot, Some(2));
         assert_eq!(workspace.window, None);
         assert_eq!(workspace.agent, "claude");
         assert_eq!(
@@ -146,5 +175,30 @@ mod tests {
             ..shop()
         };
         assert_eq!(repo_of(&elsewhere), None);
+    }
+
+    #[test]
+    fn a_plain_session_has_no_repo_even_inside_the_worktrees_folder() {
+        let inside = Workspace {
+            path: "/repo/.flow/worktrees/shop-217".into(),
+            ..scratch()
+        };
+
+        assert_eq!(repo_of(&scratch()), None);
+        assert_eq!(
+            repo_of(&inside),
+            None,
+            "remove must not tear down a folder it did not create"
+        );
+    }
+
+    #[test]
+    fn sets_no_slot_for_the_hooks_without_one() {
+        let keys: Vec<String> = hook_env("7f3c", "x", Path::new("/repo"), &scratch())
+            .into_iter()
+            .map(|(key, _)| key)
+            .collect();
+
+        assert_eq!(keys, ["FLOW_ID", "FLOW_NAME", "FLOW_WORKTREE", "FLOW_REPO"]);
     }
 }

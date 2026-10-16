@@ -118,11 +118,17 @@ impl BoardView<'_> {
         ]);
 
         let mut second = vec![Span::raw("   ")];
-        second.extend(self.sidebar.steps(flow));
-        second.push(Span::raw("  "));
+        let steps = self.sidebar.steps(flow);
+        if !steps.is_empty() {
+            second.extend(steps);
+            second.push(Span::raw("  "));
+        }
         second.push(self.sidebar.label(flow));
-        if flow.mode == Mode::Guided && !flow.is_finished() {
-            second.push(Span::styled("  · guided", theme.ui.faint));
+        if matches!(flow.mode, Mode::Guided | Mode::Plain) && !flow.is_finished() {
+            second.push(Span::styled(
+                format!("  · {}", flow.mode.name()),
+                theme.ui.faint,
+            ));
         }
 
         let ago = format!(
@@ -131,7 +137,8 @@ impl BoardView<'_> {
         );
         let third = if flow.is_finished() {
             let text = match &flow.workspace {
-                Some(space) => space.branch.clone(),
+                Some(space) if flow.is_plain() => self.sidebar.tilde(&space.path),
+                Some(space) => space.branch.clone().unwrap_or_default(),
                 None => String::new(),
             };
             split(

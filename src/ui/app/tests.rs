@@ -12,7 +12,7 @@ use crate::event::{Event, EventKind};
 use crate::fold;
 use crate::proto::{Cell, ClientMsg, Color, Flags, Frame, Mouse, ServerMsg};
 use crate::ui::input::{Command, Key, Routed, Step};
-use crate::view::State;
+use crate::view::{State, VIEW_VERSION};
 
 const SIZE: Size = Size { cols: 80, rows: 10 };
 
@@ -76,8 +76,35 @@ fn worker(id: &str, mode: crate::event::Mode, age: u64, events: Vec<EventKind>) 
             at,
             EventKind::Workspace {
                 path: format!("/shop/.flow/worktrees/{id}"),
-                branch: format!("flow/{id}"),
-                slot: 1,
+                branch: Some(format!("flow/{id}")),
+                slot: Some(1),
+                window: Some("flow-ui".into()),
+                agent: "claude".into(),
+            },
+        ),
+    ];
+    log.extend(events.into_iter().map(|kind| Event::new(at, kind)));
+    fold::fold(id, &log, None, NOW).unwrap()
+}
+
+/// A plain session in `folder`, started `age` minutes ago, with the events after its Workspace.
+fn plain_session(id: &str, folder: &str, age: u64, events: Vec<EventKind>) -> FlowView {
+    let at = NOW - age * MINUTE;
+    let mut log = vec![
+        Event::new(
+            at,
+            EventKind::Started {
+                name: id.into(),
+                request: String::new(),
+                mode: crate::event::Mode::Plain,
+            },
+        ),
+        Event::new(
+            at,
+            EventKind::Workspace {
+                path: folder.into(),
+                branch: None,
+                slot: None,
                 window: Some("flow-ui".into()),
                 agent: "claude".into(),
             },
@@ -191,7 +218,7 @@ fn board_app() -> App {
 fn every_project() -> Projects {
     let api = worker("api-7", crate::event::Mode::Auto, 5, vec![]);
     Projects {
-        version: 1,
+        version: VIEW_VERSION,
         now: NOW,
         projects: vec![
             crate::view::Project {

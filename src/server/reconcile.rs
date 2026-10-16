@@ -98,8 +98,8 @@ mod tests {
                 1,
                 EventKind::Workspace {
                     path: format!("/repo/.flow/worktrees/{id}"),
-                    branch: format!("flow/{id}"),
-                    slot: 1,
+                    branch: Some(format!("flow/{id}")),
+                    slot: Some(1),
                     window: window.map(String::from),
                     agent: agent.into(),
                 },

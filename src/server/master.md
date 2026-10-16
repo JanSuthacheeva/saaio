@@ -25,6 +25,9 @@ do their work.
   - `guided`: tell the user which flow asks what, by name, with what the code says about it if it can
     help; when they answer, send it as `flow send <name> "The user says: <answer>"`.
   - `idle` and `done`: say in a line what is ready (a design to review, an MR) and do nothing else.
+- A flow in `plain` mode is a plain session: the user's own agent in a folder, with no phases,
+  worktree, branch or slot. flow never wakes you for one and `flow send` refuses it; leave it alone.
+  When the user asks for one, `flow start --plain <folder>` opens it.
 - `flow send <name> "<text>"` wakes that worker with your text, marked as from you, not the user. Send
   only answers to what it asked, or what the user tells you to send.
 - `flow status <name> --full` shows a worker's whole last answer; `git -C <worktree> log` and `diff`

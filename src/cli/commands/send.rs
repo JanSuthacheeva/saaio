@@ -54,6 +54,12 @@ pub fn run(
             Vec::new(),
         ));
     }
+    if flow.is_plain() {
+        return Err(Failure::error(
+            format!("{} is a plain session; it is not the master's", flow.name),
+            vec!["Plain sessions are the user's own".to_string()],
+        ));
+    }
     let message = EventKind::Message {
         text: text.to_string(),
     };

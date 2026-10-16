@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::event::{EventKind, Mode, Phase};
 
-pub const VIEW_VERSION: u32 = 1;
+pub const VIEW_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,8 +46,8 @@ pub struct FlowView {
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
     pub path: String,
-    pub branch: String,
-    pub slot: u8,
+    pub branch: Option<String>,
+    pub slot: Option<u8>,
     pub window: Option<String>,
     pub agent: String,
 }
@@ -210,6 +210,11 @@ impl FlowView {
         matches!(self.state, State::Done | State::Ended)
     }
 
+    /// Started with --plain: no phases, no master.
+    pub fn is_plain(&self) -> bool {
+        self.mode == Mode::Plain
+    }
+
     pub fn group(&self) -> Group {
         if self.needs_you() {
             Group::NeedsYou
@@ -296,8 +301,8 @@ mod tests {
             changed_at: 2,
             workspace: Some(Workspace {
                 path: "/repo/.flow/worktrees/shop-221".into(),
-                branch: "flow/shop-221".into(),
-                slot: 1,
+                branch: Some("flow/shop-221".into()),
+                slot: Some(1),
                 window: Some("@14".into()),
                 agent: "claude".into(),
             }),
@@ -319,7 +324,7 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert!(
-            json.trim_start().starts_with("{\n  \"version\": 1,"),
+            json.trim_start().starts_with("{\n  \"version\": 2,"),
             "{json}"
         );
         assert_eq!(value["needsYou"], 1);
@@ -363,5 +368,13 @@ mod tests {
         assert!(flow(State::Ended).is_finished());
         assert!(!flow(State::Blocked).is_finished());
         assert!(!flow(State::Working).is_finished());
+    }
+
+    #[test]
+    fn is_plain_only_in_plain_mode() {
+        let mut plain = flow(State::Working);
+        assert!(!plain.is_plain());
+        plain.mode = Mode::Plain;
+        assert!(plain.is_plain());
     }
 }

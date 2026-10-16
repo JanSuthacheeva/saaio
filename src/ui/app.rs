@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use crate::launch::worktree::WORKTREES_DIR;
 use crate::proto::{Modes, PaneInfo, PaneKey, PaneStatus, Size};
 use crate::ui::board::BoardState;
+use crate::ui::fit;
 use crate::ui::layout::{self, Areas, Chrome};
 use crate::ui::newflow::NewFlowForm;
 use crate::ui::peek::PeekLine;
@@ -178,15 +179,21 @@ impl App {
         }
     }
 
-    /// The repository of the pane in view: the master's directory, or the repo a worker's worktree is in.
+    /// The repository of the pane in view: the master's directory, the repo a worker's worktree is
+    /// in, or a plain session's folder.
     fn focused_repo(&self) -> PathBuf {
-        let worktree = match &self.focus {
+        let focused = match &self.focus {
             PaneKey::Master => None,
-            PaneKey::Flow(id) => self
-                .worker(id)
-                .and_then(|flow| flow.workspace.as_ref())
-                .map(|space| space.path.clone()),
+            PaneKey::Flow(id) => self.worker(id),
         };
+        if let Some(flow) = focused.filter(|flow| flow.is_plain())
+            && let Some(space) = &flow.workspace
+        {
+            return PathBuf::from(&space.path);
+        }
+        let worktree = focused
+            .and_then(|flow| flow.workspace.as_ref())
+            .map(|space| space.path.clone());
         let repo = worktree.and_then(|path| {
             let marker = format!("/{WORKTREES_DIR}/");
             path.find(&marker).map(|at| path[..at].to_string())
@@ -198,14 +205,7 @@ impl App {
     }
 
     fn tilde(&self, path: &str) -> String {
-        match self
-            .home
-            .as_deref()
-            .and_then(|home| path.strip_prefix(home))
-        {
-            Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("~{rest}"),
-            _ => path.to_string(),
-        }
+        fit::tilde(path, self.home.as_deref())
     }
 
     fn worker(&self, id: &str) -> Option<&FlowView> {
@@ -242,6 +242,7 @@ impl App {
             now: self.now,
             spin: self.spin,
             changed: &self.changed,
+            home: self.home.as_deref(),
             theme,
         }
     }

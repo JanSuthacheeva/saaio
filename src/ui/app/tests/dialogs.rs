@@ -179,6 +179,22 @@ fn keeps_or_ends_unfinished_flows_when_flow_stops() {
     );
 
     let mut app = board_app();
+    let mut board = fleet();
+    board
+        .flows
+        .push(plain_session("scratch", "/Users/jan/scratch", 5, vec![]));
+    app.on_server(ServerMsg::Board(board));
+    app.on_input(Routed::Command(Command::StopServer));
+    let ended = app.on_input(Routed::View(vec![Key::Char('e')]));
+    let Effect::Quit(message) = &ended[2] else {
+        panic!("expected to quit: {ended:?}");
+    };
+    assert!(
+        message.contains("\n  scratch  ~/scratch"),
+        "a plain session's folder: {message}"
+    );
+
+    let mut app = board_app();
     app.on_input(Routed::Command(Command::StopServer));
     assert_eq!(app.on_input(Routed::View(vec![Key::Esc])), vec![]);
     assert!(!app.is_modal());
@@ -257,6 +273,58 @@ fn starts_a_flow_from_the_dialog_in_the_repo_in_view() {
     };
     assert_eq!(form.request, "SHOP-240 rate-limit the export endpoint");
     assert_eq!(form.error.as_deref(), Some("all 20 slots are in use"));
+}
+
+#[test]
+fn opens_a_plain_session_from_the_dialog() {
+    let mut app = board_app();
+    app.on_input(Routed::Command(Command::NewFlow));
+    app.on_input(Routed::View(vec![
+        Key::Tab,
+        Key::Right,
+        Key::Tab,
+        Key::Ctrl('w'),
+    ]));
+    app.on_input(Routed::View("scratch".chars().map(Key::Char).collect()));
+
+    let terminal = render_at(&app, FLEET);
+    let dialog: String = (10..24).map(|y| row(&terminal, y) + "\n").collect();
+    assert!(dialog.contains("│ new session "), "{dialog}");
+    assert!(dialog.contains("│ folder "), "{dialog}");
+    assert!(dialog.contains("│ │ ~/projects/scratch "), "{dialog}");
+    assert!(
+        dialog.contains("│ opens in ~/projects/scratch  ·  no worktree, branch or slot"),
+        "{dialog}"
+    );
+
+    let effects = app.on_input(Routed::View(vec![Key::Enter]));
+    let [Effect::Run(job)] = &effects[..] else {
+        panic!("expected a job: {effects:?}");
+    };
+    assert_eq!(job.args(), ["start", "--plain", "~/projects/scratch"]);
+    assert_eq!(job.dir(), Some(Path::new("/Users/jan/projects/shop")));
+}
+
+#[test]
+fn the_dialog_from_a_plain_session_starts_in_its_folder() {
+    let mut app = board_app();
+    let mut board = fleet();
+    board
+        .flows
+        .push(plain_session("scratch", "/Users/jan/scratch", 5, vec![]));
+    app.on_server(ServerMsg::Board(board));
+    app.focus = PaneKey::Flow("scratch".into());
+
+    let effects = app.on_input(Routed::Command(Command::NewFlow));
+
+    assert_eq!(
+        effects,
+        vec![Effect::LoadBranching(PathBuf::from("/Users/jan/scratch"))]
+    );
+    let View::NewFlow(form) = &app.view else {
+        panic!("expected the dialog");
+    };
+    assert_eq!(form.folder, "~/scratch");
 }
 
 #[test]

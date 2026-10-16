@@ -192,6 +192,28 @@ fn says_whether_an_event_changes_what_the_flow_shows() {
 }
 
 #[test]
+fn a_plain_session_has_no_steps_but_keeps_its_phase() {
+    let plain = at(
+        1,
+        EventKind::Started {
+            name: "scratch".into(),
+            request: String::new(),
+            mode: Mode::Plain,
+        },
+    );
+
+    assert_eq!(
+        view(std::slice::from_ref(&plain), 2).state,
+        State::Idle,
+        "it opens at an empty prompt"
+    );
+    let flow = view(&[plain, phase(2, Phase::Design)], 3);
+
+    assert!(flow.steps.is_empty());
+    assert_eq!(flow.phase, Some(Phase::Design));
+}
+
+#[test]
 fn needs_a_started_event_to_name_the_flow() {
     assert_eq!(fold("7f3c", &[at(1, EventKind::Working)], None, 2), None);
     assert_eq!(fold("7f3c", &[], None, 2), None);
@@ -635,8 +657,8 @@ fn resolves_an_id_then_the_unfinished_flow_then_the_newest_finished_one() {
 fn workspace(slot: u8, window: Option<&str>) -> EventKind {
     EventKind::Workspace {
         path: "/repo/.flow/worktrees/shop-221".into(),
-        branch: "flow/shop-221".into(),
-        slot,
+        branch: Some("flow/shop-221".into()),
+        slot: Some(slot),
         window: window.map(String::from),
         agent: "claude".into(),
     }
@@ -657,7 +679,7 @@ fn keeps_the_last_workspace_without_changing_the_state() {
         flow.workspace.as_ref().and_then(|ws| ws.window.as_deref()),
         Some("@14")
     );
-    assert_eq!(flow.workspace.as_ref().map(|ws| ws.slot), Some(1));
+    assert_eq!(flow.workspace.as_ref().and_then(|ws| ws.slot), Some(1));
     assert_eq!(flow.state, State::Working);
     assert_eq!(flow.changed_at, 0);
     assert_eq!(texts(&flow), vec!["started"]);

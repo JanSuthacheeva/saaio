@@ -1,0 +1,44 @@
+
+  ▚▄▞ flow board                                                                  7 sessions · 2 need you · 1 ready · 1 delegated · 1 done · 1 ended
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+    0   master                              you      1 ● shop-221                        blocked      2 ● shop-230                waiting for you
+      ~/projects/shop · main                           ●───●───○───○  implement                         ●───○───○───○  design  · guided
+      6 workers                                        4/9 tasks                         29m ago                                          31m ago
+                                                       migration needs a default value for orde…        Which approach: a channel column or a jo…
+
+
+  ╭─────────────────────────────────────────────╮
+  │ 3 ○ scratch                           ready │    4 ◓ export-csv            reviewing · agent      5 ✓ shop-198                        MR open
+  │   idle  · plain                             │      ●───●───●───○  review                            ●───●───●───●  MR !418
+  │                                     12m ago │      6/6 tasks                          1h ago        flow/shop-198                      2h ago
+  │   The tree has 14 files under src.          │      agent: review changes                            shop-198
+  ╰─────────────────────────────────────────────╯
+
+
+    6 ○ notes                             ended
+      ended
+      ~/notes                            3h ago
+
+
+
+  3 scratch  plain · ~/scratch · started 12m ago
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  timeline
+  16:28  ● started
+  16:28  ● idle: The tree has 14 files under src.
+
+
+
+
+
+
+
+
+
+
+
+
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   a every project   esc back to scratch
+

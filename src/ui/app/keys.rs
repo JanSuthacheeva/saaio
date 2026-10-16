@@ -165,13 +165,11 @@ impl App {
                     .filter(|flow| unfinished.contains(&flow.id))
                 {
                     if let Some(space) = &flow.workspace {
-                        let _ = write!(
-                            message,
-                            "\n  {}  {}  {}",
-                            flow.name,
-                            space.branch,
-                            self.tilde(&space.path)
-                        );
+                        let _ = write!(message, "\n  {}  ", flow.name);
+                        if let Some(branch) = &space.branch {
+                            let _ = write!(message, "{branch}  ");
+                        }
+                        message.push_str(&self.tilde(&space.path));
                     }
                 }
                 let mut effects = vec![Effect::Send(ClientMsg::EndFlows)];
@@ -275,7 +273,8 @@ impl App {
     /// The new-flow dialog for the repo in view, asking for its branch convention.
     pub(super) fn open_new_flow(&mut self) -> Vec<Effect> {
         let repo = self.focused_repo();
-        self.view = View::NewFlow(NewFlowForm::new(repo.clone()));
+        let place = self.tilde(&repo.display().to_string());
+        self.view = View::NewFlow(NewFlowForm::new(repo.clone(), place));
         vec![Effect::LoadBranching(repo)]
     }
 

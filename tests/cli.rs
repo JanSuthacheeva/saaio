@@ -202,7 +202,7 @@ fn status_json_is_the_versioned_board() {
 
     assert!(output.status.success());
     let board: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(board["version"], 1);
+    assert_eq!(board["version"], 2);
     assert_eq!(board["needsYou"], 1);
     assert_eq!(board["flows"][0]["name"], "shop-221");
     assert_eq!(board["flows"][0]["blocker"], "no default");
@@ -225,6 +225,26 @@ fn an_unknown_flag_fails_loudly_on_stdout_with_exit_2() {
         text.contains("Run `flow status --help` for the usage"),
         "{text}"
     );
+}
+
+#[test]
+fn a_flag_without_its_value_names_the_command_to_read_up_on() {
+    let home = TempDir::new().unwrap();
+
+    for (args, command) in [
+        (vec!["start", "--name"], "flow start"),
+        (vec!["report", "--flow"], "flow report"),
+        (vec!["--nope"], "flow"),
+    ] {
+        let output = flow(home.path(), &args);
+
+        assert_eq!(output.status.code(), Some(2), "{args:?}");
+        let text = stdout(&output);
+        assert!(
+            text.contains(&format!("Run `{command} --help` for the usage")),
+            "{args:?}: {text}"
+        );
+    }
 }
 
 #[test]
@@ -777,6 +797,140 @@ fn start_refuses_outside_a_repository() {
     );
 }
 
+/// The slots claimed in the lab's shared folder.
+fn claimed_slots(home: &Path) -> Vec<String> {
+    fs::read_dir(shared(home).join("flow/slots"))
+        .map(|entries| {
+            entries
+                .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+                .filter(|name| name.parse::<u8>().is_ok())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[test]
+fn start_plain_opens_an_agent_in_any_folder_without_a_worktree_branch_or_slot() {
+    let lab = Lab::new();
+    let scratch = lab.dir.path().canonicalize().unwrap().join("scratch");
+    fs::create_dir_all(&scratch).unwrap();
+
+    let output = flow_command(&lab.home)
+        .args(["start", "--plain"])
+        .arg(&scratch)
+        .current_dir(&scratch)
+        .output()
+        .unwrap();
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(
+        text.starts_with(
+            "flow: scratch
+"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!(
+            "folder: {}
+agent: claude
+pane: when flow ui runs",
+            scratch.display()
+        )),
+        "{text}"
+    );
+    assert!(!text.contains("branch"), "{text}");
+    assert!(!scratch.join(".flow").exists(), "no worktree");
+    assert!(claimed_slots(&lab.home).is_empty(), "no slot");
+
+    let board: serde_json::Value =
+        serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+    let session = &board["flows"][0];
+    assert_eq!(session["mode"], "plain");
+    assert_eq!(session["state"], "idle", "it waits at an empty prompt");
+    assert_eq!(session["request"], "");
+    assert_eq!(session["steps"], serde_json::json!([]));
+    assert_eq!(session["workspace"]["path"], scratch.display().to_string());
+    assert_eq!(session["workspace"]["branch"], serde_json::Value::Null);
+    assert_eq!(session["workspace"]["slot"], serde_json::Value::Null);
+}
+
+#[test]
+fn start_plain_takes_a_name_and_a_folder_under_home() {
+    let lab = Lab::new();
+    let home = lab.dir.path().canonicalize().unwrap();
+    fs::create_dir_all(home.join("scratch")).unwrap();
+
+    let output = flow_command(&lab.home)
+        .args(["start", "--plain", "~/scratch", "--name", "Try It"])
+        .env("HOME", &home)
+        .current_dir(&lab.repo)
+        .output()
+        .unwrap();
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(
+        text.starts_with(
+            "flow: try-it
+"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!(
+            "folder: {}
+",
+            home.join("scratch").display()
+        )),
+        "{text}"
+    );
+}
+
+#[test]
+fn start_plain_refuses_a_request_mode_or_type_and_a_missing_folder() {
+    let lab = Lab::new();
+    let scratch = lab.repo.display().to_string();
+
+    for extra in [
+        vec!["SHOP-1 x"],
+        vec!["--mode", "auto"],
+        vec!["--type", "feature"],
+    ] {
+        let mut args = vec!["--plain", &scratch];
+        args.extend(extra.iter().copied());
+        let output = lab.start(&args);
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "{extra:?}: {}",
+            stdout(&output)
+        );
+    }
+    let plain_mode = lab.start(&["x", "--mode", "plain"]);
+    assert_eq!(plain_mode.status.code(), Some(2), "plain is no --mode");
+
+    let missing = lab.start(&["--plain", "nowhere"]);
+    let text = stdout(&missing);
+    assert_eq!(missing.status.code(), Some(1), "{text}");
+    assert!(
+        text.starts_with(&format!(
+            "error: no folder {}",
+            lab.repo.join("nowhere").display()
+        )),
+        "{text}"
+    );
+    assert!(text.contains("Name an existing folder"), "{text}");
+    let file = lab.repo.join("file.txt");
+    fs::write(&file, "x").unwrap();
+    assert_eq!(lab.start(&["--plain", "file.txt"]).status.code(), Some(1));
+
+    let board: serde_json::Value =
+        serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+    assert_eq!(board["count"], 0, "nothing written");
+}
+
 #[test]
 fn start_and_new_refuse_a_request_over_the_limit_before_making_anything() {
     let lab = Lab::new();
@@ -1008,6 +1162,47 @@ fn remove_tears_down_and_forgets_a_running_flow() {
         list.contains("count: 1") && list.contains("shop-2"),
         "{list}"
     );
+}
+
+#[test]
+fn remove_forgets_a_plain_session_and_leaves_its_folder_alone() {
+    let lab = Lab::new();
+    lab.hook("teardown", "#!/bin/sh\ntouch \"$FLOW_REPO/torn-down\"\n");
+    let folder = lab.repo.join(".flow/worktrees/mine");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join("notes.txt"), "keep").unwrap();
+    assert!(
+        lab.start(&["--plain", ".flow/worktrees/mine"])
+            .status
+            .success()
+    );
+
+    let detail = stdout(&lab.run(&["status", "mine"]));
+    assert!(
+        detail.contains(&format!(
+            "mode: plain\nstate: idle\nfolder: {}\n",
+            folder.display()
+        )),
+        "{detail}"
+    );
+    assert!(
+        ["branch:", "worktree:", "request:", "steps"]
+            .iter()
+            .all(|field| !detail.contains(field)),
+        "{detail}"
+    );
+
+    let output = lab.run(&["remove", "mine"]);
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(text.contains("worktree: none\nbranch: none"), "{text}");
+    assert_eq!(
+        fs::read_to_string(folder.join("notes.txt")).unwrap(),
+        "keep"
+    );
+    assert!(!lab.repo.join("torn-down").exists(), "no teardown");
+    assert!(stdout(&flow(&lab.home, &["status"])).contains("count: 0"));
 }
 
 #[test]
@@ -1261,6 +1456,20 @@ fn send_refuses_what_has_no_worker_to_read_it() {
     let long = "x".repeat(4001);
     assert!(refused(&["send", "live", &long], None).contains("over 4000"));
     assert!(refused(&["send", "live", "hi"], Some("cccc")).contains("only the master sends"));
+    seed(
+        home.path(),
+        "dddd",
+        &[
+            r#"{"v":1,"at":1000,"kind":"started","name":"scratch","request":"","mode":"plain"}"#,
+            r#"{"v":1,"at":1500,"kind":"workspace","path":"/tmp","branch":null,"slot":null,"window":"flow-ui","agent":"claude"}"#,
+        ],
+    );
+    let plain = refused(&["send", "scratch", "hi"], None);
+    assert!(
+        plain.contains("scratch is a plain session; it is not the master's")
+            && plain.contains("Plain sessions are the user's own"),
+        "{plain}"
+    );
     let log = fs::read_to_string(home.path().join("flows/cccc.jsonl")).unwrap();
     assert!(!log.contains("message"), "{log}");
 }

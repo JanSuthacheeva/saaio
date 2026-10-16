@@ -35,26 +35,9 @@ const PLAN_PROGRESS_TOOL: &str = "mcp__plan-progress__report";
 const ARTIFACT_WATCH_TYPE: &str = "monitor";
 const ARTIFACT_WATCH_PREFIX: &str = "live updates for artifact ";
 
-/// The --settings JSON: each event in EVENTS runs `<flow_exe> hook claude-code`, synchronously so
-/// the events reach the log in order; each in WAIT_EVENTS also arms `<flow_exe> wait`.
+/// The --settings JSON: report_hooks, and each event in WAIT_EVENTS also arms `<flow_exe> wait`.
 pub fn settings(flow_exe: &Path) -> String {
-    let handler = json!({
-        "type": "command",
-        "command": flow_exe.display().to_string(),
-        "args": ["hook", Adapter::ClaudeCode.name()],
-        "timeout": HOOK_TIMEOUT_SECS,
-    });
-    let mut hooks: serde_json::Map<String, Value> = EVENTS
-        .iter()
-        .map(|event| {
-            let entry = if event.ends_with("ToolUse") || *event == "PermissionRequest" {
-                json!({ "matcher": "*", "hooks": [handler] })
-            } else {
-                json!({ "hooks": [handler] })
-            };
-            (event.to_string(), json!([entry]))
-        })
-        .collect();
+    let mut hooks = report_hooks(flow_exe);
     let waiter = waiter(flow_exe, &["wait"]);
     for event in WAIT_EVENTS {
         let entry = hooks
@@ -66,6 +49,33 @@ pub fn settings(flow_exe: &Path) -> String {
             .push(waiter.clone());
     }
     json!({ "hooks": hooks }).to_string()
+}
+
+/// A plain session's --settings JSON: report_hooks alone; it waits for no master.
+pub fn plain_settings(flow_exe: &Path) -> String {
+    json!({ "hooks": report_hooks(flow_exe) }).to_string()
+}
+
+/// Each event in EVENTS runs `<flow_exe> hook claude-code`, synchronously so the events reach the
+/// log in order.
+fn report_hooks(flow_exe: &Path) -> serde_json::Map<String, Value> {
+    let handler = json!({
+        "type": "command",
+        "command": flow_exe.display().to_string(),
+        "args": ["hook", Adapter::ClaudeCode.name()],
+        "timeout": HOOK_TIMEOUT_SECS,
+    });
+    EVENTS
+        .iter()
+        .map(|event| {
+            let entry = if event.ends_with("ToolUse") || *event == "PermissionRequest" {
+                json!({ "matcher": "*", "hooks": [handler] })
+            } else {
+                json!({ "hooks": [handler] })
+            };
+            (event.to_string(), json!([entry]))
+        })
+        .collect()
 }
 
 /// The master's --settings JSON: only its waiter, `<flow_exe> wait --master`; the master is no
@@ -647,6 +657,30 @@ mod tests {
         }
         assert_eq!(settings["hooks"]["PreToolUse"][0]["matcher"], "*");
         assert_eq!(settings["hooks"]["Stop"][0].get("matcher"), None);
+    }
+
+    #[test]
+    fn a_plain_session_reports_but_neither_waits_nor_hears_of_the_master() {
+        let plain: Value = serde_json::from_str(&plain_settings(Path::new("/bin/flow"))).unwrap();
+
+        let hooks = plain["hooks"].as_object().unwrap();
+        assert_eq!(hooks.len(), EVENTS.len(), "no SessionStart waiter");
+        for event in EVENTS {
+            let handlers = hooks[event][0]["hooks"].as_array().unwrap();
+            assert_eq!(handlers.len(), 1, "{event}");
+            assert_eq!(
+                handlers[0]["args"],
+                json!(["hook", "claude-code"]),
+                "{event}"
+            );
+        }
+        assert_eq!(
+            Adapter::ClaudeCode.plain_wiring(Path::new("/bin/flow")),
+            [
+                "--settings".to_string(),
+                plain_settings(Path::new("/bin/flow"))
+            ]
+        );
     }
 
     #[test]

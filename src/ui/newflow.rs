@@ -1,18 +1,15 @@
+mod view;
+
 use std::path::PathBuf;
 
-use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Clear, Widget};
 
-use crate::branching::{self, Branching};
+pub use view::NewFlowView;
+
+use crate::branching::Branching;
 use crate::event::Mode;
-use crate::launch::{name, worktree};
-use crate::slots;
-use crate::ui::fit::{clip, clip_place, columns, spans_width, split, tail};
+use crate::ui::fit::{columns, tail};
 use crate::ui::input::Key;
-use crate::ui::theme::Theme;
-use crate::view::FlowView;
 
 /// The dialog's width, borders included.
 const WIDTH: u16 = 78;
@@ -23,6 +20,8 @@ const HEIGHT: u16 = 14;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewFlowForm {
     pub request: String,
+    /// The folder a plain session opens in; prefilled with the place in view (~/projects/shop).
+    pub folder: String,
     pub mode: Mode,
     /// The repository the flow starts in: the focused pane's.
     pub repo: PathBuf,
@@ -50,10 +49,11 @@ pub enum FormAction {
 }
 
 impl NewFlowForm {
-    /// Prefilled with the focused pane's repo.
-    pub fn new(repo: PathBuf) -> NewFlowForm {
+    /// Prefilled with the focused pane's repo, and `place` as a plain session's folder.
+    pub fn new(repo: PathBuf, place: String) -> NewFlowForm {
         NewFlowForm {
             request: String::new(),
+            folder: place,
             mode: Mode::Guided,
             repo,
             error: None,
@@ -79,32 +79,61 @@ impl NewFlowForm {
         self.types().get(self.kind).map(String::as_str)
     }
 
+    /// The text the box edits: the folder for a plain session, else the request.
+    pub fn text(&self) -> &str {
+        if self.mode == Mode::Plain {
+            &self.folder
+        } else {
+            &self.request
+        }
+    }
+
+    fn text_mut(&mut self) -> &mut String {
+        if self.mode == Mode::Plain {
+            &mut self.folder
+        } else {
+            &mut self.request
+        }
+    }
+
+    /// Whether the type row shows: the repo has types and the start makes a branch.
+    fn has_type_row(&self) -> bool {
+        !self.types().is_empty() && self.mode != Mode::Plain
+    }
+
     /// Rows the type row adds to the dialog.
     fn extra_rows(&self) -> u16 {
-        u16::from(!self.types().is_empty())
+        u16::from(self.has_type_row())
     }
 
     pub fn on_key(&mut self, key: Key) -> FormAction {
         match (self.field, key) {
             (_, Key::Esc) => return FormAction::Cancel,
-            (_, Key::Enter) if !self.request.trim().is_empty() => return FormAction::Submit,
+            (_, Key::Enter) if !self.text().trim().is_empty() => return FormAction::Submit,
             (_, Key::Enter) => {}
             (_, Key::Tab) => {
                 self.field = match self.field {
-                    Field::Request if !self.types().is_empty() => Field::Type,
+                    Field::Request if self.has_type_row() => Field::Type,
                     Field::Request | Field::Type => Field::Mode,
                     Field::Mode => Field::Request,
                 };
             }
-            (Field::Request, Key::Char(c)) => self.request.push(c),
+            (Field::Request, Key::Char(c)) => self.text_mut().push(c),
             (Field::Request, Key::Backspace) => {
-                self.request.pop();
+                self.text_mut().pop();
             }
-            (Field::Request, Key::Ctrl('u')) => self.request.clear(),
+            (Field::Request, Key::Ctrl('u')) => self.text_mut().clear(),
             (Field::Request, Key::Ctrl('w')) => {
-                let kept = self.request.trim_end().len();
-                let start = self.request[..kept].rfind(' ').map_or(0, |at| at + 1);
-                self.request.truncate(start);
+                // A folder loses its last folder, a request its last word.
+                let ends: &[char] = if self.mode == Mode::Plain {
+                    &[' ', '/']
+                } else {
+                    &[' ']
+                };
+                let text = self.text_mut();
+                let kept = text.trim_end_matches(ends).len();
+                let start = text[..kept].rfind(ends).map_or(0, |at| at + 1);
+                text.truncate(start);
             }
             (Field::Type, Key::Right | Key::Char(' ' | 'l')) => {
                 self.kind = (self.kind + 1) % self.types().len().max(1);
@@ -113,216 +142,39 @@ impl NewFlowForm {
                 let count = self.types().len().max(1);
                 self.kind = (self.kind + count - 1) % count;
             }
-            (Field::Mode, Key::Left | Key::Right | Key::Char(' ' | 'h' | 'l')) => {
-                self.mode = self.mode.toggled();
+            (Field::Mode, Key::Right | Key::Char(' ' | 'l')) => {
+                self.mode = self.cycled(1);
+            }
+            (Field::Mode, Key::Left | Key::Char('h')) => {
+                self.mode = self.cycled(Mode::ALL.len() - 1);
             }
             _ => {}
         }
         FormAction::Edit
     }
 
-    /// The column of the text cursor inside the request box, while the request has the keys.
+    /// The mode `steps` after the picked one in Mode::ALL, wrapping.
+    fn cycled(&self, steps: usize) -> Mode {
+        let at = Mode::ALL
+            .iter()
+            .position(|mode| *mode == self.mode)
+            .unwrap_or(0);
+        Mode::ALL[(at + steps) % Mode::ALL.len()]
+    }
+
+    /// The column of the text cursor inside the text box, while the box has the keys.
     pub fn cursor(&self, area: Rect) -> Option<(u16, u16)> {
         if self.field != Field::Request {
             return None;
         }
         let dialog = dialog_area(area, self.extra_rows());
-        let typed = u16::try_from(columns(self.shown_request(dialog))).unwrap_or(u16::MAX);
+        let typed = u16::try_from(columns(self.shown_text(dialog))).unwrap_or(u16::MAX);
         Some((dialog.x + 3 + typed, dialog.y + 5))
     }
 
-    /// The end of the request that fits the box.
-    fn shown_request(&self, dialog: Rect) -> &str {
-        tail(&self.request, usize::from(dialog.width.saturating_sub(7)))
-    }
-}
-
-/// The dialog, centered in `area`: request, mode and what the start creates.
-#[derive(Debug)]
-pub struct NewFlowView<'a> {
-    pub form: &'a NewFlowForm,
-    pub flows: &'a [FlowView],
-    /// Where the flow starts, as shown: ~/projects/shop.
-    pub place: &'a str,
-    pub theme: &'a Theme,
-}
-
-impl Widget for NewFlowView<'_> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let form = self.form;
-        let dialog = dialog_area(area, form.extra_rows());
-        Clear.render(dialog, buf);
-        let frame = Block::bordered()
-            .border_type(BorderType::Rounded)
-            .border_style(self.theme.ui.muted)
-            .style(self.theme.ui.background);
-        let inner = frame.inner(dialog);
-        frame.render(dialog, buf);
-        let width = usize::from(inner.width);
-        let extra = form.extra_rows();
-        let mut lines = vec![
-            (0, self.header(width)),
-            (2, Line::styled(" request", self.theme.ui.faint)),
-            (7 + extra, self.mode_row()),
-            (8 + extra, self.creates(width)),
-            (
-                10 + extra,
-                Line::styled("─".repeat(width), self.theme.ui.rule),
-            ),
-            (11 + extra, self.keys()),
-        ];
-        if let Some(error) = &form.error {
-            let text = format!(" {}", clip(error, width.saturating_sub(2)));
-            lines.push((6, Line::styled(text, self.theme.state.blocked)));
-        }
-        if extra > 0 {
-            lines.push((7, self.type_row()));
-        }
-        // A terminal too short for the dialog gets the rows that fit.
-        for (row, line) in lines {
-            if row < inner.height {
-                buf.set_line(inner.x, inner.y + row, &line, inner.width);
-            }
-        }
-        self.render_request(inner, dialog, buf);
-    }
-}
-
-impl NewFlowView<'_> {
-    /// new flow, and where it starts.
-    fn header(&self, width: usize) -> Line<'static> {
-        let place = clip_place(self.place, width.saturating_sub(15));
-        split(
-            vec![Span::styled(" new flow", self.theme.ui.strong)],
-            vec![Span::styled(format!("in {place} "), self.theme.ui.faint)],
-            width,
-        )
-    }
-
-    /// The request box and the end of the request that fits it.
-    fn render_request(&self, inner: Rect, dialog: Rect, buf: &mut Buffer) {
-        let field = Rect::new(inner.x + 1, inner.y + 3, inner.width.saturating_sub(2), 3)
-            .intersection(inner);
-        if field.is_empty() {
-            return;
-        }
-        let border = if self.form.field == Field::Request {
-            self.theme.ui.accent
-        } else {
-            self.theme.ui.rule
-        };
-        let input = Block::bordered()
-            .border_type(BorderType::Rounded)
-            .border_style(border);
-        let text = input.inner(field);
-        input.render(field, buf);
-        if !text.is_empty() {
-            buf.set_line(
-                text.x + 1,
-                text.y,
-                &Line::styled(self.form.shown_request(dialog), self.theme.ui.text),
-                text.width.saturating_sub(1),
-            );
-        }
-    }
-
-    fn radio(&self, on: bool, label: &str) -> [Span<'static>; 2] {
-        let theme = self.theme;
-        [
-            Span::styled(
-                if on { "(•)" } else { "( )" },
-                if on { theme.ui.accent } else { theme.ui.faint },
-            ),
-            Span::styled(format!(" {label}"), theme.ui.text),
-        ]
-    }
-
-    /// A row's label, lit while its field has the keys.
-    fn heading(&self, field: Field, text: &'static str) -> Span<'static> {
-        let style = if self.form.field == field {
-            self.theme.ui.key
-        } else {
-            self.theme.ui.faint
-        };
-        Span::styled(text, style)
-    }
-
-    fn type_row(&self) -> Line<'static> {
-        let mut row = vec![self.heading(Field::Type, " type    ")];
-        for (index, kind) in self.form.types().iter().enumerate() {
-            if index > 0 {
-                row.push(Span::raw("   "));
-            }
-            row.extend(self.radio(index == self.form.kind, kind));
-        }
-        Line::from(row)
-    }
-
-    fn mode_row(&self) -> Line<'static> {
-        let mode = self.form.mode;
-        let mut row = vec![self.heading(Field::Mode, " mode    ")];
-        row.extend(self.radio(mode == Mode::Auto, "auto"));
-        row.push(Span::raw("     "));
-        row.extend(self.radio(mode == Mode::Guided, "guided"));
-        row.push(Span::styled(
-            "       guided stops at every phase",
-            self.theme.ui.faint,
-        ));
-        Line::from(row)
-    }
-
-    /// The branch, worktree and slot the start creates, as far as the width allows.
-    fn creates(&self, width: usize) -> Line<'static> {
-        let theme = self.theme;
-        let form = self.form;
-        if form.request.trim().is_empty() {
-            return Line::styled(" creates a branch, a worktree and a slot", theme.ui.faint);
-        }
-        let taken: Vec<String> = self
-            .flows
-            .iter()
-            .filter(|flow| !flow.is_finished())
-            .map(|flow| flow.name.clone())
-            .collect();
-        let name = name::flow_name(None, &form.request, &taken);
-        let branch = branching::branch_name(
-            form.branching.as_ref(),
-            form.picked_type(),
-            &form.request,
-            &name,
-        );
-        let mut spans = vec![
-            Span::styled(" creates ", theme.ui.faint),
-            Span::styled(branch, theme.ui.text),
-        ];
-        let worktree = format!("{}/{name}", worktree::WORKTREES_DIR);
-        if spans_width(&spans) + worktree.len() + 20 <= width {
-            spans.push(Span::styled("  ·  ", theme.ui.faint));
-            spans.push(Span::styled(worktree, theme.ui.text));
-        }
-        match slots::free_slot(self.flows) {
-            Some(slot) => {
-                spans.push(Span::styled("  ·  ", theme.ui.faint));
-                spans.push(Span::styled(format!("slot {slot}"), theme.ui.text));
-            }
-            None => spans.push(Span::styled(
-                "  ·  every slot is taken",
-                theme.state.blocked,
-            )),
-        }
-        Line::from(spans)
-    }
-
-    fn keys(&self) -> Line<'static> {
-        let theme = self.theme;
-        Line::from(vec![
-            Span::styled(" enter", theme.ui.key),
-            Span::styled(" start   ", theme.ui.faint),
-            Span::styled("tab", theme.ui.key),
-            Span::styled(" next field   ", theme.ui.faint),
-            Span::styled("esc", theme.ui.key),
-            Span::styled(" cancel", theme.ui.faint),
-        ])
+    /// The end of the text that fits the box.
+    fn shown_text(&self, dialog: Rect) -> &str {
+        tail(self.text(), usize::from(dialog.width.saturating_sub(7)))
     }
 }
 
@@ -350,7 +202,7 @@ mod tests {
 
     #[test]
     fn edits_the_request_and_submits_only_with_one() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"));
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into());
 
         assert_eq!(
             form.on_key(Key::Enter),
@@ -373,9 +225,9 @@ mod tests {
 
     #[test]
     fn picks_a_branch_type_when_the_repo_has_types() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"));
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into());
         form.on_key(Key::Tab);
-        form.on_key(Key::Right);
+        form.on_key(Key::Left);
         assert_eq!(form.mode, Mode::Auto, "without types tab goes to the mode");
 
         form.set_branching(Some(Branching {
@@ -395,48 +247,79 @@ mod tests {
 
     #[test]
     fn keeps_wide_characters_inside_the_request_box() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"));
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into());
         typed(&mut form, &"界".repeat(60));
         let dialog = dialog_area(Rect::new(0, 0, 100, 30), form.extra_rows());
 
-        let shown = form.shown_request(dialog);
+        let shown = form.shown_text(dialog);
 
         assert_eq!(columns(shown), 70);
     }
 
     #[test]
-    fn draws_an_error_in_a_terminal_too_small_for_it() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"));
-        form.error = Some("the branch exists".into());
-        let theme = Theme::default();
-        for (width, height) in (0..6)
-            .map(|width| (width, 20))
-            .chain((0..14).map(|height| (80, height)))
-        {
-            let area = Rect::new(0, 0, width, height);
-            let mut buf = Buffer::empty(area);
-
-            NewFlowView {
-                form: &form,
-                flows: &[],
-                place: "~/shop",
-                theme: &theme,
-            }
-            .render(area, &mut buf);
-        }
-    }
-
-    #[test]
-    fn switches_the_mode_from_its_field_only() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"));
+    fn cycles_the_mode_from_its_field_only() {
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into());
 
         form.on_key(Key::Char('l'));
         assert_eq!(form.mode, Mode::Guided, "l is typed into the request");
         form.on_key(Key::Tab);
-        form.on_key(Key::Right);
+        let mut seen = vec![];
+        for _ in 0..3 {
+            form.on_key(Key::Right);
+            seen.push(form.mode);
+        }
+        assert_eq!(
+            seen,
+            [Mode::Plain, Mode::Auto, Mode::Guided],
+            "right wraps around"
+        );
+        form.on_key(Key::Left);
         assert_eq!(form.mode, Mode::Auto);
+        form.on_key(Key::Char('h'));
+        assert_eq!(form.mode, Mode::Plain, "left wraps around");
         form.on_key(Key::Char(' '));
-        assert_eq!(form.mode, Mode::Guided);
+        assert_eq!(form.mode, Mode::Auto);
         assert_eq!(form.request, "l");
+    }
+
+    /// Picks plain on the mode row, then back to the box.
+    fn plain(form: &mut NewFlowForm) {
+        while form.field != Field::Mode {
+            form.on_key(Key::Tab);
+        }
+        while form.mode != Mode::Plain {
+            form.on_key(Key::Right);
+        }
+        form.on_key(Key::Tab);
+    }
+
+    #[test]
+    fn a_plain_session_edits_its_folder_and_has_no_type_row() {
+        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/projects/shop".into());
+        form.set_branching(Some(Branching {
+            name: "{type}/{slug}".into(),
+            types: vec!["feature".into(), "bugfix".into()],
+        }));
+        typed(&mut form, "fix totals");
+        plain(&mut form);
+        assert_eq!(form.extra_rows(), 0);
+
+        assert_eq!(
+            form.text(),
+            "~/projects/shop",
+            "prefilled with the place in view"
+        );
+        form.on_key(Key::Ctrl('w'));
+        assert_eq!(form.folder, "~/projects/", "a folder at a time");
+        typed(&mut form, "scratch");
+        assert_eq!(form.folder, "~/projects/scratch");
+        assert_eq!(form.request, "fix totals", "the request stays for flows");
+        form.on_key(Key::Tab);
+        assert_eq!(form.field, Field::Mode, "tab skips the type row");
+
+        form.folder.clear();
+        assert_eq!(form.on_key(Key::Enter), FormAction::Edit, "no folder");
+        form.folder = "~/scratch".into();
+        assert_eq!(form.on_key(Key::Enter), FormAction::Submit);
     }
 }

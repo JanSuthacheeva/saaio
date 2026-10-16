@@ -27,9 +27,14 @@ pub enum Unmerged {
     Delete,
 }
 
-/// Fails before anything is touched when the flow's worktree holds uncommitted work.
+/// Fails before anything is touched when the worktree remove would tear down holds uncommitted work;
+/// a plain session's folder is never torn down, so never checked.
 pub fn refuse_uncommitted_work(flow: &FlowView) -> Result<(), Failure> {
-    let Some(space) = &flow.workspace else {
+    let Some(space) = flow
+        .workspace
+        .as_ref()
+        .filter(|space| worktree::repo_of(space).is_some())
+    else {
         return Ok(());
     };
     if !Path::new(&space.path).exists() || !workspace::has_uncommitted_work(space).unwrap_or(false)
@@ -97,5 +102,5 @@ pub fn drop_branch(flow: &FlowView, unmerged: Unmerged) -> BranchFate {
 /// The repository and branch of a started flow.
 fn branch_of(flow: &FlowView) -> Option<(PathBuf, &str)> {
     let space = flow.workspace.as_ref()?;
-    Some((worktree::repo_of(space)?, &space.branch))
+    Some((worktree::repo_of(space)?, space.branch.as_deref()?))
 }

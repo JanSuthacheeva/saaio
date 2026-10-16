@@ -37,6 +37,17 @@ pub fn agent_argv(agent: &Agent, id: &str, name: &str, request: &str) -> Vec<Str
         .collect()
 }
 
+/// The agent's command with {id} and {name} filled in and {prompt} and {request} dropped: a plain
+/// session opens at an empty prompt.
+pub fn plain_argv(agent: &Agent, id: &str, name: &str) -> Vec<String> {
+    agent
+        .command
+        .iter()
+        .map(|part| fill(part, id, name, "", ""))
+        .filter(|part| !part.is_empty())
+        .collect()
+}
+
 /// The agent's resume command with {id} and {name} filled in; None when it has none.
 pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>> {
     let resume = agent.resume.as_ref()?;
@@ -51,18 +62,26 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>> {
 
 /// The agent's command the first time, its resume command once it ran somewhere (window set:
 /// HOSTED, or a tmux window from before flow ui), since its session id is taken from then on;
-/// either way with the agent's adapter wired in right after the program. None when the flow has
-/// no workspace, or must resume and the agent has no resume template.
+/// either way with the agent's adapter wired in right after the program. A plain session starts
+/// without a prompt and gets the adapter's plain wiring. None when the flow has no workspace, or
+/// must resume and the agent has no resume template.
 pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec> {
     let space = flow.workspace.as_ref()?;
     let mut argv = if space.window.is_some() {
         resume_argv(agent, &flow.id, &flow.name)?
+    } else if flow.is_plain() {
+        plain_argv(agent, &flow.id, &flow.name)
     } else {
         agent_argv(agent, &flow.id, &flow.name, &flow.request)
     };
     if let Some(adapter) = agent.adapter {
+        let wiring = if flow.is_plain() {
+            adapter.plain_wiring(&env.flow_exe)
+        } else {
+            adapter.wiring(&env.flow_exe)
+        };
         let at = 1.min(argv.len());
-        argv.splice(at..at, adapter.wiring(&env.flow_exe));
+        argv.splice(at..at, wiring);
     }
     Some(PaneSpec {
         key: PaneKey::Flow(flow.id.clone()),
@@ -206,8 +225,8 @@ mod tests {
                 1,
                 EventKind::Workspace {
                     path: "/repo/.flow/worktrees/shop-217".into(),
-                    branch: "flow/shop-217".into(),
-                    slot: 2,
+                    branch: Some("flow/shop-217".into()),
+                    slot: Some(2),
                     window: window.map(String::from),
                     agent: "claude".into(),
                 },
@@ -273,6 +292,80 @@ mod tests {
         assert_eq!(fresh.argv[3], "--append-system-prompt");
         assert_eq!(&fresh.argv[5..7], ["-n", "shop-217"]);
         assert_eq!(&resumed.argv[7..], ["--resume", "7f3c"]);
+    }
+
+    fn scratch(window: Option<&str>) -> FlowView {
+        let events = [
+            Event::new(
+                0,
+                EventKind::Started {
+                    name: "scratch".into(),
+                    request: String::new(),
+                    mode: Mode::Plain,
+                },
+            ),
+            Event::new(
+                1,
+                EventKind::Workspace {
+                    path: "/Users/jan/scratch".into(),
+                    branch: None,
+                    slot: None,
+                    window: window.map(String::from),
+                    agent: "claude".into(),
+                },
+            ),
+        ];
+        fold::fold("9b1d", &events, None, 2).unwrap()
+    }
+
+    #[test]
+    fn opens_a_plain_session_in_its_folder_without_a_prompt_or_the_master() {
+        let agents = crate::config::builtin_agents();
+        let claude = &agents["claude"];
+        let env = LaunchEnv {
+            flow_exe: PathBuf::from("/bin/flow"),
+            ..LaunchEnv::default()
+        };
+        let wiring = crate::adapter::Adapter::ClaudeCode.plain_wiring(Path::new("/bin/flow"));
+
+        let fresh = worker_spec(&scratch(None), claude, &env).unwrap();
+        let mut expected = vec![claude.command[0].clone()];
+        expected.extend(wiring.clone());
+        expected.extend(plain_argv(claude, "9b1d", "scratch").into_iter().skip(1));
+        assert_eq!(fresh.argv, expected);
+        assert!(
+            !fresh.argv.iter().any(|arg| arg.contains("/ship-feature")),
+            "{:?}",
+            fresh.argv
+        );
+        assert_eq!(fresh.cwd, PathBuf::from("/Users/jan/scratch"));
+        let mut env_expected = vec![("FLOW_ID".to_string(), "9b1d".to_string())];
+        env_expected.extend(pane_env(&env));
+        assert_eq!(
+            fresh.env, env_expected,
+            "no FLOW_SLOT, FLOW_WORKTREE or FLOW_REPO"
+        );
+
+        let resumed = worker_spec(&scratch(Some(HOSTED)), claude, &env).unwrap();
+        let mut expected = vec![claude.command[0].clone()];
+        expected.extend(wiring);
+        expected.extend(strings(&["-n", "scratch", "--resume", "9b1d"]));
+        assert_eq!(resumed.argv, expected);
+    }
+
+    #[test]
+    fn fills_a_plain_sessions_command_without_a_prompt() {
+        let agent = Agent {
+            command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
+            prompt: "/ship-feature {request}".into(),
+            adapter: None,
+            resume: None,
+        };
+
+        assert_eq!(
+            plain_argv(&agent, "9b1d", "scratch"),
+            strings(&["claude", "-n", "scratch", "--session-id", "9b1d"])
+        );
     }
 
     #[test]

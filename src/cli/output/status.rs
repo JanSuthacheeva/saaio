@@ -201,7 +201,8 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
 }
 
 /// One flow with its steps, decisions and timeline, and for a started flow where its code is:
-/// branch, worktree and whether the worktree is still there (`worktree_exists`).
+/// branch, worktree and whether the worktree is still there (`worktree_exists`), or a plain
+/// session's folder.
 pub(crate) fn detail(
     flow: &FlowView,
     now: u64,
@@ -212,6 +213,7 @@ pub(crate) fn detail(
     struct DetailDocument {
         name: String,
         id: String,
+        #[serde(skip_serializing_if = "String::is_empty")]
         request: String,
         mode: &'static str,
         state: &'static str,
@@ -228,11 +230,14 @@ pub(crate) fn detail(
         #[serde(skip_serializing_if = "Option::is_none")]
         merge_request: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        folder: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         branch: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         worktree: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         worktree_exists: Option<bool>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
         steps: Vec<StepRow>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         decisions: Vec<String>,
@@ -256,6 +261,10 @@ pub(crate) fn detail(
     }
 
     let cut = |text: &str| truncated(text, LIST_TEXT_LIMIT, full);
+    let (plain, worktree) = match &flow.workspace {
+        Some(space) if flow.is_plain() => (Some(space), None),
+        space => (None, space.as_ref()),
+    };
     let document = DetailDocument {
         name: flow.name.clone(),
         id: flow.id.clone(),
@@ -268,9 +277,10 @@ pub(crate) fn detail(
         tasks: flow.tasks.map(|tasks| tasks.to_string()),
         review: flow.review.map(|review| review.to_string()),
         merge_request: flow.merge_request.clone(),
-        branch: flow.workspace.as_ref().map(|space| space.branch.clone()),
-        worktree: flow.workspace.as_ref().map(|space| space.path.clone()),
-        worktree_exists: flow.workspace.as_ref().and(worktree_exists),
+        folder: plain.map(|space| space.path.clone()),
+        branch: worktree.and_then(|space| space.branch.clone()),
+        worktree: worktree.map(|space| space.path.clone()),
+        worktree_exists: worktree.and(worktree_exists),
         steps: flow
             .steps
             .iter()
@@ -305,10 +315,11 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>) -> Vec<String> {
         && flow.state == State::Ended
     {
         help.push("C-space r in flow ui resumes it".to_string());
-        if worktree_exists == Some(false) {
+        if let Some(branch) = &space.branch
+            && worktree_exists == Some(false)
+        {
             help.push(format!(
-                "Its worktree is gone; its commits stay on {}",
-                space.branch
+                "Its worktree is gone; its commits stay on {branch}"
             ));
         }
     }
@@ -334,6 +345,7 @@ mod tests {
     use crate::cli::output::fixtures::{MIN, flow, sample_board};
     use crate::event::{EventKind, Phase};
     use crate::fold;
+    use crate::view::VIEW_VERSION;
 
     #[test]
     fn home_shows_the_binary_the_description_and_the_flows() {
@@ -420,7 +432,7 @@ mod tests {
     fn the_overview_lists_every_projects_flows_with_their_project() {
         let now = 30 * MIN;
         let projects = Projects {
-            version: 1,
+            version: VIEW_VERSION,
             now,
             projects: vec![
                 crate::view::Project {
@@ -459,7 +471,7 @@ mod tests {
     #[test]
     fn an_empty_overview_says_so() {
         let projects = Projects {
-            version: 1,
+            version: VIEW_VERSION,
             now: 0,
             projects: vec![],
         };
