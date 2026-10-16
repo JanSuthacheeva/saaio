@@ -17,7 +17,7 @@ pub enum Routed {
     Click { col: u16, row: u16 },
 }
 
-/// Which way C-space j / k moves the peek cursor.
+/// Which way the prefix and j / k move the peek cursor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
     Next,

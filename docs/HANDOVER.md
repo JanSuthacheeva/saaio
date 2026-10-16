@@ -220,7 +220,7 @@ The vision below is built as `flow ui`, see README and `.claude/plans/plan-flow-
   Idle: about 0.15 % CPU and 3-5 MB each for server and UI.
 - The master keeps its session across crashes (master.json), starts fresh after a stop, and runs
   the built-in `master` agent with `master.md` appended to its system prompt.
-- The prefix and `Q` keeps or ends unfinished flows; ended flows keep branch and worktree until `flow clear`.
+- The prefix then `Q` keeps or ends unfinished flows; ended flows keep branch and worktree until `flow clear`.
 - Later: see Future improvements.
 
 ## The master and its workers talk (built 2026-10-15)

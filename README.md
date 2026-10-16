@@ -57,10 +57,10 @@ to the same state, so retries are harmless.
 
 `flow ui` is home: one Claude Code session, the master, almost full screen, and every worker
 beside it. It starts a session server (`flow server`) when none runs; the server owns every
-session, so closing the terminal, a crash of the UI or detaching (prefix `d`) leaves them running, and the
-next `flow ui` attaches again. The master runs in the folder of the first `flow ui` with the
-orchestrator instructions in `master.md` beside `config.toml` (flow writes the default and
-updates it with flow while you have not edited it; your edits are never overwritten).
+session, so closing the terminal, a crash of the UI or detaching (prefix `d`) leaves them
+running, and the next `flow ui` attaches again. The master runs in the folder of the first
+`flow ui` with the orchestrator instructions in `master.md` beside `config.toml` (flow writes the
+default and updates it with flow while you have not edited it; your edits are never overwritten).
 
 Every unfinished flow with a worktree, and every plain session, gets its own session: `flow start`
 records it and the server opens it within half a second. The sidebar on the right groups the workers under
@@ -158,8 +158,8 @@ flow (`pane: when flow ui runs` when no flow ui runs yet). The name comes from t
 
 ### Plain sessions
 
-For tinkering, `flow start --plain <folder>` (or plain mode in the new-flow dialog, prefix `n`) opens the agent in a
-folder of your choice, which need not be a repository:
+For tinkering, `flow start --plain <folder>` (or plain mode in the new-flow dialog, prefix `n`)
+opens the agent in a folder of your choice, which need not be a repository:
 
 ```
 $ flow start --plain ~/scratch

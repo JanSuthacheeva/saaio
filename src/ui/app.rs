@@ -35,11 +35,11 @@ pub enum View {
     Panes,
     Board(BoardState),
     NewFlow(NewFlowForm),
-    /// Scrolled back this many lines in the pane's history (C-space [).
+    /// Scrolled back this many lines in the pane's history (the prefix and [).
     History(u32),
-    /// C-space Q: the ids of the workers that are not finished, which the answer keeps or ends.
+    /// The prefix and Q: the ids of the workers that are not finished, which the answer keeps or ends.
     Stop(Vec<String>),
-    /// C-space ?: every key.
+    /// The prefix and ?: every key.
     Help,
     /// A question before a removal loses work: y runs `then`, any other key keeps the flow.
     Confirm {
@@ -73,7 +73,7 @@ pub struct App {
     master_cwd: Option<String>,
     /// A one-line message, such as why a flow command failed, until the next key.
     notice: Option<String>,
-    /// The sidebar folded to a rail: Some once C-space b chose, None follows the width (RAIL_BELOW).
+    /// The sidebar folded to a rail: Some once the prefix and b chose, None follows the width (RAIL_BELOW).
     rail: Option<bool>,
     /// This project's store, to tell its flows from other projects'.
     here: Option<String>,

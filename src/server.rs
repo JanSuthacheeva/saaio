@@ -83,7 +83,7 @@ enum Event {
 /// Why the server stops.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Stop {
-    /// A UI's StopServer (C-space Q, then y, k or e); None when its hello never came.
+    /// A UI's StopServer (the prefix and Q, then y, k or e); None when its hello never came.
     Asked(Option<Peer>),
     /// SIGTERM, SIGINT or SIGHUP; `from` is the sender's pid when the system says.
     Signal {
