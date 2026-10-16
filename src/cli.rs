@@ -18,6 +18,19 @@ pub struct Cli {
     command: Option<Command>,
 }
 
+impl Cli {
+    /// The first of `args` that names a command (after the program), for a usage error clap
+    /// gives without one.
+    pub fn subcommand_in<T: AsRef<std::ffi::OsStr>>(args: &[T]) -> Option<String> {
+        let command = <Cli as clap::CommandFactory>::command();
+        args.iter()
+            .skip(1)
+            .filter_map(|arg| arg.as_ref().to_str())
+            .find_map(|arg| command.find_subcommand(arg))
+            .map(|found| found.get_name().to_string())
+    }
+}
+
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Track a new flow, or return the unfinished flow of that name

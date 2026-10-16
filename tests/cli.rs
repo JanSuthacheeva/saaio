@@ -228,6 +228,26 @@ fn an_unknown_flag_fails_loudly_on_stdout_with_exit_2() {
 }
 
 #[test]
+fn a_flag_without_its_value_names_the_command_to_read_up_on() {
+    let home = TempDir::new().unwrap();
+
+    for (args, command) in [
+        (vec!["start", "--name"], "flow start"),
+        (vec!["report", "--flow"], "flow report"),
+        (vec!["--nope"], "flow"),
+    ] {
+        let output = flow(home.path(), &args);
+
+        assert_eq!(output.status.code(), Some(2), "{args:?}");
+        let text = stdout(&output);
+        assert!(
+            text.contains(&format!("Run `{command} --help` for the usage")),
+            "{args:?}: {text}"
+        );
+    }
+}
+
+#[test]
 fn a_missing_flow_fails_with_exit_1_and_next_steps() {
     let home = TempDir::new().unwrap();
 

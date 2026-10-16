@@ -59,9 +59,10 @@ impl Failure {
     }
 
     /// Exit code 2: clap's message, with what it lists below a closing colon (the missing
-    /// arguments), and where to read the usage.
+    /// arguments), and where to read the usage: the command of clap's usage line, else
+    /// `subcommand` (clap prints none for a flag missing its value).
     #[must_use]
-    pub fn usage(clap_error: &clap::Error) -> Failure {
+    pub fn usage(clap_error: &clap::Error, subcommand: Option<&str>) -> Failure {
         let rendered = clap_error.to_string();
         let mut lines = rendered.lines();
         let mut message = lines
@@ -86,7 +87,10 @@ impl Failure {
                     .collect::<Vec<_>>()
                     .join(" ")
             })
-            .unwrap_or_else(|| "flow".to_string());
+            .unwrap_or_else(|| match subcommand {
+                Some(name) => format!("flow {name}"),
+                None => "flow".to_string(),
+            });
         Failure {
             message,
             help: vec![format!("Run `{command} --help` for the usage")],
@@ -183,7 +187,7 @@ mod tests {
         Cli::command().debug_assert();
         let error = Cli::try_parse_from(["flow", "report", "--nope"]).unwrap_err();
 
-        let failure = Failure::usage(&error);
+        let failure = Failure::usage(&error, None);
 
         assert_eq!(failure.code, 2);
         assert_eq!(failure.message, "unexpected argument '--nope' found");
@@ -194,7 +198,7 @@ mod tests {
     fn names_the_missing_arguments_clap_lists_below_its_message() {
         let error = Cli::try_parse_from(["flow", "start"]).unwrap_err();
 
-        let failure = Failure::usage(&error);
+        let failure = Failure::usage(&error, None);
 
         assert_eq!(
             failure.message,
@@ -204,10 +208,24 @@ mod tests {
     }
 
     #[test]
+    fn names_the_subcommand_when_clap_prints_no_usage_line() {
+        let error = Cli::try_parse_from(["flow", "report", "--flow"]).unwrap_err();
+
+        assert_eq!(
+            Failure::usage(&error, Some("report")).help,
+            vec!["Run `flow report --help` for the usage"]
+        );
+        assert_eq!(
+            Failure::usage(&error, None).help,
+            vec!["Run `flow --help` for the usage"]
+        );
+    }
+
+    #[test]
     fn names_the_command_without_the_flags_clap_puts_in_its_usage() {
         let error = Cli::try_parse_from(["flow", "start", "--plain", "x", "req"]).unwrap_err();
 
-        let failure = Failure::usage(&error);
+        let failure = Failure::usage(&error, None);
 
         assert_eq!(failure.help, vec!["Run `flow start --help` for the usage"]);
     }

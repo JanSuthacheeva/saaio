@@ -377,7 +377,7 @@ The session stops; flow remove
 Decided by Jan: build both, no new hook.
 
 - [x] A plain session starts `idle` in `fold` (`Folding::new`), so a fresh one sits in READY at its empty prompt instead of RUNNING; fold test, `tests/cli.rs` asserts `state: idle`
-- [ ] `Failure::usage` names the subcommand when clap prints no usage line (a flag missing its value: `flow start --name`), taken from argv; test in `cli/output.rs` and `tests/cli.rs`
+- [x] `Failure::usage` names the subcommand when clap prints no usage line (a flag missing its value: `flow start --name`), taken from argv; test in `cli/output.rs` and `tests/cli.rs`
 
 ## Review
 

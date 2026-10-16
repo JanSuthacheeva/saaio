@@ -21,7 +21,13 @@ fn main() -> ExitCode {
             let _ = error.print();
             return ExitCode::SUCCESS;
         }
-        Err(error) => return fail(&Failure::usage(&error)),
+        Err(error) => {
+            let args: Vec<_> = env::args_os().collect();
+            return fail(&Failure::usage(
+                &error,
+                Cli::subcommand_in(&args).as_deref(),
+            ));
+        }
     };
     answer(cli::run(cli, &env(), now_ms))
 }
