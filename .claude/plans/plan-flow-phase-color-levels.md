@@ -103,4 +103,16 @@ Call sites (modified): `sidebar/labels.rs` `Sidebar::steps` and the current step
 - [x] PhaseColors, Theme.phase_colors, step_style and flow_style through tinted, with unit tests per level; Sidebar::steps and the detail view's current step use step_style; sidebar and board tests per level; goldens regenerated unchanged
 - [x] PhaseColors::named; theme_file reads phase_colors (nearest wins, bad value errors), with tests
 - [x] README Themes documents phase_colors
-- [ ] End to end: flow ui on a scratch FLOW_HOME with phase_colors off, steps and full
+- [x] End to end: flow ui on a scratch FLOW_HOME with phase_colors off, steps and full
+
+## End to end
+
+flow ui on a scratch FLOW_HOME, XDG_STATE_HOME and XDG_CONFIG_HOME, a worker `colors` (agent `sh`)
+working in review, theme.toml `extends = "flow"` with each level, in a private tmux at 150x44;
+the sidebar's colors read from `capture-pane -e`:
+
+```
+off    spinner=working  dots=●:working ●:working ●:working ○:faint
+steps  spinner=working  dots=●:review ●:review ●:review ○:faint
+full   spinner=review   dots=●:review ●:review ●:review ○:faint
+```
