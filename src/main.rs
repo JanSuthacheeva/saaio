@@ -1077,14 +1077,13 @@ fn env_path(name: &str) -> Option<PathBuf> {
 }
 
 fn bin_path() -> String {
-    let bin = env::current_exe()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|_| "flow".to_string());
-    match env::var("HOME") {
-        Ok(home) if !home.is_empty() && bin.starts_with(&home) => {
-            format!("~{}", &bin[home.len()..])
-        }
-        _ => bin,
+    let Ok(exe) = env::current_exe() else {
+        return "flow".to_string();
+    };
+    let home = env_path("HOME").filter(|home| !home.as_os_str().is_empty());
+    match home.and_then(|home| exe.strip_prefix(home).ok()) {
+        Some(rest) => format!("~/{}", rest.display()),
+        None => exe.display().to_string(),
     }
 }
 

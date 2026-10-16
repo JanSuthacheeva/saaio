@@ -91,6 +91,31 @@ fn the_home_view_shows_the_binary_and_an_empty_state() {
 }
 
 #[test]
+fn the_home_view_shortens_the_binary_only_inside_home() {
+    let home = TempDir::new().unwrap();
+    let exe = Path::new(env!("CARGO_BIN_EXE_flow"));
+    let folder = exe.parent().unwrap();
+    let bin_with = |user_home: &Path| {
+        let output = Command::new(exe)
+            .env("FLOW_HOME", home.path())
+            .env("XDG_STATE_HOME", shared(home.path()))
+            .env("HOME", user_home)
+            .output()
+            .unwrap();
+        stdout(&output).lines().next().unwrap().to_string()
+    };
+    let name = folder.file_name().unwrap().to_str().unwrap();
+    let sibling = folder.with_file_name(&name[..name.len() - 1]);
+
+    assert_eq!(
+        bin_with(folder.parent().unwrap()),
+        format!("bin: ~/{name}/flow")
+    );
+    assert_eq!(bin_with(&sibling), format!("bin: {}", exe.display()));
+    assert_eq!(bin_with(Path::new("")), format!("bin: {}", exe.display()));
+}
+
+#[test]
 fn status_lists_flows_and_shows_one_in_detail() {
     let home = TempDir::new().unwrap();
     seed_blocked(home.path());
