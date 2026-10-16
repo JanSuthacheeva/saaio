@@ -68,7 +68,7 @@ impl App {
             ServerMsg::Detached { by } => vec![Effect::Quit(format!(
                 "another flow ui took over: pid {} in {} (flow {})",
                 by.pid,
-                self.tilde(&by.cwd.to_string_lossy()),
+                self.tilde(&by.folder()),
                 by.build
             ))],
         }

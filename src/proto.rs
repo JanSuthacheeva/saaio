@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt;
 use std::io::{ErrorKind, Read, Write};
 use std::ops::BitOr;
@@ -22,6 +23,17 @@ pub struct Peer {
     pub build: String,
 }
 
+impl Peer {
+    /// Its folder, or "an unknown folder" when the process could not read its own.
+    pub fn folder(&self) -> Cow<'_, str> {
+        if self.cwd.as_os_str().is_empty() {
+            Cow::Borrowed("an unknown folder")
+        } else {
+            self.cwd.to_string_lossy()
+        }
+    }
+}
+
 /// pid 4321 in /Users/jan/projects/flow (flow 0.1.0 2904734)
 impl fmt::Display for Peer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -29,7 +41,7 @@ impl fmt::Display for Peer {
             f,
             "pid {} in {} (flow {})",
             self.pid,
-            self.cwd.display(),
+            self.folder(),
             self.build
         )
     }
@@ -419,6 +431,14 @@ mod tests {
         assert_eq!(
             peer().to_string(),
             "pid 4321 in /Users/jan/projects/flow (flow 0.1.0 2904734)"
+        );
+        let lost = Peer {
+            cwd: PathBuf::new(),
+            ..peer()
+        };
+        assert_eq!(
+            lost.to_string(),
+            "pid 4321 in an unknown folder (flow 0.1.0 2904734)"
         );
     }
 

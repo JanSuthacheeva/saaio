@@ -88,7 +88,7 @@ impl Client {
     }
 }
 
-/// This process as a Peer: its pid, current folder and BUILD.
+/// This process as a Peer: its pid, current folder (empty when it cannot be read) and BUILD.
 fn this_process() -> Peer {
     Peer {
         pid: std::process::id(),

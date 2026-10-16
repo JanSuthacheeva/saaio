@@ -57,7 +57,9 @@ ServerMsg::Detached { by: Peer }
 /// The process at the other end: what the log and a dropped UI say about it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Peer { pub pid: u32, pub cwd: PathBuf, pub build: String }
-impl fmt::Display for Peer   // `pid 4321 in /Users/jan/projects/flow (flow 0.1.0 2904734)`
+/// Its folder, or "an unknown folder" when the process could not read its own.
+impl Peer { pub fn folder(&self) -> Cow<'_, str>; }
+impl fmt::Display for Peer   // `pid 4321 in /Users/jan/projects/flow (flow 0.1.0 2904734)`, through folder()
 ```
 
 `src/server.rs` (modified)
@@ -229,7 +231,7 @@ its first caller.
 
 ### After the review
 
-- [ ] `Peer::folder()`: the folder, or `an unknown folder` when `this_process` could not read it; Display and the UI's take-over message use it; proto and app tests for an empty cwd
+- [x] `Peer::folder()`: the folder, or `an unknown folder` when `this_process` could not read it; Display and the UI's take-over message use it; proto and app tests for an empty cwd
 
 ## Review
 
