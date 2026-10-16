@@ -22,6 +22,10 @@ pub fn in_repo(url: &str, remote: &str, real_host: impl Fn(&str) -> Option<Strin
 
 /// git@host:path or ssh:// (git+ssh://, ssh+git://): a remote ssh connects to.
 fn is_ssh(remote: &str) -> bool;
+
+/// The web host of a provider's SSH-over-443 host (ssh.github.com, altssh.gitlab.com); any other
+/// host is its own.
+fn web_host(ssh_host: &str) -> &str;
 ```
 
 `host_and_path` unchanged. `in_repo` checks the path first, then the literal host, and calls
@@ -53,7 +57,7 @@ None new. No stored format, flag or output changes.
 5. hosts equal -> `true`, no ssh
 6. `in_repo` -> `is_ssh(remote)`; https -> `false`
 7. `in_repo` -> `ssh_hostname(repo_host): Option<String>` -> `stdout_of(ssh -G -- host)`; the `hostname` line
-8. `Some(real)` equal to the URL's host -> `true`; else `false`
+8. `Some(real)` whose `web_host` equals the URL's host -> `true`; else `false`
 
 Errors: ssh missing or failing -> `None` -> `false`, as today; the hook prints its existing
 "is not a merge request of this flow's repository". An unknown alias resolves to itself -> no match.
@@ -84,7 +88,7 @@ Errors: ssh missing or failing -> `None` -> `false`, as today; the hook prints i
 - [x] Add `workspace::ssh_hostname(host)` with a unit test that an unknown name resolves to itself, skipped without ssh
 - [x] Give `calls::in_repo` the `real_host` resolver and `is_ssh`, with unit tests for an alias, a plain host, an unknown alias, an https remote and a non-matching path; pass `workspace::ssh_hostname` from `hook::of_own_repo`; the E2E test passes
 - [x] End-to-end check: run `flow hook` by hand on a scratch store against a repo with an alias origin, and confirm the merge request is recorded
-- [ ] Decided after review: map the providers' SSH-over-443 hosts to their web host after resolving (`ssh.github.com` -> `github.com`, `altssh.gitlab.com` -> `gitlab.com`) with `fn web_host(ssh_host: &str) -> &str` in `calls.rs`, and a unit test for both
+- [x] Decided after review: map the providers' SSH-over-443 hosts to their web host after resolving (`ssh.github.com` -> `github.com`, `altssh.gitlab.com` -> `gitlab.com`) with `fn web_host(ssh_host: &str) -> &str` in `calls.rs`, and a unit test for both
 
 ## Review
 
@@ -103,6 +107,7 @@ units, signatures and call chain; no production-code findings.
   `altssh.gitlab.com`, resolves to a host that is not the PR URL's `github.com`, so the merge
   request is still dropped as before. Recommendation: leave it for now (no regression, rare);
   if it comes up, map those two known endpoints to their web host in `in_repo`.
+  Decided: map them (`web_host`), the last task under Tasks.
 
 ### Where to look
 

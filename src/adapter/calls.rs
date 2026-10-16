@@ -33,7 +33,17 @@ pub fn in_repo(url: &str, remote: &str, real_host: impl Fn(&str) -> Option<Strin
     same_repo
         && (host == repo_host
             || is_ssh(remote)
-                && real_host(&repo_host).is_some_and(|real| real.to_lowercase() == host))
+                && real_host(&repo_host).is_some_and(|real| web_host(&real.to_lowercase()) == host))
+}
+
+/// The web host of a provider's SSH-over-443 host (ssh.github.com, altssh.gitlab.com); any other
+/// host is its own.
+fn web_host(ssh_host: &str) -> &str {
+    match ssh_host {
+        "ssh.github.com" => "github.com",
+        "altssh.gitlab.com" => "gitlab.com",
+        _ => ssh_host,
+    }
 }
 
 /// git@host:path or ssh:// (git+ssh://, ssh+git://): a remote ssh connects to.
@@ -306,5 +316,26 @@ mod tests {
             !in_repo(pull, "git@github-work:shop/admin.git", never_asked),
             "another repo needs no ssh"
         );
+    }
+
+    #[test]
+    fn an_alias_to_a_providers_ssh_over_443_host_is_its_web_host() {
+        let to = |real: &'static str| move |_: &str| Some(real.to_string());
+
+        assert!(in_repo(
+            "https://github.com/shop/app/pull/12",
+            "git@github-work:shop/app.git",
+            to("ssh.github.com")
+        ));
+        assert!(in_repo(
+            "https://gitlab.com/shop/app/-/merge_requests/7",
+            "git@gitlab-work:shop/app.git",
+            to("altssh.gitlab.com")
+        ));
+        assert!(!in_repo(
+            "https://github.com/shop/app/pull/12",
+            "git@github-work:shop/app.git",
+            to("ssh.example.com")
+        ));
     }
 }
