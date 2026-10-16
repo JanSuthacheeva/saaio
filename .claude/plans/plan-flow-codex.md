@@ -412,3 +412,6 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 ### Merge request detection (asked for during the build)
 - [x] calls::created_merge_request: only a simple command that runs `gh pr create` or `glab mr create|new` (quotes respected, VAR=value skipped) counts, and only a merge request URL in its output; tests include today's case (the words quoted inside a tmux set-buffer, https://github.com/probe/repo/pull/7 in the output)
 - [x] calls::in_repo(url, remote) and workspace::origin_url(dir): `flow hook` drops a merge request whose URL is not of the worktree's origin repo (host and path); tests/cli.rs: the probe URL leaves the flow undone, the repo's own pull request counts
+
+### A fresh Codex master's first turn (decided after the end-to-end run)
+- [ ] Adapter::master_opening(self) -> Option<&'static str> (Claude Code None, Codex a one-line prompt); MasterRecord::spec appends it as the last argument on a fresh start only, so a fresh Codex master has its first turn at once (after Codex's own startup prompts), records its session and gets news from then on; master.rs tests (fresh has it, resumed and Claude not); a scratch-store check that a fresh Codex master records master.session without being typed to
