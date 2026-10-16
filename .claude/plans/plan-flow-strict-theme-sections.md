@@ -147,6 +147,6 @@ the title row; no `[glyphs]`. `docs/HANDOVER.md` row 9: `[glyphs]` is rejected u
 
 - [x] Section with name, named and ALL, and PaletteKey::section, with unit tests for every key's section and the name round trip
 - [x] theme_file parse walks DeTable: Entry, colors, plain, at, line; apply takes Entry; read and load drop their path context; [glyphs] rejected; says_what_is_wrong_and_where cases with path:line, dotted and inline-table tests
-- [ ] Fixtures noctalia.toml and noctalia-template.toml with tests that noctalia loads and the template parses
+- [x] Fixtures noctalia.toml and noctalia-template.toml with tests that noctalia loads and the template parses
 - [ ] README Themes and HANDOVER row 9 updated
 - [ ] End to end: flow ui on a scratch FLOW_HOME and XDG_CONFIG_HOME shows a wrong-section error with file and line, and repaints once fixed

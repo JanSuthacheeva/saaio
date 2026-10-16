@@ -512,6 +512,32 @@ mod tests {
     }
 
     #[test]
+    fn loads_the_noctalia_theme_and_reads_its_template() {
+        let dir = TempDir::new().unwrap();
+        write(&dir, "theme.toml", "extends = \"noctalia\"\n");
+        write(
+            &dir,
+            "themes/noctalia.toml",
+            include_str!("theme_file/fixtures/noctalia.toml"),
+        );
+
+        let palette = theme(&dir).palette;
+
+        assert_eq!(palette.accent, Color::Rgb(0xcb, 0x91, 0x68));
+        assert_eq!(palette.working, Color::Rgb(0x7a, 0xa7, 0xff));
+        assert_eq!(palette.done, Palette::TERMINAL.done);
+
+        let template = Path::new("noctalia-template.toml");
+        let file = parse(
+            template,
+            include_str!("theme_file/fixtures/noctalia-template.toml"),
+        )
+        .unwrap();
+        assert_eq!(file.extends, "terminal");
+        assert_eq!(file.colors.len(), 10);
+    }
+
+    #[test]
     fn takes_dotted_keys_and_inline_tables_as_their_section() {
         let dir = TempDir::new().unwrap();
         write(&dir, "theme.toml", "ui.accent = 3\nstate = { done = 4 }\n");
