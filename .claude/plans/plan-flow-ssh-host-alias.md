@@ -84,3 +84,35 @@ Errors: ssh missing or failing -> `None` -> `false`, as today; the hook prints i
 - [x] Add `workspace::ssh_hostname(host)` with a unit test that an unknown name resolves to itself, skipped without ssh
 - [x] Give `calls::in_repo` the `real_host` resolver and `is_ssh`, with unit tests for an alias, a plain host, an unknown alias, an https remote and a non-matching path; pass `workspace::ssh_hostname` from `hook::of_own_repo`; the E2E test passes
 - [x] End-to-end check: run `flow hook` by hand on a scratch store against a repo with an alias origin, and confirm the merge request is recorded
+
+## Review
+
+Reviewed in an isolated context against this plan (main...8dd5ca0). The change matches the plan's
+units, signatures and call chain; no production-code findings.
+
+### Fixed
+
+- `is_ssh`'s `git+ssh://` and `ssh+git://` arms had no test: dropping either passed every test.
+  Unit cases for both, and for a `file://` remote that never asks ssh (8dd5ca0, test only).
+
+### Open
+
+- An alias whose `HostName` is a provider's alternate SSH endpoint does not match: `Host
+  github-work` with `HostName ssh.github.com` / `Port 443` (GitHub over 443), or GitLab's
+  `altssh.gitlab.com`, resolves to a host that is not the PR URL's `github.com`, so the merge
+  request is still dropped as before. Recommendation: leave it for now (no regression, rare);
+  if it comes up, map those two known endpoints to their web host in `in_repo`.
+
+### Where to look
+
+1. `src/adapter/calls.rs` `in_repo` and `is_ssh`: the path check runs before any ssh call, and
+   only SSH forms resolve (scp-like, `ssh://`, `git+ssh://`, `ssh+git://`).
+2. `src/workspace.rs` `ssh_hostname`: `ssh -G -- host`, `None` on any failure, which keeps
+   today's "not a merge request of this flow's repository".
+3. Skim: `hook.rs` (one argument), the `tests/cli.rs` helper split (`hook_command`, `feed`) and
+   the E2E test with a fake `ssh` on PATH.
+
+### Checks
+
+`cargo test` and `cargo clippy --all-targets -- -D warnings` passed at dd45b4d; at 8dd5ca0 (tests
+only) the `calls` tests, clippy and `cargo fmt --check` pass.
