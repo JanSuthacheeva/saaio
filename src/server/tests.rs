@@ -657,7 +657,7 @@ fn never_types_into_a_session_that_had_no_turn_or_a_claude_worker() {
     let dir = TempDir::new().unwrap();
     let store = Store::at(dir.path().to_path_buf());
     let fresh = started_flow(&store, dir.path(), "fresh", "codex");
-    let claude = started_flow(&store, dir.path(), "claude", "claude");
+    let claude = started_flow(&store, dir.path(), "claude", "claude-cat");
     had_a_turn(&store, &claude);
     let cat = Agent {
         adapter: Some(crate::adapter::Adapter::ClaudeCode),
@@ -667,7 +667,7 @@ fn never_types_into_a_session_that_had_no_turn_or_a_claude_worker() {
         dir.path(),
         BTreeMap::from([
             ("codex".to_string(), fake_codex(dir.path())),
-            ("claude".to_string(), cat),
+            ("claude-cat".to_string(), cat),
         ]),
     );
 
