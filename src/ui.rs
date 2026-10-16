@@ -7,6 +7,11 @@ pub mod fit;
     expect(dead_code, reason = "drawn by the views in the next commits")
 )]
 pub mod focus;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "drawn by the views in the next commits")
+)]
+pub mod hints;
 pub mod input;
 pub mod layout;
 pub mod newflow;

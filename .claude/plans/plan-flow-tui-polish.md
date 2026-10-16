@@ -312,7 +312,7 @@ The first worker starts:
 ### Shared drawing
 
 - [x] Add `ui/focus.rs` with `mark` and `light`, and unit tests for fill, bar column, kept symbols and each built-in palette's colors
-- [ ] Add `ui/hints.rs` with `Hint` and `hints::line`, and unit tests for fitting, dropping from the right, kept hints, inactive style and zero width
+- [x] Add `ui/hints.rs` with `Hint` and `hints::line`, and unit tests for fitting, dropping from the right, kept hints, inactive style and zero width
 - [ ] Add `Theme::heading` with a test that it is uppercase and faint
 
 ### Dialogs (items 4, 9)
