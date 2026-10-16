@@ -137,7 +137,7 @@ pub fn run(socket: &Path, env: UiEnv) -> Result<String> {
         for effect in effects {
             match effect {
                 Effect::Send(message) => writer.send(&message)?,
-                Effect::Mirror(modes) => outer.mirror(&modes)?,
+                Effect::Mirror(modes) => outer.mirror(modes)?,
                 Effect::LoadBranching(repo) => {
                     let branching = Branching::load(&repo).map_err(|error| format!("{error:#}"));
                     app.on_branching(&repo, branching);

@@ -28,7 +28,7 @@ pub enum Command {
     StopServer,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Key {
     Char(char),
     Enter,
@@ -154,6 +154,7 @@ pub fn decode(bytes: &[u8]) -> Vec<Key> {
     keys
 }
 
+#[derive(Debug)]
 enum AfterPrefix {
     Command(Command),
     Literal,
@@ -216,6 +217,7 @@ fn csi_len(bytes: &[u8]) -> Option<usize> {
         .map(|end| end + 3)
 }
 
+#[derive(Debug, Clone, Copy)]
 struct MouseEvent {
     button: u16,
     col: u16,

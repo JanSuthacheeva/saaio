@@ -134,9 +134,9 @@ pub enum Effect {
 }
 
 /// h j k l and the arrows on a board.
-fn board_step(key: &Key) -> Option<isize> {
+fn board_step(key: Key) -> Option<isize> {
     match key {
-        Key::Char(c) => BoardState::step(*c),
+        Key::Char(c) => BoardState::step(c),
         Key::Left => Some(-1),
         Key::Right => Some(1),
         Key::Down => BoardState::step('j'),
@@ -730,7 +730,7 @@ impl App {
             return self.on_all_key(state, key);
         }
         let cards = self.workers().len() + 1;
-        if let Some(step) = board_step(&key) {
+        if let Some(step) = board_step(key) {
             self.view = View::Board(state.moved(step, cards));
             return vec![];
         }
@@ -789,7 +789,7 @@ impl App {
                     .collect()
             })
             .unwrap_or_default();
-        if let Some(step) = board_step(&key) {
+        if let Some(step) = board_step(key) {
             self.view = View::Board(state.moved(step, flows.len()));
             return vec![];
         }
