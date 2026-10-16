@@ -157,7 +157,7 @@ pub fn run(args: &Args, store: &Store, sender: Option<&str>, now: u64) -> Result
     // sender = env.flow_id(): Some -> "only the master sends"
 // status.rs
 pub struct Args { flow: Option<String>, json: bool, full: bool, all: bool }  // attrs as today
-pub fn run(args: Args, store: &Store, registry: &Registry, now: u64) -> Result<Document, Failure>;
+pub fn run(args: &Args, store: &Store, registry: &Registry, now: u64) -> Result<Document, Failure>;
 fn one_store(..); fn all_stores(registry: &Registry, json: bool, full: bool, now: u64) -> ..;
 // start.rs
 pub struct Args { request: String, name: Option<String>, mode: Mode, agent: Option<String>,
@@ -374,7 +374,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 - [x] Add `deliver.rs` with WorkerNews (News carries messages), worker_news, master_news; wait formats with output::news_for_worker / news_for_master; unit tests on a temp store
 
 ### 3. Commands
-- [ ] `cli/commands.rs` with views and no_flow; `home.rs`, `new.rs`, `report.rs` (ReportEvent moves here), `send.rs`, `status.rs`, each with its `Args`; `Command` uses tuple variants for them
+- [x] `cli/commands.rs` with views and no_flow; `home.rs`, `new.rs`, `report.rs` (ReportEvent moves here), `send.rs`, `status.rs`, each with its `Args`; `Command` uses tuple variants for them
 - [ ] `start.rs` with `Args` replacing `Launch`, Rollback, pick_kind, claim_slot, held_slots, claim_is_live, free_branch, append_workspace
 - [ ] `retire.rs` (Uncommitted, Unmerged, CLOSE_WAIT, refuse_*, close_pane, retire_worktree, drop_branch, branch_of), `remove.rs`, `clear.rs`
 - [ ] `ui.rs` (with stop_server), `server.rs`, `wait.rs`, `hook.rs` with their `Args`; `cli.rs` is only Cli, Command and run; unit tests for `cli::run` without a store

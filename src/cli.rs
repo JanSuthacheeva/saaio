@@ -1,3 +1,4 @@
+mod commands;
 mod env;
 pub mod output;
 
@@ -8,6 +9,8 @@ use std::time::Duration;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 
+use commands::{home, new, no_flow, report, send, status, views};
+
 pub use crate::event::unix_ms;
 pub use env::Env;
 
@@ -15,14 +18,14 @@ use crate::cli::output::{BranchFate, Document, Failure, Opening, Retired, Setup}
 use crate::client::{self, Client, Closing};
 use crate::config::Config;
 use crate::deliver::{self, WorkerNews};
-use crate::event::{Event, EventKind, LONG_TEXT_LIMIT, Mode, Phase};
+use crate::event::{Event, EventKind, Mode};
 use crate::proto::{ClientMsg, Role};
 use crate::registry::Registry;
 use crate::slots::{Claim, Slots};
 use crate::store::{Store, Waiter};
 use crate::view::FlowView;
 use crate::workspace::Hook;
-use crate::{adapter, branching, fold, launch, registry, server, slots, text, ui, view, workspace};
+use crate::{adapter, branching, fold, launch, server, slots, text, ui, view, workspace};
 
 /// How long `flow remove` and `flow clear` wait for a flow's session to end (SIGKILL comes after 3 s).
 const CLOSE_WAIT: Duration = Duration::from_secs(5);
@@ -39,36 +42,11 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Track a new flow, or return the unfinished flow of that name
-    New {
-        #[arg(long)]
-        name: String,
-        #[arg(long)]
-        request: String,
-        #[arg(long, value_enum, default_value_t)]
-        mode: Mode,
-    },
+    New(new::Args),
     /// Append one event to a flow
-    Report {
-        /// Flow name or id [default: $FLOW_ID]
-        #[arg(long, env = "FLOW_ID")]
-        flow: Option<String>,
-        #[command(subcommand)]
-        event: ReportEvent,
-    },
+    Report(report::Args),
     /// Every flow, or one flow with its phases, timeline and decisions
-    Status {
-        /// Flow name or id
-        flow: Option<String>,
-        /// Print the versioned JSON programs read, instead of TOON
-        #[arg(long)]
-        json: bool,
-        /// Do not truncate long texts
-        #[arg(long)]
-        full: bool,
-        /// Every project's flows, from every registered store
-        #[arg(long, conflicts_with = "flow")]
-        all: bool,
-    },
+    Status(status::Args),
     /// Start a worker: a flow, a worktree, the setup hook and an agent flow ui opens
     Start {
         /// What to build, e.g. "SHOP-217 add CSV export"
@@ -97,12 +75,7 @@ enum Command {
         delete_unmerged: bool,
     },
     /// Tell a flow's worker something: an answer, an instruction, a correction
-    Send {
-        /// Flow name or id
-        flow: String,
-        /// What to tell it
-        text: String,
-    },
+    Send(send::Args),
     /// Forget flows that are done or ended
     Clear,
     /// Open the terminal UI: the master, every worker and the board
@@ -127,59 +100,6 @@ enum Command {
         /// The harness: claude-code
         adapter: String,
     },
-}
-
-#[derive(Debug, Subcommand)]
-enum ReportEvent {
-    /// The flow entered a phase
-    Phase { phase: Phase },
-    /// Work goes on, after a stop or a subagent
-    Working,
-    /// A subagent works on the flow
-    Delegated { description: String },
-    /// The flow waits for the person's answer
-    Waiting { question: String },
-    /// The turn ended without a question; nothing to do for the person
-    Idle { note: String },
-    /// The flow cannot go on
-    Blocked { reason: String },
-    /// A decision made on the person's behalf
-    Decision { text: String },
-    /// Tasks done out of the plan's total
-    Tasks { done: u32, total: u32 },
-    /// Review findings fixed and still open
-    Review {
-        #[arg(long)]
-        fixed: u32,
-        #[arg(long)]
-        open: u32,
-    },
-    /// The merge request is open
-    MergeRequest { url: String },
-    /// The worker session ended
-    Ended,
-    /// Mark the flow alive without adding an event
-    Heartbeat,
-}
-
-impl ReportEvent {
-    /// The event to append; None for Heartbeat.
-    fn into_kind(self) -> Option<EventKind> {
-        Some(match self {
-            ReportEvent::Phase { phase } => EventKind::Phase { phase },
-            ReportEvent::Working => EventKind::Working,
-            ReportEvent::Delegated { description } => EventKind::Delegated { description },
-            ReportEvent::Waiting { question } => EventKind::Waiting { question },
-            ReportEvent::Idle { note } => EventKind::Idle { note },
-            ReportEvent::Blocked { reason } => EventKind::Blocked { reason },
-            ReportEvent::Decision { text } => EventKind::Decision { text },
-            ReportEvent::Tasks { done, total } => EventKind::Tasks { done, total },
-            ReportEvent::Review { fixed, open } => EventKind::Review { fixed, open },
-            ReportEvent::MergeRequest { url } => EventKind::MergeRequest { url },
-            ReportEvent::Ended => EventKind::Ended,
-            ReportEvent::Heartbeat => return None,
-        })
-    }
 }
 
 /// Runs the command `cli` names: what to print, or the failure to print instead.
@@ -214,22 +134,10 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
     let store = &store;
     let registry = &registry;
     match cli.command {
-        None => home(store, &env.bin_path(), now),
-        Some(Command::New {
-            name,
-            request,
-            mode,
-        }) => new_flow(store, name, request, mode, now),
-        Some(Command::Report { flow, event }) => report(store, flow, event, now),
-        Some(Command::Status {
-            all: true,
-            json,
-            full,
-            ..
-        }) => status_all(registry, json, full, now),
-        Some(Command::Status {
-            flow, json, full, ..
-        }) => status(store, flow, json, full, now),
+        None => home::run(store, &env.bin_path(), now),
+        Some(Command::New(args)) => new::run(args, store, now),
+        Some(Command::Report(args)) => report::run(args, store, now),
+        Some(Command::Status(args)) => status::run(&args, store, registry, now),
         Some(Command::Start {
             request,
             name,
@@ -271,15 +179,7 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
             };
             remove(store, &flow, uncommitted, unmerged, now)
         }
-        Some(Command::Send { flow, text }) => {
-            if env.flow_id().is_some() {
-                return Err(Failure::error(
-                    "only the master sends",
-                    vec!["End your turn with the question; flow wakes the master".to_string()],
-                ));
-            }
-            send(store, &flow, &text, now)
-        }
+        Some(Command::Send(args)) => send::run(&args, store, env.flow_id(), now),
         Some(Command::Clear) => clear(store, now),
         Some(Command::Ui { stop: true }) => stop_server(&client::socket_path(store)),
         Some(Command::Ui { stop: false }) => ui(store, env, clock),
@@ -452,35 +352,6 @@ fn server(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failu
     let cwd = std::env::current_dir().context("could not read the current directory")?;
     server::run(&paths, store, config, launch_env, &cwd, clock)?;
     Ok(Document::Text("flow server stopped".to_string()))
-}
-
-fn home(store: &Store, bin: &str, now: u64) -> Result<Document, Failure> {
-    let (flows, warnings) = views(store, now);
-    Ok(output::home(&fold::board(flows, now), bin, &warnings))
-}
-
-fn new_flow(
-    store: &Store,
-    name: String,
-    request: String,
-    mode: Mode,
-    now: u64,
-) -> Result<Document, Failure> {
-    let (flows, _) = views(store, now);
-    if let Some(existing) = fold::resolve(&flows, &name).filter(|flow| !flow.is_finished()) {
-        return Ok(output::created(existing, true));
-    }
-    let first = Event::new(
-        now,
-        EventKind::Started {
-            name,
-            request,
-            mode,
-        },
-    );
-    let id = store.create(&first)?;
-    let created = fold::fold(&id, &[first], None, now).expect("a started flow folds");
-    Ok(output::created(&created, false))
 }
 
 /// What `flow start` was asked for.
@@ -679,67 +550,6 @@ fn append_workspace(
         .map_err(Failure::from)
 }
 
-fn report(
-    store: &Store,
-    flow: Option<String>,
-    event: ReportEvent,
-    now: u64,
-) -> Result<Document, Failure> {
-    let Some(name) = flow.filter(|name| !name.is_empty()) else {
-        return Ok(output::skipped());
-    };
-    let (flows, _) = views(store, now);
-    let id = fold::resolve(&flows, &name)
-        .ok_or_else(|| no_flow(&name))?
-        .id
-        .clone();
-    match event.into_kind() {
-        Some(kind) => store.append(&id, &Event::new(now, kind)),
-        None => store.beat(&id),
-    }?;
-    let events = store.events(&id)?;
-    let beat = store.last_beat(&id)?;
-    let reported = fold::fold(&id, &events, beat, now).expect("a resolved flow folds");
-    Ok(output::reported(&reported))
-}
-
-/// Appends the master's message to a flow its worker reads when flow wakes it.
-fn send(store: &Store, name: &str, text: &str, now: u64) -> Result<Document, Failure> {
-    let text = text.trim();
-    if text.is_empty() {
-        return Err(Failure::error("nothing to send", Vec::new()));
-    }
-    let length = text.chars().count();
-    if length > LONG_TEXT_LIMIT {
-        return Err(Failure::error(
-            format!("the message is {length} chars, over {LONG_TEXT_LIMIT}"),
-            vec!["Say it shorter, or point to a file in the worktree".to_string()],
-        ));
-    }
-    let (flows, _) = views(store, now);
-    let flow = fold::resolve(&flows, name).ok_or_else(|| no_flow(name))?;
-    if flow.is_finished() {
-        return Err(Failure::error(
-            format!("{} is finished", flow.name),
-            vec!["Run `flow` for the flows still running".to_string()],
-        ));
-    }
-    if flow.workspace.is_none() {
-        return Err(Failure::error(
-            format!(
-                "{} has no worker; it was not started with flow start",
-                flow.name
-            ),
-            Vec::new(),
-        ));
-    }
-    let message = EventKind::Message {
-        text: text.to_string(),
-    };
-    store.append(&flow.id, &Event::new(now, message))?;
-    Ok(output::sent(flow))
-}
-
 fn remove(
     store: &Store,
     name: &str,
@@ -903,76 +713,6 @@ fn retire_worktree(flow: &FlowView, uncommitted: Uncommitted) -> Retired {
     }
 }
 
-fn status(
-    store: &Store,
-    flow: Option<String>,
-    json: bool,
-    full: bool,
-    now: u64,
-) -> Result<Document, Failure> {
-    let (flows, warnings) = views(store, now);
-    let Some(name) = flow else {
-        let board = fold::board(flows, now);
-        return Ok(if json {
-            Document::Json(board.to_json())
-        } else {
-            output::status_list(&board, &warnings, full)
-        });
-    };
-    let one = fold::resolve(&flows, &name)
-        .cloned()
-        .ok_or_else(|| no_flow(&name))?;
-    Ok(if json {
-        Document::Json(fold::board(vec![one], now).to_json())
-    } else {
-        let worktree_exists = one
-            .workspace
-            .as_ref()
-            .map(|space| Path::new(&space.path).exists());
-        output::status_detail(&one, now, full, worktree_exists)
-    })
-}
-
-/// Every registered project with flows, each as its board; unreadable logs become warnings.
-fn status_all(registry: &Registry, json: bool, full: bool, now: u64) -> Result<Document, Failure> {
-    let mut projects: Vec<view::Project> = Vec::new();
-    let mut warnings = Vec::new();
-    for store in registry.stores() {
-        let (flows, unread) = views(&store, now);
-        let base = registry::project_name(&store, registry);
-        let name = (1..)
-            .map(|number| match number {
-                1 => base.clone(),
-                _ => format!("{base} ({number})"),
-            })
-            .find(|name| projects.iter().all(|project| &project.name != name))
-            .expect("an unused suffix always exists");
-        warnings.extend(
-            unread
-                .into_iter()
-                .map(|warning| format!("{name}: {warning}")),
-        );
-        if flows.is_empty() {
-            continue;
-        }
-        projects.push(view::Project {
-            name,
-            root: store.root().display().to_string(),
-            board: fold::board(flows, now),
-        });
-    }
-    let projects = view::Projects {
-        version: view::VIEW_VERSION,
-        now,
-        projects,
-    };
-    Ok(if json {
-        Document::Json(projects.to_json())
-    } else {
-        output::status_all(&projects, &warnings, full)
-    })
-}
-
 /// Whether a claim's flow is still unfinished in its store.
 fn claim_is_live(claim: &Claim, now: u64) -> bool {
     Store::at(claim.store.clone())
@@ -990,20 +730,4 @@ fn held_slots(registry: &Registry, now: u64) -> Vec<u8> {
         .iter()
         .flat_map(|store| launch::taken_slots(&views(store, now).0))
         .collect()
-}
-
-/// Every flow folded; unreadable ones become warnings so the rest still shows.
-fn views(store: &Store, now: u64) -> (Vec<FlowView>, Vec<String>) {
-    let (logs, warnings) = store.logs();
-    (fold::views(&logs, now), warnings)
-}
-
-fn no_flow(name: &str) -> Failure {
-    Failure::error(
-        format!("no flow named {name}"),
-        vec![
-            "Run `flow` to list the flows".to_string(),
-            format!("Run `flow new --name {name} --request <text>` to start it"),
-        ],
-    )
 }
