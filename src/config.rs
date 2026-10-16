@@ -3,7 +3,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
 
 use crate::adapter::Adapter;
@@ -97,11 +97,12 @@ impl Config {
 
     /// The file's text as a Config; refuses the top-level `agent` key, naming [worker] agent.
     fn parse(text: &str) -> Result<Config> {
-        let table: toml::Table = toml::from_str(text)?;
+        let read = |error: toml::de::Error| anyhow!("{}", error.to_string().trim_end());
+        let table: toml::Table = toml::from_str(text).map_err(read)?;
         if table.contains_key("agent") {
             bail!("the top-level `agent` key is now `agent` under [worker]");
         }
-        Ok(table.try_into()?)
+        toml::from_str(text).map_err(read)
     }
 
     /// The built-in agents and phases alone, as if there were no config file.
@@ -479,6 +480,8 @@ prompt = "/design-code {request}"
         let key = error("agnets = 1\n");
         assert!(key.contains(&file.display().to_string()), "{key}");
         assert!(key.contains("agnets"), "{key}");
+        assert!(key.contains("line 1"), "{key}");
+        assert!(!key.ends_with('\n'), "{key:?}");
         let section = error("[mastr]\nwake = false\n");
         assert!(section.contains("mastr"), "{section}");
         let worker = error("[worker]\nagnet = \"codex\"\n");

@@ -58,7 +58,9 @@ impl Config {
 2. `Config::load` -> `Config::parse(&text): Result<Config>`
 3. `parse` -> `toml::from_str::<toml::Table>(text)`; a syntax error returns here.
 4. Top-level `agent` present -> `bail!("the top-level `agent` key is now `agent` under [worker]")`
-5. Else `table.try_into::<Config>()`; an unknown key or section returns serde's error naming it.
+5. Else `toml::from_str::<Config>(text)` (the text again, not the table, so serde's errors keep
+   their line and column); an unknown key or section returns its error naming it. toml's errors
+   lose their trailing newline.
 6. `load` adds `{file} is not valid`; the command exits 1 with that message.
 
 ## Test seams
