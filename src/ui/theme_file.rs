@@ -9,7 +9,7 @@ use toml::{Table, Value};
 use crate::store::Stamp;
 #[cfg(test)]
 use crate::ui::theme::MARK;
-use crate::ui::theme::{KIWI, Palette, PaletteKey, Theme, hex};
+use crate::ui::theme::{KIWI, Palette, PaletteKey, PhaseColors, Theme, hex};
 
 pub const THEME_FILE: &str = "theme.toml";
 pub const THEMES_DIR: &str = "themes";
@@ -18,14 +18,15 @@ const EXTENDS_LIMIT: usize = 4;
 /// What a theme extends when it names nothing.
 const DEFAULT_BASE: &str = "terminal";
 
-/// One theme file: what it extends, its colors by key from [ui], [state] and [phase], and
-/// whether the terminal's font has Nerd Font icons.
+/// One theme file: what it extends, its colors by key from [ui], [state] and [phase], whether
+/// the terminal's font has Nerd Font icons, and how much of a working flow takes its phase's color.
 #[derive(Debug)]
 struct ThemeFile {
     path: PathBuf,
     extends: String,
     colors: Vec<(String, Value)>,
     nerd_font: Option<bool>,
+    phase_colors: Option<PhaseColors>,
 }
 
 /// The theme in `dir`: theme.toml over what it extends, a built-in name or themes/<name>.toml; the
@@ -47,6 +48,10 @@ pub fn load(dir: &Path) -> (Result<Theme>, Vec<PathBuf>) {
             .find_map(|file| file.nerd_font)
             .unwrap_or(false);
         let mut theme = Theme::from_palette(palette);
+        theme.phase_colors = chain
+            .iter()
+            .find_map(|file| file.phase_colors)
+            .unwrap_or_default();
         if nerd_font {
             theme.glyphs.mark = KIWI;
         }
@@ -100,12 +105,19 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
     let mut extends = DEFAULT_BASE.to_string();
     let mut colors = Vec::new();
     let mut nerd_font = None;
+    let mut phase_colors = None;
     for (key, value) in table {
         match (key.as_str(), value) {
             ("extends", Value::String(name)) => extends = name,
             ("extends", _) => bail!("extends must be a theme's name"),
             ("nerd_font", Value::Boolean(on)) => nerd_font = Some(on),
             ("nerd_font", _) => bail!("nerd_font is true or false"),
+            ("phase_colors", Value::String(name))
+                if let Some(level) = PhaseColors::named(&name) =>
+            {
+                phase_colors = Some(level);
+            }
+            ("phase_colors", _) => bail!("phase_colors is off, steps or full"),
             ("ui" | "state" | "phase", Value::Table(section)) => colors.extend(section),
             // The design's [glyphs] comes later; a file that has it still loads.
             ("glyphs", Value::Table(_)) => {}
@@ -117,6 +129,7 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
         extends,
         colors,
         nerd_font,
+        phase_colors,
     })
 }
 
@@ -300,6 +313,41 @@ mod tests {
             format!("{error:#}").contains("nerd_font is true or false"),
             "{error:#}"
         );
+    }
+
+    #[test]
+    fn reads_how_much_takes_the_phase_color() {
+        let dir = TempDir::new().unwrap();
+        write(&dir, "theme.toml", "extends = \"flow\"\n");
+        assert_eq!(theme(&dir).phase_colors, PhaseColors::Steps, "the default");
+
+        write(&dir, "theme.toml", "extends = \"mine\"\n");
+        write(
+            &dir,
+            "themes/mine.toml",
+            "extends = \"flow\"\nphase_colors = \"full\"\n",
+        );
+        assert_eq!(
+            theme(&dir).phase_colors,
+            PhaseColors::Full,
+            "from the theme it extends"
+        );
+
+        write(
+            &dir,
+            "theme.toml",
+            "extends = \"mine\"\nphase_colors = \"off\"\n",
+        );
+        assert_eq!(
+            theme(&dir).phase_colors,
+            PhaseColors::Off,
+            "the nearer file wins"
+        );
+
+        write(&dir, "theme.toml", "phase_colors = \"loud\"\n");
+        assert!(error(&dir).contains("phase_colors is off, steps or full"));
+        write(&dir, "theme.toml", "phase_colors = true\n");
+        assert!(error(&dir).contains("phase_colors is off, steps or full"));
     }
 
     #[test]

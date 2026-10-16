@@ -243,6 +243,18 @@ pub enum PhaseColors {
     Full,
 }
 
+impl PhaseColors {
+    /// "off", "steps" or "full"; None for another name.
+    pub fn named(name: &str) -> Option<PhaseColors> {
+        match name {
+            "off" => Some(PhaseColors::Off),
+            "steps" => Some(PhaseColors::Steps),
+            "full" => Some(PhaseColors::Full),
+            _ => None,
+        }
+    }
+}
+
 /// Every color and symbol flow ui draws with, by name; a theme file sets them through its Palette.
 #[derive(Debug, Clone)]
 pub struct Theme {
@@ -576,6 +588,14 @@ mod tests {
             assert_eq!(theme.step_style(&flow), theme.state.waiting, "{level:?}");
             assert_eq!(theme.flow_style(&flow), theme.state.waiting, "{level:?}");
         }
+    }
+
+    #[test]
+    fn names_the_levels() {
+        assert_eq!(PhaseColors::named("off"), Some(PhaseColors::Off));
+        assert_eq!(PhaseColors::named("steps"), Some(PhaseColors::Steps));
+        assert_eq!(PhaseColors::named("full"), Some(PhaseColors::Full));
+        assert_eq!(PhaseColors::named("Full"), None);
     }
 
     #[test]
