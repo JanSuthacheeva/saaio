@@ -323,7 +323,8 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
             send(store, &flow, &text, now)
         }
         Some(Command::Clear) => clear(store, now),
-        Some(Command::Ui { stop }) => ui(store, stop),
+        Some(Command::Ui { stop: true }) => stop_server(&client::socket_path(store)),
+        Some(Command::Ui { stop: false }) => ui(store),
         Some(Command::Server) => server(store.clone()),
         Some(Command::Hook { .. } | Command::Wait { .. }) => Ok(Document::Silent),
     }
@@ -390,7 +391,11 @@ fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
         || store.waiter(waiter) == Some(me) && std::os::unix::process::parent_id() == parent;
     while is_mine() {
         let news = match waiter {
-            Waiter::Flow(id) => worker_news(store, id, clock())?,
+            Waiter::Flow(id) => match worker_news(store, id, clock()) {
+                WorkerNews::Gone => return None,
+                WorkerNews::Nothing => None,
+                WorkerNews::News(news) => Some(news),
+            },
             Waiter::Master => master_news(store, clock, &is_mine),
         };
         if news.is_some() {
@@ -401,19 +406,30 @@ fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
     None
 }
 
-/// Some(None) while there is nothing to deliver; None when the flow is finished or gone.
-fn worker_news(store: &Store, id: &str, now: u64) -> Option<Option<String>> {
-    let events = store.events(id).ok()?;
+/// What a worker's waiter finds on one look.
+enum WorkerNews {
+    /// The flow is finished or gone: stop waiting.
+    Gone,
+    Nothing,
+    News(String),
+}
+
+fn worker_news(store: &Store, id: &str, now: u64) -> WorkerNews {
+    let Ok(events) = store.events(id) else {
+        return WorkerNews::Gone;
+    };
     if fold::fold(id, &events, None, now).is_none_or(|flow| flow.is_finished()) {
-        return None;
+        return WorkerNews::Gone;
     }
     let delivered = store.delivered(id);
     let messages = wake::undelivered(&events, delivered);
     if messages.is_empty() {
-        return Some(None);
+        return WorkerNews::Nothing;
     }
-    store.set_delivered(id, delivered + messages.len()).ok()?;
-    Some(Some(output::news_for_worker(&messages)))
+    if store.set_delivered(id, delivered + messages.len()).is_err() {
+        return WorkerNews::Gone;
+    }
+    WorkerNews::News(output::news_for_worker(&messages))
 }
 
 /// The flows that stopped since the master last saw them, collected for SETTLE so several arrive
@@ -492,11 +508,8 @@ fn hook(
     Document::Silent
 }
 
-fn ui(store: &Store, stop: bool) -> Result<Document, Failure> {
+fn ui(store: &Store) -> Result<Document, Failure> {
     let socket = client::socket_path(store);
-    if stop {
-        return stop_server(&socket);
-    }
     let exe = env::current_exe()?;
     client::ensure_server(&socket, &exe, &[])?;
     let claude_home = env_path("CLAUDE_CONFIG_DIR")
