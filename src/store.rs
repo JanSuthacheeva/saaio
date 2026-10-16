@@ -252,6 +252,13 @@ impl Store {
         }
     }
 
+    pub fn busy(&self, waiter: &Waiter) -> bool {
+        self.root
+            .join(WAITS_DIR)
+            .join(format!("{}.busy", waiter.key()))
+            .exists()
+    }
+
     /// The master's own session id, for a harness that picks it itself (Codex).
     pub fn set_master_session(&self, id: &str) -> Result<()> {
         self.write_wait(MASTER_SESSION_FILE, id)

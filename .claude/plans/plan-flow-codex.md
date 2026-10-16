@@ -218,21 +218,25 @@ impl MasterRecord {
 // master.md: harness-neutral ("one agent session per feature flow"); the current text joins
 // PREVIOUS_DEFAULTS as master-v5.md.
 
-// src/server.rs: Server { /* ... */ typed_at: HashMap<PaneKey, Instant>, quiet: Duration }
+// src/server.rs: Server { /* ... */ typed_at: HashMap<PaneKey, Instant> }; serve() calls deliver_news before refresh
 // src/server/conn.rs: ClientMsg::Input -> typed_at.insert(focus, now)
 // src/server/panes.rs: open_master() uses config.master_agent(), Instructions read from master.md,
 //   store.master_session()
 
 // src/server/news.rs (new)
-/// No key into a pane for this long before the server types news into it.
-pub(super) const QUIET: Duration = Duration::from_secs(10);
+/// No key into a pane for this long before the server types news into it (200 ms under cfg(test)).
+const QUIET: Duration = Duration::from_secs(10);
 impl Server {
     /// Every tick, before refresh's early return: for each open pane whose adapter does not wake
     /// itself (no plain flows; the master only when [master] wake), when not store.busy and quiet,
     /// takes its news (deliver::) and writes paste(news) into it.
     pub(super) fn deliver_news(&mut self);
+    /// Also only a session that had its first turn (flow.session / store.master_session set), so
+    /// news never lands on Codex's startup or hooks review.
     fn server_delivered(&self, key: &PaneKey) -> Option<Waiter>;
+    fn take_news(&self, waiter: &Waiter) -> Option<String>;
 }
+fn quiet(busy: bool, typed_at: Option<Instant>, now: Instant) -> bool;
 /// ESC[200~ text ESC[201~ then "\r": one prompt, however many lines.
 fn paste(text: &str) -> Vec<u8>;
 
@@ -377,7 +381,7 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 
 ### Server
 - [x] config MasterConfig.agent and Config::master_agent, built-in master without the file argument; server/master.rs: Instructions, spec with instruct, master_wiring and session; panes.rs open_master through Config::master_agent and store.master_session; master.md harness-neutral with master-v5.md kept; tests
-- [ ] Store::busy; server/news.rs: deliver_news, server_delivered, paste; Server typed_at and quiet; conn.rs records input; server/tests.rs cases with a codex-adapter cat agent
+- [x] Store::busy; server/news.rs: deliver_news, server_delivered, paste; Server typed_at and quiet; conn.rs records input; server/tests.rs cases with a codex-adapter cat agent
 
 ### UI
 - [ ] peek split into peek/claude.rs and peek/codex.rs; Format, transcript_of, tail with format; PeekCache uses transcript_of; codex parser tests over the recorded rollout
