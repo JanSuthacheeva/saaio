@@ -61,7 +61,7 @@ any other that turns out to be noise, each named.
 - [x] event: `cut_to` truncates, `cut_texts(&mut self)`; main: drop needless clones, `branch_of` borrows
 - [x] ui app: `mem::replace` for the view, `worker(id)` and `in_view(id)` (`workers()` keeps its Vec: it is indexed, and a handful of refs costs nothing), borrowed dialog data, `Removal::of(String)`, no clone-to-measure
 - [x] ui views: `matches!` for pane keys, `unicode-width` helper, board/peek/theme_file clones
-- [ ] server: `Host::status` / `Host::keys`, no double key clone, early return; workspace `git` helper with `Command::arg(path)`; registry `sort_by_cached_key`
+- [x] server: `Host::status` / `Host::keys`, no double key clone, early return; workspace `git` helper with `Command::arg(path)`; registry `sort_by_cached_key`
 
 ### 4. Std combinators
 - [ ] let-else and let chains (main.rs, store.rs, master.rs), `while let` read loops (ui/mod.rs, server/mod.rs)

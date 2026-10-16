@@ -72,7 +72,7 @@ impl Registry {
                 }
             })
             .collect();
-        stores.sort_by_key(|store| (project_name(store, self), store.root().to_path_buf()));
+        stores.sort_by_cached_key(|store| (project_name(store, self), store.root().to_path_buf()));
         stores
     }
 
