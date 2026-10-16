@@ -353,7 +353,7 @@ The first worker starts:
 
 ### Detail panel (item 8)
 
-- [ ] `render_detail` with the steps under the header and `render_answer` (decisions, last answer's end); detail tests
+- [x] `render_detail` with the steps under the header and `render_answer` (decisions, last answer's end); detail tests
 
 ### Finish
 
