@@ -49,7 +49,7 @@ any other that turns out to be noise, each named.
 - [x] `State::name`, `Mode::name`, `Mode::toggled`, `StepStatus::name`; drop `name_of`, `name_of_mode`
 - [x] outcome enums `Setup`, `BranchFate`, `Retired` (the pane outcome stays `client::Closing`) with `Display` in output.rs; `output::started` takes `&Workspace`
 - [x] enums for `retire_worktree` / `drop_branch` flags (`Uncommitted`, `Unmerged`, done with 3.2); `WorkerNews` instead of `Option<Option<String>>`; `ui --stop` dispatched in `run`
-- [ ] server: `ControlFlow<()>` for `handle` / `message`, `stop` without `Result`, master `Start { Fresh, Resume }`
+- [x] server: `ControlFlow<()>` for `handle` / `message`, `stop` without `Result`, master `Start { Fresh, Resume }`
 - [ ] proto: typed `Flags` with `BitOr`; terminal `Arc<Mutex<Size>>`
 - [ ] ui: `Command::Cursor(Step)`; one `Group` enum for fold, sidebar and rail; `digit: Option<usize>` on board cards; peek `len: Option<u64>`
 - [ ] theme: `PaletteKey` with `FromStr`, `Palette::color` / `color_mut`

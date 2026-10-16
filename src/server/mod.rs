@@ -7,6 +7,7 @@ pub mod watch;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::ErrorKind;
+use std::ops::ControlFlow;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
@@ -24,7 +25,7 @@ use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, PaneStatus, Role,
 use crate::store::Store;
 use crate::view::{Board, FlowView, Workspace};
 use host::{Host, HostEvent};
-use master::MasterRecord;
+use master::{MasterRecord, Start};
 use reconcile::{Wanted, reconcile};
 use watch::StoreWatch;
 
@@ -111,7 +112,7 @@ pub fn run(
         eprintln!("{error:#}");
     }
     let cwd = std::env::current_dir().context("could not read the current directory")?;
-    let (record, fresh) = MasterRecord::load_or_create(&paths.master, &cwd)?;
+    let (record, start) = MasterRecord::load_or_create(&paths.master, &cwd)?;
     let (events, inbox) = mpsc::channel();
     let host = Host::new(START_SIZE, forward_host_events(events.clone()));
     let mut server = Server {
@@ -140,7 +141,7 @@ pub fn run(
         flushed_at: Instant::now(),
         events: events.clone(),
     };
-    server.open_master(fresh);
+    server.open_master(start);
     server.refresh();
     accept_in_background(listener, events);
 
@@ -160,8 +161,9 @@ impl Server {
             };
             match inbox.recv_timeout(wait) {
                 Ok(event) => {
-                    if !self.handle(event)? {
-                        return self.stop(inbox);
+                    if self.handle(event).is_break() {
+                        self.stop(inbox);
+                        return Ok(());
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
@@ -174,11 +176,11 @@ impl Server {
         }
     }
 
-    /// One event; Ok(false) once the server should stop.
-    fn handle(&mut self, event: Event) -> Result<bool> {
+    /// One event; Break once the server should stop.
+    fn handle(&mut self, event: Event) -> ControlFlow<()> {
         match event {
             Event::Accepted(stream) => self.accept(stream),
-            Event::Message(conn, message) => return Ok(self.message(conn, message)),
+            Event::Message(conn, message) => return self.message(conn, message),
             Event::Gone(conn) => self.drop_conn(conn),
             Event::Host(HostEvent::Output(key, bytes)) => {
                 self.host.feed(&key, &bytes);
@@ -201,10 +203,10 @@ impl Server {
                 }
             }
         }
-        Ok(true)
+        ControlFlow::Continue(())
     }
 
-    fn message(&mut self, conn: ConnId, message: ClientMsg) -> bool {
+    fn message(&mut self, conn: ConnId, message: ClientMsg) -> ControlFlow<()> {
         match message {
             ClientMsg::Hello { version, role } => self.hello(conn, version, role),
             ClientMsg::Focus(key) => {
@@ -226,7 +228,7 @@ impl Server {
                 self.send_full_frame();
             }
             ClientMsg::Reopen(PaneKey::Master) => {
-                self.open_master(false);
+                self.open_master(Start::Resume);
                 self.send_panes();
                 self.send_full_frame();
             }
@@ -236,10 +238,10 @@ impl Server {
                 self.send_panes();
                 self.send_full_frame();
             }
-            ClientMsg::StopServer => return false,
+            ClientMsg::StopServer => return ControlFlow::Break(()),
             ClientMsg::EndFlows => self.end_flows(),
         }
-        true
+        ControlFlow::Continue(())
     }
 
     fn hello(&mut self, conn: ConnId, version: u32, role: Role) {
@@ -399,7 +401,7 @@ impl Server {
     fn open_fresh(&mut self, key: &PaneKey) {
         eprintln!("resuming {key} failed, starting it fresh");
         let PaneKey::Flow(id) = key else {
-            self.open_master(true);
+            self.open_master(Start::Fresh);
             return;
         };
         let Some(mut flow) = self.flow(id).cloned() else {
@@ -477,7 +479,7 @@ impl Server {
         self.board.flows.iter().find(|flow| flow.id == id)
     }
 
-    fn open_master(&mut self, fresh: bool) {
+    fn open_master(&mut self, start: Start) {
         let master = self
             .config
             .agent(Some(crate::config::MASTER_AGENT))
@@ -488,14 +490,14 @@ impl Server {
             return;
         };
         match self.record.spec(
-            fresh,
+            start,
             agent,
             &self.env,
             &self.instructions,
             self.config.master.wake,
         ) {
             Some(spec) => match self.host.open(spec) {
-                Ok(()) if !fresh => {
+                Ok(()) if start == Start::Resume => {
                     self.resumed.insert(PaneKey::Master, Instant::now());
                 }
                 Ok(()) => {}
@@ -608,7 +610,7 @@ impl Server {
     }
 
     /// Closes every pane and waits for them to exit; forgets the master, so the next start is a new one.
-    fn stop(&mut self, inbox: &Receiver<Event>) -> Result<()> {
+    fn stop(&mut self, inbox: &Receiver<Event>) {
         if let Err(error) = fs::remove_file(&self.master_file)
             && error.kind() != ErrorKind::NotFound
         {
@@ -638,7 +640,6 @@ impl Server {
         for conn in conns {
             self.drop_conn(conn);
         }
-        Ok(())
     }
 }
 
