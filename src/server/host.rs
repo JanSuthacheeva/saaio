@@ -219,6 +219,21 @@ impl Host {
         })
     }
 
+    /// Where the pane stands; None when there is no such pane.
+    pub fn status(&self, key: &PaneKey) -> Option<&PaneStatus> {
+        self.panes.get(key).map(|pane| &pane.status)
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item = &PaneKey> {
+        self.panes.keys()
+    }
+
+    pub fn any_running(&self) -> bool {
+        self.panes
+            .values()
+            .any(|pane| pane.status == PaneStatus::Running)
+    }
+
     pub fn panes(&self) -> Vec<PaneInfo> {
         self.panes
             .iter()

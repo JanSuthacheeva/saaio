@@ -304,7 +304,7 @@ impl Server {
             eprintln!("{warning}");
         }
         self.board = fold::board(fold::views(&logs, now), now);
-        let open: Vec<PaneKey> = self.host.panes().into_iter().map(|pane| pane.key).collect();
+        let open: Vec<PaneKey> = self.host.keys().cloned().collect();
         let wanted = reconcile(
             &self.board.flows,
             &open,
@@ -337,19 +337,19 @@ impl Server {
     }
 
     fn open_worker(&mut self, spec: PaneSpec) {
-        let PaneKey::Flow(id) = spec.key.clone() else {
+        let key = spec.key.clone();
+        let PaneKey::Flow(id) = &key else {
             return;
         };
         self.known.insert(id.clone());
-        let Some(space) = self.flow(&id).and_then(|flow| flow.workspace.clone()) else {
+        let Some(space) = self.flow(id).and_then(|flow| flow.workspace.clone()) else {
             return;
         };
-        let key = spec.key.clone();
         let now = (self.clock)();
         let event = match self.host.open(spec) {
             Ok(()) => {
                 if space.window.is_some() {
-                    self.resumed.insert(key, Instant::now());
+                    self.resumed.insert(key.clone(), Instant::now());
                 }
                 if space.window.as_deref() == Some(HOSTED) {
                     return;
@@ -363,7 +363,7 @@ impl Server {
                 reason: format!("could not start the agent: {error:#}"),
             },
         };
-        if let Err(error) = self.store.append(&id, &LogEvent::new(now, event)) {
+        if let Err(error) = self.store.append(id, &LogEvent::new(now, event)) {
             eprintln!("{error:#}");
         }
     }
@@ -371,20 +371,15 @@ impl Server {
     /// Resumes a worker whose pane exited or never opened, also one whose flow ended.
     fn reopen_worker(&mut self, id: &str) {
         let key = PaneKey::Flow(id.to_string());
-        let running = self
-            .host
-            .panes()
-            .iter()
-            .any(|pane| pane.key == key && pane.status == PaneStatus::Running);
+        if self.host.status(&key) == Some(&PaneStatus::Running) {
+            return;
+        }
         let Some(flow) = self.flow(id).cloned() else {
             return;
         };
         let Some(space) = &flow.workspace else {
             return;
         };
-        if running {
-            return;
-        }
         let Some((name, agent)) = self.config.agent(Some(&space.agent)) else {
             self.host
                 .fail(key, format!("no agent named {}", space.agent));
@@ -427,21 +422,24 @@ impl Server {
     fn close_flow(&mut self, conn: ConnId, id: String) {
         let key = PaneKey::Flow(id.clone());
         self.known.insert(id.clone());
-        let Some(pane) = self.host.panes().into_iter().find(|pane| pane.key == key) else {
+        let Some(running) = self
+            .host
+            .status(&key)
+            .map(|status| *status == PaneStatus::Running)
+        else {
             self.send_to(conn, &ServerMsg::NotOpen(id));
             return;
         };
         self.closing.entry(key.clone()).or_default().push(conn);
         self.host.close(&key);
-        if pane.status != PaneStatus::Running {
+        if !running {
             self.tell_closed(&key);
         }
     }
 
     /// Tells everyone waiting for this pane that it is gone, once it is.
     fn tell_closed(&mut self, key: &PaneKey) {
-        let gone = !self.host.panes().iter().any(|pane| &pane.key == key);
-        if !gone {
+        if self.host.status(key).is_some() {
             return;
         }
         let Some(waiting) = self.closing.remove(key) else {
@@ -616,17 +614,12 @@ impl Server {
         {
             eprintln!("could not forget the master: {error}");
         }
-        let keys: Vec<PaneKey> = self.host.panes().into_iter().map(|pane| pane.key).collect();
+        let keys: Vec<PaneKey> = self.host.keys().cloned().collect();
         for key in &keys {
             self.host.close(key);
         }
         let deadline = Instant::now() + STOP_WAIT;
-        while self
-            .host
-            .panes()
-            .iter()
-            .any(|pane| pane.status == PaneStatus::Running)
-        {
+        while self.host.any_running() {
             let Some(left) = deadline.checked_duration_since(Instant::now()) else {
                 break;
             };
