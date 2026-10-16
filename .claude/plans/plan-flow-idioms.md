@@ -92,6 +92,9 @@ any other that turns out to be noise, each named.
 - [x] `[lints.clippy]` pedantic table in Cargo.toml; clippy, fmt, tests green
 - [x] end to end: run `flow start`, `flow status`, `flow ui` with flows, `flow remove`, `flow clear` like a user (the debug build with an isolated state folder: installing would replace the binary the live flow session runs)
 
+### 10. From the review
+- [ ] `flow hook` falls back to the built-in config when config.toml does not load, and still writes the error to stderr (decided: workers keep reporting; start and ui stay strict)
+
 ## Review
 
 Isolated review of `flow/rust-idioms` against `origin/main` (merge-base 2e715fc; the PR #14 merge
