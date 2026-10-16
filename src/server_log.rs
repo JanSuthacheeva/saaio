@@ -1,5 +1,6 @@
 use std::backtrace::Backtrace;
 use std::fs;
+use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::panic::Location;
 use std::path::{Path, PathBuf};
@@ -39,6 +40,16 @@ pub fn line(at_ms: u64, offset_secs: i64, pid: u32, text: &str) -> String {
 pub fn write(now: u64, text: &str) {
     let line = line(now, text::local_offset_secs(), process::id(), text) + "\n";
     let _ = io::stderr().write_all(line.as_bytes());
+}
+
+/// Appends a line to `log`, for a process that is not the server (flow ui --stop).
+pub fn append(log: &Path, now: u64, text: &str) -> io::Result<()> {
+    let line = line(now, text::local_offset_secs(), process::id(), text) + "\n";
+    OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log)?
+        .write_all(line.as_bytes())
 }
 
 /// From now on a panic in any thread writes its line and backtrace, then ends the process (exit
@@ -91,6 +102,22 @@ mod tests {
         rotate(&log, 10).unwrap();
         assert!(!log.exists());
         assert_eq!(fs::read_to_string(&old).unwrap(), "longer than ten");
+    }
+
+    #[test]
+    fn appends_a_line_and_creates_the_log() {
+        let dir = TempDir::new().unwrap();
+        let log = dir.path().join("server.log");
+
+        append(&log, 0, "one").unwrap();
+        append(&log, 0, "two").unwrap();
+
+        let lines = fs::read_to_string(&log).unwrap();
+        let ends: Vec<_> = lines
+            .lines()
+            .map(|line| line.rsplit("] ").next().unwrap())
+            .collect();
+        assert_eq!(ends, ["one", "two"]);
     }
 
     #[test]

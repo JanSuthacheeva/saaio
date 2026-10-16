@@ -117,7 +117,8 @@ fn dial(socket: &Path) -> Result<Option<UnixStream>> {
 
 /// Stops the server on `socket` with SIGTERM, SIGKILL when it still listens after STOP_WAIT;
 /// false when none runs. A signal, not a message, so it stops a server of any protocol version.
-pub fn stop_server(socket: &Path) -> Result<bool> {
+/// Each step goes into server.log, as the server cannot log a SIGKILL or who sent it.
+pub fn stop_server(socket: &Path, clock: fn() -> u64) -> Result<bool> {
     let Some(stream) = dial(socket)? else {
         return Ok(false);
     };
@@ -128,7 +129,21 @@ pub fn stop_server(socket: &Path) -> Result<bool> {
         )
     })?;
     drop(stream);
+    let log = server_log::path(socket);
+    // A log that cannot be written never keeps the server from stopping.
+    let note = |text: String| {
+        let _ = server_log::append(&log, clock(), &text);
+    };
+    note(format!(
+        "flow ui --stop (flow {BUILD}) sends SIGTERM to pid {pid}"
+    ));
     for (signal, wait) in [(libc::SIGTERM, STOP_WAIT), (libc::SIGKILL, KILL_WAIT)] {
+        if signal == libc::SIGKILL {
+            note(format!(
+                "pid {pid} still listens after {} s; sends SIGKILL",
+                STOP_WAIT.as_secs()
+            ));
+        }
         // SAFETY: kill only sends a signal; a pid that already exited fails with ESRCH.
         unsafe {
             libc::kill(pid, signal);
@@ -137,6 +152,7 @@ pub fn stop_server(socket: &Path) -> Result<bool> {
             return Ok(true);
         }
     }
+    note(format!("pid {pid} did not stop"));
     bail!("the flow server (pid {pid}) did not stop")
 }
 

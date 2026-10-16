@@ -1344,6 +1344,7 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     )
     .unwrap();
     let socket = home.path().join("server.sock");
+    let log = home.path().join("server.log");
 
     let none = flow(home.path(), &["ui", "--stop"]);
     assert!(none.status.success());
@@ -1352,9 +1353,17 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     let server = flow_command(home.path())
         .arg("server")
         .stdout(Stdio::null())
+        .stderr(
+            fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log)
+                .unwrap(),
+        )
         .env("FLOW_CONFIG", &config)
         .spawn()
         .unwrap();
+    let server_pid = server.id();
     let mut server = Running(server);
     wait_for_socket(&socket);
 
@@ -1367,6 +1376,26 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     assert!(server.wait().unwrap().success());
     assert!(!socket.exists());
     assert!(!home.path().join("master.json").exists());
+
+    let lines = fs::read_to_string(&log).unwrap();
+    let said = |text: &str| {
+        lines
+            .lines()
+            .find(|line| line.contains(text))
+            .unwrap_or_else(|| panic!("no line with {text:?} in\n{lines}"))
+    };
+    let pid_of = |line: &str| line.split(['[', ']']).nth(1).unwrap().to_string();
+    let server_said = format!("[{server_pid}] ");
+    assert!(said("started (flow ").contains(&server_said));
+    let stopper = said(&format!("sends SIGTERM to pid {server_pid}"));
+    assert!(stopper.contains("flow ui --stop (flow "), "{stopper}");
+    let stopping = said("stopping: SIGTERM from pid ");
+    assert!(stopping.contains(&server_said), "{stopping}");
+    assert!(
+        stopping.ends_with(&format!("from pid {}", pid_of(stopper))),
+        "{lines}"
+    );
+    assert!(said("] stopped").contains(&server_said));
 }
 
 #[test]

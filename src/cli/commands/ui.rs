@@ -17,7 +17,7 @@ pub struct Args {
 pub fn run(args: &Args, store: &Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
     let socket = client::socket_path(store);
     if args.stop {
-        return stop_server(&socket);
+        return stop_server(&socket, clock);
     }
     let exe = std::env::current_exe()?;
     client::ensure_server(&socket, &exe, &[])?;
@@ -32,8 +32,8 @@ pub fn run(args: &Args, store: &Store, env: &Env, clock: fn() -> u64) -> Result<
     Ok(Document::Text(message))
 }
 
-fn stop_server(socket: &Path) -> Result<Document, Failure> {
-    let message = if client::stop_server(socket)? {
+fn stop_server(socket: &Path, clock: fn() -> u64) -> Result<Document, Failure> {
+    let message = if client::stop_server(socket, clock)? {
         "stopped the flow server and every session in it"
     } else {
         "no flow server runs"

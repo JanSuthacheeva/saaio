@@ -222,7 +222,7 @@ its first caller.
 - [x] Rotation: `server_log::CAP`, `rotate`, `ensure_server` rotates; TempDir tests and a client test
 - [x] Stop reasons: `Stop` with Display, `Event::Signal` from `stop_on_signals` (WithOrigin; SIGTERM, SIGINT, SIGHUP), `handle`/`message` return `ControlFlow<Stop>`, `serve` returns `Stop` and writes `stopping:`; unit test for Display
 - [x] Peers: `build.rs` (FLOW_COMMIT), `proto::BUILD`, `Peer` with Display, `Hello { peer }`, `Detached { by }`, protocol 3, `client::this_process`, `server/conn.rs` `peers` with attach/take-over/left/refused lines, `Event::Unreadable` and `refuse_unreadable`, `Stop::Asked(peer)`, the UI's take-over message with ~; proto, server and app tests
-- [ ] Stopper's lines: `server_log::append`, `stop_server(socket, clock)` appends its SIGTERM/SIGKILL/did-not-stop lines; tests/cli.rs checks the stopper's and the server's lines in server.log
+- [x] Stopper's lines: `server_log::append`, `stop_server(socket, clock)` appends its SIGTERM/SIGKILL/did-not-stop lines; tests/cli.rs checks the stopper's and the server's lines in server.log
 - [ ] Guard: `commands::ui::refuse_inside_own_flow` for ui and --stop; tests/cli.rs
 - [ ] CLAUDE.md: `server_log.rs`, `build.rs`, the scratch FLOW_HOME rule
 - [ ] E2E with a scratch FLOW_HOME in tmux: start flow ui, take it over from a second one, stop with C-space Q, start again, `flow ui --stop`, `kill -TERM`, a temporary panic in a thread; read server.log for each case
