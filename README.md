@@ -99,6 +99,7 @@ second when it, or the theme it extends, changes. Without it flow uses the termi
 # Colors: "#rrggbb", an ANSI index, "default" (the terminal's), or another key.
 extends = "flow"        # terminal | flow | flow-light | a file in themes/, without .toml
 nerd_font = true        # the font has Nerd Font icons: a kiwi bird as the mark
+phase_colors = "steps"  # off | steps | full: how much of a working flow takes its phase's color
 [ui]
 accent = "#d9825b"
 [state]
@@ -108,11 +109,13 @@ merge-request = "#d08ad6"
 ```
 
 Keys: `[ui]` background, panel, selection, rule, text, strong, muted, faint, accent; `[state]`
-working, waiting, blocked, done, ended; `[phase]` design, implement, review, merge-request. A
-working flow takes its phase's color, and `working` only until it reaches its first phase; a flow
-that waits, is blocked or is done keeps its state's color. The terminal theme colors the phases
-with 256-color indexes, since terminals often repaint ANSI blue, magenta and cyan. A key left out
-keeps the base's value. `nerd_font` (default false) shows flow's mark as a kiwi bird, which needs a
+working, waiting, blocked, done, ended; `[phase]` design, implement, review, merge-request.
+`phase_colors` decides where a working flow shows its phase's color: `off` nowhere, `steps` (the
+default) in the reached step dots, `full` also in the spinner, label, rail and title row. A flow
+works in `working` until it reaches its first phase; a flow that waits, is blocked or is done
+keeps its state's color at every level. The terminal theme colors the phases with 256-color
+indexes, since terminals often repaint ANSI blue, magenta and cyan. A key left out keeps the
+base's value. `nerd_font` (default false) shows flow's mark as a kiwi bird, which needs a
 Nerd Font; without it the mark is a goose in flight, `▚▄▞`, in block characters every font has.
 The mark takes the theme's accent either way. `flow` and `flow-light` are the design's dark and
 light colors. A tool can keep a theme in `~/.config/flow/themes/<name>.toml` for `extends` to

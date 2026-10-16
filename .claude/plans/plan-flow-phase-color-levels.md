@@ -102,5 +102,5 @@ Call sites (modified): `sidebar/labels.rs` `Sidebar::steps` and the current step
 
 - [x] PhaseColors, Theme.phase_colors, step_style and flow_style through tinted, with unit tests per level; Sidebar::steps and the detail view's current step use step_style; sidebar and board tests per level; goldens regenerated unchanged
 - [x] PhaseColors::named; theme_file reads phase_colors (nearest wins, bad value errors), with tests
-- [ ] README Themes documents phase_colors
+- [x] README Themes documents phase_colors
 - [ ] End to end: flow ui on a scratch FLOW_HOME with phase_colors off, steps and full
