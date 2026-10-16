@@ -229,4 +229,4 @@ so each task brings a piece of it together with its first reader.
 - [x] Name the configured key in `flow status`'s resume hint (`detail`, `detail_help`) with a cli test
 - [x] E2E cli test: `flow ui` with `prefix = "C-c"` exits 1 with the reason
 - [x] Reword master.md (current text to master-v7.md in `PREVIOUS_DEFAULTS`), README keys section and `[ui]` example, HANDOVER lines
-- [ ] End-to-end check: flow ui on a scratch FLOW_HOME with `[ui] prefix = "C-b"`: C-b ? shows the help naming C-b, C-b d detaches, C-b C-b reaches the pane, the sidebar footer reads C-b; then `prefix = "C-c"` refuses to start
+- [x] End-to-end check: flow ui on a scratch FLOW_HOME with `[ui] prefix = "C-b"`: C-b ? shows the help naming C-b, C-b d detaches, C-b C-b reaches the pane, the sidebar footer reads C-b; then `prefix = "C-c"` refuses to start
