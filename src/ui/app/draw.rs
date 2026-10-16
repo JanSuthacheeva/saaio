@@ -8,8 +8,9 @@ use super::{App, View};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::text::plural;
 use crate::ui::board::{BoardState, BoardView};
-use crate::ui::dialog::{draw_dialog, draw_help, draw_no_session, draw_not_running};
+use crate::ui::dialog::{self, Dialog};
 use crate::ui::fit::clip;
+use crate::ui::hints::Hint;
 use crate::ui::layout::{self, Areas};
 use crate::ui::newflow::NewFlowView;
 use crate::ui::peek::PeekLine;
@@ -54,18 +55,15 @@ impl App {
             }
         }
         let asking = matches!(self.view, View::Confirm { .. });
-        match self.status(&self.focus) {
-            Some(PaneStatus::Running) => {}
-            Some(_) if asking => {}
-            Some(status) => draw_not_running(
-                frame,
-                areas.pane,
-                status,
-                self.ended_worker().as_deref(),
-                theme,
-            ),
-            None if self.focus != PaneKey::Master => draw_no_session(frame, areas.pane, theme),
-            None => {}
+        let notice = match self.status(&self.focus) {
+            Some(PaneStatus::Running) => None,
+            Some(_) if asking => None,
+            Some(status) => dialog::not_running(status, self.ended_worker().as_deref(), theme),
+            None if self.focus != PaneKey::Master => Some(dialog::no_session(theme)),
+            None => None,
+        };
+        if let Some(notice) = notice {
+            frame.render_widget(notice, areas.session());
         }
         self.draw_view(frame, &areas, theme);
     }
@@ -109,25 +107,25 @@ impl App {
     /// The open dialog or overlay over the session, or the pane's cursor when there is none.
     fn draw_view(&self, frame: &mut Frame, areas: &Areas, theme: &Theme) {
         match &self.view {
-            View::Stop(unfinished) => self.draw_stop(frame, areas.pane, theme, unfinished),
-            View::Confirm { question, .. } => {
-                let text = vec![
-                    Line::styled(question.as_str(), theme.ui.text),
-                    Line::from(vec![
-                        Span::styled("y", theme.ui.key),
-                        Span::styled(" yes, any other key keeps the flow", theme.ui.muted),
-                    ]),
-                ];
-                draw_dialog(
-                    frame,
-                    areas.pane,
-                    theme,
-                    " clean up ",
-                    theme.state.waiting,
-                    text,
-                );
+            View::Stop(unfinished) => {
+                frame.render_widget(self.stop_dialog(theme, unfinished), areas.session());
             }
-            View::Help => draw_help(frame, areas.pane, theme),
+            View::Confirm { question, .. } => frame.render_widget(
+                Dialog {
+                    border: theme.state.waiting,
+                    keys: vec![
+                        Hint::new("y", "yes"),
+                        Hint::new("any other key", "keeps the flow").kept(),
+                    ],
+                    ..Dialog::new(
+                        "clean up",
+                        vec![Line::styled(question.as_str(), theme.ui.text)],
+                        theme,
+                    )
+                },
+                areas.session(),
+            ),
+            View::Help => frame.render_widget(dialog::help(theme), areas.session()),
             View::Board(_) => {}
             View::History(back) => {
                 let hint = Line::from(vec![
@@ -180,22 +178,27 @@ impl App {
         }
     }
 
-    /// Before flow stops: asks to stop, or to keep or end the flows that are not finished.
-    fn draw_stop(&self, frame: &mut Frame, pane: Rect, theme: &Theme, unfinished: &[String]) {
+    /// The stop question, or the flows it would leave unfinished with keep, end and esc as keys.
+    fn stop_dialog<'a>(&'a self, theme: &'a Theme, unfinished: &[String]) -> Dialog<'a> {
         if unfinished.is_empty() {
-            let text = vec![
-                Line::styled("Stop flow? Every session in it ends.", theme.ui.text),
-                Line::from(vec![
-                    Span::styled("y", theme.ui.key),
-                    Span::styled(" stops it, any other key keeps it", theme.ui.muted),
-                ]),
-            ];
-            draw_dialog(frame, pane, theme, " stop ", theme.ui.rule, text);
-            return;
+            return Dialog {
+                keys: vec![
+                    Hint::new("y", "stops it"),
+                    Hint::new("any other key", "keeps it").kept(),
+                ],
+                ..Dialog::new(
+                    "stop",
+                    vec![Line::styled(
+                        "Stop flow? Every session in it ends.",
+                        theme.ui.text,
+                    )],
+                    theme,
+                )
+            };
         }
         let sidebar = self.sidebar(theme, &[]);
         let count = unfinished.len();
-        let mut text = vec![Line::styled(
+        let mut body = vec![Line::styled(
             format!(
                 "{count} flow{} {} not finished:",
                 plural(count),
@@ -220,7 +223,7 @@ impl App {
                 .clone()
                 .or_else(|| flow.delegate.as_ref().map(|text| format!("agent: {text}")))
                 .unwrap_or_else(|| sidebar.label(flow).content.to_string());
-            text.push(Line::from(vec![
+            body.push(Line::from(vec![
                 Span::raw("  "),
                 Span::styled(sidebar.glyph(flow.state), theme.flow_style(flow)),
                 Span::styled(format!(" {:name_width$}  ", flow.name), theme.ui.strong),
@@ -232,25 +235,23 @@ impl App {
         } else {
             ("them", "they resume")
         };
-        text.push(Line::raw(""));
-        text.push(Line::from(vec![
-            Span::styled("k", theme.ui.key),
-            Span::styled(
-                format!(" keep {them}; {they} the next time flow ui starts"),
-                theme.ui.muted,
-            ),
-        ]));
-        text.push(Line::from(vec![
-            Span::styled("e", theme.ui.key),
-            Span::styled(
-                format!(" end {them}; branches and worktrees stay until flow clear"),
-                theme.ui.muted,
-            ),
-        ]));
-        text.push(Line::from(vec![
-            Span::styled("esc", theme.ui.key),
-            Span::styled(" keep flow running", theme.ui.muted),
-        ]));
-        draw_dialog(frame, pane, theme, " stop ", theme.state.waiting, text);
+        body.push(Line::raw(""));
+        body.push(Line::styled(
+            format!("Kept, {they} the next time flow ui starts."),
+            theme.ui.muted,
+        ));
+        body.push(Line::styled(
+            "Ended, branches and worktrees stay until flow clear.",
+            theme.ui.muted,
+        ));
+        Dialog {
+            border: theme.state.waiting,
+            keys: vec![
+                Hint::new("k", format!("keep {them}")),
+                Hint::new("e", format!("end {them}")),
+                Hint::new("esc", "keep flow running").kept(),
+            ],
+            ..Dialog::new("stop", body, theme)
+        }
     }
 }

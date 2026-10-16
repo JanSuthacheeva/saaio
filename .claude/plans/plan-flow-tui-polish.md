@@ -318,7 +318,7 @@ The first worker starts:
 ### Dialogs (items 4, 9)
 
 - [x] Add `Dialog` with `area`, `body_area` and `Widget::render` (dim, padding, title, aside, ├─┤ rule, keys), and unit tests for geometry and the joined rule
-- [ ] Move help, not running, no session, confirm and stop onto `Dialog` (`dialog::help`, `dialog::not_running`, `dialog::no_session`, `App::stop_dialog`), remove `draw_dialog`; update the help and stop goldens
+- [x] Move help, not running, no session, confirm and stop onto `Dialog` (`dialog::help`, `dialog::not_running`, `dialog::no_session`, `App::stop_dialog`), remove `draw_dialog`; update the help and stop goldens
 - [ ] Draw `NewFlowView` inside a `Dialog` (`NewFlowView::dialog`, `NewFlowForm::cursor(body)`), mark the focused field with `focus::mark`, draw `(•)` strong and the focused row's choice reversed; remove `dialog_area` and the DIM call in draw.rs; update new-flow goldens and add new-flow-agent
 - [ ] Fit the scrollback hint with `hints::line` (`App::draw_history`)
 

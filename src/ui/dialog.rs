@@ -1,4 +1,3 @@
-use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -149,26 +148,8 @@ impl Widget for Dialog<'_> {
     }
 }
 
-pub fn draw_dialog(
-    frame: &mut Frame,
-    pane: Rect,
-    theme: &Theme,
-    title: &str,
-    border: Style,
-    text: Vec<Line>,
-) {
-    let title = title.trim();
-    frame.render_widget(
-        Dialog {
-            border,
-            ..Dialog::new(title, text, theme)
-        },
-        pane,
-    );
-}
-
-/// Every key behind C-space, over the pane.
-pub fn draw_help(frame: &mut Frame, pane: Rect, theme: &Theme) {
+/// Every key behind C-space.
+pub fn help(theme: &Theme) -> Dialog<'_> {
     let keys = [
         ("0-9", "jump to a session (0 is the master)"),
         ("j k", "move the peek over the workers"),
@@ -183,74 +164,75 @@ pub fn draw_help(frame: &mut Frame, pane: Rect, theme: &Theme) {
         ("C-space", "send C-space itself"),
         ("?", "these keys"),
     ];
-    let mut text = vec![Line::from(vec![
+    let mut body = vec![Line::from(vec![
         Span::styled("C-space", theme.ui.key),
         Span::styled(" then", theme.ui.muted),
     ])];
     for (key, what) in keys {
-        text.push(Line::from(vec![
+        body.push(Line::from(vec![
             Span::styled(format!("  {key:<9}"), theme.ui.key),
             Span::styled(what, theme.ui.text),
         ]));
     }
-    text.push(Line::raw(""));
-    text.push(Line::styled("any key closes this", theme.ui.faint));
-    draw_dialog(frame, pane, theme, " keys ", theme.ui.rule, text);
+    Dialog {
+        keys: vec![Hint::new("any key", "closes this")],
+        ..Dialog::new("keys", body, theme)
+    }
 }
 
-/// A notice over a pane whose process is gone: for a worker (`worker` is its name) what to do with
-/// its flow, for the master how to bring it back.
-pub fn draw_not_running(
-    frame: &mut Frame,
-    pane: Rect,
+/// A pane whose process is gone: for a worker (`worker` is its name) what to do with its flow,
+/// else how to bring the master back.
+pub fn not_running<'a>(
     status: &PaneStatus,
     worker: Option<&str>,
-    theme: &Theme,
-) {
-    let (title, first, style) = match status {
+    theme: &'a Theme,
+) -> Option<Dialog<'a>> {
+    let (title, first, border) = match status {
         PaneStatus::Exited { code } => (
-            " exited ",
+            "exited",
             match code {
                 Some(0) | None => "The session ended.".to_string(),
                 Some(code) => format!("The session ended with code {code}."),
             },
             theme.state.waiting,
         ),
-        PaneStatus::Failed { reason } => (" could not start ", reason.clone(), theme.state.blocked),
-        PaneStatus::Running => return,
+        PaneStatus::Failed { reason } => ("could not start", reason.clone(), theme.state.blocked),
+        PaneStatus::Running => return None,
     };
     let keys = match worker {
         Some(_) => vec![
-            Span::styled("x", theme.ui.key),
-            Span::styled(" clean up: worktree, branch, flow   ", theme.ui.muted),
-            Span::styled("r", theme.ui.key),
-            Span::styled(" resume   ", theme.ui.muted),
-            Span::styled("esc", theme.ui.key),
-            Span::styled(" back to master", theme.ui.muted),
+            Hint::new("x", "clean up: worktree, branch, flow"),
+            Hint::new("r", "resume"),
+            Hint::new("esc", "back to master").kept(),
         ],
         None => vec![
-            Span::styled("C-space r", theme.ui.key),
-            Span::styled(" resumes it   ", theme.ui.muted),
-            Span::styled("C-space Q", theme.ui.key),
-            Span::styled(" stops flow", theme.ui.muted),
+            Hint::new("C-space r", "resumes it").kept(),
+            Hint::new("C-space Q", "stops flow"),
         ],
     };
-    let text = vec![Line::styled(first, theme.ui.text), Line::from(keys)];
-    draw_dialog(frame, pane, theme, title, style, text);
+    Some(Dialog {
+        border,
+        keys,
+        ..Dialog::new(title, vec![Line::styled(first, theme.ui.text)], theme)
+    })
 }
 
-/// A notice over a worker pane flow ui has no session for, such as a flow that ended before it opened.
-pub fn draw_no_session(frame: &mut Frame, pane: Rect, theme: &Theme) {
-    let text = vec![
-        Line::styled("flow ui has no session for this flow.", theme.ui.text),
-        Line::from(vec![
-            Span::styled("C-space r", theme.ui.key),
-            Span::styled(" resumes it   ", theme.ui.muted),
-            Span::styled("C-space 0", theme.ui.key),
-            Span::styled(" back to the master", theme.ui.muted),
-        ]),
-    ];
-    draw_dialog(frame, pane, theme, " not open ", theme.ui.rule, text);
+/// A worker pane flow ui has no session for, such as a flow that ended before it opened.
+pub fn no_session(theme: &Theme) -> Dialog<'_> {
+    Dialog {
+        keys: vec![
+            Hint::new("C-space r", "resumes it").kept(),
+            Hint::new("C-space 0", "back to the master"),
+        ],
+        ..Dialog::new(
+            "not open",
+            vec![Line::styled(
+                "flow ui has no session for this flow.",
+                theme.ui.text,
+            )],
+            theme,
+        )
+    }
 }
 
 #[cfg(test)]

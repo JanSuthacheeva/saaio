@@ -13,12 +13,12 @@
                                                                                                             │     ●───○───○───○ design        guided
                                                                                                             │     Which approach: a channel column …
                                                                                                             │
-                                                                                                            │ READY 1
-                          ╭─ not open ────────────────────────────────────────────╮                         │▌3 ○ scratch                        12m
-                          │                                                       │                         │▌    idle                         plain
-                          │  flow ui has no session for this flow.                │                         │▌    The tree has 14 files under src.
-                          │  C-space r resumes it   C-space 0 back to the master  │                         │
-                          │                                                       │                         │ RUNNING 1
+                          ╭─ not open ────────────────────────────────────────────╮                         │ READY 1
+                          │                                                       │                         │▌3 ○ scratch                        12m
+                          │  flow ui has no session for this flow.                │                         │▌    idle                         plain
+                          │                                                       │                         │▌    The tree has 14 files under src.
+                          ├───────────────────────────────────────────────────────┤                         │
+                          │  C-space r resumes it   C-space 0 back to the master  │                         │ RUNNING 1
                           ╰───────────────────────────────────────────────────────╯                         │ 4 ◓ export-csv                      1h
                                                                                                             │     ●───●───●───○ review           6/6
                                                                                                             │     agent: review changes

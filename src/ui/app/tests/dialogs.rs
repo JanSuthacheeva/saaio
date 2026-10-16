@@ -142,7 +142,11 @@ fn keeps_or_ends_unfinished_flows_when_flow_stops() {
         "{dialog}"
     );
     assert!(
-        dialog.contains("e end them; branches and worktrees stay until flow clear"),
+        dialog.contains("Ended, branches and worktrees stay until flow clear."),
+        "{dialog}"
+    );
+    assert!(
+        dialog.contains("k keep them   e end them   esc keep flow running"),
         "{dialog}"
     );
 

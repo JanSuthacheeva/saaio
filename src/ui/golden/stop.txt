@@ -10,18 +10,18 @@
                                                                                                             │     migration needs a default value f…
                                                                                                             │
                                                                                                             │ 2 ● shop-230                       31m
-                                                                                                            │     ●───○───○───○ design        guided
-                     ╭─ stop ─────────────────────────────────────────────────────────╮                     │     Which approach: a channel column …
-                     │                                                                │                     │
-                     │  3 flows are not finished:                                     │                     │ RUNNING 1
-                     │    ● shop-221    migration needs a default value for orders.…  │                     │ 3 ◓ export-csv                      1h
-                     │    ● shop-230    Which approach: a channel column or a join …  │                     │     ●───●───●───○ review           6/6
-                     │    ◓ export-csv  agent: review changes                         │                     │     agent: review changes
-                     │                                                                │                     │
-                     │  k keep them; they resume the next time flow ui starts         │                     │ DONE 1
-                     │  e end them; branches and worktrees stay until flow clear      │                     │ 4 ✓ shop-198                        2h
-                     │  esc keep flow running                                         │                     │     ●───●───●───● MR !418        in 0s
-                     │                                                                │                     │
+                     ╭─ stop ─────────────────────────────────────────────────────────╮                     │     ●───○───○───○ design        guided
+                     │                                                                │                     │     Which approach: a channel column …
+                     │  3 flows are not finished:                                     │                     │
+                     │    ● shop-221    migration needs a default value for orders.…  │                     │ RUNNING 1
+                     │    ● shop-230    Which approach: a channel column or a join …  │                     │ 3 ◓ export-csv                      1h
+                     │    ◓ export-csv  agent: review changes                         │                     │     ●───●───●───○ review           6/6
+                     │                                                                │                     │     agent: review changes
+                     │  Kept, they resume the next time flow ui starts.               │                     │
+                     │  Ended, branches and worktrees stay until flow clear.          │                     │ DONE 1
+                     │                                                                │                     │ 4 ✓ shop-198                        2h
+                     ├────────────────────────────────────────────────────────────────┤                     │     ●───●───●───● MR !418        in 0s
+                     │  k keep them   e end them   esc keep flow running              │                     │
                      ╰────────────────────────────────────────────────────────────────╯                     │
                                                                                                             │
                                                                                                             │
