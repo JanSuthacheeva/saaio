@@ -56,3 +56,22 @@ fn artifact_watch(task: &Value) -> bool;
 - [x] `artifact_watch` and the skip in `running_background_task`, with tests for a watch alone (idle) and a watch beside a running subagent (delegated)
 - [x] Docs: the `background_tasks` fact in `docs/HANDOVER.md` names the artifact watch and that it is skipped
 - [x] End-to-end check: the same real worker publishing an artifact ends its turn idle (or waiting) and wakes the master
+
+## Review
+
+Reviewed in an isolated agent against this plan (commits 8400af8..bd13162).
+
+- **Fixed** - nothing; no finding needed a change. Both new tests fail without the skip (the
+  watch is the only task, and it comes before the appended subagent, so without the skip
+  `find_map` returns the watch's description).
+- **Open** - one question, no change recommended: the skip keys on Claude Code's wording
+  `live updates for artifact ` (2.1.301). If Claude Code rewords it, flows publishing artifacts go
+  back to `delegated` forever; the recorded fixture only catches that when a new payload is
+  recorded. Recommendation: keep as is, re-record `stop_artifact_watch.json` on Claude Code
+  upgrades along with the other fixtures. The `pending` watch assumption holds by construction (the
+  skip ignores status) and has no test of its own; not worth one.
+- **Where to look** - `src/adapter/claude_code.rs` `translate` "Stop" -> `running_background_task`
+  -> `artifact_watch`: the only behaviour change, about 10 lines. The two tests after
+  `a_turn_that_ends_with_background_work_running_is_delegated` and the fixture are routine; the HANDOVER paragraph can be skimmed.
+- **Checks** - `cargo test`, `cargo clippy -- -D warnings` and `cargo fmt` passed at 6a3eb4c;
+  only docs and this plan changed since.
