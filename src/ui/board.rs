@@ -16,7 +16,6 @@ use crate::view::{Board, FlowView, Project, Projects, State, StepStatus, Tone};
 
 /// Cards per row.
 const COLUMNS: usize = 3;
-/// The longest task bar on a card.
 /// A card's rows: its four lines inside a border.
 const CARD_ROWS: u16 = 6;
 /// Rows every project's cards leave for the selected flow's detail.
@@ -295,9 +294,9 @@ impl BoardView<'_> {
         [first, Line::from(second), third, fourth]
     }
 
-    /// The label at a card's top right: a solid pill when the flow needs you, a soft one otherwise.
-    /// The card's state in words, in its color: no fill, as Claude Code says a state in colored text.
-    fn pill(&self, flow: Option<&FlowView>) -> Span<'static> {
+    /// The label at a card's top right: its state in words, in the state's color, with no fill, as
+    /// Claude Code says a state in colored text.
+    fn state_label(&self, flow: Option<&FlowView>) -> Span<'static> {
         let theme = self.theme();
         let Some(flow) = flow else {
             return Span::styled("you", theme.ui.accent);
@@ -380,9 +379,10 @@ impl BoardView<'_> {
         for (line, row) in lines.iter().zip(body.rows()) {
             buf.set_line(row.x, row.y, line, row.width);
         }
-        let pill = self.pill(flow);
-        let pill_x = (body.x + body.width).saturating_sub(pill.width() as u16 + 1);
-        buf.set_span(pill_x, body.y, &pill, pill.width() as u16);
+        let label = self.state_label(flow);
+        let width = u16::try_from(label.width()).unwrap_or(u16::MAX);
+        let x = (body.x + body.width).saturating_sub(width.saturating_add(1));
+        buf.set_span(x, body.y, &label, width);
     }
 
     /// Every project's row and cards, scrolled so the selected card shows; returns the last row used.

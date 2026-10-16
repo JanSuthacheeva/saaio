@@ -65,12 +65,6 @@ enum Event {
 }
 
 #[derive(Debug)]
-struct Conn {
-    stream: UnixStream,
-    role: Option<Role>,
-}
-
-#[derive(Debug)]
 struct Server {
     store: Store,
     clock: fn() -> u64,
@@ -86,7 +80,7 @@ struct Server {
     master_file: PathBuf,
     instructions: PathBuf,
     host: Host,
-    conns: HashMap<ConnId, Conn>,
+    conns: HashMap<ConnId, UnixStream>,
     next_conn: ConnId,
     attached: Option<ConnId>,
     focus: PaneKey,
@@ -266,9 +260,6 @@ impl Server {
             self.focus = PaneKey::Master;
             self.history = None;
             self.host.resize(size);
-        }
-        if let Some(entry) = self.conns.get_mut(&conn) {
-            entry.role = Some(role);
         }
         self.send_to(
             conn,
@@ -579,10 +570,10 @@ impl Server {
 
     /// Writes one message; a connection that cannot take it is dropped.
     fn send_to(&mut self, conn: ConnId, message: &ServerMsg) {
-        let Some(entry) = self.conns.get_mut(&conn) else {
+        let Some(stream) = self.conns.get_mut(&conn) else {
             return;
         };
-        if proto::write_msg(&mut entry.stream, message).is_err() {
+        if proto::write_msg(stream, message).is_err() {
             self.drop_conn(conn);
         }
     }
@@ -594,13 +585,13 @@ impl Server {
             return;
         };
         let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
-        self.conns.insert(conn, Conn { stream, role: None });
+        self.conns.insert(conn, stream);
         read_in_background(conn, reader, self.events.clone());
     }
 
     fn drop_conn(&mut self, conn: ConnId) {
-        if let Some(entry) = self.conns.remove(&conn) {
-            let _ = entry.stream.shutdown(std::net::Shutdown::Both);
+        if let Some(stream) = self.conns.remove(&conn) {
+            let _ = stream.shutdown(std::net::Shutdown::Both);
         }
         if self.attached == Some(conn) {
             self.attached = None;

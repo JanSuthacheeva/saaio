@@ -112,7 +112,7 @@ impl MasterRecord {
             key: PaneKey::Master,
             argv,
             cwd: self.cwd.clone(),
-            env: launch::pane_env(None, env),
+            env: launch::pane_env(env),
         })
     }
 }

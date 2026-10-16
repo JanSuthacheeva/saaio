@@ -77,7 +77,7 @@ any other that turns out to be noise, each named.
 
 ### 6. Errors, dead code, docs
 - [x] error context in store, config, branching; `Store::locate` / `Registry::locate` return `Option`, Store reuses `Registry::default_root`
-- [ ] remove `pane_env`'s `id` and `Conn.role`; fix stale and misplaced docs
+- [x] remove `pane_env`'s `id` and `Conn.role`; fix stale and misplaced docs
 
 ### 7. Duplication and long functions
 - [ ] main: split `start` (done with 6.2); `locate_store`, `load_config`, `config_dir` (done with 7.1); `unix_ms`

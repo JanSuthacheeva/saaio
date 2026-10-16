@@ -153,7 +153,7 @@ fn worker_env(flow: &FlowView, space: &Workspace, env: &LaunchEnv) -> Vec<(Strin
         Some(repo) => hook_env(&flow.id, &flow.name, &repo, space),
         None => vec![("FLOW_ID".to_string(), flow.id.clone())],
     };
-    vars.extend(pane_env(None, env));
+    vars.extend(pane_env(env));
     vars
 }
 
@@ -167,12 +167,9 @@ pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// FLOW_ID (workers only), FLOW_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
-pub fn pane_env(id: Option<&str>, env: &LaunchEnv) -> Vec<(String, String)> {
+/// FLOW_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
+pub fn pane_env(env: &LaunchEnv) -> Vec<(String, String)> {
     let mut vars = Vec::new();
-    if let Some(id) = id {
-        vars.push(("FLOW_ID".to_string(), id.to_string()));
-    }
     if let Some(home) = &env.flow_home {
         vars.push(("FLOW_HOME".to_string(), home.display().to_string()));
     }
@@ -485,16 +482,15 @@ mod tests {
         };
 
         assert_eq!(
-            pane_env(Some("7f3c"), &env),
+            pane_env(&env),
             pairs(&[
-                ("FLOW_ID", "7f3c"),
                 ("FLOW_HOME", "/state/flow"),
                 ("TERM", "xterm-256color"),
                 ("COLORTERM", "truecolor"),
             ])
         );
         assert_eq!(
-            pane_env(None, &LaunchEnv::default()),
+            pane_env(&LaunchEnv::default()),
             pairs(&[("TERM", "xterm-256color"), ("COLORTERM", "truecolor")])
         );
     }
@@ -558,7 +554,7 @@ mod tests {
             agent_argv(claude, "7f3c", "shop-217", "SHOP-217 add CSV export")
         );
         let mut expected = hook_env("7f3c", "shop-217", Path::new("/repo"), &shop());
-        expected.extend(pane_env(None, &env));
+        expected.extend(pane_env(&env));
         assert_eq!(
             fresh.env, expected,
             "FLOW_SLOT and the rest, as the hooks get them"
