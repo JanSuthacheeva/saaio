@@ -82,7 +82,7 @@ any other that turns out to be noise, each named.
 ### 7. Duplication and long functions
 - [x] main: split `start` (done with 6.2); `locate_store`, `load_config`, `config_dir` (done with 7.1); `unix_ms`
 - [x] one `write_atomic` for store, registry, slots
-- [ ] ui: split `App::draw`, newflow `render`, sidebar `render`; board `digit`, `card_rect`, one footer, `spinner`, shared `Row`, `plural`
+- [x] ui: split `App::draw`, newflow `render`, sidebar `render`; board `digit`, `card_rect`, one footer, `spinner`, shared `Row`, `plural`
 
 ### 8. Tests
 - [ ] theme_file watch test without mtime dependence; cli socket wait by connect; one deadline

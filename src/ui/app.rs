@@ -2223,6 +2223,37 @@ mod tests {
         assert_eq!(side(&sidebar, 5).trim_end(), " NEEDS YOU 2");
     }
 
+    #[test]
+    fn draws_every_view_in_a_terminal_of_any_size() {
+        let views = [
+            View::Panes,
+            View::Board(BoardState::default()),
+            View::Board(BoardState {
+                selected: 2,
+                all: true,
+            }),
+            View::NewFlow(NewFlowForm::new(PathBuf::from("/shop"))),
+            View::History(3),
+            View::Stop(vec!["shop-221".into()]),
+            View::Help,
+            View::Confirm {
+                question: "shop-230 has uncommitted changes. Discard them?".into(),
+                then: Removal::of("shop-230"),
+            },
+        ];
+        for view in views {
+            for (cols, rows) in
+                (0..12).flat_map(|cols| (0..12).map(move |rows| (cols * 7, rows * 3)))
+            {
+                let mut app = board_app();
+                app.rail = cols % 2 == 0;
+                app.on_resize(Size { cols, rows });
+                app.view = view.clone();
+                render_at(&app, Size { cols, rows });
+            }
+        }
+    }
+
     fn board_app() -> App {
         let mut app = with_fleet().with_home(Some("/Users/jan".into()));
         app.on_server(ServerMsg::Master {
