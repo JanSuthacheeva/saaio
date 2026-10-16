@@ -33,7 +33,7 @@ any other that turns out to be noise, each named.
 - [x] client: `setsid` failure is returned and the SAFETY comment names async-signal-safety (no reaper: `flow ui` quits on ServerGone, so init reaps the server)
 - [x] host: the PTY reader retries on `Interrupted` (host.rs:256)
 - [x] claude_code: `task_counts` parses "all N done" with `split_once` (claude_code.rs:289)
-- [ ] registry: store roots are written and read as raw OS bytes (registry.rs:46)
+- [x] registry: store roots are written and read as raw OS bytes (registry.rs:46)
 
 ### 1. Conversions and common traits
 - [ ] `impl From<anyhow::Error> for Failure`, replacing `Failure::from_io`
