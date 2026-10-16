@@ -398,7 +398,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 ### 7. UI
 - [x] Add `ui/dialog.rs` (draw_dialog, draw_help, draw_not_running, draw_no_session) and `ui/app/effect.rs` (Effect, Job, Removal, outcome)
 - [x] Split App's methods into `app/messages.rs`, `app/keys.rs`, `app/board_keys.rs`, `app/draw.rs`
-- [ ] Move App's tests to `app/tests.rs` (fixtures) and `app/tests/{panes,sidebar,board,dialogs,golden}.rs`; goldens unchanged
+- [x] Move App's tests to `app/tests.rs` (fixtures) and `app/tests/{panes,sidebar,board,dialogs,golden}.rs`; goldens unchanged
 - [ ] Split `ui/board.rs` into board.rs, `board/cards.rs`, `board/detail.rs`; add unit tests for cards (master card, flow card states, digits) and detail (timeline, facts) rendering into a Buffer
 - [ ] Split `ui/sidebar.rs` into sidebar.rs, `sidebar/rows.rs`, `sidebar/labels.rs` with its tests
 
