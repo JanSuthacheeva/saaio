@@ -367,6 +367,22 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 - Codex is signed in. Fixtures are recorded from the real CLI, after updating it to 0.163.0 if possible.
 - E2E runs of `flow ui` and `flow server` use a scratch `FLOW_HOME=$(mktemp -d)`, never the real store.
 
+## End-to-end result (2026-10-16, Codex 0.163.0, scratch FLOW_HOME, private tmux)
+
+- Codex master and worker in flow ui: one folder trust, one hooks review; worktrees inherit the trust.
+- Worker: `waiting` on its question, `waiting permission: Bash(git add ...)`, phase `review` from a
+  skill read; the master's `flow send` typed into the idle worker, a second one handed over at its
+  Stop; `hello.txt` committed. Peek showed its rollout.
+- `flow ui --stop` then `flow ui`: the worker resumed by its session (`codex ... resume <id>`) with its
+  conversation; no new hooks review.
+- Plain Codex session: session, working, waiting, with no master.
+- Codex master: `developer_instructions` from master.md took; its Stop hook handed over stopped flows;
+  once it had a turn, the server typed a worker's new question into it while idle and it relayed it.
+- Found and fixed: a command reading several SKILL.md files (phase missed); master and worker hooks
+  undoing each other's Codex trust (now one definition, FLOW_MASTER=1 marks the master).
+- Open: a fresh Codex master hears of stopped flows only after its first turn (the server types only
+  into a session past Codex's startup prompts).
+
 ## Tasks
 
 ### Adapter
@@ -391,4 +407,4 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 ### Docs and setup
 - [x] Docs: README (Codex agent, [master] agent, trusting the hooks once), CLAUDE.md (adapter/codex.rs, answer.rs, calls.rs, server/news.rs, peek/, plan list), HANDOVER (Codex facts, decisions, codex queue for later), plan-flow-adapters.md pointer to this plan
 - [x] Link design-code, implement-plan, review-changes, write-merge-request and ship-feature from ~/projects/agent-skills into ~/.agents/skills (as commit already is), recorded in dotfiles-v2 if it manages that folder
-- [ ] End-to-end on a scratch FLOW_HOME: in flow ui a Codex worker (after one hooks review) shows phase, a permission wait and waiting on a question; the master's `flow send` reaches it idle and busy; it resumes after `flow ui --stop`; peek shows its transcript; a plain Codex session reports; then `[master] agent = "codex"` runs a Codex master that is woken when the worker stops
+- [x] End-to-end on a scratch FLOW_HOME: in flow ui a Codex worker (after one hooks review) shows phase, a permission wait and waiting on a question; the master's `flow send` reaches it idle and busy; it resumes after `flow ui --stop`; peek shows its transcript; a plain Codex session reports; then `[master] agent = "codex"` runs a Codex master that is woken when the worker stops
