@@ -1,5 +1,7 @@
 pub mod app;
 pub mod board;
+pub mod dialog;
+pub mod fit;
 pub mod input;
 pub mod layout;
 pub mod newflow;
@@ -15,7 +17,7 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use ratatui::Terminal;
@@ -27,9 +29,8 @@ use signal_hook::iterator::Signals;
 
 use crate::branching::Branching;
 use crate::client::Client;
-use crate::event::unix_ms;
 use crate::proto::{Role, ServerMsg};
-use app::{App, Effect, Job};
+use app::{App, Effect, Job, JobError};
 use input::Router;
 use outer::Outer;
 use peek::PeekCache;
@@ -43,7 +44,7 @@ enum Event {
     ServerGone,
     Resize,
     Tick,
-    Ran(Job, Result<String, String>),
+    Ran(Job, Result<String, JobError>),
 }
 
 /// How often spinners turn.
@@ -67,7 +68,7 @@ pub struct UiEnv {
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
-pub fn run(socket: &Path, env: UiEnv) -> Result<String> {
+pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let mut outer = Outer::enter()?;
     // Before any thread reads stdin: creating the terminal asks for the cursor position.
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
@@ -98,7 +99,7 @@ pub fn run(socket: &Path, env: UiEnv) -> Result<String> {
     let mut themes = ThemeWatch::new(env.theme_dir);
     let mut theme = Theme::default();
     reload_theme(&mut themes, &mut theme, &mut app);
-    app.on_tick(now_ms());
+    app.on_tick(clock());
     loop {
         let mut effects = Vec::new();
         let mut redraw = false;
@@ -126,7 +127,7 @@ pub fn run(socket: &Path, env: UiEnv) -> Result<String> {
                     vec![]
                 }
                 Event::Tick => {
-                    redraw |= app.on_tick(now_ms());
+                    redraw |= app.on_tick(clock());
                     ticks = ticks.wrapping_add(1);
                     if ticks.is_multiple_of(TICKS_PER_PEEK) {
                         redraw |= peek.refresh(app.peeked());
@@ -195,14 +196,10 @@ fn run_job(exe: &Path, job: Job, events: Sender<Event>) {
                 output.status.success(),
                 &String::from_utf8_lossy(&output.stdout),
             ),
-            Err(error) => Err(format!("could not run flow: {error}")),
+            Err(error) => Err(JobError::other(format!("could not run flow: {error}"))),
         };
         let _ = events.send(Event::Ran(job, result));
     });
-}
-
-fn now_ms() -> u64 {
-    unix_ms(SystemTime::now())
 }
 
 fn tick(events: Sender<Event>) {

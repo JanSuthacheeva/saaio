@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::config::Config;
-use crate::launch::{self, LaunchEnv, PaneSpec};
+use crate::launch::pane::{self, LaunchEnv, PaneSpec};
 use crate::proto::PaneKey;
 use crate::view::FlowView;
 
@@ -42,7 +42,7 @@ pub fn reconcile(
                 .push((key, format!("no agent named {}", space.agent)));
             continue;
         };
-        match launch::worker_spec(flow, agent, env) {
+        match pane::worker_spec(flow, agent, env) {
             Some(spec) => wanted.open.push(spec),
             None => wanted.failed.push((key, unopenable(name))),
         }
@@ -63,7 +63,7 @@ mod tests {
     use crate::config::{Agent, builtin_agents};
     use crate::event::{Event, EventKind, Mode};
     use crate::fold;
-    use crate::launch::HOSTED;
+    use crate::launch::pane::HOSTED;
 
     fn config() -> Config {
         let mut agents = builtin_agents();

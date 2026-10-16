@@ -5,7 +5,7 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
-use crate::launch;
+use crate::launch::name;
 
 /// A repo's branch convention, from `[branch]` in its `.flow/config.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -74,8 +74,8 @@ pub fn branch_name(
     let filled = branching
         .name
         .replace("{type}", kind.unwrap_or(""))
-        .replace("{ticket}", launch::ticket(request).unwrap_or(""))
-        .replace("{slug}", &launch::slug(request))
+        .replace("{ticket}", name::ticket(request).unwrap_or(""))
+        .replace("{slug}", &name::slug(request))
         .replace("{name}", name);
     let tidy: Vec<String> = filled
         .split('/')

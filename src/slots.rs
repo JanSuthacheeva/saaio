@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::registry::Registry;
 use crate::store::write_atomic;
+use crate::view::FlowView;
 
 /// Slots across every project: FLOW_SLOT, which setup hooks turn into ports.
 pub const MAX_SLOTS: u8 = 20;
@@ -91,6 +92,22 @@ impl Slots {
     }
 }
 
+/// The slots unfinished flows hold.
+pub fn taken_slots(flows: &[FlowView]) -> Vec<u8> {
+    flows
+        .iter()
+        .filter(|flow| !flow.is_finished())
+        .filter_map(|flow| flow.workspace.as_ref().map(|workspace| workspace.slot))
+        .collect()
+}
+
+/// The lowest slot 1..=MAX_SLOTS no unfinished flow of this project holds; flow start decides across
+/// projects.
+pub fn free_slot(flows: &[FlowView]) -> Option<u8> {
+    let held = taken_slots(flows);
+    (1..=MAX_SLOTS).find(|slot| !held.contains(slot))
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Barrier};
@@ -99,6 +116,53 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::event::{Event, EventKind, Mode};
+    use crate::fold;
+
+    fn flow_in_slot(slot: u8, finished: bool) -> FlowView {
+        let mut events = vec![Event::new(
+            0,
+            EventKind::Started {
+                name: format!("f{slot}"),
+                request: "x".into(),
+                mode: Mode::Guided,
+            },
+        )];
+        events.push(Event::new(
+            1,
+            EventKind::Workspace {
+                path: "/p".into(),
+                branch: "b".into(),
+                slot,
+                window: None,
+                agent: "claude".into(),
+            },
+        ));
+        if finished {
+            events.push(Event::new(2, EventKind::Ended));
+        }
+        fold::fold("id", &events, None, 3).unwrap()
+    }
+
+    #[test]
+    fn gives_the_lowest_slot_no_running_flow_holds() {
+        assert_eq!(free_slot(&[]), Some(1));
+        assert_eq!(
+            free_slot(&[flow_in_slot(1, false), flow_in_slot(3, false)]),
+            Some(2)
+        );
+        assert_eq!(free_slot(&[flow_in_slot(1, true)]), Some(1));
+        let full: Vec<FlowView> = (1..=MAX_SLOTS)
+            .map(|slot| flow_in_slot(slot, false))
+            .collect();
+        assert_eq!(free_slot(&full), None);
+    }
+
+    #[test]
+    fn lists_the_slots_of_unfinished_flows() {
+        let flows = [flow_in_slot(4, false), flow_in_slot(2, true)];
+        assert_eq!(taken_slots(&flows), vec![4]);
+    }
 
     fn slots(dir: &TempDir) -> Slots {
         Slots::at(&Registry::at(dir.path().to_path_buf()))

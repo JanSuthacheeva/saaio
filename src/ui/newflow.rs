@@ -7,9 +7,10 @@ use ratatui::widgets::{Block, BorderType, Clear, Widget};
 
 use crate::branching::{self, Branching};
 use crate::event::Mode;
-use crate::launch;
+use crate::launch::{name, worktree};
+use crate::slots;
+use crate::ui::fit::{clip, clip_place, columns, spans_width, split, tail};
 use crate::ui::input::Key;
-use crate::ui::sidebar::{clip, clip_place, columns, spans_width, split, tail};
 use crate::ui::theme::Theme;
 use crate::view::FlowView;
 
@@ -283,7 +284,7 @@ impl NewFlowView<'_> {
             .filter(|flow| !flow.is_finished())
             .map(|flow| flow.name.clone())
             .collect();
-        let name = launch::flow_name(None, &form.request, &taken);
+        let name = name::flow_name(None, &form.request, &taken);
         let branch = branching::branch_name(
             form.branching.as_ref(),
             form.picked_type(),
@@ -294,12 +295,12 @@ impl NewFlowView<'_> {
             Span::styled(" creates ", theme.ui.faint),
             Span::styled(branch, theme.ui.text),
         ];
-        let worktree = format!("{}/{name}", launch::WORKTREES_DIR);
+        let worktree = format!("{}/{name}", worktree::WORKTREES_DIR);
         if spans_width(&spans) + worktree.len() + 20 <= width {
             spans.push(Span::styled("  ·  ", theme.ui.faint));
             spans.push(Span::styled(worktree, theme.ui.text));
         }
-        match launch::free_slot(self.flows) {
+        match slots::free_slot(self.flows) {
             Some(slot) => {
                 spans.push(Span::styled("  ·  ", theme.ui.faint));
                 spans.push(Span::styled(format!("slot {slot}"), theme.ui.text));

@@ -24,6 +24,8 @@ tempfile = "3.27.0"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+# Module files are foo.rs beside foo/, never foo/mod.rs.
+mod_module_files = "warn"
 # Docs name env vars and commands in plain prose, and no rustdoc is published.
 doc_markdown = "allow"
 doc_link_with_quotes = "allow"

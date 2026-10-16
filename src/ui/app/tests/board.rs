@@ -1,0 +1,306 @@
+use super::*;
+
+#[test]
+fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
+    let mut app = board_app();
+    app.on_input(Routed::Command(Command::Focus(2)));
+
+    app.on_input(Routed::Command(Command::Board));
+    let terminal = render_at(&app, FLEET);
+
+    assert!(app.is_modal());
+    assert!(row(&terminal, 0).starts_with(" ▚▄▞ flow board "));
+    assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
+    assert!(
+        row(&terminal, 3).starts_with("   0   master                              you "),
+        "only the selected card is outlined"
+    );
+    assert!(row(&terminal, 3).contains(" 1 ● shop-221                        blocked "));
+    assert!(row(&terminal, 3).contains("│ 2 ● shop-230                waiting for you │"));
+    assert!(row(&terminal, 4).contains("     ~/projects/shop · main"));
+    assert!(
+        row(&terminal, 5).contains("   4/9 tasks"),
+        "{}",
+        row(&terminal, 5)
+    );
+    let shop_230 = row(&terminal, 5)
+        .split('│')
+        .nth(1)
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        shop_230.trim_start() == "31m ago ",
+        "a flow without tasks draws no bar: {shop_230:?}"
+    );
+    assert!(row(&terminal, 10).contains(" 3 ◓ export-csv            reviewing · agent "));
+    assert!(
+        row(&terminal, 16).starts_with(" 2 shop-230  shop-230 · guided · flow/shop-230 · slot 1"),
+        "{}",
+        row(&terminal, 16)
+    );
+    assert!(
+        row(&terminal, 41)
+            .starts_with(" 0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   a every project   esc back to shop-230")
+    );
+    let buffer = terminal.backend().buffer();
+    let accent = Theme::default().ui.accent.fg.unwrap();
+    assert_eq!(buffer[(100, 3)].fg, accent, "the selected card is outlined");
+    let blocked_at = row(&terminal, 2 + 1).find("blocked").unwrap();
+    let blocked_x = row(&terminal, 3)[..blocked_at].chars().count() as u16 + layout::MARGIN;
+    assert_eq!(
+        buffer[(blocked_x, 3 + layout::MARGIN)].fg,
+        Theme::default().state.blocked.fg.unwrap(),
+        "the state in its color"
+    );
+    assert_eq!(
+        buffer[(blocked_x, 3 + layout::MARGIN)].bg,
+        Theme::default()
+            .ui
+            .background
+            .bg
+            .unwrap_or(ratatui::style::Color::Reset),
+        "no fill"
+    );
+}
+
+#[test]
+fn an_idle_flow_is_ready_not_running() {
+    let mut flows = fleet().flows;
+    flows.push(worker(
+        "shop-250",
+        crate::event::Mode::Guided,
+        5,
+        vec![EventKind::Idle {
+            note: "The design is ready for review.".into(),
+        }],
+    ));
+    let mut app = App::new(FLEET);
+    app.on_server(ServerMsg::Board(crate::fold::board(flows, NOW)));
+    app.on_tick(NOW);
+    let terminal = render_at(&app, FLEET);
+    let sections: Vec<String> = (0..FLEET.rows - 2)
+        .map(|y| side(&terminal, y).trim_end().to_string())
+        .filter(|line| {
+            line.starts_with(' ')
+                && line
+                    .trim()
+                    .chars()
+                    .all(|c| c.is_ascii_uppercase() || c == ' ' || c.is_ascii_digit())
+                && !line.trim().is_empty()
+        })
+        .collect();
+
+    assert_eq!(
+        sections,
+        [" NEEDS YOU 2", " READY 1", " RUNNING 1", " DONE 1"]
+    );
+}
+
+#[test]
+fn a_worker_that_needs_you_leads_its_title_with_its_state_color() {
+    let theme = Theme::default();
+    let lead = |app: &App| {
+        let terminal = render_at(app, FLEET);
+        let cell = terminal.backend().buffer()[(1, 1)].clone();
+        (cell.symbol().to_string(), cell.fg)
+    };
+    let mut app = with_fleet();
+
+    assert_eq!(lead(&app).0, " ", "the master");
+    app.on_input(Routed::Command(Command::Focus(1)));
+    assert_eq!(
+        lead(&app),
+        ("▌".to_string(), theme.state.blocked.fg.unwrap()),
+        "shop-221 is blocked"
+    );
+    app.on_input(Routed::Command(Command::Focus(2)));
+    assert_eq!(
+        lead(&app),
+        ("▌".to_string(), theme.state.waiting.fg.unwrap()),
+        "shop-230 waits"
+    );
+    app.on_input(Routed::Command(Command::Focus(3)));
+    assert_eq!(lead(&app).0, " ", "export-csv runs");
+}
+
+#[test]
+fn the_board_shows_what_needs_you_under_the_master() {
+    let mut app = board_app();
+    app.on_input(Routed::Command(Command::Board));
+    let terminal = render_at(&app, FLEET);
+    let rows: Vec<String> = (12..30).map(|y| row(&terminal, y)).collect();
+    let at = rows
+        .iter()
+        .position(|line| line.starts_with(" 0 master"))
+        .unwrap_or_else(|| panic!("{}", rows.join("\n")));
+
+    assert!(
+        rows[at].contains("~/projects/shop · main · 4 workers"),
+        "{}",
+        rows[at]
+    );
+    assert_eq!(rows[at + 2].trim_end(), "  needs you");
+    assert!(
+        rows[at + 3].starts_with("  ● shop-221  migration needs a default value"),
+        "{}",
+        rows[at + 3]
+    );
+    assert!(
+        rows[at + 4].starts_with("  ● shop-230  Which approach: a channel column"),
+        "{}",
+        rows[at + 4]
+    );
+}
+
+#[test]
+fn moves_over_the_board_and_jumps_into_a_card() {
+    let mut app = board_app();
+    app.on_input(Routed::Command(Command::Board));
+
+    app.on_input(Routed::View(vec![Key::Char('l'), Key::Char('j')]));
+    assert_eq!(
+        app.view,
+        View::Board(BoardState {
+            selected: 4,
+            all: false
+        })
+    );
+    app.on_input(Routed::View(vec![Key::Char('2')]));
+    let terminal = render_at(&app, FLEET);
+    assert!(
+        row(&terminal, 19).contains("16:09  ● started"),
+        "{}",
+        row(&terminal, 19)
+    );
+
+    assert_eq!(
+        app.on_input(Routed::View(vec![Key::Enter])),
+        vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
+            "shop-230".into()
+        )))]
+    );
+    assert_eq!(app.view, View::Panes);
+    app.on_input(Routed::Command(Command::Board));
+    assert_eq!(app.on_input(Routed::View(vec![Key::Esc])), vec![]);
+    assert!(!app.is_modal());
+}
+
+#[test]
+fn starts_from_a_workers_repo_and_clears_only_finished_flows() {
+    let mut app = board_app();
+    app.on_input(Routed::Command(Command::Focus(1)));
+    app.on_input(Routed::Command(Command::NewFlow));
+    let View::NewFlow(form) = &app.view else {
+        panic!("expected the dialog");
+    };
+    assert_eq!(form.repo, PathBuf::from("/shop"));
+    app.on_input(Routed::View(vec![Key::Esc]));
+
+    app.on_input(Routed::Command(Command::Board));
+    app.on_input(Routed::View(vec![Key::Char('1'), Key::Char('x')]));
+    assert_eq!(
+        app.notice.as_deref(),
+        Some("only a finished flow can be cleared")
+    );
+    let effects = app.on_input(Routed::View(vec![Key::Char('4'), Key::Char('x')]));
+    assert_eq!(
+        effects,
+        vec![Effect::Run(Job::Remove(Removal::of("shop-198")))]
+    );
+    app.on_ran(
+        Job::Remove(Removal::of("shop-198")),
+        Err(JobError::other(
+            "could not remove shop-198: permission denied",
+        )),
+    );
+    assert_eq!(
+        app.notice.as_deref(),
+        Some("could not remove shop-198: permission denied")
+    );
+}
+
+#[test]
+fn shows_every_project_and_jumps_only_into_this_ones_flows() {
+    let mut app = board_app().with_store("/state/projects/shop".into());
+    app.on_input(Routed::Command(Command::Board));
+
+    let effects = app.on_input(Routed::View(vec![Key::Char('a')]));
+    assert_eq!(effects, vec![Effect::Run(Job::Overview)]);
+    assert_eq!(Job::Overview.args(), ["status", "--all", "--json"]);
+    assert!(row(&render_at(&app, FLEET), 2).contains("reading every project…"));
+
+    let json = serde_json::to_string(&every_project()).unwrap();
+    app.on_ran(Job::Overview, Ok(json));
+    let terminal = render_at(&app, FLEET);
+    assert!(
+        row(&terminal, 0).contains("flow board · every project"),
+        "{}",
+        row(&terminal, 0)
+    );
+    assert!(
+        row(&terminal, 0).contains("2 projects · 5 flows · 2 need you"),
+        "{}",
+        row(&terminal, 0)
+    );
+    assert!(
+        row(&terminal, 2).starts_with(" shop  4 flows · 2 need you"),
+        "{}",
+        row(&terminal, 2)
+    );
+    assert!(row(&terminal, 2).ends_with("this project "));
+    let api = (0..42).find(|y| row(&terminal, *y).starts_with(" api  1 flow"));
+    assert!(api.is_some(), "this project comes first, then api");
+    assert!(
+        row(&terminal, 41).starts_with(
+            " h j k l move   enter jump in   n new flow   x clear finished flow   a this project"
+        ),
+        "{}",
+        row(&terminal, 41)
+    );
+
+    let first = fleet().flows[0].id.clone();
+    assert_eq!(
+        app.on_input(Routed::View(vec![Key::Enter])),
+        vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(first)))]
+    );
+    app.on_input(Routed::Command(Command::Board));
+    app.on_input(Routed::View(vec![Key::Char('a')]));
+    let keys = vec![Key::Char('l'); 4];
+    app.on_input(Routed::View(keys));
+    assert_eq!(app.on_input(Routed::View(vec![Key::Enter])), vec![]);
+    assert_eq!(app.notice.as_deref(), Some("api-7 runs in project api"));
+    assert!(app.is_modal());
+
+    app.on_input(Routed::View(vec![Key::Char('a')]));
+    assert_eq!(app.view, View::Board(BoardState::default()));
+}
+
+#[test]
+fn asks_for_every_project_again_every_two_seconds_while_in_view() {
+    let mut app = board_app().with_store("/state/projects/shop".into());
+    app.on_input(Routed::Command(Command::Board));
+    app.on_input(Routed::View(vec![Key::Char('a')]));
+
+    app.on_tick(NOW + 2_500);
+    assert_eq!(app.overview_due(), vec![], "the first answer is still out");
+    app.on_ran(
+        Job::Overview,
+        Err(JobError::other("cannot find a state directory")),
+    );
+    assert_eq!(
+        app.notice.as_deref(),
+        Some("cannot read every project: cannot find a state directory")
+    );
+    app.on_tick(NOW + 2_500);
+    assert_eq!(app.overview_due(), vec![Effect::Run(Job::Overview)]);
+    app.on_ran(
+        Job::Overview,
+        Ok(serde_json::to_string(&every_project()).unwrap()),
+    );
+    app.on_tick(NOW + 3_000);
+    assert_eq!(app.overview_due(), vec![]);
+
+    app.on_input(Routed::View(vec![Key::Esc]));
+    app.on_tick(NOW + 9_000);
+    assert_eq!(app.overview_due(), vec![], "not once the board is gone");
+}
