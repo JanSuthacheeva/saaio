@@ -828,6 +828,7 @@ pane: when flow ui runs",
         serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
     let session = &board["flows"][0];
     assert_eq!(session["mode"], "plain");
+    assert_eq!(session["state"], "idle", "it waits at an empty prompt");
     assert_eq!(session["request"], "");
     assert_eq!(session["steps"], serde_json::json!([]));
     assert_eq!(session["workspace"]["path"], scratch.display().to_string());
@@ -1159,7 +1160,7 @@ fn remove_forgets_a_plain_session_and_leaves_its_folder_alone() {
     let detail = stdout(&lab.run(&["status", "mine"]));
     assert!(
         detail.contains(&format!(
-            "mode: plain\nstate: working\nfolder: {}\n",
+            "mode: plain\nstate: idle\nfolder: {}\n",
             folder.display()
         )),
         "{detail}"

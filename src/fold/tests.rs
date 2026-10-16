@@ -202,6 +202,11 @@ fn a_plain_session_has_no_steps_but_keeps_its_phase() {
         },
     );
 
+    assert_eq!(
+        view(std::slice::from_ref(&plain), 2).state,
+        State::Idle,
+        "it opens at an empty prompt"
+    );
     let flow = view(&[plain, phase(2, Phase::Design)], 3);
 
     assert!(flow.steps.is_empty());

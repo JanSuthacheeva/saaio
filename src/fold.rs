@@ -120,7 +120,12 @@ impl Folding {
             request: request.to_string(),
             mode,
             phase: None,
-            state: State::Working,
+            // A plain session opens at an empty prompt; a flow's agent starts on its request.
+            state: if mode == Mode::Plain {
+                State::Idle
+            } else {
+                State::Working
+            },
             blocker: None,
             delegate: None,
             tasks: None,
