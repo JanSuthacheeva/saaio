@@ -182,7 +182,8 @@ pub struct PeekCache {
     claude_home: PathBuf,
     flow: Option<String>,
     file: Option<PathBuf>,
-    len: u64,
+    /// The transcript's length when last read; None to read it again.
+    len: Option<u64>,
     lines: Vec<PeekLine>,
 }
 
@@ -192,7 +193,7 @@ impl PeekCache {
             claude_home,
             flow: None,
             file: None,
-            len: 0,
+            len: None,
             lines: Vec::new(),
         }
     }
@@ -208,7 +209,7 @@ impl PeekCache {
         if self.flow.as_deref() != Some(flow.id.as_str()) {
             self.flow = Some(flow.id.clone());
             self.file = None;
-            self.len = u64::MAX;
+            self.len = None;
         }
         if self.file.is_none() {
             self.file = transcript(&self.claude_home, &flow.id);
@@ -219,10 +220,10 @@ impl PeekCache {
             .and_then(|file| fs::metadata(file).ok())
             .map_or(0, |metadata| metadata.len());
         let code = code_of(flow);
-        if len == self.len && self.lines.first() == code.as_ref() {
+        if self.len == Some(len) && self.lines.first() == code.as_ref() {
             return false;
         }
-        self.len = len;
+        self.len = Some(len);
         self.lines = code.into_iter().collect();
         if let Some(file) = &self.file {
             self.lines

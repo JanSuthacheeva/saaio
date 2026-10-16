@@ -51,7 +51,7 @@ any other that turns out to be noise, each named.
 - [x] enums for `retire_worktree` / `drop_branch` flags (`Uncommitted`, `Unmerged`, done with 3.2); `WorkerNews` instead of `Option<Option<String>>`; `ui --stop` dispatched in `run`
 - [x] server: `ControlFlow<()>` for `handle` / `message`, `stop` without `Result`, master `Start { Fresh, Resume }`
 - [x] proto: typed `Flags` with `BitOr`; terminal `Arc<Mutex<Size>>`
-- [ ] ui: `Command::Cursor(Step)`; one `Group` enum for fold, sidebar and rail; `digit: Option<usize>` on board cards; peek `len: Option<u64>`
+- [x] ui: `Command::Cursor(Step)`; one `Group` enum for fold, sidebar and rail; `digit: Option<usize>` on board cards; peek `len: Option<u64>`
 - [ ] theme: `PaletteKey` with `FromStr`, `Palette::color` / `color_mut`
 - [ ] config: `Agent.adapter: Option<Adapter>`, bad names fail `Config::load` (test)
 

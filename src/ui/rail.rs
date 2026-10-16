@@ -6,7 +6,6 @@ use ratatui::widgets::Widget;
 use crate::proto::PaneKey;
 use crate::ui::layout::RAIL_WIDTH;
 use crate::ui::sidebar::{self, Sidebar};
-use crate::view::State;
 
 /// The sidebar folded to a digit and a glyph per session, for more room in the pane.
 #[derive(Debug)]
@@ -42,11 +41,7 @@ impl Rail<'_> {
         ];
         let mut group = None;
         for (index, flow) in sidebar::workers(sidebar.board).into_iter().enumerate() {
-            let heading = (
-                flow.needs_you(),
-                flow.state == State::Idle,
-                flow.is_finished(),
-            );
+            let heading = flow.group();
             if group != Some(heading) {
                 group = Some(heading);
                 rows.push((Line::raw(""), None, false));

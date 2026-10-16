@@ -209,6 +209,39 @@ impl FlowView {
     pub fn is_finished(&self) -> bool {
         matches!(self.state, State::Done | State::Ended)
     }
+
+    pub fn group(&self) -> Group {
+        if self.needs_you() {
+            Group::NeedsYou
+        } else if self.state == State::Idle {
+            Group::Ready
+        } else if self.is_finished() {
+            Group::Done
+        } else {
+            Group::Running
+        }
+    }
+}
+
+/// What a flow needs, in the order the board and the sidebar list flows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Group {
+    NeedsYou,
+    Ready,
+    Running,
+    Done,
+}
+
+impl Group {
+    /// The sidebar's heading for the group.
+    pub fn label(self) -> &'static str {
+        match self {
+            Group::NeedsYou => "NEEDS YOU",
+            Group::Ready => "READY",
+            Group::Running => "RUNNING",
+            Group::Done => "DONE",
+        }
+    }
 }
 
 #[cfg(test)]

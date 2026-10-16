@@ -12,7 +12,7 @@ use crate::launch::WORKTREES_DIR;
 use crate::output;
 use crate::proto::{ClientMsg, Modes, PaneInfo, PaneKey, PaneStatus, ServerMsg, Size};
 use crate::ui::board::{self, BoardState, BoardView};
-use crate::ui::input::{Command, Key, Routed};
+use crate::ui::input::{Command, Key, Routed, Step};
 use crate::ui::layout::{self, Areas, Chrome};
 use crate::ui::newflow::{FormAction, NewFlowForm, NewFlowView};
 use crate::ui::peek::PeekLine;
@@ -1013,7 +1013,7 @@ impl App {
     }
 
     /// Moves the peek cursor over the workers not in view; past either end it goes away.
-    fn move_cursor(&mut self, step: i8) {
+    fn move_cursor(&mut self, step: Step) {
         let ids: Vec<String> = self
             .workers()
             .into_iter()
@@ -1024,11 +1024,11 @@ impl App {
             .cursor
             .as_ref()
             .and_then(|id| ids.iter().position(|other| other == id));
-        let next = match (at, step > 0) {
-            (None, true) => Some(0),
-            (None, false) => ids.len().checked_sub(1),
-            (Some(at), true) => Some(at + 1),
-            (Some(at), false) => at.checked_sub(1),
+        let next = match (at, step) {
+            (None, Step::Next) => Some(0),
+            (None, Step::Prev) => ids.len().checked_sub(1),
+            (Some(at), Step::Next) => Some(at + 1),
+            (Some(at), Step::Prev) => at.checked_sub(1),
         };
         self.cursor = next.and_then(|index| ids.get(index)).cloned();
     }
@@ -2047,9 +2047,9 @@ mod tests {
     #[test]
     fn peeks_into_a_worker_under_the_cursor_and_jumps_in() {
         let mut app = with_fleet();
-        app.on_input(Routed::Command(Command::Cursor(1)));
-        app.on_input(Routed::Command(Command::Cursor(1)));
-        app.on_input(Routed::Command(Command::Cursor(1)));
+        app.on_input(Routed::Command(Command::Cursor(Step::Next)));
+        app.on_input(Routed::Command(Command::Cursor(Step::Next)));
+        app.on_input(Routed::Command(Command::Cursor(Step::Next)));
         assert_eq!(
             app.peeked().map(|flow| flow.name.as_str()),
             Some("export-csv")
@@ -2117,14 +2117,14 @@ mod tests {
         let mut app = with_fleet();
         app.on_input(Routed::Command(Command::Focus(1)));
 
-        app.on_input(Routed::Command(Command::Cursor(1)));
+        app.on_input(Routed::Command(Command::Cursor(Step::Next)));
         assert_eq!(
             app.peeked().map(|flow| flow.name.as_str()),
             Some("shop-230")
         );
-        app.on_input(Routed::Command(Command::Cursor(-1)));
+        app.on_input(Routed::Command(Command::Cursor(Step::Prev)));
         assert_eq!(app.peeked(), None);
-        app.on_input(Routed::Command(Command::Cursor(-1)));
+        app.on_input(Routed::Command(Command::Cursor(Step::Prev)));
         assert_eq!(
             app.peeked().map(|flow| flow.name.as_str()),
             Some("shop-198")
@@ -2135,7 +2135,7 @@ mod tests {
     fn peeks_at_where_an_ended_flows_code_is() {
         let mut app = with_fleet();
         for _ in 0..4 {
-            app.on_input(Routed::Command(Command::Cursor(1)));
+            app.on_input(Routed::Command(Command::Cursor(Step::Next)));
         }
         assert_eq!(
             app.peeked().map(|flow| flow.name.as_str()),
@@ -3008,7 +3008,7 @@ mod tests {
         golden("worker", &render_at(&worker, FLEET));
 
         let mut peek = board_app();
-        peek.on_input(Routed::Command(Command::Cursor(1)));
+        peek.on_input(Routed::Command(Command::Cursor(Step::Next)));
         golden("peek", &render_at(&peek, FLEET));
 
         let mut rail = board_app();

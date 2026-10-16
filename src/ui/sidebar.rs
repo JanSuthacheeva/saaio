@@ -12,7 +12,7 @@ use crate::proto::{PaneInfo, PaneKey, PaneStatus};
 use crate::ui::layout::SIDEBAR_WIDTH;
 use crate::ui::peek::PeekLine;
 use crate::ui::theme::Theme;
-use crate::view::{Board, FlowView, State, StepStatus};
+use crate::view::{Board, FlowView, Group, State, StepStatus};
 
 const WIDTH: usize = SIDEBAR_WIDTH as usize;
 /// Rows the key hint takes at the bottom.
@@ -123,24 +123,24 @@ impl Sidebar<'_> {
         rows.push(plain(Line::raw("")));
 
         let listed = workers(self.board);
-        let mut group = "";
+        let mut group = None;
         let mut flows = Vec::new();
         for (index, flow) in listed.iter().copied().enumerate() {
-            let heading = group_of(flow);
+            let heading = flow.group();
             let mut block = Vec::new();
-            if heading != group {
-                group = heading;
+            if group != Some(heading) {
+                group = Some(heading);
                 let count = listed
                     .iter()
-                    .filter(|other| group_of(other) == heading)
+                    .filter(|other| other.group() == heading)
                     .count();
-                let tone = if heading == "NEEDS YOU" {
+                let tone = if heading == Group::NeedsYou {
                     theme.state.waiting
                 } else {
                     theme.ui.faint
                 };
                 block.push(plain(Line::from(vec![
-                    Span::styled(format!(" {heading} "), theme.ui.faint),
+                    Span::styled(format!(" {} ", heading.label()), theme.ui.faint),
                     Span::styled(count.to_string(), tone),
                 ])));
             }
@@ -582,19 +582,6 @@ pub fn clip(text: &str, width: usize) -> String {
     }
     kept.push('…');
     kept
-}
-
-/// The sidebar section a flow is listed under.
-fn group_of(flow: &FlowView) -> &'static str {
-    if flow.needs_you() {
-        "NEEDS YOU"
-    } else if flow.state == State::Idle {
-        "READY"
-    } else if flow.is_finished() {
-        "DONE"
-    } else {
-        "RUNNING"
-    }
 }
 
 /// What a flow last said that its row does not already show: its last timeline entry, without

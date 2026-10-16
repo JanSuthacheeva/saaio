@@ -74,7 +74,7 @@ pub fn views(logs: Vec<FlowLog>, now: u64) -> Vec<FlowView> {
 
 /// Sorted: needs you, ready (idle), running, finished; newest change first within each group.
 pub fn board(mut flows: Vec<FlowView>, now: u64) -> Board {
-    flows.sort_by_key(|flow| (group(flow), std::cmp::Reverse(flow.changed_at)));
+    flows.sort_by_key(|flow| (flow.group(), std::cmp::Reverse(flow.changed_at)));
     Board {
         version: VIEW_VERSION,
         now,
@@ -97,18 +97,6 @@ pub fn resolve<'a>(flows: &'a [FlowView], name_or_id: &str) -> Option<&'a FlowVi
                 .max_by_key(|flow| flow.changed_at)
         })
         .or_else(|| named().max_by_key(|flow| flow.changed_at))
-}
-
-fn group(flow: &FlowView) -> u8 {
-    if flow.needs_you() {
-        0
-    } else if flow.state == State::Idle {
-        1
-    } else if flow.is_finished() {
-        3
-    } else {
-        2
-    }
 }
 
 #[derive(Debug)]

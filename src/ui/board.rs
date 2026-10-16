@@ -213,13 +213,18 @@ impl BoardView<'_> {
         ]
     }
 
-    fn flow_card(&self, flow: &FlowView, index: usize, width: usize) -> [Line<'static>; 4] {
+    /// `number` is the card's place among the workers, from 1; 1-9 show as the digit that picks it.
+    fn flow_card(
+        &self,
+        flow: &FlowView,
+        number: Option<usize>,
+        width: usize,
+    ) -> [Line<'static>; 4] {
         let theme = self.theme();
         let tone = theme.state_style(flow.state);
-        let digit = if index < 9 {
-            (index + 1).to_string()
-        } else {
-            " ".to_string()
+        let digit = match number {
+            Some(number @ 1..=9) => number.to_string(),
+            _ => " ".to_string(),
         };
 
         let first = Line::from(vec![
@@ -341,17 +346,17 @@ impl BoardView<'_> {
                 CARD_ROWS,
             );
             let flow = index.checked_sub(1).map(|at| flows[at]);
-            self.render_card(flow, index, index == self.state.selected, rect, buf);
+            self.render_card(flow, Some(index), index == self.state.selected, rect, buf);
             bottom = y + CARD_ROWS;
         }
         bottom
     }
 
-    /// One card: the master's when `flow` is None; `index` picks its digit (1-9 for a worker).
+    /// One card: the master's when `flow` is None; `number` picks a worker's digit.
     fn render_card(
         &self,
         flow: Option<&FlowView>,
-        index: usize,
+        number: Option<usize>,
         selected: bool,
         rect: Rect,
         buf: &mut Buffer,
@@ -368,7 +373,7 @@ impl BoardView<'_> {
         let width = body.width as usize;
         let lines = match flow {
             None => self.master_card(width),
-            Some(flow) => self.flow_card(flow, index.wrapping_sub(1), width),
+            Some(flow) => self.flow_card(flow, number, width),
         };
         for (offset, line) in lines.iter().enumerate() {
             buf.set_line(body.x, body.y + offset as u16, line, body.width);
@@ -448,7 +453,7 @@ impl BoardView<'_> {
                         card_width,
                         CARD_ROWS,
                     );
-                    self.render_card(Some(flow), 0, *number == self.state.selected, rect, buf);
+                    self.render_card(Some(flow), None, *number == self.state.selected, rect, buf);
                 }
             }
         }

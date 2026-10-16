@@ -13,10 +13,17 @@ pub enum Routed {
     Click { col: u16, row: u16 },
 }
 
+/// Which way C-space j / k moves the peek cursor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step {
+    Next,
+    Prev,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     Focus(u8),
-    Cursor(i8),
+    Cursor(Step),
     Jump,
     Reopen,
     NewFlow,
@@ -171,8 +178,8 @@ fn command_after_prefix(rest: &[u8]) -> (AfterPrefix, usize) {
     }
     let command = match rest[0] {
         digit @ b'0'..=b'9' => Command::Focus(digit - b'0'),
-        b'j' => Command::Cursor(1),
-        b'k' => Command::Cursor(-1),
+        b'j' => Command::Cursor(Step::Next),
+        b'k' => Command::Cursor(Step::Prev),
         b'\r' => Command::Jump,
         b'r' => Command::Reopen,
         b'n' => Command::NewFlow,
@@ -335,7 +342,7 @@ mod tests {
         assert_eq!(route(&mut router, b"\x00"), vec![]);
         assert_eq!(
             route(&mut router, b"j"),
-            vec![Routed::Command(Command::Cursor(1))]
+            vec![Routed::Command(Command::Cursor(Step::Next))]
         );
         assert_eq!(route(&mut router, b"j"), vec![Routed::Pane(b"j".to_vec())]);
     }
