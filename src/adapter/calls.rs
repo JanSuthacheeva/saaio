@@ -278,6 +278,16 @@ mod tests {
             in_repo(pull, "ssh://git@github-work/shop/app.git", github),
             "an alias in ssh:// form"
         );
+        for remote in [
+            "git+ssh://git@github-work/shop/app.git",
+            "ssh+git://git@github-work/shop/app.git",
+        ] {
+            assert!(in_repo(pull, remote, github), "{remote}");
+        }
+        assert!(
+            !in_repo(pull, "file://github-work/shop/app.git", never_asked),
+            "a file remote is never an ssh alias"
+        );
         assert!(
             in_repo(pull, "git@github.com:shop/app.git", never_asked),
             "a plain host matches without ssh"
