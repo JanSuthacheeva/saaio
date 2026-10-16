@@ -105,7 +105,10 @@ way from the home view and hints, created a flow, reported phase and tasks, and 
 Claude Code hooks (2.1.300, recorded):
 - `Stop` carries `background_tasks`: `[{"id", "type": "subagent", "status": "running",
   "description", "agent_type"}]` while background work is in flight, `[]` otherwise. flow reads a
-  running or pending task as `delegated` (fixture `stop_background.json`).
+  running or pending task as `delegated` (fixture `stop_background.json`). Publishing a claude.ai
+  Artifact arms a live subscription that stays there as `{"type": "monitor", "status": "running",
+  "description": "live updates for artifact <url> (auto-armed on publish)"}` (2.1.301) and never
+  finishes, so flow skips it and the turn ends idle or waiting (fixture `stop_artifact_watch.json`).
 - A subagent's hooks fire with `agent_id` set; a phase skill it starts (`review-changes` in a
   fresh agent) reaches PreToolUse Skill only when the skill exists (an unknown skill is refused
   before any hook).
