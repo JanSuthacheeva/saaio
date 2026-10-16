@@ -411,3 +411,46 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 
 ### 9. End to end
 - [x] Run the before script against the new binary and diff: byte-identical stdout, stderr and exit codes; run `flow ui` against a temp store, start a flow, open the board, the help and the stop dialog, and detach
+
+## Review
+
+Isolated review of `main..1b69fff` (21 commits). Method: every removed line of `src/` was matched
+against the added lines (whitespace-trimmed), and every line left over on either side was read.
+The leftovers are renamed paths (`output::status_list` -> `status::list`, `launch::x` ->
+`launch::name::x`, `TuiFrame` -> `Frame`), widened visibility on moved `impl` methods, the
+`Env`/`Args` plumbing, and new tests. All 305 tests from `main` are still there by name (322 now);
+`tests/cli.rs` and `src/ui/golden` are untouched.
+
+### Fixed
+
+Nothing. No finding could be shown with a failing test or a wrong result.
+
+### Open
+
+- `ui/app/messages.rs` matches `flow remove`'s stderr with `cli::output::remove::{UNCOMMITTED,
+  UNMERGED}`, so the UI depends on the CLI's output module. It was the same coupling before
+  (`crate::output`), and it is honest (the UI runs `flow remove` as a job and reads its error), so
+  I recommend leaving it; a typed error code in the job result would remove it if it ever grows.
+- `flow server` now reads `current_dir` in `cli/commands/server.rs` before `server::run` instead of
+  inside it, after loading the config. Only the order of two startup failures changes, and only
+  when the cwd is unreadable; same message. Recommend leaving it.
+
+### Where to look
+
+1. `src/cli.rs` `run` -> `cli/commands/wait.rs` -> `src/deliver.rs`: the hook and wait paths that
+   used to bypass the store lookup in `main`, the new `Document::Wake` (stderr, exit 2), and
+   `WorkerNews::News` carrying messages instead of text. Equivalent to `main`'s code; covered by
+   the wait tests in `tests/cli.rs`.
+2. `src/cli/env.rs` against `main`'s `env_path` callers: empty `FLOW_ID` and `HOME` handling now
+   lives in `flow_id()` / `user_home()` and is used by send, wait, hook and ui alike.
+3. `src/cli/commands/start.rs`: `Rollback` and the slot claim moved with `Launch` replaced by
+   `Args`; same order of create, claim, worktree, disarm.
+
+Routine and skimmable: the `server/` split (`conn.rs`, `panes.rs`), the `ui/app/` split
+(`messages`, `keys`, `board_keys`, `draw`, `chrome`, `effect`), `board/`, `sidebar/`, `launch/`,
+`cli/output/`, and the moved test files - bodies are unchanged.
+
+### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` passed at
+999844c (reported by the build); only this plan changed since. No fixes, so no fix review round.
