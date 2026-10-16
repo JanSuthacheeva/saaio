@@ -5,7 +5,7 @@ use ratatui::widgets::Widget;
 
 use crate::proto::PaneKey;
 use crate::ui::layout::RAIL_WIDTH;
-use crate::ui::sidebar::{self, Row, Sidebar, plain};
+use crate::ui::sidebar::{self, Mark, Row, Sidebar, plain};
 
 /// The sidebar folded to a digit and a glyph per session, for more room in the pane.
 #[derive(Debug)]
@@ -32,7 +32,7 @@ impl Rail<'_> {
             Row {
                 line: Line::from(vec![Span::styled(" 0", theme.ui.accent)]),
                 key: Some(PaneKey::Master),
-                selected: false,
+                mark: Mark::None,
             },
         ];
         let mut group = None;
@@ -60,7 +60,7 @@ impl Rail<'_> {
             rows.push(Row {
                 line: Line::from(spans),
                 key: Some(key),
-                selected: focused,
+                mark: if focused { Mark::Lit } else { Mark::None },
             });
         }
         let room = usize::from(height.saturating_sub(2));
@@ -74,12 +74,8 @@ impl Rail<'_> {
 
 impl Widget for Rail<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let selection = self.sidebar.theme.ui.selection;
         for (row, area) in self.rows(area.height).into_iter().zip(area.rows()) {
-            if row.selected {
-                buf.set_style(area, selection);
-            }
-            buf.set_line(area.x, area.y, &row.line, area.width);
+            row.render(area, buf, self.sidebar.theme);
         }
     }
 }

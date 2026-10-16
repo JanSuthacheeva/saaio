@@ -215,7 +215,7 @@ fn shows_where_the_master_runs_with_home_as_a_tilde() {
         "the sidebar says where it runs: {}",
         row(&sidebar, 0)
     );
-    assert_eq!(side(&sidebar, 3).trim_end(), "     ~/projects/shop · main");
+    assert_eq!(side(&sidebar, 3).trim_end(), "▌    ~/projects/shop · main");
     assert_eq!(side(&sidebar, 5).trim_end(), " NEEDS YOU 2");
 }
 

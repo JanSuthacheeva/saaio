@@ -1,6 +1,6 @@
 use ratatui::text::{Line, Span};
 
-use super::{Row, Sidebar, WIDTH, digit, plain};
+use super::{Mark, Row, Sidebar, WIDTH, digit, plain};
 use crate::event::Mode;
 use crate::proto::{PaneKey, PaneStatus};
 use crate::text::short_duration;
@@ -26,19 +26,15 @@ impl Sidebar<'_> {
             plain(Line::styled("─".repeat(width), theme.ui.rule)),
         ];
         let master = *self.focus == PaneKey::Master;
-        let (cursor, digit, name) = if master {
-            (
-                Span::styled(theme.glyphs.cursor, theme.ui.accent),
-                theme.ui.strong,
-                theme.ui.strong,
-            )
+        let (digit, name, mark) = if master {
+            (theme.ui.strong, theme.ui.strong, Mark::Focus)
         } else {
-            (Span::raw(" "), theme.ui.faint, theme.ui.text)
+            (theme.ui.faint, theme.ui.text, Mark::None)
         };
         rows.push(Row {
             line: split(
                 vec![
-                    cursor,
+                    Span::raw(" "),
                     Span::styled("0   ", digit),
                     Span::styled("master", name),
                 ],
@@ -46,7 +42,7 @@ impl Sidebar<'_> {
                 width,
             ),
             key: Some(PaneKey::Master),
-            selected: master,
+            mark,
         });
         if let Some(place) = self.master {
             rows.push(Row {
@@ -55,7 +51,7 @@ impl Sidebar<'_> {
                     theme.ui.faint,
                 ),
                 key: Some(PaneKey::Master),
-                selected: false,
+                mark,
             });
         }
         rows.push(plain(Line::raw("")));
@@ -66,20 +62,12 @@ impl Sidebar<'_> {
         let theme = self.theme;
         let width = WIDTH;
         let key = PaneKey::Flow(flow.id.clone());
-        let selected = *self.focus == key || self.cursor == Some(flow.id.as_str());
-        let changed = self.changed.contains_key(&flow.id);
+        let focused = *self.focus == key;
+        let selected = focused || self.cursor == Some(flow.id.as_str());
+        let mark = self.mark(flow);
         let tone = theme.flow_style(flow);
         let status = self.status(flow);
-        let lead = |rest: &str| -> Vec<Span<'static>> {
-            if selected {
-                vec![
-                    Span::styled(theme.glyphs.cursor, tone),
-                    Span::styled(rest.to_string(), theme.ui.faint),
-                ]
-            } else {
-                vec![Span::styled(format!(" {rest}"), theme.ui.faint)]
-            }
-        };
+        let lead = |rest: &str| vec![Span::styled(format!(" {rest}"), theme.ui.faint)];
 
         let mut first = lead(&format!("{} ", digit(index)));
         first.push(Span::styled(self.glyph(flow.state), tone));
@@ -122,17 +110,16 @@ impl Sidebar<'_> {
             None => String::new(),
         };
 
-        let lit = selected || changed;
         let mut rows = vec![
             Row {
                 line: split(first, vec![right], width),
                 key: Some(key.clone()),
-                selected: lit,
+                mark,
             },
             Row {
                 line: split(second, vec![Span::styled(detail, theme.ui.faint)], width),
                 key: Some(key.clone()),
-                selected: lit,
+                mark,
             },
         ];
         if let Some((text, style)) = self.note(flow, status) {
@@ -147,10 +134,21 @@ impl Sidebar<'_> {
             rows.push(Row {
                 line: Line::from(third),
                 key: Some(key),
-                selected: lit,
+                mark,
             });
         }
         rows
+    }
+
+    /// The focused flow's rows get the focus, the peeked one's and one that just changed the light.
+    fn mark(&self, flow: &FlowView) -> Mark {
+        if *self.focus == PaneKey::Flow(flow.id.clone()) {
+            Mark::Focus
+        } else if self.cursor == Some(flow.id.as_str()) || self.changed.contains_key(&flow.id) {
+            Mark::Lit
+        } else {
+            Mark::None
+        }
     }
 
     /// The peek in place of the flow's note, before its blank row.
@@ -237,12 +235,13 @@ impl Sidebar<'_> {
         let keep = budget.saturating_sub(2);
         let body = body.split_off(body.len().saturating_sub(keep));
 
-        let lead = || Span::styled(glyphs.cursor, tone);
+        let lead = || Span::raw(" ");
         let key = Some(PaneKey::Flow(flow.id.clone()));
+        let mark = self.mark(flow);
         let row = |spans: Vec<Span<'static>>| Row {
             line: Line::from(spans),
             key: key.clone(),
-            selected: true,
+            mark,
         };
         let mut rows = vec![row(vec![
             lead(),
@@ -255,7 +254,7 @@ impl Sidebar<'_> {
         }
         rows.push(row(vec![
             lead(),
-            Span::styled(" enter", theme.ui.key),
+            Span::styled(" C-space enter", theme.ui.key),
             Span::styled(" jump in", theme.ui.faint),
         ]));
         rows

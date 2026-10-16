@@ -2,14 +2,14 @@
   master  main                                                                                              │ ▚▄▞ flow
                                                                                                             ├────────────────────────────────────────
                                                                                                             │▌0   master
-                                                                                                            │     ~/projects/shop · main
+                                                                                                            │▌    ~/projects/shop · main
                                                                                                             │
                                                                                                             │ NEEDS YOU 2
-                                                                                                            │▌1 ● shop-221                       29m
-                                                                                                            │▌    ●───●───○───○ implement        4/9
-                                                                                                            │▌ ─────────────────────────────────────
-                                                                                                            │▌ no transcript yet
-                                                                                                            │▌ enter jump in
+                                                                                                            │ 1 ● shop-221                       29m
+                                                                                                            │     ●───●───○───○ implement        4/9
+                                                                                                            │  ─────────────────────────────────────
+                                                                                                            │  no transcript yet
+                                                                                                            │  C-space enter jump in
                                                                                                             │
                                                                                                             │ 2 ● shop-230                       31m
                                                                                                             │     ●───○───○───○ design        guided

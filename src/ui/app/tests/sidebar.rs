@@ -225,36 +225,36 @@ fn peeks_into_a_worker_under_the_cursor_and_jumps_in() {
     let terminal = render_peek(&app, &peek);
 
     assert!(
-        side(&terminal, 14).starts_with("▌3 ◓ export-csv"),
+        side(&terminal, 14).starts_with(" 3 ◓ export-csv"),
         "{}",
         side(&terminal, 14)
     );
     assert_eq!(
         side(&terminal, 15).trim_end(),
-        "▌    ●───●───●───○ review           6/6"
+        "     ●───●───●───○ review           6/6"
     );
     assert_eq!(
         side(&terminal, 16).trim_end(),
-        format!("▌ {}", "─".repeat(37))
+        format!("  {}", "─".repeat(37))
     );
     assert_eq!(
         side(&terminal, 17).trim_end(),
-        "▌ ⏺ Update(app/Http/Middleware/Thrott…)"
+        "  ⏺ Update(app/Http/Middleware/Thrott…)"
     );
-    assert_eq!(side(&terminal, 18).trim_end(), "▌     ⎿  Added 22 lines");
+    assert_eq!(side(&terminal, 18).trim_end(), "      ⎿  Added 22 lines");
     assert_eq!(
         side(&terminal, 19).trim_end(),
-        "▌ ⏺ The limiter keys on the user id, so"
+        "  ⏺ The limiter keys on the user id, so"
     );
     assert_eq!(
         side(&terminal, 20).trim_end(),
-        "▌   one export can't starve the rest."
+        "    one export can't starve the rest."
     );
     assert_eq!(
         side(&terminal, 21).trim_end(),
-        "▌ ◓ Write(ThrottleExportTest.php)"
+        "  ◓ Write(ThrottleExportTest.php)"
     );
-    assert_eq!(side(&terminal, 22).trim_end(), "▌ enter jump in");
+    assert_eq!(side(&terminal, 22).trim_end(), "  C-space enter jump in");
     assert_eq!(side(&terminal, 23).trim_end(), "");
     assert_eq!(side(&terminal, 24).trim_end(), " DONE 1");
     assert_eq!(side(&terminal, 41).trim_end(), " C-space ? keys");
@@ -305,8 +305,8 @@ fn peeks_at_where_an_ended_flows_code_is() {
 
     let terminal = render_peek(&app, &peek);
 
-    assert_eq!(side(&terminal, 22).trim_end(), "▌ branch   flow/shop-198");
-    assert_eq!(side(&terminal, 23).trim_end(), "▌ worktree gone");
+    assert_eq!(side(&terminal, 22).trim_end(), "  branch   flow/shop-198");
+    assert_eq!(side(&terminal, 23).trim_end(), "  worktree gone");
 }
 
 #[test]
@@ -335,7 +335,7 @@ fn peeks_at_an_ended_plain_sessions_folder_without_a_branch() {
         .collect();
 
     assert!(
-        rows.iter().any(|row| row == "▌ folder   ~/notes"),
+        rows.iter().any(|row| row == "  folder   ~/notes"),
         "{rows:#?}"
     );
     assert!(!rows.iter().any(|row| row.contains("branch")), "{rows:#?}");
@@ -363,7 +363,7 @@ fn a_long_place_loses_its_middle_but_keeps_the_branch_and_the_corner() {
     let screen = render_at(&fleet, FLEET);
     assert_eq!(
         side(&screen, 3).trim_end(),
-        "     /private/…/ui-look/repo · main"
+        "▌    /private/…/ui-look/repo · main"
     );
 }
 

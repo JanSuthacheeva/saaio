@@ -12,6 +12,7 @@ use ratatui::widgets::Widget;
 
 use crate::proto::{PaneInfo, PaneKey, PaneStatus};
 use crate::ui::fit;
+use crate::ui::focus;
 use crate::ui::layout::SIDEBAR_WIDTH;
 use crate::ui::peek::PeekLine;
 use crate::ui::theme::Theme;
@@ -45,12 +46,32 @@ pub struct Sidebar<'a> {
     pub theme: &'a Theme,
 }
 
+/// How a row stands out: focused (fill and bar), lit (fill: the peek, a state that just changed).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Mark {
+    None,
+    Lit,
+    Focus,
+}
+
 /// One row of the sidebar or the rail and the pane a click on it focuses.
 #[derive(Debug)]
 pub(super) struct Row {
     pub line: Line<'static>,
     pub key: Option<PaneKey>,
-    pub selected: bool,
+    pub mark: Mark,
+}
+
+impl Row {
+    /// The row's line, then its mark over it.
+    pub fn render(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+        buf.set_line(area.x, area.y, &self.line, area.width);
+        match self.mark {
+            Mark::None => {}
+            Mark::Lit => focus::light(buf, area, theme),
+            Mark::Focus => focus::mark(buf, area, theme),
+        }
+    }
 }
 
 /// The flows that get a pane, in sidebar order (needs you, ready, running, done); digit n focuses the nth.
@@ -171,10 +192,7 @@ impl Sidebar<'_> {
 impl Widget for Sidebar<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         for (row, line) in self.rows(area.height).into_iter().zip(area.rows()) {
-            if row.selected {
-                buf.set_style(line, self.theme.ui.selection);
-            }
-            buf.set_line(line.x, line.y, &row.line, line.width);
+            row.render(line, buf, self.theme);
         }
     }
 }
@@ -192,7 +210,7 @@ pub(super) fn plain(line: Line<'static>) -> Row {
     Row {
         line,
         key: None,
-        selected: false,
+        mark: Mark::None,
     }
 }
 
@@ -274,6 +292,91 @@ mod tests {
             })
             .count();
         assert_eq!(started, listed, "every listed flow shows both its rows");
+    }
+
+    #[test]
+    fn marks_the_focused_flow_and_lights_the_peeked_and_the_changed() {
+        let flows: Vec<FlowView> = ["a", "b", "c", "d"].map(working).into();
+        let board = Board {
+            version: VIEW_VERSION,
+            now: 0,
+            count: flows.len(),
+            needs_you: 0,
+            flows,
+        };
+        let theme = Theme::default();
+        let changed = HashMap::from([("c".to_string(), 0)]);
+        let focus = PaneKey::Flow("a".into());
+        let sidebar = Sidebar {
+            board: &board,
+            panes: &[],
+            focus: &focus,
+            cursor: Some("b"),
+            peek: &[],
+            master: None,
+            now: 0,
+            spin: 0,
+            changed: &changed,
+            home: None,
+            theme: &theme,
+        };
+
+        let marks: Vec<Mark> = board
+            .flows
+            .iter()
+            .enumerate()
+            .map(|(index, flow)| sidebar.flow_rows(flow, index)[0].mark)
+            .collect();
+        let master = sidebar.master_rows()[2].mark;
+
+        assert_eq!(marks, [Mark::Focus, Mark::Lit, Mark::Lit, Mark::None]);
+        assert_eq!(master, Mark::None, "the master is not in view");
+        assert!(
+            sidebar.flow_rows(&board.flows[0], 0)[0]
+                .line
+                .to_string()
+                .starts_with(" 1 "),
+            "the bar is drawn over the blank lead, not in the line"
+        );
+    }
+
+    #[test]
+    fn draws_the_bar_in_the_accent_over_the_rows_of_the_focused_flow() {
+        let board = Board {
+            version: VIEW_VERSION,
+            now: 0,
+            count: 1,
+            needs_you: 0,
+            flows: vec![working("a")],
+        };
+        let theme = Theme::default();
+        let focus = PaneKey::Flow("a".into());
+        let area = Rect::new(0, 0, 40, 12);
+        let mut buf = Buffer::empty(area);
+
+        Sidebar {
+            board: &board,
+            panes: &[],
+            focus: &focus,
+            cursor: None,
+            peek: &[],
+            master: None,
+            now: 0,
+            spin: 0,
+            changed: &HashMap::new(),
+            home: None,
+            theme: &theme,
+        }
+        .render(area, &mut buf);
+
+        let bars: Vec<u16> = (0..12)
+            .filter(|&y| buf[(0, y)].symbol() == theme.glyphs.cursor)
+            .collect();
+        assert_eq!(bars.len(), 2, "both rows of the flow: {bars:?}");
+        for y in bars {
+            assert_eq!(buf[(0, y)].fg, theme.palette.accent);
+            assert_eq!(buf[(39, y)].bg, theme.palette.selection);
+        }
     }
 
     #[test]

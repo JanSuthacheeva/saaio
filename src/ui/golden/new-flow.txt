@@ -2,7 +2,7 @@
   master  main                                                                                              │ ▚▄▞ flow
                                                                                                             ├────────────────────────────────────────
                                                                                                             │▌0   master
-                                                                                                            │     ~/projects/shop · main
+                                                                                                            │▌    ~/projects/shop · main
                                                                                                             │
                                                                                                             │ NEEDS YOU 2
                                                                                                             │ 1 ● shop-221                       29m
