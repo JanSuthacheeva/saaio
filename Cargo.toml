@@ -16,7 +16,40 @@ serde_json = "1.0.154"
 serde_toon_format = "0.2.0"
 signal-hook = "0.4.5"
 toml = "1.1.8"
+unicode-width = "0.2.2"
 uuid = { version = "1.28.0", features = ["v4"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Docs name env vars and commands in plain prose, and no rustdoc is published.
+doc_markdown = "allow"
+doc_link_with_quotes = "allow"
+# 0xrrggbb colors mirror #rrggbb in theme files; the FNV-1a constants match the spec.
+unreadable_literal = "allow"
+# Terminal sizes, card counts and millisecond clocks are bounded far below the target types.
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+# Sent.sent, Removed.removed, Projects.projects: TOON keys and the --json contract.
+struct_field_names = "allow"
+# Modes holds five independent terminal mode switches.
+struct_excessive_bools = "allow"
+# fold's apply is one flat match over every event kind.
+too_many_lines = "allow"
+# find over (1..) or (2..) ends: the names taken are finite.
+maybe_infinite_iter = "allow"
+# Outer::size reads the size of the terminal Outer has entered.
+unused_self = "allow"
+# Words that are close, such as they and them, or argv and args.
+similar_names = "allow"
+# An explicit arm that does nothing documents a key that does nothing.
+match_same_arms = "allow"
+# map_or_else puts the default first and reads worse.
+map_unwrap_or = "allow"
+# Every command handler returns Result<Document, Failure>, so run's arms stay alike.
+unnecessary_wraps = "allow"
+# The test pump's Option<Option<u32>> is "exited, with or without a code" against "timed out".
+option_option = "allow"

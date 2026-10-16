@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 
-use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::proto::PaneKey;
 use crate::slots::MAX_SLOTS;
@@ -12,14 +11,14 @@ pub const HOSTED: &str = "flow-ui";
 
 /// What the server passes on to every pane: FLOW_HOME, when it was set for the server, and the
 /// flow binary a worker's hooks run.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LaunchEnv {
     pub flow_home: Option<PathBuf>,
     pub flow_exe: PathBuf,
 }
 
 /// Exactly what a pane runs: its command line, directory and environment.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PaneSpec {
     pub key: PaneKey,
     pub argv: Vec<String>,
@@ -127,20 +126,15 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str) -> Option<Vec<String>> {
 /// The agent's command the first time, its resume command once it ran somewhere (window set:
 /// HOSTED, or a tmux window from before flow ui), since its session id is taken from then on;
 /// either way with the agent's adapter wired in right after the program. None when the flow has
-/// no workspace, must resume and the agent has no resume template, or the agent names an adapter
-/// flow does not know.
+/// no workspace, or must resume and the agent has no resume template.
 pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec> {
     let space = flow.workspace.as_ref()?;
-    let adapter = match &agent.adapter {
-        Some(name) => Some(Adapter::named(name)?),
-        None => None,
-    };
     let mut argv = if space.window.is_some() {
         resume_argv(agent, &flow.id, &flow.name)?
     } else {
         agent_argv(agent, &flow.id, &flow.name, &flow.request)
     };
-    if let Some(adapter) = adapter {
+    if let Some(adapter) = agent.adapter {
         let at = 1.min(argv.len());
         argv.splice(at..at, adapter.wiring(&env.flow_exe));
     }
@@ -159,25 +153,23 @@ fn worker_env(flow: &FlowView, space: &Workspace, env: &LaunchEnv) -> Vec<(Strin
         Some(repo) => hook_env(&flow.id, &flow.name, &repo, space),
         None => vec![("FLOW_ID".to_string(), flow.id.clone())],
     };
-    vars.extend(pane_env(None, env));
+    vars.extend(pane_env(env));
     vars
 }
 
 /// The repository a flow worktree belongs to: the path above .flow/worktrees/<name>.
 pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
-    let path = Path::new(&space.path);
-    let worktrees = path.parent()?;
-    worktrees
-        .ends_with(WORKTREES_DIR)
-        .then(|| worktrees.parent()?.parent().map(Path::to_path_buf))?
+    Path::new(&space.path)
+        .parent()
+        .filter(|worktrees| worktrees.ends_with(WORKTREES_DIR))?
+        .parent()?
+        .parent()
+        .map(Path::to_path_buf)
 }
 
-/// FLOW_ID (workers only), FLOW_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
-pub fn pane_env(id: Option<&str>, env: &LaunchEnv) -> Vec<(String, String)> {
+/// FLOW_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
+pub fn pane_env(env: &LaunchEnv) -> Vec<(String, String)> {
     let mut vars = Vec::new();
-    if let Some(id) = id {
-        vars.push(("FLOW_ID".to_string(), id.to_string()));
-    }
     if let Some(home) = &env.flow_home {
         vars.push(("FLOW_HOME".to_string(), home.display().to_string()));
     }
@@ -221,11 +213,10 @@ pub fn ticket(request: &str) -> Option<&str> {
 
 /// Up to five lowercase words of the request after its ticket key, joined by dashes; empty when none.
 pub fn slug(request: &str) -> String {
-    let rest = match ticket(request) {
-        Some(key) => request.trim_start()[key.len()..].to_string(),
-        None => request.to_string(),
-    };
-    words(&rest, 5).join("-")
+    let rest = ticket(request)
+        .and_then(|key| request.trim_start().strip_prefix(key))
+        .unwrap_or(request);
+    words(rest, 5).join("-")
 }
 
 /// The request's ticket key lowercased, for a flow's name.
@@ -260,7 +251,7 @@ mod tests {
     use crate::fold;
 
     fn strings(items: &[&str]) -> Vec<String> {
-        items.iter().map(|item| item.to_string()).collect()
+        items.iter().copied().map(String::from).collect()
     }
 
     fn flow_in_slot(slot: u8, finished: bool) -> FlowView {
@@ -491,16 +482,15 @@ mod tests {
         };
 
         assert_eq!(
-            pane_env(Some("7f3c"), &env),
+            pane_env(&env),
             pairs(&[
-                ("FLOW_ID", "7f3c"),
                 ("FLOW_HOME", "/state/flow"),
                 ("TERM", "xterm-256color"),
                 ("COLORTERM", "truecolor"),
             ])
         );
         assert_eq!(
-            pane_env(None, &LaunchEnv::default()),
+            pane_env(&LaunchEnv::default()),
             pairs(&[("TERM", "xterm-256color"), ("COLORTERM", "truecolor")])
         );
     }
@@ -564,7 +554,7 @@ mod tests {
             agent_argv(claude, "7f3c", "shop-217", "SHOP-217 add CSV export")
         );
         let mut expected = hook_env("7f3c", "shop-217", Path::new("/repo"), &shop());
-        expected.extend(pane_env(None, &env));
+        expected.extend(pane_env(&env));
         assert_eq!(
             fresh.env, expected,
             "FLOW_SLOT and the rest, as the hooks get them"
@@ -596,7 +586,7 @@ mod tests {
     fn wires_the_agents_adapter_in_after_the_program_fresh_and_resumed() {
         let agents = crate::config::builtin_agents();
         let mut claude = agents["claude"].clone();
-        claude.adapter = Some("claude-code".into());
+        claude.adapter = Some(crate::adapter::Adapter::ClaudeCode);
         let env = LaunchEnv {
             flow_exe: PathBuf::from("/bin/flow"),
             ..LaunchEnv::default()
@@ -613,8 +603,6 @@ mod tests {
         assert_eq!(fresh.argv[3], "--append-system-prompt");
         assert_eq!(&fresh.argv[5..7], ["-n", "shop-217"]);
         assert_eq!(&resumed.argv[7..], ["--resume", "7f3c"]);
-        claude.adapter = Some("codex".into());
-        assert_eq!(worker_spec(&worker(None), &claude, &env), None);
     }
 
     #[test]

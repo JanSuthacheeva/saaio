@@ -7,6 +7,7 @@ pub mod watch;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::ErrorKind;
+use std::ops::ControlFlow;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
@@ -22,9 +23,9 @@ use crate::fold;
 use crate::launch::{self, HOSTED, LaunchEnv, PaneSpec};
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, PaneStatus, Role, ServerMsg, Size};
 use crate::store::Store;
-use crate::view::{Board, FlowView};
+use crate::view::{Board, FlowView, Workspace};
 use host::{Host, HostEvent};
-use master::MasterRecord;
+use master::{MasterRecord, Start};
 use reconcile::{Wanted, reconcile};
 use watch::StoreWatch;
 
@@ -45,6 +46,7 @@ const START_SIZE: Size = Size {
     rows: 40,
 };
 
+#[derive(Debug, Clone)]
 pub struct ServerPaths {
     pub socket: PathBuf,
     pub master: PathBuf,
@@ -54,6 +56,7 @@ pub struct ServerPaths {
 
 type ConnId = u64;
 
+#[derive(Debug)]
 enum Event {
     Accepted(UnixStream),
     Message(ConnId, ClientMsg),
@@ -61,11 +64,7 @@ enum Event {
     Host(HostEvent),
 }
 
-struct Conn {
-    stream: UnixStream,
-    role: Option<Role>,
-}
-
+#[derive(Debug)]
 struct Server {
     store: Store,
     clock: fn() -> u64,
@@ -81,7 +80,7 @@ struct Server {
     master_file: PathBuf,
     instructions: PathBuf,
     host: Host,
-    conns: HashMap<ConnId, Conn>,
+    conns: HashMap<ConnId, UnixStream>,
     next_conn: ConnId,
     attached: Option<ConnId>,
     focus: PaneKey,
@@ -107,7 +106,7 @@ pub fn run(
         eprintln!("{error:#}");
     }
     let cwd = std::env::current_dir().context("could not read the current directory")?;
-    let (record, fresh) = MasterRecord::load_or_create(&paths.master, &cwd)?;
+    let (record, start) = MasterRecord::load_or_create(&paths.master, &cwd)?;
     let (events, inbox) = mpsc::channel();
     let host = Host::new(START_SIZE, forward_host_events(events.clone()));
     let mut server = Server {
@@ -136,7 +135,7 @@ pub fn run(
         flushed_at: Instant::now(),
         events: events.clone(),
     };
-    server.open_master(fresh);
+    server.open_master(start);
     server.refresh();
     accept_in_background(listener, events);
 
@@ -156,8 +155,9 @@ impl Server {
             };
             match inbox.recv_timeout(wait) {
                 Ok(event) => {
-                    if !self.handle(event)? {
-                        return self.stop(inbox);
+                    if self.handle(event).is_break() {
+                        self.stop(inbox);
+                        return Ok(());
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
@@ -170,11 +170,11 @@ impl Server {
         }
     }
 
-    /// One event; Ok(false) once the server should stop.
-    fn handle(&mut self, event: Event) -> Result<bool> {
+    /// One event; Break once the server should stop.
+    fn handle(&mut self, event: Event) -> ControlFlow<()> {
         match event {
             Event::Accepted(stream) => self.accept(stream),
-            Event::Message(conn, message) => return Ok(self.message(conn, message)),
+            Event::Message(conn, message) => return self.message(conn, message),
             Event::Gone(conn) => self.drop_conn(conn),
             Event::Host(HostEvent::Output(key, bytes)) => {
                 self.host.feed(&key, &bytes);
@@ -197,10 +197,10 @@ impl Server {
                 }
             }
         }
-        Ok(true)
+        ControlFlow::Continue(())
     }
 
-    fn message(&mut self, conn: ConnId, message: ClientMsg) -> bool {
+    fn message(&mut self, conn: ConnId, message: ClientMsg) -> ControlFlow<()> {
         match message {
             ClientMsg::Hello { version, role } => self.hello(conn, version, role),
             ClientMsg::Focus(key) => {
@@ -222,7 +222,7 @@ impl Server {
                 self.send_full_frame();
             }
             ClientMsg::Reopen(PaneKey::Master) => {
-                self.open_master(false);
+                self.open_master(Start::Resume);
                 self.send_panes();
                 self.send_full_frame();
             }
@@ -232,10 +232,10 @@ impl Server {
                 self.send_panes();
                 self.send_full_frame();
             }
-            ClientMsg::StopServer => return false,
+            ClientMsg::StopServer => return ControlFlow::Break(()),
             ClientMsg::EndFlows => self.end_flows(),
         }
-        true
+        ControlFlow::Continue(())
     }
 
     fn hello(&mut self, conn: ConnId, version: u32, role: Role) {
@@ -260,9 +260,6 @@ impl Server {
             self.focus = PaneKey::Master;
             self.history = None;
             self.host.resize(size);
-        }
-        if let Some(entry) = self.conns.get_mut(&conn) {
-            entry.role = Some(role);
         }
         self.send_to(
             conn,
@@ -297,8 +294,8 @@ impl Server {
         for warning in warnings {
             eprintln!("{warning}");
         }
-        self.board = fold::board(fold::views(logs, now), now);
-        let open: Vec<PaneKey> = self.host.panes().into_iter().map(|pane| pane.key).collect();
+        self.board = fold::board(fold::views(&logs, now), now);
+        let open: Vec<PaneKey> = self.host.keys().cloned().collect();
         let wanted = reconcile(
             &self.board.flows,
             &open,
@@ -331,36 +328,33 @@ impl Server {
     }
 
     fn open_worker(&mut self, spec: PaneSpec) {
-        let PaneKey::Flow(id) = spec.key.clone() else {
+        let key = spec.key.clone();
+        let PaneKey::Flow(id) = &key else {
             return;
         };
         self.known.insert(id.clone());
-        let Some(space) = self.flow(&id).and_then(|flow| flow.workspace.clone()) else {
+        let Some(space) = self.flow(id).and_then(|flow| flow.workspace.clone()) else {
             return;
         };
-        let key = spec.key.clone();
         let now = (self.clock)();
         let event = match self.host.open(spec) {
             Ok(()) => {
                 if space.window.is_some() {
-                    self.resumed.insert(key, Instant::now());
+                    self.resumed.insert(key.clone(), Instant::now());
                 }
                 if space.window.as_deref() == Some(HOSTED) {
                     return;
                 }
-                EventKind::Workspace {
-                    path: space.path,
-                    branch: space.branch,
-                    slot: space.slot,
+                EventKind::from(Workspace {
                     window: Some(HOSTED.to_string()),
-                    agent: space.agent,
-                }
+                    ..space
+                })
             }
             Err(error) => EventKind::Blocked {
                 reason: format!("could not start the agent: {error:#}"),
             },
         };
-        if let Err(error) = self.store.append(&id, &LogEvent::new(now, event)) {
+        if let Err(error) = self.store.append(id, &LogEvent::new(now, event)) {
             eprintln!("{error:#}");
         }
     }
@@ -368,20 +362,15 @@ impl Server {
     /// Resumes a worker whose pane exited or never opened, also one whose flow ended.
     fn reopen_worker(&mut self, id: &str) {
         let key = PaneKey::Flow(id.to_string());
-        let running = self
-            .host
-            .panes()
-            .iter()
-            .any(|pane| pane.key == key && pane.status == PaneStatus::Running);
+        if self.host.status(&key) == Some(&PaneStatus::Running) {
+            return;
+        }
         let Some(flow) = self.flow(id).cloned() else {
             return;
         };
         let Some(space) = &flow.workspace else {
             return;
         };
-        if running {
-            return;
-        }
         let Some((name, agent)) = self.config.agent(Some(&space.agent)) else {
             self.host
                 .fail(key, format!("no agent named {}", space.agent));
@@ -389,16 +378,16 @@ impl Server {
         };
         match launch::worker_spec(&flow, agent, &self.env) {
             Some(spec) => self.open_worker(spec),
-            None => self.host.fail(key, reconcile::unopenable(name, agent)),
+            None => self.host.fail(key, reconcile::unopenable(name)),
         }
     }
 
     /// Opens a pane once more with the agent's first command: its resume failed before the agent
     /// ever saved the session.
     fn open_fresh(&mut self, key: &PaneKey) {
-        eprintln!("resuming {key:?} failed, starting it fresh");
+        eprintln!("resuming {key} failed, starting it fresh");
         let PaneKey::Flow(id) = key else {
-            self.open_master(true);
+            self.open_master(Start::Fresh);
             return;
         };
         let Some(mut flow) = self.flow(id).cloned() else {
@@ -424,21 +413,24 @@ impl Server {
     fn close_flow(&mut self, conn: ConnId, id: String) {
         let key = PaneKey::Flow(id.clone());
         self.known.insert(id.clone());
-        let Some(pane) = self.host.panes().into_iter().find(|pane| pane.key == key) else {
+        let Some(running) = self
+            .host
+            .status(&key)
+            .map(|status| *status == PaneStatus::Running)
+        else {
             self.send_to(conn, &ServerMsg::NotOpen(id));
             return;
         };
         self.closing.entry(key.clone()).or_default().push(conn);
         self.host.close(&key);
-        if pane.status != PaneStatus::Running {
+        if !running {
             self.tell_closed(&key);
         }
     }
 
     /// Tells everyone waiting for this pane that it is gone, once it is.
     fn tell_closed(&mut self, key: &PaneKey) {
-        let gone = !self.host.panes().iter().any(|pane| &pane.key == key);
-        if !gone {
+        if self.host.status(key).is_some() {
             return;
         }
         let Some(waiting) = self.closing.remove(key) else {
@@ -476,7 +468,7 @@ impl Server {
         self.board.flows.iter().find(|flow| flow.id == id)
     }
 
-    fn open_master(&mut self, fresh: bool) {
+    fn open_master(&mut self, start: Start) {
         let master = self
             .config
             .agent(Some(crate::config::MASTER_AGENT))
@@ -487,14 +479,14 @@ impl Server {
             return;
         };
         match self.record.spec(
-            fresh,
+            start,
             agent,
             &self.env,
             &self.instructions,
             self.config.master.wake,
         ) {
             Some(spec) => match self.host.open(spec) {
-                Ok(()) if !fresh => {
+                Ok(()) if start == Start::Resume => {
                     self.resumed.insert(PaneKey::Master, Instant::now());
                 }
                 Ok(()) => {}
@@ -578,10 +570,10 @@ impl Server {
 
     /// Writes one message; a connection that cannot take it is dropped.
     fn send_to(&mut self, conn: ConnId, message: &ServerMsg) {
-        let Some(entry) = self.conns.get_mut(&conn) else {
+        let Some(stream) = self.conns.get_mut(&conn) else {
             return;
         };
-        if proto::write_msg(&mut entry.stream, message).is_err() {
+        if proto::write_msg(stream, message).is_err() {
             self.drop_conn(conn);
         }
     }
@@ -593,13 +585,13 @@ impl Server {
             return;
         };
         let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
-        self.conns.insert(conn, Conn { stream, role: None });
+        self.conns.insert(conn, stream);
         read_in_background(conn, reader, self.events.clone());
     }
 
     fn drop_conn(&mut self, conn: ConnId) {
-        if let Some(entry) = self.conns.remove(&conn) {
-            let _ = entry.stream.shutdown(std::net::Shutdown::Both);
+        if let Some(stream) = self.conns.remove(&conn) {
+            let _ = stream.shutdown(std::net::Shutdown::Both);
         }
         if self.attached == Some(conn) {
             self.attached = None;
@@ -607,23 +599,18 @@ impl Server {
     }
 
     /// Closes every pane and waits for them to exit; forgets the master, so the next start is a new one.
-    fn stop(&mut self, inbox: &Receiver<Event>) -> Result<()> {
+    fn stop(&mut self, inbox: &Receiver<Event>) {
         if let Err(error) = fs::remove_file(&self.master_file)
             && error.kind() != ErrorKind::NotFound
         {
             eprintln!("could not forget the master: {error}");
         }
-        let keys: Vec<PaneKey> = self.host.panes().into_iter().map(|pane| pane.key).collect();
+        let keys: Vec<PaneKey> = self.host.keys().cloned().collect();
         for key in &keys {
             self.host.close(key);
         }
         let deadline = Instant::now() + STOP_WAIT;
-        while self
-            .host
-            .panes()
-            .iter()
-            .any(|pane| pane.status == PaneStatus::Running)
-        {
+        while self.host.any_running() {
             let Some(left) = deadline.checked_duration_since(Instant::now()) else {
                 break;
             };
@@ -637,7 +624,6 @@ impl Server {
         for conn in conns {
             self.drop_conn(conn);
         }
-        Ok(())
     }
 }
 
@@ -678,19 +664,12 @@ fn accept_in_background(listener: UnixListener, events: Sender<Event>) {
 
 fn read_in_background(conn: ConnId, mut stream: UnixStream, events: Sender<Event>) {
     thread::spawn(move || {
-        loop {
-            match proto::read_msg::<_, ClientMsg>(&mut stream) {
-                Ok(Some(message)) => {
-                    if events.send(Event::Message(conn, message)).is_err() {
-                        return;
-                    }
-                }
-                Ok(None) | Err(_) => {
-                    let _ = events.send(Event::Gone(conn));
-                    return;
-                }
+        while let Ok(Some(message)) = proto::read_msg::<_, ClientMsg>(&mut stream) {
+            if events.send(Event::Message(conn, message)).is_err() {
+                return;
             }
         }
+        let _ = events.send(Event::Gone(conn));
     });
 }
 
@@ -742,11 +721,7 @@ mod tests {
             master: dir.join("master.json"),
             instructions: dir.join("master.md"),
         };
-        let thread_paths = ServerPaths {
-            socket: paths.socket.clone(),
-            master: paths.master.clone(),
-            instructions: paths.instructions.clone(),
-        };
+        let thread_paths = paths.clone();
         let store = Store::at(dir.to_path_buf());
         let config = Config {
             agent: "claude".into(),
@@ -1008,10 +983,10 @@ mod tests {
         ui: &mut UnixStream,
         panes: &mut Vec<crate::proto::PaneInfo>,
         id: &str,
-        want: Option<PaneStatus>,
+        want: Option<&PaneStatus>,
     ) {
         let deadline = Instant::now() + Duration::from_secs(5);
-        while status_of(panes, id) != want {
+        while status_of(panes, id).as_ref() != want {
             assert!(
                 Instant::now() < deadline,
                 "{id} never became {want:?}: {panes:?}"
@@ -1039,7 +1014,7 @@ mod tests {
             },
         );
         let mut panes = Vec::new();
-        wait_for(&mut ui, &mut panes, &csv, Some(PaneStatus::Running));
+        wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
         assert_eq!(
             status_of(&panes, &old),
             None,
@@ -1052,12 +1027,12 @@ mod tests {
             &mut ui,
             &mut panes,
             &csv,
-            Some(PaneStatus::Exited { code: Some(0) }),
+            Some(&PaneStatus::Exited { code: Some(0) }),
         );
         proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(csv.clone()))).unwrap();
-        wait_for(&mut ui, &mut panes, &csv, Some(PaneStatus::Running));
+        wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
         proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(old.clone()))).unwrap();
-        wait_for(&mut ui, &mut panes, &old, Some(PaneStatus::Running));
+        wait_for(&mut ui, &mut panes, &old, Some(&PaneStatus::Running));
 
         proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
         handle.join().unwrap().unwrap();
@@ -1080,7 +1055,7 @@ mod tests {
             },
         );
         let mut panes = Vec::new();
-        wait_for(&mut ui, &mut panes, &csv, Some(PaneStatus::Running));
+        wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
 
         proto::write_msg(&mut ui, &ClientMsg::EndFlows).unwrap();
         proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
@@ -1107,7 +1082,7 @@ mod tests {
         let size = Size { cols: 30, rows: 4 };
         let mut first = connect(&paths.socket, Role::Attach { size });
         let mut panes = Vec::new();
-        wait_for(&mut first, &mut panes, &csv, Some(PaneStatus::Running));
+        wait_for(&mut first, &mut panes, &csv, Some(&PaneStatus::Running));
         proto::write_msg(&mut first, &ClientMsg::Focus(PaneKey::Flow(csv.clone()))).unwrap();
         proto::write_msg(&mut first, &ClientMsg::History(Some(3))).unwrap();
         drop(first);

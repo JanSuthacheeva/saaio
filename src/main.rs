@@ -20,7 +20,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
@@ -28,7 +28,7 @@ use clap::{Parser, Subcommand};
 use client::{Client, Closing};
 use config::Config;
 use event::{Event, EventKind, LONG_TEXT_LIMIT, Mode, Phase};
-use output::{Document, Failure, Opening};
+use output::{BranchFate, Document, Failure, Opening, Retired, Setup};
 use proto::{ClientMsg, Role};
 use registry::Registry;
 use slots::{Claim, Slots};
@@ -60,7 +60,7 @@ enum Command {
         name: String,
         #[arg(long)]
         request: String,
-        #[arg(long, value_enum, default_value = "guided")]
+        #[arg(long, value_enum, default_value_t)]
         mode: Mode,
     },
     /// Append one event to a flow
@@ -92,7 +92,7 @@ enum Command {
         /// Flow name [default: from the ticket key or the first words]
         #[arg(long)]
         name: Option<String>,
-        #[arg(long, value_enum, default_value = "guided")]
+        #[arg(long, value_enum, default_value_t)]
         mode: Mode,
         /// Agent from the config [default: the config's agent, claude]
         #[arg(long)]
@@ -219,20 +219,13 @@ fn main() -> ExitCode {
     if let Some(Command::Wait { master }) = &cli.command {
         return run_wait(*master);
     }
-    let store = match Store::locate(
-        env_path("FLOW_HOME"),
-        env_path("XDG_STATE_HOME"),
-        env_path("HOME"),
-    ) {
-        Ok(store) => store,
-        Err(_) => {
-            return fail(&Failure::error(
-                "cannot find a state directory",
-                vec!["Set FLOW_HOME to a directory".to_string()],
-            ));
-        }
+    let Some(store) = locate_store() else {
+        return fail(&Failure::error(
+            "cannot find a state directory",
+            vec!["Set FLOW_HOME to a directory".to_string()],
+        ));
     };
-    let Ok(registry) = Registry::locate(env_path("XDG_STATE_HOME"), env_path("HOME")) else {
+    let Some(registry) = Registry::locate(env_path("XDG_STATE_HOME"), env_path("HOME")) else {
         return fail(&Failure::error(
             "cannot find a state directory",
             vec!["Set HOME or XDG_STATE_HOME to a directory".to_string()],
@@ -275,19 +268,14 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
             agent,
             kind,
         }) => {
-            let config = Config::load(
-                env_path("FLOW_CONFIG"),
-                env_path("XDG_CONFIG_HOME"),
-                env_path("HOME"),
-            )
-            .map_err(Failure::from_io)?;
-            let cwd = env::current_dir().map_err(|error| Failure::from_io(error.into()))?;
+            let config = load_config()?;
+            let cwd = env::current_dir()?;
             start(
                 store,
                 registry,
                 &config,
                 &cwd,
-                Launch {
+                &Launch {
                     request,
                     name,
                     mode,
@@ -301,7 +289,19 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
             flow,
             force,
             delete_unmerged,
-        }) => remove(store, &flow, force, delete_unmerged, now),
+        }) => {
+            let uncommitted = if force {
+                Uncommitted::Discard
+            } else {
+                Uncommitted::Keep
+            };
+            let unmerged = if delete_unmerged {
+                Unmerged::Delete
+            } else {
+                Unmerged::Keep
+            };
+            remove(store, &flow, uncommitted, unmerged, now)
+        }
         Some(Command::Send { flow, text }) => {
             if env::var("FLOW_ID").is_ok_and(|id| !id.is_empty()) {
                 return Err(Failure::error(
@@ -312,7 +312,8 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
             send(store, &flow, &text, now)
         }
         Some(Command::Clear) => clear(store, now),
-        Some(Command::Ui { stop }) => ui(store, stop),
+        Some(Command::Ui { stop: true }) => stop_server(&client::socket_path(store)),
+        Some(Command::Ui { stop: false }) => ui(store),
         Some(Command::Server) => server(store.clone()),
         Some(Command::Hook { .. } | Command::Wait { .. }) => Ok(Document::Silent),
     }
@@ -321,22 +322,14 @@ fn run(cli: Cli, store: &Store, registry: &Registry, now: u64) -> Result<Documen
 /// `flow hook`: never prints to stdout (a hook's stdout can reach the model) and never fails (a
 /// failing hook shows the user a notice); what goes wrong goes to stderr, Claude Code's debug log.
 fn run_hook(adapter: &str) {
-    let store = match Store::locate(
-        env_path("FLOW_HOME"),
-        env_path("XDG_STATE_HOME"),
-        env_path("HOME"),
-    ) {
-        Ok(store) => store,
-        Err(error) => return eprintln!("flow hook: {error:#}"),
+    let Some(store) = locate_store() else {
+        return eprintln!("flow hook: cannot find a state directory");
     };
-    let config = match Config::load(
-        env_path("FLOW_CONFIG"),
-        env_path("XDG_CONFIG_HOME"),
-        env_path("HOME"),
-    ) {
-        Ok(config) => config,
-        Err(error) => return eprintln!("flow hook: {error:#}"),
-    };
+    // A broken config must not stop running workers from reporting; start and ui say it loudly.
+    let config = load_config().unwrap_or_else(|error| {
+        eprintln!("flow hook: {error:#}; using the built-in config");
+        Config::builtin()
+    });
     let mut payload = String::new();
     if let Err(error) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut payload) {
         return eprintln!("flow hook: could not read the event: {error}");
@@ -348,11 +341,7 @@ fn run_hook(adapter: &str) {
 /// `flow wait`: the news on stderr and exit 2, which makes Claude Code wake the session with it;
 /// exit 0 and nothing at all when the wait ends without news. Never prints to stdout.
 fn run_wait(master: bool) -> ExitCode {
-    let Ok(store) = Store::locate(
-        env_path("FLOW_HOME"),
-        env_path("XDG_STATE_HOME"),
-        env_path("HOME"),
-    ) else {
+    let Some(store) = locate_store() else {
         return ExitCode::SUCCESS;
     };
     let waiter = match env::var("FLOW_ID") {
@@ -379,7 +368,11 @@ fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
         || store.waiter(waiter) == Some(me) && std::os::unix::process::parent_id() == parent;
     while is_mine() {
         let news = match waiter {
-            Waiter::Flow(id) => worker_news(store, id, clock())?,
+            Waiter::Flow(id) => match worker_news(store, id, clock()) {
+                WorkerNews::Gone => return None,
+                WorkerNews::Nothing => None,
+                WorkerNews::News(news) => Some(news),
+            },
             Waiter::Master => master_news(store, clock, &is_mine),
         };
         if news.is_some() {
@@ -390,26 +383,37 @@ fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
     None
 }
 
-/// Some(None) while there is nothing to deliver; None when the flow is finished or gone.
-fn worker_news(store: &Store, id: &str, now: u64) -> Option<Option<String>> {
-    let events = store.events(id).ok()?;
+/// What a worker's waiter finds on one look.
+enum WorkerNews {
+    /// The flow is finished or gone: stop waiting.
+    Gone,
+    Nothing,
+    News(String),
+}
+
+fn worker_news(store: &Store, id: &str, now: u64) -> WorkerNews {
+    let Ok(events) = store.events(id) else {
+        return WorkerNews::Gone;
+    };
     if fold::fold(id, &events, None, now).is_none_or(|flow| flow.is_finished()) {
-        return None;
+        return WorkerNews::Gone;
     }
     let delivered = store.delivered(id);
     let messages = wake::undelivered(&events, delivered);
     if messages.is_empty() {
-        return Some(None);
+        return WorkerNews::Nothing;
     }
-    store.set_delivered(id, delivered + messages.len()).ok()?;
-    Some(Some(output::news_for_worker(&messages)))
+    if store.set_delivered(id, delivered + messages.len()).is_err() {
+        return WorkerNews::Gone;
+    }
+    WorkerNews::News(output::news_for_worker(&messages))
 }
 
 /// The flows that stopped since the master last saw them, collected for SETTLE so several arrive
 /// as one wake.
 fn master_news(store: &Store, clock: fn() -> u64, is_mine: &dyn Fn() -> bool) -> Option<String> {
     let flows = views(store, clock()).0;
-    let seen = store.seen().unwrap_or_else(|| wake::first_seen(&flows));
+    let mut seen = store.seen().unwrap_or_else(|| wake::first_seen(&flows));
     if wake::changed_flows(&flows, &seen).is_empty() {
         return None;
     }
@@ -419,9 +423,8 @@ fn master_news(store: &Store, clock: fn() -> u64, is_mine: &dyn Fn() -> bool) ->
     if changed.is_empty() || !is_mine() {
         return None;
     }
-    let mut marked = seen.clone();
-    wake::mark_seen(&mut marked, &changed);
-    store.set_seen(&marked).ok()?;
+    wake::mark_seen(&mut seen, &changed);
+    store.set_seen(&seen).ok()?;
     Some(output::news_for_master(&changed))
 }
 
@@ -456,13 +459,11 @@ fn hook(
         flow
     } else {
         let (flows, _) = views(store, now);
-        match fold::resolve(&flows, &flow) {
-            Some(view) => view.id.clone(),
-            None => {
-                eprintln!("flow hook: no flow {flow}");
-                return Document::Silent;
-            }
-        }
+        let Some(view) = fold::resolve(&flows, &flow) else {
+            eprintln!("flow hook: no flow {flow}");
+            return Document::Silent;
+        };
+        view.id.clone()
     };
     for kind in kinds {
         let events = match store.events(&id) {
@@ -481,42 +482,30 @@ fn hook(
     Document::Silent
 }
 
-fn ui(store: &Store, stop: bool) -> Result<Document, Failure> {
+fn ui(store: &Store) -> Result<Document, Failure> {
     let socket = client::socket_path(store);
-    if stop {
-        return stop_server(&socket);
-    }
-    let exe = env::current_exe().map_err(|error| Failure::from_io(error.into()))?;
-    client::ensure_server(&socket, &exe, &[]).map_err(Failure::from_io)?;
+    let exe = env::current_exe()?;
+    client::ensure_server(&socket, &exe, &[])?;
     let claude_home = env_path("CLAUDE_CONFIG_DIR")
         .filter(|dir| !dir.as_os_str().is_empty())
         .or_else(|| env_path("HOME").map(|home| home.join(".claude")))
         .unwrap_or_else(|| PathBuf::from(".claude"));
     let env = ui::UiEnv {
-        exe: exe.clone(),
+        exe,
         claude_home,
         home: env_path("HOME").filter(|home| !home.as_os_str().is_empty()),
         store: store.root().to_path_buf(),
-        theme_dir: config::config_file(
-            env_path("FLOW_CONFIG"),
-            env_path("XDG_CONFIG_HOME"),
-            env_path("HOME"),
-        )
-        .and_then(|file| file.parent().map(Path::to_path_buf))
-        .unwrap_or_else(|| PathBuf::from(".")),
+        theme_dir: config_dir().unwrap_or_else(|| PathBuf::from(".")),
     };
-    let message = ui::run(&socket, env).map_err(Failure::from_io)?;
+    let message = ui::run(&socket, env)?;
     Ok(Document::Text(message))
 }
 
 fn stop_server(socket: &Path) -> Result<Document, Failure> {
-    let Some(mut control) = Client::connect(socket, Role::Control).map_err(Failure::from_io)?
-    else {
+    let Some(mut control) = Client::connect(socket, Role::Control)? else {
         return Ok(Document::Text("no flow server runs".to_string()));
     };
-    control
-        .send(&ClientMsg::StopServer)
-        .map_err(Failure::from_io)?;
+    control.send(&ClientMsg::StopServer)?;
     while let Ok(Some(_)) = control.recv() {}
     Ok(Document::Text(
         "stopped the flow server and every session in it".to_string(),
@@ -524,19 +513,8 @@ fn stop_server(socket: &Path) -> Result<Document, Failure> {
 }
 
 fn server(store: Store) -> Result<Document, Failure> {
-    let config = Config::load(
-        env_path("FLOW_CONFIG"),
-        env_path("XDG_CONFIG_HOME"),
-        env_path("HOME"),
-    )
-    .map_err(Failure::from_io)?;
-    let config_dir = config::config_file(
-        env_path("FLOW_CONFIG"),
-        env_path("XDG_CONFIG_HOME"),
-        env_path("HOME"),
-    )
-    .and_then(|file| file.parent().map(Path::to_path_buf))
-    .unwrap_or_else(|| store.root().to_path_buf());
+    let config = load_config()?;
+    let config_dir = config_dir().unwrap_or_else(|| store.root().to_path_buf());
     let paths = server::ServerPaths {
         socket: client::socket_path(&store),
         master: store.root().join("master.json"),
@@ -544,9 +522,9 @@ fn server(store: Store) -> Result<Document, Failure> {
     };
     let env = launch::LaunchEnv {
         flow_home: env_path("FLOW_HOME"),
-        flow_exe: env::current_exe().map_err(|error| Failure::from_io(error.into()))?,
+        flow_exe: env::current_exe()?,
     };
-    server::run(&paths, store, config, env, now_ms).map_err(Failure::from_io)?;
+    server::run(&paths, store, config, env, now_ms)?;
     Ok(Document::Text("flow server stopped".to_string()))
 }
 
@@ -578,12 +556,13 @@ fn new_flow(
             mode,
         },
     );
-    let id = store.create(&first).map_err(Failure::from_io)?;
+    let id = store.create(&first)?;
     let created = fold::fold(&id, &[first], None, now).expect("a started flow folds");
     Ok(output::created(&created, false))
 }
 
 /// What `flow start` was asked for.
+#[derive(Debug)]
 struct Launch {
     request: String,
     name: Option<String>,
@@ -598,7 +577,7 @@ fn start(
     registry: &Registry,
     config: &Config,
     cwd: &Path,
-    launch: Launch,
+    launch: &Launch,
     now: u64,
 ) -> Result<Document, Failure> {
     let Some((agent_name, _)) = config.agent(launch.agent.as_deref()) else {
@@ -617,24 +596,8 @@ fn start(
             vec!["Run it inside the repository the flow works on".to_string()],
         )
     })?;
-    let branching = branching::Branching::load(&repo).map_err(Failure::from_io)?;
-    let kind = match &branching {
-        Some(rules) => rules.pick_type(launch.kind.as_deref()),
-        None if launch.kind.is_some() => Err(anyhow::anyhow!(
-            "this repo has no {}, so no branch types",
-            branching::CONFIG_FILE
-        )),
-        None => Ok(None),
-    }
-    .map_err(|error| {
-        Failure::error(
-            format!("{error:#}"),
-            vec![format!(
-                "Name the types in {}: [branch] types = [\"feature\", \"bugfix\"]",
-                branching::CONFIG_FILE
-            )],
-        )
-    })?;
+    let branching = branching::Branching::load(&repo)?;
+    let kind = pick_kind(branching.as_ref(), launch.kind.as_deref())?;
     let (flows, _) = views(store, now);
     let taken: Vec<String> = flows
         .iter()
@@ -650,43 +613,20 @@ fn start(
             mode: launch.mode,
         },
     );
-    let id = store.create(&first).map_err(Failure::from_io)?;
+    let id = store.create(&first)?;
+    let mut rollback = Rollback::new(store, registry, &id);
 
     // Claimed before the worktree and setup, so a second start cannot take the same slot meanwhile.
     let claim = Claim {
         store: store.root().to_path_buf(),
         flow: id.clone(),
     };
-    let mut held = held_slots(registry, now);
-    held.extend(launch::taken_slots(&flows));
-    let slot = match Slots::at(registry).claim(&claim, &held, |claim| claim_is_live(claim, now)) {
-        Ok(Some(slot)) => slot,
-        Ok(None) => {
-            let _ = store.remove(&id);
-            return Err(Failure::error(
-                format!("all {} slots are in use", slots::MAX_SLOTS),
-                vec![
-                    "Run `flow status --all` to see which flows hold them".to_string(),
-                    "Run `flow clear` in projects with finished flows".to_string(),
-                ],
-            ));
-        }
-        Err(error) => {
-            let _ = store.remove(&id);
-            return Err(Failure::from_io(error));
-        }
-    };
+    let slot = claim_slot(registry, &claim, &flows, now)?;
+    rollback.slot = Some((slot, claim));
     let base = branching::branch_name(branching.as_ref(), kind.as_deref(), &launch.request, &name);
-    let branch = std::iter::once(base.clone())
-        .chain((2..).map(|number| format!("{base}-{number}")))
-        .find(|branch| !workspace::branch_exists(&repo, branch))
-        .expect("an unused suffix always exists");
-    let space = launch::workspace_for(&repo, &name, branch, slot, agent_name);
-    if let Err(error) = workspace::create_worktree(&repo, &space) {
-        let _ = Slots::at(registry).release(slot, &claim);
-        let _ = store.remove(&id);
-        return Err(Failure::from_io(error));
-    }
+    let space = launch::workspace_for(&repo, &name, free_branch(&repo, &base), slot, agent_name);
+    workspace::create_worktree(&repo, &space)?;
+    rollback.disarm();
 
     let setup = match workspace::run_hook(
         &repo,
@@ -694,27 +634,116 @@ fn start(
         &space,
         &launch::hook_env(&id, &name, &repo, &space),
     ) {
-        Ok(true) => "ran".to_string(),
-        Ok(false) => "none".to_string(),
+        Ok(true) => Setup::Ran,
+        Ok(false) => Setup::None,
         Err(error) => {
             let reason = format!("setup failed: {error}");
-            store
-                .append(&id, &Event::new(now, EventKind::Blocked { reason }))
-                .map_err(Failure::from_io)?;
-            format!("failed: {error}")
+            store.append(&id, &Event::new(now, EventKind::Blocked { reason }))?;
+            Setup::Failed(error.to_string())
         }
     };
 
     // Only now, so flow server opens the worker once setup is done.
     append_workspace(store, &id, &space, now)?;
 
-    let events = store.events(&id).map_err(Failure::from_io)?;
+    let events = store.events(&id)?;
     let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");
     let opening = match Client::connect(&client::socket_path(store), Role::Control) {
         Ok(None) => Opening::WhenUiRuns,
         Ok(Some(_)) | Err(_) => Opening::Running,
     };
-    Ok(output::started(&flow, &setup, opening))
+    Ok(output::started(&flow, &space, &setup, opening))
+}
+
+/// The branch type for a start: the one asked for or the repo's first, if the repo has types.
+fn pick_kind(
+    rules: Option<&branching::Branching>,
+    asked: Option<&str>,
+) -> Result<Option<String>, Failure> {
+    match rules {
+        Some(rules) => rules.pick_type(asked),
+        None if asked.is_some() => Err(anyhow::anyhow!(
+            "this repo has no {}, so no branch types",
+            branching::CONFIG_FILE
+        )),
+        None => Ok(None),
+    }
+    .map_err(|error| {
+        Failure::error(
+            format!("{error:#}"),
+            vec![format!(
+                "Name the types in {}: [branch] types = [\"feature\", \"bugfix\"]",
+                branching::CONFIG_FILE
+            )],
+        )
+    })
+}
+
+/// The lowest slot no unfinished flow in any project holds, claimed for this start.
+fn claim_slot(
+    registry: &Registry,
+    claim: &Claim,
+    flows: &[FlowView],
+    now: u64,
+) -> Result<u8, Failure> {
+    let mut held = held_slots(registry, now);
+    held.extend(launch::taken_slots(flows));
+    Slots::at(registry)
+        .claim(claim, &held, |claim| claim_is_live(claim, now))?
+        .ok_or_else(|| {
+            Failure::error(
+                format!("all {} slots are in use", slots::MAX_SLOTS),
+                vec![
+                    "Run `flow status --all` to see which flows hold them".to_string(),
+                    "Run `flow clear` in projects with finished flows".to_string(),
+                ],
+            )
+        })
+}
+
+/// `base`, or base-2, base-3, ... when the repo has that branch already.
+fn free_branch(repo: &Path, base: &str) -> String {
+    std::iter::once(base.to_string())
+        .chain((2..).map(|number| format!("{base}-{number}")))
+        .find(|branch| !workspace::branch_exists(repo, branch))
+        .expect("an unused suffix always exists")
+}
+
+/// Undoes a start that failed before its worktree existed: forgets the flow and gives its slot back.
+struct Rollback<'a> {
+    store: &'a Store,
+    slots: Slots,
+    id: String,
+    slot: Option<(u8, Claim)>,
+    armed: bool,
+}
+
+impl<'a> Rollback<'a> {
+    fn new(store: &'a Store, registry: &Registry, id: &str) -> Rollback<'a> {
+        Rollback {
+            store,
+            slots: Slots::at(registry),
+            id: id.to_string(),
+            slot: None,
+            armed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for Rollback<'_> {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        if let Some((slot, claim)) = &self.slot {
+            let _ = self.slots.release(*slot, claim);
+        }
+        let _ = self.store.remove(&self.id);
+    }
 }
 
 fn append_workspace(
@@ -723,16 +752,9 @@ fn append_workspace(
     space: &view::Workspace,
     now: u64,
 ) -> Result<(), Failure> {
-    let kind = EventKind::Workspace {
-        path: space.path.clone(),
-        branch: space.branch.clone(),
-        slot: space.slot,
-        window: space.window.clone(),
-        agent: space.agent.clone(),
-    };
     store
-        .append(id, &Event::new(now, kind))
-        .map_err(Failure::from_io)
+        .append(id, &Event::new(now, space.clone().into()))
+        .map_err(Failure::from)
 }
 
 fn report(
@@ -752,10 +774,9 @@ fn report(
     match event.into_kind() {
         Some(kind) => store.append(&id, &Event::new(now, kind)),
         None => store.beat(&id),
-    }
-    .map_err(Failure::from_io)?;
-    let events = store.events(&id).map_err(Failure::from_io)?;
-    let beat = store.last_beat(&id).map_err(Failure::from_io)?;
+    }?;
+    let events = store.events(&id)?;
+    let beat = store.last_beat(&id)?;
     let reported = fold::fold(&id, &events, beat, now).expect("a resolved flow folds");
     Ok(output::reported(&reported))
 }
@@ -793,46 +814,50 @@ fn send(store: &Store, name: &str, text: &str, now: u64) -> Result<Document, Fai
     let message = EventKind::Message {
         text: text.to_string(),
     };
-    store
-        .append(&flow.id, &Event::new(now, message))
-        .map_err(Failure::from_io)?;
+    store.append(&flow.id, &Event::new(now, message))?;
     Ok(output::sent(flow))
 }
 
 fn remove(
     store: &Store,
     name: &str,
-    force: bool,
-    delete_unmerged: bool,
+    uncommitted: Uncommitted,
+    unmerged: Unmerged,
     now: u64,
 ) -> Result<Document, Failure> {
     let (flows, _) = views(store, now);
     let flow = fold::resolve(&flows, name).ok_or_else(|| no_flow(name))?;
-    if !force {
+    if uncommitted == Uncommitted::Keep {
         refuse_uncommitted_work(flow)?;
     }
-    if !delete_unmerged {
+    if unmerged == Unmerged::Keep {
         refuse_unmerged_commits(flow)?;
     }
-    let pane = match close_pane(store, flow)? {
-        Closing::Closed => "closed",
-        Closing::NoServer | Closing::NoPane => "none",
-        Closing::TimedOut => "timed out",
-    };
-    let retired = retire_worktree(flow, force);
+    let pane = close_pane(store, flow)?;
+    let retired = retire_worktree(flow, uncommitted);
     let branch = match retired {
-        Retired::Kept(_) => "kept",
-        Retired::None | Retired::Removed => drop_branch(flow, delete_unmerged),
+        Retired::Kept(_) => BranchFate::Kept,
+        Retired::NoWorktree | Retired::Removed => drop_branch(flow, unmerged),
     };
-    let worktree = match retired {
-        Retired::None => "none".to_string(),
-        Retired::Removed => "removed".to_string(),
-        Retired::Kept(path) => format!("kept: {path}"),
-    };
-    store.remove(&flow.id).map_err(|error| {
-        Failure::from_io(error.context(format!("could not remove {}", flow.name)))
-    })?;
-    Ok(output::removed(&flow.name, pane, &worktree, branch))
+    store
+        .remove(&flow.id)
+        .map_err(|error| Failure::from(error.context(format!("could not remove {}", flow.name))))?;
+    Ok(output::removed(&flow.name, pane, &retired, branch))
+}
+
+/// What `flow remove` does with uncommitted work in the worktree (--force discards it).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Uncommitted {
+    Keep,
+    Discard,
+}
+
+/// What `flow remove` does with a branch whose commits are on no other branch
+/// (--delete-unmerged deletes it).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Unmerged {
+    Keep,
+    Delete,
 }
 
 /// Fails before anything is touched when the flow's branch has commits on no other branch.
@@ -840,11 +865,11 @@ fn refuse_unmerged_commits(flow: &FlowView) -> Result<(), Failure> {
     let Some((repo, branch)) = branch_of(flow) else {
         return Ok(());
     };
-    match workspace::commits_only_on(&repo, &branch) {
+    match workspace::commits_only_on(&repo, branch) {
         Ok(Some(count)) if count > 0 => Err(Failure::error(
             format!(
                 "{branch} has {count} commit{} {}",
-                if count == 1 { "" } else { "s" },
+                output::plural(count),
                 output::UNMERGED
             ),
             vec![
@@ -862,33 +887,33 @@ fn refuse_unmerged_commits(flow: &FlowView) -> Result<(), Failure> {
     }
 }
 
-/// Deletes the flow's branch once its worktree is gone: always with `unmerged`, else only when all
-/// its commits are on another branch. deleted, kept or none.
-fn drop_branch(flow: &FlowView, unmerged: bool) -> &'static str {
+/// Deletes the flow's branch once its worktree is gone: with Unmerged::Delete always, else only
+/// when all its commits are on another branch.
+fn drop_branch(flow: &FlowView, unmerged: Unmerged) -> BranchFate {
     let Some((repo, branch)) = branch_of(flow) else {
-        return "none";
+        return BranchFate::NoBranch;
     };
-    match workspace::commits_only_on(&repo, &branch) {
-        Ok(None) => "none",
-        Ok(Some(0)) => deleted(workspace::delete_branch(&repo, &branch)),
-        Ok(Some(_)) if unmerged => deleted(workspace::delete_branch(&repo, &branch)),
-        Ok(Some(_)) | Err(_) => "kept",
+    match workspace::commits_only_on(&repo, branch) {
+        Ok(None) => BranchFate::NoBranch,
+        Ok(Some(count)) if count == 0 || unmerged == Unmerged::Delete => {
+            match workspace::delete_branch(&repo, branch) {
+                Ok(()) => BranchFate::Deleted,
+                Err(_) => BranchFate::Kept,
+            }
+        }
+        Ok(Some(_)) | Err(_) => BranchFate::Kept,
     }
 }
 
-fn deleted(result: anyhow::Result<()>) -> &'static str {
-    if result.is_ok() { "deleted" } else { "kept" }
-}
-
 /// The repository and branch of a started flow.
-fn branch_of(flow: &FlowView) -> Option<(PathBuf, String)> {
+fn branch_of(flow: &FlowView) -> Option<(PathBuf, &str)> {
     let space = flow.workspace.as_ref()?;
-    Some((launch::repo_of(space)?, space.branch.clone()))
+    Some((launch::repo_of(space)?, &space.branch))
 }
 
 /// Ends the flow's session in flow ui before its worktree goes.
 fn close_pane(store: &Store, flow: &FlowView) -> Result<Closing, Failure> {
-    client::close_flow(&client::socket_path(store), &flow.id, CLOSE_WAIT).map_err(Failure::from_io)
+    client::close_flow(&client::socket_path(store), &flow.id, CLOSE_WAIT).map_err(Failure::from)
 }
 
 /// Fails before anything is touched when the flow's worktree holds uncommitted work.
@@ -921,40 +946,34 @@ fn clear(store: &Store, now: u64) -> Result<Document, Failure> {
     let mut kept = Vec::new();
     for flow in flows.iter().filter(|flow| flow.is_finished()) {
         close_pane(store, flow)?;
-        match retire_worktree(flow, false) {
+        match retire_worktree(flow, Uncommitted::Keep) {
             Retired::Kept(path) => kept.push((flow.name.clone(), path)),
-            Retired::None | Retired::Removed => {
-                drop_branch(flow, false);
+            Retired::NoWorktree | Retired::Removed => {
+                drop_branch(flow, Unmerged::Keep);
             }
         }
         store.remove(&flow.id).map_err(|error| {
-            Failure::from_io(error.context(format!("could not clear {}", flow.name)))
+            Failure::from(error.context(format!("could not clear {}", flow.name)))
         })?;
         names.push(flow.name.clone());
     }
     Ok(output::cleared(&names, &kept))
 }
 
-/// What happened to a flow's worktree when it was cleared or removed.
-enum Retired {
-    None,
-    Removed,
-    Kept(String),
-}
-
 /// Runs the teardown hook and removes the flow's worktree; keeps it with uncommitted work unless forced.
-fn retire_worktree(flow: &FlowView, force: bool) -> Retired {
+fn retire_worktree(flow: &FlowView, uncommitted: Uncommitted) -> Retired {
     let Some(space) = &flow.workspace else {
-        return Retired::None;
+        return Retired::NoWorktree;
     };
     let Some(repo) = launch::repo_of(space) else {
-        return Retired::None;
+        return Retired::NoWorktree;
     };
     if !Path::new(&space.path).exists() {
-        return Retired::None;
+        return Retired::NoWorktree;
     }
     let env = launch::hook_env(&flow.id, &flow.name, &repo, space);
     let _ = workspace::run_hook(&repo, Hook::Teardown, space, &env);
+    let force = uncommitted == Uncommitted::Discard;
     if workspace::remove_worktree(&repo, space, force).unwrap_or(false) {
         Retired::Removed
     } else {
@@ -1054,7 +1073,7 @@ fn held_slots(registry: &Registry, now: u64) -> Vec<u8> {
 /// Every flow folded; unreadable ones become warnings so the rest still shows.
 fn views(store: &Store, now: u64) -> (Vec<FlowView>, Vec<String>) {
     let (logs, warnings) = store.logs();
-    (fold::views(logs, now), warnings)
+    (fold::views(&logs, now), warnings)
 }
 
 fn no_flow(name: &str) -> Failure {
@@ -1072,25 +1091,49 @@ fn fail(failure: &Failure) -> ExitCode {
     ExitCode::from(failure.code)
 }
 
+/// The store $FLOW_HOME, $XDG_STATE_HOME or $HOME point to.
+fn locate_store() -> Option<Store> {
+    Store::locate(
+        env_path("FLOW_HOME"),
+        env_path("XDG_STATE_HOME"),
+        env_path("HOME"),
+    )
+}
+
+/// The config file $FLOW_CONFIG, $XDG_CONFIG_HOME or $HOME point to.
+fn load_config() -> anyhow::Result<Config> {
+    Config::load(
+        env_path("FLOW_CONFIG"),
+        env_path("XDG_CONFIG_HOME"),
+        env_path("HOME"),
+    )
+}
+
+/// The folder of the config file, where master.md and theme.toml live.
+fn config_dir() -> Option<PathBuf> {
+    config::config_file(
+        env_path("FLOW_CONFIG"),
+        env_path("XDG_CONFIG_HOME"),
+        env_path("HOME"),
+    )
+    .and_then(|file| file.parent().map(Path::to_path_buf))
+}
+
 fn env_path(name: &str) -> Option<PathBuf> {
     env::var_os(name).map(PathBuf::from)
 }
 
 fn bin_path() -> String {
-    let bin = env::current_exe()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|_| "flow".to_string());
-    match env::var("HOME") {
-        Ok(home) if !home.is_empty() && bin.starts_with(&home) => {
-            format!("~{}", &bin[home.len()..])
-        }
-        _ => bin,
+    let Ok(exe) = env::current_exe() else {
+        return "flow".to_string();
+    };
+    let home = env_path("HOME").filter(|home| !home.as_os_str().is_empty());
+    match home.and_then(|home| exe.strip_prefix(home).ok()) {
+        Some(rest) => format!("~/{}", rest.display()),
+        None => exe.display().to_string(),
     }
 }
 
 fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
+    event::unix_ms(SystemTime::now())
 }

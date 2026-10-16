@@ -9,20 +9,23 @@ use crate::view::{
 pub const SILENT_AFTER_MS: u64 = 90_000;
 
 /// One flow's view at `now`; None when the log has no Started event to name it.
-pub fn fold(id: &str, events: &[Event], last_beat: Option<u64>, now: u64) -> Option<FlowView> {
-    let start = events
-        .iter()
-        .position(|event| matches!(event.kind, EventKind::Started { .. }))?;
-    let EventKind::Started {
-        name,
-        request,
-        mode,
-    } = &events[start].kind
-    else {
-        unreachable!("position found a Started event");
-    };
-    let mut folding = Folding::new(id, name, request, *mode, events[start].at);
-    for event in &events[start + 1..] {
+pub fn fold<'a>(
+    id: &str,
+    events: impl IntoIterator<Item = &'a Event>,
+    last_beat: Option<u64>,
+    now: u64,
+) -> Option<FlowView> {
+    let mut events = events.into_iter();
+    let (name, request, mode, at) = events.by_ref().find_map(|event| match &event.kind {
+        EventKind::Started {
+            name,
+            request,
+            mode,
+        } => Some((name, request, *mode, event.at)),
+        _ => None,
+    })?;
+    let mut folding = Folding::new(id, name, request, mode, at);
+    for event in events {
         folding.apply(event);
     }
     let mut view = folding.finish(now);
@@ -34,8 +37,8 @@ pub fn fold(id: &str, events: &[Event], last_beat: Option<u64>, now: u64) -> Opt
 }
 
 /// True when appending `kind` changes what the flow shows: its state, phase, blocker, delegate,
-/// tasks, review, merge request, decisions or answer; every message does. Adapters skip the rest, so a log does not grow by a
-/// line for every tool call.
+/// tasks, review, merge request, decisions or answer; every message does. Adapters skip the rest,
+/// so a log does not grow by a line for every tool call.
 pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
     if matches!(kind, EventKind::Message { .. }) {
         return true;
@@ -43,38 +46,39 @@ pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
     let Some(before) = fold(id, events, None, now) else {
         return true;
     };
-    let mut after_events = events.to_vec();
-    after_events.push(Event::new(now, kind.clone()));
-    let Some(after) = fold(id, &after_events, None, now) else {
+    let next = Event::new(now, kind.clone());
+    let Some(after) = fold(id, events.iter().chain([&next]), None, now) else {
         return true;
-    };
-    let shown = |view: &FlowView| {
-        (
-            view.state,
-            view.phase,
-            view.blocker.clone(),
-            view.delegate.clone(),
-            view.tasks,
-            view.review,
-            view.merge_request.clone(),
-            view.decisions.clone(),
-            view.timeline.last().map(|entry| entry.text.clone()),
-            view.answer.clone(),
-        )
     };
     shown(&before) != shown(&after)
 }
 
+/// What a flow shows that an event can change.
+fn shown(view: &FlowView) -> impl PartialEq + '_ {
+    (
+        view.state,
+        view.phase,
+        view.blocker.as_deref(),
+        view.delegate.as_deref(),
+        view.tasks,
+        view.review,
+        view.merge_request.as_deref(),
+        &view.decisions,
+        view.timeline.last().map(|entry| entry.text.as_str()),
+        view.answer.as_deref(),
+    )
+}
+
 /// Every log that names its flow, folded at `now`.
-pub fn views(logs: Vec<FlowLog>, now: u64) -> Vec<FlowView> {
-    logs.into_iter()
+pub fn views(logs: &[FlowLog], now: u64) -> Vec<FlowView> {
+    logs.iter()
         .filter_map(|log| fold(&log.id, &log.events, log.beat, now))
         .collect()
 }
 
 /// Sorted: needs you, ready (idle), running, finished; newest change first within each group.
 pub fn board(mut flows: Vec<FlowView>, now: u64) -> Board {
-    flows.sort_by_key(|flow| (group(flow), std::cmp::Reverse(flow.changed_at)));
+    flows.sort_by_key(|flow| (flow.group(), std::cmp::Reverse(flow.changed_at)));
     Board {
         version: VIEW_VERSION,
         now,
@@ -99,22 +103,11 @@ pub fn resolve<'a>(flows: &'a [FlowView], name_or_id: &str) -> Option<&'a FlowVi
         .or_else(|| named().max_by_key(|flow| flow.changed_at))
 }
 
-fn group(flow: &FlowView) -> u8 {
-    if flow.needs_you() {
-        0
-    } else if flow.state == State::Idle {
-        1
-    } else if flow.is_finished() {
-        3
-    } else {
-        2
-    }
-}
-
+#[derive(Debug)]
 struct Folding {
     view: FlowView,
-    durations: [Option<u64>; 4],
-    entered: [bool; 4],
+    durations: [Option<u64>; Phase::ALL.len()],
+    entered: [bool; Phase::ALL.len()],
     phase_since: u64,
     stopped_at: Option<u64>,
 }
@@ -143,8 +136,8 @@ impl Folding {
         };
         Folding {
             view,
-            durations: [None; 4],
-            entered: [false; 4],
+            durations: [None; Phase::ALL.len()],
+            entered: [false; Phase::ALL.len()],
             phase_since: at,
             stopped_at: None,
         }
@@ -210,16 +203,17 @@ impl Folding {
                 });
             }
             EventKind::Review { fixed, open } => {
-                self.view.review = Some(ReviewCount {
+                let review = ReviewCount {
                     fixed: *fixed,
                     open: *open,
-                });
+                };
+                self.view.review = Some(review);
                 let tone = if *open > 0 {
                     Tone::Attention
                 } else {
                     Tone::Progress
                 };
-                self.note(at, format!("review: {fixed} fixed, {open} open"), tone);
+                self.note(at, format!("review: {review}"), tone);
             }
             EventKind::MergeRequest { url } => {
                 if self.view.phase != Some(Phase::MergeRequest) {
@@ -270,14 +264,14 @@ impl Folding {
     fn enter(&mut self, phase: Phase, at: u64) {
         self.close_phase(at);
         self.view.phase = Some(phase);
-        self.entered[index(phase)] = true;
+        self.entered[phase.index()] = true;
         self.phase_since = at;
     }
 
     fn close_phase(&mut self, until: u64) {
         if let Some(current) = self.view.phase {
             let spent = until.saturating_sub(self.phase_since);
-            let total = &mut self.durations[index(current)];
+            let total = &mut self.durations[current.index()];
             *total = Some(total.unwrap_or(0) + spent);
         }
     }
@@ -297,7 +291,7 @@ impl Folding {
 
     fn finish(mut self, now: u64) -> FlowView {
         self.close_phase(self.stopped_at.unwrap_or(now));
-        let current = self.view.phase.map(index);
+        let current = self.view.phase.map(Phase::index);
         let is_done = self.view.state == State::Done;
         self.view.steps = Phase::ALL
             .iter()
@@ -323,13 +317,6 @@ impl Folding {
             .collect();
         self.view
     }
-}
-
-fn index(phase: Phase) -> usize {
-    Phase::ALL
-        .iter()
-        .position(|candidate| *candidate == phase)
-        .expect("every phase is in ALL")
 }
 
 fn entry(at: u64, text: String, tone: Tone) -> TimelineEntry {

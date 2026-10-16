@@ -1,10 +1,12 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
-use crate::event::{Mode, Phase};
+use crate::event::{EventKind, Mode, Phase};
 
 pub const VIEW_VERSION: u32 = 1;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Board {
     pub version: u32,
@@ -14,7 +16,7 @@ pub struct Board {
     pub flows: Vec<FlowView>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlowView {
     pub id: String,
@@ -40,7 +42,7 @@ pub struct FlowView {
 
 /// Where a started flow's worker runs: its worktree, branch, port slot, window (flow-ui once
 /// flow ui opened it; a tmux window id from before) and agent.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
     pub path: String,
@@ -64,7 +66,23 @@ pub enum State {
     Ended,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+impl State {
+    /// The name the JSON and TOON output use: working, not-responding, ...
+    pub fn name(self) -> &'static str {
+        match self {
+            State::Working => "working",
+            State::Delegated => "delegated",
+            State::Waiting => "waiting",
+            State::Idle => "idle",
+            State::Blocked => "blocked",
+            State::NotResponding => "not-responding",
+            State::Done => "done",
+            State::Ended => "ended",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Step {
     pub phase: Phase,
@@ -80,6 +98,17 @@ pub enum StepStatus {
     Open,
 }
 
+impl StepStatus {
+    /// The name the JSON and TOON output use.
+    pub fn name(self) -> &'static str {
+        match self {
+            StepStatus::Done => "done",
+            StepStatus::Current => "current",
+            StepStatus::Open => "open",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Tasks {
     pub done: u32,
@@ -92,7 +121,34 @@ pub struct ReviewCount {
     pub open: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// What `flow start` and `flow server` append when a flow gets or reopens its workspace.
+impl From<Workspace> for EventKind {
+    fn from(space: Workspace) -> EventKind {
+        EventKind::Workspace {
+            path: space.path,
+            branch: space.branch,
+            slot: space.slot,
+            window: space.window,
+            agent: space.agent,
+        }
+    }
+}
+
+/// 4/9
+impl fmt::Display for Tasks {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}/{}", self.done, self.total)
+    }
+}
+
+/// 2 fixed, 1 open
+impl fmt::Display for ReviewCount {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} fixed, {} open", self.fixed, self.open)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimelineEntry {
     pub at: u64,
     pub text: String,
@@ -117,7 +173,7 @@ impl Board {
 }
 
 /// What `flow status --all --json` prints: a board per project.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Projects {
     pub version: u32,
@@ -126,7 +182,7 @@ pub struct Projects {
 }
 
 /// One registered store: its project name, its folder and its flows.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
     pub name: String,
@@ -153,11 +209,64 @@ impl FlowView {
     pub fn is_finished(&self) -> bool {
         matches!(self.state, State::Done | State::Ended)
     }
+
+    pub fn group(&self) -> Group {
+        if self.needs_you() {
+            Group::NeedsYou
+        } else if self.state == State::Idle {
+            Group::Ready
+        } else if self.is_finished() {
+            Group::Done
+        } else {
+            Group::Running
+        }
+    }
+}
+
+/// What a flow needs, in the order the board and the sidebar list flows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Group {
+    NeedsYou,
+    Ready,
+    Running,
+    Done,
+}
+
+impl Group {
+    /// The sidebar's heading for the group.
+    pub fn label(self) -> &'static str {
+        match self {
+            Group::NeedsYou => "NEEDS YOU",
+            Group::Ready => "READY",
+            Group::Running => "RUNNING",
+            Group::Done => "DONE",
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_states_and_steps_as_the_json_does() {
+        let states = [
+            State::Working,
+            State::Delegated,
+            State::Waiting,
+            State::Idle,
+            State::Blocked,
+            State::NotResponding,
+            State::Done,
+            State::Ended,
+        ];
+        for state in states {
+            assert_eq!(serde_json::to_value(state).unwrap(), state.name());
+        }
+        for status in [StepStatus::Done, StepStatus::Current, StepStatus::Open] {
+            assert_eq!(serde_json::to_value(status).unwrap(), status.name());
+        }
+    }
 
     fn flow(state: State) -> FlowView {
         FlowView {

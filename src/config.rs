@@ -6,13 +6,14 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
+use crate::adapter::Adapter;
 use crate::event::Phase;
 
 /// Skill name -> the phase it starts, for adapters that see skills start.
 pub type PhaseMap = BTreeMap<String, Phase>;
 
 /// How to launch one agent: its command line, the first prompt it gets, and how to resume it.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Agent {
     pub command: Vec<String>,
     pub prompt: String,
@@ -22,28 +23,35 @@ pub struct Agent {
     /// The harness flow observes it through ("claude-code"); without one, flow ui shows only
     /// whether its process runs.
     #[serde(default)]
-    pub adapter: Option<String>,
+    pub adapter: Option<Adapter>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(default)]
 pub struct Config {
-    #[serde(default = "default_agent_name")]
     pub agent: String,
-    #[serde(default)]
     pub agents: BTreeMap<String, Agent>,
     /// Skill name -> phase: the built-in map with the file's entries over it.
-    #[serde(default)]
     pub phases: PhaseMap,
-    #[serde(default)]
     pub master: MasterConfig,
 }
 
+impl Default for Config {
+    fn default() -> Config {
+        Config {
+            agent: "claude".to_string(),
+            agents: BTreeMap::new(),
+            phases: PhaseMap::new(),
+            master: MasterConfig::default(),
+        }
+    }
+}
+
 /// [master]: how the master works with its workers.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct MasterConfig {
     /// flow wakes the master when a worker stops (wake = false: it learns only from flow status).
-    #[serde(default = "yes")]
     pub wake: bool,
 }
 
@@ -51,10 +59,6 @@ impl Default for MasterConfig {
     fn default() -> MasterConfig {
         MasterConfig { wake: true }
     }
-}
-
-fn yes() -> bool {
-    true
 }
 
 impl Config {
@@ -66,24 +70,36 @@ impl Config {
         home: Option<PathBuf>,
     ) -> Result<Config> {
         let mut config = match config_file(flow_config, xdg_config, home) {
-            None => Config::empty(),
+            None => Config::default(),
             Some(file) => match fs::read_to_string(&file) {
                 Ok(text) => toml::from_str::<Config>(&text)
-                    .with_context(|| format!("could not read {}", file.display()))?,
-                Err(error) if error.kind() == ErrorKind::NotFound => Config::empty(),
+                    .with_context(|| format!("{} is not valid", file.display()))?,
+                Err(error) if error.kind() == ErrorKind::NotFound => Config::default(),
                 Err(error) => {
                     return Err(error)
                         .with_context(|| format!("could not read {}", file.display()));
                 }
             },
         };
-        let mut agents = builtin_agents();
-        agents.append(&mut config.agents);
-        config.agents = agents;
-        let mut phases = builtin_phases();
-        phases.append(&mut config.phases);
-        config.phases = phases;
+        config.add_builtins();
         Ok(config)
+    }
+
+    /// The built-in agents and phases alone, as if there were no config file.
+    pub fn builtin() -> Config {
+        let mut config = Config::default();
+        config.add_builtins();
+        config
+    }
+
+    /// The built-in agents and phases under what the file set.
+    fn add_builtins(&mut self) {
+        let mut agents = builtin_agents();
+        agents.append(&mut self.agents);
+        self.agents = agents;
+        let mut phases = builtin_phases();
+        phases.append(&mut self.phases);
+        self.phases = phases;
     }
 
     /// The named agent, or the default one.
@@ -118,8 +134,9 @@ pub fn builtin_phases() -> PhaseMap {
     ])
 }
 
-/// The adapter the built-in agents report through.
-const CLAUDE_CODE: &str = "claude-code";
+fn strings(parts: &[&str]) -> Vec<String> {
+    parts.iter().copied().map(String::from).collect()
+}
 
 /// The agent flow ui runs as its master when there is one; else the default agent.
 pub const MASTER_AGENT: &str = "master";
@@ -129,18 +146,11 @@ pub const MASTER_AGENT: &str = "master";
 /// instructions appended to its system prompt ({instructions}, the master.md beside config.toml).
 pub fn builtin_agents() -> BTreeMap<String, Agent> {
     let claude = Agent {
-        command: ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
-            .map(String::from)
-            .to_vec(),
+        command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
         prompt: "/ship-feature {request}".to_string(),
-        adapter: Some(CLAUDE_CODE.to_string()),
-        resume: Some(
-            ["claude", "-n", "{name}", "--resume", "{id}"]
-                .map(String::from)
-                .to_vec(),
-        ),
+        adapter: Some(Adapter::ClaudeCode),
+        resume: Some(strings(&["claude", "-n", "{name}", "--resume", "{id}"])),
     };
-    let strings = |parts: &[&str]| parts.iter().map(|part| part.to_string()).collect();
     let master = Agent {
         command: strings(&[
             "claude",
@@ -152,7 +162,7 @@ pub fn builtin_agents() -> BTreeMap<String, Agent> {
             "{instructions}",
         ]),
         prompt: String::new(),
-        adapter: Some(CLAUDE_CODE.to_string()),
+        adapter: Some(Adapter::ClaudeCode),
         resume: Some(strings(&[
             "claude",
             "-n",
@@ -167,21 +177,6 @@ pub fn builtin_agents() -> BTreeMap<String, Agent> {
         ("claude".to_string(), claude),
         (MASTER_AGENT.to_string(), master),
     ])
-}
-
-impl Config {
-    fn empty() -> Config {
-        Config {
-            agent: default_agent_name(),
-            agents: BTreeMap::new(),
-            phases: PhaseMap::new(),
-            master: MasterConfig::default(),
-        }
-    }
-}
-
-fn default_agent_name() -> String {
-    "claude".to_string()
 }
 
 #[cfg(test)]
@@ -240,12 +235,12 @@ mod tests {
         );
         assert_eq!(config.phases["design-code"], Phase::Design);
         assert_eq!(
-            none.agent(None).unwrap().1.adapter.as_deref(),
-            Some("claude-code")
+            none.agent(None).unwrap().1.adapter,
+            Some(Adapter::ClaudeCode)
         );
         assert_eq!(
-            none.agent(Some(MASTER_AGENT)).unwrap().1.adapter.as_deref(),
-            Some("claude-code")
+            none.agent(Some(MASTER_AGENT)).unwrap().1.adapter,
+            Some(Adapter::ClaudeCode)
         );
     }
 
@@ -326,6 +321,25 @@ prompt = "/design-code {request}"
             format!("{error:#}").contains(&file.display().to_string()),
             "{error:#}"
         );
+    }
+
+    #[test]
+    fn refuses_an_adapter_flow_does_not_know() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        fs::write(
+            &file,
+            "[agents.aider]\ncommand = [\"aider\"]\nprompt = \"{request}\"\nadapter = \"claud-code\"\n",
+        )
+        .unwrap();
+
+        let error = format!(
+            "{:#}",
+            Config::load(Some(file.clone()), None, None).unwrap_err()
+        );
+
+        assert!(error.contains(&file.display().to_string()), "{error}");
+        assert!(error.contains("claud-code"), "{error}");
     }
 
     #[test]

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -6,7 +8,7 @@ use ratatui::widgets::{Block, BorderType, Widget};
 
 use crate::event::Mode;
 use crate::event::Phase;
-use crate::output::short_duration;
+use crate::output::{plural, short_duration};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::ui::sidebar::{self, Sidebar, clip, clip_place, split, wrap};
 use crate::ui::theme::Theme;
@@ -14,7 +16,6 @@ use crate::view::{Board, FlowView, Project, Projects, State, StepStatus, Tone};
 
 /// Cards per row.
 const COLUMNS: usize = 3;
-/// The longest task bar on a card.
 /// A card's rows: its four lines inside a border.
 const CARD_ROWS: u16 = 6;
 /// Rows every project's cards leave for the selected flow's detail.
@@ -31,14 +32,10 @@ pub struct BoardState {
 impl BoardState {
     /// h j k l and the arrows move over the grid; a digit picks a card.
     pub fn moved(self, step: isize, cards: usize) -> BoardState {
-        let next = self.selected as isize + step;
-        if next < 0 || next as usize >= cards {
-            return self;
-        }
-        BoardState {
-            selected: next as usize,
-            ..self
-        }
+        self.selected
+            .checked_add_signed(step)
+            .filter(|&next| next < cards)
+            .map_or(self, |selected| BoardState { selected, ..self })
     }
 
     pub fn step(key: char) -> Option<isize> {
@@ -53,6 +50,7 @@ impl BoardState {
 }
 
 /// Every session as a card, and the timeline, decisions and steps of the selected one.
+#[derive(Debug)]
 pub struct BoardView<'a> {
     pub sidebar: Sidebar<'a>,
     pub state: BoardState,
@@ -209,20 +207,25 @@ impl BoardView<'_> {
             ]),
             Line::styled(format!("   {place}"), theme.ui.faint),
             Line::styled(
-                format!("   {workers} worker{}", if workers == 1 { "" } else { "s" }),
+                format!("   {workers} worker{}", plural(workers)),
                 theme.ui.faint,
             ),
             Line::styled(format!("   {status}"), theme.state.waiting),
         ]
     }
 
-    fn flow_card(&self, flow: &FlowView, index: usize, width: usize) -> [Line<'static>; 4] {
+    /// `number` is the card's place among the workers, from 1; 1-9 show as the digit that picks it.
+    fn flow_card(
+        &self,
+        flow: &FlowView,
+        number: Option<usize>,
+        width: usize,
+    ) -> [Line<'static>; 4] {
         let theme = self.theme();
-        let tone = theme.state(flow.state);
-        let digit = if index < 9 {
-            (index + 1).to_string()
-        } else {
-            " ".to_string()
+        let tone = theme.state_style(flow.state);
+        let digit = match number {
+            Some(number @ 1..=9) => number.to_string(),
+            _ => " ".to_string(),
         };
 
         let first = Line::from(vec![
@@ -291,27 +294,27 @@ impl BoardView<'_> {
         [first, Line::from(second), third, fourth]
     }
 
-    /// The label at a card's top right: a solid pill when the flow needs you, a soft one otherwise.
-    /// The card's state in words, in its color: no fill, as Claude Code says a state in colored text.
-    fn pill(&self, flow: Option<&FlowView>) -> Span<'static> {
+    /// The label at a card's top right: its state in words, in the state's color, with no fill, as
+    /// Claude Code says a state in colored text.
+    fn state_label(&self, flow: Option<&FlowView>) -> Span<'static> {
         let theme = self.theme();
         let Some(flow) = flow else {
             return Span::styled("you", theme.ui.accent);
         };
-        let text = match flow.state {
-            State::Blocked => "blocked".to_string(),
-            State::NotResponding => "not responding".to_string(),
-            State::Waiting => "waiting for you".to_string(),
-            State::Working => "working".to_string(),
-            State::Idle => "ready".to_string(),
-            State::Delegated => format!("{} · agent", flow.phase.map_or("working", gerund)),
-            State::Done if flow.merge_request.is_some() => "MR open".to_string(),
-            State::Done => "done".to_string(),
-            State::Ended => "ended".to_string(),
+        let text: Cow<'static, str> = match flow.state {
+            State::Blocked => "blocked".into(),
+            State::NotResponding => "not responding".into(),
+            State::Waiting => "waiting for you".into(),
+            State::Working => "working".into(),
+            State::Idle => "ready".into(),
+            State::Delegated => format!("{} · agent", flow.phase.map_or("working", gerund)).into(),
+            State::Done if flow.merge_request.is_some() => "MR open".into(),
+            State::Done => "done".into(),
+            State::Ended => "ended".into(),
         };
         let style = match flow.state {
             State::Idle => theme.ui.muted,
-            state => theme.state(state),
+            state => theme.state_style(state),
         };
         Span::styled(text, style)
     }
@@ -326,35 +329,26 @@ impl BoardView<'_> {
 
     fn render_cards(&self, area: Rect, buf: &mut Buffer) -> u16 {
         let flows = sidebar::workers(self.board());
-        let gap = 2;
-        let inner = area.width.saturating_sub(2);
-        let card_width = inner.saturating_sub(gap * (COLUMNS as u16 - 1)) / COLUMNS as u16;
         let mut bottom = area.y;
         for index in 0..=flows.len() {
-            let column = (index % COLUMNS) as u16;
             let row = (index / COLUMNS) as u16;
             let y = area.y + row * (CARD_ROWS + 1);
             if y + CARD_ROWS > area.y + area.height {
                 break;
             }
-            let rect = Rect::new(
-                area.x + 1 + column * (card_width + gap),
-                y,
-                card_width,
-                CARD_ROWS,
-            );
+            let rect = card_rect(area, index % COLUMNS, y);
             let flow = index.checked_sub(1).map(|at| flows[at]);
-            self.render_card(flow, index, index == self.state.selected, rect, buf);
+            self.render_card(flow, Some(index), index == self.state.selected, rect, buf);
             bottom = y + CARD_ROWS;
         }
         bottom
     }
 
-    /// One card: the master's when `flow` is None; `index` picks its digit (1-9 for a worker).
+    /// One card: the master's when `flow` is None; `number` picks a worker's digit.
     fn render_card(
         &self,
         flow: Option<&FlowView>,
-        index: usize,
+        number: Option<usize>,
         selected: bool,
         rect: Rect,
         buf: &mut Buffer,
@@ -371,14 +365,15 @@ impl BoardView<'_> {
         let width = body.width as usize;
         let lines = match flow {
             None => self.master_card(width),
-            Some(flow) => self.flow_card(flow, index.wrapping_sub(1), width),
+            Some(flow) => self.flow_card(flow, number, width),
         };
-        for (offset, line) in lines.iter().enumerate() {
-            buf.set_line(body.x, body.y + offset as u16, line, body.width);
+        for (line, row) in lines.iter().zip(body.rows()) {
+            buf.set_line(row.x, row.y, line, row.width);
         }
-        let pill = self.pill(flow);
-        let pill_x = (body.x + body.width).saturating_sub(pill.width() as u16 + 1);
-        buf.set_span(pill_x, body.y, &pill, pill.width() as u16);
+        let label = self.state_label(flow);
+        let width = u16::try_from(label.width()).unwrap_or(u16::MAX);
+        let x = (body.x + body.width).saturating_sub(width.saturating_add(1));
+        buf.set_span(x, body.y, &label, width);
     }
 
     /// Every project's row and cards, scrolled so the selected card shows; returns the last row used.
@@ -390,15 +385,7 @@ impl BoardView<'_> {
             buf.set_line(area.x, area.y, &line, area.width);
             return area.y + 1;
         }
-        let gap = 2;
-        let inner = area.width.saturating_sub(2);
-        let card_width = inner.saturating_sub(gap * (COLUMNS as u16 - 1)) / COLUMNS as u16;
-
         // Rows from the top of the first project: each project's line, then its rows of cards.
-        enum Item<'p> {
-            Project(&'p Project),
-            Card(&'p FlowView, usize, u16),
-        }
         let mut items = Vec::new();
         let mut y: u16 = 0;
         let mut number = 0;
@@ -407,8 +394,12 @@ impl BoardView<'_> {
             y += 1;
             for (at, flow) in project.board.flows.iter().enumerate() {
                 let row = (at / COLUMNS) as u16;
-                let column = (at % COLUMNS) as u16;
-                items.push((y + row * (CARD_ROWS + 1), Item::Card(flow, number, column)));
+                let card = Item::Card {
+                    flow,
+                    number,
+                    column: at % COLUMNS,
+                };
+                items.push((y + row * (CARD_ROWS + 1), card));
                 number += 1;
             }
             let rows = project.board.flows.len().div_ceil(COLUMNS) as u16;
@@ -424,7 +415,9 @@ impl BoardView<'_> {
         let selected_bottom = items
             .iter()
             .find_map(|(top, item)| match item {
-                Item::Card(_, number, _) if *number == self.state.selected => Some(top + CARD_ROWS),
+                Item::Card { number, .. } if *number == self.state.selected => {
+                    Some(top + CARD_ROWS)
+                }
                 _ => None,
             })
             .unwrap_or(0);
@@ -433,7 +426,7 @@ impl BoardView<'_> {
         for (top, item) in &items {
             let height = match item {
                 Item::Project(_) => 1,
-                Item::Card(..) => CARD_ROWS,
+                Item::Card { .. } => CARD_ROWS,
             };
             if *top < scroll || top + height > scroll + room {
                 continue;
@@ -443,14 +436,13 @@ impl BoardView<'_> {
                 Item::Project(project) => {
                     buf.set_line(area.x, y, &self.project_line(project, width), area.width);
                 }
-                Item::Card(flow, number, column) => {
-                    let rect = Rect::new(
-                        area.x + 1 + column * (card_width + gap),
-                        y,
-                        card_width,
-                        CARD_ROWS,
-                    );
-                    self.render_card(Some(flow), 0, *number == self.state.selected, rect, buf);
+                Item::Card {
+                    flow,
+                    number,
+                    column,
+                } => {
+                    let rect = card_rect(area, *column, y);
+                    self.render_card(Some(flow), None, *number == self.state.selected, rect, buf);
                 }
             }
         }
@@ -490,7 +482,7 @@ impl BoardView<'_> {
         };
         let mut facts: Vec<String> = project.into_iter().cloned().collect();
         facts.push(flow.request.clone());
-        facts.push(name_of_mode(flow.mode).to_string());
+        facts.push(flow.mode.name().to_string());
         if let Some(space) = &flow.workspace {
             facts.push(space.branch.clone());
             facts.push(format!("slot {}", space.slot));
@@ -546,10 +538,7 @@ impl BoardView<'_> {
         let flows = sidebar::workers(self.board());
         let count = flows.len();
         let place = clip_place(self.sidebar.master.unwrap_or(""), width.saturating_sub(24));
-        let mut facts = vec![format!(
-            "{count} worker{}",
-            if count == 1 { "" } else { "s" }
-        )];
+        let mut facts = vec![format!("{count} worker{}", plural(count))];
         if !place.is_empty() {
             facts.insert(0, place);
         }
@@ -581,7 +570,7 @@ impl BoardView<'_> {
             );
             Line::from(vec![
                 Span::styled("  ", theme.ui.text),
-                Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
+                Span::styled(sidebar.glyph(flow.state), theme.state_style(flow.state)),
                 Span::styled(format!(" {:name_width$}  ", flow.name), theme.ui.strong),
                 Span::styled(
                     clip(&text, width.saturating_sub(lead.chars().count() + 1)),
@@ -625,9 +614,8 @@ impl BoardView<'_> {
         if lines.is_empty() {
             lines.push(Line::styled("  nothing needs you", theme.ui.faint));
         }
-        let rows = area.height.saturating_sub(2) as usize;
-        for (offset, line) in lines.iter().take(rows).enumerate() {
-            buf.set_line(area.x, area.y + 2 + offset as u16, line, area.width);
+        for (line, row) in lines.iter().zip(area.rows().skip(2)) {
+            buf.set_line(row.x, row.y, line, row.width);
         }
     }
 
@@ -636,13 +624,7 @@ impl BoardView<'_> {
         let mut lines = Vec::new();
         let text_width = (area.width as usize).saturating_sub(10);
         for entry in &flow.timeline {
-            let tone = match entry.tone {
-                Tone::Neutral => theme.ui.muted,
-                Tone::Progress => theme.state.working,
-                Tone::Attention => theme.state.waiting,
-                Tone::Problem => theme.state.blocked,
-                Tone::Success => theme.state.done,
-            };
+            let tone = theme.tone_style(entry.tone);
             let text_style = if entry.tone == Tone::Problem {
                 tone
             } else {
@@ -672,8 +654,8 @@ impl BoardView<'_> {
             &Line::styled("timeline", theme.ui.faint),
             area.width,
         );
-        for (offset, line) in lines.iter().enumerate() {
-            buf.set_line(area.x, area.y + 1 + offset as u16, line, area.width);
+        for (line, row) in lines.iter().zip(area.rows().skip(1)) {
+            buf.set_line(row.x, row.y, line, row.width);
         }
     }
 
@@ -697,7 +679,7 @@ impl BoardView<'_> {
         for step in &flow.steps {
             let (glyph, style) = match step.status {
                 StepStatus::Done => (glyphs.done, theme.state.done),
-                StepStatus::Current => (glyphs.step_current, theme.state(flow.state)),
+                StepStatus::Current => (glyphs.step_current, theme.state_style(flow.state)),
                 StepStatus::Open => (glyphs.step_open, theme.ui.faint),
             };
             if !steps.is_empty() {
@@ -718,8 +700,8 @@ impl BoardView<'_> {
             }
         }
         lines.push(Line::from(steps));
-        for (offset, line) in lines.iter().take(area.height as usize).enumerate() {
-            buf.set_line(area.x, area.y + offset as u16, line, area.width);
+        for (line, row) in lines.iter().zip(area.rows()) {
+            buf.set_line(row.x, row.y, line, row.width);
         }
     }
 
@@ -729,41 +711,30 @@ impl BoardView<'_> {
             return Line::styled(format!(" {notice}"), theme.state.waiting);
         }
         let key = |text: &'static str| Span::styled(text, theme.ui.key);
-        let hint = |text: String| Span::styled(text, theme.ui.faint);
-        if self.state.all {
-            return Line::from(vec![
-                Span::raw(" "),
-                key("h j k l"),
-                hint(" move   ".into()),
-                key("enter"),
-                hint(" jump in   ".into()),
-                key("n"),
-                hint(" new flow   ".into()),
-                key("x"),
-                hint(" clear finished flow   ".into()),
-                key("a"),
-                hint(" this project   ".into()),
-                key("esc"),
-                hint(format!(" back to {}", self.back)),
-            ]);
+        let hint = |text: &'static str| Span::styled(text, theme.ui.faint);
+        let mut spans = vec![Span::raw(" ")];
+        if !self.state.all {
+            spans.extend([key("0-9"), hint(" select   ")]);
         }
-        Line::from(vec![
-            Span::raw(" "),
-            key("0-9"),
-            hint(" select   ".into()),
+        spans.extend([
             key("h j k l"),
-            hint(" move   ".into()),
+            hint(" move   "),
             key("enter"),
-            hint(" jump in   ".into()),
+            hint(" jump in   "),
             key("n"),
-            hint(" new flow   ".into()),
+            hint(" new flow   "),
             key("x"),
-            hint(" clear finished flow   ".into()),
+            hint(" clear finished flow   "),
             key("a"),
-            hint(" every project   ".into()),
+            hint(if self.state.all {
+                " this project   "
+            } else {
+                " every project   "
+            }),
             key("esc"),
-            hint(format!(" back to {}", self.back)),
-        ])
+            Span::styled(format!(" back to {}", self.back), theme.ui.faint),
+        ]);
+        Line::from(spans)
     }
 }
 
@@ -804,23 +775,12 @@ impl Widget for BoardView<'_> {
     }
 }
 
-fn plural(count: usize) -> &'static str {
-    if count == 1 { "" } else { "s" }
-}
-
 fn gerund(phase: Phase) -> &'static str {
     match phase {
         Phase::Design => "designing",
         Phase::Implement => "implementing",
         Phase::Review => "reviewing",
         Phase::MergeRequest => "opening the MR",
-    }
-}
-
-fn name_of_mode(mode: Mode) -> &'static str {
-    match mode {
-        Mode::Auto => "auto",
-        Mode::Guided => "guided",
     }
 }
 
@@ -835,24 +795,36 @@ pub fn long_duration(ms: u64) -> String {
     }
 }
 
+/// A row of every project's board: a project's line, or one of its cards.
+#[derive(Debug)]
+enum Item<'p> {
+    Project(&'p Project),
+    Card {
+        flow: &'p FlowView,
+        /// Its place among every project's cards, from 0.
+        number: usize,
+        column: usize,
+    },
+}
+
+/// The card in `column` with its top at `y`: the columns share the width less their gaps.
+fn card_rect(area: Rect, column: usize, y: u16) -> Rect {
+    const GAP: u16 = 2;
+    let columns = COLUMNS as u16;
+    let width = area
+        .width
+        .saturating_sub(2)
+        .saturating_sub(GAP * (columns - 1))
+        / columns;
+    let x = area.x + 1 + column as u16 * (width + GAP);
+    Rect::new(x, y, width, CARD_ROWS)
+}
+
 /// HH:MM of a Unix ms time in a zone `offset_secs` east of UTC.
 pub fn clock(ms: u64, offset_secs: i64) -> String {
     let secs = (ms / 1_000) as i64 + offset_secs;
     let minute_of_day = secs.rem_euclid(86_400) / 60;
     format!("{:02}:{:02}", minute_of_day / 60, minute_of_day % 60)
-}
-
-/// This machine's offset from UTC right now, in seconds.
-pub fn local_offset_secs() -> i64 {
-    // SAFETY: time and localtime_r only write into the tm we pass; a zeroed tm is a valid start.
-    unsafe {
-        let now = libc::time(std::ptr::null_mut());
-        let mut tm: libc::tm = std::mem::zeroed();
-        if libc::localtime_r(&now, &mut tm).is_null() {
-            return 0;
-        }
-        tm.tm_gmtoff
-    }
 }
 
 #[cfg(test)]

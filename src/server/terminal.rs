@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::{Arc, Mutex};
 
 use alacritty_terminal::event::{Event, EventListener};
@@ -28,11 +29,19 @@ pub struct Terminal {
     listener: Listener,
 }
 
+impl fmt::Debug for Terminal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Terminal")
+            .field("listener", &self.listener)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Collects what the emulator wants written back to the program.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone)]
 struct Listener {
     replies: Arc<Mutex<Vec<u8>>>,
-    size: Arc<Mutex<(u16, u16)>>,
+    size: Arc<Mutex<Size>>,
 }
 
 impl EventListener for Listener {
@@ -41,10 +50,10 @@ impl EventListener for Listener {
             Event::PtyWrite(text) => text,
             Event::ColorRequest(index, format) => format(asked_color(index)),
             Event::TextAreaSizeRequest(format) => {
-                let (cols, rows) = *self.size.lock().expect("size lock");
+                let size = *self.size.lock().expect("size lock");
                 format(alacritty_terminal::event::WindowSize {
-                    num_lines: rows,
-                    num_cols: cols,
+                    num_lines: size.rows,
+                    num_cols: size.cols,
                     cell_width: 8,
                     cell_height: 16,
                 })
@@ -58,6 +67,7 @@ impl EventListener for Listener {
     }
 }
 
+#[derive(Debug)]
 struct Dims {
     cols: usize,
     rows: usize,
@@ -79,8 +89,10 @@ impl Dimensions for Dims {
 
 impl Terminal {
     pub fn new(size: Size, history: usize) -> Terminal {
-        let listener = Listener::default();
-        *listener.size.lock().expect("size lock") = (size.cols, size.rows);
+        let listener = Listener {
+            replies: Arc::default(),
+            size: Arc::new(Mutex::new(size)),
+        };
         let config = Config {
             scrolling_history: history,
             kitty_keyboard: false,
@@ -116,7 +128,7 @@ impl Terminal {
     }
 
     pub fn resize(&mut self, size: Size) {
-        *self.listener.size.lock().expect("size lock") = (size.cols, size.rows);
+        *self.listener.size.lock().expect("size lock") = size;
         self.term.resize(dims(size));
     }
 
@@ -135,7 +147,7 @@ impl Terminal {
     pub fn row(&self, row: u16, history: u32) -> Vec<Cell> {
         let grid = self.term.grid();
         let back = history.min(grid.history_size() as u32) as i32;
-        let line = &grid[Line(row as i32 - back)];
+        let line = &grid[Line(i32::from(row) - back)];
         (0..grid.columns())
             .map(|col| {
                 let cell = &line[Column(col)];
@@ -233,12 +245,10 @@ fn flags(cell: CellFlags) -> Flags {
         (CellFlags::WIDE_CHAR, Flags::WIDE),
         (CellFlags::WIDE_CHAR_SPACER, Flags::SPACER),
     ];
-    Flags(
-        pairs
-            .iter()
-            .filter(|(theirs, _)| cell.intersects(*theirs))
-            .fold(0, |bits, (_, ours)| bits | ours),
-    )
+    pairs
+        .iter()
+        .filter(|(theirs, _)| cell.intersects(*theirs))
+        .fold(Flags::default(), |flags, (_, ours)| flags | *ours)
 }
 
 /// What a program asking for a palette color is told: the xterm defaults.

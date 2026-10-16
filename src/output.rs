@@ -1,7 +1,10 @@
+use std::fmt;
+
 use serde::Serialize;
 
-use crate::event::Mode;
-use crate::view::{Board, FlowView, Projects, State};
+use crate::client::Closing;
+use crate::event::{Mode, Phase};
+use crate::view::{Board, FlowView, Projects, State, Workspace};
 
 pub const DESCRIPTION: &str =
     "Tracks parallel feature flows: what each is doing, where it is blocked, how far it got";
@@ -10,7 +13,7 @@ pub const DESCRIPTION: &str =
 pub const LIST_TEXT_LIMIT: usize = 80;
 
 /// What a successful command prints: TOON for agents, JSON for programs, a line for people (flow ui).
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Document {
     Toon(String),
     Json(String),
@@ -20,7 +23,7 @@ pub enum Document {
 }
 
 /// An error an agent can act on: a message and next steps, printed as TOON on stdout.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Failure {
     pub message: String,
     pub help: Vec<String>,
@@ -73,11 +76,6 @@ impl Failure {
         }
     }
 
-    /// Exit code 1: the error chain as the message.
-    pub fn from_io(error: anyhow::Error) -> Failure {
-        Failure::error(format!("{error:#}"), Vec::new())
-    }
-
     /// error: ..., help[n]: ...
     pub fn to_toon(&self) -> String {
         #[derive(Serialize)]
@@ -90,6 +88,19 @@ impl Failure {
             error: &self.message,
             help: &self.help,
         })
+    }
+}
+
+/// Exit code 1: the error chain as the message.
+impl From<anyhow::Error> for Failure {
+    fn from(error: anyhow::Error) -> Failure {
+        Failure::error(format!("{error:#}"), Vec::new())
+    }
+}
+
+impl From<std::io::Error> for Failure {
+    fn from(error: std::io::Error) -> Failure {
+        Failure::from(anyhow::Error::from(error))
     }
 }
 
@@ -106,7 +117,7 @@ pub fn status_list(board: &Board, warnings: &[String], full: bool) -> Document {
 
 const NEW_HELP: &str = "Run `flow new --name <name> --request <text>` to track a new flow";
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct ListDocument<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     bin: Option<&'a str>,
@@ -114,33 +125,33 @@ struct ListDocument<'a> {
     description: Option<&'a str>,
     count: usize,
     needs_you: usize,
-    flows: FlowRows,
+    flows: FlowRows<'a>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    blockers: Vec<BlockerRow>,
+    blockers: Vec<BlockerRow<'a>>,
     #[serde(skip_serializing_if = "<[String]>::is_empty")]
     warnings: &'a [String],
     help: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(untagged)]
-enum FlowRows {
+enum FlowRows<'a> {
     None(&'static str),
-    Rows(Vec<FlowRow>),
+    Rows(Vec<FlowRow<'a>>),
 }
 
-#[derive(Serialize)]
-struct FlowRow {
-    name: String,
-    state: String,
-    phase: String,
+#[derive(Debug, Serialize)]
+struct FlowRow<'a> {
+    name: &'a str,
+    state: &'static str,
+    phase: &'static str,
     tasks: String,
     age: String,
 }
 
-#[derive(Serialize)]
-struct BlockerRow {
-    name: String,
+#[derive(Debug, Serialize)]
+struct BlockerRow<'a> {
+    name: &'a str,
     blocker: String,
 }
 
@@ -153,13 +164,13 @@ fn list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool) -> Do
                 .flows
                 .iter()
                 .map(|flow| FlowRow {
-                    name: flow.name.clone(),
-                    state: name_of(&flow.state),
-                    phase: flow
-                        .phase
-                        .map(|phase| phase.name().to_string())
+                    name: &flow.name,
+                    state: flow.state.name(),
+                    phase: flow.phase.map_or("", Phase::name),
+                    tasks: flow
+                        .tasks
+                        .map(|tasks| tasks.to_string())
                         .unwrap_or_default(),
-                    tasks: tasks_text(flow),
                     age: short_duration(board.now.saturating_sub(flow.changed_at)),
                 })
                 .collect(),
@@ -171,7 +182,7 @@ fn list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool) -> Do
         .filter(|flow| flow.needs_you())
         .filter_map(|flow| {
             flow.blocker.as_ref().map(|blocker| BlockerRow {
-                name: flow.name.clone(),
+                name: &flow.name,
                 blocker: truncated(blocker, LIST_TEXT_LIMIT, full),
             })
         })
@@ -201,32 +212,32 @@ pub fn status_all(projects: &Projects, warnings: &[String], full: bool) -> Docum
     struct AllDocument<'a> {
         count: usize,
         needs_you: usize,
-        flows: AllRows,
+        flows: AllRows<'a>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
-        blockers: Vec<AllBlockerRow>,
+        blockers: Vec<AllBlockerRow<'a>>,
         #[serde(skip_serializing_if = "<[String]>::is_empty")]
         warnings: &'a [String],
         help: Vec<String>,
     }
     #[derive(Serialize)]
     #[serde(untagged)]
-    enum AllRows {
+    enum AllRows<'a> {
         None(&'static str),
-        Rows(Vec<AllRow>),
+        Rows(Vec<AllRow<'a>>),
     }
     #[derive(Serialize)]
-    struct AllRow {
-        project: String,
-        name: String,
-        state: String,
-        phase: String,
+    struct AllRow<'a> {
+        project: &'a str,
+        name: &'a str,
+        state: &'static str,
+        phase: &'static str,
         tasks: String,
         age: String,
     }
     #[derive(Serialize)]
-    struct AllBlockerRow {
-        project: String,
-        name: String,
+    struct AllBlockerRow<'a> {
+        project: &'a str,
+        name: &'a str,
         blocker: String,
     }
 
@@ -243,25 +254,25 @@ pub fn status_all(projects: &Projects, warnings: &[String], full: bool) -> Docum
         .collect();
     let rows = flows
         .iter()
-        .map(|(project, flow)| AllRow {
-            project: project.to_string(),
-            name: flow.name.clone(),
-            state: name_of(&flow.state),
-            phase: flow
-                .phase
-                .map(|phase| phase.name().to_string())
+        .map(|&(project, flow)| AllRow {
+            project,
+            name: &flow.name,
+            state: flow.state.name(),
+            phase: flow.phase.map_or("", Phase::name),
+            tasks: flow
+                .tasks
+                .map(|tasks| tasks.to_string())
                 .unwrap_or_default(),
-            tasks: tasks_text(flow),
             age: short_duration(projects.now.saturating_sub(flow.changed_at)),
         })
         .collect::<Vec<_>>();
     let blockers = flows
         .iter()
         .filter(|(_, flow)| flow.needs_you())
-        .filter_map(|(project, flow)| {
+        .filter_map(|&(project, flow)| {
             flow.blocker.as_ref().map(|blocker| AllBlockerRow {
-                project: project.to_string(),
-                name: flow.name.clone(),
+                project,
+                name: &flow.name,
                 blocker: truncated(blocker, LIST_TEXT_LIMIT, full),
             })
         })
@@ -301,8 +312,8 @@ pub fn status_detail(
         name: String,
         id: String,
         request: String,
-        mode: String,
-        state: String,
+        mode: &'static str,
+        state: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
         phase: Option<&'static str>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -333,7 +344,7 @@ pub fn status_detail(
     #[derive(Serialize)]
     struct StepRow {
         phase: &'static str,
-        status: String,
+        status: &'static str,
         duration: String,
     }
 
@@ -348,15 +359,13 @@ pub fn status_detail(
         name: flow.name.clone(),
         id: flow.id.clone(),
         request: cut(&flow.request),
-        mode: name_of(&flow.mode),
-        state: name_of(&flow.state),
-        phase: flow.phase.map(|phase| phase.name()),
+        mode: flow.mode.name(),
+        state: flow.state.name(),
+        phase: flow.phase.map(Phase::name),
         blocker: flow.blocker.as_deref().map(cut),
         delegate: flow.delegate.as_deref().map(cut),
-        tasks: flow.tasks.map(|_| tasks_text(flow)),
-        review: flow
-            .review
-            .map(|review| format!("{} fixed, {} open", review.fixed, review.open)),
+        tasks: flow.tasks.map(|tasks| tasks.to_string()),
+        review: flow.review.map(|review| review.to_string()),
         merge_request: flow.merge_request.clone(),
         branch: flow.workspace.as_ref().map(|space| space.branch.clone()),
         worktree: flow.workspace.as_ref().map(|space| space.path.clone()),
@@ -366,7 +375,7 @@ pub fn status_detail(
             .iter()
             .map(|step| StepRow {
                 phase: step.phase.name(),
-                status: name_of(&step.status),
+                status: step.status.name(),
                 duration: step.duration_ms.map(short_duration).unwrap_or_default(),
             })
             .collect(),
@@ -418,20 +427,6 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>) -> Vec<String> {
     help
 }
 
-fn tasks_text(flow: &FlowView) -> String {
-    flow.tasks
-        .map(|tasks| format!("{}/{}", tasks.done, tasks.total))
-        .unwrap_or_default()
-}
-
-/// The kebab-case name serde gives a unit enum value.
-fn name_of<T: Serialize>(value: &T) -> String {
-    match serde_json::to_value(value) {
-        Ok(serde_json::Value::String(name)) => name,
-        _ => String::new(),
-    }
-}
-
 /// Whether flow ui opens a started worker now or once it runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opening {
@@ -440,7 +435,12 @@ pub enum Opening {
 }
 
 /// flow, id, worktree, branch, slot, setup (ran / none / failed: ...), agent, pane, help.
-pub fn started(flow: &FlowView, setup: &str, opening: Opening) -> Document {
+pub fn started(
+    flow: &FlowView,
+    workspace: &Workspace,
+    setup: &Setup,
+    opening: Opening,
+) -> Document {
     #[derive(Serialize)]
     struct Started<'a> {
         flow: &'a str,
@@ -448,15 +448,11 @@ pub fn started(flow: &FlowView, setup: &str, opening: Opening) -> Document {
         worktree: &'a str,
         branch: &'a str,
         slot: u8,
-        setup: &'a str,
+        setup: String,
         agent: &'a str,
         pane: &'a str,
         help: Vec<String>,
     }
-    let workspace = flow
-        .workspace
-        .as_ref()
-        .expect("a started flow has a workspace");
     let (pane, watch) = match opening {
         Opening::Running => (
             "opening",
@@ -473,7 +469,7 @@ pub fn started(flow: &FlowView, setup: &str, opening: Opening) -> Document {
         worktree: &workspace.path,
         branch: &workspace.branch,
         slot: workspace.slot,
-        setup,
+        setup: setup.to_string(),
         agent: &workspace.agent,
         pane,
         help: vec![watch, "Run `flow` for all flows".to_string()],
@@ -511,7 +507,7 @@ pub fn reported(flow: &FlowView) -> Document {
     #[derive(Serialize)]
     struct Reported<'a> {
         flow: &'a str,
-        state: String,
+        state: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
         phase: Option<&'static str>,
         help: Vec<String>,
@@ -527,8 +523,8 @@ pub fn reported(flow: &FlowView) -> Document {
     };
     Document::Toon(toon(&Reported {
         flow: &flow.name,
-        state: name_of(&flow.state),
-        phase: flow.phase.map(|phase| phase.name()),
+        state: flow.state.name(),
+        phase: flow.phase.map(Phase::name),
         help: vec![next],
     }))
 }
@@ -538,12 +534,12 @@ pub fn sent(flow: &FlowView) -> Document {
     #[derive(Serialize)]
     struct Sent<'a> {
         sent: &'a str,
-        state: String,
+        state: &'static str,
         help: [String; 2],
     }
     Document::Toon(toon(&Sent {
         sent: &flow.name,
-        state: name_of(&flow.state),
+        state: flow.state.name(),
         help: [
             "flow wakes its worker with it now, or once its session runs again".to_string(),
             format!("flow wakes you when {} changes again", flow.name),
@@ -569,8 +565,8 @@ pub fn news_for_master(flows: &[&FlowView]) -> String {
     #[derive(Serialize)]
     struct Changed {
         name: String,
-        state: String,
-        mode: String,
+        state: &'static str,
+        mode: &'static str,
         says: String,
     }
     #[derive(Serialize)]
@@ -588,19 +584,19 @@ pub fn news_for_master(flows: &[&FlowView]) -> String {
     }
     help.push("`flow status <name> --full` shows its whole last answer");
     let says = |flow: &FlowView| {
-        let text = flow.blocker.clone().unwrap_or_else(|| {
+        let text = flow.blocker.as_deref().unwrap_or_else(|| {
             let last = flow.timeline.last().map_or("", |entry| entry.text.as_str());
-            last.strip_prefix("idle: ").unwrap_or(last).to_string()
+            last.strip_prefix("idle: ").unwrap_or(last)
         });
-        truncated(&text, LIST_TEXT_LIMIT, false)
+        truncated(text, LIST_TEXT_LIMIT, false)
     };
     toon(&News {
         changed: flows
             .iter()
             .map(|flow| Changed {
                 name: flow.name.clone(),
-                state: name_of(&flow.state),
-                mode: name_of(&flow.mode),
+                state: flow.state.name(),
+                mode: flow.mode.name(),
                 says: says(flow),
             })
             .collect(),
@@ -621,25 +617,88 @@ pub fn skipped() -> Document {
     }))
 }
 
-/// removed: name, window (closed / gone / none), worktree (removed / kept: path / none), help.
-/// removed, pane (closed / none / timed out), worktree, help.
 /// How `flow remove` says a branch has work no other branch has; flow ui asks before deleting it.
 pub const UNMERGED: &str = "on no other branch";
 /// How `flow remove` says a worktree has uncommitted work; flow ui asks before discarding it.
 pub const UNCOMMITTED: &str = "has uncommitted work";
 
-/// removed, pane, worktree, branch (deleted, kept or none), help.
-pub fn removed(name: &str, pane: &str, worktree: &str, branch: &str) -> Document {
+/// What `flow start` did with the repo's .flow/setup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Setup {
+    Ran,
+    None,
+    Failed(String),
+}
+
+/// ran, none, failed: why
+impl fmt::Display for Setup {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Setup::Ran => f.write_str("ran"),
+            Setup::None => f.write_str("none"),
+            Setup::Failed(reason) => write!(f, "failed: {reason}"),
+        }
+    }
+}
+
+/// What became of a flow's worktree when it was cleared or removed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Retired {
+    NoWorktree,
+    Removed,
+    /// Kept for its uncommitted work, at this path.
+    Kept(String),
+}
+
+/// none, removed, kept: path
+impl fmt::Display for Retired {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Retired::NoWorktree => f.write_str("none"),
+            Retired::Removed => f.write_str("removed"),
+            Retired::Kept(path) => write!(f, "kept: {path}"),
+        }
+    }
+}
+
+/// What became of a flow's branch once its worktree was gone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BranchFate {
+    NoBranch,
+    Deleted,
+    Kept,
+}
+
+impl BranchFate {
+    pub fn name(self) -> &'static str {
+        match self {
+            BranchFate::NoBranch => "none",
+            BranchFate::Deleted => "deleted",
+            BranchFate::Kept => "kept",
+        }
+    }
+}
+
+fn pane_name(closing: Closing) -> &'static str {
+    match closing {
+        Closing::Closed => "closed",
+        Closing::NoServer | Closing::NoPane => "none",
+        Closing::TimedOut => "timed out",
+    }
+}
+
+/// removed, pane (closed, none or timed out), worktree, branch (deleted, kept or none), help.
+pub fn removed(name: &str, pane: Closing, worktree: &Retired, branch: BranchFate) -> Document {
     #[derive(Serialize)]
     struct Removed<'a> {
         removed: &'a str,
         pane: &'a str,
-        worktree: &'a str,
+        worktree: String,
         branch: &'a str,
         help: Vec<String>,
     }
     let mut help = Vec::new();
-    if let Some(path) = worktree.strip_prefix("kept: ") {
+    if let Retired::Kept(path) = worktree {
         help.push(format!(
             "Run `git worktree remove --force {path}` to discard what is left"
         ));
@@ -647,9 +706,9 @@ pub fn removed(name: &str, pane: &str, worktree: &str, branch: &str) -> Document
     help.push("Run `flow` to see what is left".to_string());
     Document::Toon(toon(&Removed {
         removed: name,
-        pane,
-        worktree,
-        branch,
+        pane: pane_name(pane),
+        worktree: worktree.to_string(),
+        branch: branch.name(),
         help,
     }))
 }
@@ -683,6 +742,11 @@ pub fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
             .collect(),
         help,
     }))
+}
+
+/// "s" unless there is exactly one: `format!("{n} flow{}", plural(n))`.
+pub fn plural<N: Copy + PartialEq + From<u8>>(count: N) -> &'static str {
+    if count == N::from(1) { "" } else { "s" }
 }
 
 /// 45s, 12m, 3h, 2d.
@@ -1101,7 +1165,7 @@ mod tests {
     fn names_the_whole_error_chain_for_io_failures() {
         let error = anyhow::anyhow!("Permission denied").context("could not create flow in /x");
 
-        let failure = Failure::from_io(error);
+        let failure = Failure::from(error);
 
         assert_eq!(failure.code, 1);
         assert_eq!(

@@ -5,13 +5,15 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+use crate::event::Mode;
 use crate::output::short_duration;
 use crate::proto::{PaneInfo, PaneKey, PaneStatus};
 use crate::ui::layout::SIDEBAR_WIDTH;
 use crate::ui::peek::PeekLine;
 use crate::ui::theme::Theme;
-use crate::view::{Board, FlowView, State, StepStatus};
+use crate::view::{Board, FlowView, Group, State, StepStatus};
 
 const WIDTH: usize = SIDEBAR_WIDTH as usize;
 /// Rows the key hint takes at the bottom.
@@ -22,6 +24,7 @@ const PEEK_ROWS: usize = 14;
 const PEEK_MIN_ROWS: usize = 4;
 
 /// The right-hand overview: the master, then every worker grouped by what it needs.
+#[derive(Debug)]
 pub struct Sidebar<'a> {
     pub board: &'a Board,
     pub panes: &'a [PaneInfo],
@@ -38,11 +41,12 @@ pub struct Sidebar<'a> {
     pub theme: &'a Theme,
 }
 
-/// One row of the sidebar and the pane a click on it focuses.
-struct Row {
-    line: Line<'static>,
-    key: Option<PaneKey>,
-    selected: bool,
+/// One row of the sidebar or the rail and the pane a click on it focuses.
+#[derive(Debug)]
+pub(super) struct Row {
+    pub line: Line<'static>,
+    pub key: Option<PaneKey>,
+    pub selected: bool,
 }
 
 /// The flows that get a pane, in sidebar order (needs you, ready, running, done); digit n focuses the nth.
@@ -61,6 +65,27 @@ impl Sidebar<'_> {
     }
 
     fn rows(&self, height: u16) -> Vec<Row> {
+        let room = usize::from(height.saturating_sub(FOOTER_ROWS));
+        let mut rows = self.master_rows();
+        let listed = workers(self.board);
+        let mut flows = self.flow_blocks(&listed);
+        let used = rows.len() + flows.iter().map(Vec::len).sum::<usize>();
+        let budget = room.saturating_sub(used).min(PEEK_ROWS);
+        let peeked = self
+            .cursor
+            .and_then(|id| listed.iter().position(|flow| flow.id == id));
+        if let Some(index) = peeked
+            && budget >= PEEK_MIN_ROWS
+        {
+            self.insert_peek(&mut flows[index], listed[index], budget);
+        }
+        self.fit(&mut rows, flows, room);
+        rows.extend(self.footer());
+        rows
+    }
+
+    /// The header, its rule, the master and where it runs.
+    fn master_rows(&self) -> Vec<Row> {
         let theme = self.theme;
         let width = WIDTH;
         let mut rows = vec![
@@ -76,30 +101,21 @@ impl Sidebar<'_> {
             plain(Line::styled("─".repeat(width), theme.ui.rule)),
         ];
         let master = *self.focus == PaneKey::Master;
+        let (cursor, digit, name) = if master {
+            (
+                Span::styled(theme.glyphs.cursor, theme.ui.accent),
+                theme.ui.strong,
+                theme.ui.strong,
+            )
+        } else {
+            (Span::raw(" "), theme.ui.faint, theme.ui.text)
+        };
         rows.push(Row {
             line: split(
                 vec![
-                    if master {
-                        Span::styled(theme.glyphs.cursor, theme.ui.accent)
-                    } else {
-                        Span::raw(" ")
-                    },
-                    Span::styled(
-                        "0   ",
-                        if master {
-                            theme.ui.strong
-                        } else {
-                            theme.ui.faint
-                        },
-                    ),
-                    Span::styled(
-                        "master",
-                        if master {
-                            theme.ui.strong
-                        } else {
-                            theme.ui.text
-                        },
-                    ),
+                    cursor,
+                    Span::styled("0   ", digit),
+                    Span::styled("master", name),
                 ],
                 vec![],
                 width,
@@ -118,26 +134,30 @@ impl Sidebar<'_> {
             });
         }
         rows.push(plain(Line::raw("")));
+        rows
+    }
 
-        let listed = workers(self.board);
-        let mut group = "";
+    /// One block of rows per worker, each group's first led by its heading and count.
+    fn flow_blocks(&self, listed: &[&FlowView]) -> Vec<Vec<Row>> {
+        let theme = self.theme;
+        let mut group = None;
         let mut flows = Vec::new();
         for (index, flow) in listed.iter().copied().enumerate() {
-            let heading = group_of(flow);
+            let heading = flow.group();
             let mut block = Vec::new();
-            if heading != group {
-                group = heading;
+            if group != Some(heading) {
+                group = Some(heading);
                 let count = listed
                     .iter()
-                    .filter(|other| group_of(other) == heading)
+                    .filter(|other| other.group() == heading)
                     .count();
-                let tone = if heading == "NEEDS YOU" {
+                let tone = if heading == Group::NeedsYou {
                     theme.state.waiting
                 } else {
                     theme.ui.faint
                 };
                 block.push(plain(Line::from(vec![
-                    Span::styled(format!(" {heading} "), theme.ui.faint),
+                    Span::styled(format!(" {} ", heading.label()), theme.ui.faint),
                     Span::styled(count.to_string(), tone),
                 ])));
             }
@@ -145,48 +165,39 @@ impl Sidebar<'_> {
             block.push(plain(Line::raw("")));
             flows.push(block);
         }
+        flows
+    }
 
-        let room = height.saturating_sub(FOOTER_ROWS) as usize;
-        let used = rows.len() + flows.iter().map(Vec::len).sum::<usize>();
-        let budget = room.saturating_sub(used).min(PEEK_ROWS);
-        let peeked = self.cursor.and_then(|id| {
-            workers(self.board)
-                .into_iter()
-                .position(|flow| flow.id == id)
-        });
-        if let Some(index) = peeked
-            && budget >= PEEK_MIN_ROWS
-        {
-            let flow = workers(self.board)[index];
-            let block = &mut flows[index];
-            let blank = block.pop();
-            if self.note(flow, self.status(flow)).is_some() {
-                block.pop();
-            }
-            block.extend(self.peek_rows(flow, budget));
-            block.extend(blank);
+    /// The peek in place of the flow's note, before its blank row.
+    fn insert_peek(&self, block: &mut Vec<Row>, flow: &FlowView, budget: usize) {
+        let blank = block.pop();
+        if self.note(flow, self.status(flow)).is_some() {
+            block.pop();
         }
-        let mut shown = 0;
-        for block in &flows {
-            if rows.len() + block.len() > room {
-                break;
-            }
-            shown += 1;
-        }
+        block.extend(self.peek_rows(flow, budget));
+        block.extend(blank);
+    }
+
+    /// As many whole flow blocks as fit in `room` rows, "N more" for the rest, padded to `room`.
+    fn fit(&self, rows: &mut Vec<Row>, flows: Vec<Vec<Row>>, room: usize) {
+        let mut used = rows.len();
+        let shown = flows
+            .iter()
+            .take_while(|block| {
+                used += block.len();
+                used <= room
+            })
+            .count();
         let hidden = flows.len() - shown;
-        for block in flows.into_iter().take(shown) {
-            rows.extend(block);
-        }
+        rows.extend(flows.into_iter().take(shown).flatten());
         if hidden > 0 && rows.len() < room {
             rows.push(plain(Line::styled(
-                format!(" {} {hidden} more", theme.glyphs.more),
-                theme.ui.faint,
+                format!(" {} {hidden} more", self.theme.glyphs.more),
+                self.theme.ui.faint,
             )));
         }
         rows.truncate(room);
         rows.resize_with(room, || plain(Line::raw("")));
-        rows.extend(self.footer());
-        rows
     }
 
     fn flow_rows(&self, flow: &FlowView, index: usize) -> Vec<Row> {
@@ -195,7 +206,7 @@ impl Sidebar<'_> {
         let key = PaneKey::Flow(flow.id.clone());
         let selected = *self.focus == key || self.cursor == Some(flow.id.as_str());
         let changed = self.changed.contains_key(&flow.id);
-        let tone = theme.state(flow.state);
+        let tone = theme.state_style(flow.state);
         let status = self.status(flow);
         let lead = |rest: &str| -> Vec<Span<'static>> {
             if selected {
@@ -208,12 +219,7 @@ impl Sidebar<'_> {
             }
         };
 
-        let digit = if index < 9 {
-            (index + 1).to_string()
-        } else {
-            " ".to_string()
-        };
-        let mut first = lead(&format!("{digit} "));
+        let mut first = lead(&format!("{} ", digit(index)));
         first.push(Span::styled(self.glyph(flow.state), tone));
         first.push(Span::styled(
             format!(" {}", flow.name),
@@ -239,29 +245,28 @@ impl Sidebar<'_> {
         second.extend(self.steps(flow));
         second.push(Span::raw(" "));
         second.push(self.label(flow));
-        let detail = match flow.tasks {
+        let detail = match flow.tasks.filter(|tasks| tasks.total > 0) {
             // A finished flow says how long it took.
             _ if flow.is_finished() => format!(
                 "in {} ",
                 short_duration(flow.changed_at.saturating_sub(flow.started_at))
             ),
-            Some(tasks) => format!("{}/{} ", tasks.done, tasks.total),
-            None if flow.mode == crate::event::Mode::Guided && !flow.is_finished() => {
-                "guided ".to_string()
-            }
+            Some(tasks) => format!("{tasks} "),
+            None if flow.mode == Mode::Guided => "guided ".to_string(),
             None => String::new(),
         };
 
+        let lit = selected || changed;
         let mut rows = vec![
             Row {
                 line: split(first, vec![right], width),
                 key: Some(key.clone()),
-                selected: selected || changed,
+                selected: lit,
             },
             Row {
                 line: split(second, vec![Span::styled(detail, theme.ui.faint)], width),
                 key: Some(key.clone()),
-                selected: selected || changed,
+                selected: lit,
             },
         ];
         if let Some((text, style)) = self.note(flow, status) {
@@ -276,7 +281,7 @@ impl Sidebar<'_> {
             rows.push(Row {
                 line: Line::from(third),
                 key: Some(key),
-                selected: selected || changed,
+                selected: lit,
             });
         }
         rows
@@ -285,7 +290,7 @@ impl Sidebar<'_> {
     fn status(&self, flow: &FlowView) -> Option<&PaneStatus> {
         self.panes
             .iter()
-            .find(|pane| pane.key == PaneKey::Flow(flow.id.clone()))
+            .find(|pane| matches!(&pane.key, PaneKey::Flow(id) if *id == flow.id))
             .map(|pane| &pane.status)
     }
 
@@ -294,7 +299,7 @@ impl Sidebar<'_> {
     fn peek_rows(&self, flow: &FlowView, budget: usize) -> Vec<Row> {
         let theme = self.theme;
         let glyphs = &theme.glyphs;
-        let tone = theme.state(flow.state);
+        let tone = theme.state_style(flow.state);
         let text_width = WIDTH - 4;
         let mut body: Vec<Vec<Span<'static>>> = Vec::new();
         for line in self.peek {
@@ -325,7 +330,7 @@ impl Sidebar<'_> {
                 }
                 PeekLine::Now(call) => body.push(vec![
                     Span::raw(" "),
-                    Span::styled(glyphs.spinner[self.spin % glyphs.spinner.len()], tone),
+                    Span::styled(self.spinner(), tone),
                     Span::styled(format!(" {}", clip(call, text_width)), theme.ui.muted),
                 ]),
                 PeekLine::Code {
@@ -379,10 +384,15 @@ impl Sidebar<'_> {
         rows
     }
 
+    fn spinner(&self) -> &'static str {
+        let spinner = self.theme.glyphs.spinner;
+        spinner[self.spin % spinner.len()]
+    }
+
     pub fn glyph(&self, state: State) -> &'static str {
         let glyphs = &self.theme.glyphs;
         match state {
-            State::Working | State::Delegated => glyphs.spinner[self.spin % glyphs.spinner.len()],
+            State::Working | State::Delegated => self.spinner(),
             State::Waiting => glyphs.waiting,
             State::Idle => glyphs.idle,
             State::Blocked | State::NotResponding => glyphs.blocked,
@@ -396,7 +406,7 @@ impl Sidebar<'_> {
     pub fn steps(&self, flow: &FlowView) -> Vec<Span<'static>> {
         let theme = self.theme;
         let glyphs = &theme.glyphs;
-        let tone = theme.state(flow.state);
+        let tone = theme.state_style(flow.state);
         let mut spans = Vec::new();
         for (index, step) in flow.steps.iter().enumerate() {
             let (glyph, style) = match step.status {
@@ -421,11 +431,17 @@ impl Sidebar<'_> {
 
     pub fn label(&self, flow: &FlowView) -> Span<'static> {
         let theme = self.theme;
+        match (flow.state, flow.merge_request.as_deref()) {
+            (State::Done | State::Ended, Some(url)) => {
+                Span::styled(merge_request(url), theme.ui.faint)
+            }
+            _ => self.state_label(flow),
+        }
+    }
+
+    fn state_label(&self, flow: &FlowView) -> Span<'static> {
+        let theme = self.theme;
         match flow.state {
-            State::Done | State::Ended if flow.merge_request.is_some() => Span::styled(
-                merge_request(flow.merge_request.as_deref().unwrap_or_default()),
-                theme.ui.faint,
-            ),
             State::Done => Span::styled("done", theme.state.done),
             State::Ended => Span::styled("ended", theme.state.ended),
             State::NotResponding => Span::styled("not responding", theme.state.blocked),
@@ -473,8 +489,7 @@ impl Sidebar<'_> {
 
 impl Widget for Sidebar<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        for (y, row) in self.rows(area.height).into_iter().enumerate() {
-            let line = Rect::new(area.x, area.y + y as u16, area.width, 1);
+        for (row, line) in self.rows(area.height).into_iter().zip(area.rows()) {
             if row.selected {
                 buf.set_style(line, self.theme.ui.selection);
             }
@@ -483,7 +498,16 @@ impl Widget for Sidebar<'_> {
     }
 }
 
-fn plain(line: Line<'static>) -> Row {
+/// The digit that focuses the worker at `index` among them: 1-9, then none.
+pub fn digit(index: usize) -> String {
+    if index < 9 {
+        (index + 1).to_string()
+    } else {
+        " ".to_string()
+    }
+}
+
+pub(super) fn plain(line: Line<'static>) -> Row {
     Row {
         line,
         key: None,
@@ -493,7 +517,7 @@ fn plain(line: Line<'static>) -> Row {
 
 /// `left` and `right` on one line of `width`, the left clipped when both do not fit.
 pub fn split(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: usize) -> Line<'static> {
-    let right_width: usize = right.iter().map(Span::width).sum();
+    let right_width = spans_width(&right);
     let room = width.saturating_sub(right_width);
     let mut spans = Vec::new();
     let mut used = 0;
@@ -502,7 +526,7 @@ pub fn split(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: usize) 
         if span.width() > left_room {
             let style = span.style;
             let cut = clip(&span.content, left_room.saturating_sub(1));
-            used += Span::raw(cut.as_str()).width();
+            used += columns(&cut);
             spans.push(Span::styled(cut, style));
             break;
         }
@@ -525,7 +549,7 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
             } else {
                 format!("{row} {word}")
             };
-            if Span::raw(next.as_str()).width() <= width {
+            if columns(&next) <= width {
                 row = next;
                 continue;
             }
@@ -541,15 +565,40 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
     rows
 }
 
+/// The columns `text` takes on a terminal.
+pub fn columns(text: &str) -> usize {
+    text.width()
+}
+
+/// The columns a run of spans takes.
+pub fn spans_width(spans: &[Span]) -> usize {
+    spans.iter().map(Span::width).sum()
+}
+
+/// The end of `text` that fits in `room` columns.
+pub fn tail(text: &str, room: usize) -> &str {
+    let mut used = 0;
+    let start = text
+        .char_indices()
+        .rev()
+        .take_while(|(_, c)| {
+            used += c.width().unwrap_or(0);
+            used <= room
+        })
+        .last()
+        .map_or(text.len(), |(index, _)| index);
+    &text[start..]
+}
+
 /// The text cut to `width` columns, ending in … when it was longer.
 pub fn clip(text: &str, width: usize) -> String {
-    if Span::raw(text).width() <= width {
+    if columns(text) <= width {
         return text.to_string();
     }
     let mut kept = String::new();
     let mut used = 0;
     for c in text.chars() {
-        let char_width = Span::raw(c.to_string()).width();
+        let char_width = c.width().unwrap_or(0);
         if used + char_width + 1 > width {
             break;
         }
@@ -558,19 +607,6 @@ pub fn clip(text: &str, width: usize) -> String {
     }
     kept.push('…');
     kept
-}
-
-/// The sidebar section a flow is listed under.
-fn group_of(flow: &FlowView) -> &'static str {
-    if flow.needs_you() {
-        "NEEDS YOU"
-    } else if flow.state == State::Idle {
-        "READY"
-    } else if flow.is_finished() {
-        "DONE"
-    } else {
-        "RUNNING"
-    }
 }
 
 /// What a flow last said that its row does not already show: its last timeline entry, without
@@ -592,7 +628,7 @@ pub fn last_note(flow: &FlowView) -> Option<String> {
 /// (/private/…/ui-look/repo · main), then its first folder; the branch goes only when the last
 /// folder alone does not fit beside it.
 pub fn clip_place(place: &str, width: usize) -> String {
-    let fits = |text: &str| Span::raw(text).width() <= width;
+    let fits = |text: &str| columns(text) <= width;
     if fits(place) {
         return place.to_string();
     }
@@ -683,6 +719,114 @@ mod tests {
         assert_eq!(last_note(&answered), None, "not the old question");
     }
 
+    fn working(id: &str) -> FlowView {
+        use crate::event::{Event, EventKind, Mode};
+        let events = vec![
+            Event::new(
+                0,
+                EventKind::Started {
+                    name: id.into(),
+                    request: id.into(),
+                    mode: Mode::Auto,
+                },
+            ),
+            Event::new(
+                0,
+                EventKind::Workspace {
+                    path: format!("/shop/{id}"),
+                    branch: format!("flow/{id}"),
+                    slot: 1,
+                    window: None,
+                    agent: "claude".into(),
+                },
+            ),
+        ];
+        crate::fold::fold(id, &events, None, 0).unwrap()
+    }
+
+    #[test]
+    fn lists_the_flows_that_do_not_fit_as_more_and_cuts_none_in_half() {
+        let flows: Vec<FlowView> = ["a", "b", "c", "d", "e"].map(working).into();
+        let board = Board {
+            version: 1,
+            now: 0,
+            count: flows.len(),
+            needs_you: 0,
+            flows,
+        };
+        let theme = Theme::default();
+        let sidebar = Sidebar {
+            board: &board,
+            panes: &[],
+            focus: &PaneKey::Master,
+            cursor: None,
+            peek: &[],
+            master: None,
+            now: 0,
+            spin: 0,
+            changed: &HashMap::new(),
+            theme: &theme,
+        };
+
+        let text: Vec<String> = sidebar
+            .rows(14)
+            .iter()
+            .map(|row| {
+                row.line
+                    .spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect()
+            })
+            .collect();
+
+        assert!(text.iter().any(|row| row.ends_with(" 3 more")), "{text:#?}");
+        let started = text.iter().filter(|row| row.contains("starting")).count();
+        let listed = text
+            .iter()
+            .filter(|row| {
+                [" a ", " b ", " c ", " d ", " e "]
+                    .iter()
+                    .any(|n| row.contains(n))
+            })
+            .count();
+        assert_eq!(started, listed, "every listed flow shows both its rows");
+    }
+
+    #[test]
+    fn shows_no_task_count_before_there_are_tasks() {
+        let mut flow = working("a");
+        flow.tasks = Some(crate::view::Tasks { done: 0, total: 0 });
+        let board = Board {
+            version: 1,
+            now: 0,
+            count: 1,
+            needs_you: 0,
+            flows: vec![flow],
+        };
+        let theme = Theme::default();
+        let sidebar = Sidebar {
+            board: &board,
+            panes: &[],
+            focus: &PaneKey::Master,
+            cursor: None,
+            peek: &[],
+            master: None,
+            now: 0,
+            spin: 0,
+            changed: &HashMap::new(),
+            theme: &theme,
+        };
+
+        let rows = sidebar.flow_rows(&board.flows[0], 0);
+
+        assert!(
+            !rows[1].line.to_string().contains("0/0"),
+            "{}",
+            rows[1].line
+        );
+    }
+
     #[test]
     fn shortens_a_place_in_the_middle_and_keeps_its_branch() {
         let place = "/private/tmp/claude-501/x/scratchpad/ui-look/repo · main";
@@ -702,6 +846,14 @@ mod tests {
                 "{width}"
             );
         }
+    }
+
+    #[test]
+    fn keeps_the_end_that_fits_in_columns() {
+        assert_eq!(tail("ab界", 4), "ab界");
+        assert_eq!(tail("ab界", 3), "b界");
+        assert_eq!(tail("ab界", 1), "");
+        assert_eq!(tail("", 5), "");
     }
 
     #[test]

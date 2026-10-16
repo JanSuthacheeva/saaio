@@ -1,18 +1,18 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::ErrorKind;
-use std::os::fd::AsRawFd;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::registry::Registry;
+use crate::store::write_atomic;
 
 /// Slots across every project: FLOW_SLOT, which setup hooks turn into ports.
 pub const MAX_SLOTS: u8 = 20;
 
 /// slots/<n>: which flow in which store took slot n.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Claim {
     pub store: PathBuf,
     pub flow: String,
@@ -46,10 +46,7 @@ impl Slots {
         let Some(slot) = free else {
             return Ok(None);
         };
-        let path = self.path(slot);
-        let fresh = path.with_extension(format!("{}.tmp", std::process::id()));
-        fs::write(&fresh, serde_json::to_string(claim)?)
-            .and_then(|()| fs::rename(&fresh, &path))
+        write_atomic(&self.path(slot), serde_json::to_string(claim)?.as_bytes())
             .with_context(|| format!("could not claim slot {slot}"))?;
         Ok(Some(slot))
     }
@@ -61,15 +58,15 @@ impl Slots {
         if self.read(slot).as_ref() != Some(claim) {
             return Ok(());
         }
-        match fs::remove_file(self.path(slot)) {
-            Err(error) if error.kind() != ErrorKind::NotFound => {
-                Err(error).with_context(|| format!("could not release slot {slot}"))
-            }
-            _ => Ok(()),
+        if let Err(error) = fs::remove_file(self.path(slot))
+            && error.kind() != ErrorKind::NotFound
+        {
+            return Err(error).with_context(|| format!("could not release slot {slot}"));
         }
+        Ok(())
     }
 
-    /// An exclusive flock on slots/.lock, released when the file closes.
+    /// An exclusive lock on slots/.lock, released when the file closes.
     fn lock(&self) -> Result<File> {
         fs::create_dir_all(&self.dir)
             .with_context(|| format!("could not create {}", self.dir.display()))?;
@@ -79,10 +76,7 @@ impl Slots {
             .write(true)
             .open(self.dir.join(".lock"))
             .with_context(|| format!("could not open {}", self.dir.join(".lock").display()))?;
-        // SAFETY: flock only takes the descriptor, which lives as long as `file`.
-        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } != 0 {
-            return Err(std::io::Error::last_os_error()).context("could not lock the slots");
-        }
+        file.lock().context("could not lock the slots")?;
         Ok(file)
     }
 
@@ -186,7 +180,7 @@ mod tests {
             .collect();
 
         let mut taken: Vec<u8> = handles.into_iter().map(|h| h.join().unwrap()).collect();
-        taken.sort();
+        taken.sort_unstable();
 
         assert_eq!(taken, (1..=8).collect::<Vec<u8>>());
     }

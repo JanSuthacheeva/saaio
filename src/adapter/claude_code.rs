@@ -31,6 +31,9 @@ pass on what the user said, so act on them as you would on the user's own answer
 master or the user something, end your turn with the question.";
 /// plan-progress's report tool, whose answers carry the plan's task counts.
 const PLAN_PROGRESS_TOOL: &str = "mcp__plan-progress__report";
+/// How a Stop's background tasks list the watch Claude Code keeps on a published artifact.
+const ARTIFACT_WATCH_TYPE: &str = "monitor";
+const ARTIFACT_WATCH_PREFIX: &str = "live updates for artifact ";
 
 /// The --settings JSON: each event in EVENTS runs `<flow_exe> hook claude-code`, synchronously so
 /// the events reach the log in order; each in WAIT_EVENTS also arms `<flow_exe> wait`.
@@ -220,10 +223,10 @@ fn running_background_task(tasks: &Value) -> Option<&str> {
 
 /// A live subscription Claude Code keeps for a published artifact: it never finishes.
 fn artifact_watch(task: &Value) -> bool {
-    task["type"] == "monitor"
+    task["type"] == ARTIFACT_WATCH_TYPE
         && task["description"]
             .as_str()
-            .is_some_and(|description| description.starts_with("live updates for artifact "))
+            .is_some_and(|description| description.starts_with(ARTIFACT_WATCH_PREFIX))
 }
 
 /// Waiting with the last sentence of the answer's last non-empty line that asks (ends in "?", or
@@ -293,11 +296,12 @@ fn sentences(text: &str) -> Vec<String> {
 
 /// "ok, 4/9 done" -> (4, 9); "ok, all 9 done" -> (9, 9).
 fn task_counts(result: &str) -> Option<(u32, u32)> {
-    if let Some(rest) = result.split("ok, all ").nth(1) {
-        let total: u32 = rest.split(' ').next()?.parse().ok()?;
-        if rest[total.to_string().len()..].starts_with(" done") {
-            return Some((total, total));
-        }
+    if let Some(rest) = result.split("ok, all ").nth(1)
+        && let Some((count, after)) = rest.split_once(' ')
+        && after.starts_with("done")
+    {
+        let total = count.parse().ok()?;
+        return Some((total, total));
     }
     let rest = result.split("ok, ").nth(1)?;
     let (counts, after) = rest.split_once(' ')?;
@@ -616,6 +620,7 @@ mod tests {
     fn reads_task_counts_merge_requests_and_typed_skills() {
         assert_eq!(task_counts("ok, 4/9 done - next: 2.4"), Some((4, 9)));
         assert_eq!(task_counts("ok, all 9 done - plan complete"), Some((9, 9)));
+        assert_eq!(task_counts("ok, all 09 done"), Some((9, 9)));
         assert_eq!(task_counts("refused: 2.4 matches two items"), None);
         assert_eq!(
             created_merge_request("gh pr create --fill", "https://github.com/a/b/pull/12\n"),

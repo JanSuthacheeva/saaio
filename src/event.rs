@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
@@ -6,7 +8,7 @@ pub const TEXT_LIMIT: usize = 500;
 /// The longest message or answer: what the master tells a worker, a turn's whole closing message.
 pub const LONG_TEXT_LIMIT: usize = 4000;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Event {
     pub v: u32,
     pub at: u64,
@@ -15,7 +17,7 @@ pub struct Event {
 }
 
 /// One line per event: {"v":1,"at":1791945698308,"kind":"blocked","reason":"..."}
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum EventKind {
     Started {
@@ -81,20 +83,29 @@ pub enum Phase {
     MergeRequest,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Mode {
+    #[default]
     Guided,
     Auto,
 }
 
+/// A time as Unix ms, the clock every event and log uses; 0 before 1970.
+pub fn unix_ms(time: SystemTime) -> u64 {
+    time.duration_since(UNIX_EPOCH).map_or(0, |since| {
+        u64::try_from(since.as_millis()).unwrap_or(u64::MAX)
+    })
+}
+
 impl Event {
     /// An event of the current version at `at` (Unix ms), each text cut to TEXT_LIMIT chars.
-    pub fn new(at: u64, kind: EventKind) -> Event {
+    pub fn new(at: u64, mut kind: EventKind) -> Event {
+        kind.cut_texts();
         Event {
             v: EVENT_VERSION,
             at,
-            kind: kind.with_texts_cut(),
+            kind,
         }
     }
 
@@ -113,48 +124,46 @@ impl Event {
 }
 
 impl EventKind {
-    fn with_texts_cut(self) -> EventKind {
+    fn cut_texts(&mut self) {
         match self {
-            EventKind::Started {
-                name,
-                request,
-                mode,
-            } => EventKind::Started {
-                name: cut(name),
-                request: cut(request),
-                mode,
-            },
-            EventKind::Delegated { description } => EventKind::Delegated {
-                description: cut(description),
-            },
-            EventKind::Waiting { question } => EventKind::Waiting {
-                question: cut(question),
-            },
-            EventKind::Idle { note } => EventKind::Idle { note: cut(note) },
-            EventKind::Blocked { reason } => EventKind::Blocked {
-                reason: cut(reason),
-            },
-            EventKind::Decision { text } => EventKind::Decision { text: cut(text) },
-            EventKind::MergeRequest { url } => EventKind::MergeRequest { url: cut(url) },
-            EventKind::Message { text } => EventKind::Message {
-                text: cut_to(text, LONG_TEXT_LIMIT),
-            },
-            EventKind::Answer { text } => EventKind::Answer {
-                text: cut_to(text, LONG_TEXT_LIMIT),
-            },
-            other => other,
+            EventKind::Started { name, request, .. } => {
+                cut_to(name, TEXT_LIMIT);
+                cut_to(request, TEXT_LIMIT);
+            }
+            EventKind::Delegated { description: text }
+            | EventKind::Waiting { question: text }
+            | EventKind::Idle { note: text }
+            | EventKind::Blocked { reason: text }
+            | EventKind::Decision { text }
+            | EventKind::MergeRequest { url: text } => cut_to(text, TEXT_LIMIT),
+            EventKind::Message { text } | EventKind::Answer { text } => {
+                cut_to(text, LONG_TEXT_LIMIT);
+            }
+            _ => {}
         }
     }
 }
 
-fn cut(text: String) -> String {
-    cut_to(text, TEXT_LIMIT)
+fn cut_to(text: &mut String, limit: usize) {
+    if let Some((end, _)) = text.char_indices().nth(limit) {
+        text.truncate(end);
+    }
 }
 
-fn cut_to(text: String, limit: usize) -> String {
-    match text.char_indices().nth(limit) {
-        Some((end, _)) => text[..end].to_string(),
-        None => text,
+impl Mode {
+    /// The name the command line and the logs use: guided, auto.
+    pub fn name(self) -> &'static str {
+        match self {
+            Mode::Guided => "guided",
+            Mode::Auto => "auto",
+        }
+    }
+
+    pub fn toggled(self) -> Mode {
+        match self {
+            Mode::Guided => Mode::Auto,
+            Mode::Auto => Mode::Guided,
+        }
     }
 }
 
@@ -166,6 +175,16 @@ impl Phase {
         Phase::Review,
         Phase::MergeRequest,
     ];
+
+    /// Where the phase stands in ALL.
+    pub fn index(self) -> usize {
+        match self {
+            Phase::Design => 0,
+            Phase::Implement => 1,
+            Phase::Review => 2,
+            Phase::MergeRequest => 3,
+        }
+    }
 
     /// The name the command line and the logs use: design, implement, review, merge-request.
     pub fn name(self) -> &'static str {
@@ -181,6 +200,18 @@ impl Phase {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_modes_and_phases_as_the_log_does() {
+        for mode in [Mode::Guided, Mode::Auto] {
+            assert_eq!(serde_json::to_value(mode).unwrap(), mode.name());
+            assert_eq!(mode.toggled().toggled(), mode);
+        }
+        for (index, phase) in Phase::ALL.into_iter().enumerate() {
+            assert_eq!(serde_json::to_value(phase).unwrap(), phase.name());
+            assert_eq!(phase.index(), index);
+        }
+    }
 
     fn every_kind() -> Vec<EventKind> {
         vec![

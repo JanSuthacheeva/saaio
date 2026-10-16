@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::io::{self, Write};
 use std::sync::Once;
 
@@ -12,6 +13,7 @@ const RESET_MODES: &str =
     "\x1b[?2004l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1l\x1b[?1004l";
 
 /// The real terminal flow ui runs in.
+#[derive(Debug)]
 pub struct Outer {
     mirrored: Modes,
 }
@@ -28,15 +30,15 @@ impl Outer {
     }
 
     /// Turns paste, mouse, cursor-key and focus modes on or off to match the focused pane.
-    pub fn mirror(&mut self, modes: &Modes) -> Result<()> {
-        let sequence = mode_changes(&self.mirrored, modes);
+    pub fn mirror(&mut self, modes: Modes) -> Result<()> {
+        let sequence = mode_changes(self.mirrored, modes);
         if sequence.is_empty() {
             return Ok(());
         }
         let mut stdout = io::stdout();
         stdout.write_all(sequence.as_bytes())?;
         stdout.flush()?;
-        self.mirrored = *modes;
+        self.mirrored = modes;
         Ok(())
     }
 
@@ -71,12 +73,25 @@ fn install_panic_restore() {
     });
 }
 
+/// How many seconds the local time zone is east of UTC now; 0 when the system cannot say.
+pub fn local_offset_secs() -> i64 {
+    // SAFETY: time and localtime_r only write into the tm we pass; a zeroed tm is a valid start.
+    unsafe {
+        let now = libc::time(std::ptr::null_mut());
+        let mut tm: libc::tm = std::mem::zeroed();
+        if libc::localtime_r(&raw const now, &raw mut tm).is_null() {
+            return 0;
+        }
+        tm.tm_gmtoff
+    }
+}
+
 /// The escape sequences that take the real terminal from `from` to `to`.
-fn mode_changes(from: &Modes, to: &Modes) -> String {
+fn mode_changes(from: Modes, to: Modes) -> String {
     let mut out = String::new();
     let mut set = |on: bool, was: bool, code: &str| {
         if on != was {
-            out.push_str(&format!("\x1b[?{code}{}", if on { 'h' } else { 'l' }));
+            let _ = write!(out, "\x1b[?{code}{}", if on { 'h' } else { 'l' });
         }
     };
     set(to.paste, from.paste, "2004");
@@ -91,10 +106,10 @@ fn mode_changes(from: &Modes, to: &Modes) -> String {
             Mouse::Motion => Some("1003"),
         };
         if let Some(old) = code(from.mouse) {
-            out.push_str(&format!("\x1b[?{old}l"));
+            let _ = write!(out, "\x1b[?{old}l");
         }
         if let Some(new) = code(to.mouse) {
-            out.push_str(&format!("\x1b[?{new}h"));
+            let _ = write!(out, "\x1b[?{new}h");
         }
     }
     out
@@ -116,17 +131,17 @@ mod tests {
         };
 
         assert_eq!(
-            mode_changes(&off, &on),
+            mode_changes(off, on),
             "\x1b[?2004h\x1b[?1004h\x1b[?1006h\x1b[?1003h"
         );
-        assert_eq!(mode_changes(&on, &on), "");
+        assert_eq!(mode_changes(on, on), "");
         let drag = Modes {
             mouse: Mouse::Drag,
             ..on
         };
-        assert_eq!(mode_changes(&on, &drag), "\x1b[?1003l\x1b[?1002h");
+        assert_eq!(mode_changes(on, drag), "\x1b[?1003l\x1b[?1002h");
         assert_eq!(
-            mode_changes(&on, &off),
+            mode_changes(on, off),
             "\x1b[?2004l\x1b[?1004l\x1b[?1006l\x1b[?1003l"
         );
     }

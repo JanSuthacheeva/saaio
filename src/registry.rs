@@ -1,9 +1,11 @@
+use std::ffi::OsStr;
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 
-use crate::store::Store;
+use crate::store::{Store, write_atomic};
 
 /// The folder every store registers in and slots are claimed in: the default store's folder,
 /// $XDG_STATE_HOME/flow or ~/.local/state/flow, whatever FLOW_HOME says.
@@ -13,15 +15,17 @@ pub struct Registry {
 }
 
 impl Registry {
-    pub fn locate(xdg_state: Option<PathBuf>, home: Option<PathBuf>) -> Result<Registry> {
+    /// None when neither directory is set.
+    pub fn locate(xdg_state: Option<PathBuf>, home: Option<PathBuf>) -> Option<Registry> {
+        Registry::default_root(xdg_state, home).map(|root| Registry { root })
+    }
+
+    /// $XDG_STATE_HOME/flow, else $HOME/.local/state/flow; an empty value counts as unset.
+    pub fn default_root(xdg_state: Option<PathBuf>, home: Option<PathBuf>) -> Option<PathBuf> {
         let set = |path: Option<PathBuf>| path.filter(|path| !path.as_os_str().is_empty());
-        let root = set(xdg_state)
+        set(xdg_state)
             .map(|state| state.join("flow"))
-            .or_else(|| set(home).map(|home| home.join(".local/state/flow")));
-        match root {
-            Some(root) => Ok(Registry { root }),
-            None => bail!("cannot find a state directory"),
-        }
+            .or_else(|| set(home).map(|home| home.join(".local/state/flow")))
     }
 
     #[cfg(test)]
@@ -42,9 +46,9 @@ impl Registry {
         let stores = self.root.join("stores");
         fs::create_dir_all(&stores)
             .with_context(|| format!("could not create {}", stores.display()))?;
-        let fresh = entry.with_extension(format!("{}.tmp", std::process::id()));
-        fs::write(&fresh, format!("{}\n", store.root().display()))
-            .and_then(|()| fs::rename(&fresh, &entry))
+        let mut line = store.root().as_os_str().as_bytes().to_vec();
+        line.push(b'\n');
+        write_atomic(&entry, &line)
             .with_context(|| format!("could not register {}", store.root().display()))
     }
 
@@ -58,8 +62,8 @@ impl Registry {
             .flatten()
             .filter(|entry| !entry.file_name().to_string_lossy().contains('.'))
             .filter_map(|entry| {
-                let root = fs::read_to_string(entry.path()).ok()?;
-                let root = PathBuf::from(root.trim_end_matches('\n'));
+                let line = fs::read(entry.path()).ok()?;
+                let root = PathBuf::from(OsStr::from_bytes(line.strip_suffix(b"\n")?));
                 if root.is_dir() {
                     Some(Store::at(root))
                 } else {
@@ -68,7 +72,7 @@ impl Registry {
                 }
             })
             .collect();
-        stores.sort_by_key(|store| (project_name(store, self), store.root().to_path_buf()));
+        stores.sort_by_cached_key(|store| (project_name(store, self), store.root().to_path_buf()));
         stores
     }
 
@@ -103,7 +107,7 @@ fn same_folder(left: &Path, right: &Path) -> bool {
 /// A hash that stays the same across builds, so every process finds the same file.
 pub fn fnv1a(bytes: &[u8]) -> u64 {
     bytes.iter().fold(0xcbf29ce484222325, |hash, byte| {
-        (hash ^ *byte as u64).wrapping_mul(0x100000001b3)
+        (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
     })
 }
 
@@ -131,7 +135,7 @@ mod tests {
         let registry = Registry::locate(None, Some("/home".into())).unwrap();
         assert_eq!(registry.root(), Path::new("/home/.local/state/flow"));
 
-        assert!(Registry::locate(Some("".into()), None).is_err());
+        assert!(Registry::locate(Some("".into()), None).is_none());
     }
 
     #[test]
@@ -182,6 +186,24 @@ mod tests {
                 .count(),
             2
         );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn registers_a_store_whose_path_is_not_utf8() {
+        let dir = TempDir::new().unwrap();
+        let registry = registry(&dir);
+        let root = dir.path().join(OsStr::from_bytes(b"caf\xe9"));
+        fs::create_dir_all(&root).unwrap();
+
+        registry.register(&Store::at(root.clone())).unwrap();
+
+        let roots: Vec<PathBuf> = registry
+            .stores()
+            .iter()
+            .map(|store| store.root().to_path_buf())
+            .collect();
+        assert_eq!(roots, vec![root]);
     }
 
     #[test]

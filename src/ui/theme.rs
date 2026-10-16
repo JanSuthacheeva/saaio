@@ -1,9 +1,9 @@
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::view::State;
+use crate::view::{State, Tone};
 
 /// The colors a theme file names, by its keys; Color::Reset is "default", the terminal's own.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Palette {
     pub background: Color,
     pub panel: Color,
@@ -22,102 +22,176 @@ pub struct Palette {
 }
 
 impl Palette {
-    /// "terminal" (ANSI, so flow takes on the terminal's palette), "flow" (the design's dark colors),
-    /// "flow-light" (the design's light ones); None for another name.
+    /// ANSI, so flow takes on the terminal's palette.
+    pub const TERMINAL: Palette = Palette {
+        background: Color::Reset,
+        panel: Color::Indexed(235),
+        selection: Color::Indexed(236),
+        rule: Color::DarkGray,
+        text: Color::Reset,
+        strong: Color::Reset,
+        muted: Color::Gray,
+        faint: Color::DarkGray,
+        accent: Color::Indexed(173),
+        working: Color::Blue,
+        waiting: Color::Yellow,
+        blocked: Color::Red,
+        done: Color::Green,
+        ended: Color::DarkGray,
+    };
+
+    /// The design's dark colors.
+    pub const FLOW: Palette = Palette {
+        background: hex(0x141418),
+        panel: hex(0x1f1f26),
+        selection: hex(0x26262e),
+        rule: hex(0x34343d),
+        text: hex(0xc8c8d0),
+        strong: hex(0xf0f0f4),
+        muted: hex(0x9a9aa6),
+        faint: hex(0x6c6c78),
+        accent: hex(0xe07a52),
+        working: hex(0x7aa7ff),
+        waiting: hex(0xe5b45a),
+        blocked: hex(0xf0717f),
+        done: hex(0x93c46d),
+        ended: hex(0x6c6c78),
+    };
+
+    /// The design's light colors.
+    pub const FLOW_LIGHT: Palette = Palette {
+        background: hex(0xf6f5f1),
+        panel: hex(0xecebe5),
+        selection: hex(0xe2e0d8),
+        rule: hex(0xcfcdc4),
+        text: hex(0x2b2b30),
+        strong: hex(0x111114),
+        muted: hex(0x5d5d66),
+        faint: hex(0x73737c),
+        accent: hex(0xb8532f),
+        working: hex(0x2f5fd0),
+        waiting: hex(0x9a6a00),
+        blocked: hex(0xc2283f),
+        done: hex(0x3d7a22),
+        ended: hex(0x73737c),
+    };
+
+    /// "terminal", "flow" or "flow-light"; None for another name.
     pub fn named(name: &str) -> Option<Palette> {
         match name {
-            "terminal" => Some(Palette {
-                background: Color::Reset,
-                panel: Color::Indexed(235),
-                selection: Color::Indexed(236),
-                rule: Color::DarkGray,
-                text: Color::Reset,
-                strong: Color::Reset,
-                muted: Color::Gray,
-                faint: Color::DarkGray,
-                accent: Color::Indexed(173),
-                working: Color::Blue,
-                waiting: Color::Yellow,
-                blocked: Color::Red,
-                done: Color::Green,
-                ended: Color::DarkGray,
-            }),
-            "flow" => Some(Palette {
-                background: hex(0x141418),
-                panel: hex(0x1f1f26),
-                selection: hex(0x26262e),
-                rule: hex(0x34343d),
-                text: hex(0xc8c8d0),
-                strong: hex(0xf0f0f4),
-                muted: hex(0x9a9aa6),
-                faint: hex(0x6c6c78),
-                accent: hex(0xe07a52),
-                working: hex(0x7aa7ff),
-                waiting: hex(0xe5b45a),
-                blocked: hex(0xf0717f),
-                done: hex(0x93c46d),
-                ended: hex(0x6c6c78),
-            }),
-            "flow-light" => Some(Palette {
-                background: hex(0xf6f5f1),
-                panel: hex(0xecebe5),
-                selection: hex(0xe2e0d8),
-                rule: hex(0xcfcdc4),
-                text: hex(0x2b2b30),
-                strong: hex(0x111114),
-                muted: hex(0x5d5d66),
-                faint: hex(0x73737c),
-                accent: hex(0xb8532f),
-                working: hex(0x2f5fd0),
-                waiting: hex(0x9a6a00),
-                blocked: hex(0xc2283f),
-                done: hex(0x3d7a22),
-                ended: hex(0x73737c),
-            }),
+            "terminal" => Some(Palette::TERMINAL),
+            "flow" => Some(Palette::FLOW),
+            "flow-light" => Some(Palette::FLOW_LIGHT),
             _ => None,
         }
     }
 
-    /// The color of one key ("accent", "working", ...); None for a key flow does not know.
-    pub fn get(&self, key: &str) -> Option<Color> {
-        let mut copy = *self;
-        Self::slot(&mut copy, key).copied()
-    }
-
-    /// Sets one key; false for a key flow does not know.
-    pub fn set(&mut self, key: &str, color: Color) -> bool {
-        match Self::slot(self, key) {
-            Some(slot) => {
-                *slot = color;
-                true
-            }
-            None => false,
+    pub fn color(&self, key: PaletteKey) -> Color {
+        match key {
+            PaletteKey::Background => self.background,
+            PaletteKey::Panel => self.panel,
+            PaletteKey::Selection => self.selection,
+            PaletteKey::Rule => self.rule,
+            PaletteKey::Text => self.text,
+            PaletteKey::Strong => self.strong,
+            PaletteKey::Muted => self.muted,
+            PaletteKey::Faint => self.faint,
+            PaletteKey::Accent => self.accent,
+            PaletteKey::Working => self.working,
+            PaletteKey::Waiting => self.waiting,
+            PaletteKey::Blocked => self.blocked,
+            PaletteKey::Done => self.done,
+            PaletteKey::Ended => self.ended,
         }
     }
 
-    fn slot<'a>(palette: &'a mut Palette, key: &str) -> Option<&'a mut Color> {
-        Some(match key {
-            "background" => &mut palette.background,
-            "panel" => &mut palette.panel,
-            "selection" => &mut palette.selection,
-            "rule" => &mut palette.rule,
-            "text" => &mut palette.text,
-            "strong" => &mut palette.strong,
-            "muted" => &mut palette.muted,
-            "faint" => &mut palette.faint,
-            "accent" => &mut palette.accent,
-            "working" => &mut palette.working,
-            "waiting" => &mut palette.waiting,
-            "blocked" => &mut palette.blocked,
-            "done" => &mut palette.done,
-            "ended" => &mut palette.ended,
-            _ => return None,
-        })
+    pub fn color_mut(&mut self, key: PaletteKey) -> &mut Color {
+        match key {
+            PaletteKey::Background => &mut self.background,
+            PaletteKey::Panel => &mut self.panel,
+            PaletteKey::Selection => &mut self.selection,
+            PaletteKey::Rule => &mut self.rule,
+            PaletteKey::Text => &mut self.text,
+            PaletteKey::Strong => &mut self.strong,
+            PaletteKey::Muted => &mut self.muted,
+            PaletteKey::Faint => &mut self.faint,
+            PaletteKey::Accent => &mut self.accent,
+            PaletteKey::Working => &mut self.working,
+            PaletteKey::Waiting => &mut self.waiting,
+            PaletteKey::Blocked => &mut self.blocked,
+            PaletteKey::Done => &mut self.done,
+            PaletteKey::Ended => &mut self.ended,
+        }
     }
 }
 
-fn hex(rgb: u32) -> Color {
-    Color::Rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
+/// A color a theme file can set, by its key in [ui] or [state].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaletteKey {
+    Background,
+    Panel,
+    Selection,
+    Rule,
+    Text,
+    Strong,
+    Muted,
+    Faint,
+    Accent,
+    Working,
+    Waiting,
+    Blocked,
+    Done,
+    Ended,
+}
+
+impl PaletteKey {
+    pub const ALL: [PaletteKey; 14] = [
+        PaletteKey::Background,
+        PaletteKey::Panel,
+        PaletteKey::Selection,
+        PaletteKey::Rule,
+        PaletteKey::Text,
+        PaletteKey::Strong,
+        PaletteKey::Muted,
+        PaletteKey::Faint,
+        PaletteKey::Accent,
+        PaletteKey::Working,
+        PaletteKey::Waiting,
+        PaletteKey::Blocked,
+        PaletteKey::Done,
+        PaletteKey::Ended,
+    ];
+
+    /// The key a theme file writes: accent, working, ...
+    pub fn name(self) -> &'static str {
+        match self {
+            PaletteKey::Background => "background",
+            PaletteKey::Panel => "panel",
+            PaletteKey::Selection => "selection",
+            PaletteKey::Rule => "rule",
+            PaletteKey::Text => "text",
+            PaletteKey::Strong => "strong",
+            PaletteKey::Muted => "muted",
+            PaletteKey::Faint => "faint",
+            PaletteKey::Accent => "accent",
+            PaletteKey::Working => "working",
+            PaletteKey::Waiting => "waiting",
+            PaletteKey::Blocked => "blocked",
+            PaletteKey::Done => "done",
+            PaletteKey::Ended => "ended",
+        }
+    }
+
+    /// None for a key flow does not know.
+    pub fn named(name: &str) -> Option<PaletteKey> {
+        PaletteKey::ALL.into_iter().find(|key| key.name() == name)
+    }
+}
+
+/// 0xrrggbb as a terminal color.
+pub const fn hex(rgb: u32) -> Color {
+    let [_, r, g, b] = rgb.to_be_bytes();
+    Color::Rgb(r, g, b)
 }
 
 /// Every color and symbol flow ui draws with, by name; a theme file sets them through its Palette.
@@ -185,12 +259,14 @@ pub struct Glyphs {
     pub dash: &'static str,
 }
 
-impl Theme {
-    /// The terminal theme: today's look.
-    pub fn builtin() -> Theme {
-        Theme::from_palette(Palette::named("terminal").expect("terminal is built in"))
+/// The terminal theme: today's look.
+impl Default for Theme {
+    fn default() -> Theme {
+        Theme::from_palette(Palette::TERMINAL)
     }
+}
 
+impl Theme {
     /// The styles widgets draw with, from a palette's colors; "default" leaves a color to the terminal.
     pub fn from_palette(palette: Palette) -> Theme {
         let plain = Style::default();
@@ -252,7 +328,7 @@ impl Theme {
         }
     }
 
-    pub fn state(&self, state: State) -> Style {
+    pub fn state_style(&self, state: State) -> Style {
         match state {
             State::Working | State::Delegated => self.state.working,
             State::Waiting => self.state.waiting,
@@ -260,6 +336,16 @@ impl Theme {
             State::Blocked | State::NotResponding => self.state.blocked,
             State::Done => self.state.done,
             State::Ended => self.state.ended,
+        }
+    }
+
+    pub fn tone_style(&self, tone: Tone) -> Style {
+        match tone {
+            Tone::Neutral => self.ui.muted,
+            Tone::Progress => self.state.working,
+            Tone::Attention => self.state.waiting,
+            Tone::Problem => self.state.blocked,
+            Tone::Success => self.state.done,
         }
     }
 }
@@ -270,7 +356,7 @@ mod tests {
 
     #[test]
     fn the_terminal_theme_looks_as_flow_always_did() {
-        let theme = Theme::builtin();
+        let theme = Theme::default();
         let plain = Style::default();
 
         assert_eq!(theme.ui.text, plain);
@@ -287,7 +373,7 @@ mod tests {
 
     #[test]
     fn builds_the_designs_dark_theme() {
-        let theme = Theme::from_palette(Palette::named("flow").unwrap());
+        let theme = Theme::from_palette(Palette::FLOW);
 
         assert_eq!(theme.ui.background, Style::default().bg(hex(0x141418)));
         assert_eq!(theme.ui.text, Style::default().fg(hex(0xc8c8d0)));
@@ -301,23 +387,33 @@ mod tests {
 
     #[test]
     fn gets_and_sets_colors_by_their_key() {
-        let mut palette = Palette::named("terminal").unwrap();
+        let mut palette = Palette::TERMINAL;
+        let accent = PaletteKey::named("accent").unwrap();
 
-        assert!(palette.set("accent", Color::Indexed(5)));
-        assert_eq!(palette.get("accent"), Some(Color::Indexed(5)));
-        assert!(!palette.set("acent", Color::Red));
-        assert_eq!(palette.get("acent"), None);
+        *palette.color_mut(accent) = Color::Indexed(5);
+
+        assert_eq!(palette.color(accent), Color::Indexed(5));
+        assert_eq!(PaletteKey::named("acent"), None);
+        for key in PaletteKey::ALL {
+            assert_eq!(PaletteKey::named(key.name()), Some(key));
+        }
     }
 
     #[test]
     fn gives_each_state_a_color_that_tells_it_apart() {
-        let theme = Theme::builtin();
+        let theme = Theme::default();
 
         assert_eq!(
-            theme.state(State::Blocked),
-            theme.state(State::NotResponding)
+            theme.state_style(State::Blocked),
+            theme.state_style(State::NotResponding)
         );
-        assert_ne!(theme.state(State::Waiting), theme.state(State::Blocked));
-        assert_ne!(theme.state(State::Working), theme.state(State::Done));
+        assert_ne!(
+            theme.state_style(State::Waiting),
+            theme.state_style(State::Blocked)
+        );
+        assert_ne!(
+            theme.state_style(State::Working),
+            theme.state_style(State::Done)
+        );
     }
 }

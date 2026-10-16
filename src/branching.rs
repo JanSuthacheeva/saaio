@@ -18,7 +18,7 @@ pub struct Branching {
     pub types: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct RepoConfig {
     branch: Option<Branching>,
 }
@@ -32,7 +32,9 @@ impl Branching {
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
             Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error).with_context(|| path.display().to_string()),
+            Err(error) => {
+                return Err(error).with_context(|| format!("could not read {}", path.display()));
+            }
         };
         let config: RepoConfig =
             toml::from_str(&text).with_context(|| format!("{} is not valid", path.display()))?;

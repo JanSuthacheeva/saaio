@@ -1,4 +1,6 @@
+use std::fmt;
 use std::io::{ErrorKind, Read, Write};
+use std::ops::BitOr;
 
 use anyhow::{Context, Result, bail};
 use serde::de::DeserializeOwned;
@@ -16,6 +18,16 @@ pub enum PaneKey {
     Flow(String),
 }
 
+/// the master, flow 7f3c
+impl fmt::Display for PaneKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PaneKey::Master => f.write_str("the master"),
+            PaneKey::Flow(id) => write!(f, "flow {id}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Size {
     pub cols: u16,
@@ -23,13 +35,13 @@ pub struct Size {
 }
 
 /// Attach draws the panes; Control sends one request (flow remove, flow ui --stop).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     Attach { size: Size },
     Control,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientMsg {
     Hello {
         version: u32,
@@ -47,7 +59,7 @@ pub enum ClientMsg {
     EndFlows,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ServerMsg {
     Welcome {
         version: u32,
@@ -71,13 +83,13 @@ pub enum ServerMsg {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PaneInfo {
     pub key: PaneKey,
     pub status: PaneStatus,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PaneStatus {
     Running,
     Exited { code: Option<u32> },
@@ -85,7 +97,7 @@ pub enum PaneStatus {
 }
 
 /// Rows of one pane: all of them when full, else only the changed ones.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Frame {
     pub key: PaneKey,
     pub full: bool,
@@ -95,7 +107,7 @@ pub struct Frame {
     pub history: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cell {
     pub text: String,
     pub fg: Color,
@@ -111,22 +123,30 @@ pub enum Color {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Flags(pub u8);
+pub struct Flags(u8);
 
 impl Flags {
-    pub const BOLD: u8 = 1;
-    pub const DIM: u8 = 1 << 1;
-    pub const ITALIC: u8 = 1 << 2;
-    pub const UNDERLINE: u8 = 1 << 3;
-    pub const REVERSE: u8 = 1 << 4;
-    pub const STRIKE: u8 = 1 << 5;
+    pub const BOLD: Flags = Flags(1);
+    pub const DIM: Flags = Flags(1 << 1);
+    pub const ITALIC: Flags = Flags(1 << 2);
+    pub const UNDERLINE: Flags = Flags(1 << 3);
+    pub const REVERSE: Flags = Flags(1 << 4);
+    pub const STRIKE: Flags = Flags(1 << 5);
     /// The first column of a double-width character.
-    pub const WIDE: u8 = 1 << 6;
+    pub const WIDE: Flags = Flags(1 << 6);
     /// The column a double-width character covers after its first.
-    pub const SPACER: u8 = 1 << 7;
+    pub const SPACER: Flags = Flags(1 << 7);
 
-    pub fn has(self, flag: u8) -> bool {
-        self.0 & flag != 0
+    pub fn has(self, flag: Flags) -> bool {
+        self.0 & flag.0 != 0
+    }
+}
+
+impl BitOr for Flags {
+    type Output = Flags;
+
+    fn bitor(self, other: Flags) -> Flags {
+        Flags(self.0 | other.0)
     }
 }
 
@@ -217,7 +237,7 @@ mod tests {
             text: text.into(),
             fg: Color::Indexed(4),
             bg: Color::Rgb(1, 2, 3),
-            flags: Flags(Flags::BOLD | Flags::WIDE),
+            flags: Flags::BOLD | Flags::WIDE,
         }
     }
 

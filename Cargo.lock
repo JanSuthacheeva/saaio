@@ -624,6 +624,7 @@ dependencies = [
  "signal-hook 0.4.5",
  "tempfile",
  "toml",
+ "unicode-width",
  "uuid",
 ]
 

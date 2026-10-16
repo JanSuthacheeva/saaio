@@ -1,12 +1,13 @@
 use std::fs::{self, OpenOptions};
-use std::io::{ErrorKind, Write};
+use std::io::{self, ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
 use anyhow::{Context, Result, bail};
 use uuid::Uuid;
 
-use crate::event::Event;
+use crate::event::{Event, unix_ms};
+use crate::registry::Registry;
 use crate::wake::Seen;
 
 /// What the waiters keep: each session's waiter pid, deliveries, the master's seen marks.
@@ -14,7 +15,7 @@ const WAITS_DIR: &str = "waits";
 const SEEN_FILE: &str = "master.seen";
 
 /// One flow's events and its last heartbeat, as read from disk.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlowLog {
     pub id: String,
     pub events: Vec<Event>,
@@ -55,15 +56,11 @@ impl Store {
         flow_home: Option<PathBuf>,
         xdg_state: Option<PathBuf>,
         home: Option<PathBuf>,
-    ) -> Result<Store> {
-        let set = |path: Option<PathBuf>| path.filter(|path| !path.as_os_str().is_empty());
-        let root = set(flow_home)
-            .or_else(|| set(xdg_state).map(|state| state.join("flow")))
-            .or_else(|| set(home).map(|home| home.join(".local/state/flow")));
-        match root {
-            Some(root) => Ok(Store { root }),
-            None => bail!("cannot find a state directory"),
-        }
+    ) -> Option<Store> {
+        flow_home
+            .filter(|path| !path.as_os_str().is_empty())
+            .or_else(|| Registry::default_root(xdg_state, home))
+            .map(|root| Store { root })
     }
 
     /// The store in this folder, as the registry lists it.
@@ -125,7 +122,9 @@ impl Store {
         };
         let mut ids = Vec::new();
         for entry in entries {
-            let name = entry?.file_name();
+            let name = entry
+                .with_context(|| format!("could not list {}", flows.display()))?
+                .file_name();
             if let Some(id) = name.to_string_lossy().strip_suffix(".jsonl") {
                 ids.push(id.to_string());
             }
@@ -165,9 +164,13 @@ impl Store {
                     return Err(error).with_context(|| format!("could not read flow {id}"));
                 }
             };
-            let mut modified = log.modified()?;
+            let changed = |meta: &fs::Metadata| {
+                meta.modified()
+                    .with_context(|| format!("could not read when flow {id} changed"))
+            };
+            let mut modified = changed(&log)?;
             if let Ok(alive) = fs::metadata(self.alive(&id)) {
-                modified = modified.max(alive.modified()?);
+                modified = modified.max(changed(&alive)?);
             }
             stamps.push((
                 id,
@@ -205,8 +208,7 @@ impl Store {
                 return Err(error).with_context(|| format!("could not read heartbeat of {id}"));
             }
         };
-        let since_epoch = modified.duration_since(UNIX_EPOCH).unwrap_or_default();
-        Ok(Some(since_epoch.as_millis() as u64))
+        Ok(Some(unix_ms(modified)))
     }
 
     /// Makes `pid` the session's one waiter; an older waiter sees it was replaced.
@@ -256,12 +258,10 @@ impl Store {
             waits.join(format!("{id}.pid")),
             waits.join(format!("{id}.delivered")),
         ] {
-            match fs::remove_file(&file) {
-                Err(error) if error.kind() != ErrorKind::NotFound => {
-                    return Err(error)
-                        .with_context(|| format!("could not remove {}", file.display()));
-                }
-                _ => {}
+            if let Err(error) = fs::remove_file(&file)
+                && error.kind() != ErrorKind::NotFound
+            {
+                return Err(error).with_context(|| format!("could not remove {}", file.display()));
             }
         }
         Ok(())
@@ -271,15 +271,12 @@ impl Store {
         fs::read_to_string(self.root.join(WAITS_DIR).join(name)).ok()
     }
 
-    /// Written beside and renamed over, so a reader never sees half a file.
     fn write_wait(&self, name: &str, text: &str) -> Result<()> {
         let waits = self.root.join(WAITS_DIR);
         fs::create_dir_all(&waits)
             .with_context(|| format!("could not create {}", waits.display()))?;
         let file = waits.join(name);
-        let partial = waits.join(format!(".{name}.{}", std::process::id()));
-        fs::write(&partial, text)
-            .and_then(|()| fs::rename(&partial, &file))
+        write_atomic(&file, text.as_bytes())
             .with_context(|| format!("could not write {}", file.display()))
     }
 
@@ -290,6 +287,15 @@ impl Store {
     fn alive(&self, id: &str) -> PathBuf {
         self.root.join("flows").join(format!("{id}.alive"))
     }
+}
+
+/// Writes `contents` to a hidden file beside `path` and renames it over, so a reader never sees half
+/// a file.
+pub fn write_atomic(path: &Path, contents: &[u8]) -> io::Result<()> {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let partial = path.with_file_name(format!(".{name}.{}", std::process::id()));
+    fs::write(&partial, contents)?;
+    fs::rename(&partial, path)
 }
 
 #[cfg(test)]
@@ -371,7 +377,7 @@ mod tests {
             Store::locate(None, None, home).unwrap().root,
             Path::new("/home/jan/.local/state/flow")
         );
-        assert!(Store::locate(None, None, None).is_err());
+        assert!(Store::locate(None, None, None).is_none());
     }
 
     #[test]
@@ -468,10 +474,7 @@ mod tests {
     }
 
     fn now_ms() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64
+        unix_ms(SystemTime::now())
     }
 
     #[test]

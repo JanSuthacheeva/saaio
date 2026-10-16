@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
@@ -35,8 +36,7 @@ pub fn repo_root(cwd: &Path) -> Result<PathBuf> {
 /// The branch checked out in `dir` or the repository above it, read from git's HEAD file so it is
 /// cheap to ask often; None when HEAD is detached or there is no repository.
 pub fn current_branch(dir: &Path) -> Option<String> {
-    let mut here = Some(dir);
-    while let Some(at) = here {
+    for at in dir.ancestors() {
         let dot_git = at.join(".git");
         let head = if dot_git.is_dir() {
             dot_git.join("HEAD")
@@ -45,7 +45,6 @@ pub fn current_branch(dir: &Path) -> Option<String> {
             at.join(link.trim().strip_prefix("gitdir:")?.trim())
                 .join("HEAD")
         } else {
-            here = at.parent();
             continue;
         };
         let text = fs::read_to_string(head).ok()?;
@@ -94,8 +93,9 @@ pub fn run_hook(
 /// Removes a worktree; without force Ok(false) when git refuses (uncommitted work).
 pub fn remove_worktree(repo: &Path, workspace: &Workspace, force: bool) -> Result<bool> {
     let argv = worktree_remove_argv(repo, workspace, force);
-    let output = Command::new(&argv[0])
-        .args(&argv[1..])
+    let (program, args) = argv.split_first().context("empty command")?;
+    let output = Command::new(program)
+        .args(args)
         .output()
         .context("could not run git")?;
     Ok(output.status.success())
@@ -103,42 +103,31 @@ pub fn remove_worktree(repo: &Path, workspace: &Workspace, force: bool) -> Resul
 
 /// Whether the worktree has changes or untracked files git would refuse to remove it over.
 pub fn has_uncommitted_work(workspace: &Workspace) -> Result<bool> {
-    let status = run(&[
-        "git".to_string(),
-        "-C".to_string(),
-        workspace.path.clone(),
-        "status".to_string(),
-        "--porcelain".to_string(),
-    ])?;
+    let status = git(&workspace.path, &["status", "--porcelain"])?;
     Ok(!status.trim().is_empty())
 }
 
-/// Runs a command; its stdout, or an error with the last line it printed.
 /// How many commits of `branch` are on no other branch, local or remote; None when there is no such
 /// branch.
 pub fn commits_only_on(repo: &Path, branch: &str) -> Result<Option<u32>> {
-    let git = |args: &[&str]| -> Vec<String> {
-        ["git", "-C", &repo.display().to_string()]
-            .iter()
-            .chain(args)
-            .map(|part| part.to_string())
-            .collect()
-    };
     let full = format!("refs/heads/{branch}");
-    if run(&git(&["show-ref", "--verify", "--quiet", &full])).is_err() {
+    if git(repo, &["show-ref", "--verify", "--quiet", &full]).is_err() {
         return Ok(None);
     }
     // With --branches, --exclude names the branch without refs/heads/.
     let exclude = format!("--exclude={branch}");
-    let count = run(&git(&[
-        "rev-list",
-        "--count",
-        &full,
-        "--not",
-        &exclude,
-        "--branches",
-        "--remotes",
-    ]))?;
+    let count = git(
+        repo,
+        &[
+            "rev-list",
+            "--count",
+            &full,
+            "--not",
+            &exclude,
+            "--branches",
+            "--remotes",
+        ],
+    )?;
     count
         .trim()
         .parse()
@@ -148,35 +137,40 @@ pub fn commits_only_on(repo: &Path, branch: &str) -> Result<Option<u32>> {
 
 /// Whether the repo has a local branch of this name.
 pub fn branch_exists(repo: &Path, branch: &str) -> bool {
-    run(&[
-        "git".to_string(),
-        "-C".to_string(),
-        repo.display().to_string(),
-        "show-ref".to_string(),
-        "--verify".to_string(),
-        "--quiet".to_string(),
-        format!("refs/heads/{branch}"),
-    ])
+    git(
+        repo,
+        &[
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}"),
+        ],
+    )
     .is_ok()
 }
 
 /// git branch -D <branch>: the flow's branch once its worktree is gone.
 pub fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
-    run(&[
-        "git".to_string(),
-        "-C".to_string(),
-        repo.display().to_string(),
-        "branch".to_string(),
-        "-D".to_string(),
-        branch.to_string(),
-    ])
-    .map(|_| ())
+    git(repo, &["branch", "-D", branch]).map(|_| ())
 }
 
+/// git -C <dir> <args>; its stdout, or an error with the last line it printed.
+fn git(dir: impl AsRef<OsStr>, args: &[&str]) -> Result<String> {
+    let mut command = Command::new("git");
+    command.arg("-C").arg(dir).args(args);
+    stdout_of(command, "git")
+}
+
+/// Runs an argv; its stdout, or an error with the last line it printed.
 fn run(argv: &[String]) -> Result<String> {
     let (program, args) = argv.split_first().context("empty command")?;
-    let output = Command::new(program)
-        .args(args)
+    let mut command = Command::new(program);
+    command.args(args);
+    stdout_of(command, program)
+}
+
+fn stdout_of(mut command: Command, program: &str) -> Result<String> {
+    let output = command
         .output()
         .with_context(|| format!("could not run {program}"))?;
     if !output.status.success() {
@@ -186,8 +180,7 @@ fn run(argv: &[String]) -> Result<String> {
 }
 
 fn last_line(stderr: &[u8], stdout: &[u8]) -> String {
-    let text =
-        String::from_utf8_lossy(if stderr.is_empty() { stdout } else { stderr }).into_owned();
+    let text = String::from_utf8_lossy(if stderr.is_empty() { stdout } else { stderr });
     text.lines()
         .map(str::trim)
         .rfind(|line| !line.is_empty())
@@ -197,16 +190,7 @@ fn last_line(stderr: &[u8], stdout: &[u8]) -> String {
 
 /// Adds .flow/worktrees/ to .git/info/exclude once, so worktrees never show in git status.
 fn exclude_worktrees(repo: &Path) -> Result<()> {
-    let git_dir = PathBuf::from(
-        run(&[
-            "git".to_string(),
-            "-C".to_string(),
-            repo.display().to_string(),
-            "rev-parse".to_string(),
-            "--git-common-dir".to_string(),
-        ])?
-        .trim(),
-    );
+    let git_dir = PathBuf::from(git(repo, &["rev-parse", "--git-common-dir"])?.trim());
     let git_dir = if git_dir.is_absolute() {
         git_dir
     } else {
