@@ -159,6 +159,23 @@ fn cut_to(text: String, limit: usize) -> String {
     }
 }
 
+impl Mode {
+    /// The name the command line and the logs use: guided, auto.
+    pub fn name(self) -> &'static str {
+        match self {
+            Mode::Guided => "guided",
+            Mode::Auto => "auto",
+        }
+    }
+
+    pub fn toggled(self) -> Mode {
+        match self {
+            Mode::Guided => Mode::Auto,
+            Mode::Auto => Mode::Guided,
+        }
+    }
+}
+
 impl Phase {
     /// design, implement, review, merge-request - in flow order.
     pub const ALL: [Phase; 4] = [
@@ -182,6 +199,17 @@ impl Phase {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_modes_and_phases_as_the_log_does() {
+        for mode in [Mode::Guided, Mode::Auto] {
+            assert_eq!(serde_json::to_value(mode).unwrap(), mode.name());
+            assert_eq!(mode.toggled().toggled(), mode);
+        }
+        for phase in Phase::ALL {
+            assert_eq!(serde_json::to_value(phase).unwrap(), phase.name());
+        }
+    }
 
     fn every_kind() -> Vec<EventKind> {
         vec![

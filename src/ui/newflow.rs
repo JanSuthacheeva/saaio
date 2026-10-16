@@ -113,10 +113,7 @@ impl NewFlowForm {
                 self.kind = (self.kind + count - 1) % count;
             }
             (Field::Mode, Key::Left | Key::Right | Key::Char(' ' | 'h' | 'l')) => {
-                self.mode = match self.mode {
-                    Mode::Auto => Mode::Guided,
-                    Mode::Guided => Mode::Auto,
-                };
+                self.mode = self.mode.toggled();
             }
             _ => {}
         }

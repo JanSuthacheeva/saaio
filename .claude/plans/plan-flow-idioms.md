@@ -46,7 +46,7 @@ any other that turns out to be noise, each named.
 - [x] lossless casts via `From`; `pid` as `libc::pid_t` via `try_from`
 
 ### 2. Typed values
-- [ ] `State::name`, `Mode::name`, `Mode::toggled`, `StepStatus::name`; drop `name_of`, `name_of_mode`
+- [x] `State::name`, `Mode::name`, `Mode::toggled`, `StepStatus::name`; drop `name_of`, `name_of_mode`
 - [ ] outcome enums `Setup`, `PaneFate`, `BranchFate`, `Retired` with `Display` in output.rs; `output::started` takes `&Workspace`
 - [ ] enums for `retire_worktree` / `drop_branch` flags; `WorkerNews` instead of `Option<Option<String>>`; `ui --stop` dispatched in `run`
 - [ ] server: `ControlFlow<()>` for `handle` / `message`, `stop` without `Result`, master `Start { Fresh, Resume }`

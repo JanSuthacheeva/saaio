@@ -8,7 +8,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph};
 
 use crate::branching::Branching;
-use crate::event::Mode;
 use crate::launch::WORKTREES_DIR;
 use crate::output;
 use crate::proto::{ClientMsg, Modes, PaneInfo, PaneKey, PaneStatus, ServerMsg, Size};
@@ -86,10 +85,7 @@ impl Job {
                     "start".to_string(),
                     form.request.trim().to_string(),
                     "--mode".to_string(),
-                    match form.mode {
-                        Mode::Auto => "auto".to_string(),
-                        Mode::Guided => "guided".to_string(),
-                    },
+                    form.mode.name().to_string(),
                 ];
                 if let Some(kind) = form.picked_type() {
                     args.extend(["--type".to_string(), kind.to_string()]);

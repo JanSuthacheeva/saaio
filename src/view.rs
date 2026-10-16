@@ -66,6 +66,22 @@ pub enum State {
     Ended,
 }
 
+impl State {
+    /// The name the JSON and TOON output use: working, not-responding, ...
+    pub fn name(self) -> &'static str {
+        match self {
+            State::Working => "working",
+            State::Delegated => "delegated",
+            State::Waiting => "waiting",
+            State::Idle => "idle",
+            State::Blocked => "blocked",
+            State::NotResponding => "not-responding",
+            State::Done => "done",
+            State::Ended => "ended",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Step {
@@ -80,6 +96,17 @@ pub enum StepStatus {
     Done,
     Current,
     Open,
+}
+
+impl StepStatus {
+    /// The name the JSON and TOON output use.
+    pub fn name(self) -> &'static str {
+        match self {
+            StepStatus::Done => "done",
+            StepStatus::Current => "current",
+            StepStatus::Open => "open",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -187,6 +214,26 @@ impl FlowView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_states_and_steps_as_the_json_does() {
+        let states = [
+            State::Working,
+            State::Delegated,
+            State::Waiting,
+            State::Idle,
+            State::Blocked,
+            State::NotResponding,
+            State::Done,
+            State::Ended,
+        ];
+        for state in states {
+            assert_eq!(serde_json::to_value(state).unwrap(), state.name());
+        }
+        for status in [StepStatus::Done, StepStatus::Current, StepStatus::Open] {
+            assert_eq!(serde_json::to_value(status).unwrap(), status.name());
+        }
+    }
 
     fn flow(state: State) -> FlowView {
         FlowView {

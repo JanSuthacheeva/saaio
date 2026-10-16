@@ -140,7 +140,7 @@ enum FlowRows {
 #[derive(Debug, Serialize)]
 struct FlowRow {
     name: String,
-    state: String,
+    state: &'static str,
     phase: String,
     tasks: String,
     age: String,
@@ -162,7 +162,7 @@ fn list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool) -> Do
                 .iter()
                 .map(|flow| FlowRow {
                     name: flow.name.clone(),
-                    state: name_of(&flow.state),
+                    state: flow.state.name(),
                     phase: flow
                         .phase
                         .map(|phase| phase.name().to_string())
@@ -229,7 +229,7 @@ pub fn status_all(projects: &Projects, warnings: &[String], full: bool) -> Docum
     struct AllRow {
         project: String,
         name: String,
-        state: String,
+        state: &'static str,
         phase: String,
         tasks: String,
         age: String,
@@ -257,7 +257,7 @@ pub fn status_all(projects: &Projects, warnings: &[String], full: bool) -> Docum
         .map(|(project, flow)| AllRow {
             project: project.to_string(),
             name: flow.name.clone(),
-            state: name_of(&flow.state),
+            state: flow.state.name(),
             phase: flow
                 .phase
                 .map(|phase| phase.name().to_string())
@@ -315,8 +315,8 @@ pub fn status_detail(
         name: String,
         id: String,
         request: String,
-        mode: String,
-        state: String,
+        mode: &'static str,
+        state: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
         phase: Option<&'static str>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -347,7 +347,7 @@ pub fn status_detail(
     #[derive(Serialize)]
     struct StepRow {
         phase: &'static str,
-        status: String,
+        status: &'static str,
         duration: String,
     }
 
@@ -362,8 +362,8 @@ pub fn status_detail(
         name: flow.name.clone(),
         id: flow.id.clone(),
         request: cut(&flow.request),
-        mode: name_of(&flow.mode),
-        state: name_of(&flow.state),
+        mode: flow.mode.name(),
+        state: flow.state.name(),
         phase: flow.phase.map(|phase| phase.name()),
         blocker: flow.blocker.as_deref().map(cut),
         delegate: flow.delegate.as_deref().map(cut),
@@ -378,7 +378,7 @@ pub fn status_detail(
             .iter()
             .map(|step| StepRow {
                 phase: step.phase.name(),
-                status: name_of(&step.status),
+                status: step.status.name(),
                 duration: step.duration_ms.map(short_duration).unwrap_or_default(),
             })
             .collect(),
@@ -428,14 +428,6 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>) -> Vec<String> {
     }
     help.push("Run `flow` for all flows".to_string());
     help
-}
-
-/// The kebab-case name serde gives a unit enum value.
-fn name_of<T: Serialize>(value: &T) -> String {
-    match serde_json::to_value(value) {
-        Ok(serde_json::Value::String(name)) => name,
-        _ => String::new(),
-    }
 }
 
 /// Whether flow ui opens a started worker now or once it runs.
@@ -517,7 +509,7 @@ pub fn reported(flow: &FlowView) -> Document {
     #[derive(Serialize)]
     struct Reported<'a> {
         flow: &'a str,
-        state: String,
+        state: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
         phase: Option<&'static str>,
         help: Vec<String>,
@@ -533,7 +525,7 @@ pub fn reported(flow: &FlowView) -> Document {
     };
     Document::Toon(toon(&Reported {
         flow: &flow.name,
-        state: name_of(&flow.state),
+        state: flow.state.name(),
         phase: flow.phase.map(|phase| phase.name()),
         help: vec![next],
     }))
@@ -544,12 +536,12 @@ pub fn sent(flow: &FlowView) -> Document {
     #[derive(Serialize)]
     struct Sent<'a> {
         sent: &'a str,
-        state: String,
+        state: &'static str,
         help: [String; 2],
     }
     Document::Toon(toon(&Sent {
         sent: &flow.name,
-        state: name_of(&flow.state),
+        state: flow.state.name(),
         help: [
             "flow wakes its worker with it now, or once its session runs again".to_string(),
             format!("flow wakes you when {} changes again", flow.name),
@@ -575,8 +567,8 @@ pub fn news_for_master(flows: &[&FlowView]) -> String {
     #[derive(Serialize)]
     struct Changed {
         name: String,
-        state: String,
-        mode: String,
+        state: &'static str,
+        mode: &'static str,
         says: String,
     }
     #[derive(Serialize)]
@@ -605,8 +597,8 @@ pub fn news_for_master(flows: &[&FlowView]) -> String {
             .iter()
             .map(|flow| Changed {
                 name: flow.name.clone(),
-                state: name_of(&flow.state),
-                mode: name_of(&flow.mode),
+                state: flow.state.name(),
+                mode: flow.mode.name(),
                 says: says(flow),
             })
             .collect(),

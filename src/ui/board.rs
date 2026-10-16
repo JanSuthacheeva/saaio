@@ -488,7 +488,7 @@ impl BoardView<'_> {
         };
         let mut facts: Vec<String> = project.into_iter().cloned().collect();
         facts.push(flow.request.clone());
-        facts.push(name_of_mode(flow.mode).to_string());
+        facts.push(flow.mode.name().to_string());
         if let Some(space) = &flow.workspace {
             facts.push(space.branch.clone());
             facts.push(format!("slot {}", space.slot));
@@ -806,13 +806,6 @@ fn gerund(phase: Phase) -> &'static str {
         Phase::Implement => "implementing",
         Phase::Review => "reviewing",
         Phase::MergeRequest => "opening the MR",
-    }
-}
-
-fn name_of_mode(mode: Mode) -> &'static str {
-    match mode {
-        Mode::Auto => "auto",
-        Mode::Guided => "guided",
     }
 }
 
