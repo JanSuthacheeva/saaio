@@ -145,7 +145,7 @@ impl Terminal {
     pub fn row(&self, row: u16, history: u32) -> Vec<Cell> {
         let grid = self.term.grid();
         let back = history.min(grid.history_size() as u32) as i32;
-        let line = &grid[Line(row as i32 - back)];
+        let line = &grid[Line(i32::from(row) - back)];
         (0..grid.columns())
             .map(|col| {
                 let cell = &line[Column(col)];

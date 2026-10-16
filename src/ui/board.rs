@@ -31,14 +31,10 @@ pub struct BoardState {
 impl BoardState {
     /// h j k l and the arrows move over the grid; a digit picks a card.
     pub fn moved(self, step: isize, cards: usize) -> BoardState {
-        let next = self.selected as isize + step;
-        if next < 0 || next as usize >= cards {
-            return self;
-        }
-        BoardState {
-            selected: next as usize,
-            ..self
-        }
+        self.selected
+            .checked_add_signed(step)
+            .filter(|&next| next < cards)
+            .map_or(self, |selected| BoardState { selected, ..self })
     }
 
     pub fn step(key: char) -> Option<isize> {

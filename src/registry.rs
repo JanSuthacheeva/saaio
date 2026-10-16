@@ -107,7 +107,7 @@ fn same_folder(left: &Path, right: &Path) -> bool {
 /// A hash that stays the same across builds, so every process finds the same file.
 pub fn fnv1a(bytes: &[u8]) -> u64 {
     bytes.iter().fold(0xcbf29ce484222325, |hash, byte| {
-        (hash ^ *byte as u64).wrapping_mul(0x100000001b3)
+        (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
     })
 }
 

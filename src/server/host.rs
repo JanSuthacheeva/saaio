@@ -47,7 +47,7 @@ struct Pane {
 struct Process {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
-    pid: i32,
+    pid: libc::pid_t,
     exited: Arc<AtomicBool>,
 }
 
@@ -252,9 +252,10 @@ impl Host {
             .spawn_command(command)
             .with_context(|| format!("could not start {program}"))?;
         drop(pair.slave);
-        let pid = child
+        let id = child
             .process_id()
-            .context("the started process has no id")? as i32;
+            .context("the started process has no id")?;
+        let pid = libc::pid_t::try_from(id).with_context(|| format!("pid {id} is out of range"))?;
         let mut reader = pair.master.try_clone_reader()?;
         let writer = pair.master.take_writer()?;
         let exited = Arc::new(AtomicBool::new(false));
@@ -310,7 +311,7 @@ fn pty_size(size: Size) -> PtySize {
 }
 
 /// The child leads its own session (portable-pty calls setsid), so its group id is its pid.
-fn signal_group(pid: i32, signal: libc::c_int) {
+fn signal_group(pid: libc::pid_t, signal: libc::c_int) {
     // SAFETY: kill only sends a signal; a stale group id fails with ESRCH and changes nothing.
     unsafe {
         libc::kill(-pid, signal);

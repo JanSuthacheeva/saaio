@@ -705,23 +705,22 @@ impl App {
 
     /// k j a line, C-u C-d half a page, C-b C-f a page, g G the ends, q or esc back to live.
     fn on_history_key(&mut self, back: u32, key: Key) -> Vec<Effect> {
-        let page = self.areas().pane.height.max(2) as i64;
-        let step: i64 = match key {
-            Key::Char('k') | Key::Up => 1,
-            Key::Char('j') | Key::Down => -1,
-            Key::Ctrl('u') => page / 2,
-            Key::Ctrl('d') => -(page / 2),
-            Key::Ctrl('b') => page,
-            Key::Ctrl('f') => -page,
-            Key::Char('g') => i64::from(u32::MAX),
-            Key::Char('G') => -i64::from(u32::MAX),
+        let page = u32::from(self.areas().pane.height.max(2));
+        let next = match key {
+            Key::Char('k') | Key::Up => back.saturating_add(1),
+            Key::Char('j') | Key::Down => back.saturating_sub(1),
+            Key::Ctrl('u') => back.saturating_add(page / 2),
+            Key::Ctrl('d') => back.saturating_sub(page / 2),
+            Key::Ctrl('b') => back.saturating_add(page),
+            Key::Ctrl('f') => back.saturating_sub(page),
+            Key::Char('g') => u32::MAX,
+            Key::Char('G') => 0,
             Key::Char('q') | Key::Esc => {
                 self.view = View::Panes;
                 return vec![Effect::Send(ClientMsg::History(None))];
             }
             _ => return vec![],
         };
-        let next = (i64::from(back) + step).clamp(0, i64::from(u32::MAX)) as u32;
         self.view = View::History(next);
         vec![Effect::Send(ClientMsg::History(Some(next)))]
     }

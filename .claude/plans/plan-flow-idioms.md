@@ -43,7 +43,7 @@ any other that turns out to be noise, each named.
 - [x] `Theme`: `const fn hex` with `to_be_bytes`, palette consts, `impl Default`; `Theme::state` -> `state_style`, `tone_style`
 - [x] `Key`, `MouseEvent` `Copy`; `Modes` by value
 - [x] `Debug` on every type, `Eq` where every field is `Eq`, `ServerPaths: Clone`
-- [ ] lossless casts via `From`; `pid` as `libc::pid_t` via `try_from`
+- [x] lossless casts via `From`; `pid` as `libc::pid_t` via `try_from`
 
 ### 2. Typed values
 - [ ] `State::name`, `Mode::name`, `Mode::toggled`, `StepStatus::name`; drop `name_of`, `name_of_mode`
