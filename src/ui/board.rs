@@ -154,6 +154,19 @@ impl BoardView<'_> {
         sidebar::workers(self.board()).get(at).copied()
     }
 
+    /// Whether enter and x act on the selected card: not on a flow of another project, which the
+    /// board only shows.
+    fn reachable(&self) -> bool {
+        if !self.state.all {
+            return true;
+        }
+        self.projects.is_some_and(|projects| {
+            every_flow(projects)
+                .get(self.state.selected)
+                .is_some_and(|(project, _)| self.here == Some(project.root.as_str()))
+        })
+    }
+
     /// How many cards there are to move over.
     fn cards(&self) -> usize {
         match (self.state.all, self.projects) {
@@ -171,14 +184,15 @@ impl BoardView<'_> {
         }
         let active = |hint: Hint, on: bool| if on { hint } else { hint.inactive() };
         let many = self.cards() > 1;
-        let finished = self.selected().is_some_and(FlowView::is_finished);
+        let reachable = self.reachable();
+        let finished = reachable && self.selected().is_some_and(FlowView::is_finished);
         let mut hints = Vec::new();
         if !self.state.all {
             hints.push(active(Hint::new("0-9", "select"), many));
         }
         hints.extend([
             active(Hint::new("h j k l", "move"), many),
-            Hint::new("enter", "jump in"),
+            active(Hint::new("enter", "jump in"), reachable),
             Hint::new("n", "new flow"),
             active(Hint::new("x", "clear finished flow"), finished),
             Hint::new(

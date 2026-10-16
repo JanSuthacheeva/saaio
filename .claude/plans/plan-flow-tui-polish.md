@@ -270,7 +270,7 @@ The board at any width:
 5. render_card -> focus::mark(buf, rect, theme) when selected
 6. BoardView::render -> render_detail -> header, Sidebar::steps line, rule -> render_timeline(left), render_answer(right)
 7. render_answer -> fit::wrap(answer, width): the last rows that fit, under DECISIONS when there are any
-8. BoardView::render -> footer(width) -> hints::line(&hints, width, theme); `x clear finished flow` inactive unless the selected card is a finished flow; `0-9 select` and `h j k l move` inactive with one card
+8. BoardView::render -> footer(width) -> hints::line(&hints, width, theme); `x clear finished flow` inactive unless the selected card is a finished flow of this project; `enter jump in` inactive on another project's card; `0-9 select` and `h j k l move` inactive with one card
 9. An inactive key pressed anyway: on_board_key keeps today's notice ("only a finished flow can be cleared").
 10. No answer yet: render_answer shows only the decisions, or nothing.
 

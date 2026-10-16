@@ -383,3 +383,44 @@ fn draws_the_keys_that_do_nothing_for_the_selected_card_faint() {
         "a finished flow can"
     );
 }
+
+#[test]
+fn draws_enter_and_x_faint_on_a_card_of_another_project() {
+    let theme = Theme::default();
+    let style_of = |app: &App, key: &str| {
+        let terminal = render_at(app, FLEET);
+        let footer = row(&terminal, 41);
+        let at = footer.find(&format!("   {key} ")).unwrap() + 3;
+        let x = footer[..at].chars().count() as u16 + layout::MARGIN;
+        terminal.backend().buffer()[(x, 41 + layout::MARGIN)].fg
+    };
+    let mut app = board_app().with_store("/state/projects/shop".into());
+    app.on_input(Routed::Command(Command::Board));
+    app.on_input(Routed::View(vec![Key::Char('a')]));
+    let json = serde_json::to_string(&every_project()).unwrap();
+    app.on_ran(Job::Overview, Ok(json));
+    let finished = crate::ui::board::every_flow(app.projects.as_ref().unwrap())
+        .iter()
+        .position(|(_, flow)| flow.is_finished())
+        .unwrap();
+    app.view = View::Board(BoardState {
+        selected: finished,
+        all: true,
+    });
+    assert_ne!(
+        style_of(&app, "x"),
+        theme.palette.faint,
+        "a finished flow here"
+    );
+
+    app.view = View::Board(BoardState {
+        selected: 4,
+        all: true,
+    });
+    assert_eq!(
+        style_of(&app, "enter"),
+        theme.palette.faint,
+        "api-7 runs elsewhere"
+    );
+    assert_eq!(style_of(&app, "x"), theme.palette.faint);
+}
