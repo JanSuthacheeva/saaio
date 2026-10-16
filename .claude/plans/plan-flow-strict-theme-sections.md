@@ -141,7 +141,8 @@ the title row; no `[glyphs]`. `docs/HANDOVER.md` row 9: `[glyphs]` is rejected u
 ## Assumptions
 
 - A color key at the top level names its section (`accent belongs in [ui]`).
-- With several mistakes the topmost is reported.
+- With several mistakes the topmost structural one (a key, a table, a type) is reported first,
+  then the topmost bad value.
 - Bad values, syntax errors and the name-each-other loop get a line; "does not exist" and "more than
   4 themes deep" keep the path only.
 - Dotted keys and inline tables count as their section.
@@ -170,9 +171,15 @@ are byte-identical to `~/.config/flow/themes/noctalia.toml` and dotfiles-v2's
   reports line 4 (the wrong section) before line 2 (the bad color). Recommendation: accept it and
   read the assumption as "the topmost structural mistake first, then the topmost bad value"; the
   user still gets one true error at a time.
+
+  Decided 2026-10-16: accepted as recommended; the assumption is reworded.
 - **Where to look** - `src/ui/theme_file.rs` `parse` to `colors`: the span sort and section check
   carry the behaviour; `apply`: the `name each other` line comes from the first pending reference;
   `src/ui.rs` `reload_theme` with `App::take_back`: a theme that reads again clears only a notice
   starting `theme: `. `theme.rs` `section`, README, HANDOVER and the fixtures are routine.
 - **Checks** - `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`
   passed at 73eeef1 (told, not rerun; no code changed since).
+
+**After the review**: origin/main (phase-color-levels, `phase_colors`) merged in e6abea4; the
+`phase_colors` arm sits in the new top-level match and its errors carry the line. Tests, clippy
+and fmt pass at e6abea4.
