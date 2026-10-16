@@ -213,3 +213,33 @@ The master's pane opens again:
 - [x] Draw row 0 and the rail's 0 with the glyph and the Lit mark; golden for the master working and waiting; `FLOW_UPDATE_GOLDEN=1` only for the meant change
 - [x] Update CLAUDE.md's architecture lines (store, hook, proto) and docs/HANDOVER.md where they describe the master's hooks
 - [x] End to end: scratch `FLOW_HOME`, `flow ui` with a Claude Code master: the spinner while it works, the dot after its turn while a worker is focused, cleared on C-space 0; also with `[master] wake = false`
+
+## Review
+
+Reviewed 2026-10-17 against this plan, in a context that did not write the code.
+
+**Fixed**
+- A master turn woken by `flow wait` (asyncRewake, no UserPromptSubmit) that ended without a tool
+  call went Idle -> Idle; `record_master_turn` kept the old file, so row 0 showed no dot for the
+  news the master just relayed. Shown by `tests/cli.rs`
+  `a_woken_master_turn_that_ends_idle_again_is_a_new_turn` failing. Now only a repeated Working
+  or Delegated is skipped; every resting state is written with its `at` (f8f5539).
+
+**Open**
+- "Not focused" is `focus != PaneKey::Master`, as planned: while the board or a history view
+  covers the screen with the master still focused, a turn that ends there shows no dot.
+  Recommendation: leave as planned unless it bites; the fix would be to also count
+  `View::Board`/`View::History` as not in view.
+- The fix was reviewed in a separate pass by the same reviewer, not by an independent agent.
+
+**Where to look**
+1. `src/cli/commands/hook.rs` `record_master_turn`: which hook kinds rewrite `waits/master.turn`.
+2. `src/ui/app/messages.rs` `on_master_turn` with `src/ui/app.rs` `master_state` and
+   `src/ui/app/keys.rs` `focus`: the seen/unseen logic.
+3. `src/adapter/claude_code.rs` `master_settings`/`arm` and `adapter.rs` `wire_master`: the Claude
+   master now always runs the report hooks (`turn` is None for Claude Code, so no Stop handover).
+- Routine, skim: `changed` keyed by `PaneKey`, the `turn: None` test fixture lines, goldens,
+  `Store::remove_wait` extraction, `PROTOCOL_VERSION` 5.
+
+**Checks**: `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check` green
+at f8f5539.
