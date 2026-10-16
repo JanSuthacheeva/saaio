@@ -81,9 +81,10 @@ pub enum Phase {
     MergeRequest,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Mode {
+    #[default]
     Guided,
     Auto,
 }

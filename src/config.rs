@@ -26,24 +26,31 @@ pub struct Agent {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(default)]
 pub struct Config {
-    #[serde(default = "default_agent_name")]
     pub agent: String,
-    #[serde(default)]
     pub agents: BTreeMap<String, Agent>,
     /// Skill name -> phase: the built-in map with the file's entries over it.
-    #[serde(default)]
     pub phases: PhaseMap,
-    #[serde(default)]
     pub master: MasterConfig,
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        Config {
+            agent: "claude".to_string(),
+            agents: BTreeMap::new(),
+            phases: PhaseMap::new(),
+            master: MasterConfig::default(),
+        }
+    }
 }
 
 /// [master]: how the master works with its workers.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct MasterConfig {
     /// flow wakes the master when a worker stops (wake = false: it learns only from flow status).
-    #[serde(default = "yes")]
     pub wake: bool,
 }
 
@@ -51,10 +58,6 @@ impl Default for MasterConfig {
     fn default() -> MasterConfig {
         MasterConfig { wake: true }
     }
-}
-
-fn yes() -> bool {
-    true
 }
 
 impl Config {
@@ -66,11 +69,11 @@ impl Config {
         home: Option<PathBuf>,
     ) -> Result<Config> {
         let mut config = match config_file(flow_config, xdg_config, home) {
-            None => Config::empty(),
+            None => Config::default(),
             Some(file) => match fs::read_to_string(&file) {
                 Ok(text) => toml::from_str::<Config>(&text)
                     .with_context(|| format!("could not read {}", file.display()))?,
-                Err(error) if error.kind() == ErrorKind::NotFound => Config::empty(),
+                Err(error) if error.kind() == ErrorKind::NotFound => Config::default(),
                 Err(error) => {
                     return Err(error)
                         .with_context(|| format!("could not read {}", file.display()));
@@ -118,6 +121,10 @@ pub fn builtin_phases() -> PhaseMap {
     ])
 }
 
+fn strings(parts: &[&str]) -> Vec<String> {
+    parts.iter().copied().map(String::from).collect()
+}
+
 /// The adapter the built-in agents report through.
 const CLAUDE_CODE: &str = "claude-code";
 
@@ -129,18 +136,11 @@ pub const MASTER_AGENT: &str = "master";
 /// instructions appended to its system prompt ({instructions}, the master.md beside config.toml).
 pub fn builtin_agents() -> BTreeMap<String, Agent> {
     let claude = Agent {
-        command: ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
-            .map(String::from)
-            .to_vec(),
+        command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
         prompt: "/ship-feature {request}".to_string(),
         adapter: Some(CLAUDE_CODE.to_string()),
-        resume: Some(
-            ["claude", "-n", "{name}", "--resume", "{id}"]
-                .map(String::from)
-                .to_vec(),
-        ),
+        resume: Some(strings(&["claude", "-n", "{name}", "--resume", "{id}"])),
     };
-    let strings = |parts: &[&str]| parts.iter().map(|part| part.to_string()).collect();
     let master = Agent {
         command: strings(&[
             "claude",
@@ -167,21 +167,6 @@ pub fn builtin_agents() -> BTreeMap<String, Agent> {
         ("claude".to_string(), claude),
         (MASTER_AGENT.to_string(), master),
     ])
-}
-
-impl Config {
-    fn empty() -> Config {
-        Config {
-            agent: default_agent_name(),
-            agents: BTreeMap::new(),
-            phases: PhaseMap::new(),
-            master: MasterConfig::default(),
-        }
-    }
-}
-
-fn default_agent_name() -> String {
-    "claude".to_string()
 }
 
 #[cfg(test)]

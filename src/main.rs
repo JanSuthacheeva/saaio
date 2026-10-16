@@ -60,7 +60,7 @@ enum Command {
         name: String,
         #[arg(long)]
         request: String,
-        #[arg(long, value_enum, default_value = "guided")]
+        #[arg(long, value_enum, default_value_t)]
         mode: Mode,
     },
     /// Append one event to a flow
@@ -92,7 +92,7 @@ enum Command {
         /// Flow name [default: from the ticket key or the first words]
         #[arg(long)]
         name: Option<String>,
-        #[arg(long, value_enum, default_value = "guided")]
+        #[arg(long, value_enum, default_value_t)]
         mode: Mode,
         /// Agent from the config [default: the config's agent, claude]
         #[arg(long)]
