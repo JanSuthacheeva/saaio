@@ -113,6 +113,7 @@ Isolated review of `flow/rust-idioms` against `origin/main` (merge-base 2e715fc;
   `flow start` and `flow ui` do say it loudly. Recommendation: keep the strict load (the loud
   failure at start/ui is the point), and accept that running workers go stale until it is fixed.
   If that is too quiet, let `flow hook` fall back to the built-in phases when the config fails.
+  Resolved: the user chose the fallback (task 10, 6a55019).
 
 **Where to look**
 1. `src/main.rs` `start()` -> `Rollback` -> `claim_slot` / `free_branch`: the rollback moved from
@@ -130,3 +131,20 @@ Routine and skimmable: the derives, `Display` / `name()` replacements for `name_
 
 **Checks**: `cargo test` (263 + 40), `cargo clippy --all-targets -- -D warnings` and
 `cargo fmt --check` pass at 4cfc759.
+
+### Second review
+
+Isolated review of 2830670..6a55019 (task 10): `Config::builtin()`, the shared `add_builtins`, and
+`run_hook` falling back to it with the error on stderr.
+
+**Fixed**: nothing.
+
+**Open**: none needing a decision. Noted: on the fallback a worker loses the skill-to-phase
+entries the user added in `[phases]` until the file is fixed (built-in phases only), and every
+hook event repeats the error in Claude Code's debug log. Both follow from the decision.
+
+**Where to look**: `src/main.rs` `run_hook` (the only caller of `Config::builtin`; `flow start`
+and `flow server` still use `load_config()?`). The test `a_hook_keeps_reporting_when_the_config_does_not_load`
+fails with the old `run_hook` (checked).
+
+**Checks**: `cargo test` (263 + 41), clippy and fmt pass at 6a55019; no code changed since.
