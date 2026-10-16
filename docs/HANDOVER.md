@@ -265,7 +265,8 @@ Codex facts" list every source line). Decisions:
   (`waits/<key>.busy` says idle). This is the one place flow writes into a PTY on its own.
 - Instructions go through `Adapter::instruct`: Codex `-c developer_instructions=<toml string>`,
   Claude Code `--append-system-prompt` (the master too, instead of `-file`).
-- `[master] agent` picks the master's agent; the dialog's agent row the worker's.
+- `[master] agent` picks the master's agent; `[worker] agent` the worker's default (the top-level
+  `agent` key is refused, naming it), the dialog's agent row the worker's.
 
 Verified on Codex 0.163.0 (recorded in `src/adapter/fixtures/codex/`):
 - The subagent tool is `collaborationspawn_agent` (namespace + name) with an encrypted `message`;

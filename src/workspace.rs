@@ -163,6 +163,18 @@ pub fn remote_urls(dir: &Path) -> Vec<String> {
     urls
 }
 
+/// ssh -G -- <host>: the hostname its ssh config gives it (the host itself when no rule names it);
+/// None when ssh does not run or prints none.
+pub fn ssh_hostname(host: &str) -> Option<String> {
+    let mut command = Command::new("ssh");
+    command.args(["-G", "--", host]);
+    let config = stdout_of(command, "ssh").ok()?;
+    config
+        .lines()
+        .find_map(|line| line.strip_prefix("hostname "))
+        .map(|name| name.trim().to_string())
+}
+
 /// git branch -D <branch>: the flow's branch once its worktree is gone.
 pub fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
     git(repo, &["branch", "-D", branch]).map(|_| ())
@@ -275,6 +287,19 @@ mod tests {
         let file = dir.join(name);
         fs::write(&file, script).unwrap();
         fs::set_permissions(&file, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[test]
+    fn an_ssh_host_no_rule_names_resolves_to_itself() {
+        if Command::new("ssh").arg("-V").output().is_err() {
+            eprintln!("skipped: no ssh");
+            return;
+        }
+
+        assert_eq!(
+            ssh_hostname("flow-test-unknown-alias").as_deref(),
+            Some("flow-test-unknown-alias")
+        );
     }
 
     #[test]

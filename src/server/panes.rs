@@ -75,7 +75,7 @@ impl Server {
                 .master
                 .agent
                 .as_ref()
-                .unwrap_or(&self.config.agent);
+                .unwrap_or(&self.config.worker.agent);
             let reason = format!("no agent named {missing}");
             self.host.fail(PaneKey::Master, reason);
             return;
