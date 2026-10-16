@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -300,16 +302,16 @@ impl BoardView<'_> {
         let Some(flow) = flow else {
             return Span::styled("you", theme.ui.accent);
         };
-        let text = match flow.state {
-            State::Blocked => "blocked".to_string(),
-            State::NotResponding => "not responding".to_string(),
-            State::Waiting => "waiting for you".to_string(),
-            State::Working => "working".to_string(),
-            State::Idle => "ready".to_string(),
-            State::Delegated => format!("{} · agent", flow.phase.map_or("working", gerund)),
-            State::Done if flow.merge_request.is_some() => "MR open".to_string(),
-            State::Done => "done".to_string(),
-            State::Ended => "ended".to_string(),
+        let text: Cow<'static, str> = match flow.state {
+            State::Blocked => "blocked".into(),
+            State::NotResponding => "not responding".into(),
+            State::Waiting => "waiting for you".into(),
+            State::Working => "working".into(),
+            State::Idle => "ready".into(),
+            State::Delegated => format!("{} · agent", flow.phase.map_or("working", gerund)).into(),
+            State::Done if flow.merge_request.is_some() => "MR open".into(),
+            State::Done => "done".into(),
+            State::Ended => "ended".into(),
         };
         let style = match flow.state {
             State::Idle => theme.ui.muted,

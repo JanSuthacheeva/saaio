@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
@@ -161,13 +162,15 @@ fn target(input: &Value) -> String {
 
 /// The first non-empty line of a tool result, given as text or as text blocks.
 fn first_line(content: &Value) -> Option<String> {
-    let text = match content {
-        Value::String(text) => text.clone(),
-        Value::Array(blocks) => blocks
-            .iter()
-            .filter_map(|block| block["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n"),
+    let text: Cow<str> = match content {
+        Value::String(text) => Cow::Borrowed(text),
+        Value::Array(blocks) => Cow::Owned(
+            blocks
+                .iter()
+                .filter_map(|block| block["text"].as_str())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ),
         _ => return None,
     };
     text.lines()
