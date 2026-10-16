@@ -685,9 +685,15 @@ resume = ["cat"]"#,
 
 /// Runs `flow hook claude-code` with a hook payload on stdin, as Claude Code does.
 fn hook(home: &Path, flow_id: Option<&str>, payload: &str) -> Output {
+    hook_with(home, &["claude-code"], flow_id, payload)
+}
+
+/// Runs `flow hook <args>` with a hook payload on stdin.
+fn hook_with(home: &Path, args: &[&str], flow_id: Option<&str>, payload: &str) -> Output {
     let mut command = flow_command(home);
     command
-        .args(["hook", "claude-code"])
+        .arg("hook")
+        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -729,6 +735,69 @@ fn a_hook_event_reports_into_the_flow_silently_and_only_once() {
         1,
         "{log}"
     );
+}
+
+/// What `flow send` would append: the master's message to the flow's worker.
+fn message_for(home: &Path, id: &str, text: &str) {
+    let line = format!("{{\"v\":1,\"at\":5,\"kind\":\"message\",\"text\":\"{text}\"}}\n");
+    let mut log = fs::OpenOptions::new()
+        .append(true)
+        .open(home.join(format!("flows/{id}.jsonl")))
+        .unwrap();
+    log.write_all(line.as_bytes()).unwrap();
+}
+
+#[test]
+fn a_codex_stop_hands_the_masters_message_over_and_goes_on_working() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let prompt = r#"{"session_id":"01a1","hook_event_name":"UserPromptSubmit","prompt":"go"}"#;
+    let stop = r#"{"session_id":"01a1","hook_event_name":"Stop","last_assistant_message":"Tabs or spaces?"}"#;
+    let busy = home.path().join(format!("waits/{id}.busy"));
+
+    let started = hook_with(home.path(), &["codex"], Some(&id), prompt);
+    assert!(started.status.success());
+    assert!(busy.exists(), "busy from the prompt on");
+    let idle = hook_with(home.path(), &["codex"], Some(&id), stop);
+    assert!(idle.status.success(), "nothing to hand over");
+    assert!(idle.stdout.is_empty() && idle.stderr.is_empty());
+    assert!(!busy.exists(), "idle after its Stop");
+
+    message_for(home.path(), &id, "Tabs.");
+    let handed = hook_with(home.path(), &["codex"], Some(&id), stop);
+
+    assert_eq!(handed.status.code(), Some(2), "Codex goes on with stderr");
+    assert!(handed.stdout.is_empty());
+    let news = String::from_utf8_lossy(&handed.stderr);
+    assert!(news.contains("message from the flow master:"), "{news}");
+    assert!(news.contains("Tabs."), "{news}");
+    let detail = stdout(&flow(home.path(), &["status", "shop-221", "--json"]));
+    assert!(detail.contains(r#""state": "working""#), "{detail}");
+    assert!(
+        detail.contains(r#""id": "01a1""#),
+        "the session it picked: {detail}"
+    );
+    let again = hook_with(home.path(), &["codex"], Some(&id), stop);
+    assert!(again.status.success(), "delivered once");
+}
+
+#[test]
+fn a_codex_master_records_its_session_and_reports_nothing() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let prompt = r#"{"session_id":"02b2","hook_event_name":"UserPromptSubmit","prompt":"status?"}"#;
+
+    let output = hook_with(home.path(), &["codex", "--master"], None, prompt);
+
+    assert!(output.status.success());
+    assert!(output.stdout.is_empty() && output.stderr.is_empty());
+    assert_eq!(
+        fs::read_to_string(home.path().join("waits/master.session")).unwrap(),
+        "02b2"
+    );
+    assert!(home.path().join("waits/master.busy").exists());
+    let log = fs::read_to_string(home.path().join(format!("flows/{id}.jsonl"))).unwrap();
+    assert!(!log.contains("02b2"), "{log}");
 }
 
 #[test]

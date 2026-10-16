@@ -13,6 +13,7 @@ use crate::wake::Seen;
 /// What the waiters keep: each session's waiter pid, deliveries, the master's seen marks.
 const WAITS_DIR: &str = "waits";
 const SEEN_FILE: &str = "master.seen";
+const MASTER_SESSION_FILE: &str = "master.session";
 
 /// One flow's events and its last heartbeat, as read from disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -235,6 +236,32 @@ impl Store {
         self.write_wait(&format!("{id}.delivered"), &count.to_string())
     }
 
+    /// Marks the session as running a turn, or as idle at its prompt, for a session flow server
+    /// types news into: it types only into an idle one.
+    pub fn set_busy(&self, waiter: &Waiter, busy: bool) -> Result<()> {
+        let name = format!("{}.busy", waiter.key());
+        if busy {
+            return self.write_wait(&name, "");
+        }
+        let file = self.root.join(WAITS_DIR).join(name);
+        match fs::remove_file(&file) {
+            Err(error) if error.kind() != ErrorKind::NotFound => {
+                Err(error).with_context(|| format!("could not remove {}", file.display()))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// The master's own session id, for a harness that picks it itself (Codex).
+    pub fn set_master_session(&self, id: &str) -> Result<()> {
+        self.write_wait(MASTER_SESSION_FILE, id)
+    }
+
+    pub fn master_session(&self) -> Option<String> {
+        let id = self.read_wait(MASTER_SESSION_FILE)?;
+        Some(id.trim().to_string()).filter(|id| !id.is_empty())
+    }
+
     /// What the master was last woken for; None before its first wake.
     pub fn seen(&self) -> Option<Seen> {
         serde_json::from_str(&self.read_wait(SEEN_FILE)?).ok()
@@ -257,6 +284,7 @@ impl Store {
             self.alive(id),
             waits.join(format!("{id}.pid")),
             waits.join(format!("{id}.delivered")),
+            waits.join(format!("{id}.busy")),
         ] {
             if let Err(error) = fs::remove_file(&file)
                 && error.kind() != ErrorKind::NotFound
@@ -454,6 +482,23 @@ mod tests {
         let store = Store::at(dir.path().to_path_buf());
 
         assert_eq!(store.beat("nope").unwrap_err().to_string(), "no flow nope");
+    }
+
+    #[test]
+    fn marks_a_session_busy_and_keeps_the_masters_session() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let busy = dir.path().join("waits/7f3c.busy");
+
+        store.set_busy(&Waiter::Flow("7f3c".into()), true).unwrap();
+        assert!(busy.exists());
+        store.set_busy(&Waiter::Flow("7f3c".into()), false).unwrap();
+        store.set_busy(&Waiter::Flow("7f3c".into()), false).unwrap();
+        assert!(!busy.exists(), "idle twice is no error");
+
+        assert_eq!(store.master_session(), None);
+        store.set_master_session("01a1").unwrap();
+        assert_eq!(store.master_session().as_deref(), Some("01a1"));
     }
 
     #[test]

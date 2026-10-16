@@ -371,13 +371,12 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 
 ### Launch, delivery, hook
 - [x] config: built-in codex agent; tests (master_agent, [master] agent and the master without the file argument move to the master task, worker_agents to the dialog task: a unit lands with its first caller, since private modules warn on dead code)
-- [ ] launch/pane.rs: {session} in resume_argv; worker_spec fills it from flow.session and falls back to the fresh or plain command; tests
-- [ ] store busy marks and master_session; deliver::master_news_now (master_news uses it); tests
-- [ ] commands/hook.rs: Adapter::wakes_itself, Args.master, Hooked, hand_over, busy marks, Document::Wake on a Stop with news; tests/cli.rs cases
+- [x] launch/pane.rs: {session} in resume_argv; worker_spec fills it from flow.session and falls back to the fresh or plain command; tests
+- [x] Store set_busy and master_session, deliver::master_news_now (master_news uses it), Adapter::wakes_itself; commands/hook.rs: Args.master, Hooked, hand_over, busy marks, Document::Wake on a Stop with news; tests/cli.rs cases
 
 ### Server
 - [ ] config MasterConfig.agent and Config::master_agent, built-in master without the file argument; server/master.rs: Instructions, spec with instruct, master_wiring and session; panes.rs open_master through Config::master_agent and store.master_session; master.md harness-neutral with master-v5.md kept; tests
-- [ ] server/news.rs: deliver_news, server_delivered, paste; Server typed_at and quiet; conn.rs records input; server/tests.rs cases with a codex-adapter cat agent
+- [ ] Store::busy; server/news.rs: deliver_news, server_delivered, paste; Server typed_at and quiet; conn.rs records input; server/tests.rs cases with a codex-adapter cat agent
 
 ### UI
 - [ ] peek split into peek/claude.rs and peek/codex.rs; Format, transcript_of, tail with format; PeekCache uses transcript_of; codex parser tests over the recorded rollout

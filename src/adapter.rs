@@ -99,6 +99,15 @@ impl Adapter {
         }
     }
 
+    /// True when the session wakes itself for news (Claude Code: an asyncRewake `flow wait`); false
+    /// when flow hands news over at its Stop and flow server types it in (Codex).
+    pub fn wakes_itself(self) -> bool {
+        match self {
+            Adapter::ClaudeCode => true,
+            Adapter::Codex => false,
+        }
+    }
+
     /// The flow events one hook payload means; empty for one that means nothing.
     pub fn translate(self, payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
         match self {
@@ -200,6 +209,8 @@ mod tests {
         );
         assert_eq!(Adapter::Codex.plain_wiring(exe), codex::hooks(exe, false));
         assert_eq!(Adapter::Codex.master_wiring(exe), codex::hooks(exe, true));
+        assert!(!Adapter::Codex.wakes_itself());
+        assert!(Adapter::ClaudeCode.wakes_itself());
     }
 
     #[test]

@@ -43,14 +43,23 @@ pub fn worker_news(store: &Store, id: &str, now: u64) -> WorkerNews {
 /// as one wake, and marked seen; none while `is_mine` no longer holds.
 pub fn master_news(store: &Store, clock: fn() -> u64, is_mine: &dyn Fn() -> bool) -> Vec<FlowView> {
     let flows = fold::views(&store.logs().0, clock());
-    let mut seen = store.seen().unwrap_or_else(|| wake::first_seen(&flows));
+    let seen = store.seen().unwrap_or_else(|| wake::first_seen(&flows));
     if wake::changed_flows(&flows, &seen).is_empty() {
         return Vec::new();
     }
     thread::sleep(SETTLE);
-    let flows = fold::views(&store.logs().0, clock());
-    let changed = wake::changed_flows(&flows, &seen);
-    if changed.is_empty() || !is_mine() {
+    if !is_mine() {
+        return Vec::new();
+    }
+    master_news_now(store, &fold::views(&store.logs().0, clock()))
+}
+
+/// The flows that stopped since the master last saw them, marked seen, without waiting for more:
+/// what a Stop hands over and flow server types into an idle master.
+pub fn master_news_now(store: &Store, flows: &[FlowView]) -> Vec<FlowView> {
+    let mut seen = store.seen().unwrap_or_else(|| wake::first_seen(flows));
+    let changed = wake::changed_flows(flows, &seen);
+    if changed.is_empty() {
         return Vec::new();
     }
     wake::mark_seen(&mut seen, &changed);
@@ -130,5 +139,25 @@ mod tests {
         started(&store);
 
         assert!(master_news(&store, || 3, &|| true).is_empty());
+    }
+
+    #[test]
+    fn the_master_hears_of_a_stopped_flow_once_at_once() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let id = started(&store);
+        let idle = EventKind::Idle {
+            note: "plan written".to_string(),
+        };
+        store.append(&id, &Event::new(2, idle)).unwrap();
+        let flows = || fold::views(&store.logs().0, 3);
+
+        let news = master_news_now(&store, &flows());
+
+        assert_eq!(
+            news.iter().map(|flow| flow.id.as_str()).collect::<Vec<_>>(),
+            [id.as_str()]
+        );
+        assert!(master_news_now(&store, &flows()).is_empty(), "seen now");
     }
 }
