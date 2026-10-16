@@ -205,7 +205,7 @@ impl App {
             spin: 0,
             ticks: 0,
             home: None,
-            offset_secs: board::local_offset_secs(),
+            offset_secs: 0,
             master: None,
             master_cwd: None,
             notice: None,
@@ -229,6 +229,12 @@ impl App {
             None => notice,
         };
         self.say(notice);
+    }
+
+    /// Board times show this many seconds east of UTC.
+    pub fn with_offset(mut self, offset_secs: i64) -> App {
+        self.offset_secs = offset_secs;
+        self
     }
 
     /// The store this flow ui belongs to, as `flow status --all` names its root.
@@ -2205,7 +2211,6 @@ mod tests {
 
     fn board_app() -> App {
         let mut app = with_fleet().with_home(Some("/Users/jan".into()));
-        app.offset_secs = 0;
         app.on_server(ServerMsg::Master {
             cwd: "/Users/jan/projects/shop".into(),
             branch: Some("main".into()),

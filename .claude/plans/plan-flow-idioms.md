@@ -73,7 +73,7 @@ any other that turns out to be noise, each named.
 ### 5. unsafe and RAII
 - [x] slots: `File::lock` instead of `libc::flock`
 - [x] `flow start` rolls back through a drop guard
-- [ ] local UTC offset read moves out of board.rs to the I/O side, with `&raw`
+- [x] local UTC offset read moves out of board.rs to the I/O side, with `&raw`
 
 ### 6. Errors, dead code, docs
 - [ ] error context in store, config, branching; `Store::locate` / `Registry::locate` return `Option`, Store reuses `Registry::default_root`

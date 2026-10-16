@@ -833,19 +833,6 @@ pub fn clock(ms: u64, offset_secs: i64) -> String {
     format!("{:02}:{:02}", minute_of_day / 60, minute_of_day % 60)
 }
 
-/// This machine's offset from UTC right now, in seconds.
-pub fn local_offset_secs() -> i64 {
-    // SAFETY: time and localtime_r only write into the tm we pass; a zeroed tm is a valid start.
-    unsafe {
-        let now = libc::time(std::ptr::null_mut());
-        let mut tm: libc::tm = std::mem::zeroed();
-        if libc::localtime_r(&now, &mut tm).is_null() {
-            return 0;
-        }
-        tm.tm_gmtoff
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
