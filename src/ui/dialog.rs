@@ -12,7 +12,7 @@ use crate::ui::theme::Theme;
 /// Rows between the border and the body, above and below it.
 const PAD_ROWS: u16 = 1;
 /// Columns between the border and the body, left and right of it.
-const PAD_COLS: u16 = 2;
+pub const PAD_COLS: u16 = 2;
 
 /// A box over the session: the screen behind it dimmed, the title in its border, one row and two
 /// columns of padding, and its keys under a rule that joins the border.

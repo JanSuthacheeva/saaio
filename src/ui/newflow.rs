@@ -11,10 +11,10 @@ use crate::event::Mode;
 use crate::ui::fit::{columns, tail};
 use crate::ui::input::Key;
 
-/// The dialog's width, borders included.
-const WIDTH: u16 = 78;
-/// The dialog's height, borders included.
-const HEIGHT: u16 = 14;
+/// The dialog body's width, inside its padding.
+const BODY_WIDTH: u16 = 72;
+/// The body's rows without the type and agent rows: label, text box, error, mode, creates.
+const BODY_ROWS: u16 = 7;
 
 /// What `C-space n` asks before it runs `flow start`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -191,32 +191,20 @@ impl NewFlowForm {
         Mode::ALL[(at + steps) % Mode::ALL.len()]
     }
 
-    /// The column of the text cursor inside the text box, while the box has the keys.
-    pub fn cursor(&self, area: Rect) -> Option<(u16, u16)> {
-        if self.field != Field::Request {
+    /// Where the text cursor goes inside the text box, while the box has the keys; `body` is the
+    /// dialog's body (Dialog::body_area).
+    pub fn cursor(&self, body: Rect) -> Option<(u16, u16)> {
+        if self.field != Field::Request || body.height < 3 {
             return None;
         }
-        let dialog = dialog_area(area, self.extra_rows());
-        let typed = u16::try_from(columns(self.shown_text(dialog))).unwrap_or(u16::MAX);
-        Some((dialog.x + 3 + typed, dialog.y + 5))
+        let typed = u16::try_from(columns(self.shown_text(body))).unwrap_or(u16::MAX);
+        Some((body.x + 2 + typed, body.y + 2))
     }
 
     /// The end of the text that fits the box.
-    fn shown_text(&self, dialog: Rect) -> &str {
-        tail(self.text(), usize::from(dialog.width.saturating_sub(7)))
+    fn shown_text(&self, body: Rect) -> &str {
+        tail(self.text(), usize::from(body.width.saturating_sub(4)))
     }
-}
-
-/// Centered on the screen, a little above the middle as in the design.
-fn dialog_area(area: Rect, extra_rows: u16) -> Rect {
-    let width = WIDTH.min(area.width);
-    let height = (HEIGHT + extra_rows).min(area.height);
-    Rect::new(
-        area.x + (area.width - width) / 2,
-        area.y + (area.height - height) / 3,
-        width,
-        height,
-    )
 }
 
 #[cfg(test)]
@@ -278,11 +266,11 @@ mod tests {
     fn keeps_wide_characters_inside_the_request_box() {
         let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into(), Vec::new());
         typed(&mut form, &"界".repeat(60));
-        let dialog = dialog_area(Rect::new(0, 0, 100, 30), form.extra_rows());
+        let body = Rect::new(0, 0, BODY_WIDTH, 10);
 
-        let shown = form.shown_text(dialog);
+        let shown = form.shown_text(body);
 
-        assert_eq!(columns(shown), 70);
+        assert_eq!(columns(shown), 68);
     }
 
     #[test]

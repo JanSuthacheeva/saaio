@@ -2,10 +2,6 @@ pub mod app;
 pub mod board;
 pub mod dialog;
 pub mod fit;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "drawn by the views in the next commits")
-)]
 pub mod focus;
 #[cfg_attr(
     not(test),

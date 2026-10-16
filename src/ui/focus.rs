@@ -7,6 +7,9 @@ use crate::ui::theme::Theme;
 /// theme.ui.accent down its first column. Drawn after the content, which leaves that column blank.
 pub fn mark(buf: &mut Buffer, area: Rect, theme: &Theme) {
     let area = area.intersection(buf.area);
+    if area.is_empty() {
+        return;
+    }
     light(buf, area, theme);
     for y in area.top()..area.bottom() {
         buf[(area.x, y)]
@@ -90,7 +93,9 @@ mod tests {
         let mut buf = filled(" abcde");
 
         mark(&mut buf, Rect::new(4, 2, 10, 10), &theme);
+        mark(&mut buf, Rect::new(2, 0, 0, 3), &theme);
 
         assert_eq!(buf[(4, 2)].symbol(), "▌");
+        assert_eq!(buf[(2, 0)].symbol(), "b", "an empty area marks nothing");
     }
 }

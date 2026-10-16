@@ -1,0 +1,44 @@
+
+  master  main                                                                                              │ ▚▄▞ flow
+                                                                                                            ├────────────────────────────────────────
+                                                                                                            │▌0   master
+                                                                                                            │     ~/projects/shop · main
+                                                                                                            │
+                                                                                                            │ NEEDS YOU 2
+                                                                                                            │ 1 ● shop-221                       29m
+                                                                                                            │     ●───●───○───○ implement        4/9
+                                                                                                            │     migration needs a default value f…
+                                                                                                            │
+                                                                                                            │ 2 ● shop-230                       31m
+               ╭─ new flow ──────────────────────────────────────────── in ~/projects/shop ─╮               │     ●───○───○───○ design        guided
+               │                                                                            │               │     Which approach: a channel column …
+               │  request                                                                   │               │
+               │  ╭──────────────────────────────────────────────────────────────────────╮  │               │ RUNNING 1
+               │  │                                                                      │  │               │ 3 ◓ export-csv                      1h
+               │  ╰──────────────────────────────────────────────────────────────────────╯  │               │     ●───●───●───○ review           6/6
+               │                                                                            │               │     agent: review changes
+               │▌ agent   (•) claude   ( ) codex                                            │               │
+               │  mode    ( ) auto   (•) guided   ( ) plain    guided stops at every phase  │               │ DONE 1
+               │  creates a branch, a worktree and a slot                                   │               │ 4 ✓ shop-198                        2h
+               │                                                                            │               │     ●───●───●───● MR !418        in 0s
+               ├────────────────────────────────────────────────────────────────────────────┤               │
+               │  enter start   tab next field   esc cancel                                 │               │
+               ╰────────────────────────────────────────────────────────────────────────────╯               │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │ C-space ? keys
+

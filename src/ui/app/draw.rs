@@ -1,6 +1,5 @@
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
 
@@ -148,18 +147,15 @@ impl App {
             }
             View::NewFlow(form) => {
                 let repo = form.repo.display().to_string();
-                let screen = frame.area();
-                frame.buffer_mut().set_style(screen, Modifier::DIM);
-                frame.render_widget(
-                    NewFlowView {
-                        form,
-                        flows: self.board.as_ref().map_or(&[], |board| &board.flows),
-                        place: &self.tilde(&repo),
-                        theme,
-                    },
-                    areas.session(),
-                );
-                if let Some(cursor) = form.cursor(areas.session()) {
+                let view = NewFlowView {
+                    form,
+                    flows: self.board.as_ref().map_or(&[], |board| &board.flows),
+                    place: &self.tilde(&repo),
+                    theme,
+                };
+                let body = view.dialog().body_area(areas.session());
+                frame.render_widget(view, areas.session());
+                if let Some(cursor) = form.cursor(body) {
                     frame.set_cursor_position(cursor);
                 }
             }

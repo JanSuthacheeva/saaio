@@ -79,8 +79,11 @@ pub struct Dialog<'a> {
     pub theme: &'a Theme,
 }
 
-impl Dialog<'_> {
-    /// The box centered in `area`, a little above the middle, clamped to it.
+impl<'a> Dialog<'a> {
+    /// A dialog with `body` and no keys, its border in the rule color; the rest by struct update.
+    pub fn new(title: &'a str, body: Vec<Line<'a>>, theme: &'a Theme) -> Dialog<'a>;
+    /// The box centered in `area`, a little above the middle, clamped to it; the row padding goes
+    /// first when `area` is too short.
     pub fn area(&self, area: Rect) -> Rect;
     /// Where the body goes inside `area(area)`: inside the padding, above the key rule.
     pub fn body_area(&self, area: Rect) -> Rect;
@@ -91,11 +94,13 @@ impl Dialog<'_> {
 impl Widget for Dialog<'_> { fn render(self, area: Rect, buf: &mut Buffer); }
 
 /// Every key behind C-space.
-pub fn help(theme: &Theme) -> Dialog<'static>;
+pub fn help(theme: &Theme) -> Dialog<'_>;
 /// A pane whose process is gone: for a worker (its name) what to do with its flow, else the master.
-pub fn not_running(status: &PaneStatus, worker: Option<&str>, theme: &Theme) -> Option<Dialog<'static>>;
+pub fn not_running<'a>(status: &PaneStatus, worker: Option<&str>, theme: &'a Theme) -> Option<Dialog<'a>>;
 /// A worker pane flow ui has no session for.
-pub fn no_session(theme: &Theme) -> Dialog<'static>;
+pub fn no_session(theme: &Theme) -> Dialog<'_>;
+/// The body's side padding; new flow's focus mark reaches across it to the border.
+pub const PAD_COLS: u16 = 2;
 ```
 
 `src/ui/layout.rs` (modified)
@@ -205,6 +210,9 @@ impl NewFlowView<'_> {
 // newflow.rs: dialog_area goes; cursor() takes the body from Dialog::body_area.
 pub fn cursor(&self, body: Rect) -> Option<(u16, u16)>;
 ```
+
+The focused field's mark spans the dialog's inner width, border to border (the request's label
+and box together), so its bar stands where the sidebar's does. Labels stay faint.
 
 The text box keeps a rule-colored rounded border in every state; with focus its rows get
 focus::mark and the cursor shows.
@@ -319,7 +327,7 @@ The first worker starts:
 
 - [x] Add `Dialog` with `area`, `body_area` and `Widget::render` (dim, padding, title, aside, ├─┤ rule, keys), and unit tests for geometry and the joined rule
 - [x] Move help, not running, no session, confirm and stop onto `Dialog` (`dialog::help`, `dialog::not_running`, `dialog::no_session`, `App::stop_dialog`), remove `draw_dialog`; update the help and stop goldens
-- [ ] Draw `NewFlowView` inside a `Dialog` (`NewFlowView::dialog`, `NewFlowForm::cursor(body)`), mark the focused field with `focus::mark`, draw `(•)` strong and the focused row's choice reversed; remove `dialog_area` and the DIM call in draw.rs; update new-flow goldens and add new-flow-agent
+- [x] Draw `NewFlowView` inside a `Dialog` (`NewFlowView::dialog`, `NewFlowForm::cursor(body)`), mark the focused field with `focus::mark`, draw `(•)` strong and the focused row's choice reversed; remove `dialog_area` and the DIM call in draw.rs; update new-flow goldens and add new-flow-agent
 - [ ] Fit the scrollback hint with `hints::line` (`App::draw_history`)
 
 ### Focus and color (items 2, 3, 9)

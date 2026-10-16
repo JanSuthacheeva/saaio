@@ -65,6 +65,8 @@ fn every_view_looks_as_it_did() {
     let mut new_flow = board_app().with_agents(vec!["claude".into(), "codex".into()]);
     new_flow.on_input(Routed::Command(Command::NewFlow));
     golden("new-flow", &render_at(&new_flow, FLEET));
+    new_flow.on_input(Routed::View(vec![Key::Tab]));
+    golden("new-flow-agent", &render_at(&new_flow, FLEET));
 
     let mut new_session = board_app();
     new_session.on_input(Routed::Command(Command::NewFlow));
