@@ -1399,6 +1399,28 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
 }
 
 #[test]
+fn ui_refuses_inside_a_worker_on_its_own_store_and_points_to_a_scratch_home() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+
+    for args in [&["ui"][..], &["ui", "--stop"]] {
+        let refused = flow_in(home.path(), &id, args);
+        assert_eq!(refused.status.code(), Some(1), "{args:?}");
+        let text = stdout(&refused);
+        assert!(
+            text.contains("would take over the user's flow ui"),
+            "{text}"
+        );
+        assert!(text.contains("FLOW_HOME"), "{text}");
+    }
+
+    let scratch = TempDir::new().unwrap();
+    let elsewhere = flow_in(scratch.path(), &id, &["ui", "--stop"]);
+    assert!(elsewhere.status.success(), "{}", stdout(&elsewhere));
+    assert_eq!(stdout(&elsewhere).trim(), "no flow server runs");
+}
+
+#[test]
 fn ui_stop_ends_a_server_that_speaks_another_protocol() {
     let home = TempDir::new().unwrap();
     let socket = home.path().join("server.sock");
