@@ -102,3 +102,35 @@ so the flow binary the master runs on stayed as it was.
 - [x] Add `REQUEST_LIMIT` and `commands::check_request` and call it first in `start::run` and `new::run`, with CLI tests: 20,001 chars refused by both (no flow, no branch), 20,000 taken
 - [x] Add a `status.rs` case: a long request is cut with the `--full` hint
 - [x] End-to-end: `cargo install --path .`, start a long request in a scratch repo, check the worker's prompt and `flow status` output; check a 20,001-char start is refused
+
+## Review
+
+Reviewed `flow/full-request` against `main` (commits 1c6c0fd..89b47ab) in a context that did not write it.
+
+**Fixed** - nothing. No finding could be proven: every call chain, message, help line and test seam in
+the plan matches the code.
+
+**Open**
+
+- The UI's board (`ui/board/detail.rs`, `ui/board/cards.rs`) and `flow status <name>` show the request
+  clipped, so long requests stay one line there; `flow status <name> --full` and `--json` now print up
+  to 20,000 chars. Intended by the plan; no action.
+- `flow new` checks the request before looking for an existing flow of that name, so a too-long request
+  is refused even when the flow already exists. Matches the plan; recommend keeping it (the input is
+  wrong either way).
+- `docs/design/core-implementation.html` and `plan-flow-core.md` still say texts are cut at 500 chars.
+  They are historical design records; recommend leaving them.
+
+**Where to look**
+
+1. `src/event.rs` `EventKind::cut_texts`: the only place a Started request used to be cut; now only the
+   name is.
+2. `src/cli/commands.rs` `check_request`, called first in `start::run` and `new::run`: nothing (flow,
+   slot, worktree, branch) is made before it.
+3. `src/launch/pane.rs` `agent_argv`: the whole request becomes one argv string; 20,000 chars is at most
+   80 KB, under Linux's 128 KiB per string.
+
+Routine, skim: the tests in `tests/cli.rs` and `src/cli/output/status.rs`.
+
+**Checks** - `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` passed at
+6cff74e; later commits change only this plan.
