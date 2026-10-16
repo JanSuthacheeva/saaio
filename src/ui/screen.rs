@@ -44,15 +44,9 @@ pub struct ScreenView<'a> {
 
 impl Widget for ScreenView<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        for (y, cells) in self
-            .screen
-            .rows
-            .iter()
-            .enumerate()
-            .take(area.height as usize)
-        {
-            for (x, cell) in cells.iter().enumerate().take(area.width as usize) {
-                let Some(target) = buf.cell_mut((area.x + x as u16, area.y + y as u16)) else {
+        for (cells, row) in self.screen.rows.iter().zip(area.rows()) {
+            for (cell, column) in cells.iter().zip(row.columns()) {
+                let Some(target) = buf.cell_mut(column.as_position()) else {
                     continue;
                 };
                 if cell.flags.has(Flags::SPACER) {

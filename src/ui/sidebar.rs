@@ -477,8 +477,7 @@ impl Sidebar<'_> {
 
 impl Widget for Sidebar<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        for (y, row) in self.rows(area.height).into_iter().enumerate() {
-            let line = Rect::new(area.x, area.y + y as u16, area.width, 1);
+        for (row, line) in self.rows(area.height).into_iter().zip(area.rows()) {
             if row.selected {
                 buf.set_style(line, self.theme.ui.selection);
             }

@@ -377,8 +377,8 @@ impl BoardView<'_> {
             None => self.master_card(width),
             Some(flow) => self.flow_card(flow, number, width),
         };
-        for (offset, line) in lines.iter().enumerate() {
-            buf.set_line(body.x, body.y + offset as u16, line, body.width);
+        for (line, row) in lines.iter().zip(body.rows()) {
+            buf.set_line(row.x, row.y, line, row.width);
         }
         let pill = self.pill(flow);
         let pill_x = (body.x + body.width).saturating_sub(pill.width() as u16 + 1);
@@ -630,9 +630,8 @@ impl BoardView<'_> {
         if lines.is_empty() {
             lines.push(Line::styled("  nothing needs you", theme.ui.faint));
         }
-        let rows = area.height.saturating_sub(2) as usize;
-        for (offset, line) in lines.iter().take(rows).enumerate() {
-            buf.set_line(area.x, area.y + 2 + offset as u16, line, area.width);
+        for (line, row) in lines.iter().zip(area.rows().skip(2)) {
+            buf.set_line(row.x, row.y, line, row.width);
         }
     }
 
@@ -671,8 +670,8 @@ impl BoardView<'_> {
             &Line::styled("timeline", theme.ui.faint),
             area.width,
         );
-        for (offset, line) in lines.iter().enumerate() {
-            buf.set_line(area.x, area.y + 1 + offset as u16, line, area.width);
+        for (line, row) in lines.iter().zip(area.rows().skip(1)) {
+            buf.set_line(row.x, row.y, line, row.width);
         }
     }
 
@@ -717,8 +716,8 @@ impl BoardView<'_> {
             }
         }
         lines.push(Line::from(steps));
-        for (offset, line) in lines.iter().take(area.height as usize).enumerate() {
-            buf.set_line(area.x, area.y + offset as u16, line, area.width);
+        for (line, row) in lines.iter().zip(area.rows()) {
+            buf.set_line(row.x, row.y, line, row.width);
         }
     }
 

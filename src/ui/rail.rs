@@ -79,8 +79,7 @@ impl Rail<'_> {
 impl Widget for Rail<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let selection = self.sidebar.theme.ui.selection;
-        for (y, (line, _, focused)) in self.rows(area.height).into_iter().enumerate() {
-            let row = Rect::new(area.x, area.y + y as u16, area.width, 1);
+        for ((line, _, focused), row) in self.rows(area.height).into_iter().zip(area.rows()) {
             if focused {
                 buf.set_style(row, selection);
             }
