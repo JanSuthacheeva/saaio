@@ -1,0 +1,532 @@
+use std::collections::BTreeMap;
+use std::os::unix::fs::PermissionsExt;
+use std::os::unix::net::UnixListener;
+use std::thread;
+
+use tempfile::TempDir;
+
+use super::*;
+use crate::config::Agent;
+use crate::event::{Event as LogEvent, EventKind};
+use crate::launch::pane::HOSTED;
+use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Role};
+
+/// A server whose master is `cat`, run on its own thread.
+fn start(dir: &Path) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
+    start_with(
+        dir,
+        Agent {
+            command: vec!["cat".into()],
+            prompt: String::new(),
+            adapter: None,
+            resume: Some(vec!["cat".into()]),
+        },
+    )
+}
+
+fn start_with(dir: &Path, agent: Agent) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
+    start_with_agents(dir, BTreeMap::from([("claude".to_string(), agent)]))
+}
+
+fn start_with_agents(
+    dir: &Path,
+    agents: BTreeMap<String, Agent>,
+) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
+    let paths = ServerPaths {
+        socket: dir.join("server.sock"),
+        master: dir.join("master.json"),
+        instructions: dir.join("master.md"),
+    };
+    let thread_paths = paths.clone();
+    let store = Store::at(dir.to_path_buf());
+    let config = Config {
+        agent: "claude".into(),
+        agents,
+        phases: crate::config::builtin_phases(),
+        master: crate::config::MasterConfig::default(),
+    };
+    let handle = thread::spawn(move || {
+        run(
+            &thread_paths,
+            store,
+            config,
+            LaunchEnv::default(),
+            &std::env::current_dir().unwrap(),
+            || 0,
+        )
+    });
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while UnixStream::connect(&paths.socket).is_err() {
+        assert!(Instant::now() < deadline, "the server did not start");
+        thread::sleep(Duration::from_millis(20));
+    }
+    (paths, handle)
+}
+
+fn connect(socket: &Path, role: Role) -> UnixStream {
+    let mut stream = UnixStream::connect(socket).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    proto::write_msg(
+        &mut stream,
+        &ClientMsg::Hello {
+            version: PROTOCOL_VERSION,
+            role,
+        },
+    )
+    .unwrap();
+    stream
+}
+
+fn recv(stream: &mut UnixStream) -> ServerMsg {
+    proto::read_msg(stream).unwrap().expect("a message")
+}
+
+fn text(frame: &Frame, row: u16) -> String {
+    frame
+        .rows
+        .iter()
+        .find(|(index, _)| *index == row)
+        .map(|(_, cells)| {
+            cells
+                .iter()
+                .map(|cell| cell.text.as_str())
+                .collect::<String>()
+        })
+        .unwrap_or_default()
+        .trim_end()
+        .to_string()
+}
+
+#[test]
+fn a_ui_attaches_types_into_the_master_and_sees_it() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+    let size = Size { cols: 30, rows: 6 };
+
+    let mut ui = connect(&paths.socket, Role::Attach { size });
+
+    assert_eq!(
+        recv(&mut ui),
+        ServerMsg::Welcome {
+            version: PROTOCOL_VERSION
+        }
+    );
+    let ServerMsg::Master { cwd, .. } = recv(&mut ui) else {
+        panic!("expected where the master runs");
+    };
+    assert_eq!(cwd, std::env::current_dir().unwrap().display().to_string());
+    let ServerMsg::Board(board) = recv(&mut ui) else {
+        panic!("expected the board");
+    };
+    assert_eq!(board.count, 0);
+    let ServerMsg::Panes(panes) = recv(&mut ui) else {
+        panic!("expected the panes");
+    };
+    assert_eq!(panes[0].key, PaneKey::Master);
+    assert_eq!(panes[0].status, PaneStatus::Running);
+    let ServerMsg::Frame(first) = recv(&mut ui) else {
+        panic!("expected a full frame");
+    };
+    assert!(first.full);
+    assert_eq!(first.rows.len(), 6);
+    assert_eq!(first.rows[0].1.len(), 30);
+
+    proto::write_msg(&mut ui, &ClientMsg::Input(b"hello\r".to_vec())).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut seen = String::new();
+    while !seen.contains("hello") {
+        assert!(Instant::now() < deadline, "never saw the echo: {seen:?}");
+        if let ServerMsg::Frame(frame) = recv(&mut ui) {
+            seen = text(&frame, 0);
+        }
+    }
+
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+    assert!(!paths.socket.exists());
+    assert!(!paths.master.exists(), "a stop ends the master for good");
+}
+
+/// A flow with a worktree at dir/<name>, as `flow start` leaves it.
+fn started_flow(store: &Store, dir: &Path, name: &str, agent: &str) -> String {
+    let id = store
+        .create(&LogEvent::new(
+            0,
+            EventKind::Started {
+                name: name.into(),
+                request: "x".into(),
+                mode: crate::event::Mode::Auto,
+            },
+        ))
+        .unwrap();
+    let path = dir.join(name);
+    fs::create_dir_all(&path).unwrap();
+    let workspace = EventKind::Workspace {
+        path: path.display().to_string(),
+        branch: format!("flow/{name}"),
+        slot: 1,
+        window: None,
+        agent: agent.into(),
+    };
+    store.append(&id, &LogEvent::new(1, workspace)).unwrap();
+    id
+}
+
+fn status_of(panes: &[crate::proto::PaneInfo], id: &str) -> Option<PaneStatus> {
+    let key = PaneKey::Flow(id.to_string());
+    panes
+        .iter()
+        .find(|pane| pane.key == key)
+        .map(|pane| pane.status.clone())
+}
+
+#[test]
+fn opens_a_pane_for_every_started_flow_and_marks_it_hosted() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let cat = Agent {
+        command: vec!["cat".into()],
+        prompt: String::new(),
+        adapter: None,
+        resume: Some(vec!["cat".into()]),
+    };
+    let broken = Agent {
+        command: vec!["/nonexistent/flow-agent".into()],
+        prompt: String::new(),
+        adapter: None,
+        resume: None,
+    };
+    let csv = started_flow(&store, dir.path(), "csv", "claude");
+    let odd = started_flow(&store, dir.path(), "odd", "codex");
+    let (paths, handle) = start_with_agents(
+        dir.path(),
+        BTreeMap::from([("claude".to_string(), cat), ("broken".to_string(), broken)]),
+    );
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    let later = started_flow(&store, dir.path(), "later", "broken");
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut flows = 0;
+    let mut panes = Vec::new();
+    while !(flows == 3 && status_of(&panes, &later).is_some()) {
+        assert!(Instant::now() < deadline, "flows {flows}, panes {panes:?}");
+        match recv(&mut ui) {
+            ServerMsg::Board(board) => flows = board.count,
+            ServerMsg::Panes(update) => panes = update,
+            _ => {}
+        }
+    }
+
+    assert_eq!(status_of(&panes, &csv), Some(PaneStatus::Running));
+    assert_eq!(
+        status_of(&panes, &odd),
+        Some(PaneStatus::Failed {
+            reason: "no agent named codex".into()
+        })
+    );
+    assert!(matches!(
+        status_of(&panes, &later),
+        Some(PaneStatus::Failed { .. })
+    ));
+    let hosted = store.events(&csv).unwrap().into_iter().any(|event| {
+        matches!(event.kind, EventKind::Workspace { window: Some(ref w), .. } if w == HOSTED)
+    });
+    assert!(hosted, "an opened worker is marked hosted");
+    let blocked = store
+        .events(&later)
+        .unwrap()
+        .into_iter()
+        .any(|event| matches!(event.kind, EventKind::Blocked { .. }));
+    assert!(blocked, "a worker that cannot start blocks its flow");
+
+    proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(csv))).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::Input(b"csv here\r".to_vec())).unwrap();
+    let mut echoed = false;
+    while !echoed {
+        assert!(Instant::now() < deadline, "the worker never echoed");
+        if let ServerMsg::Frame(frame) = recv(&mut ui) {
+            echoed = (0..4).any(|row| text(&frame, row).contains("csv here"));
+        }
+    }
+
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
+fn closes_a_flow_pane_on_request_and_says_when_there_is_none() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let csv = started_flow(&store, dir.path(), "csv", "claude");
+    let (paths, handle) = start(dir.path());
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut panes = Vec::new();
+    while status_of(&panes, &csv) != Some(PaneStatus::Running) {
+        assert!(Instant::now() < deadline, "the worker never opened");
+        if let ServerMsg::Panes(update) = recv(&mut ui) {
+            panes = update;
+        }
+    }
+
+    let closed = crate::client::close_flow(&paths.socket, &csv, Duration::from_secs(5));
+    let none = crate::client::close_flow(&paths.socket, "nope", Duration::from_secs(5));
+
+    assert_eq!(closed.unwrap(), crate::client::Closing::Closed);
+    assert_eq!(none.unwrap(), crate::client::Closing::NoPane);
+    while status_of(&panes, &csv).is_some() {
+        assert!(Instant::now() < deadline, "the ui still lists the pane");
+        if let ServerMsg::Panes(update) = recv(&mut ui) {
+            panes = update;
+        }
+    }
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+    assert_eq!(
+        crate::client::close_flow(&paths.socket, &csv, Duration::from_secs(1)).unwrap(),
+        crate::client::Closing::NoServer
+    );
+}
+
+/// Reads messages until the UI's pane list shows `want` for the flow.
+fn wait_for(
+    ui: &mut UnixStream,
+    panes: &mut Vec<crate::proto::PaneInfo>,
+    id: &str,
+    want: Option<&PaneStatus>,
+) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while status_of(panes, id).as_ref() != want {
+        assert!(
+            Instant::now() < deadline,
+            "{id} never became {want:?}: {panes:?}"
+        );
+        if let ServerMsg::Panes(update) = recv(ui) {
+            *panes = update;
+        }
+    }
+}
+
+#[test]
+fn reopens_an_exited_worker_and_one_whose_flow_ended() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let csv = started_flow(&store, dir.path(), "csv", "claude");
+    let old = started_flow(&store, dir.path(), "old", "claude");
+    store
+        .append(&old, &LogEvent::new(2, EventKind::Ended))
+        .unwrap();
+    let (paths, handle) = start(dir.path());
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    let mut panes = Vec::new();
+    wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
+    assert_eq!(
+        status_of(&panes, &old),
+        None,
+        "an ended flow does not open by itself"
+    );
+
+    proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(csv.clone()))).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::Input(b"\x04".to_vec())).unwrap();
+    wait_for(
+        &mut ui,
+        &mut panes,
+        &csv,
+        Some(&PaneStatus::Exited { code: Some(0) }),
+    );
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(csv.clone()))).unwrap();
+    wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(old.clone()))).unwrap();
+    wait_for(&mut ui, &mut panes, &old, Some(&PaneStatus::Running));
+
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
+fn ends_every_unfinished_flow_before_a_stop_when_asked() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let csv = started_flow(&store, dir.path(), "csv", "claude");
+    let done = started_flow(&store, dir.path(), "done", "claude");
+    store
+        .append(&done, &LogEvent::new(2, EventKind::Ended))
+        .unwrap();
+    let (paths, handle) = start(dir.path());
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    let mut panes = Vec::new();
+    wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
+
+    proto::write_msg(&mut ui, &ClientMsg::EndFlows).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+
+    let ends = |id: &str| {
+        store
+            .events(id)
+            .unwrap()
+            .iter()
+            .filter(|event| event.kind == EventKind::Ended)
+            .count()
+    };
+    assert_eq!(ends(&csv), 1);
+    assert_eq!(ends(&done), 1, "a finished flow is left alone");
+}
+
+#[test]
+fn a_ui_that_attaches_again_starts_on_the_master() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let csv = started_flow(&store, dir.path(), "csv", "claude");
+    let (paths, handle) = start(dir.path());
+    let size = Size { cols: 30, rows: 4 };
+    let mut first = connect(&paths.socket, Role::Attach { size });
+    let mut panes = Vec::new();
+    wait_for(&mut first, &mut panes, &csv, Some(&PaneStatus::Running));
+    proto::write_msg(&mut first, &ClientMsg::Focus(PaneKey::Flow(csv.clone()))).unwrap();
+    proto::write_msg(&mut first, &ClientMsg::History(Some(3))).unwrap();
+    drop(first);
+
+    let mut again = connect(&paths.socket, Role::Attach { size });
+    let frame = loop {
+        if let ServerMsg::Frame(frame) = recv(&mut again) {
+            break frame;
+        }
+    };
+
+    assert_eq!(frame.key, PaneKey::Master);
+    assert_eq!(frame.history, None);
+    proto::write_msg(&mut again, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
+fn a_second_ui_takes_over_and_an_old_protocol_is_refused() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+    let size = Size { cols: 20, rows: 4 };
+
+    let mut first = connect(&paths.socket, Role::Attach { size });
+    assert!(matches!(recv(&mut first), ServerMsg::Welcome { .. }));
+    let mut second = connect(&paths.socket, Role::Attach { size });
+    assert!(matches!(recv(&mut second), ServerMsg::Welcome { .. }));
+
+    let mut told = false;
+    while let Ok(Some(message)) = proto::read_msg::<_, ServerMsg>(&mut first) {
+        told |= message == ServerMsg::Detached;
+    }
+    assert!(told);
+
+    let mut old = UnixStream::connect(&paths.socket).unwrap();
+    old.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    proto::write_msg(
+        &mut old,
+        &ClientMsg::Hello {
+            version: PROTOCOL_VERSION + 1,
+            role: Role::Control,
+        },
+    )
+    .unwrap();
+    assert!(matches!(recv(&mut old), ServerMsg::Refused { .. }));
+
+    proto::write_msg(&mut second, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
+fn starts_the_master_fresh_when_its_session_cannot_be_resumed() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("master.json"),
+        r#"{"session": "5e55", "cwd": "/tmp"}"#,
+    )
+    .unwrap();
+    let (paths, handle) = start_with(
+        dir.path(),
+        Agent {
+            command: vec!["cat".into()],
+            prompt: String::new(),
+            adapter: None,
+            resume: Some(vec![
+                "sh".into(),
+                "-c".into(),
+                "echo No conversation found; exit 1".into(),
+            ]),
+        },
+    );
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    thread::sleep(Duration::from_millis(500));
+
+    proto::write_msg(&mut ui, &ClientMsg::Input(b"again\r".to_vec())).unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut running = false;
+    let mut echoed = false;
+    while !(running && echoed) {
+        assert!(
+            Instant::now() < deadline,
+            "running {running}, echoed {echoed}"
+        );
+        match recv(&mut ui) {
+            ServerMsg::Panes(panes) => running = panes[0].status == PaneStatus::Running,
+            ServerMsg::Frame(frame) => {
+                echoed |= (0..4).any(|row| text(&frame, row).contains("again"));
+                if !echoed {
+                    proto::write_msg(&mut ui, &ClientMsg::Input(b"again\r".to_vec())).unwrap();
+                }
+            }
+            _ => {}
+        }
+    }
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
+fn replaces_a_stale_socket_but_not_a_live_one() {
+    let dir = TempDir::new().unwrap();
+    let socket = dir.path().join("server.sock");
+    drop(UnixListener::bind(&socket).unwrap());
+    // A process another test forks right now holds the listener until it execs.
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while UnixStream::connect(&socket).is_ok() && std::time::Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(5));
+    }
+
+    let listener = bind(&socket).unwrap();
+
+    let mode = fs::metadata(&socket).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o600);
+    let error = bind(&socket).unwrap_err();
+    assert!(error.to_string().contains("already runs"), "{error}");
+    drop(listener);
+}

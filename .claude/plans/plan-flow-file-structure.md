@@ -392,7 +392,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 - [x] Move fold's tests to `fold/tests.rs`
 
 ### 6. Server
-- [ ] Split `server.rs` into server.rs (run, serve, handle, stop), `server/conn.rs`, `server/panes.rs`, `server/tests.rs`
+- [x] Split `server.rs` into server.rs (run, serve, handle, stop), `server/conn.rs`, `server/panes.rs`, `server/tests.rs`
 
 ### 7. UI
 - [ ] Add `ui/dialog.rs` (draw_dialog, draw_help, draw_not_running, draw_no_session) and `ui/app/effect.rs` (Effect, Job, Removal, outcome)
