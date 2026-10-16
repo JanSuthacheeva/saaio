@@ -109,6 +109,7 @@ Claude Code hooks (2.1.300, recorded):
   Artifact arms a live subscription that stays there as `{"type": "monitor", "status": "running",
   "description": "live updates for artifact <url> (auto-armed on publish)"}` (2.1.301) and never
   finishes, so flow skips it and the turn ends idle or waiting (fixture `stop_artifact_watch.json`).
+  The skip matches that wording, so re-record the fixture with the others on a Claude Code upgrade.
 - A subagent's hooks fire with `agent_id` set; a phase skill it starts (`review-changes` in a
   fresh agent) reaches PreToolUse Skill only when the skill exists (an unknown skill is refused
   before any hook).
