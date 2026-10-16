@@ -61,6 +61,7 @@ pub(super) fn with_view<R>(flows: Vec<FlowView>, look: impl FnOnce(&BoardView) -
             now: NOW,
             spin: 0,
             changed: &changed,
+            home: None,
             theme: &theme,
         },
         state: BoardState::default(),

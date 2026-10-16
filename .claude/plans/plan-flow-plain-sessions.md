@@ -249,6 +249,10 @@ shows `branch · slot N`.
 - Card: `· plain` after the label; a finished card's third row shows the folder.
 - Board detail facts: mode, folder, age; no branch, slot or empty request.
 - `PeekLine::Code { branch: Option<String>, worktree, exists }`; no branch row when None.
+  The place row says `folder` then.
+- `Sidebar` gains `home: Option<&str>` and `tilde(path)` (`fit::tilde`, moved from `App::tilde`), so
+  cards, detail, peek and chrome show `~/scratch` (done in the build).
+- Board detail draws no steps column without steps.
 
 `src/server/master.md` (modified): one line, plain sessions are the user's own; leave them alone.
 
@@ -360,7 +364,7 @@ The session stops; flow remove
 ### flow ui
 
 - [x] `Mode::ALL`, remove `toggled()`; `NewFlowForm` folder, `text`/`text_mut`, mode cycling through `Mode::ALL`, type row hidden in plain, `new(repo, place)`; `Job::args` for plain; `open_new_flow` place, `focused_repo` for plain; newflow and app tests, golden `new-flow-plain.txt`
-- [ ] Plain session look: sidebar `plain` tag and no steps, card `· plain` and folder, board detail facts, chrome title folder, C-space Q list, `PeekLine::Code` branch Option; golden with a plain session
+- [x] Plain session look: sidebar `plain` tag and no steps, card `· plain` and folder, board detail facts, chrome title folder, C-space Q list, `PeekLine::Code` branch Option; golden with a plain session
 
 ### Docs and check
 

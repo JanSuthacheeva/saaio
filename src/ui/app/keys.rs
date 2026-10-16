@@ -165,13 +165,11 @@ impl App {
                     .filter(|flow| unfinished.contains(&flow.id))
                 {
                     if let Some(space) = &flow.workspace {
-                        let _ = write!(
-                            message,
-                            "\n  {}  {}  {}",
-                            flow.name,
-                            space.branch.as_deref().unwrap_or_default(),
-                            self.tilde(&space.path)
-                        );
+                        let _ = write!(message, "\n  {}  ", flow.name);
+                        if let Some(branch) = &space.branch {
+                            let _ = write!(message, "{branch}  ");
+                        }
+                        message.push_str(&self.tilde(&space.path));
                     }
                 }
                 let mut effects = vec![Effect::Send(ClientMsg::EndFlows)];

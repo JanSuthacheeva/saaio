@@ -43,9 +43,13 @@ impl BoardView<'_> {
             return;
         };
         let mut facts: Vec<String> = project.into_iter().cloned().collect();
-        facts.push(flow.request.clone());
+        if !flow.request.is_empty() {
+            facts.push(flow.request.clone());
+        }
         facts.push(flow.mode.name().to_string());
-        if let Some(space) = &flow.workspace {
+        if let Some(space) = flow.workspace.as_ref().filter(|_| flow.is_plain()) {
+            facts.push(self.sidebar.tilde(&space.path));
+        } else if let Some(space) = &flow.workspace {
             facts.extend(space.branch.clone());
             facts.extend(space.slot.map(|slot| format!("slot {slot}")));
         }
@@ -223,7 +227,6 @@ impl BoardView<'_> {
 
     fn render_facts(&self, flow: &FlowView, area: Rect, buf: &mut Buffer) {
         let theme = self.theme();
-        let glyphs = &theme.glyphs;
         let width = area.width as usize;
         let mut lines = Vec::new();
         if !flow.decisions.is_empty() {
@@ -236,7 +239,20 @@ impl BoardView<'_> {
             }
             lines.push(Line::raw(""));
         }
-        lines.push(Line::styled("steps", theme.ui.faint));
+        // A plain session has no phases to show.
+        if !flow.steps.is_empty() {
+            lines.push(Line::styled("steps", theme.ui.faint));
+            lines.push(Line::from(self.steps(flow)));
+        }
+        for (line, row) in lines.iter().zip(area.rows()) {
+            buf.set_line(row.x, row.y, line, row.width);
+        }
+    }
+
+    /// Each phase with its glyph and the time spent in it.
+    fn steps(&self, flow: &FlowView) -> Vec<Span<'static>> {
+        let theme = self.theme();
+        let glyphs = &theme.glyphs;
         let mut steps = Vec::new();
         for step in &flow.steps {
             let (glyph, style) = match step.status {
@@ -261,10 +277,7 @@ impl BoardView<'_> {
                 ));
             }
         }
-        lines.push(Line::from(steps));
-        for (line, row) in lines.iter().zip(area.rows()) {
-            buf.set_line(row.x, row.y, line, row.width);
-        }
+        steps
     }
 }
 

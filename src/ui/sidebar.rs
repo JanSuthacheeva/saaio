@@ -11,6 +11,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 
 use crate::proto::{PaneInfo, PaneKey, PaneStatus};
+use crate::ui::fit;
 use crate::ui::layout::SIDEBAR_WIDTH;
 use crate::ui::peek::PeekLine;
 use crate::ui::theme::Theme;
@@ -39,6 +40,8 @@ pub struct Sidebar<'a> {
     pub spin: usize,
     /// Flows whose state changed a moment ago, by id; their rows stand out.
     pub changed: &'a HashMap<String, u64>,
+    /// The user's home, shown as ~ in paths.
+    pub home: Option<&'a str>,
     pub theme: &'a Theme,
 }
 
@@ -60,6 +63,11 @@ pub fn workers(board: &Board) -> Vec<&FlowView> {
 }
 
 impl Sidebar<'_> {
+    /// `path` with ~ for the user's home.
+    pub fn tilde(&self, path: &str) -> String {
+        fit::tilde(path, self.home)
+    }
+
     /// The pane a click on this row of the sidebar focuses.
     pub fn key_at(&self, row: u16, height: u16) -> Option<PaneKey> {
         self.rows(height).into_iter().nth(row as usize)?.key
@@ -237,6 +245,7 @@ mod tests {
             now: 0,
             spin: 0,
             changed: &HashMap::new(),
+            home: None,
             theme: &theme,
         };
 
@@ -287,6 +296,7 @@ mod tests {
             now: 0,
             spin: 0,
             changed: &HashMap::new(),
+            home: None,
             theme: &theme,
         };
 

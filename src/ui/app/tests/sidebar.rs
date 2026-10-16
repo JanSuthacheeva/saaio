@@ -310,6 +310,38 @@ fn peeks_at_where_an_ended_flows_code_is() {
 }
 
 #[test]
+fn peeks_at_an_ended_plain_sessions_folder_without_a_branch() {
+    let mut app = board_app();
+    app.on_server(ServerMsg::Board(fold::board(
+        vec![plain_session(
+            "notes",
+            "/Users/jan/notes",
+            200,
+            vec![EventKind::Ended],
+        )],
+        NOW,
+    )));
+    app.on_input(Routed::Command(Command::Cursor(Step::Next)));
+    assert_eq!(app.peeked().map(|flow| flow.name.as_str()), Some("notes"));
+    let peek = vec![PeekLine::Code {
+        branch: None,
+        worktree: "/Users/jan/notes".into(),
+        exists: true,
+    }];
+
+    let terminal = render_peek(&app, &peek);
+    let rows: Vec<String> = (0..20)
+        .map(|y| side(&terminal, y).trim_end().to_string())
+        .collect();
+
+    assert!(
+        rows.iter().any(|row| row == "▌ folder   ~/notes"),
+        "{rows:#?}"
+    );
+    assert!(!rows.iter().any(|row| row.contains("branch")), "{rows:#?}");
+}
+
+#[test]
 fn a_long_place_loses_its_middle_but_keeps_the_branch_and_the_corner() {
     let mut fleet = with_fleet();
     fleet.on_server(ServerMsg::Master {

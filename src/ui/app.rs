@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use crate::launch::worktree::WORKTREES_DIR;
 use crate::proto::{Modes, PaneInfo, PaneKey, PaneStatus, Size};
 use crate::ui::board::BoardState;
+use crate::ui::fit;
 use crate::ui::layout::{self, Areas, Chrome};
 use crate::ui::newflow::NewFlowForm;
 use crate::ui::peek::PeekLine;
@@ -204,14 +205,7 @@ impl App {
     }
 
     fn tilde(&self, path: &str) -> String {
-        match self
-            .home
-            .as_deref()
-            .and_then(|home| path.strip_prefix(home))
-        {
-            Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("~{rest}"),
-            _ => path.to_string(),
-        }
+        fit::tilde(path, self.home.as_deref())
     }
 
     fn worker(&self, id: &str) -> Option<&FlowView> {
@@ -248,6 +242,7 @@ impl App {
             now: self.now,
             spin: self.spin,
             changed: &self.changed,
+            home: self.home.as_deref(),
             theme,
         }
     }

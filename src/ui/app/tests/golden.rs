@@ -71,6 +71,36 @@ fn every_view_looks_as_it_did() {
     new_session.on_input(Routed::View(vec![Key::Tab, Key::Right]));
     golden("new-flow-plain", &render_at(&new_session, FLEET));
 
+    let mut plain = board_app();
+    let mut board = super::fleet();
+    board.flows.push(plain_session(
+        "scratch",
+        "/Users/jan/scratch",
+        12,
+        vec![EventKind::Idle {
+            note: "The tree has 14 files under src.".into(),
+        }],
+    ));
+    board.flows.push(plain_session(
+        "notes",
+        "/Users/jan/notes",
+        200,
+        vec![EventKind::Ended],
+    ));
+    plain.on_server(ServerMsg::Board(fold::board(board.flows, NOW)));
+    let digit = crate::ui::sidebar::workers(plain.board.as_ref().unwrap())
+        .iter()
+        .position(|flow| flow.name == "scratch")
+        .unwrap()
+        + 1;
+    plain.on_input(Routed::Command(Command::Focus(digit as u8)));
+    golden("plain", &render_at(&plain, FLEET));
+    plain.view = View::Board(BoardState {
+        selected: digit,
+        all: false,
+    });
+    golden("board-plain", &render_at(&plain, FLEET));
+
     let mut help = board_app();
     help.on_input(Routed::Command(Command::Help));
     golden("help", &render_at(&help, FLEET));

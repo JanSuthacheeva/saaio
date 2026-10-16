@@ -104,8 +104,11 @@ impl Sidebar<'_> {
         };
 
         let mut second = lead("    ");
-        second.extend(self.steps(flow));
-        second.push(Span::raw(" "));
+        let steps = self.steps(flow);
+        if !steps.is_empty() {
+            second.extend(steps);
+            second.push(Span::raw(" "));
+        }
         second.push(self.label(flow));
         let detail = match flow.tasks.filter(|tasks| tasks.total > 0) {
             // A finished flow says how long it took.
@@ -115,6 +118,7 @@ impl Sidebar<'_> {
             ),
             Some(tasks) => format!("{tasks} "),
             None if flow.mode == Mode::Guided => "guided ".to_string(),
+            None if flow.is_plain() => "plain ".to_string(),
             None => String::new(),
         };
 
@@ -210,12 +214,18 @@ impl Sidebar<'_> {
                         ]);
                     }
                     let place = if *exists {
-                        clip(worktree, text_width - 6)
+                        clip_place(&self.tilde(worktree), text_width - 6)
                     } else {
                         "gone".to_string()
                     };
+                    // A plain session's code is in its folder.
+                    let label = if branch.is_some() {
+                        " worktree "
+                    } else {
+                        " folder   "
+                    };
                     body.push(vec![
-                        Span::styled(" worktree ", theme.ui.faint),
+                        Span::styled(label, theme.ui.faint),
                         Span::styled(place, theme.ui.muted),
                     ]);
                 }

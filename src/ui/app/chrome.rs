@@ -61,10 +61,22 @@ impl App {
             Span::styled(sidebar.glyph(flow.state), theme.state_style(flow.state)),
             Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
         ];
-        title.extend(sidebar.steps(flow));
-        title.push(Span::raw(" "));
+        let steps = sidebar.steps(flow);
+        if !steps.is_empty() {
+            title.extend(steps);
+            title.push(Span::raw(" "));
+        }
         title.push(sidebar.label(flow));
-        if let Some(space) = &flow.workspace
+        if let Some(space) = flow.workspace.as_ref().filter(|_| flow.is_plain()) {
+            let lead = "  · ";
+            let fitted = clip_place(
+                &self.tilde(&space.path),
+                room(spans_width(&title) + columns(lead)),
+            );
+            if !fitted.is_empty() {
+                title.push(Span::styled(format!("{lead}{fitted}"), theme.ui.faint));
+            }
+        } else if let Some(space) = &flow.workspace
             && let (Some(branch), Some(slot)) = (&space.branch, space.slot)
         {
             let place = format!("{branch} · slot {slot}");

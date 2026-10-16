@@ -179,6 +179,22 @@ fn keeps_or_ends_unfinished_flows_when_flow_stops() {
     );
 
     let mut app = board_app();
+    let mut board = fleet();
+    board
+        .flows
+        .push(plain_session("scratch", "/Users/jan/scratch", 5, vec![]));
+    app.on_server(ServerMsg::Board(board));
+    app.on_input(Routed::Command(Command::StopServer));
+    let ended = app.on_input(Routed::View(vec![Key::Char('e')]));
+    let Effect::Quit(message) = &ended[2] else {
+        panic!("expected to quit: {ended:?}");
+    };
+    assert!(
+        message.contains("\n  scratch  ~/scratch"),
+        "a plain session's folder: {message}"
+    );
+
+    let mut app = board_app();
     app.on_input(Routed::Command(Command::StopServer));
     assert_eq!(app.on_input(Routed::View(vec![Key::Esc])), vec![]);
     assert!(!app.is_modal());

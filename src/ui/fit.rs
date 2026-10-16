@@ -95,6 +95,14 @@ pub fn clip(text: &str, width: usize) -> String {
     kept
 }
 
+/// `path` with ~ for the user's `home`: /Users/jan/projects/shop -> ~/projects/shop.
+pub fn tilde(path: &str, home: Option<&str>) -> String {
+    match home.and_then(|home| path.strip_prefix(home)) {
+        Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("~{rest}"),
+        _ => path.to_string(),
+    }
+}
+
 /// A place (`path · branch`) in `width` columns: the path loses folders from its middle first
 /// (/private/…/ui-look/repo · main), then its first folder; the branch goes only when the last
 /// folder alone does not fit beside it.
