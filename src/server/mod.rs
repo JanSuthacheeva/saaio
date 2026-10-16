@@ -22,7 +22,7 @@ use crate::fold;
 use crate::launch::{self, HOSTED, LaunchEnv, PaneSpec};
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, PaneStatus, Role, ServerMsg, Size};
 use crate::store::Store;
-use crate::view::{Board, FlowView};
+use crate::view::{Board, FlowView, Workspace};
 use host::{Host, HostEvent};
 use master::MasterRecord;
 use reconcile::{Wanted, reconcile};
@@ -348,13 +348,10 @@ impl Server {
                 if space.window.as_deref() == Some(HOSTED) {
                     return;
                 }
-                EventKind::Workspace {
-                    path: space.path,
-                    branch: space.branch,
-                    slot: space.slot,
+                EventKind::from(Workspace {
                     window: Some(HOSTED.to_string()),
-                    agent: space.agent,
-                }
+                    ..space
+                })
             }
             Err(error) => EventKind::Blocked {
                 reason: format!("could not start the agent: {error:#}"),

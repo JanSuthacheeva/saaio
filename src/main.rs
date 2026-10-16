@@ -699,7 +699,7 @@ fn start(
     };
 
     // Only now, so flow server opens the worker once setup is done.
-    append_workspace(store, &id, &space, now)?;
+    append_workspace(store, &id, space, now)?;
 
     let events = store.events(&id)?;
     let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");
@@ -713,18 +713,11 @@ fn start(
 fn append_workspace(
     store: &Store,
     id: &str,
-    space: &view::Workspace,
+    space: view::Workspace,
     now: u64,
 ) -> Result<(), Failure> {
-    let kind = EventKind::Workspace {
-        path: space.path.clone(),
-        branch: space.branch.clone(),
-        slot: space.slot,
-        window: space.window.clone(),
-        agent: space.agent.clone(),
-    };
     store
-        .append(id, &Event::new(now, kind))
+        .append(id, &Event::new(now, space.into()))
         .map_err(Failure::from)
 }
 

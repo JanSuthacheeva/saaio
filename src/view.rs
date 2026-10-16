@@ -2,7 +2,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::event::{Mode, Phase};
+use crate::event::{EventKind, Mode, Phase};
 
 pub const VIEW_VERSION: u32 = 1;
 
@@ -92,6 +92,19 @@ pub struct Tasks {
 pub struct ReviewCount {
     pub fixed: u32,
     pub open: u32,
+}
+
+/// What `flow start` and `flow server` append when a flow gets or reopens its workspace.
+impl From<Workspace> for EventKind {
+    fn from(space: Workspace) -> EventKind {
+        EventKind::Workspace {
+            path: space.path,
+            branch: space.branch,
+            slot: space.slot,
+            window: space.window,
+            agent: space.agent,
+        }
+    }
 }
 
 /// 4/9
