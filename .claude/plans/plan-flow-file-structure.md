@@ -417,12 +417,10 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 
 ## Review
 
-Isolated review of `main..1b69fff` (21 commits). Method: every removed line of `src/` was matched
-against the added lines (whitespace-trimmed), and every line left over on either side was read.
-The leftovers are renamed paths (`output::status_list` -> `status::list`, `launch::x` ->
-`launch::name::x`, `TuiFrame` -> `Frame`), widened visibility on moved `impl` methods, the
-`Env`/`Args` plumbing, and new tests. All 305 tests from `main` are still there by name (322 now);
-`tests/cli.rs` and `src/ui/golden` are untouched.
+Two isolated reviews. The first covered `main..1b69fff` (21 commits): every removed line of `src/`
+was matched against the added lines and every leftover read; no finding could be shown, and its two
+open questions were decided (task 10.1: fix; the `flow server` cwd order: leave). The second covers
+`1bd8773..a1a5465`, task 10.1 alone, read line by line.
 
 ### Fixed
 
@@ -430,30 +428,32 @@ Nothing. No finding could be shown with a failing test or a wrong result.
 
 ### Open
 
-- Decided: fix (task 10.1). `ui/app/messages.rs` matches `flow remove`'s stderr with `cli::output::remove::{UNCOMMITTED,
-  UNMERGED}`, so the UI depends on the CLI's output module. It was the same coupling before
-  (`crate::output`), and it is honest (the UI runs `flow remove` as a job and reads its error), so
-  I recommend leaving it; a typed error code in the job result would remove it if it ever grows.
-- Decided: leave. `flow server` now reads `current_dir` in `cli/commands/server.rs` before `server::run` instead of
-  inside it, after loading the config. Only the order of two startup failures changes, and only
-  when the cwd is unreadable; same message. Recommend leaving it.
+- Not new: `outcome` takes the first stdout line as the error, and TOON quotes a message that needs
+  it (for example one with `: `, see `names_the_whole_error_chain_for_io_failures`), so such a
+  notice in flow ui shows the quotes. The refusals are still recognised (`Refusal::of` uses
+  `contains`), and their messages are unquoted for ordinary paths and branch names. Recommend
+  leaving it for this branch; reading `flow remove --json` or the TOON value would remove it.
+- `Refusal::of` still finds the refusal by its text, now in one place beside the functions that
+  write that text, so the UI no longer depends on the wording. That is what task 10.1 asked for;
+  nothing to do.
 
 ### Where to look
 
-1. `src/cli.rs` `run` -> `cli/commands/wait.rs` -> `src/deliver.rs`: the hook and wait paths that
-   used to bypass the store lookup in `main`, the new `Document::Wake` (stderr, exit 2), and
-   `WorkerNews::News` carrying messages instead of text. Equivalent to `main`'s code; covered by
-   the wait tests in `tests/cli.rs`.
-2. `src/cli/env.rs` against `main`'s `env_path` callers: empty `FLOW_ID` and `HOME` handling now
-   lives in `flow_id()` / `user_home()` and is used by send, wait, hook and ui alike.
-3. `src/cli/commands/start.rs`: `Rollback` and the slot claim moved with `Launch` replaced by
-   `Args`; same order of create, claim, worktree, disarm.
+1. `src/cli/output/remove.rs` `uncommitted()` / `unmerged()` against the removed bodies in
+   `src/cli/commands/retire.rs`: the message and both help lines are the same bytes (`tests/cli.rs`
+   checks the messages at lines 1026 and 1058).
+2. `src/ui/app/effect.rs` `outcome` -> `src/ui/app/messages.rs` `on_ran`: the refusal is read once
+   from the message and the remove prompts match on it; the start form, the notice and the overview
+   use `message` as before.
 
-Routine and skimmable: the `server/` split (`conn.rs`, `panes.rs`), the `ui/app/` split
-(`messages`, `keys`, `board_keys`, `draw`, `chrome`, `effect`), `board/`, `sidebar/`, `launch/`,
-`cli/output/`, and the moved test files - bodies are unchanged.
+Routine and skimmable: the `JobError::other` changes in `src/ui.rs` and the test files.
+
+For the first round's reading order: `src/cli.rs` `run` -> `cli/commands/wait.rs` ->
+`src/deliver.rs` (hook and wait paths, `Document::Wake`), `src/cli/env.rs` (`flow_id()`,
+`user_home()`), and `src/cli/commands/start.rs` (`Rollback`, slot claim order). The `server/`,
+`ui/app/`, `board/`, `sidebar/`, `launch/` and `cli/output/` splits move bodies unchanged.
 
 ### Checks
 
 `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` passed at
-999844c (reported by the build); only this plan changed since. No fixes, so no fix review round.
+a1a5465 (reported by the build); only this plan changed since. No fixes, so no fix review round.
