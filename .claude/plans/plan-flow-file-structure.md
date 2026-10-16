@@ -410,4 +410,4 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 - [x] Check every production file against the rules (size, one responsibility, style) and fix what is left
 
 ### 9. End to end
-- [ ] Run the before script against the new binary and diff: byte-identical stdout, stderr and exit codes; run `flow ui` against a temp store, start a flow, open the board, the help and the stop dialog, and detach
+- [x] Run the before script against the new binary and diff: byte-identical stdout, stderr and exit codes; run `flow ui` against a temp store, start a flow, open the board, the help and the stop dialog, and detach
