@@ -116,3 +116,18 @@ off    spinner=working  dots=●:working ●:working ●:working ○:faint
 steps  spinner=working  dots=●:review ●:review ●:review ○:faint
 full   spinner=review   dots=●:review ●:review ●:review ○:faint
 ```
+
+## Review
+
+- **Fixed** - the detail view's current step moving to `step_style` had no test: reverting it to
+  `flow_style` left the suite green. Added
+  `board::detail::tests::the_current_step_takes_the_color_of_its_phase_by_default`, proven to fail
+  on the revert (45d9e61). Test only, so no second review round was needed.
+- **Open** - none. Note for the merge request: the default changes the look for everyone, since
+  `steps` replaces today's full coloring; a user who wants the old look sets `phase_colors = "full"`.
+- **Where to look** - `src/ui/theme.rs` `flow_style` / `step_style` / `tinted`: which level colors
+  what; then `src/ui/theme_file.rs` `parse` and `load`: the bad-value error and the nearest file
+  winning. The call-site swaps in `sidebar/labels.rs` and `board/detail.rs` and the test and README
+  changes are routine.
+- **Checks** - `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`
+  pass at 45d9e61.
