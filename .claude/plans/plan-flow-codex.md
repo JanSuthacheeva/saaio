@@ -111,7 +111,7 @@ impl Adapter {
     pub fn wiring(self, flow_exe: &Path) -> Vec<String>;
     /// Report hooks only: no prompt, no news.
     pub fn plain_wiring(self, flow_exe: &Path) -> Vec<String>;
-    /// Claude: its waiter (only called when wake, as today). Codex: its hooks with --master; hook hands
+    /// Claude: its waiter (only called when wake, as today). Codex: the same hooks as a worker's; FLOW_MASTER=1 in the master's pane makes hook hand
     /// news over at Stop.
     pub fn master_wiring(self, flow_exe: &Path) -> Vec<String>;
     /// Claude ["--append-system-prompt", text]; Codex ["-c", "developer_instructions=<toml string>"].
@@ -138,9 +138,8 @@ pub fn created_merge_request(command: &str, stdout: &str) -> Option<String>;
 const EVENTS: [&str; 6] = ["UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop", "Interrupt"];
 const HOOK_TIMEOUT_SECS: u64 = 10;
 /// ["-c", "check_for_update_on_startup=false"] then per event
-/// ["-c", "hooks.<Event>=[{hooks=[{type=\"command\",command=\"'<flow_exe>' hook codex<args>\",timeout=10}]}]"];
-/// args "" for workers and plain sessions, " --master" for the master.
-pub fn hooks(flow_exe: &Path, master: bool) -> Vec<String>;
+/// ["-c", "hooks.<Event>=[{hooks=[{type=\"command\",command=\"'<flow_exe>' hook codex\",timeout=10}]}]"].
+pub fn hooks(flow_exe: &Path) -> Vec<String>;   // one definition for every pane: Codex keys trust by position (E2E: different master hooks undid the workers' trust)
 pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind>;
 fn session(payload: &Value) -> Option<EventKind>;           // Session { id: session_id, transcript: transcript_path }
 fn mentioned_skill(prompt: &str) -> Option<&str>;           // first "$name" token
@@ -195,8 +194,8 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str, session: &str) -> Option
 pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec>;
 
 // src/cli/commands/hook.rs
-#[derive(clap::Args)] pub struct Args { adapter: String, #[arg(long)] master: bool }
-/// Whose hook: a flow's session ($FLOW_ID), the master's (--master), or neither.
+#[derive(clap::Args)] pub struct Args { adapter: String }   // the master: Env::is_master ($FLOW_MASTER=1)
+/// Whose hook: the master's ($FLOW_MASTER), a flow's session ($FLOW_ID), or neither.
 enum Hooked { Flow(String), Master, Nobody }
 /// Document::Wake(news) when a Stop hands news over, else Silent.
 pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document;
@@ -313,7 +312,7 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
    - `Server::open_master` -> `Config::master_agent()` gives `("codex", agent)`.
    - `MasterRecord::spec(start, agent, env, &instructions, wake, store.master_session())` -> `instruct(text)`
      plus `master_wiring(flow_exe)`.
-   - `codex` -> `flow hook codex --master` -> `Hooked::Master`: `Store::set_master_session(session_id)`, and
+   - `codex` -> `flow hook codex` with FLOW_MASTER=1 (master.rs puts it in the pane env, pane::MASTER_ENV) -> `Hooked::Master`: `Store::set_master_session(session_id)`, and
      `set_busy(Master, ..)` on UserPromptSubmit and Stop.
    - Stop with `[master] wake`: `deliver::master_news_now` -> `Wake(news::for_master(..))`.
    - Idle: `Server::deliver_news` with `Waiter::Master`.
@@ -345,7 +344,7 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
   - `newflow`: the agent row with two agents, `--agent` in the args; a golden screen
     (`FLOW_UPDATE_GOLDEN=1`) of the dialog with the row.
 - **CLI.** `tests/cli.rs`: `flow hook codex` on Stop with a pending message exits 2 with it on stderr;
-  without one, exit 0 and silent; `--master` writes `waits/master.session`.
+  without one, exit 0 and silent; FLOW_MASTER=1 writes `waits/master.session` and reports nothing, even with FLOW_ID set.
 
 ## Assumptions
 

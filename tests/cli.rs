@@ -787,7 +787,22 @@ fn a_codex_master_records_its_session_and_reports_nothing() {
     let id = new_flow(home.path(), "shop-221");
     let prompt = r#"{"session_id":"02b2","hook_event_name":"UserPromptSubmit","prompt":"status?"}"#;
 
-    let output = hook_with(home.path(), &["codex", "--master"], None, prompt);
+    let mut command = flow_command(home.path());
+    command
+        .args(["hook", "codex"])
+        .env("FLOW_MASTER", "1")
+        .env("FLOW_ID", &id)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(prompt.as_bytes())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
 
     assert!(output.status.success());
     assert!(output.stdout.is_empty() && output.stderr.is_empty());

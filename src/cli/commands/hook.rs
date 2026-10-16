@@ -17,12 +17,9 @@ use crate::view::FlowView;
 pub struct Args {
     /// The harness: claude-code or codex
     adapter: String,
-    /// The master's own hooks: record its session, hand it its news
-    #[arg(long)]
-    master: bool,
 }
 
-/// Whose hook ran: a flow's session ($FLOW_ID), the master's (--master), or neither.
+/// Whose hook ran: the master's ($FLOW_MASTER), a flow's session ($FLOW_ID), or neither.
 enum Hooked {
     Flow(String),
     Master,
@@ -43,7 +40,7 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
         Config::builtin()
     });
     let hooked = match env.flow_id() {
-        _ if args.master => Hooked::Master,
+        _ if env.is_master() => Hooked::Master,
         Some(id) => Hooked::Flow(id.to_string()),
         None => Hooked::Nobody,
     };

@@ -5,6 +5,9 @@ use crate::launch::worktree::{hook_env, repo_of};
 use crate::proto::PaneKey;
 use crate::view::{FlowView, Workspace};
 
+/// Set to 1 in the master's pane, so the hooks it shares with workers know whose they are.
+pub const MASTER_ENV: &str = "FLOW_MASTER";
+
 /// Workspace.window of a worker flow ui has opened once; its next open resumes it.
 pub const HOSTED: &str = "flow-ui";
 

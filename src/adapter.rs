@@ -56,7 +56,7 @@ impl Adapter {
                 .into_iter()
                 .chain(self.instruct(WORKER_PROMPT))
                 .collect(),
-            Adapter::Codex => codex::hooks(flow_exe, false)
+            Adapter::Codex => codex::hooks(flow_exe)
                 .into_iter()
                 .chain(self.instruct(WORKER_PROMPT))
                 .collect(),
@@ -71,20 +71,21 @@ impl Adapter {
                 "--settings".to_string(),
                 claude_code::plain_settings(flow_exe),
             ],
-            Adapter::Codex => codex::hooks(flow_exe, false),
+            Adapter::Codex => codex::hooks(flow_exe),
         }
     }
 
     /// The arguments that bring the master its news, inserted right after the program: Claude
-    /// Code's `<flow_exe> wait --master` waiter; Codex's hooks with --master, which record its
-    /// session and hand news over at Stop. The master is no flow, so nothing else.
+    /// Code's `<flow_exe> wait --master` waiter; Codex's hooks, which in the master's pane
+    /// (FLOW_MASTER) record its session and hand news over at Stop. The master is no flow, so
+    /// nothing else.
     pub fn master_wiring(self, flow_exe: &Path) -> Vec<String> {
         match self {
             Adapter::ClaudeCode => vec![
                 "--settings".to_string(),
                 claude_code::master_settings(flow_exe),
             ],
-            Adapter::Codex => codex::hooks(flow_exe, true),
+            Adapter::Codex => codex::hooks(flow_exe),
         }
     }
 
@@ -202,13 +203,13 @@ mod tests {
         );
 
         let worker = Adapter::Codex.wiring(exe);
-        assert_eq!(worker[..worker.len() - 2], codex::hooks(exe, false));
+        assert_eq!(worker[..worker.len() - 2], codex::hooks(exe));
         assert_eq!(
             worker[worker.len() - 2..],
             Adapter::Codex.instruct(WORKER_PROMPT)
         );
-        assert_eq!(Adapter::Codex.plain_wiring(exe), codex::hooks(exe, false));
-        assert_eq!(Adapter::Codex.master_wiring(exe), codex::hooks(exe, true));
+        assert_eq!(Adapter::Codex.plain_wiring(exe), codex::hooks(exe));
+        assert_eq!(Adapter::Codex.master_wiring(exe), codex::hooks(exe));
         assert!(!Adapter::Codex.wakes_itself());
         assert!(Adapter::ClaudeCode.wakes_itself());
     }

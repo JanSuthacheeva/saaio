@@ -142,7 +142,10 @@ impl MasterRecord {
             key: PaneKey::Master,
             argv,
             cwd: self.cwd.clone(),
-            env: pane::pane_env(env),
+            env: [(pane::MASTER_ENV.to_string(), "1".to_string())]
+                .into_iter()
+                .chain(pane::pane_env(env))
+                .collect(),
         })
     }
 }
@@ -223,6 +226,11 @@ mod tests {
         );
         assert_eq!(resumed.cwd, PathBuf::from("/work"));
         assert!(resumed.env.iter().all(|(key, _)| key != "FLOW_ID"));
+        assert!(
+            resumed
+                .env
+                .contains(&("FLOW_MASTER".to_string(), "1".to_string()))
+        );
         let unresumable = Agent {
             resume: None,
             ..bare.clone()
@@ -287,7 +295,7 @@ mod tests {
         };
         let md = instructions();
         let exe = Path::new("/bin/flow");
-        let mut wired = crate::adapter::codex::hooks(exe, true);
+        let mut wired = crate::adapter::codex::hooks(exe);
         wired.extend(Adapter::Codex.instruct("# You are the master"));
 
         let fresh = record()

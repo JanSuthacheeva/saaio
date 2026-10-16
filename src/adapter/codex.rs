@@ -21,18 +21,17 @@ const EVENTS: [&str; 6] = [
 /// Seconds Codex waits for `flow hook` before it goes on without it.
 const HOOK_TIMEOUT_SECS: u64 = 10;
 
-/// The `-c` arguments that run `'<flow_exe>' hook codex` (`--master` for the master) on each event
-/// in EVENTS, synchronously so the events reach the log in order and a Stop can hand news over;
-/// and keep Codex from asking about updates in a pane flow opened.
-pub fn hooks(flow_exe: &Path, master: bool) -> Vec<String> {
-    let mut command = format!(
+/// The `-c` arguments that run `'<flow_exe>' hook codex` on each event in EVENTS, synchronously so
+/// the events reach the log in order and a Stop can hand news over; and keep Codex from asking
+/// about updates in a pane flow opened. The same for workers, plain sessions and the master (its
+/// pane's FLOW_MASTER tells them apart): Codex keys hook trust by position, so different hooks
+/// would each undo the other's trust.
+pub fn hooks(flow_exe: &Path) -> Vec<String> {
+    let command = format!(
         "{} hook {}",
         shell_quoted(&flow_exe.display().to_string()),
         Adapter::Codex.name()
     );
-    if master {
-        command.push_str(" --master");
-    }
     let handler = format!(
         "[{{hooks=[{{type=\"command\",command={},timeout={HOOK_TIMEOUT_SECS}}}]}}]",
         toml_string(&command)
@@ -351,7 +350,7 @@ mod tests {
 
     #[test]
     fn hooks_every_event_to_flow_hook_codex() {
-        let args = hooks(Path::new("/opt/my flow/flow"), false);
+        let args = hooks(Path::new("/opt/my flow/flow"));
 
         assert_eq!(args[..2], ["-c", "check_for_update_on_startup=false"]);
         let values: Vec<&String> = args.iter().skip(3).step_by(2).collect();
@@ -370,12 +369,7 @@ mod tests {
             );
             assert_eq!(handler["timeout"].as_integer(), Some(10));
         }
-        assert!(
-            hooks(Path::new("/bin/flow"), true)
-                .iter()
-                .any(|arg| arg.contains(r"'/bin/flow' hook codex --master"))
-        );
-        assert!(hooks(Path::new("/b'in/flow"), false)[3].contains(r"'/b'\\''in/flow'"));
+        assert!(hooks(Path::new("/b'in/flow"))[3].contains(r"'/b'\\''in/flow'"));
     }
 
     #[test]
