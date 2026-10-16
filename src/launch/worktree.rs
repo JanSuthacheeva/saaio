@@ -49,8 +49,11 @@ pub fn worktree_remove_argv(repo: &Path, workspace: &Workspace, force: bool) -> 
     argv
 }
 
-/// The repository a flow worktree belongs to: the path above .flow/worktrees/<name>.
+/// The repository a flow worktree belongs to: the path above .flow/worktrees/<name>. None for a
+/// plain session (no branch), even one opened inside a worktree, so remove never tears down a folder
+/// it did not create.
 pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
+    space.branch.as_ref()?;
     Path::new(&space.path)
         .parent()
         .filter(|worktrees| worktrees.ends_with(WORKTREES_DIR))?
@@ -77,7 +80,7 @@ pub fn hook_env(id: &str, name: &str, repo: &Path, workspace: &Workspace) -> Vec
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::launch::fixtures::{shop, strings};
+    use crate::launch::fixtures::{scratch, shop, strings};
 
     #[test]
     fn places_the_worktree_inside_the_repo_on_its_own_branch() {
@@ -151,5 +154,30 @@ mod tests {
             ..shop()
         };
         assert_eq!(repo_of(&elsewhere), None);
+    }
+
+    #[test]
+    fn a_plain_session_has_no_repo_even_inside_the_worktrees_folder() {
+        let inside = Workspace {
+            path: "/repo/.flow/worktrees/shop-217".into(),
+            ..scratch()
+        };
+
+        assert_eq!(repo_of(&scratch()), None);
+        assert_eq!(
+            repo_of(&inside),
+            None,
+            "remove must not tear down a folder it did not create"
+        );
+    }
+
+    #[test]
+    fn sets_no_slot_for_the_hooks_without_one() {
+        let keys: Vec<String> = hook_env("7f3c", "x", Path::new("/repo"), &scratch())
+            .into_iter()
+            .map(|(key, _)| key)
+            .collect();
+
+        assert_eq!(keys, ["FLOW_ID", "FLOW_NAME", "FLOW_WORKTREE", "FLOW_REPO"]);
     }
 }

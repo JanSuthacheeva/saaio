@@ -340,13 +340,13 @@ The session stops; flow remove
 
 ### Launch
 
-- [ ] `worktree::folder_workspace`, `repo_of` None without a branch, `hook_env` FLOW_SLOT only with a slot; tests incl. a plain session inside `.flow/worktrees`
+- [x] `repo_of` None without a branch, `hook_env` FLOW_SLOT only with a slot; tests incl. a plain session inside `.flow/worktrees`
 - [ ] `claude_code::report_hooks`, `plain_settings`, `Adapter::plain_wiring`; tests: every report hook, no waiter, no prompt
 - [ ] `pane::plain_argv`, `worker_spec` for plain sessions; tests: fresh without prompt and with plain wiring, resumed once hosted, env without FLOW_SLOT
 
 ### Commands
 
-- [ ] `start::Args` with `--plain` and optional request, `pick_agent` and `opening` lifted out, `start/plain.rs` `open` + `resolve`, `output::start::opened`, `cli.rs` passes home; `tests/cli.rs`: plain start outside git, no worktree or slot file, request + `--plain` exits 2, missing folder exits 1, `~` expanded
+- [ ] `start::Args` with `--plain` and optional request, `pick_agent` and `opening` lifted out, `start/plain.rs` `open` + `resolve`, `worktree::folder_workspace` (moved here, its first user), `output::start::opened`, `cli.rs` passes home; `tests/cli.rs`: plain start outside git, no worktree or slot file, request + `--plain` exits 2, missing folder exits 1, `~` expanded
 - [ ] `send` refuses a plain session; `wake::changed_flows` skips plain sessions; `status::detail` shows the folder; tests in `wake` and `tests/cli.rs` (send refused, remove keeps the folder)
 
 ### flow ui
