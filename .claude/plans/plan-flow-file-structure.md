@@ -405,7 +405,7 @@ Server: Server::handle (server.rs) -> message (conn.rs) -> refresh / open_worker
 - [x] Split `ui/sidebar.rs` into sidebar.rs, `sidebar/rows.rs`, `sidebar/labels.rs` with its tests
 
 ### 8. Rules and docs
-- [ ] CLAUDE.md: a Structure section with the rules above, the Architecture list for the new files, Build Commands unchanged; README mentions of moved files
+- [x] CLAUDE.md: a Structure section with the rules above, the Architecture list for the new files, Build Commands unchanged; README mentions of moved files
 - [ ] Check every production file against the rules (size, one responsibility, style) and fix what is left
 
 ### 9. End to end
