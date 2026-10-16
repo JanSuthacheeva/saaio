@@ -368,6 +368,21 @@ fn a_long_place_loses_its_middle_but_keeps_the_branch_and_the_corner() {
 }
 
 #[test]
+fn the_rail_marks_the_master_like_any_focused_row() {
+    let mut app = board_app();
+    app.on_input(Routed::Command(Command::Rail));
+    let terminal = render_at(&app, FLEET);
+    let rail = |y| row(&terminal, y).chars().skip(142).collect::<String>();
+    let theme = Theme::default();
+
+    assert_eq!(rail(2), "▌0    ");
+    assert_eq!(rail(4), " 1 ●  ");
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(143, 3)].fg, theme.palette.accent);
+    assert_eq!(buffer[(148, 3)].bg, theme.palette.selection);
+}
+
+#[test]
 fn folds_the_sidebar_to_a_rail_and_back() {
     let mut app = board_app();
     app.on_input(Routed::Command(Command::Focus(1)));

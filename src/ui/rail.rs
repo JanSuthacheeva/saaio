@@ -23,6 +23,15 @@ impl Rail<'_> {
         let sidebar = &self.sidebar;
         let theme = sidebar.theme;
         let width = RAIL_WIDTH as usize;
+        let master = *sidebar.focus == PaneKey::Master;
+        let digit = |focused: bool| {
+            if focused {
+                theme.ui.strong
+            } else {
+                theme.ui.faint
+            }
+        };
+        let mark = |focused: bool| if focused { Mark::Focus } else { Mark::None };
         let mut rows = vec![
             plain(Line::from(vec![
                 Span::raw(" "),
@@ -30,9 +39,9 @@ impl Rail<'_> {
             ])),
             plain(Line::styled("─".repeat(width), theme.ui.rule)),
             Row {
-                line: Line::from(vec![Span::styled(" 0", theme.ui.accent)]),
+                line: Line::from(vec![Span::styled(" 0", digit(master))]),
                 key: Some(PaneKey::Master),
-                mark: Mark::None,
+                mark: mark(master),
             },
         ];
         let mut group = None;
@@ -45,22 +54,16 @@ impl Rail<'_> {
             let key = PaneKey::Flow(flow.id.clone());
             let focused = *sidebar.focus == key;
             let tone = theme.flow_style(flow);
-            let digit = sidebar::digit(index);
-            let lead = if focused {
-                vec![
-                    Span::styled(theme.glyphs.cursor, tone),
-                    Span::styled(digit, theme.ui.strong),
-                ]
-            } else {
-                vec![Span::raw(" "), Span::styled(digit, theme.ui.faint)]
-            };
-            let mut spans = lead;
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(sidebar.glyph(flow.state), tone));
+            let spans = vec![
+                Span::raw(" "),
+                Span::styled(sidebar::digit(index), digit(focused)),
+                Span::raw(" "),
+                Span::styled(sidebar.glyph(flow.state), tone),
+            ];
             rows.push(Row {
                 line: Line::from(spans),
                 key: Some(key),
-                mark: if focused { Mark::Lit } else { Mark::None },
+                mark: mark(focused),
             });
         }
         let room = usize::from(height.saturating_sub(2));
