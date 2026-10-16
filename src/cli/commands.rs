@@ -1,6 +1,9 @@
+pub(super) mod clear;
 pub(super) mod home;
 pub(super) mod new;
+pub(super) mod remove;
 pub(super) mod report;
+mod retire;
 pub(super) mod send;
 pub(super) mod start;
 pub(super) mod status;

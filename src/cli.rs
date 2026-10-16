@@ -9,24 +9,21 @@ use std::time::Duration;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 
-use commands::{home, new, no_flow, report, send, start, status, views};
+use commands::{clear, home, new, remove, report, send, start, status, views};
 
 pub use crate::event::unix_ms;
 pub use env::Env;
 
-use crate::cli::output::{BranchFate, Document, Failure, Retired};
-use crate::client::{self, Client, Closing};
+use crate::cli::output::{Document, Failure};
+use crate::client::{self, Client};
 use crate::config::Config;
 use crate::deliver::{self, WorkerNews};
 use crate::event::Event;
 use crate::proto::{ClientMsg, Role};
 use crate::store::{Store, Waiter};
 use crate::view::FlowView;
-use crate::workspace::Hook;
-use crate::{adapter, fold, launch, server, text, ui, workspace};
+use crate::{adapter, fold, launch, server, ui};
 
-/// How long `flow remove` and `flow clear` wait for a flow's session to end (SIGKILL comes after 3 s).
-const CLOSE_WAIT: Duration = Duration::from_secs(5);
 /// How often `flow wait` looks for news, as often as the server looks at the store.
 const WAIT_EVERY: Duration = Duration::from_millis(500);
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
@@ -48,16 +45,7 @@ enum Command {
     /// Start a worker: a flow, a worktree, the setup hook and an agent flow ui opens
     Start(start::Args),
     /// Stop a flow's worker, tear down its worktree and forget it
-    Remove {
-        /// Flow name or id
-        flow: String,
-        /// Also remove a worktree with uncommitted work
-        #[arg(long)]
-        force: bool,
-        /// Also delete the flow's branch when it has commits on no other branch
-        #[arg(long)]
-        delete_unmerged: bool,
-    },
+    Remove(remove::Args),
     /// Tell a flow's worker something: an answer, an instruction, a correction
     Send(send::Args),
     /// Forget flows that are done or ended
@@ -127,25 +115,9 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
             let cwd = std::env::current_dir()?;
             start::run(&args, store, registry, &config, &cwd, now)
         }
-        Some(Command::Remove {
-            flow,
-            force,
-            delete_unmerged,
-        }) => {
-            let uncommitted = if force {
-                Uncommitted::Discard
-            } else {
-                Uncommitted::Keep
-            };
-            let unmerged = if delete_unmerged {
-                Unmerged::Delete
-            } else {
-                Unmerged::Keep
-            };
-            remove(store, &flow, uncommitted, unmerged, now)
-        }
+        Some(Command::Remove(args)) => remove::run(&args, store, now),
         Some(Command::Send(args)) => send::run(&args, store, env.flow_id(), now),
-        Some(Command::Clear) => clear(store, now),
+        Some(Command::Clear) => clear::run(store, now),
         Some(Command::Ui { stop: true }) => stop_server(&client::socket_path(store)),
         Some(Command::Ui { stop: false }) => ui(store, env, clock),
         Some(Command::Server) => server(store.clone(), env, clock),
@@ -317,167 +289,4 @@ fn server(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failu
     let cwd = std::env::current_dir().context("could not read the current directory")?;
     server::run(&paths, store, config, launch_env, &cwd, clock)?;
     Ok(Document::Text("flow server stopped".to_string()))
-}
-
-fn remove(
-    store: &Store,
-    name: &str,
-    uncommitted: Uncommitted,
-    unmerged: Unmerged,
-    now: u64,
-) -> Result<Document, Failure> {
-    let (flows, _) = views(store, now);
-    let flow = fold::resolve(&flows, name).ok_or_else(|| no_flow(name))?;
-    if uncommitted == Uncommitted::Keep {
-        refuse_uncommitted_work(flow)?;
-    }
-    if unmerged == Unmerged::Keep {
-        refuse_unmerged_commits(flow)?;
-    }
-    let pane = close_pane(store, flow)?;
-    let retired = retire_worktree(flow, uncommitted);
-    let branch = match retired {
-        Retired::Kept(_) => BranchFate::Kept,
-        Retired::NoWorktree | Retired::Removed => drop_branch(flow, unmerged),
-    };
-    store
-        .remove(&flow.id)
-        .map_err(|error| Failure::from(error.context(format!("could not remove {}", flow.name))))?;
-    Ok(output::removed(&flow.name, pane, &retired, branch))
-}
-
-/// What `flow remove` does with uncommitted work in the worktree (--force discards it).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Uncommitted {
-    Keep,
-    Discard,
-}
-
-/// What `flow remove` does with a branch whose commits are on no other branch
-/// (--delete-unmerged deletes it).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Unmerged {
-    Keep,
-    Delete,
-}
-
-/// Fails before anything is touched when the flow's branch has commits on no other branch.
-fn refuse_unmerged_commits(flow: &FlowView) -> Result<(), Failure> {
-    let Some((repo, branch)) = branch_of(flow) else {
-        return Ok(());
-    };
-    match workspace::commits_only_on(&repo, branch) {
-        Ok(Some(count)) if count > 0 => Err(Failure::error(
-            format!(
-                "{branch} has {count} commit{} {}",
-                text::plural(count),
-                output::UNMERGED
-            ),
-            vec![
-                format!(
-                    "Merge or push {branch}, then run `flow remove {}` again",
-                    flow.name
-                ),
-                format!(
-                    "Run `flow remove {} --delete-unmerged` to delete it with its commits",
-                    flow.name
-                ),
-            ],
-        )),
-        _ => Ok(()),
-    }
-}
-
-/// Deletes the flow's branch once its worktree is gone: with Unmerged::Delete always, else only
-/// when all its commits are on another branch.
-fn drop_branch(flow: &FlowView, unmerged: Unmerged) -> BranchFate {
-    let Some((repo, branch)) = branch_of(flow) else {
-        return BranchFate::NoBranch;
-    };
-    match workspace::commits_only_on(&repo, branch) {
-        Ok(None) => BranchFate::NoBranch,
-        Ok(Some(count)) if count == 0 || unmerged == Unmerged::Delete => {
-            match workspace::delete_branch(&repo, branch) {
-                Ok(()) => BranchFate::Deleted,
-                Err(_) => BranchFate::Kept,
-            }
-        }
-        Ok(Some(_)) | Err(_) => BranchFate::Kept,
-    }
-}
-
-/// The repository and branch of a started flow.
-fn branch_of(flow: &FlowView) -> Option<(PathBuf, &str)> {
-    let space = flow.workspace.as_ref()?;
-    Some((launch::repo_of(space)?, &space.branch))
-}
-
-/// Ends the flow's session in flow ui before its worktree goes.
-fn close_pane(store: &Store, flow: &FlowView) -> Result<Closing, Failure> {
-    client::close_flow(&client::socket_path(store), &flow.id, CLOSE_WAIT).map_err(Failure::from)
-}
-
-/// Fails before anything is touched when the flow's worktree holds uncommitted work.
-fn refuse_uncommitted_work(flow: &FlowView) -> Result<(), Failure> {
-    let Some(space) = &flow.workspace else {
-        return Ok(());
-    };
-    if !Path::new(&space.path).exists() || !workspace::has_uncommitted_work(space).unwrap_or(false)
-    {
-        return Ok(());
-    }
-    Err(Failure::error(
-        format!("{} {} in {}", flow.name, output::UNCOMMITTED, space.path),
-        vec![
-            format!(
-                "Commit or stash it in {}, then run `flow remove {}` again",
-                space.path, flow.name
-            ),
-            format!(
-                "Run `flow remove {} --force` to discard the uncommitted work",
-                flow.name
-            ),
-        ],
-    ))
-}
-
-fn clear(store: &Store, now: u64) -> Result<Document, Failure> {
-    let (flows, _) = views(store, now);
-    let mut names = Vec::new();
-    let mut kept = Vec::new();
-    for flow in flows.iter().filter(|flow| flow.is_finished()) {
-        close_pane(store, flow)?;
-        match retire_worktree(flow, Uncommitted::Keep) {
-            Retired::Kept(path) => kept.push((flow.name.clone(), path)),
-            Retired::NoWorktree | Retired::Removed => {
-                drop_branch(flow, Unmerged::Keep);
-            }
-        }
-        store.remove(&flow.id).map_err(|error| {
-            Failure::from(error.context(format!("could not clear {}", flow.name)))
-        })?;
-        names.push(flow.name.clone());
-    }
-    Ok(output::cleared(&names, &kept))
-}
-
-/// Runs the teardown hook and removes the flow's worktree; keeps it with uncommitted work unless forced.
-fn retire_worktree(flow: &FlowView, uncommitted: Uncommitted) -> Retired {
-    let Some(space) = &flow.workspace else {
-        return Retired::NoWorktree;
-    };
-    let Some(repo) = launch::repo_of(space) else {
-        return Retired::NoWorktree;
-    };
-    if !Path::new(&space.path).exists() {
-        return Retired::NoWorktree;
-    }
-    let env = launch::hook_env(&flow.id, &flow.name, &repo, space);
-    let _ = workspace::run_hook(&repo, Hook::Teardown, space, &env);
-    let force = uncommitted == Uncommitted::Discard;
-    if workspace::remove_worktree(&repo, space, force).unwrap_or(false) {
-        Retired::Removed
-    } else {
-        Retired::Kept(space.path.clone())
-    }
 }
