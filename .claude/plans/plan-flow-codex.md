@@ -365,7 +365,7 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 
 ### Adapter
 - [x] Record Codex hook payloads with the real CLI into `src/adapter/fixtures/codex/`: a probe hook that appends stdin, in a scratch repo under a private tmux (`tmux -L`), `~/.codex/config.toml` backed up and restored. Record user_prompt, user_prompt_skill, pre_bash_skill, pre_spawn_agent, post_bash, post_bash_merge_request, permission_bash, stop, stop_question, interrupt and subagent_bash, plus one rollout into `src/ui/peek/fixtures/codex-rollout.jsonl`
-- [ ] Move turn_end/plain/sentences to adapter/answer.rs and tool_call/created_merge_request to adapter/calls.rs; WORKER_PROMPT harness-neutral in adapter.rs; add Adapter::instruct and wakes_itself; claude_code tests unchanged and green
+- [x] Move turn_end/plain/sentences to adapter/answer.rs and tool_call/created_merge_request to adapter/calls.rs; WORKER_PROMPT harness-neutral in adapter.rs; add Adapter::instruct; claude_code tests unchanged and green
 - [ ] Add EventKind::Session, view::Session and FlowView.session, fold apply and changes, PROTOCOL_VERSION 4; tests in fold/tests.rs and proto
 - [ ] Add adapter/codex.rs (hooks, toml_string, translate, session, mentioned_skill, read_skill, subagent); Adapter::Codex in named/name/wiring/plain_wiring/master_wiring/translate; table tests over the fixtures
 
@@ -373,7 +373,7 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 - [ ] config: built-in codex agent, MasterConfig.agent, Config::master_agent and worker_agents, built-in master without the file argument; tests
 - [ ] launch/pane.rs: {session} in resume_argv; worker_spec fills it from flow.session and falls back to the fresh or plain command; tests
 - [ ] store busy marks and master_session; deliver::master_news_now (master_news uses it); tests
-- [ ] commands/hook.rs: Args.master, Hooked, hand_over, busy marks, Document::Wake on a Stop with news; tests/cli.rs cases
+- [ ] commands/hook.rs: Adapter::wakes_itself, Args.master, Hooked, hand_over, busy marks, Document::Wake on a Stop with news; tests/cli.rs cases
 
 ### Server
 - [ ] server/master.rs: Instructions, spec with instruct, master_wiring and session; panes.rs open_master through Config::master_agent and store.master_session; master.md harness-neutral with master-v5.md kept; tests

@@ -1,3 +1,5 @@
+mod answer;
+mod calls;
 pub mod claude_code;
 
 use std::path::Path;
@@ -10,6 +12,15 @@ use crate::event::{EventKind, Phase};
 
 /// The longest text an adapter puts into an event: a question, a reason, a description.
 pub const REPORT_TEXT_LIMIT: usize = 200;
+
+/// What a worker is told about the master, added to its instructions: the master's messages arrive
+/// as hook feedback or as a prompt flow types in, which it would rightly not take as the user's
+/// words otherwise.
+pub const WORKER_PROMPT: &str = "You run as a worker of flow, in your own git worktree. The flow \
+master is the agent session that coordinates the workers for the user. Its messages reach you as \
+hook feedback or as a prompt that starts with \"message from the flow master:\"; they answer what \
+you asked or pass on what the user said, so act on them as you would on the user's own answer. To \
+ask the master or the user something, end your turn with the question.";
 
 /// A harness flow observes through its own hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -37,12 +48,10 @@ impl Adapter {
     /// master's messages, inserted right after the program in the agent's argv, fresh and resumed.
     pub fn wiring(self, flow_exe: &Path) -> Vec<String> {
         match self {
-            Adapter::ClaudeCode => vec![
-                "--settings".to_string(),
-                claude_code::settings(flow_exe),
-                "--append-system-prompt".to_string(),
-                claude_code::WORKER_PROMPT.to_string(),
-            ],
+            Adapter::ClaudeCode => vec!["--settings".to_string(), claude_code::settings(flow_exe)]
+                .into_iter()
+                .chain(self.instruct(WORKER_PROMPT))
+                .collect(),
         }
     }
 
@@ -65,6 +74,13 @@ impl Adapter {
                 "--settings".to_string(),
                 claude_code::master_settings(flow_exe),
             ],
+        }
+    }
+
+    /// The arguments that add `text` to the session's instructions.
+    pub fn instruct(self, text: &str) -> Vec<String> {
+        match self {
+            Adapter::ClaudeCode => vec!["--append-system-prompt".to_string(), text.to_string()],
         }
     }
 
@@ -125,6 +141,26 @@ mod tests {
             Some(Phase::Design)
         );
         assert_eq!(phase_of("commit", &phases), None);
+    }
+
+    #[test]
+    fn tells_a_worker_who_the_flow_master_is() {
+        assert!(WORKER_PROMPT.contains("message from the flow master:"));
+        assert!(
+            !WORKER_PROMPT.contains("Claude"),
+            "the prompt names no harness"
+        );
+        let wiring = Adapter::ClaudeCode.wiring(Path::new("/bin/flow"));
+        assert_eq!(wiring[0], "--settings");
+        assert_eq!(wiring[2..], ["--append-system-prompt", WORKER_PROMPT]);
+    }
+
+    #[test]
+    fn claude_code_takes_instructions_on_its_system_prompt() {
+        assert_eq!(
+            Adapter::ClaudeCode.instruct("be brief"),
+            ["--append-system-prompt", "be brief"]
+        );
     }
 
     #[test]
