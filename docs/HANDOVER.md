@@ -311,6 +311,24 @@ server's typing.
 - **Extensions:** glab and ClickUp as data sources (ticket as the request, MR and pipeline status
   per flow); the new-flow dialog's "from ClickUp" list in the design waits for this.
   Decide whether both should match.
+- **Subagents in the sidebar.** `delegated` shows one foreground subagent's task; background
+  subagents (`run_in_background`) are not counted, so a worker running three in parallel looks merely
+  working. Count every running subagent from the harness's start and stop hooks (Claude Code's
+  subagent hooks, Codex's equivalents), show the count beside the state glyph (`◐ 3`) while any run,
+  and list their tasks in the board's detail view.
+- **No messages between workers (decided 2026-10-16).** Each flow keeps its own branch so its work
+  stays independent and reviewable; workers sending each other messages would couple flows through
+  conversations nobody reviews, allow loops (A asks B, B asks A) and hide who decided what. A worker
+  may read other flows (`flow status --all`, their plans), like any node reading a CAN bus; whatever
+  it needs from another flow it says at the end of its turn, and the master (later `flow ask`) passes
+  it on.
+- **No real bus for now (decided 2026-10-16).** flow is a publish/subscribe log with one supervisor:
+  status works like CAN (workers report unasked into the logs, each reader filters, `fold::changes`
+  drops what changes nothing), control like LIN (only the master sends, one flow per message), except
+  that the master is woken instead of polling. flow server and `flow wait` poll the store every
+  500 ms. A hub over the server's socket, with hooks pushing to it, would still have to write the logs
+  (they survive crashes, and reporting works without flow ui), still could not wake Codex, and would
+  gain at most half a second. Revisit when flow spans machines or needs sub-second reactions.
 
 ## Long-term vision: `flow` as its own TUI
 
