@@ -62,7 +62,7 @@ fn every_view_looks_as_it_did() {
     board.on_input(Routed::Command(Command::Board));
     golden("board", &render_at(&board, FLEET));
 
-    let mut new_flow = board_app();
+    let mut new_flow = board_app().with_agents(vec!["claude".into(), "codex".into()]);
     new_flow.on_input(Routed::Command(Command::NewFlow));
     golden("new-flow", &render_at(&new_flow, FLEET));
 

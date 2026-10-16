@@ -427,3 +427,62 @@ fn keeps_what_a_new_flow_creates_inside_the_dialog() {
     );
     assert!(creates.contains("  │"), "{creates}");
 }
+
+#[test]
+fn picks_the_agent_in_the_dialog_when_there_are_two() {
+    let mut app = board_app().with_agents(vec!["claude".into(), "codex".into()]);
+    app.on_input(Routed::Command(Command::NewFlow));
+    app.on_input(Routed::View(
+        "SHOP-240 fix totals".chars().map(Key::Char).collect(),
+    ));
+    app.on_input(Routed::View(vec![Key::Tab, Key::Right]));
+
+    let terminal = render_at(&app, FLEET);
+    let dialog: String = (10..26).map(|y| row(&terminal, y) + "\n").collect();
+    assert!(
+        dialog.contains("│ agent   ( ) claude   (•) codex"),
+        "{dialog}"
+    );
+    let effects = app.on_input(Routed::View(vec![Key::Enter]));
+    let [Effect::Run(job)] = &effects[..] else {
+        panic!("expected a job: {effects:?}");
+    };
+    assert_eq!(
+        job.args(),
+        [
+            "start",
+            "SHOP-240 fix totals",
+            "--mode",
+            "guided",
+            "--agent",
+            "codex"
+        ]
+    );
+
+    app.on_input(Routed::Command(Command::NewFlow));
+    app.on_input(Routed::View(vec![
+        Key::Tab,
+        Key::Right,
+        Key::Tab,
+        Key::Right,
+    ]));
+    let effects = app.on_input(Routed::View(vec![Key::Enter]));
+    let [Effect::Run(job)] = &effects[..] else {
+        panic!("expected a job: {effects:?}");
+    };
+    assert_eq!(
+        job.args(),
+        ["start", "--plain", "~/projects/shop", "--agent", "codex"],
+        "a plain session too"
+    );
+}
+
+#[test]
+fn shows_no_agent_row_with_one_agent() {
+    let mut app = board_app().with_agents(vec!["claude".into()]);
+    app.on_input(Routed::Command(Command::NewFlow));
+
+    let terminal = render_at(&app, FLEET);
+    let dialog: String = (10..26).map(|y| row(&terminal, y) + "\n").collect();
+    assert!(!dialog.contains("agent "), "{dialog}");
+}

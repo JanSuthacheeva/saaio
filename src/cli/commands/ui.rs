@@ -20,9 +20,15 @@ pub fn run(args: &Args, store: &Store, env: &Env, clock: fn() -> u64) -> Result<
     if args.stop {
         return stop_server(&socket, clock);
     }
+    let config = env.config()?;
     let exe = std::env::current_exe()?;
     client::ensure_server(&socket, &exe, &[])?;
     let ui_env = ui::UiEnv {
+        agents: config
+            .worker_agents()
+            .into_iter()
+            .map(String::from)
+            .collect(),
         exe,
         claude_home: env.claude_home(),
         home: env.user_home().map(Path::to_path_buf),

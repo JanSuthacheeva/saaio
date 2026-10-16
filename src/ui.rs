@@ -65,6 +65,8 @@ pub struct UiEnv {
     pub store: PathBuf,
     /// Where theme.toml lives: config.toml's folder.
     pub theme_dir: PathBuf,
+    /// The agents a flow can run, the default first, for the new-flow dialog.
+    pub agents: Vec<String>,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
@@ -77,7 +79,8 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let mut app = App::new(outer.size()?)
         .with_offset(crate::text::local_offset_secs())
         .with_home(home)
-        .with_store(env.store.display().to_string());
+        .with_store(env.store.display().to_string())
+        .with_agents(env.agents);
     let client = Client::connect(
         socket,
         Role::Attach {

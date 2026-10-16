@@ -274,7 +274,7 @@ impl App {
     pub(super) fn open_new_flow(&mut self) -> Vec<Effect> {
         let repo = self.focused_repo();
         let place = self.tilde(&repo.display().to_string());
-        self.view = View::NewFlow(NewFlowForm::new(repo.clone(), place));
+        self.view = View::NewFlow(NewFlowForm::new(repo.clone(), place, self.agents.clone()));
         vec![Effect::LoadBranching(repo)]
     }
 

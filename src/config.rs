@@ -116,6 +116,20 @@ impl Config {
         }
     }
 
+    /// The agents a flow can run, the default first: every one but MASTER_AGENT.
+    pub fn worker_agents(&self) -> Vec<&str> {
+        let others = self
+            .agents
+            .keys()
+            .map(String::as_str)
+            .filter(|name| *name != MASTER_AGENT && *name != self.agent);
+        self.agent(None)
+            .map(|(name, _)| name)
+            .into_iter()
+            .chain(others)
+            .collect()
+    }
+
     /// The named agent, or the default one.
     pub fn agent(&self, name: Option<&str>) -> Option<(&str, &Agent)> {
         let name = name.unwrap_or(&self.agent);
@@ -401,5 +415,17 @@ prompt = "/design-code {request}"
                 .any(|part| part.contains("{instructions}")),
             "the server adds the instructions through the adapter"
         );
+    }
+
+    #[test]
+    fn lists_the_agents_a_flow_can_run_the_default_first() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        fs::write(&file, "agent = \"codex\"\n").unwrap();
+
+        let config = Config::load(Some(file), None, None).unwrap();
+
+        assert_eq!(config.worker_agents(), ["codex", "claude"]);
+        assert_eq!(Config::builtin().worker_agents(), ["claude", "codex"]);
     }
 }

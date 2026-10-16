@@ -40,11 +40,17 @@ impl Job {
     /// The arguments after the flow binary.
     pub fn args(&self) -> Vec<String> {
         match self {
-            Job::Start(form) if form.mode == Mode::Plain => vec![
-                "start".to_string(),
-                "--plain".to_string(),
-                form.folder.trim().to_string(),
-            ],
+            Job::Start(form) if form.mode == Mode::Plain => {
+                let mut args = vec![
+                    "start".to_string(),
+                    "--plain".to_string(),
+                    form.folder.trim().to_string(),
+                ];
+                if let Some(agent) = form.picked_agent() {
+                    args.extend(["--agent".to_string(), agent.to_string()]);
+                }
+                args
+            }
             Job::Start(form) => {
                 let mut args = vec![
                     "start".to_string(),
@@ -54,6 +60,9 @@ impl Job {
                 ];
                 if let Some(kind) = form.picked_type() {
                     args.extend(["--type".to_string(), kind.to_string()]);
+                }
+                if let Some(agent) = form.picked_agent() {
+                    args.extend(["--agent".to_string(), agent.to_string()]);
                 }
                 args
             }

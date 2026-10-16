@@ -387,7 +387,7 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 
 ### UI
 - [x] peek split into peek/claude.rs and peek/codex.rs; Format, transcript_of, tail with format; PeekCache uses transcript_of; codex parser tests over the recorded rollout
-- [ ] Config::worker_agents; new-flow dialog agent row (NewFlowForm agents/agent, Field::Agent, picked_agent, view.rs), UiEnv.agents, Job::Start --agent; tests and a golden screen
+- [x] Config::worker_agents; new-flow dialog agent row (NewFlowForm agents/agent, Field::Agent, picked_agent, view.rs), UiEnv.agents, Job::Start --agent; tests and a golden screen
 
 ### Docs and setup
 - [ ] Docs: README (Codex agent, [master] agent, trusting the hooks once), CLAUDE.md (adapter/codex.rs, answer.rs, calls.rs, server/news.rs, peek/, plan list), HANDOVER (Codex facts, decisions, codex queue for later), plan-flow-adapters.md pointer to this plan
