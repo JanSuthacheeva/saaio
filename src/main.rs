@@ -436,7 +436,7 @@ fn worker_news(store: &Store, id: &str, now: u64) -> WorkerNews {
 /// as one wake.
 fn master_news(store: &Store, clock: fn() -> u64, is_mine: &dyn Fn() -> bool) -> Option<String> {
     let flows = views(store, clock()).0;
-    let seen = store.seen().unwrap_or_else(|| wake::first_seen(&flows));
+    let mut seen = store.seen().unwrap_or_else(|| wake::first_seen(&flows));
     if wake::changed_flows(&flows, &seen).is_empty() {
         return None;
     }
@@ -446,9 +446,8 @@ fn master_news(store: &Store, clock: fn() -> u64, is_mine: &dyn Fn() -> bool) ->
     if changed.is_empty() || !is_mine() {
         return None;
     }
-    let mut marked = seen.clone();
-    wake::mark_seen(&mut marked, &changed);
-    store.set_seen(&marked).ok()?;
+    wake::mark_seen(&mut seen, &changed);
+    store.set_seen(&seen).ok()?;
     Some(output::news_for_master(&changed))
 }
 
@@ -517,7 +516,7 @@ fn ui(store: &Store) -> Result<Document, Failure> {
         .or_else(|| env_path("HOME").map(|home| home.join(".claude")))
         .unwrap_or_else(|| PathBuf::from(".claude"));
     let env = ui::UiEnv {
-        exe: exe.clone(),
+        exe,
         claude_home,
         home: env_path("HOME").filter(|home| !home.as_os_str().is_empty()),
         store: store.root().to_path_buf(),
@@ -855,7 +854,7 @@ fn refuse_unmerged_commits(flow: &FlowView) -> Result<(), Failure> {
     let Some((repo, branch)) = branch_of(flow) else {
         return Ok(());
     };
-    match workspace::commits_only_on(&repo, &branch) {
+    match workspace::commits_only_on(&repo, branch) {
         Ok(Some(count)) if count > 0 => Err(Failure::error(
             format!(
                 "{branch} has {count} commit{} {}",
@@ -883,10 +882,10 @@ fn drop_branch(flow: &FlowView, unmerged: Unmerged) -> BranchFate {
     let Some((repo, branch)) = branch_of(flow) else {
         return BranchFate::NoBranch;
     };
-    match workspace::commits_only_on(&repo, &branch) {
+    match workspace::commits_only_on(&repo, branch) {
         Ok(None) => BranchFate::NoBranch,
         Ok(Some(count)) if count == 0 || unmerged == Unmerged::Delete => {
-            match workspace::delete_branch(&repo, &branch) {
+            match workspace::delete_branch(&repo, branch) {
                 Ok(()) => BranchFate::Deleted,
                 Err(_) => BranchFate::Kept,
             }
@@ -896,9 +895,9 @@ fn drop_branch(flow: &FlowView, unmerged: Unmerged) -> BranchFate {
 }
 
 /// The repository and branch of a started flow.
-fn branch_of(flow: &FlowView) -> Option<(PathBuf, String)> {
+fn branch_of(flow: &FlowView) -> Option<(PathBuf, &str)> {
     let space = flow.workspace.as_ref()?;
-    Some((launch::repo_of(space)?, space.branch.clone()))
+    Some((launch::repo_of(space)?, &space.branch))
 }
 
 /// Ends the flow's session in flow ui before its worktree goes.

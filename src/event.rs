@@ -91,11 +91,12 @@ pub enum Mode {
 
 impl Event {
     /// An event of the current version at `at` (Unix ms), each text cut to TEXT_LIMIT chars.
-    pub fn new(at: u64, kind: EventKind) -> Event {
+    pub fn new(at: u64, mut kind: EventKind) -> Event {
+        kind.cut_texts();
         Event {
             v: EVENT_VERSION,
             at,
-            kind: kind.with_texts_cut(),
+            kind,
         }
     }
 
@@ -114,48 +115,29 @@ impl Event {
 }
 
 impl EventKind {
-    fn with_texts_cut(self) -> EventKind {
+    fn cut_texts(&mut self) {
         match self {
-            EventKind::Started {
-                name,
-                request,
-                mode,
-            } => EventKind::Started {
-                name: cut(name),
-                request: cut(request),
-                mode,
-            },
-            EventKind::Delegated { description } => EventKind::Delegated {
-                description: cut(description),
-            },
-            EventKind::Waiting { question } => EventKind::Waiting {
-                question: cut(question),
-            },
-            EventKind::Idle { note } => EventKind::Idle { note: cut(note) },
-            EventKind::Blocked { reason } => EventKind::Blocked {
-                reason: cut(reason),
-            },
-            EventKind::Decision { text } => EventKind::Decision { text: cut(text) },
-            EventKind::MergeRequest { url } => EventKind::MergeRequest { url: cut(url) },
-            EventKind::Message { text } => EventKind::Message {
-                text: cut_to(text, LONG_TEXT_LIMIT),
-            },
-            EventKind::Answer { text } => EventKind::Answer {
-                text: cut_to(text, LONG_TEXT_LIMIT),
-            },
-            other => other,
+            EventKind::Started { name, request, .. } => {
+                cut_to(name, TEXT_LIMIT);
+                cut_to(request, TEXT_LIMIT);
+            }
+            EventKind::Delegated { description: text }
+            | EventKind::Waiting { question: text }
+            | EventKind::Idle { note: text }
+            | EventKind::Blocked { reason: text }
+            | EventKind::Decision { text }
+            | EventKind::MergeRequest { url: text } => cut_to(text, TEXT_LIMIT),
+            EventKind::Message { text } | EventKind::Answer { text } => {
+                cut_to(text, LONG_TEXT_LIMIT);
+            }
+            _ => {}
         }
     }
 }
 
-fn cut(text: String) -> String {
-    cut_to(text, TEXT_LIMIT)
-}
-
-fn cut_to(text: String, limit: usize) -> String {
-    match text.char_indices().nth(limit) {
-        Some((end, _)) => text[..end].to_string(),
-        None => text,
+fn cut_to(text: &mut String, limit: usize) {
+    if let Some((end, _)) = text.char_indices().nth(limit) {
+        text.truncate(end);
     }
 }
 
