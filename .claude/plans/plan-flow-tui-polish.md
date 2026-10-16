@@ -136,7 +136,8 @@ fn stop_dialog<'a>(&'a self, theme: &'a Theme, unfinished: &[String]) -> Dialog<
 /// The scrollback hint along the pane's last row, fitted by hints::line.
 fn draw_history(&self, frame: &mut Frame, pane: Rect, back: u32, theme: &Theme);
 
-// chrome.rs: draw_bar goes; title_line drops the needs-you bar (the state glyph says it).
+// chrome.rs: draw_bar goes; title_line drops the needs-you bar (the state glyph says it); the
+// master's title says its whole place while the rail shows (nothing else does), else its branch.
 fn title_line(&self, theme: &Theme, width: u16, right: usize) -> Line<'static>;
 
 // keys.rs: Command::Rail sets self.rail = Some(!self.folded()); every read of self.rail is folded().
@@ -300,7 +301,7 @@ The first worker starts:
 - cards: name cut before its label at 30 columns; mode dropped when it does not fit; blocker in text style.
 - detail: the answer's end kept; no answer, no heading; steps under the header.
 - sidebar: Mark per row (focus, peek, changed); `took 2h`; tasks-only column; empty rows.
-- golden: every view rewritten with FLOW_UPDATE_GOLDEN=1 and read by eye; new narrow-board (96
+- golden: every view rewritten with FLOW_UPDATE_GOLDEN=1 and read by eye; solo becomes master-alone; new narrow-board (96
   columns), empty-board, new-flow-agent (focus on agent), stop-unfinished.
 - E2E: scratch FLOW_HOME in a separate tmux server (`tmux -L`) at 150x44 and 96x30, the review's screens.
 
@@ -339,8 +340,8 @@ The first worker starts:
 
 ### Layout and empty states (items 1, 6)
 
-- [ ] Remove `Chrome::Solo`, `Areas::bar` and `draw_bar`; the sidebar shows with only the master and `Sidebar::empty_rows`; update layout tests and the solo golden
-- [ ] Add `RAIL_BELOW`, `App.rail: Option<bool>` and `App::folded`; C-space b sets the choice; tests for width and override in app/tests/panes.rs
+- [x] Remove `Chrome::Solo`, `Areas::bar` and `draw_bar`; the sidebar shows with only the master and `Sidebar::empty_rows`; update layout tests and the solo golden
+- [x] Add `RAIL_BELOW`, `App.rail: Option<bool>` and `App::folded`; C-space b sets the choice; tests for width and override in app/tests/panes.rs
 - [ ] Board header `1 session`, master card and master detail `no workers yet` / `n starts a flow`; add the empty-board golden
 
 ### Hints and labels (items 1, 5, 7)

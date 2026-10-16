@@ -4,7 +4,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 
 use super::App;
-use crate::proto::{PaneKey, PaneStatus};
+use crate::proto::PaneKey;
 use crate::ui::fit::{clip, clip_place, columns, spans_width};
 use crate::ui::theme::Theme;
 use crate::view::State;
@@ -31,13 +31,13 @@ impl App {
         let room = |used: usize| (width as usize).saturating_sub(right + 2 + used);
         let PaneKey::Flow(id) = &self.focus else {
             let mut title = vec![Span::styled(" master", theme.ui.strong)];
-            // The sidebar says where the master runs; alone, the title says it.
-            let place = match (&self.master, self.areas().side) {
-                (Some(place), Some(_)) => place
+            // The sidebar says where the master runs and the title its branch; the rail says neither.
+            let place = match &self.master {
+                Some(place) if self.folded() => Some(place.clone()),
+                Some(place) => place
                     .rsplit_once(" · ")
                     .map(|(_, branch)| branch.to_string()),
-                (Some(place), None) => Some(place.clone()),
-                (None, _) => None,
+                None => None,
             };
             if let Some(place) = place {
                 let fitted = clip_place(&place, room(spans_width(&title) + 2));
@@ -88,10 +88,7 @@ impl App {
     /// to the sidebar; with the sidebar, nothing.
     fn border_hint(&self, theme: &Theme) -> Option<Line<'static>> {
         // With the sidebar in view its key hint says the rest.
-        if !self.rail {
-            return None;
-        }
-        if self.workers().is_empty() {
+        if !self.folded() {
             return None;
         }
         let sidebar = self.sidebar(theme, &[]);
@@ -126,56 +123,5 @@ impl App {
         spans.push(Span::styled("C-space b", theme.ui.key));
         spans.push(Span::styled(" sidebar ", theme.ui.faint));
         Some(Line::from(spans))
-    }
-
-    pub(super) fn draw_bar(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        let glyphs = &theme.glyphs;
-        let mut left = vec![
-            Span::raw(" "),
-            Span::styled(glyphs.mark, theme.ui.accent),
-            Span::styled(" flow ", theme.ui.strong),
-            Span::styled(format!(" {} ", glyphs.separator), theme.ui.rule),
-            Span::styled("master", theme.ui.text),
-        ];
-        if let Some(place) = &self.master {
-            let room = usize::from(area.width).saturating_sub(spans_width(&left) + 3);
-            left.push(Span::styled(
-                format!("  {}", clip_place(place, room)),
-                theme.ui.faint,
-            ));
-        }
-        match self.status(&PaneKey::Master) {
-            Some(PaneStatus::Exited { .. }) => left.push(Span::styled(
-                "  exited - C-space r resumes it",
-                theme.state.waiting,
-            )),
-            Some(PaneStatus::Failed { reason }) => {
-                left.push(Span::styled(format!("  {reason}"), theme.state.blocked));
-            }
-            _ => {}
-        }
-        let keys = vec![
-            Span::styled("C-space", theme.ui.key),
-            Span::styled(" then  ", theme.ui.faint),
-            Span::styled("n", theme.ui.key),
-            Span::styled(" new flow   ", theme.ui.muted),
-            Span::styled("?", theme.ui.key),
-            Span::styled(" keys ", theme.ui.muted),
-        ];
-        let mut full = vec![
-            Span::styled("no workers yet", theme.ui.faint),
-            Span::styled(format!("   {}  ", glyphs.separator), theme.ui.rule),
-        ];
-        full.extend(keys.clone());
-        let left = Line::from(left);
-        let room = (area.width as usize).saturating_sub(left.width() + 1);
-        let right = [Line::from(full), Line::from(keys)]
-            .into_iter()
-            .find(|line| line.width() <= room);
-        frame.render_widget(Block::default().style(theme.ui.bar), area);
-        frame.render_widget(Paragraph::new(left), area);
-        if let Some(right) = right {
-            frame.render_widget(Paragraph::new(right).alignment(Alignment::Right), area);
-        }
     }
 }

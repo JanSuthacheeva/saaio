@@ -27,9 +27,7 @@ impl App {
         }
         let areas = self.areas();
         self.draw_title(frame, areas.title, theme);
-        if let Some(rule) = areas.rule {
-            self.draw_rule(frame, rule, theme);
-        }
+        self.draw_rule(frame, areas.rule, theme);
         frame.render_widget(
             ScreenView {
                 screen: &self.screen,
@@ -38,20 +36,15 @@ impl App {
             },
             areas.pane,
         );
-        if let Some(bar) = areas.bar {
-            self.draw_bar(frame, bar, theme);
-        }
-        if let Some(side) = areas.side {
-            if self.rail {
-                frame.render_widget(
-                    Rail {
-                        sidebar: self.sidebar(theme, &[]),
-                    },
-                    side,
-                );
-            } else {
-                frame.render_widget(self.sidebar(theme, peek), side);
-            }
+        if self.folded() {
+            frame.render_widget(
+                Rail {
+                    sidebar: self.sidebar(theme, &[]),
+                },
+                areas.side,
+            );
+        } else {
+            frame.render_widget(self.sidebar(theme, peek), areas.side);
         }
         let asking = matches!(self.view, View::Confirm { .. });
         let notice = match self.status(&self.focus) {
@@ -94,7 +87,7 @@ impl App {
         if let Some(joint) = line.get_mut(1) {
             *joint = Line::styled(theme.glyphs.rule_joint, theme.ui.rule);
         }
-        if self.rail {
+        if self.folded() {
             let foot = line.len().saturating_sub(2);
             if let Some(joint) = line.get_mut(foot) {
                 *joint = Line::styled(theme.glyphs.rule_joint, theme.ui.rule);

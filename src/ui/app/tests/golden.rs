@@ -36,12 +36,12 @@ fn golden(name: &str, terminal: &Terminal<TestBackend>) {
 
 #[test]
 fn every_view_looks_as_it_did() {
-    let mut solo = App::new(FLEET).with_home(Some("/Users/jan".into()));
-    solo.on_server(ServerMsg::Master {
+    let mut alone = App::new(FLEET).with_home(Some("/Users/jan".into()));
+    alone.on_server(ServerMsg::Master {
         cwd: "/Users/jan/projects/shop".into(),
         branch: Some("main".into()),
     });
-    golden("solo", &render_at(&solo, FLEET));
+    golden("master-alone", &render_at(&alone, FLEET));
 
     let fleet = board_app();
     golden("fleet", &render_at(&fleet, FLEET));

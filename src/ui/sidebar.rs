@@ -98,6 +98,9 @@ impl Sidebar<'_> {
         let room = usize::from(height.saturating_sub(FOOTER_ROWS));
         let mut rows = self.master_rows();
         let listed = workers(self.board);
+        if listed.is_empty() {
+            rows.extend(self.empty_rows());
+        }
         let mut flows = self.flow_blocks(&listed);
         let used = rows.len() + flows.iter().map(Vec::len).sum::<usize>();
         let budget = room.saturating_sub(used).min(PEEK_ROWS);
@@ -174,6 +177,19 @@ impl Sidebar<'_> {
             .iter()
             .find(|pane| matches!(&pane.key, PaneKey::Flow(id) if *id == flow.id))
             .map(|pane| &pane.status)
+    }
+
+    /// Under the master while there are no workers: "no workers yet" and C-space n.
+    fn empty_rows(&self) -> Vec<Row> {
+        let theme = self.theme;
+        vec![
+            plain(Line::styled(" no workers yet", theme.ui.faint)),
+            plain(Line::from(vec![
+                Span::raw(" "),
+                Span::styled("C-space n", theme.ui.key),
+                Span::styled(" starts a flow", theme.ui.faint),
+            ])),
+        ]
     }
 
     /// One quiet line at the foot: the prefix and the key that lists the rest.

@@ -23,7 +23,6 @@ impl App {
                 vec![]
             }
             ServerMsg::Board(board) => {
-                let before = self.areas().pane;
                 self.now = self.now.max(board.now);
                 if let Some(old) = &self.board {
                     for flow in &board.flows {
@@ -35,10 +34,6 @@ impl App {
                 }
                 self.board = Some(board);
                 let mut effects = Vec::new();
-                let after = self.areas();
-                if after.pane != before {
-                    effects.push(Effect::Send(ClientMsg::Resize(after.pane_size())));
-                }
                 if let PaneKey::Flow(id) = &self.focus
                     && !self.workers().iter().any(|flow| &flow.id == id)
                 {

@@ -1,22 +1,34 @@
 use super::*;
 
 #[test]
-fn makes_room_for_the_sidebar_once_the_first_worker_shows_up() {
+fn shows_the_sidebar_from_the_start_and_keeps_the_pane_when_workers_come() {
     let mut app = App::new(FLEET);
+    let pane = app.areas().pane;
 
+    assert_eq!(app.areas().side.width, 40, "the master has its row");
     assert_eq!(
         app.on_server(ServerMsg::Board(fold::board(vec![], NOW))),
         vec![]
     );
-    assert_eq!(app.areas().side, None);
     assert_eq!(
         app.on_server(ServerMsg::Board(fleet())),
-        vec![Effect::Send(ClientMsg::Resize(Size {
-            cols: 107,
-            rows: 41
-        }))]
+        vec![],
+        "the first worker resizes nothing"
     );
-    assert_eq!(app.on_server(ServerMsg::Board(fleet())), vec![]);
+    assert_eq!(app.areas().pane, pane);
+}
+
+#[test]
+fn says_there_are_no_workers_yet_and_how_to_start_one() {
+    let mut app = App::new(FLEET);
+    app.on_server(ServerMsg::Board(fold::board(vec![], NOW)));
+
+    let terminal = render_at(&app, FLEET);
+
+    assert_eq!(side(&terminal, 2).trim_end(), "▌0   master");
+    assert_eq!(side(&terminal, 4).trim_end(), " no workers yet");
+    assert_eq!(side(&terminal, 5).trim_end(), " C-space n starts a flow");
+    assert_eq!(side(&terminal, 41).trim_end(), " C-space ? keys");
 }
 
 #[test]
@@ -350,15 +362,18 @@ fn a_long_place_loses_its_middle_but_keeps_the_branch_and_the_corner() {
     });
 
     let narrow = Size { cols: 90, rows: 20 };
-    let mut solo = App::new(narrow);
-    solo.on_server(ServerMsg::Master {
+    let mut folded = App::new(narrow);
+    folded.on_server(ServerMsg::Master {
         cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
         branch: Some("main".into()),
     });
-    let solo = render_at(&solo, narrow);
-    let top = row(&solo, 0);
+    let folded = render_at(&folded, narrow);
+    let top = row(&folded, 0);
     assert!(top.contains("/private/…/"), "{top}");
-    assert!(top.trim_end().ends_with("/repo · main"), "{top}");
+    assert!(
+        top.contains("/repo · main ") && top.contains("C-space b sidebar │"),
+        "with the rail the title says where the master runs: {top}"
+    );
 
     let screen = render_at(&fleet, FLEET);
     assert_eq!(

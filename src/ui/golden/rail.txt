@@ -1,5 +1,5 @@
 
-  master  main                                                                                  ● 1 shop-221 is blocked  │  C-space b sidebar │ ▚▄▞
+  master  ~/projects/shop · main                                                                ● 1 shop-221 is blocked  │  C-space b sidebar │ ▚▄▞
                                                                                                                                               ├──────
                                                                                                                                               │▌0
                                                                                                                                               │

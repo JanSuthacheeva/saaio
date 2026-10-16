@@ -192,7 +192,7 @@ fn render_at(app: &App, size: Size) -> Terminal<TestBackend> {
 
 /// Row `y` of the sidebar.
 fn side(terminal: &Terminal<TestBackend>, y: u16) -> String {
-    let side = layout::areas(FLEET, layout::Chrome::Sidebar).side.unwrap();
+    let side = layout::areas(FLEET, layout::Chrome::Sidebar).side;
     let screen = layout::screen(FLEET);
     let from = (side.x - screen.x) as usize;
     row(terminal, y).chars().skip(from).collect::<String>()
