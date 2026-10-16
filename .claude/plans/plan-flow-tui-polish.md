@@ -359,3 +359,27 @@ The first worker starts:
 
 - [x] Copy the approaches and implementation pages to `docs/design/polish-approaches.html` and `docs/design/polish-implementation.html`; update CLAUDE.md's ui module list for focus.rs and hints.rs
 - [x] End-to-end: build, run flow ui on a scratch FLOW_HOME in a separate tmux server at 150x44 and 96x30 with stand-in workers, capture every screen from the review and compare by eye under noctalia and the terminal theme; clippy and fmt clean
+
+## Review
+
+Reviewed in isolation against this plan and CLAUDE.md, every changed line of `main...flow/tui-polish`.
+
+**Fixed**
+
+- On every project's board, a card of another project drew `enter jump in` and (when finished) `x clear finished flow` as active, though both only say "runs in project api". Shown by `draws_enter_and_x_faint_on_a_card_of_another_project`; fixed with `BoardView::reachable` (ui: board: enter and x faint on a card of another project). The fix was re-read on its own, not by a separate agent.
+
+**Open**
+
+- None blocking. A finished flow whose start and last change share a second reads `took 0s` (the fleet fixture shows it); real flows will not, so left as is.
+- The selected board card's focus fill covers its whole rect, the blank rows above and below the text included (narrow-board golden). That follows the plan; worth a look on the real terminal if it reads as too heavy.
+
+**Where to look**
+
+1. `src/ui/dialog.rs` `Dialog::area` / `body_area` / `render`, then `src/ui/newflow/view.rs` `render` and `NewFlowForm::cursor`: the body geometry the view and the text cursor must agree on, and how a short terminal drops padding, then body rows.
+2. `src/ui/app.rs` `folded()` with `keys.rs` `Command::Rail` and `messages.rs` (the Board-time Resize is gone because chrome no longer depends on workers): the pane size the server is told.
+3. `src/ui/board/cards.rs` `first_row`: when the state label shortens and how the name is cut.
+4. Routine, skim: `focus.rs`, `hints.rs`, theme headings, sidebar/rail `Mark`, label wording, goldens.
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at the fix commit.
