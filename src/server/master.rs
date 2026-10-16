@@ -15,13 +15,14 @@ pub const MASTER_NAME: &str = "master";
 /// What flow writes to master.md: how the master works with flow.
 pub const DEFAULT_INSTRUCTIONS: &str = include_str!("master.md");
 /// Earlier defaults: a master.md still holding one of them was never edited, so it gets the current one.
-const PREVIOUS_DEFAULTS: [&str; 6] = [
+const PREVIOUS_DEFAULTS: [&str; 7] = [
     include_str!("master-v1.md"),
     include_str!("master-v2.md"),
     include_str!("master-v3.md"),
     include_str!("master-v4.md"),
     include_str!("master-v5.md"),
     include_str!("master-v6.md"),
+    include_str!("master-v7.md"),
 ];
 
 /// Writes the default instructions to `file` when it is missing or still an earlier default; an edited

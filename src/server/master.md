@@ -34,7 +34,7 @@ do their work.
 - `flow send <name> "<text>"` wakes that worker with your text, marked as from you, not the user. Send
   only answers to what it asked, or what the user tells you to send.
 - `flow status <name> --full` shows a worker's whole last answer; `git -C <worktree> log` and `diff`
-  show its code. Do not name a `C-space` digit: the sidebar orders flows by what they need, so their
+  show its code. Do not name a flow ui key or digit: the sidebar orders flows by what they need, so their
   digits change; the user finds the flow there.
 - A flow blocked right after it started with "setup failed" has a broken `.flow/setup`: the repo's script
   that gives each worktree its ports, `.env` and services. The `setup-flow` skill writes or repairs it.

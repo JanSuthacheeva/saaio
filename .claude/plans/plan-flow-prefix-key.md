@@ -228,5 +228,5 @@ so each task brings a piece of it together with its first reader.
 - [x] Every hint names the configured key: `Prefix::name` / `then` with unit tests, `App::with_prefix`, `Sidebar.prefix`, `dialog::help` / `not_running` / `no_session`, chrome title row, master card, peek hint; app tests with a C-b App for each place; goldens unchanged
 - [x] Name the configured key in `flow status`'s resume hint (`detail`, `detail_help`) with a cli test
 - [x] E2E cli test: `flow ui` with `prefix = "C-c"` exits 1 with the reason
-- [ ] Reword master.md (current text to master-v7.md in `PREVIOUS_DEFAULTS`), README keys section and `[ui]` example, HANDOVER lines
+- [x] Reword master.md (current text to master-v7.md in `PREVIOUS_DEFAULTS`), README keys section and `[ui]` example, HANDOVER lines
 - [ ] End-to-end check: flow ui on a scratch FLOW_HOME with `[ui] prefix = "C-b"`: C-b ? shows the help naming C-b, C-b d detaches, C-b C-b reaches the pane, the sidebar footer reads C-b; then `prefix = "C-c"` refuses to start
