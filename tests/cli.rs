@@ -202,7 +202,7 @@ fn status_json_is_the_versioned_board() {
 
     assert!(output.status.success());
     let board: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(board["version"], 1);
+    assert_eq!(board["version"], 2);
     assert_eq!(board["needsYou"], 1);
     assert_eq!(board["flows"][0]["name"], "shop-221");
     assert_eq!(board["flows"][0]["blocker"], "no default");

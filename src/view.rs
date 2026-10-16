@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::event::{EventKind, Mode, Phase};
 
-pub const VIEW_VERSION: u32 = 1;
+pub const VIEW_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -324,7 +324,7 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert!(
-            json.trim_start().starts_with("{\n  \"version\": 1,"),
+            json.trim_start().starts_with("{\n  \"version\": 2,"),
             "{json}"
         );
         assert_eq!(value["needsYou"], 1);

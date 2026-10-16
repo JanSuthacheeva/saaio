@@ -189,6 +189,7 @@ pub(super) fn plain(line: Line<'static>) -> Row {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::view::VIEW_VERSION;
 
     fn working(id: &str) -> FlowView {
         use crate::event::{Event, EventKind, Mode};
@@ -219,7 +220,7 @@ mod tests {
     fn lists_the_flows_that_do_not_fit_as_more_and_cuts_none_in_half() {
         let flows: Vec<FlowView> = ["a", "b", "c", "d", "e"].map(working).into();
         let board = Board {
-            version: 1,
+            version: VIEW_VERSION,
             now: 0,
             count: flows.len(),
             needs_you: 0,
@@ -269,7 +270,7 @@ mod tests {
         let mut flow = working("a");
         flow.tasks = Some(crate::view::Tasks { done: 0, total: 0 });
         let board = Board {
-            version: 1,
+            version: VIEW_VERSION,
             now: 0,
             count: 1,
             needs_you: 0,

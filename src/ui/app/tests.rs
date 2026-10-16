@@ -12,7 +12,7 @@ use crate::event::{Event, EventKind};
 use crate::fold;
 use crate::proto::{Cell, ClientMsg, Color, Flags, Frame, Mouse, ServerMsg};
 use crate::ui::input::{Command, Key, Routed, Step};
-use crate::view::State;
+use crate::view::{State, VIEW_VERSION};
 
 const SIZE: Size = Size { cols: 80, rows: 10 };
 
@@ -191,7 +191,7 @@ fn board_app() -> App {
 fn every_project() -> Projects {
     let api = worker("api-7", crate::event::Mode::Auto, 5, vec![]);
     Projects {
-        version: 1,
+        version: VIEW_VERSION,
         now: NOW,
         projects: vec![
             crate::view::Project {

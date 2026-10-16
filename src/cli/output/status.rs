@@ -338,6 +338,7 @@ mod tests {
     use crate::cli::output::fixtures::{MIN, flow, sample_board};
     use crate::event::{EventKind, Phase};
     use crate::fold;
+    use crate::view::VIEW_VERSION;
 
     #[test]
     fn home_shows_the_binary_the_description_and_the_flows() {
@@ -424,7 +425,7 @@ mod tests {
     fn the_overview_lists_every_projects_flows_with_their_project() {
         let now = 30 * MIN;
         let projects = Projects {
-            version: 1,
+            version: VIEW_VERSION,
             now,
             projects: vec![
                 crate::view::Project {
@@ -463,7 +464,7 @@ mod tests {
     #[test]
     fn an_empty_overview_says_so() {
         let projects = Projects {
-            version: 1,
+            version: VIEW_VERSION,
             now: 0,
             projects: vec![],
         };

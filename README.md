@@ -333,9 +333,9 @@ Programs read `flow status --json`: the whole board, nothing truncated, camelCas
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "now": 1791953473760,
-  "count": 1,
+  "count": 2,
   "needsYou": 1,
   "flows": [
     {
@@ -362,13 +362,41 @@ Programs read `flow status --json`: the whole board, nothing truncated, camelCas
       "changedAt": 1791953413760,
       "workspace": null,
       "answer": null
+    },
+    {
+      "id": "9b1d0e7a-4f2c-4b8e-9d6a-3c5e1f2a7b40",
+      "name": "scratch",
+      "request": "",
+      "mode": "plain",
+      "phase": null,
+      "state": "idle",
+      "blocker": null,
+      "delegate": null,
+      "tasks": null,
+      "review": null,
+      "mergeRequest": null,
+      "decisions": [],
+      "steps": [],
+      "timeline": [{ "at": 1791952213760, "text": "started", "tone": "neutral" }],
+      "startedAt": 1791952213760,
+      "changedAt": 1791953113760,
+      "workspace": {
+        "path": "/Users/jan/scratch",
+        "branch": null,
+        "slot": null,
+        "window": "flow-ui",
+        "agent": "claude"
+      },
+      "answer": null
     }
   ]
 }
 ```
 
 Timeline tones: `neutral`, `progress`, `attention`, `problem`, `success`. `answer` is the last
-turn's whole closing message, as the worker's harness reported it.
+turn's whole closing message, as the worker's harness reported it. A plain session (`mode:
+plain`) has no steps, and its workspace is its folder, with `branch` and `slot` null. Version 2
+made them nullable.
 
 ## Where the logs live
 
