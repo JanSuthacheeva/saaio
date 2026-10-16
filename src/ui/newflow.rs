@@ -396,7 +396,7 @@ mod tests {
     fn draws_an_error_in_a_terminal_too_narrow_for_it() {
         let mut form = NewFlowForm::new(PathBuf::from("/shop"));
         form.error = Some("the branch exists".into());
-        let theme = Theme::builtin();
+        let theme = Theme::default();
         for width in 0..6 {
             let area = Rect::new(0, 0, width, 20);
             let mut buf = Buffer::empty(area);

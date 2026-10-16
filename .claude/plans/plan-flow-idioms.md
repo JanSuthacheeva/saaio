@@ -40,7 +40,7 @@ any other that turns out to be noise, each named.
 - [x] `Display` for `Tasks`, `ReviewCount`, `PaneKey` (replacing `describe`)
 - [x] `From<view::Workspace> for EventKind` (the fold keeps its destructuring: the other direction would be a TryFrom used once)
 - [x] `Default` for `Config` and `MasterConfig` via `#[serde(default)]`; `Mode` default via `#[default]` + `default_value_t`
-- [ ] `Theme`: `const fn hex` with `to_be_bytes`, palette consts, `impl Default`; `Theme::state` -> `state_style`, `tone_style`
+- [x] `Theme`: `const fn hex` with `to_be_bytes`, palette consts, `impl Default`; `Theme::state` -> `state_style`, `tone_style`
 - [ ] `Key`, `MouseEvent` `Copy`; `Modes` by value
 - [ ] `Debug` on every type, `Eq` where every field is `Eq`, `ServerPaths: Clone`
 - [ ] lossless casts via `From`; `pid` as `libc::pid_t` via `try_from`

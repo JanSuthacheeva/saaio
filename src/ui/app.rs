@@ -904,7 +904,7 @@ impl App {
         if !side.contains(Position::new(col, row)) {
             return vec![];
         }
-        let theme = Theme::builtin();
+        let theme = Theme::default();
         let sidebar = self.sidebar(&theme, &[]);
         let key = if self.rail {
             Rail { sidebar }.key_at(row - side.y, side.height)
@@ -1108,7 +1108,7 @@ impl App {
                 .unwrap_or_else(|| sidebar.label(flow).content.to_string());
             text.push(Line::from(vec![
                 Span::raw("  "),
-                Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
+                Span::styled(sidebar.glyph(flow.state), theme.state_style(flow.state)),
                 Span::styled(format!(" {:name_width$}  ", flow.name), theme.ui.strong),
                 Span::styled(clip(&doing, 44), theme.ui.muted),
             ]));
@@ -1182,13 +1182,13 @@ impl App {
         };
         let sidebar = self.sidebar(theme, &[]);
         let lead = if flow.needs_you() {
-            Span::styled(theme.glyphs.cursor, theme.state(flow.state))
+            Span::styled(theme.glyphs.cursor, theme.state_style(flow.state))
         } else {
             Span::raw(" ")
         };
         let mut title = vec![
             lead,
-            Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
+            Span::styled(sidebar.glyph(flow.state), theme.state_style(flow.state)),
             Span::styled(format!(" {}  ", flow.name), theme.ui.strong),
         ];
         title.extend(sidebar.steps(flow));
@@ -1236,7 +1236,7 @@ impl App {
                     index + 1,
                     flow.name
                 ),
-                theme.state(flow.state),
+                theme.state_style(flow.state),
             ));
             spans.push(Span::styled(
                 format!("  {}  ", theme.glyphs.separator),
@@ -1468,7 +1468,7 @@ mod tests {
     fn render(app: &App) -> Terminal<TestBackend> {
         let mut terminal = Terminal::new(TestBackend::new(SIZE.cols, SIZE.rows)).unwrap();
         terminal
-            .draw(|frame| app.draw(frame, &Theme::builtin(), &[]))
+            .draw(|frame| app.draw(frame, &Theme::default(), &[]))
             .unwrap();
         terminal
     }
@@ -1591,7 +1591,7 @@ mod tests {
         assert!(bar.contains("C-space then  n new flow   ? keys"), "{bar}");
         let buffer = terminal.backend().buffer();
         assert!(
-            (1..SIZE.cols - 1).all(|x| buffer[(x, 8)].bg == Theme::builtin().ui.bar.bg.unwrap()),
+            (1..SIZE.cols - 1).all(|x| buffer[(x, 8)].bg == Theme::default().ui.bar.bg.unwrap()),
             "the whole bar has the panel background"
         );
         terminal.backend_mut().assert_cursor_position((6, 2));
@@ -1806,7 +1806,7 @@ mod tests {
     fn render_at(app: &App, size: Size) -> Terminal<TestBackend> {
         let mut terminal = Terminal::new(TestBackend::new(size.cols, size.rows)).unwrap();
         terminal
-            .draw(|frame| app.draw(frame, &Theme::builtin(), &[]))
+            .draw(|frame| app.draw(frame, &Theme::default(), &[]))
             .unwrap();
         terminal
     }
@@ -1822,7 +1822,7 @@ mod tests {
     #[test]
     fn paints_every_cell_on_the_themes_ground() {
         let app = board_app();
-        let theme = Theme::from_palette(crate::ui::theme::Palette::named("flow").unwrap());
+        let theme = Theme::from_palette(crate::ui::theme::Palette::FLOW);
         let mut terminal = Terminal::new(TestBackend::new(FLEET.cols, FLEET.rows)).unwrap();
 
         terminal.draw(|frame| app.draw(frame, &theme, &[])).unwrap();
@@ -1902,7 +1902,7 @@ mod tests {
         let buffer = terminal.backend().buffer();
         assert_eq!(
             buffer[(112, 6)].fg,
-            Theme::builtin().state.blocked.fg.unwrap()
+            Theme::default().state.blocked.fg.unwrap()
         );
     }
 
@@ -1932,7 +1932,7 @@ mod tests {
         );
         assert!(side(&terminal, 9).starts_with("▌2 ● shop-230"));
         let buffer = terminal.backend().buffer();
-        let selection = Theme::builtin().ui.selection.bg.unwrap();
+        let selection = Theme::default().ui.selection.bg.unwrap();
         assert!((109..149).all(|x| buffer[(x, 11)].bg == selection));
         assert_ne!(buffer[(119, 9)].bg, selection);
 
@@ -2043,7 +2043,7 @@ mod tests {
     fn render_peek(app: &App, peek: &[PeekLine]) -> Terminal<TestBackend> {
         let mut terminal = Terminal::new(TestBackend::new(FLEET.cols, FLEET.rows)).unwrap();
         terminal
-            .draw(|frame| app.draw(frame, &Theme::builtin(), peek))
+            .draw(|frame| app.draw(frame, &Theme::default(), peek))
             .unwrap();
         terminal
     }
@@ -2271,18 +2271,18 @@ mod tests {
                 .starts_with(" 0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   a every project   esc back to shop-230")
         );
         let buffer = terminal.backend().buffer();
-        let accent = Theme::builtin().ui.accent.fg.unwrap();
+        let accent = Theme::default().ui.accent.fg.unwrap();
         assert_eq!(buffer[(100, 3)].fg, accent, "the selected card is outlined");
         let blocked_at = row(&terminal, 2 + 1).find("blocked").unwrap();
         let blocked_x = row(&terminal, 3)[..blocked_at].chars().count() as u16 + layout::MARGIN;
         assert_eq!(
             buffer[(blocked_x, 3 + layout::MARGIN)].fg,
-            Theme::builtin().state.blocked.fg.unwrap(),
+            Theme::default().state.blocked.fg.unwrap(),
             "the state in its color"
         );
         assert_eq!(
             buffer[(blocked_x, 3 + layout::MARGIN)].bg,
-            Theme::builtin()
+            Theme::default()
                 .ui
                 .background
                 .bg
@@ -2326,7 +2326,7 @@ mod tests {
 
     #[test]
     fn a_row_stands_out_a_moment_after_its_flow_changed() {
-        let selection = Theme::builtin().ui.selection.bg.unwrap();
+        let selection = Theme::default().ui.selection.bg.unwrap();
         let mut app = with_fleet();
         let background_of = |app: &App, text: &str| {
             let terminal = render_at(app, FLEET);
@@ -2366,7 +2366,7 @@ mod tests {
 
     #[test]
     fn notes_stay_behind_the_names_but_the_selected_one() {
-        let theme = Theme::builtin();
+        let theme = Theme::default();
         let mut app = with_fleet();
         app.on_input(Routed::Command(Command::Focus(2)));
         let terminal = render_at(&app, FLEET);
@@ -2390,7 +2390,7 @@ mod tests {
 
     #[test]
     fn what_is_done_takes_the_color_of_where_the_flow_is() {
-        let theme = Theme::builtin();
+        let theme = Theme::default();
         let blocked = theme.state.blocked.fg.unwrap();
         let faint = theme.ui.faint.fg.unwrap();
         let terminal = render_at(&with_fleet(), FLEET);
@@ -2415,7 +2415,7 @@ mod tests {
 
     #[test]
     fn a_worker_that_needs_you_leads_its_title_with_its_state_color() {
-        let theme = Theme::builtin();
+        let theme = Theme::default();
         let lead = |app: &App| {
             let terminal = render_at(app, FLEET);
             let cell = terminal.backend().buffer()[(1, 1)].clone();

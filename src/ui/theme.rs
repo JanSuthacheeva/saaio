@@ -1,6 +1,6 @@
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::view::State;
+use crate::view::{State, Tone};
 
 /// The colors a theme file names, by its keys; Color::Reset is "default", the terminal's own.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -22,58 +22,66 @@ pub struct Palette {
 }
 
 impl Palette {
-    /// "terminal" (ANSI, so flow takes on the terminal's palette), "flow" (the design's dark colors),
-    /// "flow-light" (the design's light ones); None for another name.
+    /// ANSI, so flow takes on the terminal's palette.
+    pub const TERMINAL: Palette = Palette {
+        background: Color::Reset,
+        panel: Color::Indexed(235),
+        selection: Color::Indexed(236),
+        rule: Color::DarkGray,
+        text: Color::Reset,
+        strong: Color::Reset,
+        muted: Color::Gray,
+        faint: Color::DarkGray,
+        accent: Color::Indexed(173),
+        working: Color::Blue,
+        waiting: Color::Yellow,
+        blocked: Color::Red,
+        done: Color::Green,
+        ended: Color::DarkGray,
+    };
+
+    /// The design's dark colors.
+    pub const FLOW: Palette = Palette {
+        background: hex(0x141418),
+        panel: hex(0x1f1f26),
+        selection: hex(0x26262e),
+        rule: hex(0x34343d),
+        text: hex(0xc8c8d0),
+        strong: hex(0xf0f0f4),
+        muted: hex(0x9a9aa6),
+        faint: hex(0x6c6c78),
+        accent: hex(0xe07a52),
+        working: hex(0x7aa7ff),
+        waiting: hex(0xe5b45a),
+        blocked: hex(0xf0717f),
+        done: hex(0x93c46d),
+        ended: hex(0x6c6c78),
+    };
+
+    /// The design's light colors.
+    pub const FLOW_LIGHT: Palette = Palette {
+        background: hex(0xf6f5f1),
+        panel: hex(0xecebe5),
+        selection: hex(0xe2e0d8),
+        rule: hex(0xcfcdc4),
+        text: hex(0x2b2b30),
+        strong: hex(0x111114),
+        muted: hex(0x5d5d66),
+        faint: hex(0x73737c),
+        accent: hex(0xb8532f),
+        working: hex(0x2f5fd0),
+        waiting: hex(0x9a6a00),
+        blocked: hex(0xc2283f),
+        done: hex(0x3d7a22),
+        ended: hex(0x73737c),
+    };
+
+    /// "terminal", "flow" or "flow-light"; None for another name.
     pub fn named(name: &str) -> Option<Palette> {
         match name {
-            "terminal" => Some(Palette {
-                background: Color::Reset,
-                panel: Color::Indexed(235),
-                selection: Color::Indexed(236),
-                rule: Color::DarkGray,
-                text: Color::Reset,
-                strong: Color::Reset,
-                muted: Color::Gray,
-                faint: Color::DarkGray,
-                accent: Color::Indexed(173),
-                working: Color::Blue,
-                waiting: Color::Yellow,
-                blocked: Color::Red,
-                done: Color::Green,
-                ended: Color::DarkGray,
-            }),
-            "flow" => Some(Palette {
-                background: hex(0x141418),
-                panel: hex(0x1f1f26),
-                selection: hex(0x26262e),
-                rule: hex(0x34343d),
-                text: hex(0xc8c8d0),
-                strong: hex(0xf0f0f4),
-                muted: hex(0x9a9aa6),
-                faint: hex(0x6c6c78),
-                accent: hex(0xe07a52),
-                working: hex(0x7aa7ff),
-                waiting: hex(0xe5b45a),
-                blocked: hex(0xf0717f),
-                done: hex(0x93c46d),
-                ended: hex(0x6c6c78),
-            }),
-            "flow-light" => Some(Palette {
-                background: hex(0xf6f5f1),
-                panel: hex(0xecebe5),
-                selection: hex(0xe2e0d8),
-                rule: hex(0xcfcdc4),
-                text: hex(0x2b2b30),
-                strong: hex(0x111114),
-                muted: hex(0x5d5d66),
-                faint: hex(0x73737c),
-                accent: hex(0xb8532f),
-                working: hex(0x2f5fd0),
-                waiting: hex(0x9a6a00),
-                blocked: hex(0xc2283f),
-                done: hex(0x3d7a22),
-                ended: hex(0x73737c),
-            }),
+            "terminal" => Some(Palette::TERMINAL),
+            "flow" => Some(Palette::FLOW),
+            "flow-light" => Some(Palette::FLOW_LIGHT),
             _ => None,
         }
     }
@@ -187,12 +195,14 @@ pub struct Glyphs {
     pub dash: &'static str,
 }
 
-impl Theme {
-    /// The terminal theme: today's look.
-    pub fn builtin() -> Theme {
-        Theme::from_palette(Palette::named("terminal").expect("terminal is built in"))
+/// The terminal theme: today's look.
+impl Default for Theme {
+    fn default() -> Theme {
+        Theme::from_palette(Palette::TERMINAL)
     }
+}
 
+impl Theme {
     /// The styles widgets draw with, from a palette's colors; "default" leaves a color to the terminal.
     pub fn from_palette(palette: Palette) -> Theme {
         let plain = Style::default();
@@ -254,7 +264,7 @@ impl Theme {
         }
     }
 
-    pub fn state(&self, state: State) -> Style {
+    pub fn state_style(&self, state: State) -> Style {
         match state {
             State::Working | State::Delegated => self.state.working,
             State::Waiting => self.state.waiting,
@@ -262,6 +272,16 @@ impl Theme {
             State::Blocked | State::NotResponding => self.state.blocked,
             State::Done => self.state.done,
             State::Ended => self.state.ended,
+        }
+    }
+
+    pub fn tone_style(&self, tone: Tone) -> Style {
+        match tone {
+            Tone::Neutral => self.ui.muted,
+            Tone::Progress => self.state.working,
+            Tone::Attention => self.state.waiting,
+            Tone::Problem => self.state.blocked,
+            Tone::Success => self.state.done,
         }
     }
 }
@@ -272,7 +292,7 @@ mod tests {
 
     #[test]
     fn the_terminal_theme_looks_as_flow_always_did() {
-        let theme = Theme::builtin();
+        let theme = Theme::default();
         let plain = Style::default();
 
         assert_eq!(theme.ui.text, plain);
@@ -289,7 +309,7 @@ mod tests {
 
     #[test]
     fn builds_the_designs_dark_theme() {
-        let theme = Theme::from_palette(Palette::named("flow").unwrap());
+        let theme = Theme::from_palette(Palette::FLOW);
 
         assert_eq!(theme.ui.background, Style::default().bg(hex(0x141418)));
         assert_eq!(theme.ui.text, Style::default().fg(hex(0xc8c8d0)));
@@ -303,7 +323,7 @@ mod tests {
 
     #[test]
     fn gets_and_sets_colors_by_their_key() {
-        let mut palette = Palette::named("terminal").unwrap();
+        let mut palette = Palette::TERMINAL;
 
         assert!(palette.set("accent", Color::Indexed(5)));
         assert_eq!(palette.get("accent"), Some(Color::Indexed(5)));
@@ -313,13 +333,19 @@ mod tests {
 
     #[test]
     fn gives_each_state_a_color_that_tells_it_apart() {
-        let theme = Theme::builtin();
+        let theme = Theme::default();
 
         assert_eq!(
-            theme.state(State::Blocked),
-            theme.state(State::NotResponding)
+            theme.state_style(State::Blocked),
+            theme.state_style(State::NotResponding)
         );
-        assert_ne!(theme.state(State::Waiting), theme.state(State::Blocked));
-        assert_ne!(theme.state(State::Working), theme.state(State::Done));
+        assert_ne!(
+            theme.state_style(State::Waiting),
+            theme.state_style(State::Blocked)
+        );
+        assert_ne!(
+            theme.state_style(State::Working),
+            theme.state_style(State::Done)
+        );
     }
 }

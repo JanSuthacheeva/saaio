@@ -245,7 +245,7 @@ mod tests {
 
         let (theme, files) = load(dir.path());
 
-        assert_eq!(theme.unwrap().palette, Palette::named("terminal").unwrap());
+        assert_eq!(theme.unwrap().palette, Palette::TERMINAL);
         assert_eq!(files, vec![dir.path().join("theme.toml")]);
     }
 
@@ -260,7 +260,7 @@ mod tests {
 
         let palette = theme(&dir).palette;
 
-        let flow = Palette::named("flow").unwrap();
+        let flow = Palette::FLOW;
         assert_eq!(palette.accent, Color::Rgb(0xd9, 0x82, 0x5b));
         assert_eq!(palette.rule, Color::Indexed(8));
         assert_eq!(palette.ended, Color::Reset);
@@ -320,10 +320,7 @@ mod tests {
         assert_eq!(palette.accent, Color::Rgb(0xcb, 0x91, 0x68));
         assert_eq!(palette.muted, palette.accent);
         assert_eq!(palette.ended, Color::Rgb(0x74, 0x69, 0x65));
-        assert_eq!(
-            palette.background,
-            Palette::named("flow-light").unwrap().background
-        );
+        assert_eq!(palette.background, Palette::FLOW_LIGHT.background);
         assert_eq!(files[1], dir.path().join("themes/noctalia.toml"));
         assert_eq!(
             theme(&dir).ui.background,
@@ -382,7 +379,7 @@ mod tests {
         let mut watch = ThemeWatch::new(dir.path().to_path_buf());
 
         let first = watch.changed().expect("the first look loads");
-        assert_eq!(first.unwrap().palette, Palette::named("terminal").unwrap());
+        assert_eq!(first.unwrap().palette, Palette::TERMINAL);
         assert!(watch.changed().is_none());
 
         write(&dir, "theme.toml", "extends = \"noctalia\"\n");
@@ -406,9 +403,6 @@ mod tests {
         );
 
         fs::remove_file(dir.path().join("theme.toml")).unwrap();
-        assert_eq!(
-            watch.changed().unwrap().unwrap().palette,
-            Palette::named("terminal").unwrap()
-        );
+        assert_eq!(watch.changed().unwrap().unwrap().palette, Palette::TERMINAL);
     }
 }

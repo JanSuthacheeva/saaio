@@ -218,7 +218,7 @@ impl BoardView<'_> {
 
     fn flow_card(&self, flow: &FlowView, index: usize, width: usize) -> [Line<'static>; 4] {
         let theme = self.theme();
-        let tone = theme.state(flow.state);
+        let tone = theme.state_style(flow.state);
         let digit = if index < 9 {
             (index + 1).to_string()
         } else {
@@ -311,7 +311,7 @@ impl BoardView<'_> {
         };
         let style = match flow.state {
             State::Idle => theme.ui.muted,
-            state => theme.state(state),
+            state => theme.state_style(state),
         };
         Span::styled(text, style)
     }
@@ -581,7 +581,7 @@ impl BoardView<'_> {
             );
             Line::from(vec![
                 Span::styled("  ", theme.ui.text),
-                Span::styled(sidebar.glyph(flow.state), theme.state(flow.state)),
+                Span::styled(sidebar.glyph(flow.state), theme.state_style(flow.state)),
                 Span::styled(format!(" {:name_width$}  ", flow.name), theme.ui.strong),
                 Span::styled(
                     clip(&text, width.saturating_sub(lead.chars().count() + 1)),
@@ -636,13 +636,7 @@ impl BoardView<'_> {
         let mut lines = Vec::new();
         let text_width = (area.width as usize).saturating_sub(10);
         for entry in &flow.timeline {
-            let tone = match entry.tone {
-                Tone::Neutral => theme.ui.muted,
-                Tone::Progress => theme.state.working,
-                Tone::Attention => theme.state.waiting,
-                Tone::Problem => theme.state.blocked,
-                Tone::Success => theme.state.done,
-            };
+            let tone = theme.tone_style(entry.tone);
             let text_style = if entry.tone == Tone::Problem {
                 tone
             } else {
@@ -697,7 +691,7 @@ impl BoardView<'_> {
         for step in &flow.steps {
             let (glyph, style) = match step.status {
                 StepStatus::Done => (glyphs.done, theme.state.done),
-                StepStatus::Current => (glyphs.step_current, theme.state(flow.state)),
+                StepStatus::Current => (glyphs.step_current, theme.state_style(flow.state)),
                 StepStatus::Open => (glyphs.step_open, theme.ui.faint),
             };
             if !steps.is_empty() {

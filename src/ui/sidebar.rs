@@ -197,7 +197,7 @@ impl Sidebar<'_> {
         let key = PaneKey::Flow(flow.id.clone());
         let selected = *self.focus == key || self.cursor == Some(flow.id.as_str());
         let changed = self.changed.contains_key(&flow.id);
-        let tone = theme.state(flow.state);
+        let tone = theme.state_style(flow.state);
         let status = self.status(flow);
         let lead = |rest: &str| -> Vec<Span<'static>> {
             if selected {
@@ -296,7 +296,7 @@ impl Sidebar<'_> {
     fn peek_rows(&self, flow: &FlowView, budget: usize) -> Vec<Row> {
         let theme = self.theme;
         let glyphs = &theme.glyphs;
-        let tone = theme.state(flow.state);
+        let tone = theme.state_style(flow.state);
         let text_width = WIDTH - 4;
         let mut body: Vec<Vec<Span<'static>>> = Vec::new();
         for line in self.peek {
@@ -398,7 +398,7 @@ impl Sidebar<'_> {
     pub fn steps(&self, flow: &FlowView) -> Vec<Span<'static>> {
         let theme = self.theme;
         let glyphs = &theme.glyphs;
-        let tone = theme.state(flow.state);
+        let tone = theme.state_style(flow.state);
         let mut spans = Vec::new();
         for (index, step) in flow.steps.iter().enumerate() {
             let (glyph, style) = match step.status {
@@ -740,7 +740,7 @@ mod tests {
             needs_you: 0,
             flows,
         };
-        let theme = Theme::builtin();
+        let theme = Theme::default();
         let sidebar = Sidebar {
             board: &board,
             panes: &[],
@@ -790,7 +790,7 @@ mod tests {
             needs_you: 0,
             flows: vec![flow],
         };
-        let theme = Theme::builtin();
+        let theme = Theme::default();
         let sidebar = Sidebar {
             board: &board,
             panes: &[],
