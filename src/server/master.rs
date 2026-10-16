@@ -94,8 +94,9 @@ impl MasterRecord {
 
     /// The agent's command (name master, no prompt) when new, its resume command after, by
     /// `session` when its harness picked one (else a new session), with {instructions} filled in.
-    /// After the program: the adapter's master wiring (Claude Code's waiter only when it `wake`s;
-    /// Codex's hooks always, which also record its session), then the instructions. None when it
+    /// After the program: the adapter's master wiring (its hooks always, which keep where its turn
+    /// stands; Claude Code's waiter only when it `wake`s; Codex's hooks also record its session),
+    /// then the instructions. None when it
     /// must resume and the agent has no resume template.
     pub fn spec(
         &self,
@@ -252,7 +253,7 @@ mod tests {
     }
 
     #[test]
-    fn gives_the_claude_master_its_instructions_and_its_waiter_when_it_wakes() {
+    fn gives_the_claude_master_its_hooks_instructions_and_its_waiter_when_it_wakes() {
         let agents = builtin_agents();
         let master = &agents[crate::config::MASTER_AGENT];
         let env = LaunchEnv {
@@ -265,8 +266,15 @@ mod tests {
             let quiet = record()
                 .spec(start, master, &env, &md, false, None)
                 .unwrap();
+            assert_eq!(quiet.argv[1], "--settings");
+            assert!(
+                quiet.argv[2].contains(r#""args":["hook","claude-code"]"#)
+                    && !quiet.argv[2].contains("--master"),
+                "{}",
+                quiet.argv[2]
+            );
             assert_eq!(
-                quiet.argv[1..3],
+                quiet.argv[3..5],
                 ["--append-system-prompt", "# You are the master"]
             );
             assert!(
@@ -284,7 +292,7 @@ mod tests {
                 "{}",
                 woken.argv[2]
             );
-            assert_eq!(woken.argv[3..], quiet.argv[1..]);
+            assert_eq!(woken.argv[3..], quiet.argv[3..]);
         }
     }
 

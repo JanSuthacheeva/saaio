@@ -58,7 +58,7 @@ pub fn forget_master_turn(&self) -> Result<()>;
 pub fn master_settings(flow_exe: &Path, wake: bool) -> String;
 
 /// Adds `waiter` to each event in WAIT_EVENTS; settings and master_settings share it.
-fn arm(hooks: &mut serde_json::Map<String, Value>, waiter: Value);
+fn arm(hooks: &mut serde_json::Map<String, Value>, waiter: &Value);
 ```
 
 `src/adapter.rs` (modified): `wire_master` keeps its signature; ClaudeCode always adds
@@ -201,10 +201,10 @@ The master's pane opens again:
 
 ## Tasks
 
-- [ ] Add `view::MasterTurn` and `fold::master_state(kinds)` with unit tests for last-kind-wins and kinds that say no state
-- [ ] Add `Store::master_turn`, `set_master_turn`, `forget_master_turn` (`waits/master.turn`) with round-trip, forget-twice and unparsable-file tests
+- [x] Add `view::MasterTurn` and `fold::master_state(kinds)` with unit tests for last-kind-wins and kinds that say no state
+- [x] Add `Store::master_turn`, `set_master_turn`, `forget_master_turn` (`waits/master.turn`) with round-trip, forget-twice and unparsable-file tests
 - [ ] Give the Claude Code master the report hooks: `claude_code::master_settings(flow_exe, wake)` with `arm`, `Adapter::wire_master` always wiring it, doc comments in `adapter.rs` and `server/master.rs`; update the settings and wire_master tests
-- [ ] Add `record_master_turn` to `flow hook`'s master arm, with `tests/cli.rs` cases: a prompt writes working, a Stop writes idle, a repeated tool call leaves the file untouched
+- [x] Add `record_master_turn` to `flow hook`'s master arm, with `tests/cli.rs` cases: a prompt writes working, a Stop writes idle, a repeated tool call leaves the file untouched
 - [ ] Send the turn: `ServerMsg::Master { turn }` from `send_master`, `open_pane` forgets the master's turn; server test over the socket
 - [ ] Key `App.changed` and `Sidebar.changed` by `PaneKey`; existing tests pass unchanged in behaviour
 - [ ] Add `App::on_master_turn`, `master_state`, `master_unseen`, the focus clear and the master spin in `on_tick`, with `app/tests/sidebar.rs` cases for unseen, focused, cleared and spinning
