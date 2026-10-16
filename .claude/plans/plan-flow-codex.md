@@ -427,44 +427,40 @@ A subagent's events (`agent_id` set) yield only a phase, from a skill it reads. 
 
 ## Review
 
-Reviewed 2026-10-16 in a fresh context against this plan, CLAUDE.md and origin/main.
+Reviewed 2026-10-16 in a fresh context against this plan, CLAUDE.md and origin/main (up to e5ade90), then
+a second fresh review of the follow-ups (e5ade90..0a56a7a).
 
 **Fixed**
 - A fork's pull request never counted: `flow hook` matched a merge request URL only against `origin`, but
   `gh pr create` in a fork opens it in the upstream repo. Shown by `a_merge_request_of_a_forks_upstream_counts`
   (tests/cli.rs), red before. Now any remote of the worktree counts (`workspace::remote_urls`). Commit 945a5ca
   (reviewed again by a separate agent: no problems).
+- Follow-ups from the first review, built as decided and checked in the second: a stale busy mark is cleared
+  when the server opens a pane (`Server::open_pane`, every `Host::open` goes through it; b12a679),
+  `codex::turn` ignores a subagent's event as `translate` does (2635444), `client::server_command` strips
+  `FLOW_MASTER` with the hook variables (0a56a7a). Each has a test that fails without it. The second review
+  found nothing to fix.
 
 **Open**
-- A stale busy mark. `waits/<key>.busy` is cleared only by a Stop or Interrupt hook. When a Codex pane dies
-  mid-turn (`flow ui --stop`, a crash), the resumed session sits idle but stays "busy", so the server never
-  types news into it until the person starts a turn there. Unproven: it hangs on whether Codex runs its
-  Interrupt hook on SIGHUP, and the real-Codex probe was not allowed in this review. Recommendation: clear the
-  mark in `open_worker` / `open_master` before `Host::open` (a fresh process is never mid-turn), and change
-  the busy case in `types_the_masters_message_into_an_idle_codex_worker_once` to set busy after the pane opened.
-- `codex::turn` ignores `agent_id`. If Codex fires Stop or UserPromptSubmit for a subagent with `agent_id`
-  set, its Stop would hand the worker's news to the subagent and mark the main agent idle mid-turn.
-  Unverified (only subagent tool calls were recorded). Recommendation: `turn` returns None when `agent_id`
-  is set, as `translate` already treats those events.
-- A user-defined `[agents.master]` still carrying `--append-system-prompt-file {instructions}` now gets
-  master.md twice (the file and `--append-system-prompt` text). Recommendation: a line in the CHANGELOG at
-  the public release.
-- `client::server_command` strips the hook variables but not `FLOW_MASTER`: a `flow ui` run inside the
-  master's pane would start a server whose workers all report as the master. Recommendation: strip it too.
+- A user-defined `[agents.master]` still carrying `--append-system-prompt-file {instructions}` gets master.md
+  twice. Recommendation: the CHANGELOG line at the public release, as decided.
+- `codex::turn` skipping `agent_id` events rests on Codex putting `agent_id` only on a subagent's payloads
+  (true of every recorded fixture; a subagent's Stop was never recorded). Recommendation: none now; record a
+  subagent Stop when one comes up.
 - `open_master` marks the pane resumed by the requested `Start` even when `spec` fell back to fresh (no
-  Codex session yet). Harmless (a quick exit just starts fresh again); no action.
+  Codex session yet). Harmless; no action.
 
 **Where to look**
 1. `src/cli/commands/hook.rs` `hook()` -> `hand_over()`: busy marks and the exit-2 hand-over, for workers
    and the master (`FLOW_MASTER`).
-2. `src/server/news.rs` `deliver_news()` / `server_delivered()`: when the server types into a pane (busy,
-   QUIET, first turn had).
+2. `src/server/news.rs` `deliver_news()` / `server_delivered()` with `panes.rs` `open_pane()`: when the
+   server types into a pane (busy, QUIET, first turn had) and when a busy mark is forgotten.
 3. `src/server/master.rs` `spec()` with `Adapter::wire_master` and `panes.rs` `open_master()`: fresh vs
    resumed master, `forget_master_session`.
 4. `src/launch/pane.rs` `worker_spec()`: resume by `{session}`, fresh when none.
 
 Routine, skim: the peek split (`ui/peek/*`), the new-flow agent row and golden, the moved `answer.rs` /
-`calls.rs`, config and docs.
+`calls.rs`, config and docs, and the three follow-up commits.
 
 **Checks:** `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at
-945a5ca.
+0a56a7a.
