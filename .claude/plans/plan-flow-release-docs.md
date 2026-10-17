@@ -332,6 +332,26 @@ the review; every fix is documentation.
 The rest (`examples/*.toml` against their tests, test-only `Serialize` derives, the docs index,
 the demo script and tape) is routine and can be skimmed.
 
+**Second review** (3881dbf, the resize panic, in an isolated context)
+
+- Fixed: nothing; the fix is right and complete. Both draw paths lay out from the frame:
+  `App::draw` through `areas_in(frame_size(frame))` and `draw_board` through
+  `layout::screen(frame_size(frame))`; the title, rule, pane, sidebar or rail, every dialog
+  (`Dialog` clamps to its area), the history hint and the cursor take their rects from those
+  areas, and `ScreenView` clips server rows longer than the pane. The regression test fails with
+  ratatui's "index outside of buffer" panic when either call goes back to `self.size`, so it
+  covers both paths.
+- Open: input still uses the stored size until the resize arrives (`ui.rs` routing mouse to the
+  pane, `keys.rs` `on_click`, history paging, `folded()` choosing sidebar or rail). Every use is
+  guarded by `Rect::contains` or only reads a height, so the worst case is one click mapped to the
+  old layout for a moment; recommendation: keep, since the stored size is what the server sized
+  the pane to. The CHANGELOG's `### Fixed` in the first release fixes nothing a user had;
+  recommendation: keep only if Jan wants it there, else drop it before tagging. The race itself
+  was not reproduced in a real `flow ui` (it needs a draw between SIGWINCH and its event); the
+  unit test reproduces the exact panic instead.
+- Where to look: `src/ui/app/draw.rs` `draw` and `draw_board`, then the test in
+  `src/ui/app/tests/panes.rs`.
+
 **Checks**
 
 `cargo test` passed after the review's last code-adjacent change (the example config's comment);
