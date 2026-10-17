@@ -10,7 +10,7 @@ use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
 use crate::launch::pane::HOSTED;
 use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
-use crate::store::Waiter;
+use crate::store::{Busy, Waiter};
 use crate::view::{MasterTurn, State};
 
 /// A server whose master is `cat`, run on its own thread.
@@ -688,7 +688,9 @@ fn types_the_masters_message_into_an_idle_codex_worker_once() {
     let busy = started_flow(&store, dir.path(), "busy", "codex");
     had_a_turn(&store, &csv);
     had_a_turn(&store, &busy);
-    store.set_busy(&Waiter::Flow(csv.clone()), true).unwrap();
+    store
+        .set_busy(&Waiter::Flow(csv.clone()), Busy::Turn)
+        .unwrap();
     let (paths, handle) = start_with_agents(
         dir.path(),
         BTreeMap::from([("codex".to_string(), fake_codex(dir.path()))]),
@@ -698,7 +700,9 @@ fn types_the_masters_message_into_an_idle_codex_worker_once() {
         assert!(Instant::now() < deadline, "the busy worker never started");
         thread::sleep(Duration::from_millis(20));
     }
-    store.set_busy(&Waiter::Flow(busy.clone()), true).unwrap();
+    store
+        .set_busy(&Waiter::Flow(busy.clone()), Busy::Turn)
+        .unwrap();
 
     tell(&store, &csv, "Tabs.");
     tell(&store, &busy, "Spaces.");

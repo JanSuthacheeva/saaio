@@ -11,7 +11,7 @@ use crate::config::Config;
 use crate::deliver::{self, WorkerNews};
 use crate::event::{Event, EventKind};
 use crate::fold;
-use crate::store::{Store, Waiter};
+use crate::store::{Busy, Store, Waiter};
 use crate::view::{FlowView, MasterTurn, State};
 use crate::workspace;
 
@@ -92,8 +92,8 @@ fn hook(
         }
     };
     match adapter.turn(payload)? {
-        Turn::Began => mark_busy(store, &waiter, true),
-        Turn::Interrupted => mark_busy(store, &waiter, false),
+        Turn::Began => mark_busy(store, &waiter, Busy::Turn),
+        Turn::Interrupted => mark_busy(store, &waiter, Busy::Idle),
         Turn::Ended => {
             let wakes = !matches!(waiter, Waiter::Master) || config.master.wake;
             let news = if wakes {
@@ -102,7 +102,7 @@ fn hook(
                 None
             };
             if news.is_none() {
-                mark_busy(store, &waiter, false);
+                mark_busy(store, &waiter, Busy::Idle);
             }
             return news;
         }
@@ -211,7 +211,7 @@ fn record_master_turn(store: &Store, kinds: &[EventKind], now: u64) {
     }
 }
 
-fn mark_busy(store: &Store, waiter: &Waiter, busy: bool) {
+fn mark_busy(store: &Store, waiter: &Waiter, busy: Busy) {
     if let Err(error) = store.set_busy(waiter, busy) {
         eprintln!("flow hook: {error:#}");
     }

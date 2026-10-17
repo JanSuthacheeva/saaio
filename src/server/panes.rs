@@ -11,7 +11,7 @@ use crate::fold;
 use crate::launch::pane::{self, HOSTED, PaneSpec};
 use crate::proto::{PaneKey, PaneStatus, ServerMsg};
 use crate::server_log;
-use crate::store::Waiter;
+use crate::store::{Busy, Waiter};
 use crate::view::{FlowView, Workspace};
 
 impl Server {
@@ -126,7 +126,7 @@ impl Server {
             PaneKey::Master => Waiter::Master,
             PaneKey::Flow(id) => Waiter::Flow(id.clone()),
         };
-        if let Err(error) = self.store.set_busy(&waiter, false) {
+        if let Err(error) = self.store.set_busy(&waiter, Busy::Idle) {
             server_log::write((self.clock)(), &format!("{error:#}"));
         }
         if spec.key == PaneKey::Master

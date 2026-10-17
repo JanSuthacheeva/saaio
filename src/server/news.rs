@@ -5,7 +5,7 @@ use crate::cli::output::news;
 use crate::deliver::{self, WorkerNews};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::server_log;
-use crate::store::Waiter;
+use crate::store::{Busy, Waiter};
 use crate::view::FlowView;
 
 /// No key into a pane for this long before the server types news into it, so it does not land in
@@ -93,8 +93,8 @@ impl Server {
 
 /// True when the server may type into a session: not running a turn, and no key typed into its
 /// pane within QUIET.
-fn quiet(busy: bool, typed_at: Option<Instant>, now: Instant) -> bool {
-    !busy && typed_at.is_none_or(|at| now.duration_since(at) >= QUIET)
+fn quiet(busy: Busy, typed_at: Option<Instant>, now: Instant) -> bool {
+    busy == Busy::Idle && typed_at.is_none_or(|at| now.duration_since(at) >= QUIET)
 }
 
 /// `text` as one bracketed paste, then Enter: a single prompt however many lines it has, which
@@ -114,13 +114,14 @@ mod tests {
     fn types_only_into_an_idle_session_nobody_typed_into_lately() {
         let typed = Instant::now();
 
-        assert!(quiet(false, None, typed));
-        assert!(!quiet(true, None, typed), "running a turn");
+        assert!(quiet(Busy::Idle, None, typed));
+        assert!(!quiet(Busy::Turn, None, typed), "running a turn");
+        assert!(!quiet(Busy::Typed, None, typed), "typed into, no turn yet");
         assert!(
-            !quiet(false, Some(typed), typed + QUIET / 2),
+            !quiet(Busy::Idle, Some(typed), typed + QUIET / 2),
             "typed into lately"
         );
-        assert!(quiet(false, Some(typed), typed + QUIET));
+        assert!(quiet(Busy::Idle, Some(typed), typed + QUIET));
     }
 
     #[test]
