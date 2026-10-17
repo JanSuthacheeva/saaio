@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepares what docs/media/demo.tape records: a throwaway sample repository, and a scratch flow
+# Prepares what docs/media/record.sh records: a throwaway sample repository, and a scratch flow
 # store and config, so the recording never touches your own flows.
 #
 #   docs/media/demo-setup.sh <repo> <state>
@@ -11,11 +11,9 @@
 # the sample repository, so they walk through plan, implement, review and merge-request on a real
 # agent without opening merge requests or publishing anything.
 #
-# Then, in a terminal:
-#   source <state>/env && cd <repo> && flow ui
-# ask the master to start the flows printed at the end, answer the agents' first-run questions
-# (folder trust, Codex's hooks review), wait until the workers stand in different places, detach
-# with C-space d, and run: vhs docs/media/demo.tape
+# Then: docs/media/record.sh open <state> <repo>, ask the master to start the flows printed at the
+# end, answer the agents' first-run questions in their panes (folder trust, Codex's hooks review),
+# and once the workers stand in different places: docs/media/record.sh capture.
 set -euo pipefail
 
 repo=${1:?usage: demo-setup.sh <repo> <state>}
@@ -145,6 +143,10 @@ prompt = "$demo-plan {request}"
 resume = ["codex", "resume", "{session}"]
 adapter = "codex"
 
+# A still picture reads best with the master's answer last, not its wake-ups.
+[master]
+wake = false
+
 [[phases]]
 name = "plan"
 skills = ["demo-plan"]
@@ -173,15 +175,14 @@ unset FLOW_ID FLOW_NAME FLOW_SLOT FLOW_REPO FLOW_WORKTREE FLOW_MASTER
 EOF
 
 cat <<EOF
-Ready. Start flow ui on the scratch store:
+Ready. Open flow ui on the scratch store in an Alacritty window:
 
-  source $state/env && cd $repo && flow ui
+  docs/media/record.sh open $state $repo
 
 and ask the master:
 
-  Start four flows: "SHOP-217 export orders and refunds as CSV, JSON and a monthly summary
-  report" in auto mode; "SHOP-221 refund totals: ask me first whether refunds count on the
-  order's date or the refund's date" guided; "SHOP-230 email a receipt when an order is placed,
-  with a plain text and an HTML template" with Codex; "SHOP-198 round order totals to cents" in
-  auto mode.
+  Start four flows: "SHOP-217 export orders as CSV and JSON" in auto mode; "SHOP-221 refund
+  totals: ask me first whether refunds count on the order's date or the refund's date" guided;
+  "SHOP-230 email a receipt when an order is placed, with a plain text and an HTML template"
+  with Codex; "SHOP-198 round order totals to cents" in auto mode.
 EOF

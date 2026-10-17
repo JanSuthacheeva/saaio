@@ -230,6 +230,14 @@ colors.
   commit in a worktree without asking.
 - The sidebar has no `plain` tag (the old README said so): a plain session shows its state.
 - The end-to-end check installed the branch build into a scratch `--root`, not `~/.cargo/bin`.
+- Re-recorded after the review in Alacritty instead of VHS, as Jan asked: `docs/media/record.sh`
+  (flow ui in a private tmux, an Alacritty window from `docs/media/alacritty.toml`, the picture by
+  window id with `screencapture`, the GIF with ffmpeg cropped to the window) replaces `demo.tape`.
+  The demo config sets `[master] wake = false`, so the master's pane ends on its answer.
+- Found while recording, not fixed here: flow ui panics (index outside the buffer, from
+  `sidebar.rs` `Row::render`) when the terminal shrinks and a redraw comes before the resize event,
+  since `App::draw` lays out from the app's stored size, not the frame's. Reproduced with an app
+  laid out for 150x45 drawn into a 130x40 `TestBackend`.
 
 ## Tasks
 
@@ -249,7 +257,7 @@ colors.
 - [x] `docs/repository.md` and `docs/files.md`: branches, setup/teardown, slots and ports, the setup-flow skill, every file flow keeps
 - [x] `docs/ui.md` and `docs/flows.md`: layout, every key, dialogs, the master, guided vs auto, plain sessions, reporting, the workflow
 - [x] `docs/install.md`, `docs/troubleshooting.md` and the `docs/README.md` index; check whether `npx skills add` takes several `--skill` flags
-- [x] Record the picture: `docs/media/demo-setup.sh` and `demo.tape` with Claude Code and Codex workers, flow dark theme, phase_colors off; `flow-ui.png` and `flow-ui.gif`, from a scratch `FLOW_HOME` only
+- [x] Record the picture: `docs/media/demo-setup.sh` and `demo.tape` (now `record.sh`, Alacritty) with Claude Code and Codex workers, flow dark theme, phase_colors off; `flow-ui.png` and `flow-ui.gif`, from a scratch `FLOW_HOME` only
 - [x] Rewrite `README.md` as on the implementation page, with real `flow status` output and the picture
 - [x] `CHANGELOG.md` under Unreleased with known issues; the CLAUDE.md changelog rule and Architecture lines; `flow example config|theme` under HANDOVER's Future improvements
 
