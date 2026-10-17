@@ -124,7 +124,7 @@ impl App {
         } else {
             spans.push(Span::raw(" "));
         }
-        spans.push(Span::styled("C-space b", theme.ui.key));
+        spans.push(Span::styled(self.prefix.then("b"), theme.ui.key));
         spans.push(Span::styled(" sidebar ", theme.ui.faint));
         Some(Line::from(spans))
     }

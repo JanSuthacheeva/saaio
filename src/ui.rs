@@ -9,6 +9,7 @@ pub mod layout;
 pub mod newflow;
 pub mod outer;
 pub mod peek;
+pub mod prefix;
 pub mod rail;
 pub mod screen;
 pub mod sidebar;
@@ -36,6 +37,7 @@ use app::{App, Effect, Job, JobError};
 use input::Router;
 use outer::Outer;
 use peek::PeekCache;
+use prefix::Prefix;
 use theme::Theme;
 use theme_file::ThemeWatch;
 
@@ -69,6 +71,8 @@ pub struct UiEnv {
     pub theme_dir: PathBuf,
     /// The agents a flow can run, the default first, for the new-flow dialog.
     pub agents: Vec<String>,
+    /// The key before every flow ui command.
+    pub prefix: Prefix,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
@@ -82,7 +86,8 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
         .with_offset(crate::text::local_offset_secs())
         .with_home(home)
         .with_store(env.store.display().to_string())
-        .with_agents(env.agents);
+        .with_agents(env.agents)
+        .with_prefix(env.prefix);
     let client = Client::connect(
         socket,
         Role::Attach {
@@ -98,7 +103,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     watch_resize(events.clone())?;
     tick(events);
 
-    let mut router = Router::default();
+    let mut router = Router::new(env.prefix);
     let mut peek = PeekCache::new(env.claude_home);
     let mut ticks: u32 = 0;
     let mut themes = ThemeWatch::new(env.theme_dir);

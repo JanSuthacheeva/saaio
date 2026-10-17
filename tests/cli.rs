@@ -610,6 +610,18 @@ fn status_says_where_a_flows_code_is_and_whether_its_worktree_is_left() {
         "{ended}"
     );
     assert!(ended.contains("C-space r in flow ui resumes it"), "{ended}");
+    let config = lab.home.join("no-config.toml");
+    fs::write(&config, "[ui]\nprefix = \"C-b\"\n").unwrap();
+    let ended = stdout(&lab.run(&["status", "shop-217"]));
+    assert!(ended.contains("C-b r in flow ui resumes it"), "{ended}");
+    fs::write(&config, "[ui]\nprefix = \"C-c\"\n").unwrap();
+    let broken = lab.run(&["status", "shop-217"]);
+    assert!(
+        broken.status.success(),
+        "a config flow ui refuses leaves status working"
+    );
+    assert!(stdout(&broken).contains("C-space r in flow ui resumes it"));
+    fs::remove_file(&config).unwrap();
     git(
         &lab.repo,
         &["worktree", "remove", worktree.to_str().unwrap()],
@@ -1748,6 +1760,36 @@ fn ui_refuses_inside_a_worker_on_its_own_store_and_points_to_a_scratch_home() {
     let elsewhere = flow_in(scratch.path(), &id, &["ui", "--stop"]);
     assert!(elsewhere.status.success(), "{}", stdout(&elsewhere));
     assert_eq!(stdout(&elsewhere).trim(), "no flow server runs");
+}
+
+#[test]
+fn ui_refuses_a_prefix_the_panes_need_before_it_starts_anything() {
+    let home = TempDir::new().unwrap();
+    let config = home.path().join("no-config.toml");
+    fs::write(&config, "[ui]\nprefix = \"C-c\"\n").unwrap();
+
+    let refused = flow(home.path(), &["ui"]);
+
+    assert_eq!(refused.status.code(), Some(1));
+    let text = stdout(&refused);
+    assert!(text.contains(&config.display().to_string()), "{text}");
+    assert!(
+        text.contains(
+            "C-c interrupts the agent in a pane; pick another prefix, such as C-space or C-b"
+        ),
+        "{text}"
+    );
+    assert!(
+        !home.path().join("server.sock").exists(),
+        "no server started"
+    );
+
+    fs::write(&config, "[ui]\nprefix = \"Ctrl+b\"\n").unwrap();
+    let unknown = stdout(&flow(home.path(), &["ui"]));
+    assert!(
+        unknown.contains("unknown prefix \\\"Ctrl+b\\\": use C-space or C-a to C-z"),
+        "{unknown}"
+    );
 }
 
 #[test]

@@ -82,9 +82,11 @@ impl BoardView<'_> {
         let workers = sidebar::workers(self.board()).len();
         let place = clip_place(self.sidebar.master.unwrap_or(""), width.saturating_sub(4));
         let status = match self.status(&PaneKey::Master) {
-            Some(PaneStatus::Exited { .. }) => "exited - C-space r resumes it",
-            Some(PaneStatus::Failed { .. }) => "could not start",
-            _ => "",
+            Some(PaneStatus::Exited { .. }) => {
+                format!("exited - {} resumes it", self.sidebar.prefix.then("r"))
+            }
+            Some(PaneStatus::Failed { .. }) => "could not start".to_string(),
+            _ => String::new(),
         };
         [
             self.first_row(

@@ -131,6 +131,7 @@ fn merge_request(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::prefix::Prefix;
 
     #[test]
     fn colors_only_the_current_step() {
@@ -173,6 +174,7 @@ mod tests {
             spin: 0,
             changed: &std::collections::HashMap::new(),
             home: None,
+            prefix: Prefix::default(),
             theme: &theme,
         };
 

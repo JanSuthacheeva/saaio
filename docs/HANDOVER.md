@@ -212,14 +212,15 @@ install the ambient-context hook (AXI principle 7).
 The vision below is built as `flow ui`, see README and `.claude/plans/plan-flow-ui.md`. Decisions:
 - Our own multiplexer, not tmux or herdr: `flow server` (started by `flow ui`, a new session via
   setsid) owns every PTY and its terminal emulator (alacritty_terminal, kitty keyboard off so
-  C-space stays a NUL byte); `flow ui` is a client over a Unix socket. Sessions survive the UI.
+  the prefix, C-space unless `[ui] prefix` sets another, stays one control byte); `flow ui` is a
+  client over a Unix socket. Sessions survive the UI.
 - The log is the only way a pane opens: the server reconciles every unfinished flow with a
   workspace; once opened it records `Workspace.window = "flow-ui"`, so later opens resume.
 - One thread owns all server state; only the focused pane streams (changed rows, at most 60/s).
   Idle: about 0.15 % CPU and 3-5 MB each for server and UI.
 - The master keeps its session across crashes (master.json), starts fresh after a stop, and runs
   the built-in `master` agent with `master.md` appended to its system prompt.
-- `C-space Q` keeps or ends unfinished flows; ended flows keep branch and worktree until `flow clear`.
+- The prefix then `Q` keeps or ends unfinished flows; ended flows keep branch and worktree until `flow clear`.
 - Later: see Future improvements.
 
 ## The master and its workers talk (built 2026-10-15)

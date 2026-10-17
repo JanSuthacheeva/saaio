@@ -93,7 +93,7 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
         None => home::run(store, &env.bin_path(), now),
         Some(Command::New(args)) => new::run(args, store, now),
         Some(Command::Report(args)) => report::run(args, store, now),
-        Some(Command::Status(args)) => status::run(&args, store, registry, now),
+        Some(Command::Status(args)) => status::run(&args, store, registry, env, now),
         Some(Command::Start(args)) => {
             let config = env.config()?;
             let cwd = std::env::current_dir()?;

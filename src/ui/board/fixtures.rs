@@ -7,6 +7,7 @@ use super::{BoardState, BoardView};
 use crate::event::{Event, EventKind, Mode};
 use crate::fold;
 use crate::proto::PaneKey;
+use crate::ui::prefix::Prefix;
 use crate::ui::sidebar::Sidebar;
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView};
@@ -72,6 +73,7 @@ pub(super) fn with_state<R>(
             spin: 0,
             changed: &changed,
             home: None,
+            prefix: Prefix::default(),
             theme: &theme,
         },
         state,

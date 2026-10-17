@@ -34,6 +34,7 @@ pub fn run(args: &Args, store: &Store, env: &Env, clock: fn() -> u64) -> Result<
         home: env.user_home().map(Path::to_path_buf),
         store: store.root().to_path_buf(),
         theme_dir: env.config_dir().unwrap_or_else(|| PathBuf::from(".")),
+        prefix: config.ui.prefix,
     };
     let message = ui::run(&socket, ui_env, clock)?;
     Ok(Document::Text(message))
