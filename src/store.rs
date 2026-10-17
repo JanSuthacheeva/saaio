@@ -16,6 +16,8 @@ const WAITS_DIR: &str = "waits";
 const SEEN_FILE: &str = "master.seen";
 const MASTER_SESSION_FILE: &str = "master.session";
 const MASTER_TURN_FILE: &str = "master.turn";
+const BUSY_TURN: &str = "turn";
+const BUSY_TYPED: &str = "typed";
 
 /// One flow's events and its last heartbeat, as read from disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +48,17 @@ impl Waiter {
             Waiter::Flow(id) => id,
         }
     }
+}
+
+/// Whether a session runs a turn, as `waits/<key>.busy` says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Busy {
+    /// At its prompt: no busy file.
+    Idle,
+    /// A hook or `flow wait` began a turn ("turn", or an empty file an earlier flow wrote).
+    Turn,
+    /// The server typed into the pane and no turn began yet ("typed").
+    Typed,
 }
 
 #[derive(Debug, Clone)]
@@ -238,21 +251,34 @@ impl Store {
         self.write_wait(&format!("{id}.delivered"), &count.to_string())
     }
 
-    /// Marks the session as running a turn, or as idle at its prompt, for a session flow server
-    /// types news into: it types only into an idle one.
-    pub fn set_busy(&self, waiter: &Waiter, busy: bool) -> Result<()> {
-        let name = format!("{}.busy", waiter.key());
-        if busy {
-            return self.write_wait(&name, "");
-        }
-        self.remove_wait(&name)
+    /// How many of the flow's queued lines the server typed into its pane.
+    pub fn typed(&self, id: &str) -> usize {
+        self.read_wait(&format!("{id}.typed"))
+            .and_then(|text| text.trim().parse().ok())
+            .unwrap_or(0)
     }
 
-    pub fn busy(&self, waiter: &Waiter) -> bool {
-        self.root
-            .join(WAITS_DIR)
-            .join(format!("{}.busy", waiter.key()))
-            .exists()
+    pub fn set_typed(&self, id: &str, count: usize) -> Result<()> {
+        self.write_wait(&format!("{id}.typed"), &count.to_string())
+    }
+
+    /// Marks the session as running a turn, as typed into by the server, or as idle at its
+    /// prompt: the server types news and queued lines only into an idle one.
+    pub fn set_busy(&self, waiter: &Waiter, busy: Busy) -> Result<()> {
+        let name = format!("{}.busy", waiter.key());
+        match busy {
+            Busy::Idle => self.remove_wait(&name),
+            Busy::Turn => self.write_wait(&name, BUSY_TURN),
+            Busy::Typed => self.write_wait(&name, BUSY_TYPED),
+        }
+    }
+
+    pub fn busy(&self, waiter: &Waiter) -> Busy {
+        match self.read_wait(&format!("{}.busy", waiter.key())) {
+            None => Busy::Idle,
+            Some(text) if text.trim() == BUSY_TYPED => Busy::Typed,
+            Some(_) => Busy::Turn,
+        }
     }
 
     /// The master's own session id, for a harness that picks it itself (Codex).
@@ -307,6 +333,7 @@ impl Store {
             self.alive(id),
             waits.join(format!("{id}.pid")),
             waits.join(format!("{id}.delivered")),
+            waits.join(format!("{id}.typed")),
             waits.join(format!("{id}.busy")),
         ] {
             if let Err(error) = fs::remove_file(&file)
@@ -519,16 +546,9 @@ mod tests {
     }
 
     #[test]
-    fn marks_a_session_busy_and_keeps_the_masters_session() {
+    fn keeps_the_masters_session() {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
-        let busy = dir.path().join("waits/7f3c.busy");
-
-        store.set_busy(&Waiter::Flow("7f3c".into()), true).unwrap();
-        assert!(busy.exists());
-        store.set_busy(&Waiter::Flow("7f3c".into()), false).unwrap();
-        store.set_busy(&Waiter::Flow("7f3c".into()), false).unwrap();
-        assert!(!busy.exists(), "idle twice is no error");
 
         assert_eq!(store.master_session(), None);
         store.set_master_session("01a1").unwrap();
@@ -620,6 +640,10 @@ mod tests {
         store.set_delivered("7f3c", 3).unwrap();
         assert_eq!(store.delivered("7f3c"), 3);
 
+        assert_eq!(store.typed("7f3c"), 0);
+        store.set_typed("7f3c", 2).unwrap();
+        assert_eq!(store.typed("7f3c"), 2);
+
         assert_eq!(store.seen(), None);
         let seen = Seen::from([(
             "7f3c".to_string(),
@@ -633,16 +657,42 @@ mod tests {
     }
 
     #[test]
-    fn removing_a_flow_forgets_its_waiter_and_deliveries() {
+    fn marks_a_session_idle_running_a_turn_or_typed_into() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let worker = Waiter::Flow("7f3c".into());
+
+        assert_eq!(store.busy(&worker), Busy::Idle);
+        store.set_busy(&worker, Busy::Typed).unwrap();
+        assert_eq!(store.busy(&worker), Busy::Typed);
+        store.set_busy(&worker, Busy::Turn).unwrap();
+        assert_eq!(store.busy(&worker), Busy::Turn);
+        store.set_busy(&worker, Busy::Idle).unwrap();
+        assert_eq!(store.busy(&worker), Busy::Idle);
+        assert!(!dir.path().join("waits/7f3c.busy").exists());
+        store.set_busy(&worker, Busy::Idle).unwrap();
+
+        fs::write(dir.path().join("waits/7f3c.busy"), "").unwrap();
+        assert_eq!(
+            store.busy(&worker),
+            Busy::Turn,
+            "the empty file an earlier flow wrote"
+        );
+    }
+
+    #[test]
+    fn removing_a_flow_forgets_its_waiter_deliveries_and_typed_lines() {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
         let id = store.create(&started()).unwrap();
         store.claim_waiter(&Waiter::Flow(id.clone()), 9).unwrap();
         store.set_delivered(&id, 2).unwrap();
+        fs::write(dir.path().join(format!("waits/{id}.typed")), "1").unwrap();
 
         store.remove(&id).unwrap();
 
         assert_eq!(store.waiter(&Waiter::Flow(id.clone())), None);
         assert_eq!(store.delivered(&id), 0);
+        assert_eq!(store.typed(&id), 0);
     }
 }

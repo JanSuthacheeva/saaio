@@ -10,7 +10,7 @@ use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
 use crate::launch::pane::HOSTED;
 use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
-use crate::store::Waiter;
+use crate::store::{Busy, Waiter};
 use crate::view::{MasterTurn, State};
 
 /// A server whose master is `cat`, run on its own thread.
@@ -688,7 +688,9 @@ fn types_the_masters_message_into_an_idle_codex_worker_once() {
     let busy = started_flow(&store, dir.path(), "busy", "codex");
     had_a_turn(&store, &csv);
     had_a_turn(&store, &busy);
-    store.set_busy(&Waiter::Flow(csv.clone()), true).unwrap();
+    store
+        .set_busy(&Waiter::Flow(csv.clone()), Busy::Turn)
+        .unwrap();
     let (paths, handle) = start_with_agents(
         dir.path(),
         BTreeMap::from([("codex".to_string(), fake_codex(dir.path()))]),
@@ -698,7 +700,9 @@ fn types_the_masters_message_into_an_idle_codex_worker_once() {
         assert!(Instant::now() < deadline, "the busy worker never started");
         thread::sleep(Duration::from_millis(20));
     }
-    store.set_busy(&Waiter::Flow(busy.clone()), true).unwrap();
+    store
+        .set_busy(&Waiter::Flow(busy.clone()), Busy::Turn)
+        .unwrap();
 
     tell(&store, &csv, "Tabs.");
     tell(&store, &busy, "Spaces.");
@@ -774,4 +778,110 @@ fn never_types_into_a_session_that_had_no_turn_or_a_claude_worker() {
     );
     proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
+}
+
+/// A Claude Code stand-in that keeps each line typed into it in `typed` and, as its prompt hook
+/// would, marks flow `id`'s turn as begun.
+fn fake_claude(dir: &Path, id: &str) -> Agent {
+    let script = dir.join("fake-claude");
+    let busy = dir.join(format!("waits/{id}.busy"));
+    let body = format!(
+        "#!/bin/sh\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> typed; printf turn > '{}'; done\n",
+        busy.display()
+    );
+    fs::write(&script, body).unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    Agent {
+        command: vec![script.display().to_string()],
+        prompt: None,
+        adapter: Some(crate::adapter::Adapter::ClaudeCode),
+        resume: Some(vec![script.display().to_string()]),
+    }
+}
+
+fn queue(store: &Store, id: &str, line: &str) {
+    let typed = EventKind::Typed { text: line.into() };
+    store.append(id, &LogEvent::new(3, typed)).unwrap();
+}
+
+fn wait_until_typed(dir: &Path, name: &str, want: &str) {
+    let deadline = Instant::now() + typing::UNSTARTED + Duration::from_secs(5);
+    while !typed(dir, name).contains(want) {
+        assert!(
+            Instant::now() < deadline,
+            "{want} never typed: {:?}",
+            typed(dir, name)
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn types_queued_lines_in_order_each_once_the_turn_before_it_ended() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let id = started_flow(&store, dir.path(), "csv", "claude-cat");
+    let answer = EventKind::Answer {
+        text: "Plan done.".into(),
+    };
+    store.append(&id, &LogEvent::new(2, answer)).unwrap();
+    queue(&store, &id, "/compact");
+    queue(&store, &id, "continue shipping");
+    let (paths, handle) = start_with_agents(
+        dir.path(),
+        BTreeMap::from([("claude-cat".to_string(), fake_claude(dir.path(), &id))]),
+    );
+    let waiter = Waiter::Flow(id.clone());
+
+    wait_until_typed(dir.path(), "csv", "/compact");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while store.busy(&waiter) != Busy::Turn {
+        assert!(Instant::now() < deadline, "its turn never began");
+        thread::sleep(Duration::from_millis(20));
+    }
+    thread::sleep(WATCH_EVERY * 3);
+    assert_eq!(
+        typed(dir.path(), "csv"),
+        "\x1b[200~/compact\x1b[201~\n",
+        "never mid-turn"
+    );
+    assert_eq!(store.typed(&id), 1);
+
+    store.set_busy(&waiter, Busy::Idle).unwrap();
+    wait_until_typed(dir.path(), "csv", "continue shipping");
+    assert_eq!(
+        typed(dir.path(), "csv"),
+        "\x1b[200~/compact\x1b[201~\n\x1b[200~continue shipping\x1b[201~\n"
+    );
+    assert_eq!(store.typed(&id), 2);
+    stop(&paths, handle);
+}
+
+#[test]
+fn a_typed_line_that_begins_no_turn_lets_the_next_one_follow() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let id = started_flow(&store, dir.path(), "csv", "codex");
+    let fresh = started_flow(&store, dir.path(), "fresh", "codex");
+    had_a_turn(&store, &id);
+    let answer = EventKind::Answer {
+        text: "Plan done.".into(),
+    };
+    store.append(&id, &LogEvent::new(2, answer)).unwrap();
+    queue(&store, &id, "/cost");
+    queue(&store, &id, "go on");
+    queue(&store, &fresh, "/compact");
+    let (paths, handle) = start_with_agents(
+        dir.path(),
+        BTreeMap::from([("codex".to_string(), fake_codex(dir.path()))]),
+    );
+
+    wait_until_typed(dir.path(), "csv", "go on");
+    assert_eq!(store.busy(&Waiter::Flow(id.clone())), Busy::Typed);
+    assert_eq!(
+        typed(dir.path(), "fresh"),
+        "",
+        "a session that never ended a turn may still be starting up"
+    );
+    stop(&paths, handle);
 }

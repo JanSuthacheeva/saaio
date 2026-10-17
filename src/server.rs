@@ -7,6 +7,7 @@ pub mod watch;
 mod conn;
 mod news;
 mod panes;
+mod typing;
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -142,6 +143,10 @@ struct Server {
     events: Sender<Event>,
     /// When each pane last got a key from the person, so typed news waits until they pause.
     typed_at: HashMap<PaneKey, Instant>,
+    /// When each pane opened, so nothing is typed into a harness still starting up.
+    opened_at: HashMap<PaneKey, Instant>,
+    /// When the server last typed into each pane, for a line that begins no turn.
+    line_at: HashMap<PaneKey, Instant>,
 }
 
 /// Writes master.md and, when missing, the example config.toml and theme.toml; logs what fails.
@@ -207,6 +212,8 @@ pub fn run(
         flushed_at: Instant::now(),
         events: events.clone(),
         typed_at: HashMap::new(),
+        opened_at: HashMap::new(),
+        line_at: HashMap::new(),
     };
     server.open_master(start);
     server.refresh();
@@ -243,6 +250,7 @@ impl Server {
             if self.refreshed_at.elapsed() >= WATCH_EVERY {
                 self.deliver_news();
                 self.refresh();
+                self.type_lines();
             }
             self.flush();
         }

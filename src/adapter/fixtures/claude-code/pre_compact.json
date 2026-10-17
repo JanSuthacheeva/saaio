@@ -1,0 +1,9 @@
+{
+ "session_id": "7f3c0000-0000-4000-8000-000000000000",
+ "transcript_path": "/home/dev/.claude/projects/-repo/7f3c.jsonl",
+ "cwd": "/repo",
+ "prompt_id": "ffa68ece-75b4-4906-be04-82ecf44f5e8c",
+ "hook_event_name": "PreCompact",
+ "trigger": "manual",
+ "custom_instructions": null
+}

@@ -63,6 +63,30 @@ fn a_message_is_in_the_timeline_and_leaves_the_state() {
 }
 
 #[test]
+fn a_typed_line_is_in_the_timeline_and_leaves_the_state() {
+    let typed = EventKind::Typed {
+        text: "/compact".into(),
+    };
+    let events = vec![
+        started(0),
+        at(
+            1,
+            EventKind::Idle {
+                note: "plan done".into(),
+            },
+        ),
+        at(2, typed.clone()),
+    ];
+
+    let flow = fold("x", &events, None, 3).unwrap();
+
+    assert_eq!(flow.state, State::Idle);
+    assert_eq!(flow.changed_at, 1);
+    assert_eq!(flow.timeline.last().unwrap().text, "master typed: /compact");
+    assert!(changes("x", &events, &typed, 3));
+}
+
+#[test]
 fn keeps_the_last_answer_whole() {
     let long = "word ".repeat(300);
     let answer = |text: &str| EventKind::Answer { text: text.into() };

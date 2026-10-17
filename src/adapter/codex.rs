@@ -10,13 +10,15 @@ use crate::event::{EventKind, Phase};
 use crate::workflow::Workflow;
 
 /// The hook events flow listens to.
-const EVENTS: [&str; 6] = [
+const EVENTS: [&str; 8] = [
     "UserPromptSubmit",
     "PreToolUse",
     "PostToolUse",
     "PermissionRequest",
     "Stop",
     "Interrupt",
+    "PreCompact",
+    "PostCompact",
 ];
 /// Seconds Codex waits for `flow hook` before it goes on without it.
 const HOOK_TIMEOUT_SECS: u64 = 10;
@@ -167,16 +169,16 @@ fn shell_quoted(text: &str) -> String {
     format!("'{}'", text.replace('\'', r"'\''"))
 }
 
-/// A prompt begins a turn, a Stop ends it, an Esc interrupts it; a subagent's (agent_id set) are
-/// not the session's.
+/// A prompt or a compaction begins a turn, a Stop ends it, an Esc or the compaction's end leaves
+/// it at its prompt with no Stop; a subagent's (agent_id set) are not the session's.
 pub fn turn(payload: &Value) -> Option<Turn> {
     if payload.get("agent_id").is_some() {
         return None;
     }
     match payload["hook_event_name"].as_str()? {
-        "UserPromptSubmit" => Some(Turn::Began),
+        "UserPromptSubmit" | "PreCompact" => Some(Turn::Began),
         "Stop" => Some(Turn::Ended),
-        "Interrupt" => Some(Turn::Interrupted),
+        "Interrupt" | "PostCompact" => Some(Turn::Idle),
         _ => None,
     }
 }
@@ -326,6 +328,14 @@ mod tests {
                 }
             ])
         );
+    }
+
+    #[test]
+    fn a_compaction_is_a_turn_that_changes_nothing() {
+        assert_eq!(events("pre_compact"), after_session(vec![]));
+        assert_eq!(events("post_compact"), after_session(vec![]));
+        assert_eq!(turn(&fixture("pre_compact")), Some(Turn::Began));
+        assert_eq!(turn(&fixture("post_compact")), Some(Turn::Idle));
     }
 
     #[test]

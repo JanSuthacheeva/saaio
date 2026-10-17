@@ -81,6 +81,32 @@ pub(crate) fn sent(flow: &FlowView) -> Document {
     }))
 }
 
+/// queued, the line, how many lines wait before it, and when flow types it.
+pub(crate) fn queued(flow: &FlowView, line: &str, ahead: usize) -> Document {
+    #[derive(Serialize)]
+    struct Queued<'a> {
+        queued: &'a str,
+        line: &'a str,
+        ahead: usize,
+        help: [String; 2],
+    }
+    Document::Toon(toon(&Queued {
+        queued: &flow.name,
+        line,
+        ahead,
+        help: [
+            format!(
+                "flow types it into {}'s pane once its session is idle",
+                flow.name
+            ),
+            format!(
+                "Queue the next line with another `flow send --type {} \"<line>\"`. It waits for this one's turn to end",
+                flow.name
+            ),
+        ],
+    }))
+}
+
 /// skipped: no flow id, and how to give one.
 pub(crate) fn skipped() -> Document {
     #[derive(Serialize)]
@@ -199,6 +225,33 @@ mod tests {
                 "help[2]: \"flow wakes its worker with it now, or once its session runs again\",flow wakes you when shop-217 changes again",
             ]
             .join("\n")
+        );
+    }
+
+    #[test]
+    fn says_a_line_was_queued_and_how_many_wait_before_it() {
+        let idle = flow(
+            "shop-217",
+            vec![EventKind::Idle {
+                note: "plan done".into(),
+            }],
+            10 * MIN,
+        );
+
+        assert_eq!(
+            queued(&idle, "/compact", 0).text(),
+            [
+                "queued: shop-217",
+                "line: /compact",
+                "ahead: 0",
+                "help[2]: flow types it into shop-217's pane once its session is idle,\"Queue the next line with another `flow send --type shop-217 \\\"<line>\\\"`. It waits for this one's turn to end\"",
+            ]
+            .join("\n")
+        );
+        assert!(
+            queued(&idle, "continue shipping", 1)
+                .text()
+                .contains("ahead: 1")
         );
     }
 }

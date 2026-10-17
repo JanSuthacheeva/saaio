@@ -27,6 +27,18 @@ pub fn undelivered(events: &[Event], delivered: usize) -> Vec<&str> {
         .collect()
 }
 
+/// The lines queued in a flow's log after the first `typed` of them.
+pub fn untyped(events: &[Event], typed: usize) -> Vec<&str> {
+    events
+        .iter()
+        .filter_map(|event| match &event.kind {
+            EventKind::Typed { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .skip(typed)
+        .collect()
+}
+
 /// Flows whose state needs the master and that changed since it last saw them, oldest first; never
 /// a plain session, which is the user's own.
 pub fn changed_flows<'a>(flows: &'a [FlowView], seen: &Seen) -> Vec<&'a FlowView> {
@@ -111,6 +123,20 @@ mod tests {
         assert_eq!(undelivered(&events, 1), ["two"]);
         assert!(undelivered(&events, 2).is_empty());
         assert!(undelivered(&events, 5).is_empty());
+    }
+
+    #[test]
+    fn queues_only_the_lines_not_yet_typed_and_no_messages() {
+        let line = |text: &str| EventKind::Typed { text: text.into() };
+        let events: Vec<Event> = [line("/compact"), message("hi"), line("continue shipping")]
+            .into_iter()
+            .map(|kind| Event::new(1, kind))
+            .collect();
+
+        assert_eq!(untyped(&events, 0), ["/compact", "continue shipping"]);
+        assert_eq!(untyped(&events, 1), ["continue shipping"]);
+        assert!(untyped(&events, 2).is_empty());
+        assert_eq!(undelivered(&events, 0), ["hi"]);
     }
 
     #[test]

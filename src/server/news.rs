@@ -5,15 +5,15 @@ use crate::cli::output::news;
 use crate::deliver::{self, WorkerNews};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::server_log;
-use crate::store::Waiter;
+use crate::store::{Busy, Waiter};
 use crate::view::FlowView;
 
 /// No key into a pane for this long before the server types news into it, so it does not land in
 /// the middle of what the person types there.
 #[cfg(not(test))]
-const QUIET: Duration = Duration::from_secs(10);
+pub(super) const QUIET: Duration = Duration::from_secs(10);
 #[cfg(test)]
-const QUIET: Duration = Duration::from_millis(200);
+pub(super) const QUIET: Duration = Duration::from_millis(200);
 
 impl Server {
     /// Types the news of each session that cannot wake itself into its pane, when it sits idle at
@@ -38,7 +38,7 @@ impl Server {
             let Some(text) = self.take_news(&waiter) else {
                 continue;
             };
-            if let Err(error) = self.host.write(&key, &paste(&text)) {
+            if let Err(error) = self.type_into(&key, &waiter, &text) {
                 server_log::write(
                     (self.clock)(),
                     &format!("could not hand over news: {error:#}"),
@@ -93,13 +93,13 @@ impl Server {
 
 /// True when the server may type into a session: not running a turn, and no key typed into its
 /// pane within QUIET.
-fn quiet(busy: bool, typed_at: Option<Instant>, now: Instant) -> bool {
-    !busy && typed_at.is_none_or(|at| now.duration_since(at) >= QUIET)
+pub(super) fn quiet(busy: Busy, typed_at: Option<Instant>, now: Instant) -> bool {
+    busy == Busy::Idle && typed_at.is_none_or(|at| now.duration_since(at) >= QUIET)
 }
 
 /// `text` as one bracketed paste, then Enter: a single prompt however many lines it has, which
 /// Codex's composer takes whole instead of as typed keys.
-fn paste(text: &str) -> Vec<u8> {
+pub(super) fn paste(text: &str) -> Vec<u8> {
     let mut bytes = b"\x1b[200~".to_vec();
     bytes.extend_from_slice(text.as_bytes());
     bytes.extend_from_slice(b"\x1b[201~\r");
@@ -114,13 +114,14 @@ mod tests {
     fn types_only_into_an_idle_session_nobody_typed_into_lately() {
         let typed = Instant::now();
 
-        assert!(quiet(false, None, typed));
-        assert!(!quiet(true, None, typed), "running a turn");
+        assert!(quiet(Busy::Idle, None, typed));
+        assert!(!quiet(Busy::Turn, None, typed), "running a turn");
+        assert!(!quiet(Busy::Typed, None, typed), "typed into, no turn yet");
         assert!(
-            !quiet(false, Some(typed), typed + QUIET / 2),
+            !quiet(Busy::Idle, Some(typed), typed + QUIET / 2),
             "typed into lately"
         );
-        assert!(quiet(false, Some(typed), typed + QUIET));
+        assert!(quiet(Busy::Idle, Some(typed), typed + QUIET));
     }
 
     #[test]

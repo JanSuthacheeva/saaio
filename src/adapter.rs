@@ -30,12 +30,13 @@ what needs the user, if anything.";
 /// Where a session's turn stands after a hook event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Turn {
-    /// It runs a turn: flow types nothing into it.
+    /// It runs a turn (a prompt, a compaction): flow types nothing into it.
     Began,
-    /// It ended its turn and its hook can hand news over (exit 2).
+    /// It ended its turn at a Stop, and its hook can hand news over (exit 2).
     Ended,
-    /// It was stopped mid-turn and waits at its prompt; its hook can hand nothing over.
-    Interrupted,
+    /// It waits at its prompt with no Stop (an Esc, the end of a compaction); its hook can hand
+    /// nothing over.
+    Idle,
 }
 
 /// A harness flow observes through its own hooks.
@@ -141,11 +142,11 @@ impl Adapter {
         argv
     }
 
-    /// Where a hook event leaves the session's turn, for a harness flow hands news to at its Stop
-    /// (Codex); None for one that wakes itself, or an event that is neither.
+    /// Where a hook event leaves the session's turn, so the server types only into an idle
+    /// session; None for an event that is neither.
     pub fn turn(self, payload: &Value) -> Option<Turn> {
         match self {
-            Adapter::ClaudeCode => None,
+            Adapter::ClaudeCode => claude_code::turn(payload),
             Adapter::Codex => codex::turn(payload),
         }
     }
@@ -267,9 +268,12 @@ mod tests {
             Some(Turn::Began)
         );
         assert_eq!(Adapter::Codex.turn(&event("Stop")), Some(Turn::Ended));
+        assert_eq!(Adapter::Codex.turn(&event("Interrupt")), Some(Turn::Idle));
+        assert_eq!(Adapter::Codex.turn(&event("PreCompact")), Some(Turn::Began));
         assert_eq!(
-            Adapter::Codex.turn(&event("Interrupt")),
-            Some(Turn::Interrupted)
+            Adapter::Codex.turn(&event("PostCompact")),
+            Some(Turn::Idle),
+            "no Stop follows a compaction"
         );
         assert_eq!(Adapter::Codex.turn(&event("PreToolUse")), None);
         let subagent = serde_json::json!({ "hook_event_name": "Stop", "agent_id": "01a1" });
@@ -278,11 +282,7 @@ mod tests {
             None,
             "a subagent's turn is not the session's"
         );
-        assert_eq!(
-            Adapter::ClaudeCode.turn(&event("Stop")),
-            None,
-            "it wakes itself"
-        );
+        assert_eq!(Adapter::ClaudeCode.turn(&event("Stop")), Some(Turn::Ended));
     }
 
     #[test]

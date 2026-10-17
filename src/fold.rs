@@ -40,10 +40,10 @@ pub fn fold<'a>(
 }
 
 /// True when appending `kind` changes what the flow shows: its state, phase, blocker, delegate,
-/// tasks, review, merge request, decisions, answer or session; every message does. Adapters skip the rest,
-/// so a log does not grow by a line for every tool call.
+/// tasks, review, merge request, decisions, answer or session; every message and typed line
+/// does. Adapters skip the rest, so a log does not grow by a line for every tool call.
 pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
-    if matches!(kind, EventKind::Message { .. }) {
+    if matches!(kind, EventKind::Message { .. } | EventKind::Typed { .. }) {
         return true;
     }
     let Some(before) = fold(id, events, None, now) else {
@@ -287,6 +287,9 @@ impl Folding {
             }
             EventKind::Message { text } => {
                 self.note(at, format!("master: {text}"), Tone::Neutral);
+            }
+            EventKind::Typed { text } => {
+                self.note(at, format!("master typed: {text}"), Tone::Neutral);
             }
             EventKind::Answer { text } => {
                 self.view.answer = Some(text.clone());

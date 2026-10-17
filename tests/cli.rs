@@ -1020,6 +1020,44 @@ fn a_codex_stop_hands_the_masters_message_over_and_goes_on_working() {
 }
 
 #[test]
+fn a_claude_code_turn_marks_the_session_busy_and_its_stop_hands_nothing_over() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let busy = home.path().join(format!("waits/{id}.busy"));
+    let prompt = r#"{"session_id":"7f3c","hook_event_name":"UserPromptSubmit","prompt":"go"}"#;
+    let stop = r#"{"session_id":"7f3c","hook_event_name":"Stop","last_assistant_message":"Tabs or spaces?","background_tasks":[]}"#;
+    let compact = |event: &str| {
+        format!(r#"{{"session_id":"7f3c","hook_event_name":"{event}","trigger":"manual"}}"#)
+    };
+
+    assert!(hook(home.path(), Some(&id), prompt).status.success());
+    assert_eq!(fs::read_to_string(&busy).unwrap(), "turn");
+    message_for(home.path(), &id, "Tabs.");
+    let stopped = hook(home.path(), Some(&id), stop);
+    assert!(stopped.status.success(), "flow wait wakes it, not its Stop");
+    assert!(stopped.stdout.is_empty() && stopped.stderr.is_empty());
+    assert!(!busy.exists(), "idle after its Stop");
+
+    assert!(
+        hook(home.path(), Some(&id), &compact("PreCompact"))
+            .status
+            .success()
+    );
+    assert!(busy.exists(), "busy while it compacts");
+    assert!(
+        hook(home.path(), Some(&id), &compact("PostCompact"))
+            .status
+            .success()
+    );
+    assert!(
+        !busy.exists(),
+        "idle once the compaction ends, with no Stop"
+    );
+    let log = fs::read_to_string(home.path().join(format!("flows/{id}.jsonl"))).unwrap();
+    assert!(!log.contains("Compact"), "{log}");
+}
+
+#[test]
 fn a_codex_master_records_its_session_and_reports_nothing() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");
@@ -2134,6 +2172,124 @@ fn send_refuses_what_has_no_worker_to_read_it() {
     assert!(!log.contains("message"), "{log}");
 }
 
+#[test]
+fn send_takes_a_message_while_config_toml_is_broken() {
+    let home = TempDir::new().unwrap();
+    seed_worker(
+        home.path(),
+        "7f3c",
+        "shop-217",
+        r#"{"v":1,"at":2000,"kind":"idle","note":"plan done"}"#,
+    );
+    fs::write(home.path().join("no-config.toml"), "agent = [\n").unwrap();
+
+    let sent = flow(home.path(), &["send", "shop-217", "Tabs."]);
+    let typed = flow(home.path(), &["send", "--type", "shop-217", "/compact"]);
+
+    assert!(sent.status.success(), "{}", stdout(&sent));
+    assert_eq!(typed.status.code(), Some(1), "{}", stdout(&typed));
+    assert!(
+        stdout(&typed).contains("no-config.toml is not valid"),
+        "{}",
+        stdout(&typed)
+    );
+}
+
+#[test]
+fn send_type_queues_lines_in_order_in_the_flows_log() {
+    let home = TempDir::new().unwrap();
+    seed_worker(
+        home.path(),
+        "7f3c",
+        "shop-217",
+        r#"{"v":1,"at":2000,"kind":"idle","note":"plan done"}"#,
+    );
+
+    let first = flow(home.path(), &["send", "--type", "shop-217", "/compact"]);
+    let second = flow(
+        home.path(),
+        &["send", "--type", "shop-217", "continue shipping"],
+    );
+
+    assert!(first.status.success(), "{}", stdout(&first));
+    assert!(
+        stdout(&first).starts_with("queued: shop-217\nline: /compact\nahead: 0\n"),
+        "{}",
+        stdout(&first)
+    );
+    assert!(stdout(&second).contains("ahead: 1"), "{}", stdout(&second));
+    let log = fs::read_to_string(home.path().join("flows/7f3c.jsonl")).unwrap();
+    let typed: Vec<&str> = log
+        .lines()
+        .filter(|line| line.contains(r#""kind":"typed""#))
+        .collect();
+    assert_eq!(typed.len(), 2, "{log}");
+    assert!(typed[0].contains(r#""text":"/compact""#), "{log}");
+    assert!(!log.contains(r#""kind":"message""#), "{log}");
+    let detail = stdout(&flow(home.path(), &["status", "shop-217"]));
+    assert!(detail.contains("master typed: /compact"), "{detail}");
+
+    fs::create_dir_all(home.path().join("waits")).unwrap();
+    fs::write(home.path().join("waits/7f3c.typed"), "2").unwrap();
+    let after = flow(home.path(), &["send", "--type", "shop-217", "/review"]);
+    assert!(stdout(&after).contains("ahead: 0"), "{}", stdout(&after));
+}
+
+#[test]
+fn send_type_refuses_more_than_one_line_and_an_agent_without_turns() {
+    let home = TempDir::new().unwrap();
+    seed_worker(
+        home.path(),
+        "7f3c",
+        "shop-217",
+        r#"{"v":1,"at":2000,"kind":"working"}"#,
+    );
+    seed(
+        home.path(),
+        "aaaa",
+        &[
+            r#"{"v":1,"at":1000,"kind":"started","name":"old-cli","request":"x","mode":"auto"}"#,
+            r#"{"v":1,"at":1500,"kind":"workspace","path":"/repo","branch":"flow/old-cli","slot":2,"window":"flow-ui","agent":"aider"}"#,
+        ],
+    );
+    let config = home.path().join("config.toml");
+    fs::write(
+        &config,
+        "[agents.aider]\ncommand = [\"aider\"]\nprompt = \"{request}\"\n",
+    )
+    .unwrap();
+    let refused = |args: &[&str]| {
+        let output = flow_command(home.path())
+            .args(args)
+            .env("FLOW_CONFIG", &config)
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "{args:?}: {}",
+            stdout(&output)
+        );
+        stdout(&output)
+    };
+
+    let lines = refused(&["send", "--type", "shop-217", "/compact\ncontinue"]);
+    assert!(
+        lines.contains("a typed line is one line")
+            && lines.contains("Queue one `flow send --type` per line"),
+        "{lines}"
+    );
+    let aider = refused(&["send", "--type", "old-cli", "/compact"]);
+    assert!(
+        aider.contains("old-cli runs aider, which reports no turns to flow")
+            && aider.contains("Use `flow send` for a message"),
+        "{aider}"
+    );
+    assert!(refused(&["send", "--type", "shop-217", "  "]).contains("nothing to send"));
+    let log = fs::read_to_string(home.path().join("flows/7f3c.jsonl")).unwrap();
+    assert!(!log.contains("typed"), "{log}");
+}
+
 fn waiter(home: &Path, flow_id: Option<&str>, args: &[&str]) -> Running {
     let mut command = flow_command(home);
     command
@@ -2195,6 +2351,11 @@ fn a_workers_wait_ends_with_the_masters_message_once() {
     assert_eq!(
         err.trim_end(),
         "message from the flow master:\n  Semicolons."
+    );
+    assert_eq!(
+        fs::read_to_string(home.path().join("waits/7f3c.busy")).unwrap(),
+        "turn",
+        "the turn it wakes runs no prompt hook"
     );
 
     let mut again = waiter(home.path(), Some("7f3c"), &[]);

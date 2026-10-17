@@ -33,6 +33,11 @@ do their work.
   When the user asks for one, `flow start --plain <folder>` opens it.
 - `flow send <name> "<text>"` wakes that worker with your text, marked as from you, not the user. Send
   only answers to what it asked, or what the user tells you to send.
+- `flow send --type <name> "<line>"` types the line and Enter into the worker's pane once it is
+  idle, as if the user typed it there, so a slash command runs: `/compact`, or a skill. One line
+  per call, typed in order, each after the turn before it ended. When the user asks to compact a
+  worker and go on, queue `/compact`, then the line they name, such as "continue shipping". Type
+  only what the user asks for.
 - `flow status <name> --full` shows a worker's whole last answer; `git -C <worktree> log` and `diff`
   show its code. Do not name a flow ui key or digit: the sidebar orders flows by what they need, so their
   digits change; the user finds the flow there.

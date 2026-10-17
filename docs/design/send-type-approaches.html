@@ -1,0 +1,156 @@
+<title>Typing Into Workers</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* layout: one 720px reading column of cards, jasu.dev (Nord + one purple accent) */
+:root {
+  --surface:#f8f9fb; --card:#eceff4; --ink:#2e3440; --muted:#4c566a; --subtle:#d8dee9; --border:#d8dee9;
+  --code-block:#2e3440; --code-bg:#e5e9f0; --code-ink:#4b6c8a; --accent:#7b5eaf; --link:#4b6c8a;
+  --constructive:#a3be8c; --warning:#d08770; --critical:#bf616a; --on-accent:#f8f9fb; --block-ink:#eceff4;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --gap:24px; --radius:6px;
+}
+:root[data-theme="dark"] {
+  --surface:#2e3440; --card:#3b4252; --ink:#eceff4; --muted:#93b1cc; --subtle:#434c5e; --border:#4c566a;
+  --code-block:#3b4252; --code-bg:#3b4252; --code-ink:#88c0d0; --accent:#bd93f9; --link:#88c0d0; --warning:#ebcb8b; --on-accent:#2e3440; color-scheme:dark }
+body { background:var(--surface); color:var(--ink); font:18px/1.6 var(--sans);
+  padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); padding-block:32px 64px; }
+main { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:var(--gap); }
+h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.1; font-weight:800; letter-spacing:-0.03em; margin:0; text-wrap:balance; }
+h2 { font-size:24px; line-height:1.3; margin:0; text-wrap:balance; }
+h3 { font-size:18px; margin:0; }
+p, ul, ol { margin:0; }
+ul, ol { padding-left:1.2em; display:flex; flex-direction:column; gap:6px; }
+.meta { font-size:13px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:var(--gap);
+  display:flex; flex-direction:column; gap:16px; min-width:0; }
+.card.rec { border-color:var(--accent); border-width:2px; }
+.pill { display:inline-block; border-radius:99px; font-size:.8rem; font-weight:600; letter-spacing:.05em; padding:1px 10px;
+  background:var(--accent); color:var(--on-accent); vertical-align:middle; }
+code { font-family:var(--mono); font-size:.78em; background:var(--code-bg); color:var(--code-ink); border-radius:.2rem; padding:1px 4px; overflow-wrap:anywhere; }
+pre { margin:0; background:var(--code-block); color:var(--block-ink); border-radius:var(--radius); padding:14px; overflow-x:auto; font:13px/1.5 var(--mono); }
+.cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.cols > div { min-width:0; display:flex; flex-direction:column; gap:6px; }
+.cols h3 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+.plus li::marker { content:"+  "; color:var(--muted); }
+.minus li::marker { content:"-  "; color:var(--muted); }
+.dia { display:flex; flex-direction:column; gap:6px; font:13px/1.4 var(--mono); }
+.row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.box { border:1px solid var(--border); background:var(--surface); border-radius:4px; padding:4px 8px; }
+.box.new { border:2px solid var(--accent); }
+.box.mod { border:1px dashed var(--accent); }
+.arrow { color:var(--muted); }
+.legend { display:flex; gap:12px; flex-wrap:wrap; font-size:13px; color:var(--muted); align-items:center; }
+.legend .box { padding:0 6px; }
+@media (max-width:560px) { .cols { grid-template-columns:1fr; } .card { padding:14px; } body { font-size:17px; } }
+table { border-collapse:collapse; font-size:15px; width:100%; }
+td, th { border:1px solid var(--border); padding:6px 8px; text-align:left; vertical-align:top; }
+th { background:var(--subtle); }
+.scroll { overflow-x:auto; }
+</style>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:8px">
+  <p class="meta">flow · design-code · approaches · 2026-10-17</p>
+  <h1>Typing into a worker's pane</h1>
+  <p>From a phone over remote control you cannot type <code>/compact</code> into a worker. <code>flow send</code> wakes the worker through its hook, so the model reads <code>/compact</code> as words and cannot run it. The server owns every pane's PTY: it should type a line and Enter into the pane once the worker is idle, as if you had typed it, and queue several lines in order.</p>
+</header>
+
+<section class="card">
+  <h2>What exists today</h2>
+  <ul>
+    <li><code>flow send</code> appends <code>Message { text }</code> to the flow's log (<code>cli/commands/send.rs:62</code>) after refusing a worker as sender, empty text, an unknown, finished, worker-less or plain flow (<code>send.rs:23-60</code>). The worker's <code>flow wait</code> hands undelivered messages over and counts them in <code>waits/&lt;id&gt;.delivered</code> (<code>deliver.rs:24</code>).</li>
+    <li>For Codex, which cannot wake itself, the server pastes news into an idle pane: <code>Server::deliver_news</code> every 500 ms (<code>server.rs:243</code>, <code>server/news.rs:22</code>), only when <code>waits/&lt;id&gt;.busy</code> is absent and nobody typed into the pane for 10 s (<code>news.rs:96</code>). The bytes are one bracketed paste and <code>\r</code> (<code>news.rs:102</code>).</li>
+    <li>Only Codex marks <code>.busy</code>: <code>Adapter::turn</code> is <code>None</code> for Claude Code (<code>adapter.rs:146</code>), Codex maps UserPromptSubmit / Stop / Interrupt to Began / Ended / Interrupted (<code>adapter/codex.rs:172</code>), and <code>flow hook</code> sets and clears the marker (<code>cli/commands/hook.rs:88</code>).</li>
+    <li>A turn that <code>flow wait</code> wakes runs no UserPromptSubmit (<code>HANDOVER.md</code>, master row), and Claude Code runs no hook on an Esc interrupt (<code>HANDOVER.md:304</code>).</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Probed today</h2>
+  <p>Hooks logged in scratch sessions while a line was typed into the pane (Claude Code 2.1.302, Codex 0.163.0):</p>
+  <div class="scroll"><table>
+    <tr><th>Typed</th><th>Claude Code</th><th>Codex</th></tr>
+    <tr><td>a prompt</td><td>UserPromptSubmit, Stop</td><td>UserPromptSubmit, Stop</td></tr>
+    <tr><td><code>/compact</code></td><td>PreCompact, SessionStart compact, PostCompact - no Stop</td><td>PreCompact, PostCompact - no Stop</td></tr>
+    <tr><td>a skill, <code>/commit</code></td><td>UserPromptSubmit, ..., Stop</td><td>-</td></tr>
+    <tr><td><code>/clear</code></td><td>SessionEnd (reason clear), SessionStart clear</td><td>-</td></tr>
+    <tr><td><code>/cost</code></td><td>no hook, opens a dialog that takes the next keys</td><td>-</td></tr>
+  </table></div>
+  <p class="meta">So "the line is done" is a Stop or a PostCompact. A line that starts no turn says nothing at all.</p>
+</section>
+
+<section class="card">
+  <h2>The same in every approach</h2>
+  <ul>
+    <li><b>Idle is reliable for both harnesses.</b> Claude Code gets <code>Adapter::turn</code> too. Both map UserPromptSubmit and PreCompact to Began, Stop and PostCompact to Ended (Codex keeps Interrupt). A Claude Code Stop only clears the marker, its news stays <code>flow wait</code>'s. <code>flow wait</code> marks the session busy when it wakes it with news, since that turn runs no prompt hook.</li>
+    <li><b>When a line is typed:</b> the session had its first turn, is not busy, nobody typed into the pane for 10 s, and the line before it is done. The server marks the session busy as it types, so the next line waits for that turn's end.</li>
+    <li><b>A line that starts no turn</b> (<code>/cost</code>, a typo) holds the queue at most 30 s, then counts as done.</li>
+    <li><b>Refused</b> like <code>flow send</code>: from a worker, empty, unknown, finished, no worker, plain. Also a line with a newline: it is what you type before Enter.</li>
+    <li>Codex sees two new hooks (PreCompact, PostCompact), so it asks once to review flow's hooks again.</li>
+    <li>An Esc-interrupted Claude Code worker runs no hook, so it stays busy and a queued line waits until its next prompt.</li>
+  </ul>
+</section>
+
+<div class="legend"><span class="box new">new</span><span class="box mod">modified</span><span class="box">existing</span></div>
+
+<section class="card rec">
+  <h2>A. The log holds the queue <span class="pill">recommended</span></h2>
+  <p><code>flow send --type</code> appends a new <code>Typed { text }</code> event, like <code>Message</code>. The server keeps a count of the lines it typed per flow in <code>waits/&lt;id&gt;.typed</code>, next to <code>.delivered</code>, and types the next one when the pane is ready. The timeline shows <code>master typed: /compact</code>.</p>
+  <div class="dia">
+    <div class="row"><span class="box mod">flow send --type</span><span class="arrow">-&gt;</span><span class="box new">Typed { text }</span><span class="arrow">-&gt;</span><span class="box">flows/&lt;id&gt;.jsonl</span></div>
+    <div class="row"><span class="box">flows/&lt;id&gt;.jsonl</span><span class="arrow">-&gt;</span><span class="box new">Server::type_lines</span><span class="arrow">-&gt;</span><span class="box">Host::write (PTY)</span></div>
+    <div class="row"><span class="box mod">flow hook / flow wait</span><span class="arrow">-&gt;</span><span class="box">waits/&lt;id&gt;.busy</span><span class="arrow">-&gt;</span><span class="box new">Server::type_lines</span><span class="arrow">&lt;-&gt;</span><span class="box new">waits/&lt;id&gt;.typed</span></div>
+  </div>
+  <div class="cols">
+    <div><h3>Gains</h3><ul class="plus">
+      <li>Mirrors <code>Message</code> and <code>.delivered</code> exactly: same refusals, same counting, same file layout.</li>
+      <li>Works without the server running: lines wait until <code>flow ui</code> opens the pane, and survive a server restart.</li>
+      <li>The record of what was typed into a worker is in its log and timeline.</li>
+      <li>No protocol change between UI and server.</li>
+    </ul></div>
+    <div><h3>Costs</h3><ul class="minus">
+      <li>One new event kind; an older binary folding the log skips it.</li>
+      <li>The command cannot say "typed": it answers "queued", the timeline shows when.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>B. The server holds the queue</h2>
+  <p><code>flow send --type</code> connects to the server's socket with a new <code>ClientMsg::Type { flow, text }</code>. The server keeps the lines per pane in memory and types them as in A.</p>
+  <div class="dia">
+    <div class="row"><span class="box mod">flow send --type</span><span class="arrow">-&gt;</span><span class="box mod">client</span><span class="arrow">-&gt;</span><span class="box new">ClientMsg::Type</span><span class="arrow">-&gt;</span><span class="box new">Server queue (memory)</span><span class="arrow">-&gt;</span><span class="box">Host::write</span></div>
+  </div>
+  <div class="cols">
+    <div><h3>Gains</h3><ul class="plus">
+      <li>The command can refuse a flow whose pane is not open.</li>
+      <li>No new event or waits file.</li>
+    </ul></div>
+    <div><h3>Costs</h3><ul class="minus">
+      <li>Fails when no server runs; queued lines are lost when the server stops or restarts on an upgrade.</li>
+      <li><code>PROTOCOL_VERSION</code> 6, and <code>flow send</code> needs a socket client next to its store write.</li>
+      <li>Nothing records what was typed.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Rejected: let the worker run it</h2>
+  <p>Sending <code>/compact</code> as a message and telling the worker to compact itself does not work: a model cannot run a harness's slash command. Typing into the PTY is the only way short of the harnesses' own control APIs (Codex's <code>codex queue</code> refuses a session with <code>-c</code> overrides, <code>HANDOVER.md</code>).</p>
+</section>
+
+<section class="card">
+  <h2>The command</h2>
+  <p>A public surface, so your call. Recommended: a flag on <code>send</code>, one line per call, calls queue in order:</p>
+<pre>flow send --type shop-217 /compact
+flow send --type shop-217 "continue shipping"</pre>
+  <p>Alternatives: a variadic <code>flow send --type shop-217 /compact "continue shipping"</code> (one call, one line per argument), or a separate verb <code>flow type shop-217 /compact</code>. The flag keeps one verb for "the master tells a worker", and the recommended form keeps <code>&lt;flow&gt; &lt;text&gt;</code> as <code>send</code> has it.</p>
+</section>
+
+<section class="card">
+  <h2>Recommendation</h2>
+  <p>A, with <code>flow send --type &lt;flow&gt; &lt;line&gt;</code>. The log already is the queue for messages, and a queue that survives a server restart matters when you queue <code>/compact</code> and "continue shipping" from a phone and walk away.</p>
+  <p>Please pick A or B, and the command shape.</p>
+</section>
+</main>
