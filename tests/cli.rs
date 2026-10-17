@@ -375,6 +375,34 @@ fn a_flow_walks_the_configured_workflow_and_refuses_another_phase() {
 }
 
 #[test]
+fn a_plain_session_refuses_a_phase_and_says_it_has_none() {
+    let home = TempDir::new().unwrap();
+    fs::create_dir_all(home.path().join("flows")).unwrap();
+    fs::write(
+        home.path().join("flows/scratch-id.jsonl"),
+        "{\"v\":1,\"at\":1,\"kind\":\"started\",\"name\":\"scratch\",\"request\":\"\",\"mode\":\"plain\"}\n",
+    )
+    .unwrap();
+
+    let report = flow(
+        home.path(),
+        &["report", "--flow", "scratch", "phase", "plan"],
+    );
+
+    assert_eq!(report.status.code(), Some(1));
+    assert!(
+        stdout(&report).starts_with("error: scratch has no phase plan"),
+        "{}",
+        stdout(&report)
+    );
+    assert!(
+        stdout(&report).contains("scratch is a plain session, which has no phases"),
+        "{}",
+        stdout(&report)
+    );
+}
+
+#[test]
 fn report_takes_a_flow_name_from_the_flag() {
     let home = TempDir::new().unwrap();
     new_flow(home.path(), "shop-221");

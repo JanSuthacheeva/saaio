@@ -19,7 +19,10 @@ pub struct Args {
 #[derive(Debug, Subcommand)]
 enum ReportEvent {
     /// The flow entered a phase
-    Phase { phase: Phase },
+    Phase {
+        /// One of the flow's phases, as `flow status <name>` lists them: plan, implement, ...
+        phase: Phase,
+    },
     /// Work goes on, after a stop or a subagent
     Working,
     /// A subagent works on the flow
@@ -72,9 +75,14 @@ impl ReportEvent {
 /// The failure for a phase the flow's workflow does not have; the help lists the ones it has.
 fn no_phase(flow: &FlowView, phase: &Phase) -> Failure {
     let phases: Vec<&str> = flow.steps.iter().map(|step| step.phase.name()).collect();
+    let help = if flow.is_plain() {
+        format!("{} is a plain session, which has no phases", flow.name)
+    } else {
+        format!("Phases: {}", phases.join(", "))
+    };
     Failure::error(
         format!("{} has no phase {}", flow.name, phase.name()),
-        vec![format!("Phases: {}", phases.join(", "))],
+        vec![help],
     )
 }
 
