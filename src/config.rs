@@ -7,11 +7,8 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
 
 use crate::adapter::Adapter;
-use crate::event::Phase;
 use crate::ui::prefix::Prefix;
-
-/// Skill name -> the phase it starts, for adapters that see skills start.
-pub type PhaseMap = BTreeMap<String, Phase>;
+use crate::workflow::Workflow;
 
 /// How to launch one agent: its command line, the first prompt it gets, and how to resume it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -32,8 +29,9 @@ pub struct Agent {
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub agents: BTreeMap<String, Agent>,
-    /// Skill name -> phase: the built-in map with the file's entries over it.
-    pub phases: PhaseMap,
+    /// [[phases]]: the built-in workflow unless the file has one.
+    #[serde(rename = "phases")]
+    pub workflow: Workflow,
     pub worker: WorkerConfig,
     pub master: MasterConfig,
     pub ui: UiConfig,
@@ -106,31 +104,35 @@ impl Config {
         Ok(config)
     }
 
-    /// The file's text as a Config; refuses the top-level `agent` key, naming [worker] agent.
+    /// The file's text as a Config; refuses the top-level `agent` key, naming [worker] agent, and
+    /// the [phases] skill table, naming [[phases]].
     fn parse(text: &str) -> Result<Config> {
         let read = |error: toml::de::Error| anyhow!("{}", error.to_string().trim_end());
         let table: toml::Table = toml::from_str(text).map_err(read)?;
         if table.contains_key("agent") {
             bail!("the top-level `agent` key is now `agent` under [worker]");
         }
+        if table.get("phases").is_some_and(toml::Value::is_table) {
+            bail!(
+                "[phases] is now a list of phases: [[phases]] with name = \"plan\" and \
+                 skills = [\"design-code\"], one per phase in order"
+            );
+        }
         toml::from_str(text).map_err(read)
     }
 
-    /// The built-in agents and phases alone, as if there were no config file.
+    /// The built-in agents and workflow alone, as if there were no config file.
     pub fn builtin() -> Config {
         let mut config = Config::default();
         config.add_builtins();
         config
     }
 
-    /// The built-in agents and phases under what the file set.
+    /// The built-in agents under what the file set.
     fn add_builtins(&mut self) {
         let mut agents = builtin_agents();
         agents.append(&mut self.agents);
         self.agents = agents;
-        let mut phases = builtin_phases();
-        phases.append(&mut self.phases);
-        self.phases = phases;
     }
 
     /// The master's agent: [master] agent, else MASTER_AGENT, else the default agent; None when
@@ -175,18 +177,6 @@ pub fn config_file(
     set(flow_config)
         .or_else(|| set(xdg_config).map(|dir| dir.join("flow/config.toml")))
         .or_else(|| set(home).map(|dir| dir.join(".config/flow/config.toml")))
-}
-
-/// The phases of the agent-skills chain: design-code, implement-plan, review-changes,
-/// write-merge-request. A config file adds others or points these elsewhere.
-pub fn builtin_phases() -> PhaseMap {
-    let phase = |name: &str| name.parse().expect("a built-in phase name is valid");
-    PhaseMap::from([
-        ("design-code".to_string(), phase("design")),
-        ("implement-plan".to_string(), phase("implement")),
-        ("review-changes".to_string(), phase("review")),
-        ("write-merge-request".to_string(), phase("merge-request")),
-    ])
 }
 
 fn strings(parts: &[&str]) -> Vec<String> {
@@ -269,26 +259,28 @@ mod tests {
     }
 
     #[test]
-    fn maps_the_agent_skills_to_phases_and_takes_more_from_the_file() {
+    fn reads_the_workflow_from_the_file_or_takes_the_built_in_one() {
         let dir = TempDir::new().unwrap();
         let file = dir.path().join("config.toml");
         fs::write(
             &file,
-            "[phases]\nbrainstorm = \"design\"\nreview-changes = \"implement\"\n",
+            "[[phases]]\nname = \"spec\"\nskills = [\"brainstorming\"]\n\n\
+             [[phases]]\nname = \"build\"\nskills = [\"executing-plans\", \"tdd\"]\n",
         )
         .unwrap();
 
         let config = Config::load(Some(file), None, None).unwrap();
         let none = Config::load(Some(dir.path().join("missing.toml")), None, None).unwrap();
 
-        assert_eq!(none.phases, builtin_phases());
-        assert_eq!(config.phases["brainstorm"], Phase::of("design"));
+        assert_eq!(none.workflow, Workflow::builtin());
         assert_eq!(
-            config.phases["review-changes"],
-            Phase::of("implement"),
-            "the file wins"
+            config.workflow,
+            Workflow::of(&[
+                ("spec", &["brainstorming"]),
+                ("build", &["executing-plans", "tdd"])
+            ]),
+            "the file's list replaces the built-in one whole"
         );
-        assert_eq!(config.phases["design-code"], Phase::of("design"));
         assert_eq!(
             none.agent(None).unwrap().1.adapter,
             Some(Adapter::ClaudeCode)
@@ -297,6 +289,46 @@ mod tests {
             none.agent(Some(MASTER_AGENT)).unwrap().1.adapter,
             Some(Adapter::ClaudeCode)
         );
+    }
+
+    #[test]
+    fn refuses_a_workflow_it_cannot_draw_on_its_line() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        let error = |text: &str| {
+            fs::write(&file, text).unwrap();
+            format!(
+                "{:#}",
+                Config::load(Some(file.clone()), None, None).unwrap_err()
+            )
+        };
+        let phase = |name: &str| format!("[[phases]]\nname = \"{name}\"\n");
+
+        let five = error(&["a", "b", "c", "d", "e"].map(phase).concat());
+        assert!(five.contains(&file.display().to_string()), "{five}");
+        assert!(five.contains("a workflow has 1 to 4 phases"), "{five}");
+        let twice = error(&[phase("review"), phase("review")].concat());
+        assert!(twice.contains("two phases are named review"), "{twice}");
+        let name = error(&phase("Review"));
+        assert!(name.contains("lowercase letters, digits and -"), "{name}");
+        assert!(name.contains("line 2"), "{name}");
+        let key = error("[[phases]]\nname = \"plan\"\nskill = [\"design-code\"]\n");
+        assert!(key.contains("skill"), "{key}");
+    }
+
+    #[test]
+    fn names_the_new_shape_when_the_file_has_the_old_phases_table() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        fs::write(&file, "[phases]\nbrainstorm = \"design\"\n").unwrap();
+
+        let error = format!(
+            "{:#}",
+            Config::load(Some(file.clone()), None, None).unwrap_err()
+        );
+
+        assert!(error.contains(&file.display().to_string()), "{error}");
+        assert!(error.contains("[[phases]]"), "{error}");
     }
 
     #[test]

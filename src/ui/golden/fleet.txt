@@ -10,7 +10,7 @@
                                                                                                             │     migration needs a default value f…
                                                                                                             │
                                                                                                             │ 2 ● shop-230                       31m
-                                                                                                            │     ●───○───○───○ design
+                                                                                                            │     ●───○───○───○ plan
                                                                                                             │     Which approach: a channel column …
                                                                                                             │
                                                                                                             │ RUNNING 1

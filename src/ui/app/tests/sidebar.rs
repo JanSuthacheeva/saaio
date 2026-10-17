@@ -58,7 +58,7 @@ fn draws_the_fleet_in_the_sidebar_grouped_by_what_it_needs() {
     );
     assert_eq!(
         side(&terminal, 10),
-        "     ●───○───○───○ design               "
+        "     ●───○───○───○ plan                 "
     );
     assert_eq!(side(&terminal, 13).trim_end(), " RUNNING 1");
     assert!(side(&terminal, 14).starts_with(" 3 ◓ export-csv"));
@@ -91,7 +91,7 @@ fn focuses_a_worker_by_digit_or_click_and_marks_it() {
     let terminal = render_at(&app, FLEET);
     let title = row(&terminal, 0);
     assert!(
-        title.starts_with(" ● shop-230  ●───○───○───○ design  · flow/shop-230 · slot 1 "),
+        title.starts_with(" ● shop-230  ●───○───○───○ plan  · flow/shop-230 · slot 1 "),
         "{title}"
     );
     assert!(
@@ -733,7 +733,7 @@ fn a_branch_too_cut_to_read_leaves_the_title() {
     let title = row(&render_at(&app, narrow), 0);
 
     assert!(
-        title.starts_with(" ● shop-230  ●───○───○───○ design "),
+        title.starts_with(" ● shop-230  ●───○───○───○ plan "),
         "{title}"
     );
     assert!(!title.contains("· …"), "{title}");

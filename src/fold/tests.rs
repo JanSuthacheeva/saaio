@@ -247,7 +247,7 @@ fn says_whether_an_event_changes_what_the_flow_shows() {
         "id",
         &[started],
         &EventKind::Phase {
-            phase: Phase::of("design")
+            phase: Phase::of("plan")
         },
         2
     ));
@@ -274,10 +274,10 @@ fn a_plain_session_has_no_steps_but_keeps_its_phase() {
         State::Idle,
         "it opens at an empty prompt"
     );
-    let flow = view(&[plain, phase(2, Phase::of("design"))], 3);
+    let flow = view(&[plain, phase(2, Phase::of("plan"))], 3);
 
     assert!(flow.steps.is_empty());
-    assert_eq!(flow.phase, Some(Phase::of("design")));
+    assert_eq!(flow.phase, Some(Phase::of("plan")));
 }
 
 #[test]
@@ -303,7 +303,7 @@ fn a_started_flow_is_working_with_four_open_steps() {
             .iter()
             .map(|step| step.phase.name())
             .collect::<Vec<_>>(),
-        ["design", "implement", "review", "merge-request"]
+        ["plan", "implement", "review", "merge-request"]
     );
     assert_eq!(steps(&flow), vec![(StepStatus::Open, None); 4]);
     assert_eq!(texts(&flow), vec!["started"]);
@@ -315,7 +315,7 @@ fn phases_close_the_previous_step_and_the_current_one_runs_until_now() {
     let flow = view(
         &[
             started(0),
-            phase(0, Phase::of("design")),
+            phase(0, Phase::of("plan")),
             phase(9 * MIN, Phase::of("implement")),
         ],
         40 * MIN,
@@ -333,7 +333,7 @@ fn phases_close_the_previous_step_and_the_current_one_runs_until_now() {
     );
     assert_eq!(
         texts(&flow),
-        vec!["started", "phase: design", "phase: implement"]
+        vec!["started", "phase: plan", "phase: implement"]
     );
     assert_eq!(flow.timeline[1].tone, Tone::Progress);
     assert_eq!(flow.changed_at, 9 * MIN);
@@ -364,12 +364,12 @@ fn going_back_a_phase_adds_to_its_time_and_keeps_later_steps_done() {
 
 #[test]
 fn the_same_phase_reported_twice_changes_nothing() {
-    let once = view(&[started(0), phase(1, Phase::of("design"))], 10);
+    let once = view(&[started(0), phase(1, Phase::of("plan"))], 10);
     let twice = view(
         &[
             started(0),
-            phase(1, Phase::of("design")),
-            phase(5, Phase::of("design")),
+            phase(1, Phase::of("plan")),
+            phase(5, Phase::of("plan")),
         ],
         10,
     );

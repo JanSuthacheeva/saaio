@@ -147,7 +147,7 @@ mod tests {
                 phases: None,
             },
             EventKind::Phase {
-                phase: Phase::of("design"),
+                phase: Phase::of("plan"),
             },
             EventKind::Phase {
                 phase: Phase::of("implement"),
@@ -192,7 +192,7 @@ mod tests {
                 theme.ui.faint,
                 theme.ui.faint,
             ],
-            "design done, its join reached, implement current, the rest open"
+            "plan done, its join reached, implement current, the rest open"
         );
     }
 
@@ -215,13 +215,13 @@ mod tests {
         let phase = |phase| EventKind::Phase { phase };
 
         let ready = flow(vec![
-            phase(Phase::of("design")),
+            phase(Phase::of("plan")),
             EventKind::Idle {
                 note: "The design is ready for review.".into(),
             },
         ]);
         let working = flow(vec![
-            phase(Phase::of("design")),
+            phase(Phase::of("plan")),
             phase(Phase::of("implement")),
         ]);
         let told = flow(vec![

@@ -8,8 +8,8 @@ use std::path::Path;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::config::PhaseMap;
-use crate::event::{EventKind, Phase};
+use crate::event::EventKind;
+use crate::workflow::Workflow;
 
 /// The longest text an adapter puts into an event: a question, a reason, a description.
 pub const REPORT_TEXT_LIMIT: usize = 200;
@@ -150,19 +150,12 @@ impl Adapter {
     }
 
     /// The flow events one hook payload means; empty for one that means nothing.
-    pub fn translate(self, payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
+    pub fn translate(self, payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
         match self {
-            Adapter::ClaudeCode => claude_code::translate(payload, phases),
-            Adapter::Codex => codex::translate(payload, phases),
+            Adapter::ClaudeCode => claude_code::translate(payload, workflow),
+            Adapter::Codex => codex::translate(payload, workflow),
         }
     }
-}
-
-/// The phase a skill starts: "/design-code" and "plugin:design-code" both look up "design-code".
-pub fn phase_of(skill: &str, phases: &PhaseMap) -> Option<Phase> {
-    let name = skill.trim_start_matches('/');
-    let name = name.rsplit(':').next().unwrap_or(name);
-    phases.get(name).cloned()
 }
 
 /// Text cut to REPORT_TEXT_LIMIT chars.
@@ -182,13 +175,6 @@ mod tests {
         assert_eq!(Adapter::named(adapter.name()), Some(adapter));
     }
 
-    fn phases() -> PhaseMap {
-        PhaseMap::from([
-            ("design-code".to_string(), Phase::of("design")),
-            ("implement-plan".to_string(), Phase::of("implement")),
-        ])
-    }
-
     #[test]
     fn knows_claude_code_by_name() {
         assert_eq!(Adapter::named("claude-code"), Some(Adapter::ClaudeCode));
@@ -196,22 +182,6 @@ mod tests {
         assert_eq!(Adapter::named("codex"), Some(Adapter::Codex));
         assert_eq!(Adapter::Codex.name(), "codex");
         assert_eq!(Adapter::named("pi"), None);
-    }
-
-    #[test]
-    fn finds_the_phase_of_a_skill_with_or_without_a_slash_or_plugin() {
-        let phases = phases();
-
-        assert_eq!(phase_of("design-code", &phases), Some(Phase::of("design")));
-        assert_eq!(
-            phase_of("/implement-plan", &phases),
-            Some(Phase::of("implement"))
-        );
-        assert_eq!(
-            phase_of("buzzwoo-standard:design-code", &phases),
-            Some(Phase::of("design"))
-        );
-        assert_eq!(phase_of("commit", &phases), None);
     }
 
     #[test]

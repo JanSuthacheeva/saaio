@@ -754,7 +754,7 @@ fn a_hook_event_reports_into_the_flow_silently_and_only_once() {
         assert!(output.stdout.is_empty(), "{}", stdout(output));
     }
     let detail = stdout(&flow(home.path(), &["status", "shop-221"]));
-    assert!(detail.contains("phase: design"), "{detail}");
+    assert!(detail.contains("phase: plan"), "{detail}");
     let log = fs::read_to_string(home.path().join(format!("flows/{id}.jsonl"))).unwrap();
     assert_eq!(
         log.lines()
@@ -1072,7 +1072,7 @@ fn a_hook_keeps_reporting_when_the_config_does_not_load() {
     let err = String::from_utf8_lossy(&output.stderr);
     assert!(err.contains("no-config.toml is not valid"), "{err}");
     let detail = stdout(&flow(home.path(), &["status", "shop-221"]));
-    assert!(detail.contains("phase: design"), "{detail}");
+    assert!(detail.contains("phase: plan"), "{detail}");
 }
 
 #[test]

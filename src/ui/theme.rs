@@ -642,7 +642,7 @@ mod tests {
         let phase = |phase| Style::default().fg(Palette::FLOW.color(phase));
 
         assert_eq!(
-            theme.flow_style(&flow(State::Working, Some(Phase::of("design")))),
+            theme.flow_style(&flow(State::Working, Some(Phase::of("plan")))),
             phase(PaletteKey::Design)
         );
         assert_eq!(

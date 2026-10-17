@@ -479,7 +479,7 @@ mod tests {
             Mode::Guided,
             vec![
                 EventKind::Phase {
-                    phase: Phase::of("design"),
+                    phase: Phase::of("plan"),
                 },
                 EventKind::Waiting {
                     question: "Which approach?".into(),
@@ -494,7 +494,7 @@ mod tests {
         });
 
         assert_eq!(card[0], " 2 ● shop-230-rate-…  waiting ");
-        assert_eq!(card[1], "   ●───○───○───○  design", "no room for the mode");
+        assert_eq!(card[1], "   ●───○───○───○  plan", "no room for the mode");
         assert_eq!(styles.0, styles.1, "the question reads as text");
     }
 

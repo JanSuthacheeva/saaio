@@ -189,7 +189,7 @@ fn moves_over_the_board_and_jumps_into_a_card() {
     app.on_input(Routed::View(vec![Key::Char('2')]));
     let terminal = render_at(&app, FLEET);
     assert!(
-        row(&terminal, 17).trim_start().starts_with("design ● 31m"),
+        row(&terminal, 17).trim_start().starts_with("plan ● 31m"),
         "the steps under the header: {}",
         row(&terminal, 17)
     );

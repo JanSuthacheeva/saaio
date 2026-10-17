@@ -415,7 +415,7 @@ mod tests {
             Mode::Auto,
             vec![
                 EventKind::Phase {
-                    phase: crate::event::Phase::of("design"),
+                    phase: crate::event::Phase::of("plan"),
                 },
                 EventKind::Phase {
                     phase: crate::event::Phase::of("implement"),
@@ -435,7 +435,7 @@ mod tests {
         assert!(rows[0].starts_with(" 1 shop-221  "), "{rows:#?}");
         assert_eq!(
             rows[1].trim_start(),
-            "design ✓ 1m   implement ● 28m   review ○   MR ○"
+            "plan ✓ 1m   implement ● 28m   review ○   MR ○"
         );
         assert!(rows[2].starts_with("────"), "{rows:#?}");
         assert_eq!(rows[3], " TIMELINE");

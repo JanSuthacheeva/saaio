@@ -44,7 +44,7 @@ pub(super) fn sample_board(now: u64) -> Board {
             flow(
                 "shop-230",
                 vec![EventKind::Phase {
-                    phase: Phase::of("design"),
+                    phase: Phase::of("plan"),
                 }],
                 now,
             ),

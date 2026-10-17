@@ -10,7 +10,7 @@
                                                                                                             │     migration needs a default value f…
                             ╭─ keys ───────────────────────────────────────────╮                            │
                             │                                                  │                            │ 2 ● shop-230                       31m
-                            │  C-space then                                    │                            │     ●───○───○───○ design
+                            │  C-space then                                    │                            │     ●───○───○───○ plan
                             │    0-9      jump to a session (0 is the master)  │                            │     Which approach: a channel column …
                             │    j k      move the peek over the workers       │                            │
                             │    enter    jump into the peeked worker          │                            │ RUNNING 1

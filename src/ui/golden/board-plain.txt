@@ -3,7 +3,7 @@
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
     0   master                              you      1 ● shop-221                        blocked      2 ● shop-230                waiting for you
-      ~/projects/shop · main                           ●───●───○───○  implement                         ●───○───○───○  design  · guided
+      ~/projects/shop · main                           ●───●───○───○  implement                         ●───○───○───○  plan  · guided
       6 workers                                        4/9 tasks                             29m                                              31m
                                                        migration needs a default value for orde…        Which approach: a channel column or a jo…
 

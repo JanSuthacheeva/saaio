@@ -130,7 +130,7 @@ fn fleet() -> Board {
             Auto,
             29,
             vec![
-                phase("design"),
+                phase("plan"),
                 phase("implement"),
                 tasks(4, 9),
                 EventKind::Blocked {
@@ -143,7 +143,7 @@ fn fleet() -> Board {
             Guided,
             31,
             vec![
-                phase("design"),
+                phase("plan"),
                 EventKind::Waiting {
                     question: "Which approach: a channel column or a join table?".into(),
                 },
@@ -154,7 +154,7 @@ fn fleet() -> Board {
             Auto,
             60,
             vec![
-                phase("design"),
+                phase("plan"),
                 phase("implement"),
                 phase("review"),
                 tasks(6, 6),

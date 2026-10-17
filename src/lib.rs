@@ -18,4 +18,5 @@ mod text;
 mod ui;
 mod view;
 mod wake;
+mod workflow;
 mod workspace;

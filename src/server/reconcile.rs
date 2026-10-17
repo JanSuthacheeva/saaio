@@ -78,7 +78,7 @@ mod tests {
         );
         Config {
             agents,
-            phases: crate::config::builtin_phases(),
+            workflow: crate::workflow::Workflow::builtin(),
             ..Config::default()
         }
     }

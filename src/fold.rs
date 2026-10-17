@@ -4,9 +4,7 @@ use crate::view::{
     Board, FlowView, ReviewCount, Session, State, Step, StepStatus, Tasks, TimelineEntry, Tone,
     VIEW_VERSION, Workspace,
 };
-
-/// The phases every flow has, until a flow records its own.
-const BUILTIN_PHASES: [&str; 4] = ["design", "implement", "review", "merge-request"];
+use crate::workflow::Workflow;
 
 /// A flow with a heartbeat older than this, not done or ended, is not responding.
 pub const SILENT_AFTER_MS: u64 = 90_000;
@@ -19,16 +17,17 @@ pub fn fold<'a>(
     now: u64,
 ) -> Option<FlowView> {
     let mut events = events.into_iter();
-    let (name, request, mode, at) = events.by_ref().find_map(|event| match &event.kind {
-        EventKind::Started {
-            name,
-            request,
-            mode,
-            ..
-        } => Some((name, request, *mode, event.at)),
-        _ => None,
-    })?;
-    let mut folding = Folding::new(id, name, request, mode, at);
+    let (name, request, mode, phases, at) =
+        events.by_ref().find_map(|event| match &event.kind {
+            EventKind::Started {
+                name,
+                request,
+                mode,
+                phases,
+            } => Some((name, request, *mode, phases.as_deref(), event.at)),
+            _ => None,
+        })?;
+    let mut folding = Folding::new(id, name, request, mode, phases, at);
     for event in events {
         folding.apply(event);
     }
@@ -126,6 +125,8 @@ pub fn master_state(kinds: &[EventKind]) -> Option<State> {
 struct Folding {
     view: FlowView,
     phases: Vec<Phase>,
+    /// No list recorded: "design" reads as "plan".
+    legacy: bool,
     /// By position in phases.
     durations: Vec<Option<u64>>,
     entered: Vec<bool>,
@@ -134,7 +135,14 @@ struct Folding {
 }
 
 impl Folding {
-    fn new(id: &str, name: &str, request: &str, mode: Mode, at: u64) -> Folding {
+    fn new(
+        id: &str,
+        name: &str,
+        request: &str,
+        mode: Mode,
+        phases: Option<&[Phase]>,
+        at: u64,
+    ) -> Folding {
         let view = FlowView {
             id: id.to_string(),
             name: name.to_string(),
@@ -161,12 +169,11 @@ impl Folding {
             answer: None,
             session: None,
         };
-        let phases: Vec<Phase> = BUILTIN_PHASES
-            .iter()
-            .map(|name| name.parse().expect("a built-in phase name is valid"))
-            .collect();
+        let legacy = phases.is_none();
+        let phases = phases.map_or_else(|| Workflow::builtin().phases(), <[Phase]>::to_vec);
         Folding {
             view,
+            legacy,
             durations: vec![None; phases.len()],
             entered: vec![false; phases.len()],
             phases,
@@ -186,7 +193,7 @@ impl Folding {
             EventKind::Started { .. } => {}
             EventKind::Phase { phase } => {
                 if let Some(position) = self.position(phase)
-                    && self.view.phase.as_ref() != Some(phase)
+                    && self.view.phase.as_ref() != Some(&self.phases[position])
                 {
                     self.enter(position, at);
                     // A delegate can start the phase itself, as a review in a fresh agent does.
@@ -195,7 +202,8 @@ impl Folding {
                         self.view.delegate = None;
                     }
                     self.view.blocker = None;
-                    self.note(at, format!("phase: {}", phase.name()), Tone::Progress);
+                    let text = format!("phase: {}", self.phases[position].name());
+                    self.note(at, text, Tone::Progress);
                 }
             }
             EventKind::Working => {
@@ -312,9 +320,14 @@ impl Folding {
         }
     }
 
-    /// Where `phase` stands in the flow's phases; None when it has none of that name.
+    /// Where `phase` stands in the flow's phases (after the legacy rename); None when it has none.
     fn position(&self, phase: &Phase) -> Option<usize> {
-        self.phases.iter().position(|known| known == phase)
+        let phase = if self.legacy {
+            legacy_name(phase)
+        } else {
+            phase.clone()
+        };
+        self.phases.iter().position(|known| *known == phase)
     }
 
     fn enter(&mut self, position: usize, at: u64) {
@@ -385,6 +398,14 @@ impl Folding {
             })
             .collect();
         self.view
+    }
+}
+
+/// "design" -> "plan", for logs written before phases were configurable.
+fn legacy_name(phase: &Phase) -> Phase {
+    match phase.name() {
+        "design" => "plan".parse().expect("a built-in phase name is valid"),
+        _ => phase.clone(),
     }
 }
 

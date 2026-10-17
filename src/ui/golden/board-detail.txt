@@ -3,7 +3,7 @@
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
                                                    ▌
     0   master                              you    ▌ 1 ● shop-221                        blocked      2 ● shop-230                waiting for you
-      ~/projects/shop · main                       ▌   ●───●───○───○  implement                         ●───○───○───○  design  · guided
+      ~/projects/shop · main                       ▌   ●───●───○───○  implement                         ●───○───○───○  plan  · guided
       4 workers                                    ▌   4/9 tasks                             29m                                              31m
                                                    ▌   migration needs a default value for orde…        Which approach: a channel column or a jo…
                                                    ▌
@@ -16,11 +16,11 @@
 
 
   1 shop-221  shop-221 · auto · flow/shop-221 · slot 1 · started 29m ago
-              design ✓ 0s   implement ● 29m   review ○   MR ○
+              plan ✓ 0s   implement ● 29m   review ○   MR ○
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   TIMELINE                                                                                DECISIONS
   16:11  ● started                                                                        · exported_at stays nullable
-  16:11  ● phase: design
+  16:11  ● phase: plan
   16:11  ● phase: implement                                                               LAST ANSWER
   16:11  ● blocked: migration needs a default value for orders.exported_at                The migration adds orders.exported_at, but the column has
                                                                                           no default and the table holds 2.1M rows. Which default

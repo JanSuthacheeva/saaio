@@ -43,7 +43,7 @@ fn start_with_agents(
     let store = Store::at(dir.to_path_buf());
     let config = Config {
         agents,
-        phases: crate::config::builtin_phases(),
+        workflow: crate::workflow::Workflow::builtin(),
         ..Config::default()
     };
     let handle = thread::spawn(move || {

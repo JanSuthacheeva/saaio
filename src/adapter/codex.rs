@@ -5,9 +5,9 @@ use serde_json::Value;
 
 use crate::adapter::answer::turn_end;
 use crate::adapter::calls::{created_merge_request, tool_call};
-use crate::adapter::{Adapter, Turn, cut, phase_of};
-use crate::config::PhaseMap;
+use crate::adapter::{Adapter, Turn, cut};
 use crate::event::{EventKind, Phase};
+use crate::workflow::Workflow;
 
 /// The hook events flow listens to.
 const EVENTS: [&str; 6] = [
@@ -49,7 +49,7 @@ pub fn hooks(flow_exe: &Path) -> Vec<String> {
 
 /// The flow events one Codex hook payload means: first the session it runs in, then what it did.
 /// Of a subagent's events (agent_id set) only a phase skill it reads counts.
-pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
+pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
     let tool = payload["tool_name"].as_str().unwrap_or("");
     let input = &payload["tool_input"];
     let event = payload["hook_event_name"].as_str().unwrap_or("");
@@ -58,7 +58,7 @@ pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
         return input["command"]
             .as_str()
             .filter(|_| reads)
-            .and_then(|command| read_phase(command, phases))
+            .and_then(|command| read_phase(command, workflow))
             .map(|phase| vec![EventKind::Phase { phase }])
             .unwrap_or_default();
     }
@@ -67,7 +67,7 @@ pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
         "UserPromptSubmit" => {
             kinds.push(EventKind::Working);
             let skill = payload["prompt"].as_str().and_then(mentioned_skill);
-            if let Some(phase) = skill.and_then(|skill| phase_of(skill, phases)) {
+            if let Some(phase) = skill.and_then(|skill| workflow.phase_of(skill)) {
                 kinds.push(EventKind::Phase { phase });
             }
         }
@@ -76,7 +76,7 @@ pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
         }),
         "PreToolUse" if tool == "Bash" => {
             let command = input["command"].as_str().unwrap_or("");
-            if let Some(phase) = read_phase(command, phases) {
+            if let Some(phase) = read_phase(command, workflow) {
                 kinds.push(EventKind::Phase { phase });
             }
         }
@@ -137,8 +137,8 @@ fn mentioned_skill(prompt: &str) -> Option<&str> {
 
 /// The phase of the first skill a shell command reads whose name is in the map: Codex reads
 /// ".../skills/<name>/SKILL.md", often several in one command.
-fn read_phase(command: &str, phases: &PhaseMap) -> Option<Phase> {
-    read_skills(command).find_map(|skill| phase_of(skill, phases))
+fn read_phase(command: &str, workflow: &Workflow) -> Option<Phase> {
+    read_skills(command).find_map(|skill| workflow.phase_of(skill))
 }
 
 /// The skills whose SKILL.md a shell command reads: ".../skills/<name>/SKILL.md" -> name.
@@ -213,10 +213,10 @@ mod tests {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
     }
 
-    fn phases() -> PhaseMap {
-        PhaseMap::from([
-            ("demo-skill".to_string(), Phase::of("design")),
-            ("implement-plan".to_string(), Phase::of("implement")),
+    fn phases() -> Workflow {
+        Workflow::of(&[
+            ("plan", &["demo-skill"]),
+            ("implement", &["implement-plan"]),
         ])
     }
 
@@ -251,7 +251,7 @@ mod tests {
             after_session(vec![
                 EventKind::Working,
                 EventKind::Phase {
-                    phase: Phase::of("design")
+                    phase: Phase::of("plan")
                 }
             ])
         );
@@ -262,7 +262,7 @@ mod tests {
         assert_eq!(
             events("pre_bash_skill"),
             after_session(vec![EventKind::Phase {
-                phase: Phase::of("design")
+                phase: Phase::of("plan")
             }])
         );
     }
@@ -272,7 +272,7 @@ mod tests {
         let command = "cat /home/dev/.agents/skills/clickup-axi/SKILL.md && \
                        sed -n 1,200p '/home/dev/.agents/skills/demo-skill/SKILL.md'";
 
-        assert_eq!(read_phase(command, &phases()), Some(Phase::of("design")));
+        assert_eq!(read_phase(command, &phases()), Some(Phase::of("plan")));
         assert_eq!(read_phase("cat README.md", &phases()), None);
     }
 

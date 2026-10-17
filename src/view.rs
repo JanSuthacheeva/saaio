@@ -305,7 +305,7 @@ mod tests {
             merge_request: None,
             decisions: vec![],
             steps: vec![Step {
-                phase: Phase::of("design"),
+                phase: Phase::of("plan"),
                 status: StepStatus::Done,
                 duration_ms: Some(540_000),
             }],
