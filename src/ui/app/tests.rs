@@ -71,6 +71,7 @@ fn worker(id: &str, mode: crate::event::Mode, age: u64, events: Vec<EventKind>) 
                 name: id.into(),
                 request: id.into(),
                 mode,
+                phases: None,
             },
         ),
         Event::new(
@@ -98,6 +99,7 @@ fn plain_session(id: &str, folder: &str, age: u64, events: Vec<EventKind>) -> Fl
                 name: id.into(),
                 request: String::new(),
                 mode: crate::event::Mode::Plain,
+                phases: None,
             },
         ),
         Event::new(
@@ -117,8 +119,10 @@ fn plain_session(id: &str, folder: &str, age: u64, events: Vec<EventKind>) -> Fl
 
 fn fleet() -> Board {
     use crate::event::Mode::{Auto, Guided};
-    use crate::event::Phase::{Design, Implement, Review};
-    let phase = |phase| EventKind::Phase { phase };
+    use crate::event::Phase;
+    let phase = |name| EventKind::Phase {
+        phase: Phase::of(name),
+    };
     let tasks = |done, total| EventKind::Tasks { done, total };
     let flows = vec![
         worker(
@@ -126,8 +130,8 @@ fn fleet() -> Board {
             Auto,
             29,
             vec![
-                phase(Design),
-                phase(Implement),
+                phase("design"),
+                phase("implement"),
                 tasks(4, 9),
                 EventKind::Blocked {
                     reason: "migration needs a default value for orders.exported_at".into(),
@@ -139,7 +143,7 @@ fn fleet() -> Board {
             Guided,
             31,
             vec![
-                phase(Design),
+                phase("design"),
                 EventKind::Waiting {
                     question: "Which approach: a channel column or a join table?".into(),
                 },
@@ -150,9 +154,9 @@ fn fleet() -> Board {
             Auto,
             60,
             vec![
-                phase(Design),
-                phase(Implement),
-                phase(Review),
+                phase("design"),
+                phase("implement"),
+                phase("review"),
                 tasks(6, 6),
                 EventKind::Delegated {
                     description: "review changes".into(),

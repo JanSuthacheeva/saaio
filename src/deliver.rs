@@ -83,6 +83,7 @@ mod tests {
                 name: "csv".to_string(),
                 request: "SHOP-221 add CSV export".to_string(),
                 mode: Mode::Auto,
+                phases: None,
             },
         );
         store.create(&first).unwrap()

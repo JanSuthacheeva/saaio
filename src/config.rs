@@ -180,11 +180,12 @@ pub fn config_file(
 /// The phases of the agent-skills chain: design-code, implement-plan, review-changes,
 /// write-merge-request. A config file adds others or points these elsewhere.
 pub fn builtin_phases() -> PhaseMap {
+    let phase = |name: &str| name.parse().expect("a built-in phase name is valid");
     PhaseMap::from([
-        ("design-code".to_string(), Phase::Design),
-        ("implement-plan".to_string(), Phase::Implement),
-        ("review-changes".to_string(), Phase::Review),
-        ("write-merge-request".to_string(), Phase::MergeRequest),
+        ("design-code".to_string(), phase("design")),
+        ("implement-plan".to_string(), phase("implement")),
+        ("review-changes".to_string(), phase("review")),
+        ("write-merge-request".to_string(), phase("merge-request")),
     ])
 }
 
@@ -281,13 +282,13 @@ mod tests {
         let none = Config::load(Some(dir.path().join("missing.toml")), None, None).unwrap();
 
         assert_eq!(none.phases, builtin_phases());
-        assert_eq!(config.phases["brainstorm"], Phase::Design);
+        assert_eq!(config.phases["brainstorm"], Phase::of("design"));
         assert_eq!(
             config.phases["review-changes"],
-            Phase::Implement,
+            Phase::of("implement"),
             "the file wins"
         );
-        assert_eq!(config.phases["design-code"], Phase::Design);
+        assert_eq!(config.phases["design-code"], Phase::of("design"));
         assert_eq!(
             none.agent(None).unwrap().1.adapter,
             Some(Adapter::ClaudeCode)

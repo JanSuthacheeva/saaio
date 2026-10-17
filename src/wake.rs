@@ -83,6 +83,7 @@ mod tests {
                 name: id.into(),
                 request: id.into(),
                 mode: Mode::Auto,
+                phases: None,
             },
         )];
         events.extend(kinds.into_iter().map(|(at, kind)| Event::new(at, kind)));

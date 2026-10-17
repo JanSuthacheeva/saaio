@@ -215,8 +215,8 @@ mod tests {
 
     fn phases() -> PhaseMap {
         PhaseMap::from([
-            ("demo-skill".to_string(), Phase::Design),
-            ("implement-plan".to_string(), Phase::Implement),
+            ("demo-skill".to_string(), Phase::of("design")),
+            ("implement-plan".to_string(), Phase::of("implement")),
         ])
     }
 
@@ -251,7 +251,7 @@ mod tests {
             after_session(vec![
                 EventKind::Working,
                 EventKind::Phase {
-                    phase: Phase::Design
+                    phase: Phase::of("design")
                 }
             ])
         );
@@ -262,7 +262,7 @@ mod tests {
         assert_eq!(
             events("pre_bash_skill"),
             after_session(vec![EventKind::Phase {
-                phase: Phase::Design
+                phase: Phase::of("design")
             }])
         );
     }
@@ -272,7 +272,7 @@ mod tests {
         let command = "cat /home/dev/.agents/skills/clickup-axi/SKILL.md && \
                        sed -n 1,200p '/home/dev/.agents/skills/demo-skill/SKILL.md'";
 
-        assert_eq!(read_phase(command, &phases()), Some(Phase::Design));
+        assert_eq!(read_phase(command, &phases()), Some(Phase::of("design")));
         assert_eq!(read_phase("cat README.md", &phases()), None);
     }
 

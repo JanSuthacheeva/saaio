@@ -215,6 +215,7 @@ fn started_flow(store: &Store, dir: &Path, name: &str, agent: &str) -> String {
                 name: name.into(),
                 request: "x".into(),
                 mode: crate::event::Mode::Auto,
+                phases: None,
             },
         ))
         .unwrap();

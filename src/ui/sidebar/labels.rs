@@ -66,8 +66,8 @@ impl Sidebar<'_> {
             State::Done => Span::styled("done", theme.state.done),
             State::Ended => Span::styled("ended", theme.state.ended),
             State::NotResponding => Span::styled("not responding", theme.state.blocked),
-            _ => match (flow.phase, flow.state) {
-                (Some(phase), _) => Span::styled(phase.name(), theme.ui.text),
+            _ => match (&flow.phase, flow.state) {
+                (Some(phase), _) => Span::styled(phase.name().to_string(), theme.ui.text),
                 (None, State::Working) => Span::styled("starting", theme.ui.faint),
                 (None, State::Waiting) => Span::styled("waiting", theme.state.waiting),
                 (None, State::Idle) => Span::styled("idle", theme.ui.muted),
@@ -144,12 +144,13 @@ mod tests {
                 name: "shop".into(),
                 request: "x".into(),
                 mode: Mode::Auto,
+                phases: None,
             },
             EventKind::Phase {
-                phase: Phase::Design,
+                phase: Phase::of("design"),
             },
             EventKind::Phase {
-                phase: Phase::Implement,
+                phase: Phase::of("implement"),
             },
         ]
         .map(|kind| Event::new(0, kind));
@@ -205,6 +206,7 @@ mod tests {
                     name: "shop".into(),
                     request: "x".into(),
                     mode: Mode::Auto,
+                    phases: None,
                 },
             )];
             events.extend(kinds.into_iter().map(|kind| Event::new(1, kind)));
@@ -213,18 +215,21 @@ mod tests {
         let phase = |phase| EventKind::Phase { phase };
 
         let ready = flow(vec![
-            phase(Phase::Design),
+            phase(Phase::of("design")),
             EventKind::Idle {
                 note: "The design is ready for review.".into(),
             },
         ]);
-        let working = flow(vec![phase(Phase::Design), phase(Phase::Implement)]);
+        let working = flow(vec![
+            phase(Phase::of("design")),
+            phase(Phase::of("implement")),
+        ]);
         let told = flow(vec![
             EventKind::Message {
                 text: "Semicolons.".into(),
             },
             EventKind::Working,
-            phase(Phase::Implement),
+            phase(Phase::of("implement")),
         ]);
 
         assert_eq!(

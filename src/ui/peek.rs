@@ -390,6 +390,7 @@ mod tests {
                     name: "csv".into(),
                     request: "add csv".into(),
                     mode: crate::event::Mode::Guided,
+                    phases: None,
                 },
             ),
             crate::event::Event::new(

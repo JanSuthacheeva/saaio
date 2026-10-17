@@ -246,7 +246,9 @@ impl BoardView<'_> {
             State::Working => "working".into(),
             State::Idle => "ready".into(),
             State::Delegated if short => "agent".into(),
-            State::Delegated => format!("{} · agent", flow.phase.map_or("working", gerund)).into(),
+            State::Delegated => {
+                format!("{} · agent", flow.phase.as_ref().map_or("working", gerund)).into()
+            }
             State::Done => match flow.merge_request.as_deref() {
                 Some(url) if url.contains("/pull/") => "PR open".into(),
                 Some(_) => "MR open".into(),
@@ -372,12 +374,13 @@ impl BoardView<'_> {
     }
 }
 
-fn gerund(phase: Phase) -> &'static str {
-    match phase {
-        Phase::Design => "designing",
-        Phase::Implement => "implementing",
-        Phase::Review => "reviewing",
-        Phase::MergeRequest => "opening the MR",
+fn gerund(phase: &Phase) -> &str {
+    match phase.name() {
+        "design" => "designing",
+        "implement" => "implementing",
+        "review" => "reviewing",
+        "merge-request" => "opening the MR",
+        name => name,
     }
 }
 
@@ -422,7 +425,7 @@ mod tests {
             Mode::Guided,
             vec![
                 EventKind::Phase {
-                    phase: Phase::Implement,
+                    phase: Phase::of("implement"),
                 },
                 EventKind::Tasks { done: 4, total: 9 },
                 EventKind::Blocked {
@@ -476,7 +479,7 @@ mod tests {
             Mode::Guided,
             vec![
                 EventKind::Phase {
-                    phase: Phase::Design,
+                    phase: Phase::of("design"),
                 },
                 EventKind::Waiting {
                     question: "Which approach?".into(),

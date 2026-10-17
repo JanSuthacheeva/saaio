@@ -275,6 +275,7 @@ mod tests {
                     name: "csv".into(),
                     request: "add csv".into(),
                     mode: Mode::Guided,
+                    phases: None,
                 },
             ),
             Event::new(

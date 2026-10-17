@@ -470,12 +470,12 @@ impl Theme {
         }
     }
 
-    pub fn phase_style(&self, phase: Phase) -> Style {
-        match phase {
-            Phase::Design => self.phase.design,
-            Phase::Implement => self.phase.implement,
-            Phase::Review => self.phase.review,
-            Phase::MergeRequest => self.phase.merge_request,
+    pub fn phase_style(&self, phase: &Phase) -> Style {
+        match phase.name() {
+            "implement" => self.phase.implement,
+            "review" => self.phase.review,
+            "merge-request" => self.phase.merge_request,
+            _ => self.phase.design,
         }
     }
 
@@ -491,7 +491,7 @@ impl Theme {
 
     /// The phase's color when `colored` and the flow works in one, else its state's.
     fn tinted(&self, flow: &FlowView, colored: bool) -> Style {
-        match (flow.state, flow.phase) {
+        match (flow.state, &flow.phase) {
             (State::Working | State::Delegated, Some(phase)) if colored => self.phase_style(phase),
             (state, _) => self.state_style(state),
         }
@@ -642,15 +642,15 @@ mod tests {
         let phase = |phase| Style::default().fg(Palette::FLOW.color(phase));
 
         assert_eq!(
-            theme.flow_style(&flow(State::Working, Some(Phase::Design))),
+            theme.flow_style(&flow(State::Working, Some(Phase::of("design")))),
             phase(PaletteKey::Design)
         );
         assert_eq!(
-            theme.flow_style(&flow(State::Delegated, Some(Phase::Review))),
+            theme.flow_style(&flow(State::Delegated, Some(Phase::of("review")))),
             phase(PaletteKey::Review)
         );
         assert_eq!(
-            theme.flow_style(&flow(State::Working, Some(Phase::MergeRequest))),
+            theme.flow_style(&flow(State::Working, Some(Phase::of("merge-request")))),
             phase(PaletteKey::MergeRequest)
         );
         assert_eq!(
@@ -659,12 +659,12 @@ mod tests {
             "no phase yet"
         );
         assert_eq!(
-            theme.flow_style(&flow(State::Waiting, Some(Phase::Implement))),
+            theme.flow_style(&flow(State::Waiting, Some(Phase::of("implement")))),
             theme.state.waiting,
             "a flow that needs you keeps the state's color"
         );
         assert_eq!(
-            theme.flow_style(&flow(State::Idle, Some(Phase::Implement))),
+            theme.flow_style(&flow(State::Idle, Some(Phase::of("implement")))),
             theme.ui.muted
         );
     }
@@ -674,7 +674,7 @@ mod tests {
         let mut theme = Theme::from_palette(Palette::FLOW);
         let review = theme.phase.review;
         let working = theme.state.working;
-        let flow = flow(State::Delegated, Some(Phase::Review));
+        let flow = flow(State::Delegated, Some(Phase::of("review")));
         let styles = |theme: &Theme| (theme.step_style(&flow), theme.flow_style(&flow));
 
         assert_eq!(theme.phase_colors, PhaseColors::Steps, "the default");
@@ -688,7 +688,7 @@ mod tests {
     #[test]
     fn a_waiting_flow_keeps_its_state_color_at_every_level() {
         let mut theme = Theme::from_palette(Palette::FLOW);
-        let flow = flow(State::Waiting, Some(Phase::Implement));
+        let flow = flow(State::Waiting, Some(Phase::of("implement")));
         for level in [PhaseColors::Off, PhaseColors::Steps, PhaseColors::Full] {
             theme.phase_colors = level;
             assert_eq!(theme.step_style(&flow), theme.state.waiting, "{level:?}");

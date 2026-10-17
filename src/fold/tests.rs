@@ -125,7 +125,7 @@ fn a_phase_a_delegate_starts_keeps_the_flow_delegated() {
         Event::new(
             2,
             EventKind::Phase {
-                phase: Phase::Review,
+                phase: Phase::of("review"),
             },
         ),
     ];
@@ -133,7 +133,7 @@ fn a_phase_a_delegate_starts_keeps_the_flow_delegated() {
     let flow = fold("x", &events, None, 3).unwrap();
 
     assert_eq!(flow.state, State::Delegated);
-    assert_eq!(flow.phase, Some(Phase::Review));
+    assert_eq!(flow.phase, Some(Phase::of("review")));
     assert_eq!(flow.delegate.as_deref(), Some("reviewer"));
 }
 
@@ -169,7 +169,7 @@ fn kinds_that_say_no_state_leave_the_master_as_it_was() {
             text: "done".into(),
         },
         EventKind::Phase {
-            phase: Phase::Implement,
+            phase: Phase::of("implement"),
         },
     ];
 
@@ -184,6 +184,7 @@ fn started(at: u64) -> Event {
             name: "shop-221".into(),
             request: "SHOP-221 add CSV export".into(),
             mode: Mode::Auto,
+            phases: None,
         },
     )
 }
@@ -222,6 +223,7 @@ fn says_whether_an_event_changes_what_the_flow_shows() {
             name: "csv".into(),
             request: "x".into(),
             mode: Mode::Auto,
+            phases: None,
         },
     );
     let waiting = Event::new(
@@ -245,7 +247,7 @@ fn says_whether_an_event_changes_what_the_flow_shows() {
         "id",
         &[started],
         &EventKind::Phase {
-            phase: Phase::Design
+            phase: Phase::of("design")
         },
         2
     ));
@@ -263,6 +265,7 @@ fn a_plain_session_has_no_steps_but_keeps_its_phase() {
             name: "scratch".into(),
             request: String::new(),
             mode: Mode::Plain,
+            phases: None,
         },
     );
 
@@ -271,10 +274,10 @@ fn a_plain_session_has_no_steps_but_keeps_its_phase() {
         State::Idle,
         "it opens at an empty prompt"
     );
-    let flow = view(&[plain, phase(2, Phase::Design)], 3);
+    let flow = view(&[plain, phase(2, Phase::of("design"))], 3);
 
     assert!(flow.steps.is_empty());
-    assert_eq!(flow.phase, Some(Phase::Design));
+    assert_eq!(flow.phase, Some(Phase::of("design")));
 }
 
 #[test]
@@ -296,8 +299,11 @@ fn a_started_flow_is_working_with_four_open_steps() {
     assert_eq!(flow.started_at, 1_000);
     assert_eq!(flow.changed_at, 1_000);
     assert_eq!(
-        flow.steps.iter().map(|step| step.phase).collect::<Vec<_>>(),
-        Phase::ALL
+        flow.steps
+            .iter()
+            .map(|step| step.phase.name())
+            .collect::<Vec<_>>(),
+        ["design", "implement", "review", "merge-request"]
     );
     assert_eq!(steps(&flow), vec![(StepStatus::Open, None); 4]);
     assert_eq!(texts(&flow), vec!["started"]);
@@ -309,13 +315,13 @@ fn phases_close_the_previous_step_and_the_current_one_runs_until_now() {
     let flow = view(
         &[
             started(0),
-            phase(0, Phase::Design),
-            phase(9 * MIN, Phase::Implement),
+            phase(0, Phase::of("design")),
+            phase(9 * MIN, Phase::of("implement")),
         ],
         40 * MIN,
     );
 
-    assert_eq!(flow.phase, Some(Phase::Implement));
+    assert_eq!(flow.phase, Some(Phase::of("implement")));
     assert_eq!(
         steps(&flow),
         vec![
@@ -338,9 +344,9 @@ fn going_back_a_phase_adds_to_its_time_and_keeps_later_steps_done() {
     let flow = view(
         &[
             started(0),
-            phase(0, Phase::Implement),
-            phase(10 * MIN, Phase::Review),
-            phase(15 * MIN, Phase::Implement),
+            phase(0, Phase::of("implement")),
+            phase(10 * MIN, Phase::of("review")),
+            phase(15 * MIN, Phase::of("implement")),
         ],
         20 * MIN,
     );
@@ -358,9 +364,13 @@ fn going_back_a_phase_adds_to_its_time_and_keeps_later_steps_done() {
 
 #[test]
 fn the_same_phase_reported_twice_changes_nothing() {
-    let once = view(&[started(0), phase(1, Phase::Design)], 10);
+    let once = view(&[started(0), phase(1, Phase::of("design"))], 10);
     let twice = view(
-        &[started(0), phase(1, Phase::Design), phase(5, Phase::Design)],
+        &[
+            started(0),
+            phase(1, Phase::of("design")),
+            phase(5, Phase::of("design")),
+        ],
         10,
     );
 
@@ -384,7 +394,7 @@ fn a_new_phase_clears_a_blocker_and_a_delegate() {
                     reason: "no default".into(),
                 },
             ),
-            phase(3, Phase::Review),
+            phase(3, Phase::of("review")),
         ],
         4,
     );
@@ -570,7 +580,7 @@ fn a_merge_request_finishes_the_flow_and_every_step() {
     let flow = view(
         &[
             started(0),
-            phase(0, Phase::Review),
+            phase(0, Phase::of("review")),
             at(
                 6 * MIN,
                 EventKind::MergeRequest {
@@ -582,7 +592,7 @@ fn a_merge_request_finishes_the_flow_and_every_step() {
     );
 
     assert_eq!(flow.state, State::Done);
-    assert_eq!(flow.phase, Some(Phase::MergeRequest));
+    assert_eq!(flow.phase, Some(Phase::of("merge-request")));
     assert_eq!(flow.merge_request.as_deref(), Some("https://x/88"));
     assert_eq!(
         steps(&flow),
@@ -602,7 +612,7 @@ fn ended_stops_the_clock_but_keeps_a_done_flow_done() {
     let ended = view(
         &[
             started(0),
-            phase(0, Phase::Implement),
+            phase(0, Phase::of("implement")),
             at(5 * MIN, EventKind::Ended),
         ],
         60 * MIN,
@@ -629,7 +639,7 @@ fn ended_stops_the_clock_but_keeps_a_done_flow_done() {
 
 #[test]
 fn a_silent_heartbeat_means_not_responding_unless_finished() {
-    let running = [started(0), phase(0, Phase::Implement)];
+    let running = [started(0), phase(0, Phase::of("implement"))];
     let beat = Some(10 * MIN);
 
     assert_eq!(
@@ -761,6 +771,7 @@ fn ignores_a_second_started_event() {
                     name: "other".into(),
                     request: "other".into(),
                     mode: Mode::Guided,
+                    phases: None,
                 },
             ),
         ],

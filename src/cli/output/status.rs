@@ -46,7 +46,7 @@ enum FlowRows<'a> {
 struct FlowRow<'a> {
     name: &'a str,
     state: &'static str,
-    phase: &'static str,
+    phase: &'a str,
     tasks: String,
     age: String,
 }
@@ -68,7 +68,7 @@ fn board_list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool)
                 .map(|flow| FlowRow {
                     name: &flow.name,
                     state: flow.state.name(),
-                    phase: flow.phase.map_or("", Phase::name),
+                    phase: flow.phase.as_ref().map_or("", Phase::name),
                     tasks: flow
                         .tasks
                         .map(|tasks| tasks.to_string())
@@ -132,7 +132,7 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
         project: &'a str,
         name: &'a str,
         state: &'static str,
-        phase: &'static str,
+        phase: &'a str,
         tasks: String,
         age: String,
     }
@@ -160,7 +160,7 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
             project,
             name: &flow.name,
             state: flow.state.name(),
-            phase: flow.phase.map_or("", Phase::name),
+            phase: flow.phase.as_ref().map_or("", Phase::name),
             tasks: flow
                 .tasks
                 .map(|tasks| tasks.to_string())
@@ -220,7 +220,7 @@ pub(crate) fn detail(
         mode: &'static str,
         state: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
-        phase: Option<&'static str>,
+        phase: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         blocker: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -251,7 +251,7 @@ pub(crate) fn detail(
 
     #[derive(Serialize)]
     struct StepRow {
-        phase: &'static str,
+        phase: String,
         status: &'static str,
         duration: String,
     }
@@ -273,7 +273,7 @@ pub(crate) fn detail(
         request: cut(&flow.request),
         mode: flow.mode.name(),
         state: flow.state.name(),
-        phase: flow.phase.map(Phase::name),
+        phase: flow.phase.as_ref().map(|phase| phase.name().to_string()),
         blocker: flow.blocker.as_deref().map(cut),
         delegate: flow.delegate.as_deref().map(cut),
         tasks: flow.tasks.map(|tasks| tasks.to_string()),
@@ -287,7 +287,7 @@ pub(crate) fn detail(
             .steps
             .iter()
             .map(|step| StepRow {
-                phase: step.phase.name(),
+                phase: step.phase.name().to_string(),
                 status: step.status.name(),
                 duration: step.duration_ms.map(short_duration).unwrap_or_default(),
             })
@@ -491,13 +491,13 @@ mod tests {
             "shop-221",
             vec![
                 EventKind::Phase {
-                    phase: Phase::Design,
+                    phase: Phase::of("design"),
                 },
                 EventKind::Decision {
                     text: "approach B".into(),
                 },
                 EventKind::Phase {
-                    phase: Phase::Implement,
+                    phase: Phase::of("implement"),
                 },
                 EventKind::Tasks { done: 4, total: 9 },
                 EventKind::Blocked {

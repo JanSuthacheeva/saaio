@@ -11,6 +11,7 @@ pub(super) fn flow(name: &str, events: Vec<EventKind>, now: u64) -> FlowView {
             name: name.into(),
             request: format!("{} add CSV export", name.to_uppercase()),
             mode: Mode::Auto,
+            phases: None,
         },
     )];
     all.extend(
@@ -31,7 +32,7 @@ pub(super) fn sample_board(now: u64) -> Board {
                 "shop-221",
                 vec![
                     EventKind::Phase {
-                        phase: Phase::Implement,
+                        phase: Phase::of("implement"),
                     },
                     EventKind::Tasks { done: 4, total: 9 },
                     EventKind::Blocked {
@@ -43,7 +44,7 @@ pub(super) fn sample_board(now: u64) -> Board {
             flow(
                 "shop-230",
                 vec![EventKind::Phase {
-                    phase: Phase::Design,
+                    phase: Phase::of("design"),
                 }],
                 now,
             ),

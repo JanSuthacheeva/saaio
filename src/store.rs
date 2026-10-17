@@ -377,6 +377,7 @@ mod tests {
                 name: "shop-221".into(),
                 request: "SHOP-221".into(),
                 mode: Mode::Guided,
+                phases: None,
             },
         )
     }

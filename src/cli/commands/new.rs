@@ -27,6 +27,7 @@ pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
             name: args.name,
             request: args.request,
             mode: args.mode,
+            phases: None,
         },
     );
     let id = store.create(&first)?;

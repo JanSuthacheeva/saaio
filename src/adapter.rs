@@ -162,7 +162,7 @@ impl Adapter {
 pub fn phase_of(skill: &str, phases: &PhaseMap) -> Option<Phase> {
     let name = skill.trim_start_matches('/');
     let name = name.rsplit(':').next().unwrap_or(name);
-    phases.get(name).copied()
+    phases.get(name).cloned()
 }
 
 /// Text cut to REPORT_TEXT_LIMIT chars.
@@ -184,8 +184,8 @@ mod tests {
 
     fn phases() -> PhaseMap {
         PhaseMap::from([
-            ("design-code".to_string(), Phase::Design),
-            ("implement-plan".to_string(), Phase::Implement),
+            ("design-code".to_string(), Phase::of("design")),
+            ("implement-plan".to_string(), Phase::of("implement")),
         ])
     }
 
@@ -202,11 +202,14 @@ mod tests {
     fn finds_the_phase_of_a_skill_with_or_without_a_slash_or_plugin() {
         let phases = phases();
 
-        assert_eq!(phase_of("design-code", &phases), Some(Phase::Design));
-        assert_eq!(phase_of("/implement-plan", &phases), Some(Phase::Implement));
+        assert_eq!(phase_of("design-code", &phases), Some(Phase::of("design")));
+        assert_eq!(
+            phase_of("/implement-plan", &phases),
+            Some(Phase::of("implement"))
+        );
         assert_eq!(
             phase_of("buzzwoo-standard:design-code", &phases),
-            Some(Phase::Design)
+            Some(Phase::of("design"))
         );
         assert_eq!(phase_of("commit", &phases), None);
     }

@@ -37,7 +37,7 @@ pub(crate) fn reported(flow: &FlowView) -> Document {
         flow: &'a str,
         state: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
-        phase: Option<&'static str>,
+        phase: Option<&'a str>,
         help: Vec<String>,
     }
     let next = match flow.state {
@@ -52,7 +52,7 @@ pub(crate) fn reported(flow: &FlowView) -> Document {
     Document::Toon(toon(&Reported {
         flow: &flow.name,
         state: flow.state.name(),
-        phase: flow.phase.map(Phase::name),
+        phase: flow.phase.as_ref().map(Phase::name),
         help: vec![next],
     }))
 }
@@ -117,7 +117,7 @@ mod tests {
             "shop-221",
             vec![
                 EventKind::Phase {
-                    phase: Phase::Implement,
+                    phase: Phase::of("implement"),
                 },
                 EventKind::Blocked { reason: "x".into() },
             ],

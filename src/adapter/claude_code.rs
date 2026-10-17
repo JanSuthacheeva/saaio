@@ -276,8 +276,8 @@ mod tests {
 
     fn phases() -> PhaseMap {
         PhaseMap::from([
-            ("design-code".to_string(), Phase::Design),
-            ("implement-plan".to_string(), Phase::Implement),
+            ("design-code".to_string(), Phase::of("design")),
+            ("implement-plan".to_string(), Phase::of("implement")),
         ])
     }
 
@@ -299,7 +299,7 @@ mod tests {
             vec![
                 EventKind::Working,
                 EventKind::Phase {
-                    phase: Phase::Implement
+                    phase: Phase::of("implement")
                 }
             ]
         );
@@ -310,7 +310,7 @@ mod tests {
         assert_eq!(
             events("pre_skill"),
             vec![EventKind::Phase {
-                phase: Phase::Design
+                phase: Phase::of("design")
             }]
         );
         assert_eq!(
@@ -332,11 +332,11 @@ mod tests {
             "tool_name": "Skill",
             "tool_input": {"skill": "review-changes"}
         });
-        let phases = PhaseMap::from([("review-changes".to_string(), Phase::Review)]);
+        let phases = PhaseMap::from([("review-changes".to_string(), Phase::of("review"))]);
         assert_eq!(
             translate(&review, &phases),
             vec![EventKind::Phase {
-                phase: Phase::Review
+                phase: Phase::of("review")
             }]
         );
     }

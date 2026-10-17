@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::ValueEnum;
@@ -27,6 +28,10 @@ pub enum EventKind {
         name: String,
         request: String,
         mode: Mode,
+        /// The flow's phases in order; None in a log from before they were configurable, and for
+        /// a plain session.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        phases: Option<Vec<Phase>>,
     },
     Phase {
         phase: Phase,
@@ -82,14 +87,10 @@ pub enum EventKind {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
-#[serde(rename_all = "kebab-case")]
-pub enum Phase {
-    Design,
-    Implement,
-    Review,
-    MergeRequest,
-}
+/// A phase's name: plan, implement, ... as the workflow names it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct Phase(String);
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
@@ -174,33 +175,47 @@ impl Mode {
     }
 }
 
-impl Phase {
-    /// design, implement, review, merge-request - in flow order.
-    pub const ALL: [Phase; 4] = [
-        Phase::Design,
-        Phase::Implement,
-        Phase::Review,
-        Phase::MergeRequest,
-    ];
+impl TryFrom<String> for Phase {
+    type Error = String;
 
-    /// Where the phase stands in ALL.
-    pub fn index(self) -> usize {
-        match self {
-            Phase::Design => 0,
-            Phase::Implement => 1,
-            Phase::Review => 2,
-            Phase::MergeRequest => 3,
+    /// Lowercase letters, digits and '-'; not empty.
+    fn try_from(name: String) -> Result<Phase, String> {
+        let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
+        if name.is_empty() || !name.chars().all(allowed) {
+            return Err(format!(
+                "{name:?} is no phase name: lowercase letters, digits and -"
+            ));
         }
+        Ok(Phase(name))
     }
+}
 
-    /// The name the command line and the logs use: design, implement, review, merge-request.
-    pub fn name(self) -> &'static str {
-        match self {
-            Phase::Design => "design",
-            Phase::Implement => "implement",
-            Phase::Review => "review",
-            Phase::MergeRequest => "merge-request",
-        }
+impl From<Phase> for String {
+    fn from(phase: Phase) -> String {
+        phase.0
+    }
+}
+
+impl FromStr for Phase {
+    type Err = String;
+
+    fn from_str(name: &str) -> Result<Phase, String> {
+        Phase::try_from(name.to_string())
+    }
+}
+
+#[cfg(test)]
+impl Phase {
+    /// A phase by a name the test knows is valid.
+    pub fn of(name: &str) -> Phase {
+        name.parse().expect("a valid phase name")
+    }
+}
+
+impl Phase {
+    /// The name the workflow, the command line and the logs use.
+    pub fn name(&self) -> &str {
+        &self.0
     }
 }
 
@@ -213,10 +228,26 @@ mod tests {
         for mode in Mode::ALL {
             assert_eq!(serde_json::to_value(mode).unwrap(), mode.name());
         }
-        for (index, phase) in Phase::ALL.into_iter().enumerate() {
-            assert_eq!(serde_json::to_value(phase).unwrap(), phase.name());
-            assert_eq!(phase.index(), index);
+        let phase = phase("merge-request");
+        assert_eq!(serde_json::to_value(&phase).unwrap(), "merge-request");
+        assert_eq!(phase.name(), "merge-request");
+    }
+
+    fn phase(name: &str) -> Phase {
+        name.parse().unwrap()
+    }
+
+    #[test]
+    fn a_phase_is_named_in_lowercase_letters_digits_and_hyphens() {
+        assert_eq!(phase("step-2").name(), "step-2");
+        for bad in ["", "Plan", "my phase", "plan!", "über"] {
+            let error = bad.parse::<Phase>().unwrap_err();
+            assert!(error.contains("lowercase letters, digits and -"), "{error}");
         }
+        assert!(
+            serde_json::from_str::<Phase>(r#""Review""#).is_err(),
+            "a log cannot smuggle one in"
+        );
     }
 
     fn every_kind() -> Vec<EventKind> {
@@ -225,14 +256,16 @@ mod tests {
                 name: "shop-221".into(),
                 request: "SHOP-221 add CSV export".into(),
                 mode: Mode::Auto,
+                phases: Some(vec![phase("plan"), phase("ship")]),
             },
             EventKind::Started {
                 name: "scratch".into(),
                 request: String::new(),
                 mode: Mode::Plain,
+                phases: None,
             },
             EventKind::Phase {
-                phase: Phase::MergeRequest,
+                phase: phase("merge-request"),
             },
             EventKind::Working,
             EventKind::Delegated {
@@ -290,7 +323,7 @@ mod tests {
             Event::new(
                 7,
                 EventKind::Phase {
-                    phase: Phase::MergeRequest
+                    phase: phase("merge-request")
                 }
             )
             .to_line(),
@@ -307,6 +340,7 @@ mod tests {
                 name: long.clone(),
                 request: long.clone(),
                 mode: Mode::Guided,
+                phases: None,
             },
         );
 
@@ -346,6 +380,31 @@ mod tests {
         };
         assert_eq!(branch.as_deref(), Some("flow/shop-221"));
         assert_eq!(slot, Some(2));
+    }
+
+    #[test]
+    fn reads_a_started_line_written_before_phases_were_recorded() {
+        let line =
+            r#"{"v":1,"at":7,"kind":"started","name":"shop-221","request":"x","mode":"guided"}"#;
+
+        let Some(Event {
+            kind: EventKind::Started { phases, .. },
+            ..
+        }) = Event::from_line(line)
+        else {
+            panic!("an old started line parses");
+        };
+        assert_eq!(phases, None);
+        let plain = Event::new(
+            7,
+            EventKind::Started {
+                name: "scratch".into(),
+                request: String::new(),
+                mode: Mode::Plain,
+                phases: None,
+            },
+        );
+        assert!(!plain.to_line().contains("phases"), "left out when None");
     }
 
     #[test]

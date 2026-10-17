@@ -91,6 +91,7 @@ mod tests {
                     name: id.into(),
                     request: "x".into(),
                     mode: Mode::Auto,
+                    phases: None,
                 },
             ),
             Event::new(
@@ -117,6 +118,7 @@ mod tests {
                 name: id.into(),
                 request: "x".into(),
                 mode: Mode::Guided,
+                phases: None,
             },
         );
         fold::fold(id, &[started], None, 1).unwrap()

@@ -296,7 +296,7 @@ mod tests {
             name: "shop-221".into(),
             request: "SHOP-221 add CSV export".into(),
             mode: Mode::Auto,
-            phase: Some(Phase::MergeRequest),
+            phase: Some(Phase::of("merge-request")),
             state,
             blocker: None,
             delegate: None,
@@ -305,7 +305,7 @@ mod tests {
             merge_request: None,
             decisions: vec![],
             steps: vec![Step {
-                phase: Phase::Design,
+                phase: Phase::of("design"),
                 status: StepStatus::Done,
                 duration_ms: Some(540_000),
             }],

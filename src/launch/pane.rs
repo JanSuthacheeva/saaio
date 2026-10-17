@@ -248,6 +248,7 @@ mod tests {
                     name: "shop-217".into(),
                     request: "SHOP-217 add CSV export".into(),
                     mode: Mode::Auto,
+                    phases: None,
                 },
             ),
             Event::new(
@@ -383,6 +384,7 @@ mod tests {
                     name: "scratch".into(),
                     request: String::new(),
                     mode: Mode::Plain,
+                    phases: None,
                 },
             ),
             Event::new(

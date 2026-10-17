@@ -126,6 +126,7 @@ mod tests {
                 name: format!("f{slot}"),
                 request: "x".into(),
                 mode: Mode::Guided,
+                phases: None,
             },
         )];
         events.push(Event::new(
