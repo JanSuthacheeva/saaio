@@ -15,11 +15,13 @@ stays pure.
 - A log without a recorded list folds with the built-in four and reads `design` as `plan`.
 - JSON `VIEW_VERSION` 3. theme.toml `[phase]` colors any phase by name; a phase without one takes
   the built-in color of its position.
-- `[worker] prompt = "/ship-feature {request}"` fills every agent that sets no `prompt`; the Codex
-  adapter writes a leading `/skill` as `$skill`.
+- The first prompt: an agent's own `prompt` from the file wins; else `[worker] prompt`, when set,
+  exactly as written; else the built-in default of its name (claude `/ship-feature {request}`,
+  codex `$ship-feature {request}`). No rewriting between harnesses.
 
 Decided in review: the old `[phases]` skill table is refused with an error naming `[[phases]]`;
-phase names are lowercase letters, digits and `-`; a workflow has 1 to 4 phases.
+phase names are lowercase letters, digits and `-`; a workflow has 1 to 4 phases. Later the user
+dropped the Codex `/` -> `$` rewrite for the prompt order above.
 
 ## Units
 
@@ -128,7 +130,8 @@ pub struct Config {
 
 pub struct Agent {
     pub command: Vec<String>,
-    /// Its own first prompt; None takes [worker] prompt. Some after load for every agent.
+    /// Its own first prompt; None takes [worker] prompt, else the built-in agent's of its name.
+    /// Some after load for every agent.
     #[serde(default)]
     pub prompt: Option<String>,
     pub resume: Option<Vec<String>>,
@@ -137,27 +140,28 @@ pub struct Agent {
 
 pub struct WorkerConfig {
     pub agent: String,
-    /// The first prompt of every agent that sets none, "/ship-feature {request}" unless set.
-    pub prompt: String,
+    /// The first prompt of every agent the file gives none, the built-in ones included; unset,
+    /// each keeps its built-in default.
+    pub prompt: Option<String>,
 }
 
 impl Config {
     /// Also refuses the old [phases] skill table, naming [[phases]].
     fn parse(text: &str) -> Result<Config>;
-    /// Every agent without a prompt takes [worker] prompt, as its adapter writes a skill.
-    fn fill_prompts(&mut self);
+    /// Each agent's first prompt: its own from the file, else [worker] prompt, else the built-in
+    /// agent's of its name, else none.
+    fn resolve_prompts(&mut self, builtins: &BTreeMap<String, Agent>);
 }
 ```
 
-Removed: `PhaseMap`, `builtin_phases`. `builtin_agents`: claude, codex and master set no prompt.
-`load` and `builtin` call `fill_prompts` after `add_builtins`.
+Removed: `PhaseMap`, `builtin_phases`. `builtin_agents` keep their prompts as `Some`: claude
+`/ship-feature {request}`, codex `$ship-feature {request}`, master `""`. `add_builtins` calls
+`resolve_prompts` with them before it merges the file's agents over them.
 
 `src/adapter.rs`, `adapter/claude_code.rs`, `adapter/codex.rs` (modified):
 
 ```rust
 impl Adapter {
-    /// The prompt as this harness calls a skill: Codex writes a leading "/name" as "$name".
-    pub fn skill_prompt(self, prompt: &str) -> String;
     pub fn translate(self, payload: &Value, workflow: &Workflow) -> Vec<EventKind>;
 }
 pub fn claude_code::translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind>;
@@ -273,10 +277,11 @@ The UI colors a working flow:
    positions[1]
 
 The first prompt:
-1. Config::load -> add_builtins -> fill_prompts()
-2. codex has no prompt -> Adapter::Codex.skill_prompt("/ship-feature {request}"):
-   "$ship-feature {request}"
-3. server panes -> pane::worker_spec -> agent_argv fills the request
+1. Config::load -> add_builtins -> resolve_prompts(&builtin_agents())
+2. [worker] prompt unset: claude keeps "/ship-feature {request}", codex "$ship-feature {request}"
+3. [worker] prompt = "/my-flow {request}": claude and codex both get it as written; an
+   [agents.aider] with prompt = "{request}" keeps its own
+4. server panes -> pane::worker_spec -> agent_argv fills the request
 
 ## Test seams
 
@@ -284,9 +289,9 @@ The first prompt:
 - `event.rs`: Phase name rules; Started round-trips with and without phases; an old line parses.
 - `fold/tests.rs`: a custom 3-phase flow's steps; design -> plan only without a list; an unknown
   phase ignored; MR enters the last phase.
-- `config.rs`: [[phases]] read, limits, old [phases] refused; [worker] prompt default and override;
-  codex gets `$`.
-- `adapter`: skill_prompt per adapter; translate fixtures with a Workflow.
+- `config.rs`: [[phases]] read, limits, old [phases] refused; the prompt order (own,
+  [worker], built-in default, none).
+- `adapter`: translate fixtures with a Workflow.
 - `theme.rs`, `theme_file.rs`: color by name, by position, the "design" alias, a bad name.
 - `tests/cli.rs`: start and new record phases; report refuses an unknown phase; `status --json`
   version 3. Goldens rewritten where they showed "designing" or "design".
@@ -299,7 +304,8 @@ The first prompt:
 4. A phase without a theme color takes the built-in color of its position.
 5. A `[phase]` color can name a `[ui]` or `[state]` key; nothing can name a phase's color.
 6. A delegated card says "review · agent", no gerunds.
-7. The Codex rewrite touches only a leading `/name`; an agent's own prompt is used as written.
+7. An `[agents.claude]` in the file without a prompt and no `[worker] prompt` keeps the built-in
+   claude prompt.
 8. `flow new` reads config.toml for the workflow (and fails on a broken one).
 
 ## Tasks
@@ -312,6 +318,6 @@ The first prompt:
 - [ ] `VIEW_VERSION` 3; README's JSON example and the cli test that checks the version
 - [ ] Theme: `PhasePalette`, `ColorKey`, `Palette::color/set`, `PhaseTokens`, `Theme::phase_style(phase, position)`; theme_file reads any phase name in `[phase]`, "design" as "plan"; theme tests
 - [ ] Cards say "{phase} · agent"; detail keeps "MR" by name; goldens updated
-- [ ] `[worker] prompt`, `Agent.prompt: Option`, `fill_prompts`, `Adapter::skill_prompt`; built-in agents set none; `agent_argv` and the master's bare start; config and adapter tests
+- [ ] `[worker] prompt: Option`, `Agent.prompt: Option`, `resolve_prompts` (own, then [worker], then the built-in default of its name); `agent_argv` and the master's bare start; config tests for each step of the order
 - [ ] README: `[[phases]]`, `[worker] prompt`, phase names in `flow report`, theme `[phase]` by name, JSON v3; HANDOVER and CLAUDE.md where they name the phases or `PhaseMap`
-- [ ] End to end: a scratch `FLOW_HOME` and `FLOW_CONFIG` with a 3-phase workflow; `flow new`, `flow report phase`, `flow status` and `--json` show its steps; an old log with `design` reads as plan; `flow ui` on the scratch store shows the steps colored by a theme `[phase]` entry; `flow start` builds the worker's argv with `[worker] prompt` (claude `/`, codex `$`)
+- [ ] End to end: a scratch `FLOW_HOME` and `FLOW_CONFIG` with a 3-phase workflow; `flow new`, `flow report phase`, `flow status` and `--json` show its steps; an old log with `design` reads as plan; `flow ui` on the scratch store shows the steps colored by a theme `[phase]` entry; `flow start` builds the worker's argv with the built-in prompts (claude `/`, codex `$`), then with `[worker] prompt` set for both as written

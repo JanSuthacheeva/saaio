@@ -63,7 +63,7 @@ th { background:var(--subtle); font-weight:600; }
   <ul>
     <li>At most 4 phases. This keeps the steps row as wide as today and gives every position a built-in color.</li>
     <li>Defaults: <code>plan</code>, <code>implement</code>, <code>review</code>, <code>merge-request</code>, with today's four skills. Logs without a recorded list read <code>design</code> as <code>plan</code>.</li>
-    <li><code>[worker] prompt = "/ship-feature {request}"</code>. An agent's own <code>prompt</code> still wins. The Codex adapter turns a leading <code>/skill</code> into <code>$skill</code>.</li>
+    <li>The first prompt: an agent's own <code>prompt</code> wins; else <code>[worker] prompt</code>, when set, exactly as written; else the built-in default (claude <code>/ship-feature {request}</code>, codex <code>$ship-feature {request}</code>). No rewriting between harnesses.</li>
     <li>JSON <code>VIEW_VERSION</code> 3. theme.toml <code>[phase]</code> colors any phase by name.</li>
   </ul>
 </section>
@@ -74,7 +74,7 @@ th { background:var(--subtle); font-weight:600; }
   <div class="dia">
     <div class="layer"><span>config</span>
       <div class="row"><span class="box mod">config::Config</span><span class="arrow">-&gt;</span><span class="box new">workflow::Workflow</span><span class="arrow">-&gt;</span><span class="box new">workflow::PhaseSpec</span></div>
-      <div class="row"><span class="box mod">config::WorkerConfig.prompt</span><span class="arrow">-&gt;</span><span class="box mod">Adapter::skill_prompt</span></div>
+      <div class="row"><span class="box mod">config::WorkerConfig.prompt</span><span class="arrow">-&gt;</span><span class="box mod">Config::resolve_prompts</span><span class="arrow">-&gt;</span><span class="box mod">Agent.prompt</span></div>
     </div>
     <div class="layer"><span>log and fold</span>
       <div class="row"><span class="box mod">event::Phase (name)</span><span class="box mod">EventKind::Started.phases</span><span class="arrow">-&gt;</span><span class="box mod">fold::Folding</span><span class="arrow">-&gt;</span><span class="box mod">view::FlowView / Step</span></div>
@@ -206,7 +206,8 @@ fn legacy_name(phase: &amp;Phase) -&gt; Phase;</pre>
 
 pub struct Agent {
     pub command: Vec&lt;String&gt;,
-    /// Its own first prompt; None takes [worker] prompt. Some after load for every agent.
+    /// Its own first prompt; None takes [worker] prompt, else the built-in agent's of its name.
+    /// Some after load for every agent.
     #[serde(default)]
     pub prompt: Option&lt;String&gt;,
     pub resume: Option&lt;Vec&lt;String&gt;&gt;,
@@ -222,17 +223,16 @@ pub struct WorkerConfig {
 impl Config {
     /// Also refuses the old [phases] skill table, naming [[phases]].
     fn parse(text: &amp;str) -&gt; Result&lt;Config&gt;;
-    /// Every agent without a prompt takes [worker] prompt, as its adapter writes a skill.
-    fn fill_prompts(&amp;mut self);
+    /// Each agent's first prompt: its own from the file, else [worker] prompt, else the built-in
+    /// agent's of its name, else none.
+    fn resolve_prompts(&amp;mut self, builtins: &amp;BTreeMap&lt;String, Agent&gt;);
 }</pre>
-    <p class="meta">Removed: <code>PhaseMap</code>, <code>builtin_phases</code>. <code>builtin_agents</code>: <code>claude</code>, <code>codex</code> and <code>master</code> set no prompt. <code>load</code> and <code>builtin</code> call <code>fill_prompts</code> after <code>add_builtins</code>.</p>
+    <p class="meta">Removed: <code>PhaseMap</code>, <code>builtin_phases</code>. <code>builtin_agents</code> keep their prompts: claude <code>/ship-feature {request}</code>, codex <code>$ship-feature {request}</code>, master empty. <code>add_builtins</code> calls <code>resolve_prompts</code> with them before merging the file's agents over them.</p>
   </div>
 
   <div class="unit">
     <h3><code>src/adapter.rs</code>, <code>claude_code.rs</code>, <code>codex.rs</code> <span class="tag mod">modified</span></h3>
 <pre>impl Adapter {
-    /// The prompt as this harness calls a skill: Codex writes a leading "/name" as "$name".
-    pub fn skill_prompt(self, prompt: &amp;str) -&gt; String;
     pub fn translate(self, payload: &amp;Value, workflow: &amp;Workflow) -&gt; Vec&lt;EventKind&gt;;
 }
 pub fn claude_code::translate(payload: &amp;Value, workflow: &amp;Workflow) -&gt; Vec&lt;EventKind&gt;;
@@ -392,8 +392,9 @@ skills = ["finishing-a-development-branch"]</pre>
 
   <h3>The worker's first prompt</h3>
   <ol class="steps">
-    <li>Config::load -&gt; add_builtins -&gt; fill_prompts()</li>
-    <li>fill_prompts -&gt; codex has no prompt -&gt; Adapter::Codex.skill_prompt("/ship-feature {request}"): "$ship-feature {request}"</li>
+    <li>Config::load -&gt; add_builtins -&gt; resolve_prompts(&amp;builtin_agents())</li>
+    <li>[worker] prompt unset: claude keeps "/ship-feature {request}", codex "$ship-feature {request}"</li>
+    <li>[worker] prompt = "/my-flow {request}": claude and codex both get it as written; [agents.aider] prompt = "{request}" keeps its own</li>
     <li>server panes -&gt; pane::worker_spec(flow, agent, env) -&gt; agent_argv: prompt filled with the request</li>
   </ol>
 </section>
@@ -416,8 +417,8 @@ skills = ["finishing-a-development-branch"]</pre>
     <li><code>workflow.rs</code>: unit tests for builtin, phases, phase_of (slash and plugin prefix), each try_from error.</li>
     <li><code>event.rs</code>: Phase name rules; Started round-trips with and without phases; an old started line parses.</li>
     <li><code>fold/tests.rs</code>: custom 3-phase steps; design-to-plan only without a list; unknown phase ignored; MR enters the last phase.</li>
-    <li><code>config.rs</code>: [[phases]] read, limits, old [phases] refused; [worker] prompt default and override; codex gets $.</li>
-    <li><code>adapter</code>: skill_prompt per adapter; translate fixtures with a Workflow.</li>
+    <li><code>config.rs</code>: [[phases]] read, limits, old [phases] refused; the prompt order (own, [worker], built-in default, none).</li>
+    <li><code>adapter</code>: translate fixtures with a Workflow.</li>
     <li><code>theme.rs</code>, <code>theme_file.rs</code>: color by name, by position, "design" alias, bad name error.</li>
     <li><code>tests/cli.rs</code>: start/new record phases; report refuses an unknown phase; <code>status --json</code> version 3. Goldens rewritten where "designing" or "design" showed.</li>
   </ul>
@@ -432,7 +433,7 @@ skills = ["finishing-a-development-branch"]</pre>
     <li>A phase without a color in the theme takes the built-in color of its position (1st to 4th).</li>
     <li>A <code>[phase]</code> color can name a <code>[ui]</code> or <code>[state]</code> key; nothing can name a phase's color.</li>
     <li>A delegated card says "review · agent", not "reviewing · agent": no gerunds for names flow does not know.</li>
-    <li>The Codex rewrite touches only a leading <code>/name</code>; an agent's own prompt is used as written.</li>
+    <li>An <code>[agents.claude]</code> in the file without a prompt, and no <code>[worker] prompt</code>, keeps the built-in claude prompt.</li>
     <li><code>flow new</code> records the configured workflow too, so it now reads config.toml (and fails on a broken one).</li>
   </ol>
 </section>
@@ -443,6 +444,7 @@ skills = ["finishing-a-development-branch"]</pre>
     <li>The old <code>[phases]</code> skill table is refused, with an error naming the <code>[[phases]]</code> shape.</li>
     <li>Phase names are lowercase letters, digits and <code>-</code>.</li>
     <li>A workflow has 1 to 4 phases.</li>
+    <li>No <code>/</code> to <code>$</code> rewrite for Codex: <code>[worker] prompt</code>, when set, overrides both built-in prompts exactly as written; an agent's own prompt still wins.</li>
   </ol>
 </section>
 </main>
