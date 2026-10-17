@@ -1,10 +1,10 @@
 # The command line
 
-flow's command line is made to be read by agents first. Every command answers in
-[TOON](https://toonformat.dev), a compact text format, and ends with `help[]` lines that name the
-next commands worth running. Programs read `flow status --json` instead (see [json.md](json.md)).
+flow's command line is written for agents first. Every command answers in
+[TOON](https://toonformat.dev), a compact text format, and ends with `help[]` lines suggesting what
+to run next. Programs should read `flow status --json` instead (see [json.md](json.md)).
 
-The output below is from real runs; only the paths are shortened.
+All the output on this page comes from real runs, with only the paths shortened.
 
 - [Commands at a glance](#commands-at-a-glance)
 - [flow](#flow)
@@ -36,13 +36,14 @@ The output below is from real runs; only the paths are shortened.
 | `flow remove <flow> [--force] [--delete-unmerged]` | end a flow and tear down its worktree |
 | `flow clear` | forget finished flows and tear down their worktrees |
 
-`<flow>` is a flow's name or id. A name means the unfinished flow of that name, or else the most
-recent finished one. `flow --version` prints the version, and `--help` works on every command.
+Wherever a command takes `<flow>`, you can give a flow's name or its id. A name means the
+unfinished flow with that name, or if there's none, the most recent finished one.
+`flow --version` prints the version, and every command takes `--help`.
 
 ## flow
 
-The home view: how many flows there are, how many need you, one line per flow, and what each
-waiting or blocked flow asks.
+Run on its own, `flow` gives you the overview. It shows how many flows there are and how many need
+you, a line per flow, and what each waiting or blocked flow is asking.
 
 ```
 $ flow
@@ -60,9 +61,9 @@ blockers[2]{name,blocker}:
 help[2]: "Run `flow status <name>` for one flow's phases, timeline and decisions",Run `flow new --name <name> --request <text>` to track a new flow
 ```
 
-Flows are sorted by what they need: first the ones that need you, then the ready ones (their turn
-ended, nothing asked), then the running ones, then the finished ones. Within each group the most
-recent change comes first. `age` is the time since the flow's state, phase or blocker last changed.
+The flows that need you come first, then the ready ones (their turn ended and nothing was asked),
+then the running ones, then the finished ones. Within each group, the most recent change comes
+first. `age` is how long ago the flow's state, phase or blocker last changed.
 
 ## flow ui
 
@@ -71,18 +72,18 @@ flow ui
 flow ui --stop
 ```
 
-Opens the terminal UI and starts the session server behind it when none runs. See
-[ui.md](ui.md) for everything on the screen.
+Opens the terminal UI, and starts the session server behind it if it isn't running yet.
+[ui.md](ui.md) explains everything on the screen.
 
-When you leave it, flow ui prints what happened, for example
+When you leave, flow ui prints what happened, for example
 ``detached - the agents keep running; run `flow ui` to attach again``.
 
-`--stop` stops the server and every session in it. Unfinished flows are kept and their workers
+`--stop` stops the server and every session in it. Unfinished flows are kept, and their workers
 resume the next time you run `flow ui`. It prints `stopped the flow server and every session in
 it`, or `no flow server runs`.
 
-Inside a worker, `flow ui` on the worker's own store is refused, since it would take over your
-flow ui. Set `FLOW_HOME` to another folder to run one there.
+Inside a worker, `flow ui` refuses to run on the worker's own store, because it would take over
+your flow ui. Set `FLOW_HOME` to another folder to run one there.
 
 ## flow start
 
@@ -91,13 +92,13 @@ flow start <request> [--name <name>] [--mode guided|auto] [--agent <agent>] [--t
 flow start --plain <folder> [--name <name>] [--agent <agent>]
 ```
 
-Run it inside the repository the flow works on. It:
+Run it inside the repository the flow should work on. In order, it:
 
-1. names the flow,
-2. claims a slot (1 to 20, see [repository.md](repository.md#slots-and-ports)),
-3. creates a git worktree in `.flow/worktrees/<name>` on a new branch,
-4. runs the repository's `.flow/setup` there, if it has one,
-5. records the flow, so flow ui opens the agent in the worktree.
+1. names the flow
+2. claims a slot (1 to 20, see [repository.md](repository.md#slots-and-ports))
+3. creates a git worktree in `.flow/worktrees/<name>` on a new branch
+4. runs the repository's `.flow/setup` there, if it has one
+5. records the flow, so flow ui opens the agent in the worktree
 
 ```
 $ flow start "SHOP-217 add CSV export"
@@ -112,9 +113,9 @@ pane: when flow ui runs
 help[2]: Run `flow ui` to open the worker,Run `flow` for all flows
 ```
 
-`setup` is `ran`, `none` (the repository has no setup hook) or `failed: <its last error line>`.
-A failed setup marks the flow blocked, and the worker still opens so you can look.
-`pane` is `opening` when flow ui runs, else `when flow ui runs`.
+`setup` says `ran`, `none` (the repository has no setup hook) or `failed: <its last error line>`.
+A failed setup marks the flow blocked, but the worker still opens so you can look into it. `pane`
+says `opening` if flow ui is running, and `when flow ui runs` if it isn't.
 
 | Option | Default | Does |
 | --- | --- | --- |
@@ -125,14 +126,13 @@ A failed setup marks the flow blocked, and the worker still opens so you can loo
 | `--type <type>` | the repository's first type | a branch type from the repository's `.flow/config.toml`. See [repository.md](repository.md#branch-names). |
 | `--plain <folder>` | | open the agent in this folder instead, as a plain session |
 
-The branch is `flow/<name>` unless the repository sets its own convention. When the branch already
+The branch is `flow/<name>` unless the repository has its own convention. If the branch already
 exists, flow adds `-2`, `-3` and so on.
 
 ### Plain sessions
 
-`--plain <folder>` opens an agent in any folder, which does not have to be a repository. There is
-no worktree, branch, slot or first prompt, and the master leaves it alone. See
-[flows.md](flows.md#plain-sessions).
+`--plain <folder>` opens an agent in any folder, repository or not. You get no worktree, branch,
+slot or first prompt, and the master leaves it alone (see [flows.md](flows.md#plain-sessions)).
 
 ```
 $ flow start --plain ~/projects/scratch
@@ -144,8 +144,8 @@ pane: when flow ui runs
 help[2]: Run `flow ui` to open the session,Run `flow` for all flows
 ```
 
-The name is the folder's, unless `--name` gives one. A leading `~` is your home folder. A request,
-`--mode` and `--type` cannot go with `--plain`.
+The session is named after the folder unless you pass `--name`. A leading `~` means your home
+folder. `--plain` can't be combined with a request, `--mode` or `--type`.
 
 ## flow status
 
@@ -153,8 +153,8 @@ The name is the folder's, unless `--name` gives one. A leading `~` is your home 
 flow status [<flow>] [--json] [--full] [--all]
 ```
 
-Without a flow it lists every flow, like `flow`. With one it shows that flow whole: its request,
-mode, state, phases with the time spent in each, tasks, decisions and timeline.
+Without a flow, it lists every flow, just like `flow`. Give it a flow and you get everything about
+that one.
 
 ```
 $ flow status shop-217
@@ -184,11 +184,11 @@ timeline[5]{ago,text}:
 help[2]: Run `flow report --flow shop-217 working` once the block is resolved,Run `flow` for all flows
 ```
 
-Fields with nothing to show are left out: `blocker` and `delegate` (what the worker handed to a
-subagent) while there is none, `tasks` without task counts, `review` and `merge_request` until a
-review or merge request was reported, `branch`, `worktree` and `worktree_exists` (false once the
-folder is gone) for a flow without a worktree. A plain session shows `folder` instead, and `answer`
-is the closing message of the worker's last turn.
+Fields with nothing to show are left out. `blocker` and `delegate` (what the worker handed to a
+subagent) only appear while there is one, `tasks` only with task counts, and `review` and
+`merge_request` once one was reported. A flow without a worktree has no `branch`, `worktree` or
+`worktree_exists` (which turns false once the folder is gone); a plain session shows `folder`
+instead. `answer` is the closing message of the worker's last turn.
 
 | Option | Does |
 | --- | --- |
@@ -202,9 +202,9 @@ is the closing message of the worker's last turn.
 flow send <flow> <text>
 ```
 
-The master's way to tell a worker something: an answer, an instruction, a correction. flow adds
-`master: <text>` to the flow's timeline and wakes the worker with it, or gives it to the worker
-once its session runs again.
+This is how the master tells a worker something, whether that's an answer, an instruction or a
+correction. flow adds `master: <text>` to the flow's timeline and wakes the worker with it, or
+hands it over once the worker's session is running again.
 
 ```
 $ flow send shop-221 "Count them against the refund date."
@@ -213,11 +213,9 @@ state: waiting
 help[2]: "flow wakes its worker with it now, or once its session runs again",flow wakes you when shop-221 changes again
 ```
 
-It refuses:
-
-- inside a worker (`only the master sends`): workers end their turn with the question instead,
-- a finished flow, a flow without a worker, and a plain session,
-- an empty text, or one over 4000 characters.
+It refuses to run inside a worker (`only the master sends`), since a worker asks by ending its
+turn with the question. It also refuses a finished flow, a flow without a worker, a plain session,
+and a text that's empty or over 4000 characters.
 
 ## flow report
 
@@ -225,13 +223,13 @@ It refuses:
 flow report [--flow <flow>] <event>
 ```
 
-Adds one event to a flow. Workers do not need it: their harness's hooks report for them (see
-[flows.md](flows.md#how-a-worker-reports)). It is there for scripts, other tools and fixing a
-flow by hand.
+Adds one event to a flow. Workers don't need it, because their harness's hooks report for them
+(see [flows.md](flows.md#how-a-worker-reports)). It's for scripts, other tools and fixing a flow by
+hand.
 
-The flow comes from `--flow`, else from `$FLOW_ID`, which flow sets in every worker. Without
-either, `flow report` does nothing and still succeeds, so a skill can report and also work outside
-a flow:
+The flow comes from `--flow`, or else from `$FLOW_ID`, which flow sets in every worker. With
+neither, `flow report` does nothing and still succeeds, so a skill can report and still work
+outside a flow:
 
 ```
 $ flow report working
@@ -254,7 +252,7 @@ help[1]: Set FLOW_ID or pass --flow <name>
 | `ended` | the worker's session ended; flow ui does not open it again |
 | `heartbeat` | the worker is alive; adds no event (see `not-responding` in [flows.md](flows.md#states)) |
 
-Each answers with the flow's new state:
+Each one answers with the flow's new state:
 
 ```
 $ flow report --flow shop-217 blocked "Task 5: the migration needs a default value"
@@ -264,8 +262,8 @@ phase: implement
 help[1]: Run `flow report working` once the block is resolved
 ```
 
-Reporting the same state, phase, tasks or decision twice changes nothing, so retries of those are
-harmless; `review`, `merge-request` and `ended` add a timeline entry each time. Texts are kept up
+Reporting the same state, phase, tasks or decision twice changes nothing, so retrying those is
+harmless. `review`, `merge-request` and `ended` add a timeline entry every time. Texts are kept up
 to 500 characters.
 
 ## flow new
@@ -274,8 +272,8 @@ to 500 characters.
 flow new --name <name> --request <text> [--mode guided|auto]
 ```
 
-Tracks a flow without a worktree or a worker, for a worker you run yourself. If an unfinished flow
-of that name exists, it answers with that one (`existing: true`).
+Tracks a flow without a worktree or a worker, for when you run the worker yourself. If an
+unfinished flow with that name already exists, you get that one back (`existing: true`).
 
 ```
 $ flow new --name shop-230 --request "SHOP-230 tracked by hand"
@@ -291,8 +289,8 @@ help[2]: Run `flow report --flow shop-230 phase plan` when plan starts,Or set FL
 flow remove <flow> [--force] [--delete-unmerged]
 ```
 
-Ends one flow, whatever its state: it closes the worker's session in flow ui, runs the repository's
-`.flow/teardown`, removes the worktree, deletes the branch and forgets the flow.
+Ends one flow, whatever state it's in. It closes the worker's session in flow ui, runs the
+repository's `.flow/teardown`, removes the worktree, deletes the branch and forgets the flow.
 
 ```
 $ flow remove shop-217
@@ -303,8 +301,8 @@ branch: deleted
 help[1]: Run `flow` to see what is left
 ```
 
-It refuses, and changes nothing, when the worktree has uncommitted work or the branch has commits
-that are on no other branch, local or pushed:
+If the worktree has uncommitted work, or the branch has commits that aren't on any other branch,
+local or pushed, it refuses and changes nothing:
 
 ```
 $ flow remove shop-221
@@ -317,7 +315,7 @@ help[2]: "Merge or push flow/shop-221, then run `flow remove shop-221` again",Ru
 | `--force` | also remove a worktree with uncommitted work, discarding it |
 | `--delete-unmerged` | also delete a branch whose commits are on no other branch |
 
-A plain session's folder is never touched: `flow remove` only forgets the session.
+For a plain session, `flow remove` only forgets the session. The folder is never touched.
 
 ## flow clear
 
@@ -326,9 +324,9 @@ flow clear
 ```
 
 Forgets every finished flow (`done` or `ended`) and tears down its worktree the way `flow remove`
-does, with two differences: a worktree with uncommitted work is kept and listed under `kept`, and
-a branch is deleted only when all its commits are on another branch. A pushed branch with its merge
-request stays on the remote.
+does. Two things are different. A worktree with uncommitted work is kept and listed under `kept`,
+and a branch is only deleted when all its commits are on another branch. A pushed branch with its
+merge request stays on the remote.
 
 ```
 $ flow clear
@@ -341,7 +339,7 @@ help[2]: Run `flow` to see what is left,"Commit or discard the work in a kept wo
 
 ## Commands flow runs itself
 
-These do not show in `flow --help`. You should not need to run them.
+These don't show up in `flow --help`, and you shouldn't need to run them yourself.
 
 | Command | What runs it |
 | --- | --- |
@@ -351,7 +349,7 @@ These do not show in `flow --help`. You should not need to run them.
 
 ## Output, errors and exit codes
 
-Errors are TOON on stdout too, with the next steps:
+Errors are TOON on stdout too, with next steps like everything else:
 
 ```
 $ flow report --flow shop-999 working
@@ -367,7 +365,7 @@ help[2]: Run `flow` to list the flows,Run `flow new --name shop-999 --request <t
 
 ## Environment variables
 
-flow reads:
+flow reads these:
 
 | Variable | Does |
 | --- | --- |
@@ -378,7 +376,7 @@ flow reads:
 | `FLOW_MASTER` | `1` in the master's session, whose hooks report no flow |
 | `CLAUDE_CONFIG_DIR` | Claude Code's folder, where flow ui reads a worker's transcript for the peek. Default: `~/.claude`. |
 
-flow sets, in every worker's session and in the repository's setup and teardown hooks:
+And it sets these in every worker's session and in the repository's setup and teardown hooks:
 
 | Variable | Holds |
 | --- | --- |
@@ -393,19 +391,17 @@ A plain session gets only `FLOW_ID`. Every session also gets `FLOW_HOME` when yo
 
 ## Several projects
 
-By default every project shares one store, one server and one master. To keep projects apart, give
-each its own `FLOW_HOME`, for example one per tmux session:
+By default, every project shares one store, one server and one master. To keep projects apart,
+give each one its own `FLOW_HOME`, for example one per tmux session:
 
 ```sh
 export FLOW_HOME=~/.local/state/flow/projects/shop
 ```
 
-Each store then has its own flows, server and master. What they share lives in the default folder
-(`$XDG_STATE_HOME/flow`, else `~/.local/state/flow`), whatever `FLOW_HOME` says:
-
-- every store registers itself there, so `flow status --all` and the board's `a` key find all of
-  them,
-- slots are claimed there, so no two unfinished flows in any project share a slot.
+Each store then has its own flows, server and master. Two things stay shared, in the default
+folder (`$XDG_STATE_HOME/flow`, else `~/.local/state/flow`) whatever `FLOW_HOME` says. Every store
+registers itself there, which is how `flow status --all` and the board's `a` key find them all.
+And slots are claimed there, so no two unfinished flows in any project share a slot.
 
 ```
 $ flow status --all
@@ -421,5 +417,5 @@ blockers[2]{project,name,blocker}:
 help[2]: "Run `flow status <name>` in a flow's project for its phases, timeline and decisions",Run `flow status --all --json` for every project's board
 ```
 
-A project is named after its store's folder (`shop` above); the default store is `default`. A
-store whose folder is gone is dropped from the list.
+A project is named after its store's folder (`shop` above), and the default store is called
+`default`. If a store's folder is gone, it's dropped from the list.

@@ -1,15 +1,14 @@
 # The JSON contract
 
-Programs read `flow status --json`. It prints the whole board: every flow, nothing cut short, with
-camelCase keys and `version` first. The command line and this JSON are flow's only public
-interface; the log files behind them are private and may change.
-
 ```sh
 flow status --json          # this project's flows
 flow status --all --json    # every project's flows
+flow status shop-217 --json # a board with just that flow
 ```
 
-`flow status <flow> --json` prints a board that holds only that flow.
+If you're writing a program that reads flow, this is what to read. It prints the whole board, every
+flow with nothing cut short, with camelCase keys and `version` first. The command line and this
+JSON are flow's only public interface. The log files behind them are private and may change.
 
 ## The board
 
@@ -168,7 +167,7 @@ A flow keeps the phases it started with, so two flows can have different steps.
 
 ## Every project
 
-`flow status --all --json` prints one board per registered store that has flows:
+`flow status --all --json` prints a board for each registered store that has flows:
 
 ```json
 {
@@ -188,8 +187,8 @@ A flow keeps the phases it started with, so two flows can have different steps.
 
 ## Versions
 
-`version` goes up when a change could break a program that reads the JSON. New keys can appear
-without a new version, so ignore keys you do not know.
+`version` goes up when a change could break a program that reads the JSON. New keys can show up
+without a new version, so ignore keys you don't know.
 
 | Version | Changed |
 | --- | --- |

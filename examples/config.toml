@@ -1,33 +1,37 @@
 # flow's settings.
 #
-# flow wrote this file on its first run. Every setting is commented out and shows its default.
-# Remove the # in front of a setting to change it. flow never overwrites this file once you edit it.
+# flow wrote this file on its first run. Every setting is commented out at its default; remove the
+# # in front of one to change it. Once you've edited this file, flow never overwrites it.
 #
-# Commands read it each time they run. flow ui and its server read it when they start, so a change
-# to [agents], a prompt, [master] or [ui] applies after flow ui --stop and the next flow ui. A key
-# flow does not know is an error that names the file and the key.
-# All of it, explained: https://github.com/JanSuthacheeva/flow/blob/main/docs/configuration.md
+# Commands read this file every time they run. flow ui and its server only read it when they start,
+# so after changing [agents], a prompt, [master] or [ui], run flow ui --stop and then flow ui. A key
+# flow doesn't know is an error that names the file and the key.
+# The whole file, explained: https://github.com/JanSuthacheeva/flow/blob/main/docs/configuration.md
+#
+# To use your own skills instead of the agent-skills set, set [worker] prompt and [[phases]]:
+# https://github.com/JanSuthacheeva/flow/blob/main/docs/configuration.md#use-your-own-workflow
 
 #[worker]
-# The agent a new flow runs when you pick none: a name under [agents].
+# The agent a new flow runs when you don't pick one, by its name under [agents].
 #agent = "claude"
-# The first prompt of every agent that sets none of its own, the built-in ones too. Unset, each
-# agent keeps its own. Claude Code calls a skill /name and Codex $name.
-# For example: prompt = "{request}"
+# The first prompt for every agent that doesn't set its own, built-in agents included. Unset, each
+# agent keeps its own. Claude Code calls a skill /name, Codex calls it $name.
+# For example: prompt = "/my-feature {request}" ($my-feature in Codex)
 
 #[master]
-# Wake the master when a worker stops. false: it learns only when it runs flow status.
+# Wakes the master when a worker stops. With false, it only finds out when it runs flow status.
 #wake = true
-# The agent flow ui runs as the master. Unset, the built-in "master" agent below.
+# The agent flow ui runs as the master. Unset, it's the built-in "master" agent below.
 # For example: agent = "codex"
 
 #[ui]
-# The key before every flow ui command: "C-space", or "C-a" to "C-z" except C-c, C-d, C-h, C-i,
-# C-j, C-m, C-q, C-s and C-z, which a pane needs.
+# The key you press before every flow ui command: "C-space", or "C-a" to "C-z". C-c, C-d, C-h,
+# C-i, C-j, C-m, C-q, C-s and C-z aren't allowed, because a pane needs them.
 #prefix = "C-space"
 
-# The workflow: 1 to 4 phases in order, each with the skills that start it. They are a flow's
-# steps in flow ui. A new list replaces all four.
+# The workflow: one to four phases in order, each with the skills that start it. flow ui shows them
+# as a flow's steps. Your own list replaces all four. A flow whose skills match no phase still
+# works; its steps just stay empty.
 #[[phases]]
 #name = "plan"
 #skills = ["design-code"]
@@ -44,18 +48,18 @@
 #name = "merge-request"
 #skills = ["write-merge-request"]
 
-# The agents a flow can run. An agent you add here appears in flow start --agent and the new-flow
-# dialog; one with a built-in name replaces it.
+# The agents a flow can run. Any agent you add here shows up in flow start --agent and the new-flow
+# dialog. An agent with a built-in name replaces the built-in one.
 #
 # command   the command line that starts a new session
 # prompt    the first prompt, filled into {prompt}
-# resume    the command line that continues a session after a restart; without one the agent
-#           starts once and is not resumed
-# adapter   "claude-code" or "codex": the harness flow reads the agent's state from. Without one
-#           flow ui shows only whether the process runs.
+# resume    the command line that continues a session after a restart; without it, the agent
+#           starts once and isn't resumed
+# adapter   "claude-code" or "codex", the harness whose hooks tell flow what the agent is doing.
+#           Without it, flow ui only shows whether the process is running.
 #
-# Placeholders: {id} flow's id for the session, {name} the flow's name, {request} what you asked
-# for, {prompt} the prompt above, {session} the session id the harness picked (Codex),
+# Placeholders: {id} is flow's id for the session, {name} the flow's name, {request} what you asked
+# for, {prompt} the prompt above, {session} the session id the harness picked (Codex), and
 # {instructions} the path of master.md, the master's instructions.
 
 #[agents.claude]
@@ -70,7 +74,7 @@
 #resume = ["codex", "resume", "{session}"]
 #adapter = "codex"
 
-# The master: Claude Code without a first prompt; flow adds master.md to its instructions.
+# The master is Claude Code without a first prompt; flow adds master.md to its instructions.
 #[agents.master]
 #command = ["claude", "-n", "{name}", "--session-id", "{id}"]
 #prompt = ""

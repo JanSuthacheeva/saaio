@@ -2,14 +2,21 @@
 
 ![flow ui with Claude Code and Codex workers](docs/media/flow-ui.png)
 
-I usually have several coding agents working at once, each on its own feature. flow is the tool I
-built to keep track of them: it opens each agent in its own git worktree, shows where every one
-stands, and tells me when one needs me. I use it every day with Claude Code and Codex, and thought
-it might help others too.
+If you run several coding agents at once, each on its own feature, you know the routine of going
+from one terminal to the next to see which one needs you. flow works more like a small team. You
+talk to one agent, the master. It starts the workers, tells them what to do, and comes back to you
+when one of them needs a decision. Think of yourself as the CTO and the master as your team lead:
+you talk mostly to the lead, and the lead runs the developers.
 
-flow is a terminal UI, `flow ui`, and a command line whose main user is an agent.
+A CTO still knows the details, and it's still on you that things work. So you can watch every
+worker as it goes, read what it did and why, and step in whenever you want. Each one runs in its
+own git worktree, and the sidebar shows what it's doing and whether it's waiting on you.
 
-## Quick start
+flow works with Claude Code and Codex. It's a terminal UI, `flow ui`, plus a command line written
+for agents to read. It started as a tool for one person's daily work and is shared in case it
+helps you too.
+
+## Install
 
 You need macOS or Linux, git, Rust 1.95 or newer, and Claude Code or Codex.
 
@@ -17,62 +24,100 @@ You need macOS or Linux, git, Rust 1.95 or newer, and Claude Code or Codex.
 cargo install --git https://github.com/JanSuthacheeva/flow --tag v0.1.0
 ```
 
-Each worker starts with `/ship-feature <request>` (`$ship-feature` in Codex), a skill from
-[agent-skills](https://github.com/JanSuthacheeva/agent-skills) that takes a feature from plan to
-merge request. Install it and the skills it runs, or set your own first prompt (see
-[configuration](docs/configuration.md#the-first-prompt)):
+## Pick a workflow
+
+Every worker starts with a first prompt. Out of the box that's `/ship-feature <your request>`
+(`$ship-feature` in Codex), a skill that plans the feature, builds it, reviews it and opens the
+merge request. You can install that skill and the ones it uses, or point flow at skills you already
+have.
+
+**Use the agent-skills set.** It lives in
+[agent-skills](https://github.com/JanSuthacheeva/agent-skills):
 
 ```sh
 npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature design-code implement-plan review-changes write-merge-request commit setup-flow
 ```
 
-Then, in a repository:
+**Use your own skills.** Tell flow which prompt starts a worker and which skills start each phase,
+in `~/.config/flow/config.toml`:
+
+```toml
+[worker]
+prompt = "/my-feature {request}"   # $my-feature in Codex
+
+[[phases]]
+name = "plan"
+skills = ["my-plan"]
+
+[[phases]]
+name = "build"
+skills = ["my-build"]
+
+[[phases]]
+name = "ship"
+skills = ["my-pr"]
+```
+
+A phase starts when the worker runs one of its skills, and your phases replace the built-in four.
+[Use your own workflow](docs/configuration.md#use-your-own-workflow) explains the rest.
+
+You can also skip both. A flow works without any matching skills: the worker gets your request,
+and the sidebar still shows whether it's working, waiting for you or done. Its steps just stay
+empty (`○───○───○───○`), since no skill ever starts a phase.
+
+## First run
+
+In a repository:
 
 ```sh
 flow ui
 ```
 
-The big pane is the master, an agent that works with flow for you. Ask it to start a flow ("start
-a flow for SHOP-217 add CSV export"), or press `C-space n`. Each worker shows up in the sidebar on
-the right, grouped by what it needs from you. `C-space ?` lists every key.
+The big pane is the master. Ask it to "start a flow for SHOP-217 add CSV export", or press
+`C-space n` to start one yourself. Each worker shows up in the sidebar on the right, grouped by
+what it needs from you, and `C-space ?` lists every key.
 
 ![Moving through flow ui: the peek, a worker, the board](docs/media/flow-ui.gif)
 
-On its first run flow writes `config.toml`, `theme.toml` and `master.md` to `~/.config/flow`, every
-setting commented out at its default.
+The first run also writes `config.toml`, `theme.toml` and `master.md` to `~/.config/flow`, with
+every setting commented out at its default.
 
 ## What it does
 
-- **Works with different agents.** Claude Code and Codex are built in, each followed through its
-  own hooks. Any other command can run as a worker; flow then shows only whether it runs. The
-  phases a flow walks through, the skills that start each phase and every agent's first prompt are
-  settings.
-- **Gives each worktree its own environment.** `.flow/setup` and `.flow/teardown` run in every
-  worktree. `FLOW_SLOT` (1 to 20) is unique across all your projects, so each worktree's Docker
-  stack can get its own ports. The `setup-flow` skill writes both scripts for your repo and tries
-  them in a scratch worktree.
-- **Has a master that is woken.** The master starts workers, answers them with `flow send` and is
-  woken when one waits, is blocked or finishes. In a guided flow the questions come to you; in an
-  auto flow the master answers what the code and the plan already settle.
-- **Plain sessions.** An agent in any folder, without a worktree or a flow, next to your workers.
-- **Themes.** Your terminal's colors by default, flow's own dark and light themes built in,
-  reloaded while you edit. Another tool can write a theme for flow to follow (a Noctalia template
-  is in the docs).
-- **Sessions outlive the UI.** Closing the terminal leaves every agent running; after a reboot
-  flow resumes each conversation.
+The master is a regular agent session that knows how to use flow. It starts workers, sends them
+answers with `flow send`, and is woken whenever one waits, gets blocked or finishes. In a guided
+flow it brings every question to you. In an auto flow it answers what the code and the plan already
+settle, and only asks you the rest.
+
+Each worker gets its own branch and worktree, so nothing it does touches your checkout. If your
+project needs services, `.flow/setup` and `.flow/teardown` run in every worktree, and `FLOW_SLOT`
+(1 to 20, never held by two unfinished flows at once, in any of your projects) gives each
+worktree's Docker stack its own ports. The `setup-flow` skill can write both scripts for your
+repo and try them in a scratch worktree.
+
+flow knows what a worker is doing because Claude Code and Codex tell it through their own hooks.
+It never reads the screen. Any other command can run as a worker too; flow then shows whether it's
+running. The phases, the skills that start them and every agent's first prompt are all settings.
+
+Close the terminal and everything keeps running. After a reboot, `flow ui` resumes every
+conversation where it stopped.
+
+Next to your workers you can open plain sessions: an agent in any folder, without a worktree or a
+flow. And flow takes on your terminal's colors by default, with a dark and a light theme of its
+own. Themes reload while you edit them, and another tool can write one for flow to follow (the docs
+have a Noctalia template).
 
 ## How it works
 
-Every flow is an append-only log of events. The agents' own hooks run `flow hook`, which turns what
-happens into events: a skill started a phase, a question is waiting, a merge request was opened.
-flow folds the logs into where each flow stands: its phase and how long each took, tasks,
-blockers, decisions and a timeline. `flow server` runs each agent in its own terminal and keeps it
-running; `flow ui` attaches to it.
+Every flow is an append-only log of events. The agents' hooks run `flow hook`, which turns what
+happened into an event: a skill started a phase, a question is waiting, a merge request was opened.
+flow folds those logs into where each flow stands. `flow server` runs each agent in its own
+terminal and keeps it running, and `flow ui` attaches to it.
 
 ## For agents and scripts
 
-Every command answers in [TOON](https://toonformat.dev), a compact format agents read well, with
-the next steps beside it:
+Every command answers in [TOON](https://toonformat.dev), a compact format agents read well, and
+suggests the next commands to run:
 
 ```
 $ flow status
@@ -88,8 +133,8 @@ blockers[2]{name,blocker}:
 help[2]: "Run `flow status <name>` for one flow's phases, timeline and decisions",Run `flow new --name <name> --request <text>` to track a new flow
 ```
 
-Programs read `flow status --json`, a versioned contract. The command line and the JSON are the
-only public interface; the logs are private.
+Programs read `flow status --json`, which is versioned. The command line and the JSON are the only
+public interface; the logs behind them are private.
 
 | Command | Does |
 | --- | --- |
@@ -102,37 +147,37 @@ only public interface; the logs are private.
 | `flow report <event>` | report into a flow by hand |
 | `flow remove <flow>`, `flow clear` | tear down and forget |
 
-Every option is in [docs/cli.md](docs/cli.md).
+[docs/cli.md](docs/cli.md) has every option.
 
 ## Similar tools
 
-Many tools run coding agents side by side in worktrees: Claude Squad, ccmanager, dmux, amux, herdr,
-parallel-code and Conductor among them, and several do things flow does not. Conductor,
-parallel-code and dmux have diff review and pull requests built in; parallel-code reaches your
-phone; herdr and ccmanager recognise many more agents. If you need one of those, they will suit you
-better.
+Plenty of tools run coding agents side by side in worktrees, among them Claude Squad, ccmanager,
+dmux, amux, herdr, parallel-code and Conductor. Several of them do things flow doesn't. Conductor,
+parallel-code and dmux have diff review and pull requests built in, and parallel-code reaches your
+phone. If you need one of those, they'll suit you better.
 
-What flow does differently:
+[firstmate](https://github.com/kunchenguid/firstmate) is closest in spirit. A lead agent, the first
+mate, starts crewmates in their own git worktrees. It ships as a repository of instructions, skills
+and scripts that you start your agent in. Crewmates run in tmux by default (or herdr, cmux, Zellij
+or Orca), and it has no dashboard of its own.
 
-- It follows a feature, not only a session: phases, task counts, decisions, blockers and a
-  timeline per flow.
-- It learns what an agent does from the agent's own hooks instead of reading its screen.
-- Its command line is made for agents, so a master agent can start, read and answer workers, and
-  it is woken instead of polling.
-- Each worktree gets its own setup, teardown and port slot.
+flow's take is to follow a feature rather than a session. Each flow has phases, task counts,
+decisions, blockers and a timeline. It learns all of that from the agents' own hooks, and its
+command line is made for agents, so the master can start, read and answer workers and gets woken
+instead of polling. Each worktree gets its own setup, teardown and port slot.
 
-Where flow falls short: it has no diff viewer or pull request button (the worker's skill opens the
-merge request and flow notices it), no desktop notifications, no phone access, and it follows only
-Claude Code and Codex. It runs on macOS and Linux only.
+flow has no diff viewer or pull request button (the worker's skill opens the merge request, and
+flow notices), no desktop notifications yet, and no way to reach it from your phone. It runs on
+macOS and Linux.
 
 ## Documentation
 
-[Install](docs/install.md), [flow ui](docs/ui.md), [flows and the master](docs/flows.md),
-[configuration](docs/configuration.md), [themes](docs/themes.md),
-[repository setup](docs/repository.md), [the command line](docs/cli.md),
-[the JSON contract](docs/json.md), [files](docs/files.md),
-[troubleshooting](docs/troubleshooting.md). What changed: [CHANGELOG.md](CHANGELOG.md). What
-comes next: [ROADMAP.md](ROADMAP.md).
+Start with [install](docs/install.md) and [flow ui](docs/ui.md). Then there's
+[flows and the master](docs/flows.md), [configuration](docs/configuration.md),
+[themes](docs/themes.md), [repository setup](docs/repository.md),
+[the command line](docs/cli.md), [the JSON contract](docs/json.md), [files](docs/files.md) and
+[troubleshooting](docs/troubleshooting.md). [CHANGELOG.md](CHANGELOG.md) says what changed and
+[ROADMAP.md](ROADMAP.md) what comes next.
 
 ## License
 
