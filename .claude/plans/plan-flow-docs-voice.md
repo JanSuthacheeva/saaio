@@ -160,7 +160,7 @@ configuration.md "When a change applies":
 - [x] Rewrite docs/configuration.md with "Use your own workflow" first and the no-skills facts
 - [x] Rewrite docs/install.md and docs/README.md
 - [x] Rewrite docs/flows.md
-- [ ] Rewrite docs/ui.md
+- [x] Rewrite docs/ui.md
 - [ ] Rewrite docs/themes.md and docs/repository.md
 - [ ] Rewrite docs/cli.md, docs/json.md and docs/files.md
 - [ ] Light pass on docs/troubleshooting.md
