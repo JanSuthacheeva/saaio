@@ -1,11 +1,12 @@
 # Files
 
-Every file flow reads or writes. All of them are plain text, and none needs editing by hand
-except the three in the config folder.
+This is every file flow reads or writes. They're all plain text, and the only ones you'd ever edit
+by hand are the ones in the config folder.
 
 ## The config folder
 
-The folder of `$FLOW_CONFIG` when it is set, else `$XDG_CONFIG_HOME/flow`, else `~/.config/flow`.
+This is the folder `$FLOW_CONFIG` is in when it's set, else `$XDG_CONFIG_HOME/flow`, else
+`~/.config/flow`.
 
 | File | Holds |
 | --- | --- |
@@ -14,12 +15,12 @@ The folder of `$FLOW_CONFIG` when it is set, else `$XDG_CONFIG_HOME/flow`, else 
 | `themes/<name>.toml` | themes `theme.toml` can extend, often written by another tool |
 | `master.md` | the master's instructions (see [flows.md](flows.md#the-master)) |
 
-flow ui writes `config.toml`, `theme.toml` and `master.md` on its first run. It never overwrites
-one you edited. A newer flow refreshes `master.md` while it still holds an earlier default.
+flow ui writes `config.toml`, `theme.toml` and `master.md` on its first run, and never overwrites
+one you've edited. A newer flow refreshes `master.md` as long as it still holds an earlier default.
 
 ## The store
 
-Where flow keeps its flows: `$FLOW_HOME`, else `$XDG_STATE_HOME/flow`, else
+This is where flow keeps its flows: `$FLOW_HOME`, else `$XDG_STATE_HOME/flow`, else
 `~/.local/state/flow`.
 
 | File | Holds |
@@ -31,13 +32,13 @@ Where flow keeps its flows: `$FLOW_HOME`, else `$XDG_STATE_HOME/flow`, else
 | `server.log` | what the server did and what went wrong; past 1 MiB it moves to `server.log.1` |
 | `master.json` | the master's session id and the folder it runs in, so it resumes after a restart |
 
-The event log is private to flow: read flows through `flow status --json` (see [json.md](json.md)),
-not from these files.
+The event log is private to flow. To read flows, use `flow status --json` (see [json.md](json.md))
+rather than these files.
 
 ## The shared folder
 
-`$XDG_STATE_HOME/flow`, else `~/.local/state/flow`, whatever `FLOW_HOME` says. With the default
-store it is the same folder as the store.
+This is `$XDG_STATE_HOME/flow`, else `~/.local/state/flow`, whatever `FLOW_HOME` says. With the
+default store, it's the same folder as the store.
 
 | File | Holds |
 | --- | --- |
@@ -60,11 +61,14 @@ store it is the same folder as the store.
 | `~/.claude/projects/...` (or under `$CLAUDE_CONFIG_DIR`) | a Claude Code worker's transcript, for the peek in flow ui |
 | the transcript Codex reports | a Codex worker's transcript, for the peek |
 
-flow writes nothing to `~/.claude` or `~/.codex`. It passes its hooks on each agent's command line.
+flow writes nothing to `~/.claude` or `~/.codex`. It passes its hooks on each agent's command line
+instead.
 
 ## Removing flow
 
-1. `flow ui --stop`, to end the server and every session.
-2. `flow remove <name>` or `flow clear` for flows whose worktrees you want gone.
-3. `cargo uninstall flow`.
-4. Delete `~/.config/flow` and `~/.local/state/flow` (and any `FLOW_HOME` you used).
+```sh
+flow ui --stop      # end the server and every session
+flow clear          # or flow remove <name>, for flows whose worktrees you want gone
+cargo uninstall flow
+rm -rf ~/.config/flow ~/.local/state/flow   # and any FLOW_HOME you used
+```

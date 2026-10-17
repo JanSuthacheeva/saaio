@@ -162,7 +162,7 @@ configuration.md "When a change applies":
 - [x] Rewrite docs/flows.md
 - [x] Rewrite docs/ui.md
 - [x] Rewrite docs/themes.md and docs/repository.md
-- [ ] Rewrite docs/cli.md, docs/json.md and docs/files.md
+- [x] Rewrite docs/cli.md, docs/json.md and docs/files.md
 - [ ] Light pass on docs/troubleshooting.md
 - [ ] Rewrite ROADMAP.md (add More agents) and CHANGELOG.md
 - [ ] Rewrite the comments in examples/config.toml and examples/theme.toml; cargo test
