@@ -54,6 +54,14 @@ next prompt.
 and no event for `/exit`. End its flow from flow ui (`x` on its pane once it exited, or on the
 board when it is done) or with `flow remove`.
 
+**A Codex flow jumps ahead to a later phase.** flow learns a Codex worker's phase from the skill
+files it reads, so a worker that reads the next skills' `SKILL.md` early seems to start their phases
+early. A line in your skills such as "read each skill only when you start it" helps.
+
+**A Codex worker asks permission for every `git commit`.** Codex's sandbox lets it write only inside
+its worktree, but a worktree's git data lives in the main repository's `.git`. Approve the commit in
+its pane, or give Codex a sandbox setting that allows it.
+
 **A flow is `not-responding`.** It reported heartbeats with `flow report heartbeat` and stopped for
 90 seconds. Claude Code and Codex workers send no heartbeats; a session of theirs that stopped shows
 `exited` in the sidebar instead.
