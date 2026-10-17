@@ -86,3 +86,30 @@ pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("SAAIO_COMM
 - [x] Rename the docs: README, docs/*.md, HANDOVER, CLAUDE.md, ROADMAP, CHANGELOG, examples, media scripts
 - [x] Grep for any product use of flow left; fmt, clippy, tests
 - [x] End to end: install saaio into a scratch root and run `saaio`, `saaio new`, `saaio report`, `saaio status --json` and `saaio ui` on a scratch `SAAIO_HOME`
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and main (59b5a55).
+
+**Fixed**
+
+- tests/cli.rs cleared the shell's `FLOW_*` variables instead of `SAAIO_*`: run inside a saaio worker (`SAAIO_FLOW_ID`, `SAAIO_MASTER=1` set), 16 of the 67 CLI tests failed. e508975
+- `saaio --help` still closed with "Run alone in a terminal, flow opens saaio ui."; the help test now asserts the line. b802f03
+- Four doc comments still named the product flow (master.rs, pane.rs, report.rs, output/flow.rs). b0bec88
+
+**Open**
+
+- Users' own files are not migrated: a `theme.toml` with `extends = "flow"` or `"flow-light"` stops loading, and repo hooks that read `FLOW_*` get nothing. Jan's own theme extends `noctalia`, so only the hooks matter; step 2 of "After the merge" covers them. Recommend leaving it, as planned (no compatibility code before 0.1.0).
+- Assumption 5 is safer than stated: a flow whose log says `flow-ui` still resumes (any window resumes) and the server marks it `saaio-ui` on open (`server/panes.rs`), so an open flow survives the rename.
+
+**Where to look**
+
+1. `src/main.rs` env reads to `src/launch/pane.rs` `worker_env` and `src/launch/worktree.rs` hook variables: every variable a worker and a hook get.
+2. `src/registry.rs`, `src/config.rs` `config_file`, `src/client.rs` socket path, `src/branching.rs` `CONFIG_FILE`: the folders, which decide whether the `mv` steps after the merge find everything.
+3. `src/server/master.rs` and `master-v9.md` (byte for byte main's master.md): a moved, unedited master.md upgrades.
+
+The rest is string renames in output, tests, goldens and docs, and can be skimmed. The fixes were reviewed by the same agent in a separate pass, not independently.
+
+**Checks**
+
+`cargo test` (458 unit + 67 CLI, also with `SAAIO_FLOW_ID`/`SAAIO_MASTER`/`SAAIO_SLOT` set), `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at b0bec88.
