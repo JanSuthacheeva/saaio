@@ -265,6 +265,10 @@ colors.
 
 - [x] End to end: install the branch build, start `flow ui` with a fresh scratch `FLOW_HOME` and empty config dir, confirm the three files appear and change nothing, edit one setting and restart (kept), follow the README quick start as a new user would, and read every docs page once against what flow does
 
+### After review
+
+- [ ] Fix the flow ui panic when the terminal shrinks before its resize event: `App::draw` lays out for the frame it draws into, not the stored size; regression test drawing an app laid out for a larger terminal into a smaller one; a CHANGELOG line; a short second review of the commit
+
 ## Review
 
 Reviewed in an isolated context against this plan, CLAUDE.md and the code. The code matches the
