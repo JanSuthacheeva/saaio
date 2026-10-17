@@ -5,12 +5,13 @@ shipped is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Implementing
 
-- **Desktop notifications.** When a flow starts waiting or is blocked and you are not looking at
-  it, flow ui tells your terminal to notify you, with a switch in `config.toml`. Today a waiting
-  flow shows only in the sidebar and to the master.
+Nothing is in progress right now.
 
 ## Planned soon
 
+- **Desktop notifications.** When a flow starts waiting or is blocked and you are not looking at
+  it, flow ui tells your terminal to notify you, with a switch in `config.toml`. Today a waiting
+  flow shows only in the sidebar and to the master.
 - **Every subagent in the sidebar.** A worker running several background subagents looks merely
   working, and only the first shows, once its turn ends. The sidebar should count every running
   subagent and the board list their tasks.
