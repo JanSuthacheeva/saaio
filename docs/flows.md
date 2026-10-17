@@ -1,129 +1,145 @@
 # Flows, workers and the master
 
-- [What a flow is](#what-a-flow-is)
+```sh
+flow start "SHOP-217 add CSV export"
+```
+
+That's a flow: one feature, from your request to an open merge request. flow makes a branch and a
+worktree for it and opens an agent there, the flow's worker.
+
+From then on flow keeps a log of what the worker does. `flow status shop-217`, or the board in
+flow ui, shows what came of it so far. You'll see the phase it's in and how long the earlier ones
+took, any decisions it made for you, what it's asking, and a timeline of the whole thing.
+
 - [States](#states)
-- [Phases and steps](#phases-and-steps)
-- [Starting a flow](#starting-a-flow)
+- [Phases](#phases)
+- [Start a flow](#start-a-flow)
 - [Guided and auto](#guided-and-auto)
 - [The master](#the-master)
 - [Plain sessions](#plain-sessions)
 - [How a worker reports](#how-a-worker-reports)
-- [Ending a flow](#ending-a-flow)
-
-## What a flow is
-
-A flow is one feature on its way to a merge request: the request, a git worktree and branch of its
-own, and a worker, an agent session flow ui runs in that worktree. flow writes down what happens in
-each flow as it happens, and shows where each one stands: its state, its phase and how long each
-phase took, task counts, decisions, what it asks, and a timeline.
+- [End a flow](#end-a-flow)
 
 ## States
+
+A flow is always in one of these states, and the sidebar groups it by what that means for you:
 
 | State | Means | In the sidebar |
 | --- | --- | --- |
 | `working` | the worker is at work | RUNNING |
-| `delegated` | a subagent works on the flow, such as a review | RUNNING |
-| `waiting` | the worker asks you something | NEEDS YOU |
+| `delegated` | a subagent is working on the flow, such as a review | RUNNING |
+| `waiting` | the worker is asking you something | NEEDS YOU |
 | `idle` | the worker's turn ended without a question; something may be ready to look at | READY |
-| `blocked` | the flow cannot go on | NEEDS YOU |
-| `not-responding` | a worker that sent heartbeats stopped for 90 seconds | NEEDS YOU |
+| `blocked` | the flow can't go on | NEEDS YOU |
+| `not-responding` | a worker that sent heartbeats has been silent for 90 seconds | NEEDS YOU |
 | `done` | the merge request is open | DONE |
 | `ended` | the worker's session ended for good | DONE |
 
-A worker that quits with `/exit` ends its flow. A session that stops for any other reason, such as
-a crash or a closed connection, does not: its row says `exited`, `C-space r` resumes it, and the
-next server start resumes it on its own.
+Quitting a worker with `/exit` ends its flow. If the session stops any other way, say a crash or a
+dropped connection, the flow carries on. Its row says `exited`, `C-space r` resumes it, and the
+next time the server starts it resumes on its own.
 
-## Phases and steps
+## Phases
 
-A flow walks through up to four phases. flow ui shows them as steps, `●───●───○───○`: finished,
-current and still open. The built-in phases are `plan`, `implement`, `review` and `merge-request`;
-a phase starts when the worker runs its skill (`design-code`, `implement-plan`, `review-changes`,
-`write-merge-request`). Each step keeps the time spent in it.
+A flow walks through up to four phases, which flow ui draws as steps: `●───●───○───○`, finished,
+current, still to come. Each step keeps the time spent in it.
 
-You can set your own phases and the skills that start them; see
-[configuration.md](configuration.md#phases-the-workflow). A flow keeps the phases it started with.
+The built-in phases are `plan`, `implement`, `review` and `merge-request`. Each starts when the
+worker runs its skill: `design-code`, `implement-plan`, `review-changes` and `write-merge-request`.
 
-## Starting a flow
+You can name your own phases and the skills that start them, and a flow keeps working without any
+matching skills at all. [configuration.md](configuration.md#phases-the-workflow) covers both. A
+flow keeps the phases it started with.
 
-Three ways, all doing the same:
+## Start a flow
 
-- Ask the master: "start a flow for SHOP-217 add CSV export".
-- Press `C-space n` in flow ui (see [ui.md](ui.md#starting-a-flow)).
-- Run `flow start "SHOP-217 add CSV export"` in the repository (see [cli.md](cli.md#flow-start)).
+There are three ways, and they all do the same thing:
+
+- ask the master, "start a flow for SHOP-217 add CSV export"
+- press `C-space n` in flow ui (see [ui.md](ui.md#starting-a-flow))
+- run `flow start "SHOP-217 add CSV export"` in the repository (see [cli.md](cli.md#flow-start))
 
 flow names the flow, creates its worktree and branch, gives it a slot, runs the repository's setup
-script and opens the worker. The worker starts with its first prompt, by default
-`/ship-feature SHOP-217 add CSV export` for Claude Code and `$ship-feature ...` for Codex.
+script and opens the worker. The worker starts with its first prompt. By default that's
+`/ship-feature SHOP-217 add CSV export` in Claude Code and `$ship-feature ...` in Codex.
 
-Each worker also gets a short system prompt from flow, which tells it that it runs as a worker of
+flow also gives each worker a short system prompt. It tells the worker that it runs as part of
 flow, and that messages from the flow master are answers to act on.
 
 ## Guided and auto
 
-A flow is `guided` or `auto`. The mode tells the master who answers when the worker asks
-something:
+Every flow is either `guided` or `auto`. The mode tells the master who answers when the worker asks
+something.
 
-- **guided** (the default): the question goes to you. The master tells you which flow asks what,
-  and sends your answer on.
-- **auto**: the master answers what the code, the plan or your earlier decisions already settle,
-  and tells you what it answered. A product decision, or anything that is still a guess, comes to
-  you.
+In a **guided** flow, the default, every question comes to you. The master tells you which flow is
+asking what, and passes your answer on.
 
-The worker itself does not know its mode. How often it stops to ask is up to its skills: the
-`ship-feature` skill, for example, stops at the decisions that are yours.
+In an **auto** flow, the master answers whatever the code, the plan or your earlier decisions
+already settle, and tells you what it said. Product decisions, and anything that would still be a
+guess, still come to you.
 
-Without the master, the mode changes nothing: every question waits for you in the sidebar.
+The worker doesn't know its own mode. How often it stops to ask depends on its skills; the
+`ship-feature` skill, for example, stops at the decisions that are yours to make.
+
+If you're not using the master, the mode makes no difference. Every question waits for you in the
+sidebar.
 
 ## The master
 
-The master is an agent session that works with flow for you. It is the big pane when flow ui
-opens, and row `0` in the sidebar. It starts flows, reads where they stand, answers workers and
-tells you what needs you. It does not do the workers' work.
+The master is the agent you talk to. It's the big pane when flow ui opens, and row `0` in the
+sidebar. You tell it what you want built; it starts the flows, keeps an eye on them, answers the
+workers and tells you when something needs you. It doesn't do the workers' work itself. If you
+think of yourself as the CTO, the master is your team lead and the workers are its developers.
 
-It runs in the folder you ran `flow ui` in when it started, with the instructions in `master.md`
-beside `config.toml` added to its system prompt. flow writes the default `master.md` on its first
-run and refreshes it with new versions of flow, until you edit it; your edits are never
-overwritten. The master is Claude Code unless `[master] agent` names another
+It runs in the folder where you started `flow ui`, with the instructions from `master.md` (next to
+`config.toml`) added to its system prompt. flow writes the default `master.md` on the first run and
+keeps it up to date with new versions of flow until you edit it. Your edits are never overwritten.
+The master is Claude Code unless `[master] agent` names another agent
 (see [configuration.md](configuration.md#master)).
 
-**Being woken.** The master is woken when a flow of its project becomes `waiting`, `blocked`,
-`idle`, `done` or `not-responding`. Flows that stop within two seconds of each other arrive as one
-list. `[master] wake = false` turns this off; the master then learns only when it runs
+### When the master wakes up
+
+The master wakes up when a flow in its project becomes `waiting`, `blocked`, `idle`, `done` or
+`not-responding`. Flows that stop within two seconds of each other arrive together, as one list.
+Set `[master] wake = false` to turn this off; the master then only finds out when it runs
 `flow status`.
 
-**Answering.** The master answers a worker with `flow send <name> "<text>"`. flow adds
-`master: <text>` to the flow's timeline and wakes the worker with it, or gives it to the worker
-once its session runs again.
+### How it answers
 
-How a session is woken depends on its harness:
+The master answers a worker with `flow send <name> "<text>"`. flow adds `master: <text>` to the
+flow's timeline and wakes the worker with it, or hands it over once the worker's session is running
+again.
 
-- Claude Code sessions run `flow wait` in the background after each turn. It sleeps until there is
-  news and then wakes the session with it.
-- Codex cannot wake a session that sits at its prompt, so a busy Codex session gets its news as its
-  turn ends, and an idle one has it typed in by flow's server, as one paste, once nobody has typed into
-  that pane for ten seconds. flow never types into a Codex session before its first turn.
+Waking works differently per harness. A Claude Code session runs `flow wait` in the background
+after each turn, which sleeps until there's news and then wakes the session with it.
+
+Codex can't wake a session that's sitting at its prompt. A busy Codex session gets its news when
+its turn ends. For an idle one, flow's server types the news in, as one paste, once nobody has
+typed in that pane for ten seconds. flow never types into a Codex session before its first turn.
 
 `flow status <name> --full` shows a worker's whole last answer, for you or the master.
 
 ## Plain sessions
 
-A plain session is an agent in a folder of your choice, for tinkering: no flow, worktree, branch,
-slot or first prompt. Start one with `flow start --plain <folder>`, or in the new-flow dialog with
-the mode set to `plain`. The folder does not have to be a repository.
+Sometimes you just want an agent in some folder to tinker with. That's a plain session. It has no
+flow, worktree, branch, slot or first prompt. Start one with `flow start --plain <folder>`, or pick
+`plain` as the mode in the new-flow dialog. The folder doesn't have to be a repository.
 
-It shows in the sidebar beside the workers and resumes after a restart like them. Its hooks still
-report, so its state shows. It is yours, not the master's: it gets no worker prompt, never wakes
-the master, and `flow send` refuses it. `flow remove` forgets it and never touches the folder.
+It sits in the sidebar next to the workers and resumes after a restart like they do. Its hooks
+still report, so you can see its state. But it's yours, not the master's. It gets no worker prompt
+and never wakes the master, and `flow send` refuses it. `flow remove` forgets it without touching
+the folder.
 
 ## How a worker reports
 
-A worker reports through its harness's own hooks; the agent and its skills take no part. When flow
-ui starts a worker whose agent has an `adapter`, it adds the hooks to the agent's command line.
-They run beside your own hooks, and flow installs nothing. Each hook runs `flow hook`, which turns
-the event into flow's events and adds only what changes the flow.
+A worker reports through its harness's own hooks. Neither the agent nor its skills have to do
+anything. When flow ui starts a worker whose agent has an `adapter`, it adds the hooks to the
+agent's command line. They run alongside your own hooks, and flow installs nothing. Each hook runs
+`flow hook`, which turns the event into flow's events and records only what changes the flow.
 
-**Claude Code** (`adapter = "claude-code"`): flow passes `--settings` with its hooks.
+### Claude Code
+
+With `adapter = "claude-code"`, flow passes its hooks with `--settings`.
 
 | Claude Code event | Reported |
 | --- | --- |
@@ -136,10 +152,12 @@ the event into flow's events and adds only what changes the flow.
 | the end of a turn | `delegated <the task>` while a background task still runs, else `waiting <the question>` when the last line asks one, else `idle <the last sentence>`; the whole closing message becomes the flow's `answer` |
 | `/exit` | `ended` |
 
-**Codex** (`adapter = "codex"`): flow passes `-c hooks.<event>=[...]` and the worker prompt as
-`-c developer_instructions=...`; nothing is written to `~/.codex`. The first time, Codex asks you
-to review the hooks: pick "Trust all and continue". It asks again only when flow's hooks change. A
-repository you trust in Codex covers its flow worktrees.
+### Codex
+
+With `adapter = "codex"`, flow passes `-c hooks.<event>=[...]`, and the worker prompt as
+`-c developer_instructions=...`. Nothing is written to `~/.codex`. The first time, Codex asks you
+to review the hooks; pick "Trust all and continue". It only asks again when flow's hooks change. A
+repository you trust in Codex covers its flow worktrees too.
 
 | Codex event | Reported |
 | --- | --- |
@@ -151,24 +169,27 @@ repository you trust in Codex covers its flow worktrees.
 | the end of a turn | as for Claude Code |
 | Esc | `idle interrupted` |
 
-Codex has no plan-progress tool, so a Codex flow shows no task counts, and no `/exit` event, so you
-end its flow from flow ui or with `flow remove`.
+Codex has no plan-progress tool, so a Codex flow shows no task counts. It also has no `/exit`
+event, so you end a Codex flow from flow ui or with `flow remove`.
 
-A subagent's own events are ignored, except that a phase skill it runs counts, as when a review
-runs in a fresh agent.
+### Everything else
 
-An agent without an adapter reports nothing; flow ui shows only whether it runs. Scripts and other
-tools can report by hand with `flow report` (see [cli.md](cli.md#flow-report)).
+A subagent's own events are ignored, with one exception: a phase skill it runs still counts, as
+when a review runs in a fresh agent.
 
-## Ending a flow
+An agent without an adapter reports nothing, and flow ui only shows whether it's running. Scripts
+and other tools can report by hand with `flow report` (see [cli.md](cli.md#flow-report)).
 
-- A flow is `done` once its merge request is open. It stays in the sidebar until you clear it.
-- `flow clear` forgets every finished flow and removes its worktree, keeping one with uncommitted
-  work. In flow ui, `x` on the board cleans up one finished flow.
-- `flow remove <name>` ends a flow in any state: it closes its session, runs the teardown script,
-  removes the worktree and branch, and forgets the flow. It refuses uncommitted work and commits
-  that are on no other branch, unless you pass `--force` or `--delete-unmerged`.
-- In a worker's ended pane, `x` does the same as `flow remove`, and asks before discarding
-  anything.
+## End a flow
 
-See [cli.md](cli.md#flow-remove) for the details.
+A flow is `done` once its merge request is open. It stays in the sidebar until you clear it.
+
+`flow clear` forgets every finished flow and removes its worktree, but keeps a worktree with
+uncommitted work. In flow ui, `x` on the board cleans up one finished flow.
+
+`flow remove <name>` ends a flow in any state. It closes the session, runs the teardown script,
+removes the worktree and branch, and forgets the flow. It refuses if there's uncommitted work or
+commits that aren't on any other branch, unless you pass `--force` or `--delete-unmerged`. In a
+worker's ended pane, `x` does the same as `flow remove` and asks before throwing anything away.
+
+[cli.md](cli.md#flow-remove) has the details.

@@ -158,8 +158,8 @@ configuration.md "When a change applies":
 - [x] Write the link and anchor checker and the voice grep (scratchpad); run them on the current docs as a baseline
 - [x] Rewrite README.md: orchestration opening, What it does, Pick a workflow, Similar tools with firstmate
 - [x] Rewrite docs/configuration.md with "Use your own workflow" first and the no-skills facts
-- [ ] Rewrite docs/install.md and docs/README.md
-- [ ] Rewrite docs/flows.md
+- [x] Rewrite docs/install.md and docs/README.md
+- [x] Rewrite docs/flows.md
 - [ ] Rewrite docs/ui.md
 - [ ] Rewrite docs/themes.md and docs/repository.md
 - [ ] Rewrite docs/cli.md, docs/json.md and docs/files.md
