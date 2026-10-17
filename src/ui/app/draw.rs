@@ -4,7 +4,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
 
 use super::{App, View};
-use crate::proto::{PaneKey, PaneStatus};
+use crate::proto::{PaneKey, PaneStatus, Size};
 use crate::text::plural;
 use crate::ui::board::{BoardState, BoardView};
 use crate::ui::dialog::{self, Dialog};
@@ -25,7 +25,7 @@ impl App {
             self.draw_board(frame, state, theme);
             return;
         }
-        let areas = self.areas();
+        let areas = self.areas_in(frame_size(frame));
         self.draw_title(frame, areas.title, theme);
         self.draw_rule(frame, areas.rule, theme);
         frame.render_widget(
@@ -77,7 +77,7 @@ impl App {
                 projects: self.projects.as_ref(),
                 here: self.here.as_deref(),
             },
-            layout::screen(self.size),
+            layout::screen(frame_size(frame)),
         );
     }
 
@@ -257,5 +257,14 @@ impl App {
             ],
             ..Dialog::new("stop", body, theme)
         }
+    }
+}
+
+/// The size of the terminal the frame is drawn in, which ratatui read just before drawing.
+fn frame_size(frame: &Frame) -> Size {
+    let area = frame.area();
+    Size {
+        cols: area.width,
+        rows: area.height,
     }
 }

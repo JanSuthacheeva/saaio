@@ -26,6 +26,11 @@ The first public release, 0.1.0. This heading becomes `## [0.1.0] - <date>` when
 - The command line for agents (TOON) and `flow status --json` for programs.
 - Commented example `config.toml` and `theme.toml`, written on the first run.
 
+### Fixed
+
+- flow ui no longer crashes when its terminal shrinks, such as a window manager resizing it, while
+  it draws.
+
 ### Known issues
 
 - No desktop notifications: a waiting flow shows only in the sidebar and to the master.
