@@ -50,7 +50,7 @@ pub struct Session {
     pub transcript: Option<String>,
 }
 
-/// Where a started flow's worker runs: its worktree, branch, port slot, window (flow-ui once
+/// Where a started flow's worker runs: its worktree, branch, port slot, window (saaio-ui once
 /// flow ui opened it; a tmux window id from before) and agent.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

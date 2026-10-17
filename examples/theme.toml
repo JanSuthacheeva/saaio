@@ -16,7 +16,7 @@
 # A key you leave out keeps the color of the theme this file extends.
 # The whole file, explained: https://github.com/JanSuthacheeva/flow/blob/main/docs/themes.md
 
-# The theme to start from: "terminal", "flow" (dark), "flow-light", or the name of a file in
+# The theme to start from: "terminal", "saaio" (dark), "saaio-light", or the name of a file in
 # themes/ next to this one, without .toml.
 #extends = "terminal"
 

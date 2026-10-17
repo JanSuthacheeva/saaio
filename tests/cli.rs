@@ -796,7 +796,7 @@ resume = ["cat"]"#,
     let hosted = || {
         let board: serde_json::Value =
             serde_json::from_slice(&saaio(&lab.home, &["status", "--json"]).stdout).unwrap();
-        board["flows"][0]["workspace"]["window"] == "flow-ui"
+        board["flows"][0]["workspace"]["window"] == "saaio-ui"
     };
     wait_until(
         Duration::from_secs(5),
@@ -2089,7 +2089,7 @@ fn seed_worker(home: &Path, id: &str, name: &str, last: &str) {
         r#"{{"v":1,"at":1000,"kind":"started","name":"{name}","request":"x","mode":"auto"}}"#
     );
     let workspace = format!(
-        r#"{{"v":1,"at":1500,"kind":"workspace","path":"/repo/.saaio/worktrees/{name}","branch":"flow/{name}","slot":1,"window":"flow-ui","agent":"claude"}}"#
+        r#"{{"v":1,"at":1500,"kind":"workspace","path":"/repo/.saaio/worktrees/{name}","branch":"flow/{name}","slot":1,"window":"saaio-ui","agent":"claude"}}"#
     );
     seed(home, id, &[&started, &workspace, last]);
 }
@@ -2167,7 +2167,7 @@ fn send_refuses_what_has_no_worker_to_read_it() {
         "dddd",
         &[
             r#"{"v":1,"at":1000,"kind":"started","name":"scratch","request":"","mode":"plain"}"#,
-            r#"{"v":1,"at":1500,"kind":"workspace","path":"/tmp","branch":null,"slot":null,"window":"flow-ui","agent":"claude"}"#,
+            r#"{"v":1,"at":1500,"kind":"workspace","path":"/tmp","branch":null,"slot":null,"window":"saaio-ui","agent":"claude"}"#,
         ],
     );
     let plain = refused(&["send", "scratch", "hi"], None);
@@ -2257,7 +2257,7 @@ fn send_type_refuses_more_than_one_line_and_an_agent_without_turns() {
         "aaaa",
         &[
             r#"{"v":1,"at":1000,"kind":"started","name":"old-cli","request":"x","mode":"auto"}"#,
-            r#"{"v":1,"at":1500,"kind":"workspace","path":"/repo","branch":"flow/old-cli","slot":2,"window":"flow-ui","agent":"aider"}"#,
+            r#"{"v":1,"at":1500,"kind":"workspace","path":"/repo","branch":"flow/old-cli","slot":2,"window":"saaio-ui","agent":"aider"}"#,
         ],
     );
     let config = home.path().join("config.toml");

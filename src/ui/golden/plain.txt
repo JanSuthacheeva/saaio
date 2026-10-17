@@ -1,5 +1,5 @@
 
-  ○ scratch  idle  · ~/scratch                                                                              │ ▚▄▞ flow
+  ○ scratch  idle  · ~/scratch                                                                              │ ▚▄▞ saaio
                                                                                                             ├────────────────────────────────────────
                                                                                                             │ 0   master
                                                                                                             │     ~/projects/shop · main

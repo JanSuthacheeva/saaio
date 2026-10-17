@@ -108,11 +108,11 @@ mod tests {
 
     #[test]
     fn uncomments_settings_and_sections_but_not_explanations() {
-        let text = "# A theme.\n#extends = \"flow\"\n\n#[ui]\n## heading\n# For example: x = 1\n#[[phases]]\nkey = 2\n";
+        let text = "# A theme.\n#extends = \"saaio\"\n\n#[ui]\n## heading\n# For example: x = 1\n#[[phases]]\nkey = 2\n";
 
         assert_eq!(
             uncommented(text),
-            "# A theme.\nextends = \"flow\"\n\n[ui]\n## heading\n# For example: x = 1\n[[phases]]\nkey = 2\n"
+            "# A theme.\nextends = \"saaio\"\n\n[ui]\n## heading\n# For example: x = 1\n[[phases]]\nkey = 2\n"
         );
     }
 }

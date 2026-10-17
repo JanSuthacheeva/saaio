@@ -9,7 +9,7 @@ use crate::view::{FlowView, Workspace};
 pub const MASTER_ENV: &str = "SAAIO_MASTER";
 
 /// Workspace.window of a worker flow ui has opened once; its next open resumes it.
-pub const HOSTED: &str = "flow-ui";
+pub const HOSTED: &str = "saaio-ui";
 
 /// What the server passes on to every pane: SAAIO_HOME, when it was set for the server, and the
 /// flow binary a worker's hooks run.

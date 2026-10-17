@@ -401,7 +401,7 @@ mod tests {
 
     #[test]
     fn reads_a_workspace_line_written_before_plain_sessions() {
-        let line = r#"{"v":1,"at":7,"kind":"workspace","path":"/repo/.saaio/worktrees/shop-221","branch":"flow/shop-221","slot":2,"window":"flow-ui","agent":"claude"}"#;
+        let line = r#"{"v":1,"at":7,"kind":"workspace","path":"/repo/.saaio/worktrees/shop-221","branch":"flow/shop-221","slot":2,"window":"saaio-ui","agent":"claude"}"#;
 
         let Some(Event {
             kind: EventKind::Workspace { branch, slot, .. },

@@ -81,7 +81,7 @@ pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("SAAIO_COMM
 - [x] Rename the crate, lib and binary to saaio: Cargo.toml, Cargo.lock, `use saaio::` in main.rs, `CARGO_BIN_EXE_saaio` in tests/cli.rs, `SAAIO_COMMIT` in build.rs and proto.rs
 - [x] Rename every variable to `SAAIO_*` (`SAAIO_FLOW_ID`, `SAAIO_FLOW_NAME`) and the `Env` fields, with the tests that set them
 - [x] Rename the folders: state and config `saaio`, `/etc/saaio`, `.saaio/` per project, `/tmp/saaio-<uid>`, with their tests
-- [ ] Rename the stored and shown names: `HOSTED = "saaio-ui"`, themes `saaio`/`saaio-light` and `Palette::SAAIO`, the UI wordmark; rewrite the goldens
+- [x] Rename the stored and shown names: `HOSTED = "saaio-ui"`, themes `saaio`/`saaio-light` and `Palette::SAAIO`, the UI wordmark; rewrite the goldens
 - [ ] Rename what agents read: `WORKER_PROMPT`, "message from the saaio master:", every help[] line, error and the about text in src/cli
 - [ ] Rename the docs: README, docs/*.md, HANDOVER, CLAUDE.md, ROADMAP, CHANGELOG, examples, master.md, media scripts
 - [ ] Grep for any product use of flow left; fmt, clippy, tests

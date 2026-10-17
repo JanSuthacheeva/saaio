@@ -247,7 +247,7 @@ fn shows_where_the_master_runs_with_home_as_a_tilde() {
 #[test]
 fn paints_every_cell_on_the_themes_ground() {
     let app = board_app();
-    let theme = Theme::from_palette(crate::ui::theme::Palette::FLOW);
+    let theme = Theme::from_palette(crate::ui::theme::Palette::SAAIO);
     let mut terminal = Terminal::new(TestBackend::new(FLEET.cols, FLEET.rows)).unwrap();
 
     terminal.draw(|frame| app.draw(frame, &theme, &[])).unwrap();
@@ -352,7 +352,7 @@ fn draws_for_a_terminal_that_shrank_before_its_resize_arrived() {
         .map(|x| buffer[(x, 1)].symbol().to_string())
         .collect();
     assert!(
-        header.contains("flow"),
+        header.contains("saaio"),
         "the sidebar at the new edge: {header:?}"
     );
     app.on_input(Routed::Command(Command::Board));

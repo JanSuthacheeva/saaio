@@ -126,7 +126,7 @@ impl BoardView<'_> {
             vec![
                 Span::raw(" "),
                 Span::styled(theme.glyphs.mark, theme.ui.accent),
-                Span::styled(" flow", theme.ui.strong),
+                Span::styled(" saaio", theme.ui.strong),
                 Span::styled(" board", theme.ui.faint),
             ],
             right,

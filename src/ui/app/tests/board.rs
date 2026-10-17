@@ -9,7 +9,7 @@ fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
     let terminal = render_at(&app, FLEET);
 
     assert!(app.is_modal());
-    assert!(row(&terminal, 0).starts_with(" ▚▄▞ flow board "));
+    assert!(row(&terminal, 0).starts_with(" ▚▄▞ saaio board "));
     assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
     assert!(
         row(&terminal, 3).starts_with("   0   master                              you "),
@@ -259,7 +259,7 @@ fn shows_every_project_and_jumps_only_into_this_ones_flows() {
     app.on_ran(Job::Overview, Ok(json));
     let terminal = render_at(&app, FLEET);
     assert!(
-        row(&terminal, 0).contains("flow board · every project"),
+        row(&terminal, 0).contains("saaio board · every project"),
         "{}",
         row(&terminal, 0)
     );

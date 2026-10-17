@@ -393,12 +393,12 @@ mod tests {
         write(
             &dir,
             "theme.toml",
-            "extends = \"flow\"\n[ui]\naccent = \"#d9825b\"\nrule = 8\n[state]\nended = \"default\"\n",
+            "extends = \"saaio\"\n[ui]\naccent = \"#d9825b\"\nrule = 8\n[state]\nended = \"default\"\n",
         );
 
         let palette = theme(&dir).palette;
 
-        let flow = Palette::FLOW;
+        let flow = Palette::SAAIO;
         assert_eq!(palette.accent, Color::Rgb(0xd9, 0x82, 0x5b));
         assert_eq!(palette.rule, Color::DarkGray);
         assert_eq!(palette.ended, Color::Reset);
@@ -408,18 +408,18 @@ mod tests {
     #[test]
     fn a_nerd_font_turns_the_mark_into_the_kiwi() {
         let dir = TempDir::new().unwrap();
-        write(&dir, "theme.toml", "extends = \"flow\"\n");
+        write(&dir, "theme.toml", "extends = \"saaio\"\n");
         assert_eq!(theme(&dir).glyphs.mark, MARK, "every font has it");
 
         write(&dir, "theme.toml", "extends = \"mine\"\nnerd_font = true\n");
-        write(&dir, "themes/mine.toml", "extends = \"flow\"\n");
+        write(&dir, "themes/mine.toml", "extends = \"saaio\"\n");
         assert_eq!(theme(&dir).glyphs.mark, KIWI);
 
         write(&dir, "theme.toml", "extends = \"mine\"\n");
         write(
             &dir,
             "themes/mine.toml",
-            "extends = \"flow\"\nnerd_font = true\n",
+            "extends = \"saaio\"\nnerd_font = true\n",
         );
         assert_eq!(theme(&dir).glyphs.mark, KIWI, "from the theme it extends");
 
@@ -441,14 +441,14 @@ mod tests {
     #[test]
     fn reads_how_much_takes_the_phase_color() {
         let dir = TempDir::new().unwrap();
-        write(&dir, "theme.toml", "extends = \"flow\"\n");
+        write(&dir, "theme.toml", "extends = \"saaio\"\n");
         assert_eq!(theme(&dir).phase_colors, PhaseColors::Off, "the default");
 
         write(&dir, "theme.toml", "extends = \"mine\"\n");
         write(
             &dir,
             "themes/mine.toml",
-            "extends = \"flow\"\nphase_colors = \"full\"\n",
+            "extends = \"saaio\"\nphase_colors = \"full\"\n",
         );
         assert_eq!(
             theme(&dir).phase_colors,
@@ -484,7 +484,7 @@ mod tests {
         write(
             &dir,
             "themes/noctalia.toml",
-            "extends = \"flow-light\"\n[ui]\naccent = \"#cb9168\"\nfaint = \"#746965\"\n",
+            "extends = \"saaio-light\"\n[ui]\naccent = \"#cb9168\"\nfaint = \"#746965\"\n",
         );
 
         let (loaded, files) = load(dir.path());
@@ -493,7 +493,7 @@ mod tests {
         assert_eq!(palette.accent, Color::Rgb(0xcb, 0x91, 0x68));
         assert_eq!(palette.muted, palette.accent);
         assert_eq!(palette.ended, Color::Rgb(0x74, 0x69, 0x65));
-        assert_eq!(palette.background, Palette::FLOW_LIGHT.background);
+        assert_eq!(palette.background, Palette::SAAIO_LIGHT.background);
         assert_eq!(files[1], dir.path().join("themes/noctalia.toml"));
         assert_eq!(
             theme(&dir).ui.background,
@@ -507,7 +507,7 @@ mod tests {
         write(
             &dir,
             "theme.toml",
-            "extends = \"flow\"\n[phase]\nmerge-request = \"#cb9168\"\nreview = \"done\"\nbuild = 4\n",
+            "extends = \"saaio\"\n[phase]\nmerge-request = \"#cb9168\"\nreview = \"done\"\nbuild = 4\n",
         );
 
         let palette = theme(&dir).palette;
@@ -516,10 +516,10 @@ mod tests {
             palette.phases.names["merge-request"],
             Color::Rgb(0xcb, 0x91, 0x68)
         );
-        assert_eq!(palette.phases.names["review"], Palette::FLOW.done);
+        assert_eq!(palette.phases.names["review"], Palette::SAAIO.done);
         assert_eq!(palette.phases.names["build"], Color::Blue);
         assert!(!palette.phases.names.contains_key("plan"));
-        assert_eq!(palette.phases.positions, Palette::FLOW.phases.positions);
+        assert_eq!(palette.phases.positions, Palette::SAAIO.phases.positions);
     }
 
     #[test]
@@ -570,7 +570,7 @@ mod tests {
                 "theme.toml:2: Build is no phase name",
             ),
             (
-                "extends = \"flow\"\naccent = 3\n",
+                "extends = \"saaio\"\naccent = 3\n",
                 "theme.toml:2: accent belongs in [ui]",
             ),
             ("ui = 3\n", "theme.toml:1: [ui] is a table of colors"),

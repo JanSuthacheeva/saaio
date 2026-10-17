@@ -37,7 +37,7 @@ fn draws_the_fleet_in_the_sidebar_grouped_by_what_it_needs() {
 
     assert_eq!(
         side(&terminal, 0),
-        " ▚▄▞ flow                               "
+        " ▚▄▞ saaio                              "
     );
     assert_eq!(
         side(&terminal, 2),
@@ -95,7 +95,7 @@ fn focuses_a_worker_by_digit_or_click_and_marks_it() {
         "{title}"
     );
     assert!(
-        title.ends_with("  │ ▚▄▞ flow                               "),
+        title.ends_with("  │ ▚▄▞ saaio                              "),
         "{title}"
     );
     assert_eq!(
