@@ -283,6 +283,6 @@ flow wait wakes a Claude Code worker:
 - [x] `flow hook`: Claude Code turns mark Busy only, never hand over; `flow wait` marks Busy::Turn with news; tests
 - [x] `flow send --type` with its refusals and `output::flow::queued`, with output unit tests and `tests/cli.rs` cases
 - [x] `server/typing.rs`: `Store::set_typed`, `type_lines`, `type_into`, `takes_lines`, `ready`, `unstarted`, the `opened_at`/`line_at` fields, `deliver_news` through `type_into`; unit tests and a `server/tests.rs` case with two queued lines
-- [ ] master.md bullet with `master-v8.md` kept and listed in master.rs; test that the old default upgrades
+- [x] master.md bullet with `master-v8.md` kept and listed in master.rs; test that the old default upgrades
 - [ ] Docs: `docs/cli.md`, `docs/files.md`, `docs/flows.md`, README if needed, HANDOVER verified facts and decision
 - [ ] E2E with a scratch FLOW_HOME: a Claude Code worker and a Codex worker get `/compact` then a line, each typed when idle, in order
