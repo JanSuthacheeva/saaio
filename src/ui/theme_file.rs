@@ -258,11 +258,11 @@ fn apply(file: &ThemeFile, palette: &mut Palette) -> Result<()> {
     Ok(())
 }
 
-/// "#rrggbb", an ANSI index 0-255, "default", or another key of the palette.
+/// "#rrggbb", an ANSI index 0-255 (0-15 the terminal's named colors), "default", or another key.
 fn color(value: &Value, palette: &Palette) -> Result<Color> {
     match value {
         Value::Integer(index) => u8::try_from(*index)
-            .map(Color::Indexed)
+            .map(ansi)
             .map_err(|_| anyhow!("{index} is no ANSI index (0-255)")),
         Value::String(text) if text == "default" => Ok(Color::Reset),
         Value::String(text) => match text.strip_prefix('#') {
@@ -278,6 +278,32 @@ fn color(value: &Value, palette: &Palette) -> Result<Color> {
         },
         _ => bail!("a color is \"#rrggbb\", an ANSI index, \"default\" or another key"),
     }
+}
+
+/// The terminal's own sixteen colors by name, so a theme can say what the terminal theme says.
+fn ansi(index: u8) -> Color {
+    const NAMED: [Color; 16] = [
+        Color::Black,
+        Color::Red,
+        Color::Green,
+        Color::Yellow,
+        Color::Blue,
+        Color::Magenta,
+        Color::Cyan,
+        Color::Gray,
+        Color::DarkGray,
+        Color::LightRed,
+        Color::LightGreen,
+        Color::LightYellow,
+        Color::LightBlue,
+        Color::LightMagenta,
+        Color::LightCyan,
+        Color::White,
+    ];
+    NAMED
+        .get(usize::from(index))
+        .copied()
+        .unwrap_or(Color::Indexed(index))
 }
 
 /// Knows the files the current theme came from, by size and time; a missing file counts too.
@@ -366,7 +392,7 @@ mod tests {
 
         let flow = Palette::FLOW;
         assert_eq!(palette.accent, Color::Rgb(0xd9, 0x82, 0x5b));
-        assert_eq!(palette.rule, Color::Indexed(8));
+        assert_eq!(palette.rule, Color::DarkGray);
         assert_eq!(palette.ended, Color::Reset);
         assert_eq!(palette.text, flow.text);
     }
@@ -483,7 +509,7 @@ mod tests {
             Color::Rgb(0xcb, 0x91, 0x68)
         );
         assert_eq!(palette.phases.names["review"], Palette::FLOW.done);
-        assert_eq!(palette.phases.names["build"], Color::Indexed(4));
+        assert_eq!(palette.phases.names["build"], Color::Blue);
         assert!(!palette.phases.names.contains_key("plan"));
         assert_eq!(palette.phases.positions, Palette::FLOW.phases.positions);
     }
@@ -628,8 +654,26 @@ mod tests {
 
         let palette = theme(&dir).palette;
 
-        assert_eq!(palette.accent, Color::Indexed(3));
-        assert_eq!(palette.done, Color::Indexed(4));
+        assert_eq!(palette.accent, Color::Yellow);
+        assert_eq!(palette.done, Color::Blue);
+    }
+
+    #[test]
+    fn reads_the_first_sixteen_indexes_as_the_terminal_colors() {
+        let dir = TempDir::new().unwrap();
+        write(
+            &dir,
+            "theme.toml",
+            "[ui]\naccent = 0\nrule = 4\ntext = 8\nmuted = 15\nfaint = 16\n",
+        );
+
+        let palette = theme(&dir).palette;
+
+        assert_eq!(palette.accent, Color::Black);
+        assert_eq!(palette.rule, Color::Blue);
+        assert_eq!(palette.text, Color::DarkGray);
+        assert_eq!(palette.muted, Color::White);
+        assert_eq!(palette.faint, Color::Indexed(16));
     }
 
     #[test]
@@ -665,7 +709,7 @@ mod tests {
             .changed()
             .expect("the extended file appeared")
             .unwrap();
-        assert_eq!(theme.palette.accent, Color::Indexed(3));
+        assert_eq!(theme.palette.accent, Color::Yellow);
         assert!(watch.changed().is_none());
 
         // A new length, so the change shows on filesystems whose mtimes are a second coarse.
