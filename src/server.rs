@@ -154,7 +154,7 @@ pub fn run(
         clock(),
         &format!("started (flow {BUILD}, protocol {PROTOCOL_VERSION})"),
     );
-    if let Err(error) = master::ensure_instructions(&paths.instructions) {
+    if let Err(error) = master::INSTRUCTIONS.ensure(&paths.instructions) {
         server_log::write(clock(), &format!("{error:#}"));
     }
     let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;
