@@ -256,3 +256,62 @@ colors.
 ### Check
 
 - [x] End to end: install the branch build, start `flow ui` with a fresh scratch `FLOW_HOME` and empty config dir, confirm the three files appear and change nothing, edit one setting and restart (kept), follow the README quick start as a new user would, and read every docs page once against what flow does
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and the code. The code matches the
+plan's units, call chains and test seams; a scratch `flow server` (scratch `FLOW_HOME`,
+`XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `HOME`) wrote master.md, config.toml (byte for byte the
+example) and theme.toml, and `flow status` still read the commented config as the defaults. The
+docs were fact-checked line by line against the code and real runs. No production code changed in
+the review; every fix is documentation.
+
+**Fixed**
+
+- `docs/cli.md`, `docs/json.md`: report retries of `review`, `merge-request` and `ended` do add
+  timeline entries; `age` moves on phase and blocker changes too; `flow wait` prints to stderr and
+  `flow hook` exits 2 for Codex news; the detail's optional fields (`delegate`, `folder`, `answer`,
+  `worktree_exists`) named; `--all` skips stores without flows and suffixes taken names (49c50ff).
+- `docs/configuration.md`, `examples/config.toml` header: a change to `[worker] prompt` or an
+  agent's `prompt`, and the new-flow dialog's default agent, need a new flow ui (the server fills
+  the prompt from the config it loaded at start, `server/panes.rs`); the CLI's config error shows
+  the full path; theme error texts as flow prints them; the config folder's precedence; the
+  `/tmp/flow-<uid>/<hash>.sock` fallback in `docs/files.md` (c029a72).
+- `docs/flows.md`, `docs/ui.md`, `docs/troubleshooting.md`, `CHANGELOG.md`: an exited worker is
+  not resumed by a running server, only by `C-space r` or the next server start; the rail's title
+  row names one flow; the master's title shows its folder with the rail; a turn ending with
+  background tasks reports `delegated`; server.log's start line carries the commit (66b315b).
+
+**Open**
+
+- The README picture shows rough edges of a real run: "Stop hook feedback" at the top, the master
+  remarking that commits lack a `Refs:` line because the branch name does not match the ticket
+  pattern, and "the status still showed it as idle right after". Recommendation: re-record before
+  tagging if Jan wants a clean first impression; the content is honest, so it is not a blocker.
+- `[worker] prompt` needing a server restart is documented now, but it is surprising next to
+  `[worker] agent` applying at once. Recommendation: leave as documented for 0.1.0; consider
+  filling the prompt in `flow start` (recorded in the `started`/workspace event) later.
+- Default files come back whenever they are missing at server start, not only on the first run
+  (a deleted theme.toml reappears). Harmless, since they are all commented out; the docs' "first
+  run" wording is close enough. Recommendation: keep.
+- `flow status --all --json` example `root` reads `.../state/flow/projects/shop`; not verified
+  against how per-project stores are named. Worth a glance.
+- Fixes were reviewed by me in a separate pass, not by an independent agent; they are docs only.
+
+**Where to look**
+
+1. `src/default_file.rs` `ensure` with `src/server.rs` `write_defaults`: what is written, when, and
+   that a read error is logged rather than overwriting a file.
+2. `src/ui/theme_file.rs` `ansi` and `src/ui/theme.rs` `PhaseColors::default`: the two
+   user-visible behaviour changes (indexes 0-15 as named colors, phase colors off by default).
+3. `docs/configuration.md` "When a change applies" and `docs/flows.md` states and adapters: the
+   places where docs and behaviour most easily drift.
+4. `README.md` and `docs/media/flow-ui.png`: the first impression.
+
+The rest (`examples/*.toml` against their tests, test-only `Serialize` derives, the docs index,
+the demo script and tape) is routine and can be skimmed.
+
+**Checks**
+
+`cargo test` passed after the review's last code-adjacent change (the example config's comment);
+clippy and fmt last passed at 1de3dc4, and the review changed no Rust code.
