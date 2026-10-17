@@ -9,8 +9,8 @@ use crate::view::FlowView;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
-    /// Flow name or id [default: $FLOW_ID]
-    #[arg(long, env = "FLOW_ID")]
+    /// Flow name or id [default: $SAAIO_FLOW_ID]
+    #[arg(long, env = "SAAIO_FLOW_ID")]
     flow: Option<String>,
     #[command(subcommand)]
     event: ReportEvent,

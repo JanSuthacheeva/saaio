@@ -31,10 +31,10 @@ Stays: "a flow"/"flows" as the unit, `.claude/plans/` and `docs/design/` (histor
 ```rust
 // src/cli/env.rs - Env fields renamed; flow_id stays
 pub struct Env {
-    pub home: Option<PathBuf>,    // was flow_home, from $SAAIO_HOME
-    pub config: Option<PathBuf>,  // was flow_config, from $SAAIO_CONFIG
+    pub saaio_home: Option<PathBuf>,    // was flow_home, from $SAAIO_HOME
+    pub saaio_config: Option<PathBuf>,  // was flow_config, from $SAAIO_CONFIG
     pub flow_id: Option<String>,  // from $SAAIO_FLOW_ID
-    pub master: bool,             // was flow_master, $SAAIO_MASTER is 1
+    pub saaio_master: bool,             // was flow_master, $SAAIO_MASTER is 1
     ...
 }
 pub(crate) fn bin_path(&self) -> String; // falls back to "saaio"
@@ -53,7 +53,7 @@ impl Palette {
 pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("SAAIO_COMMIT"));
 ```
 
-If a renamed `Env` field collides with an existing method, keep a `saaio_` prefix for it instead.
+`Env` already has `home` and `config()`, so the three fields take a `saaio_` prefix (decided during the build).
 
 ## Test seams
 
@@ -79,7 +79,7 @@ If a renamed `Env` field collides with an existing method, keep a `saaio_` prefi
 ## Tasks
 
 - [x] Rename the crate, lib and binary to saaio: Cargo.toml, Cargo.lock, `use saaio::` in main.rs, `CARGO_BIN_EXE_saaio` in tests/cli.rs, `SAAIO_COMMIT` in build.rs and proto.rs
-- [ ] Rename every variable to `SAAIO_*` (`SAAIO_FLOW_ID`, `SAAIO_FLOW_NAME`) and the `Env` fields, with the tests that set them
+- [x] Rename every variable to `SAAIO_*` (`SAAIO_FLOW_ID`, `SAAIO_FLOW_NAME`) and the `Env` fields, with the tests that set them
 - [ ] Rename the folders: state and config `saaio`, `/etc/saaio`, `.saaio/` per project, `$TMPDIR/saaio-<uid>`, with their tests
 - [ ] Rename the stored and shown names: `HOSTED = "saaio-ui"`, themes `saaio`/`saaio-light` and `Palette::SAAIO`, the UI wordmark; rewrite the goldens
 - [ ] Rename what agents read: `WORKER_PROMPT`, "message from the saaio master:", every help[] line, error and the about text in src/cli

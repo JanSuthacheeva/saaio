@@ -96,14 +96,14 @@ pub struct UiConfig {
 }
 
 impl Config {
-    /// $FLOW_CONFIG, else $XDG_CONFIG_HOME/flow/config.toml, else ~/.config/flow/config.toml;
+    /// $SAAIO_CONFIG, else $XDG_CONFIG_HOME/flow/config.toml, else ~/.config/flow/config.toml;
     /// the built-in agents alone when there is no file.
     pub fn load(
-        flow_config: Option<PathBuf>,
+        saaio_config: Option<PathBuf>,
         xdg_config: Option<PathBuf>,
         home: Option<PathBuf>,
     ) -> Result<Config> {
-        let mut config = match config_file(flow_config, xdg_config, home) {
+        let mut config = match config_file(saaio_config, xdg_config, home) {
             None => Config::default(),
             Some(file) => match fs::read_to_string(&file) {
                 Ok(text) => Config::parse(&text)
@@ -205,14 +205,14 @@ impl Config {
     }
 }
 
-/// $FLOW_CONFIG, else $XDG_CONFIG_HOME/flow/config.toml, else ~/.config/flow/config.toml.
+/// $SAAIO_CONFIG, else $XDG_CONFIG_HOME/flow/config.toml, else ~/.config/flow/config.toml.
 pub fn config_file(
-    flow_config: Option<PathBuf>,
+    saaio_config: Option<PathBuf>,
     xdg_config: Option<PathBuf>,
     home: Option<PathBuf>,
 ) -> Option<PathBuf> {
     let set = |path: Option<PathBuf>| path.filter(|path| !path.as_os_str().is_empty());
-    set(flow_config)
+    set(saaio_config)
         .or_else(|| set(xdg_config).map(|dir| dir.join("flow/config.toml")))
         .or_else(|| set(home).map(|dir| dir.join(".config/flow/config.toml")))
 }

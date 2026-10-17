@@ -67,13 +67,13 @@ pub struct Store {
 }
 
 impl Store {
-    /// $FLOW_HOME, else $XDG_STATE_HOME/flow, else $HOME/.local/state/flow.
+    /// $SAAIO_HOME, else $XDG_STATE_HOME/flow, else $HOME/.local/state/flow.
     pub fn locate(
-        flow_home: Option<PathBuf>,
+        saaio_home: Option<PathBuf>,
         xdg_state: Option<PathBuf>,
         home: Option<PathBuf>,
     ) -> Option<Store> {
-        flow_home
+        saaio_home
             .filter(|path| !path.as_os_str().is_empty())
             .or_else(|| Registry::default_root(xdg_state, home))
             .map(|root| Store { root })

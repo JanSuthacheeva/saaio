@@ -9,7 +9,7 @@ use crate::registry::Registry;
 use crate::store::write_atomic;
 use crate::view::FlowView;
 
-/// Slots across every project: FLOW_SLOT, which setup hooks turn into ports.
+/// Slots across every project: SAAIO_SLOT, which setup hooks turn into ports.
 pub const MAX_SLOTS: u8 = 20;
 
 /// slots/<n>: which flow in which store took slot n.

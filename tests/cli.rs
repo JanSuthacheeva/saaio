@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use tempfile::TempDir;
 
-/// The flow binary with a test's own state: `home` as FLOW_HOME, the shared folder inside it, a
+/// The flow binary with a test's own state: `home` as SAAIO_HOME, the shared folder inside it, a
 /// config file that does not exist (so the built-in agents), no Claude Code home of the user's
 /// and no FLOW_* variable of the shell it runs in.
 fn saaio_command(home: &Path) -> Command {
@@ -24,9 +24,9 @@ fn saaio_command(home: &Path) -> Command {
         }
     }
     command
-        .env("FLOW_HOME", home)
+        .env("SAAIO_HOME", home)
         .env("XDG_STATE_HOME", shared(home))
-        .env("FLOW_CONFIG", home.join("no-config.toml"))
+        .env("SAAIO_CONFIG", home.join("no-config.toml"))
         .env("XDG_CONFIG_HOME", home.join("no-config-home"))
         .env("CLAUDE_CONFIG_DIR", home.join("no-claude-home"));
     command
@@ -42,7 +42,7 @@ fn saaio(home: &Path, args: &[&str]) -> Output {
 fn saaio_in(home: &Path, flow_id: &str, args: &[&str]) -> Output {
     saaio_command(home)
         .args(args)
-        .env("FLOW_ID", flow_id)
+        .env("SAAIO_FLOW_ID", flow_id)
         .output()
         .expect("the flow binary runs")
 }
@@ -268,7 +268,12 @@ fn bare_saaio_in_an_agents_or_a_flows_terminal_prints_the_overview() {
     let home = TempDir::new().unwrap();
     let _stops = StopsServer(home.path());
 
-    for marker in ["FLOW_ID", "FLOW_MASTER", "CLAUDECODE", "CODEX_THREAD_ID"] {
+    for marker in [
+        "SAAIO_FLOW_ID",
+        "SAAIO_MASTER",
+        "CLAUDECODE",
+        "CODEX_THREAD_ID",
+    ] {
         let mut terminal = Terminal::open(home.path(), home.path(), &[(marker, "1")]);
 
         let status = terminal.child.wait().unwrap();
@@ -721,7 +726,10 @@ fn set_executable(file: &Path) {
 #[test]
 fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_flow_ui() {
     let lab = Lab::new();
-    lab.hook("setup", "#!/bin/sh\necho \"slot $FLOW_SLOT\" > setup-ran\n");
+    lab.hook(
+        "setup",
+        "#!/bin/sh\necho \"slot $SAAIO_SLOT\" > setup-ran\n",
+    );
 
     let output = lab.start(&["SHOP-217 add CSV export"]);
 
@@ -927,7 +935,7 @@ fn hook_command(home: &Path, args: &[&str], flow_id: Option<&str>) -> Command {
     let mut command = saaio_command(home);
     command.arg("hook").args(args);
     if let Some(id) = flow_id {
-        command.env("FLOW_ID", id);
+        command.env("SAAIO_FLOW_ID", id);
     }
     command
 }
@@ -1066,8 +1074,8 @@ fn a_codex_master_records_its_session_and_reports_nothing() {
     let mut command = saaio_command(home.path());
     command
         .args(["hook", "codex"])
-        .env("FLOW_MASTER", "1")
-        .env("FLOW_ID", &id)
+        .env("SAAIO_MASTER", "1")
+        .env("SAAIO_FLOW_ID", &id)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1096,7 +1104,7 @@ fn a_codex_master_records_its_session_and_reports_nothing() {
 /// Runs `flow hook claude-code` as the master's pane does.
 fn master_hook(home: &Path, payload: &str) -> Output {
     let mut command = hook_command(home, &["claude-code"], None);
-    command.env("FLOW_MASTER", "1");
+    command.env("SAAIO_MASTER", "1");
     feed(command, payload)
 }
 
@@ -1679,7 +1687,7 @@ fn clear_tears_down_and_removes_clean_worktrees_but_keeps_uncommitted_work() {
     let lab = Lab::new();
     lab.hook(
         "teardown",
-        "#!/bin/sh\necho \"$FLOW_NAME\" >> \"$FLOW_REPO/torn-down\"\n",
+        "#!/bin/sh\necho \"$SAAIO_FLOW_NAME\" >> \"$SAAIO_REPO/torn-down\"\n",
     );
     assert!(lab.start(&["SHOP-1 clean one"]).status.success());
     assert!(lab.start(&["SHOP-2 dirty one"]).status.success());
@@ -1728,7 +1736,7 @@ fn remove_tears_down_and_forgets_a_running_flow() {
     let lab = Lab::new();
     lab.hook(
         "teardown",
-        "#!/bin/sh\necho \"$FLOW_NAME\" >> \"$FLOW_REPO/torn-down\"\n",
+        "#!/bin/sh\necho \"$SAAIO_FLOW_NAME\" >> \"$SAAIO_REPO/torn-down\"\n",
     );
     assert!(lab.start(&["SHOP-1 first try"]).status.success());
     assert!(lab.start(&["SHOP-2 keep me"]).status.success());
@@ -1758,7 +1766,7 @@ fn remove_tears_down_and_forgets_a_running_flow() {
 #[test]
 fn remove_forgets_a_plain_session_and_leaves_its_folder_alone() {
     let lab = Lab::new();
-    lab.hook("teardown", "#!/bin/sh\ntouch \"$FLOW_REPO/torn-down\"\n");
+    lab.hook("teardown", "#!/bin/sh\ntouch \"$SAAIO_REPO/torn-down\"\n");
     let folder = lab.repo.join(".flow/worktrees/mine");
     fs::create_dir_all(&folder).unwrap();
     fs::write(folder.join("notes.txt"), "keep").unwrap();
@@ -1950,7 +1958,7 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
                 .open(&log)
                 .unwrap(),
         )
-        .env("FLOW_CONFIG", &config)
+        .env("SAAIO_CONFIG", &config)
         .spawn()
         .unwrap();
     let server_pid = server.id();
@@ -2001,7 +2009,7 @@ fn ui_refuses_inside_a_worker_on_its_own_store_and_points_to_a_scratch_home() {
             text.contains("would take over the user's flow ui"),
             "{text}"
         );
-        assert!(text.contains("FLOW_HOME"), "{text}");
+        assert!(text.contains("SAAIO_HOME"), "{text}");
     }
 
     let scratch = TempDir::new().unwrap();
@@ -2261,7 +2269,7 @@ fn send_type_refuses_more_than_one_line_and_an_agent_without_turns() {
     let refused = |args: &[&str]| {
         let output = saaio_command(home.path())
             .args(args)
-            .env("FLOW_CONFIG", &config)
+            .env("SAAIO_CONFIG", &config)
             .output()
             .unwrap();
         assert_eq!(
@@ -2299,7 +2307,7 @@ fn waiter(home: &Path, flow_id: Option<&str>, args: &[&str]) -> Running {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if let Some(id) = flow_id {
-        command.env("FLOW_ID", id);
+        command.env("SAAIO_FLOW_ID", id);
     }
     Running(command.spawn().expect("the flow binary runs"))
 }

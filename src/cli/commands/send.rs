@@ -19,7 +19,7 @@ pub struct Args {
 }
 
 /// Appends the master's message to a flow its worker reads when flow wakes it, or with --type a
-/// line flow server types into its pane; only the master sends (no FLOW_ID in its env).
+/// line flow server types into its pane; only the master sends (no SAAIO_FLOW_ID in its env).
 pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, Failure> {
     if env.flow_id().is_some() {
         return Err(Failure::error(

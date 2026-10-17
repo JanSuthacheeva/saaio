@@ -26,7 +26,7 @@ const HOOK_TIMEOUT_SECS: u64 = 10;
 /// The `-c` arguments that run `'<flow_exe>' hook codex` on each event in EVENTS, synchronously so
 /// the events reach the log in order and a Stop can hand news over; and keep Codex from asking
 /// about updates in a pane flow opened. The same for workers, plain sessions and the master (its
-/// pane's FLOW_MASTER tells them apart): Codex keys hook trust by position, so different hooks
+/// pane's SAAIO_MASTER tells them apart): Codex keys hook trust by position, so different hooks
 /// would each undo the other's trust.
 pub fn hooks(flow_exe: &Path) -> Vec<String> {
     let command = format!(

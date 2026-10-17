@@ -265,7 +265,7 @@ fn socket_path_for(root: &Path, tmp: &Path) -> PathBuf {
     ))
 }
 
-/// `<exe> server` with `env` and without the hook variables or FLOW_MASTER of the session it starts
+/// `<exe> server` with `env` and without the hook variables or SAAIO_MASTER of the session it starts
 /// from, so a flow ui opened inside a worker or the master gives its panes none of that identity.
 fn server_command(exe: &Path, env: &[(String, String)]) -> Command {
     let mut command = Command::new(exe);
@@ -338,7 +338,7 @@ mod tests {
     fn starts_the_server_without_the_identity_of_the_session_it_starts_from() {
         let command = server_command(
             Path::new("/bin/flow"),
-            &[("FLOW_HOME".to_string(), "/state".to_string())],
+            &[("SAAIO_HOME".to_string(), "/state".to_string())],
         );
 
         let envs: Vec<(String, Option<String>)> = command
@@ -351,15 +351,15 @@ mod tests {
             })
             .collect();
         for var in [
-            "FLOW_ID",
-            "FLOW_NAME",
-            "FLOW_SLOT",
-            "FLOW_WORKTREE",
-            "FLOW_REPO",
+            "SAAIO_FLOW_ID",
+            "SAAIO_FLOW_NAME",
+            "SAAIO_SLOT",
+            "SAAIO_WORKTREE",
+            "SAAIO_REPO",
         ] {
             assert!(envs.contains(&(var.to_string(), None)), "{var}: {envs:?}");
         }
-        assert!(envs.contains(&("FLOW_HOME".to_string(), Some("/state".to_string()))));
+        assert!(envs.contains(&("SAAIO_HOME".to_string(), Some("/state".to_string()))));
     }
 
     #[test]
@@ -506,7 +506,7 @@ mod tests {
     fn starts_the_server_without_the_identity_of_the_session_it_comes_from() {
         let command = server_command(
             Path::new("/bin/flow"),
-            &[("FLOW_HOME".into(), "/state".into())],
+            &[("SAAIO_HOME".into(), "/state".into())],
         );
         let envs: Vec<(String, Option<String>)> = command
             .get_envs()
@@ -522,6 +522,6 @@ mod tests {
                 "{var} removed: {envs:?}"
             );
         }
-        assert!(envs.contains(&("FLOW_HOME".into(), Some("/state".into()))));
+        assert!(envs.contains(&("SAAIO_HOME".into(), Some("/state".into()))));
     }
 }

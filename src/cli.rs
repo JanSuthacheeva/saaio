@@ -59,7 +59,7 @@ enum Command {
     /// The session server flow ui starts on its own
     #[command(hide = true)]
     Server,
-    /// What a harness hook runs: reports the event on stdin into $FLOW_ID's flow
+    /// What a harness hook runs: reports the event on stdin into $SAAIO_FLOW_ID's flow
     #[command(hide = true)]
     Hook(hook::Args),
 }
@@ -79,7 +79,7 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
     let Some(store) = env.store() else {
         return Err(Failure::error(
             "cannot find a state directory",
-            vec!["Set FLOW_HOME to a directory".to_string()],
+            vec!["Set SAAIO_HOME to a directory".to_string()],
         ));
     };
     let Some(registry) = env.registry() else {
@@ -143,7 +143,7 @@ mod tests {
         assert_eq!(failure.message, "cannot find a state directory");
         assert_eq!(
             failure.help,
-            vec!["Set FLOW_HOME to a directory".to_string()]
+            vec!["Set SAAIO_HOME to a directory".to_string()]
         );
         assert_eq!(failure.code, 1);
     }

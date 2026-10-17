@@ -21,7 +21,7 @@ pub struct Args {
     adapter: String,
 }
 
-/// Whose hook ran: the master's ($FLOW_MASTER), a flow's session ($FLOW_ID), or neither.
+/// Whose hook ran: the master's ($SAAIO_MASTER), a flow's session ($SAAIO_FLOW_ID), or neither.
 enum Hooked {
     Flow(String),
     Master,

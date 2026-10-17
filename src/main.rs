@@ -37,10 +37,10 @@ fn main() -> ExitCode {
 fn env() -> Env {
     let path = |name| env::var_os(name).map(PathBuf::from);
     Env {
-        flow_home: path("FLOW_HOME"),
-        flow_config: path("FLOW_CONFIG"),
-        flow_id: env::var("FLOW_ID").ok(),
-        flow_master: env::var("FLOW_MASTER").is_ok_and(|value| value == "1"),
+        saaio_home: path("SAAIO_HOME"),
+        saaio_config: path("SAAIO_CONFIG"),
+        flow_id: env::var("SAAIO_FLOW_ID").ok(),
+        saaio_master: env::var("SAAIO_MASTER").is_ok_and(|value| value == "1"),
         home: path("HOME"),
         xdg_state_home: path("XDG_STATE_HOME"),
         xdg_config_home: path("XDG_CONFIG_HOME"),

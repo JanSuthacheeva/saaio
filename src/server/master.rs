@@ -207,11 +207,11 @@ mod tests {
             ["claude", "-n", "master", "--resume", "5e55"].map(String::from)
         );
         assert_eq!(resumed.cwd, PathBuf::from("/work"));
-        assert!(resumed.env.iter().all(|(key, _)| key != "FLOW_ID"));
+        assert!(resumed.env.iter().all(|(key, _)| key != "SAAIO_FLOW_ID"));
         assert!(
             resumed
                 .env
-                .contains(&("FLOW_MASTER".to_string(), "1".to_string()))
+                .contains(&("SAAIO_MASTER".to_string(), "1".to_string()))
         );
         let unresumable = Agent {
             resume: None,

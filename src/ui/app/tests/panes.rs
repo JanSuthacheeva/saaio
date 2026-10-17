@@ -314,7 +314,7 @@ fn reads_what_a_flow_command_printed() {
 fn reads_an_error_toon_quoted_without_its_quotes() {
     let failure = Failure::error(
         "could not create flow in /shop: Permission denied (os error 13)",
-        vec!["Set FLOW_HOME to a directory".to_string()],
+        vec!["Set SAAIO_HOME to a directory".to_string()],
     );
     let printed = format!("{}\n", failure.to_toon());
     assert!(

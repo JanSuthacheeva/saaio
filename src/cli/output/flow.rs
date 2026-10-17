@@ -29,7 +29,7 @@ pub(crate) fn created(flow: &FlowView, existing: bool) -> Document {
             })
             .into_iter()
             .chain([format!(
-                "Or set FLOW_ID={} in the worker's environment and leave out --flow",
+                "Or set SAAIO_FLOW_ID={} in the worker's environment and leave out --flow",
                 flow.id
             )])
             .collect(),
@@ -116,7 +116,7 @@ pub(crate) fn skipped() -> Document {
     }
     Document::Toon(toon(&Skipped {
         skipped: "no flow id",
-        help: ["Set FLOW_ID or pass --flow <name>"],
+        help: ["Set SAAIO_FLOW_ID or pass --flow <name>"],
     }))
 }
 
@@ -136,7 +136,7 @@ mod tests {
                 "flow: shop-221",
                 "id: shop-221-id",
                 "existing: false",
-                "help[2]: Run `flow report --flow shop-221 phase plan` when plan starts,Or set FLOW_ID=shop-221-id in the worker's environment and leave out --flow",
+                "help[2]: Run `flow report --flow shop-221 phase plan` when plan starts,Or set SAAIO_FLOW_ID=shop-221-id in the worker's environment and leave out --flow",
             ]
             .join("\n")
         );
@@ -203,7 +203,7 @@ mod tests {
     fn skipped_says_why_and_how_to_give_a_flow() {
         assert_eq!(
             skipped().text(),
-            "skipped: no flow id\nhelp[1]: Set FLOW_ID or pass --flow <name>"
+            "skipped: no flow id\nhelp[1]: Set SAAIO_FLOW_ID or pass --flow <name>"
         );
     }
 

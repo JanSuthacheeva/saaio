@@ -6,16 +6,16 @@ use crate::proto::PaneKey;
 use crate::view::{FlowView, Workspace};
 
 /// Set to 1 in the master's pane, so the hooks it shares with workers know whose they are.
-pub const MASTER_ENV: &str = "FLOW_MASTER";
+pub const MASTER_ENV: &str = "SAAIO_MASTER";
 
 /// Workspace.window of a worker flow ui has opened once; its next open resumes it.
 pub const HOSTED: &str = "flow-ui";
 
-/// What the server passes on to every pane: FLOW_HOME, when it was set for the server, and the
+/// What the server passes on to every pane: SAAIO_HOME, when it was set for the server, and the
 /// flow binary a worker's hooks run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LaunchEnv {
-    pub flow_home: Option<PathBuf>,
+    pub saaio_home: Option<PathBuf>,
     pub flow_exe: PathBuf,
 }
 
@@ -109,21 +109,21 @@ pub fn names_session(agent: &Agent) -> bool {
 }
 
 /// What a worker's session knows of its flow: the hooks' variables, so it can find its own ports
-/// from FLOW_SLOT, then pane_env's.
+/// from SAAIO_SLOT, then pane_env's.
 fn worker_env(flow: &FlowView, space: &Workspace, env: &LaunchEnv) -> Vec<(String, String)> {
     let mut vars = match repo_of(space) {
         Some(repo) => hook_env(&flow.id, &flow.name, &repo, space),
-        None => vec![("FLOW_ID".to_string(), flow.id.clone())],
+        None => vec![("SAAIO_FLOW_ID".to_string(), flow.id.clone())],
     };
     vars.extend(pane_env(env));
     vars
 }
 
-/// FLOW_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
+/// SAAIO_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
 pub fn pane_env(env: &LaunchEnv) -> Vec<(String, String)> {
     let mut vars = Vec::new();
-    if let Some(home) = &env.flow_home {
-        vars.push(("FLOW_HOME".to_string(), home.display().to_string()));
+    if let Some(home) = &env.saaio_home {
+        vars.push(("SAAIO_HOME".to_string(), home.display().to_string()));
     }
     vars.push(("TERM".to_string(), "xterm-256color".to_string()));
     vars.push(("COLORTERM".to_string(), "truecolor".to_string()));
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn gives_every_pane_a_terminal_type_and_workers_their_flow() {
         let env = LaunchEnv {
-            flow_home: Some(PathBuf::from("/state/flow")),
+            saaio_home: Some(PathBuf::from("/state/flow")),
             ..LaunchEnv::default()
         };
         let pairs = |items: &[(&str, &str)]| -> Vec<(String, String)> {
@@ -230,7 +230,7 @@ mod tests {
         assert_eq!(
             pane_env(&env),
             pairs(&[
-                ("FLOW_HOME", "/state/flow"),
+                ("SAAIO_HOME", "/state/flow"),
                 ("TERM", "xterm-256color"),
                 ("COLORTERM", "truecolor"),
             ])
@@ -287,7 +287,7 @@ mod tests {
         expected.extend(pane_env(&env));
         assert_eq!(
             fresh.env, expected,
-            "FLOW_SLOT and the rest, as the hooks get them"
+            "SAAIO_SLOT and the rest, as the hooks get them"
         );
 
         let resumed = worker_spec(&worker(Some(HOSTED)), claude, &env).unwrap();
@@ -423,11 +423,11 @@ mod tests {
             fresh.argv
         );
         assert_eq!(fresh.cwd, PathBuf::from("/Users/jan/scratch"));
-        let mut env_expected = vec![("FLOW_ID".to_string(), "9b1d".to_string())];
+        let mut env_expected = vec![("SAAIO_FLOW_ID".to_string(), "9b1d".to_string())];
         env_expected.extend(pane_env(&env));
         assert_eq!(
             fresh.env, env_expected,
-            "no FLOW_SLOT, FLOW_WORKTREE or FLOW_REPO"
+            "no SAAIO_SLOT, SAAIO_WORKTREE or SAAIO_REPO"
         );
 
         let resumed = worker_spec(&scratch(Some(HOSTED)), claude, &env).unwrap();

@@ -12,7 +12,7 @@ const WAIT_EVERY: Duration = Duration::from_millis(500);
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
-    /// The master's news: flows that changed [default: $FLOW_ID's messages]
+    /// The master's news: flows that changed [default: $SAAIO_FLOW_ID's messages]
     #[arg(long)]
     master: bool,
 }

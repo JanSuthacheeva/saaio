@@ -76,21 +76,21 @@ pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
 /// What hook_env sets: a worker's identity, which a session flow ui starts from inside one must
 /// not pass on.
 pub const HOOK_VARS: [&str; 5] = [
-    "FLOW_ID",
-    "FLOW_NAME",
-    "FLOW_SLOT",
-    "FLOW_WORKTREE",
-    "FLOW_REPO",
+    "SAAIO_FLOW_ID",
+    "SAAIO_FLOW_NAME",
+    "SAAIO_SLOT",
+    "SAAIO_WORKTREE",
+    "SAAIO_REPO",
 ];
 
-/// FLOW_ID, FLOW_NAME, FLOW_SLOT (when it has one), FLOW_WORKTREE, FLOW_REPO for the hooks.
+/// SAAIO_FLOW_ID, SAAIO_FLOW_NAME, SAAIO_SLOT (when it has one), SAAIO_WORKTREE, SAAIO_REPO for the hooks.
 pub fn hook_env(id: &str, name: &str, repo: &Path, workspace: &Workspace) -> Vec<(String, String)> {
     [
-        Some(("FLOW_ID", id.to_string())),
-        Some(("FLOW_NAME", name.to_string())),
-        workspace.slot.map(|slot| ("FLOW_SLOT", slot.to_string())),
-        Some(("FLOW_WORKTREE", workspace.path.clone())),
-        Some(("FLOW_REPO", repo.display().to_string())),
+        Some(("SAAIO_FLOW_ID", id.to_string())),
+        Some(("SAAIO_FLOW_NAME", name.to_string())),
+        workspace.slot.map(|slot| ("SAAIO_SLOT", slot.to_string())),
+        Some(("SAAIO_WORKTREE", workspace.path.clone())),
+        Some(("SAAIO_REPO", repo.display().to_string())),
     ]
     .into_iter()
     .flatten()
@@ -155,14 +155,14 @@ mod tests {
         assert_eq!(
             hook_env("7f3c", "shop-217", Path::new("/repo"), &shop()),
             vec![
-                ("FLOW_ID".to_string(), "7f3c".to_string()),
-                ("FLOW_NAME".to_string(), "shop-217".to_string()),
-                ("FLOW_SLOT".to_string(), "2".to_string()),
+                ("SAAIO_FLOW_ID".to_string(), "7f3c".to_string()),
+                ("SAAIO_FLOW_NAME".to_string(), "shop-217".to_string()),
+                ("SAAIO_SLOT".to_string(), "2".to_string()),
                 (
-                    "FLOW_WORKTREE".to_string(),
+                    "SAAIO_WORKTREE".to_string(),
                     "/repo/.flow/worktrees/shop-217".to_string()
                 ),
-                ("FLOW_REPO".to_string(), "/repo".to_string()),
+                ("SAAIO_REPO".to_string(), "/repo".to_string()),
             ]
         );
     }
@@ -199,6 +199,14 @@ mod tests {
             .map(|(key, _)| key)
             .collect();
 
-        assert_eq!(keys, ["FLOW_ID", "FLOW_NAME", "FLOW_WORKTREE", "FLOW_REPO"]);
+        assert_eq!(
+            keys,
+            [
+                "SAAIO_FLOW_ID",
+                "SAAIO_FLOW_NAME",
+                "SAAIO_WORKTREE",
+                "SAAIO_REPO"
+            ]
+        );
     }
 }

@@ -196,7 +196,7 @@ fn run_job(exe: &Path, job: Job, events: Sender<Event>) {
     let mut command = std::process::Command::new(exe);
     command
         .args(job.args())
-        .env_remove("FLOW_ID")
+        .env_remove("SAAIO_FLOW_ID")
         .stdin(std::process::Stdio::null());
     if let Some(dir) = job.dir() {
         command.current_dir(dir);

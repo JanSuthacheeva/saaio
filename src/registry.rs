@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use crate::store::{Store, write_atomic};
 
 /// The folder every store registers in and slots are claimed in: the default store's folder,
-/// $XDG_STATE_HOME/flow or ~/.local/state/flow, whatever FLOW_HOME says.
+/// $XDG_STATE_HOME/flow or ~/.local/state/flow, whatever SAAIO_HOME says.
 #[derive(Debug, Clone)]
 pub struct Registry {
     root: PathBuf, // holds stores/<hash> and slots/<n>

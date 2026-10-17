@@ -344,14 +344,14 @@ mod tests {
         hook(
             &repo,
             "setup",
-            "#!/bin/sh\necho \"$FLOW_SLOT $(pwd)\" > ran.txt\n",
+            "#!/bin/sh\necho \"$SAAIO_SLOT $(pwd)\" > ran.txt\n",
         );
 
         let ran = run_hook(
             &repo,
             Hook::Setup,
             &workspace,
-            &[("FLOW_SLOT".into(), "3".into())],
+            &[("SAAIO_SLOT".into(), "3".into())],
         )
         .unwrap();
 
