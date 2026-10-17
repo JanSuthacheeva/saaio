@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn reads_each_refusal_back_from_its_own_message() {
-        let uncommitted = uncommitted("shop-230", "/shop/.flow/worktrees/shop-230");
+        let uncommitted = uncommitted("shop-230", "/shop/.saaio/worktrees/shop-230");
         let unmerged = unmerged("shop-230", "flow/shop-230", 2);
 
         assert_eq!(

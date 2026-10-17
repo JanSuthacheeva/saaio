@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn writes_a_missing_file_and_its_folder() {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("flow/file");
+        let path = dir.path().join("saaio/file");
 
         FILE.ensure(&path).unwrap();
 

@@ -81,7 +81,7 @@ fn pane(flow: &FlowView, opening: Opening, what: &str) -> (&'static str, String)
     }
 }
 
-/// What `flow start` did with the repo's .flow/setup.
+/// What `flow start` did with the repo's .saaio/setup.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Setup {
     Ran,

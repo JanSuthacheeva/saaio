@@ -124,11 +124,11 @@ mod tests {
     #[test]
     fn finds_the_config_folder_from_the_config_file() {
         let env = Env {
-            saaio_config: Some(PathBuf::from("/etc/flow/config.toml")),
+            saaio_config: Some(PathBuf::from("/etc/saaio/config.toml")),
             ..Env::default()
         };
 
-        assert_eq!(env.config_dir(), Some(PathBuf::from("/etc/flow")));
+        assert_eq!(env.config_dir(), Some(PathBuf::from("/etc/saaio")));
     }
 
     #[test]

@@ -96,7 +96,7 @@ pub struct UiConfig {
 }
 
 impl Config {
-    /// $SAAIO_CONFIG, else $XDG_CONFIG_HOME/flow/config.toml, else ~/.config/flow/config.toml;
+    /// $SAAIO_CONFIG, else $XDG_CONFIG_HOME/saaio/config.toml, else ~/.config/saaio/config.toml;
     /// the built-in agents alone when there is no file.
     pub fn load(
         saaio_config: Option<PathBuf>,
@@ -205,7 +205,7 @@ impl Config {
     }
 }
 
-/// $SAAIO_CONFIG, else $XDG_CONFIG_HOME/flow/config.toml, else ~/.config/flow/config.toml.
+/// $SAAIO_CONFIG, else $XDG_CONFIG_HOME/saaio/config.toml, else ~/.config/saaio/config.toml.
 pub fn config_file(
     saaio_config: Option<PathBuf>,
     xdg_config: Option<PathBuf>,
@@ -213,8 +213,8 @@ pub fn config_file(
 ) -> Option<PathBuf> {
     let set = |path: Option<PathBuf>| path.filter(|path| !path.as_os_str().is_empty());
     set(saaio_config)
-        .or_else(|| set(xdg_config).map(|dir| dir.join("flow/config.toml")))
-        .or_else(|| set(home).map(|dir| dir.join(".config/flow/config.toml")))
+        .or_else(|| set(xdg_config).map(|dir| dir.join("saaio/config.toml")))
+        .or_else(|| set(home).map(|dir| dir.join(".config/saaio/config.toml")))
 }
 
 fn strings(parts: &[&str]) -> Vec<String> {
@@ -494,16 +494,16 @@ command = ["pi", "{prompt}"]
     fn finds_the_file_by_flow_config_then_xdg_then_home() {
         let dir = TempDir::new().unwrap();
         let xdg = dir.path().join("xdg");
-        fs::create_dir_all(xdg.join("flow")).unwrap();
+        fs::create_dir_all(xdg.join("saaio")).unwrap();
         fs::write(
-            xdg.join("flow/config.toml"),
+            xdg.join("saaio/config.toml"),
             "[worker]\nagent = \"from-xdg\"\n",
         )
         .unwrap();
         let home = dir.path().join("home");
-        fs::create_dir_all(home.join(".config/flow")).unwrap();
+        fs::create_dir_all(home.join(".config/saaio")).unwrap();
         fs::write(
-            home.join(".config/flow/config.toml"),
+            home.join(".config/saaio/config.toml"),
             "[worker]\nagent = \"from-home\"\n",
         )
         .unwrap();

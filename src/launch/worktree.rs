@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 
 use crate::view::Workspace;
 
-pub const WORKTREES_DIR: &str = ".flow/worktrees";
+pub const WORKTREES_DIR: &str = ".saaio/worktrees";
 
-/// <repo>/.flow/worktrees/<name> on `branch`.
+/// <repo>/.saaio/worktrees/<name> on `branch`.
 pub fn workspace_for(repo: &Path, name: &str, branch: String, slot: u8, agent: &str) -> Workspace {
     Workspace {
         path: repo.join(WORKTREES_DIR).join(name).display().to_string(),
@@ -60,7 +60,7 @@ pub fn worktree_remove_argv(repo: &Path, workspace: &Workspace, force: bool) -> 
     argv
 }
 
-/// The repository a flow worktree belongs to: the path above .flow/worktrees/<name>. None for a
+/// The repository a flow worktree belongs to: the path above .saaio/worktrees/<name>. None for a
 /// plain session (no branch), even one opened inside a worktree, so remove never tears down a folder
 /// it did not create.
 pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
@@ -107,7 +107,7 @@ mod tests {
     fn places_the_worktree_inside_the_repo_on_its_own_branch() {
         let workspace = shop();
 
-        assert_eq!(workspace.path, "/repo/.flow/worktrees/shop-217");
+        assert_eq!(workspace.path, "/repo/.saaio/worktrees/shop-217");
         assert_eq!(workspace.branch.as_deref(), Some("flow/shop-217"));
         assert_eq!(workspace.slot, Some(2));
         assert_eq!(workspace.window, None);
@@ -122,7 +122,7 @@ mod tests {
                 "add",
                 "-b",
                 "flow/shop-217",
-                "/repo/.flow/worktrees/shop-217"
+                "/repo/.saaio/worktrees/shop-217"
             ])
         );
         assert_eq!(
@@ -133,7 +133,7 @@ mod tests {
                 "/repo",
                 "worktree",
                 "remove",
-                "/repo/.flow/worktrees/shop-217"
+                "/repo/.saaio/worktrees/shop-217"
             ])
         );
         assert_eq!(
@@ -145,7 +145,7 @@ mod tests {
                 "worktree",
                 "remove",
                 "--force",
-                "/repo/.flow/worktrees/shop-217"
+                "/repo/.saaio/worktrees/shop-217"
             ])
         );
     }
@@ -160,7 +160,7 @@ mod tests {
                 ("SAAIO_SLOT".to_string(), "2".to_string()),
                 (
                     "SAAIO_WORKTREE".to_string(),
-                    "/repo/.flow/worktrees/shop-217".to_string()
+                    "/repo/.saaio/worktrees/shop-217".to_string()
                 ),
                 ("SAAIO_REPO".to_string(), "/repo".to_string()),
             ]
@@ -180,7 +180,7 @@ mod tests {
     #[test]
     fn a_plain_session_has_no_repo_even_inside_the_worktrees_folder() {
         let inside = Workspace {
-            path: "/repo/.flow/worktrees/shop-217".into(),
+            path: "/repo/.saaio/worktrees/shop-217".into(),
             ..scratch()
         };
 

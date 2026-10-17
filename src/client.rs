@@ -247,7 +247,7 @@ fn timed_out(error: &anyhow::Error) -> bool {
 /// Unix sockets paths must be shorter than this (104 bytes on macOS, 108 on Linux).
 const SOCKET_PATH_LIMIT: usize = 100;
 
-/// <store root>/server.sock; when that is too long for a socket, /tmp/flow-<uid>/<hash of the root>.sock.
+/// <store root>/server.sock; when that is too long for a socket, /tmp/saaio-<uid>/<hash of the root>.sock.
 pub fn socket_path(store: &Store) -> PathBuf {
     socket_path_for(store.root(), Path::new("/tmp"))
 }
@@ -259,7 +259,7 @@ fn socket_path_for(root: &Path, tmp: &Path) -> PathBuf {
     }
     // SAFETY: getuid cannot fail and touches no memory.
     let uid = unsafe { libc::getuid() };
-    tmp.join(format!("flow-{uid}")).join(format!(
+    tmp.join(format!("saaio-{uid}")).join(format!(
         "{:016x}.sock",
         registry::fnv1a(root.as_os_str().as_encoded_bytes())
     ))
@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn starts_the_server_without_the_identity_of_the_session_it_starts_from() {
         let command = server_command(
-            Path::new("/bin/flow"),
+            Path::new("/bin/saaio"),
             &[("SAAIO_HOME".to_string(), "/state".to_string())],
         );
 
@@ -483,7 +483,7 @@ mod tests {
                 .file_name()
                 .unwrap()
                 .to_string_lossy()
-                .starts_with("flow-")
+                .starts_with("saaio-")
         );
         assert_eq!(socket, socket_path_for(&long, Path::new("/tmp")));
         assert_ne!(
@@ -494,18 +494,18 @@ mod tests {
 
     #[test]
     fn keeps_the_socket_in_the_state_directory() {
-        let store = Store::at(PathBuf::from("/state/flow"));
+        let store = Store::at(PathBuf::from("/state/saaio"));
 
         assert_eq!(
             socket_path(&store),
-            PathBuf::from("/state/flow/server.sock")
+            PathBuf::from("/state/saaio/server.sock")
         );
     }
 
     #[test]
     fn starts_the_server_without_the_identity_of_the_session_it_comes_from() {
         let command = server_command(
-            Path::new("/bin/flow"),
+            Path::new("/bin/saaio"),
             &[("SAAIO_HOME".into(), "/state".into())],
         );
         let envs: Vec<(String, Option<String>)> = command

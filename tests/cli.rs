@@ -693,7 +693,7 @@ impl Lab {
 
     /// A commit in the flow's worktree, on its branch only.
     fn commit_in(&self, name: &str) {
-        let worktree = self.repo.join(".flow/worktrees").join(name);
+        let worktree = self.repo.join(".saaio/worktrees").join(name);
         fs::write(worktree.join("work.txt"), "done").unwrap();
         git(&worktree, &["add", "work.txt"]);
         git(
@@ -712,7 +712,7 @@ impl Lab {
     }
 
     fn hook(&self, name: &str, script: &str) {
-        let dir = self.repo.join(".flow");
+        let dir = self.repo.join(".saaio");
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join(name), script).unwrap();
         set_executable(&dir.join(name));
@@ -735,7 +735,7 @@ fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_flow_ui() {
 
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
-    let worktree = lab.repo.join(".flow/worktrees/shop-217");
+    let worktree = lab.repo.join(".saaio/worktrees/shop-217");
     assert!(text.starts_with("flow: shop-217\n"), "{text}");
     assert!(
         text.contains(&format!("worktree: {}", worktree.display())),
@@ -811,7 +811,7 @@ resume = ["cat"]"#,
 fn status_says_where_a_flows_code_is_and_whether_its_worktree_is_left() {
     let lab = Lab::new();
     assert!(lab.start(&["SHOP-217 add CSV export"]).status.success());
-    let worktree = lab.repo.join(".flow/worktrees/shop-217");
+    let worktree = lab.repo.join(".saaio/worktrees/shop-217");
     assert!(
         lab.run(&["report", "--flow", "shop-217", "ended"])
             .status
@@ -1398,7 +1398,7 @@ fn start_refuses_a_config_with_the_top_level_agent_key() {
 
 /// The slots claimed in the lab's shared folder.
 fn claimed_slots(home: &Path) -> Vec<String> {
-    fs::read_dir(shared(home).join("flow/slots"))
+    fs::read_dir(shared(home).join("saaio/slots"))
         .map(|entries| {
             entries
                 .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
@@ -1440,7 +1440,7 @@ pane: when flow ui runs",
         "{text}"
     );
     assert!(!text.contains("branch"), "{text}");
-    assert!(!scratch.join(".flow").exists(), "no worktree");
+    assert!(!scratch.join(".saaio").exists(), "no worktree");
     assert!(claimed_slots(&lab.home).is_empty(), "no slot");
 
     let board: serde_json::Value =
@@ -1617,7 +1617,7 @@ fn start_says_when_every_slot_is_taken() {
 #[test]
 fn a_start_whose_worktree_fails_forgets_its_flow_and_gives_its_slot_back() {
     let lab = Lab::new();
-    let worktrees = lab.repo.join(".flow/worktrees");
+    let worktrees = lab.repo.join(".saaio/worktrees");
     fs::create_dir_all(&worktrees).unwrap();
     fs::write(worktrees.join("shop-9"), "in the way").unwrap();
 
@@ -1627,7 +1627,7 @@ fn a_start_whose_worktree_fails_forgets_its_flow_and_gives_its_slot_back() {
     let logs = fs::read_dir(lab.home.join("flows")).map_or(0, Iterator::count);
     assert_eq!(logs, 0, "the failed start forgets its flow");
     assert!(
-        !shared(&lab.home).join("flow/slots/1").exists(),
+        !shared(&lab.home).join("saaio/slots/1").exists(),
         "the failed start gives its slot back"
     );
 }
@@ -1670,8 +1670,8 @@ fn projects_never_share_a_slot_and_show_up_together() {
 #[test]
 fn a_failed_start_gives_its_slot_back() {
     let lab = Lab::new();
-    fs::create_dir_all(lab.repo.join(".flow/worktrees/shop-1")).unwrap();
-    fs::write(lab.repo.join(".flow/worktrees/shop-1/x"), "in the way").unwrap();
+    fs::create_dir_all(lab.repo.join(".saaio/worktrees/shop-1")).unwrap();
+    fs::write(lab.repo.join(".saaio/worktrees/shop-1/x"), "in the way").unwrap();
 
     let failed = lab.start(&["SHOP-1 one"]);
     let next = lab.start(&["SHOP-2 two"]);
@@ -1692,7 +1692,7 @@ fn clear_tears_down_and_removes_clean_worktrees_but_keeps_uncommitted_work() {
     assert!(lab.start(&["SHOP-1 clean one"]).status.success());
     assert!(lab.start(&["SHOP-2 dirty one"]).status.success());
     assert!(lab.start(&["SHOP-3 still running"]).status.success());
-    let worktrees = lab.repo.join(".flow/worktrees");
+    let worktrees = lab.repo.join(".saaio/worktrees");
     fs::write(worktrees.join("shop-2/work.txt"), "unsaved").unwrap();
     for name in ["shop-1", "shop-2"] {
         assert!(
@@ -1749,7 +1749,7 @@ fn remove_tears_down_and_forgets_a_running_flow() {
         text.starts_with("removed: shop-1\npane: none\nworktree: removed\nbranch: deleted\n"),
         "{text}"
     );
-    assert!(!lab.repo.join(".flow/worktrees/shop-1").exists());
+    assert!(!lab.repo.join(".saaio/worktrees/shop-1").exists());
     assert_eq!(
         fs::read_to_string(lab.repo.join("torn-down"))
             .unwrap()
@@ -1767,11 +1767,11 @@ fn remove_tears_down_and_forgets_a_running_flow() {
 fn remove_forgets_a_plain_session_and_leaves_its_folder_alone() {
     let lab = Lab::new();
     lab.hook("teardown", "#!/bin/sh\ntouch \"$SAAIO_REPO/torn-down\"\n");
-    let folder = lab.repo.join(".flow/worktrees/mine");
+    let folder = lab.repo.join(".saaio/worktrees/mine");
     fs::create_dir_all(&folder).unwrap();
     fs::write(folder.join("notes.txt"), "keep").unwrap();
     assert!(
-        lab.start(&["--plain", ".flow/worktrees/mine"])
+        lab.start(&["--plain", ".saaio/worktrees/mine"])
             .status
             .success()
     );
@@ -1807,9 +1807,9 @@ fn remove_forgets_a_plain_session_and_leaves_its_folder_alone() {
 #[test]
 fn start_names_the_branch_after_the_repos_convention() {
     let lab = Lab::new();
-    fs::create_dir_all(lab.repo.join(".flow")).unwrap();
+    fs::create_dir_all(lab.repo.join(".saaio")).unwrap();
     fs::write(
-        lab.repo.join(".flow/config.toml"),
+        lab.repo.join(".saaio/config.toml"),
         "[branch]\nname = \"{type}/{ticket}-{slug}\"\ntypes = [\"feature\", \"bugfix\"]\n",
     )
     .unwrap();
@@ -1830,7 +1830,7 @@ fn start_names_the_branch_after_the_repos_convention() {
         stdout(&feature)
     );
     assert!(
-        lab.repo.join(".flow/worktrees/shop-1").exists(),
+        lab.repo.join(".saaio/worktrees/shop-1").exists(),
         "worktrees keep the flow's name"
     );
     assert_eq!(unknown.status.code(), Some(1));
@@ -1853,7 +1853,7 @@ fn start_refuses_a_type_in_a_repo_without_types() {
 
     assert_eq!(output.status.code(), Some(1));
     assert!(
-        stdout(&output).contains("no .flow/config.toml"),
+        stdout(&output).contains("no .saaio/config.toml"),
         "{}",
         stdout(&output)
     );
@@ -1878,7 +1878,7 @@ fn remove_keeps_a_branch_with_its_own_commits_unless_told() {
         "{text}"
     );
     assert!(
-        lab.repo.join(".flow/worktrees/shop-1").exists(),
+        lab.repo.join(".saaio/worktrees/shop-1").exists(),
         "nothing touched"
     );
     assert!(stdout(&lab.run(&[])).contains("shop-1"));
@@ -1895,7 +1895,7 @@ fn remove_keeps_a_branch_with_its_own_commits_unless_told() {
 fn remove_refuses_uncommitted_work_unless_forced() {
     let lab = Lab::new();
     assert!(lab.start(&["SHOP-1 dirty"]).status.success());
-    let worktree = lab.repo.join(".flow/worktrees/shop-1");
+    let worktree = lab.repo.join(".saaio/worktrees/shop-1");
     fs::write(worktree.join("work.txt"), "unsaved").unwrap();
 
     let refused = lab.run(&["remove", "shop-1"]);
@@ -2089,7 +2089,7 @@ fn seed_worker(home: &Path, id: &str, name: &str, last: &str) {
         r#"{{"v":1,"at":1000,"kind":"started","name":"{name}","request":"x","mode":"auto"}}"#
     );
     let workspace = format!(
-        r#"{{"v":1,"at":1500,"kind":"workspace","path":"/repo/.flow/worktrees/{name}","branch":"flow/{name}","slot":1,"window":"flow-ui","agent":"claude"}}"#
+        r#"{{"v":1,"at":1500,"kind":"workspace","path":"/repo/.saaio/worktrees/{name}","branch":"flow/{name}","slot":1,"window":"flow-ui","agent":"claude"}}"#
     );
     seed(home, id, &[&started, &workspace, last]);
 }

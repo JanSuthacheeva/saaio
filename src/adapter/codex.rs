@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn hooks_every_event_to_flow_hook_codex() {
-        let args = hooks(Path::new("/opt/my flow/flow"));
+        let args = hooks(Path::new("/opt/my saaio/saaio"));
 
         assert_eq!(args[..2], ["-c", "check_for_update_on_startup=false"]);
         let values: Vec<&String> = args.iter().skip(3).step_by(2).collect();
@@ -388,12 +388,12 @@ mod tests {
             assert_eq!(handler["type"].as_str(), Some("command"));
             assert_eq!(
                 handler["command"].as_str(),
-                Some("'/opt/my flow/flow' hook codex"),
+                Some("'/opt/my saaio/saaio' hook codex"),
                 "{event}"
             );
             assert_eq!(handler["timeout"].as_integer(), Some(10));
         }
-        assert!(hooks(Path::new("/b'in/flow"))[3].contains(r"'/b'\\''in/flow'"));
+        assert!(hooks(Path::new("/b'in/saaio"))[3].contains(r"'/b'\\''in/saaio'"));
     }
 
     #[test]

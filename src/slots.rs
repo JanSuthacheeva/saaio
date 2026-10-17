@@ -171,7 +171,7 @@ mod tests {
 
     fn claim(flow: &str) -> Claim {
         Claim {
-            store: PathBuf::from("/state/flow/projects/shop"),
+            store: PathBuf::from("/state/saaio/projects/shop"),
             flow: flow.to_string(),
         }
     }

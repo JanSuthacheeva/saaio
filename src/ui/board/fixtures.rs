@@ -30,7 +30,7 @@ pub(super) fn flow(name: &str, mode: Mode, events: Vec<EventKind>) -> FlowView {
         Event::new(
             0,
             EventKind::Workspace {
-                path: format!("/shop/.flow/worktrees/{name}"),
+                path: format!("/shop/.saaio/worktrees/{name}"),
                 branch: Some(format!("flow/{name}")),
                 slot: Some(1),
                 window: None,

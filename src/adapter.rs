@@ -193,7 +193,7 @@ mod tests {
             !WORKER_PROMPT.contains("Claude"),
             "the prompt names no harness"
         );
-        let wiring = Adapter::ClaudeCode.wiring(Path::new("/bin/flow"));
+        let wiring = Adapter::ClaudeCode.wiring(Path::new("/bin/saaio"));
         assert_eq!(wiring[0], "--settings");
         assert_eq!(wiring[2..], ["--append-system-prompt", WORKER_PROMPT]);
     }
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn codex_takes_instructions_as_config_and_its_hooks_on_every_launch() {
-        let exe = Path::new("/bin/flow");
+        let exe = Path::new("/bin/saaio");
         let instructions = Adapter::Codex.instruct("be \"brief\"\nplease");
         assert_eq!(instructions[0], "-c");
         let parsed: toml::Table = toml::from_str(&instructions[1]).unwrap();
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn wires_each_master_its_own_way() {
-        let exe = Path::new("/bin/flow");
+        let exe = Path::new("/bin/saaio");
         let argv = || vec!["agent".to_string(), "-n".to_string(), "master".to_string()];
 
         let quiet = Adapter::ClaudeCode.wire_master(argv(), exe, "md", false, true);

@@ -67,7 +67,7 @@ pub struct Store {
 }
 
 impl Store {
-    /// $SAAIO_HOME, else $XDG_STATE_HOME/flow, else $HOME/.local/state/flow.
+    /// $SAAIO_HOME, else $XDG_STATE_HOME/saaio, else $HOME/.local/state/saaio.
     pub fn locate(
         saaio_home: Option<PathBuf>,
         xdg_state: Option<PathBuf>,
@@ -460,11 +460,11 @@ mod tests {
         );
         assert_eq!(
             Store::locate(None, xdg, home.clone()).unwrap().root,
-            Path::new("/state/flow")
+            Path::new("/state/saaio")
         );
         assert_eq!(
             Store::locate(None, None, home).unwrap().root,
-            Path::new("/home/jan/.local/state/flow")
+            Path::new("/home/jan/.local/state/saaio")
         );
         assert!(Store::locate(None, None, None).is_none());
     }
@@ -477,7 +477,7 @@ mod tests {
             Some(PathBuf::from("/home/jan")),
         )
         .unwrap();
-        assert_eq!(store.root, Path::new("/home/jan/.local/state/flow"));
+        assert_eq!(store.root, Path::new("/home/jan/.local/state/saaio"));
     }
 
     #[test]

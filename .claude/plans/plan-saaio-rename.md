@@ -17,7 +17,7 @@ The product, binary and crate become `saaio`. The unit of work stays "a flow": `
 | build and test | `FLOW_COMMIT`, `FLOW_UPDATE_GOLDEN` | `SAAIO_COMMIT`, `SAAIO_UPDATE_GOLDEN` |
 | state, config | `~/.local/state/flow`, `~/.config/flow`, `/etc/flow` | `~/.local/state/saaio`, `~/.config/saaio`, `/etc/saaio` |
 | per project | `.flow/` | `.saaio/` |
-| socket folder | `$TMPDIR/flow-<uid>` | `$TMPDIR/saaio-<uid>` |
+| socket folder | `/tmp/flow-<uid>` | `/tmp/saaio-<uid>` (when the store path is too long for a socket) |
 | hosted-pane marker | `flow-ui` | `saaio-ui` |
 | themes | `flow`, `flow-light`, `Palette::FLOW`, `Palette::FLOW_LIGHT` | `saaio`, `saaio-light`, `Palette::SAAIO`, `Palette::SAAIO_LIGHT` |
 | UI wordmark | `▚▄▞ flow`, `▚▄▞ flow board` | `▚▄▞ saaio`, `▚▄▞ saaio board` |
@@ -80,7 +80,7 @@ pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("SAAIO_COMM
 
 - [x] Rename the crate, lib and binary to saaio: Cargo.toml, Cargo.lock, `use saaio::` in main.rs, `CARGO_BIN_EXE_saaio` in tests/cli.rs, `SAAIO_COMMIT` in build.rs and proto.rs
 - [x] Rename every variable to `SAAIO_*` (`SAAIO_FLOW_ID`, `SAAIO_FLOW_NAME`) and the `Env` fields, with the tests that set them
-- [ ] Rename the folders: state and config `saaio`, `/etc/saaio`, `.saaio/` per project, `$TMPDIR/saaio-<uid>`, with their tests
+- [x] Rename the folders: state and config `saaio`, `/etc/saaio`, `.saaio/` per project, `/tmp/saaio-<uid>`, with their tests
 - [ ] Rename the stored and shown names: `HOSTED = "saaio-ui"`, themes `saaio`/`saaio-light` and `Palette::SAAIO`, the UI wordmark; rewrite the goldens
 - [ ] Rename what agents read: `WORKER_PROMPT`, "message from the saaio master:", every help[] line, error and the about text in src/cli
 - [ ] Rename the docs: README, docs/*.md, HANDOVER, CLAUDE.md, ROADMAP, CHANGELOG, examples, master.md, media scripts

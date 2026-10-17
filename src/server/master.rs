@@ -242,7 +242,7 @@ mod tests {
         let agents = builtin_agents();
         let master = &agents[crate::config::MASTER_AGENT];
         let env = LaunchEnv {
-            flow_exe: PathBuf::from("/bin/flow"),
+            flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
         let md = instructions();
@@ -286,11 +286,11 @@ mod tests {
         let agents = builtin_agents();
         let codex = &agents["codex"];
         let env = LaunchEnv {
-            flow_exe: PathBuf::from("/bin/flow"),
+            flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
         let md = instructions();
-        let exe = Path::new("/bin/flow");
+        let exe = Path::new("/bin/saaio");
         let mut wired = crate::adapter::codex::hooks(exe);
         wired.extend(Adapter::Codex.instruct("# You are the master"));
 

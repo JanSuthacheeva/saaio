@@ -351,14 +351,14 @@ mod tests {
 
     #[test]
     fn home_shows_the_binary_the_description_and_the_flows() {
-        let Document::Toon(text) = home(&sample_board(10 * MIN), "~/.cargo/bin/flow", &[]) else {
+        let Document::Toon(text) = home(&sample_board(10 * MIN), "~/.cargo/bin/saaio", &[]) else {
             panic!("home is TOON");
         };
 
         assert_eq!(
             text,
             [
-                "bin: ~/.cargo/bin/flow",
+                "bin: ~/.cargo/bin/saaio",
                 "description: \"Tracks parallel feature flows: what each is doing, where it is blocked, how far it got\"",
                 "count: 3",
                 "needs_you: 1",
@@ -439,12 +439,12 @@ mod tests {
             projects: vec![
                 crate::view::Project {
                     name: "api".into(),
-                    root: "/state/flow/projects/api".into(),
+                    root: "/state/saaio/projects/api".into(),
                     board: fold::board(vec![flow("api-7", vec![], now)], now),
                 },
                 crate::view::Project {
                     name: "shop".into(),
-                    root: "/state/flow/projects/shop".into(),
+                    root: "/state/saaio/projects/shop".into(),
                     board: sample_board(now),
                 },
             ],

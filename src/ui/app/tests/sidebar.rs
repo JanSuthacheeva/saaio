@@ -311,7 +311,7 @@ fn peeks_at_where_an_ended_flows_code_is() {
     );
     let peek = vec![PeekLine::Code {
         branch: Some("flow/shop-198".into()),
-        worktree: "/shop/.flow/worktrees/shop-198".into(),
+        worktree: "/shop/.saaio/worktrees/shop-198".into(),
         exists: false,
     }];
 

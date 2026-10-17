@@ -77,7 +77,7 @@ fn worker(id: &str, mode: crate::event::Mode, age: u64, events: Vec<EventKind>) 
         Event::new(
             at,
             EventKind::Workspace {
-                path: format!("/shop/.flow/worktrees/{id}"),
+                path: format!("/shop/.saaio/worktrees/{id}"),
                 branch: Some(format!("flow/{id}")),
                 slot: Some(1),
                 window: Some("flow-ui".into()),

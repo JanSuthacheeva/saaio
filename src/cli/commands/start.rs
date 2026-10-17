@@ -34,7 +34,7 @@ pub struct Args {
     /// Agent from the config [default: the config's agent, claude]
     #[arg(long)]
     agent: Option<String>,
-    /// Branch type from the repo's .flow/config.toml [default: its first]
+    /// Branch type from the repo's .saaio/config.toml [default: its first]
     #[arg(long = "type")]
     kind: Option<String>,
 }

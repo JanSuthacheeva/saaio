@@ -541,11 +541,11 @@ mod tests {
 
     #[test]
     fn wires_every_event_to_flow_hook_claude_code() {
-        let settings: Value = serde_json::from_str(&settings(Path::new("/bin/flow"))).unwrap();
+        let settings: Value = serde_json::from_str(&settings(Path::new("/bin/saaio"))).unwrap();
 
         for event in EVENTS {
             let handler = &settings["hooks"][event][0]["hooks"][0];
-            assert_eq!(handler["command"], "/bin/flow", "{event}");
+            assert_eq!(handler["command"], "/bin/saaio", "{event}");
             assert_eq!(handler["args"], json!(["hook", "claude-code"]), "{event}");
         }
         assert_eq!(settings["hooks"]["PreToolUse"][0]["matcher"], "*");
@@ -554,7 +554,7 @@ mod tests {
 
     #[test]
     fn a_plain_session_reports_but_neither_waits_nor_hears_of_the_master() {
-        let plain: Value = serde_json::from_str(&plain_settings(Path::new("/bin/flow"))).unwrap();
+        let plain: Value = serde_json::from_str(&plain_settings(Path::new("/bin/saaio"))).unwrap();
 
         let hooks = plain["hooks"].as_object().unwrap();
         assert_eq!(hooks.len(), EVENTS.len(), "no SessionStart waiter");
@@ -568,10 +568,10 @@ mod tests {
             );
         }
         assert_eq!(
-            Adapter::ClaudeCode.plain_wiring(Path::new("/bin/flow")),
+            Adapter::ClaudeCode.plain_wiring(Path::new("/bin/saaio")),
             [
                 "--settings".to_string(),
-                plain_settings(Path::new("/bin/flow"))
+                plain_settings(Path::new("/bin/saaio"))
             ]
         );
     }
@@ -581,15 +581,15 @@ mod tests {
         let waiter = |args: Value| {
             json!({
                 "type": "command",
-                "command": "/bin/flow",
+                "command": "/bin/saaio",
                 "args": args,
                 "asyncRewake": true,
                 "timeout": WAIT_TIMEOUT_SECS,
             })
         };
-        let worker: Value = serde_json::from_str(&settings(Path::new("/bin/flow"))).unwrap();
+        let worker: Value = serde_json::from_str(&settings(Path::new("/bin/saaio"))).unwrap();
         let master: Value =
-            serde_json::from_str(&master_settings(Path::new("/bin/flow"), true)).unwrap();
+            serde_json::from_str(&master_settings(Path::new("/bin/saaio"), true)).unwrap();
 
         for event in ["SessionStart", "Stop"] {
             let hooks = worker["hooks"][event][0]["hooks"].as_array().unwrap();
@@ -614,7 +614,7 @@ mod tests {
     fn the_master_reports_every_event_and_waits_only_when_it_wakes() {
         for wake in [true, false] {
             let master: Value =
-                serde_json::from_str(&master_settings(Path::new("/bin/flow"), wake)).unwrap();
+                serde_json::from_str(&master_settings(Path::new("/bin/saaio"), wake)).unwrap();
 
             for event in EVENTS {
                 let handler = &master["hooks"][event][0]["hooks"][0];

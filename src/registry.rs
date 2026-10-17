@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use crate::store::{Store, write_atomic};
 
 /// The folder every store registers in and slots are claimed in: the default store's folder,
-/// $XDG_STATE_HOME/flow or ~/.local/state/flow, whatever SAAIO_HOME says.
+/// $XDG_STATE_HOME/saaio or ~/.local/state/saaio, whatever SAAIO_HOME says.
 #[derive(Debug, Clone)]
 pub struct Registry {
     root: PathBuf, // holds stores/<hash> and slots/<n>
@@ -20,12 +20,12 @@ impl Registry {
         Registry::default_root(xdg_state, home).map(|root| Registry { root })
     }
 
-    /// $XDG_STATE_HOME/flow, else $HOME/.local/state/flow; an empty value counts as unset.
+    /// $XDG_STATE_HOME/saaio, else $HOME/.local/state/saaio; an empty value counts as unset.
     pub fn default_root(xdg_state: Option<PathBuf>, home: Option<PathBuf>) -> Option<PathBuf> {
         let set = |path: Option<PathBuf>| path.filter(|path| !path.as_os_str().is_empty());
         set(xdg_state)
-            .map(|state| state.join("flow"))
-            .or_else(|| set(home).map(|home| home.join(".local/state/flow")))
+            .map(|state| state.join("saaio"))
+            .or_else(|| set(home).map(|home| home.join(".local/state/saaio")))
     }
 
     #[cfg(test)]
@@ -118,11 +118,11 @@ mod tests {
     use super::*;
 
     fn registry(dir: &TempDir) -> Registry {
-        Registry::at(dir.path().join("flow"))
+        Registry::at(dir.path().join("saaio"))
     }
 
     fn store(dir: &TempDir, name: &str) -> Store {
-        let root = dir.path().join("flow/projects").join(name);
+        let root = dir.path().join("saaio/projects").join(name);
         fs::create_dir_all(&root).unwrap();
         Store::at(root)
     }
@@ -130,10 +130,10 @@ mod tests {
     #[test]
     fn locates_the_shared_folder_without_flow_home() {
         let registry = Registry::locate(Some("/state".into()), Some("/home".into())).unwrap();
-        assert_eq!(registry.root(), Path::new("/state/flow"));
+        assert_eq!(registry.root(), Path::new("/state/saaio"));
 
         let registry = Registry::locate(None, Some("/home".into())).unwrap();
-        assert_eq!(registry.root(), Path::new("/home/.local/state/flow"));
+        assert_eq!(registry.root(), Path::new("/home/.local/state/saaio"));
 
         assert!(Registry::locate(Some("".into()), None).is_none());
     }

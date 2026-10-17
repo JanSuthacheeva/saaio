@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::launch::name;
 
-/// A repo's branch convention, from `[branch]` in its `.flow/config.toml`.
+/// A repo's branch convention, from `[branch]` in its `.saaio/config.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Branching {
@@ -23,10 +23,10 @@ struct RepoConfig {
     branch: Option<Branching>,
 }
 
-pub const CONFIG_FILE: &str = ".flow/config.toml";
+pub const CONFIG_FILE: &str = ".saaio/config.toml";
 
 impl Branching {
-    /// <repo>/.flow/config.toml's [branch]; None without the file or the section.
+    /// <repo>/.saaio/config.toml's [branch]; None without the file or the section.
     pub fn load(repo: &Path) -> Result<Option<Branching>> {
         let path = repo.join(CONFIG_FILE);
         let text = match fs::read_to_string(&path) {
@@ -175,7 +175,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         assert_eq!(Branching::load(dir.path()).unwrap(), None);
 
-        fs::create_dir_all(dir.path().join(".flow")).unwrap();
+        fs::create_dir_all(dir.path().join(".saaio")).unwrap();
         let config = dir.path().join(CONFIG_FILE);
         fs::write(
             &config,

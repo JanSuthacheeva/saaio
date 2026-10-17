@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn gives_every_pane_a_terminal_type_and_workers_their_flow() {
         let env = LaunchEnv {
-            saaio_home: Some(PathBuf::from("/state/flow")),
+            saaio_home: Some(PathBuf::from("/state/saaio")),
             ..LaunchEnv::default()
         };
         let pairs = |items: &[(&str, &str)]| -> Vec<(String, String)> {
@@ -230,7 +230,7 @@ mod tests {
         assert_eq!(
             pane_env(&env),
             pairs(&[
-                ("SAAIO_HOME", "/state/flow"),
+                ("SAAIO_HOME", "/state/saaio"),
                 ("TERM", "xterm-256color"),
                 ("COLORTERM", "truecolor"),
             ])
@@ -255,7 +255,7 @@ mod tests {
             Event::new(
                 1,
                 EventKind::Workspace {
-                    path: "/repo/.flow/worktrees/shop-217".into(),
+                    path: "/repo/.saaio/worktrees/shop-217".into(),
                     branch: Some("flow/shop-217".into()),
                     slot: Some(2),
                     window: window.map(String::from),
@@ -278,7 +278,7 @@ mod tests {
 
         let fresh = worker_spec(&worker(None), claude, &env).unwrap();
         assert_eq!(fresh.key, PaneKey::Flow("7f3c".into()));
-        assert_eq!(fresh.cwd, PathBuf::from("/repo/.flow/worktrees/shop-217"));
+        assert_eq!(fresh.cwd, PathBuf::from("/repo/.saaio/worktrees/shop-217"));
         assert_eq!(
             fresh.argv,
             agent_argv(claude, "7f3c", "shop-217", "SHOP-217 add CSV export")
@@ -308,7 +308,7 @@ mod tests {
         let mut claude = agents["claude"].clone();
         claude.adapter = Some(crate::adapter::Adapter::ClaudeCode);
         let env = LaunchEnv {
-            flow_exe: PathBuf::from("/bin/flow"),
+            flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
 
@@ -318,7 +318,7 @@ mod tests {
         for spec in [&fresh, &resumed] {
             assert_eq!(spec.argv[0], "claude");
             assert_eq!(spec.argv[1], "--settings");
-            assert!(spec.argv[2].contains("\"/bin/flow\""), "{}", spec.argv[2]);
+            assert!(spec.argv[2].contains("\"/bin/saaio\""), "{}", spec.argv[2]);
         }
         assert_eq!(fresh.argv[3], "--append-system-prompt");
         assert_eq!(&fresh.argv[5..7], ["-n", "shop-217"]);
@@ -365,13 +365,13 @@ mod tests {
         let agents = crate::config::builtin_agents();
         let codex = &agents["codex"];
         let env = LaunchEnv {
-            flow_exe: PathBuf::from("/bin/flow"),
+            flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
 
         let resumed = worker_spec(&codex_worker(Some(HOSTED), Some("01a1")), codex, &env).unwrap();
 
-        let wiring = crate::adapter::Adapter::Codex.wiring(Path::new("/bin/flow"));
+        let wiring = crate::adapter::Adapter::Codex.wiring(Path::new("/bin/saaio"));
         assert_eq!(resumed.argv[0], "codex");
         assert_eq!(resumed.argv[1..=wiring.len()], wiring[..]);
         assert_eq!(resumed.argv[wiring.len() + 1..], ["resume", "01a1"]);
@@ -407,10 +407,10 @@ mod tests {
         let agents = crate::config::builtin_agents();
         let claude = &agents["claude"];
         let env = LaunchEnv {
-            flow_exe: PathBuf::from("/bin/flow"),
+            flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
-        let wiring = crate::adapter::Adapter::ClaudeCode.plain_wiring(Path::new("/bin/flow"));
+        let wiring = crate::adapter::Adapter::ClaudeCode.plain_wiring(Path::new("/bin/saaio"));
 
         let fresh = worker_spec(&scratch(None), claude, &env).unwrap();
         let mut expected = vec![claude.command[0].clone()];

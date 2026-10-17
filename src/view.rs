@@ -317,7 +317,7 @@ mod tests {
             started_at: 1,
             changed_at: 2,
             workspace: Some(Workspace {
-                path: "/repo/.flow/worktrees/shop-221".into(),
+                path: "/repo/.saaio/worktrees/shop-221".into(),
                 branch: Some("flow/shop-221".into()),
                 slot: Some(1),
                 window: Some("@14".into()),

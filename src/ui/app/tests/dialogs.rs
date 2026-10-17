@@ -178,7 +178,7 @@ fn keeps_or_ends_unfinished_flows_when_flow_stops() {
         "{message}"
     );
     assert!(
-        message.contains("\n  shop-221  flow/shop-221  /shop/.flow/worktrees/shop-221"),
+        message.contains("\n  shop-221  flow/shop-221  /shop/.saaio/worktrees/shop-221"),
         "{message}"
     );
 
@@ -244,7 +244,7 @@ fn starts_a_flow_from_the_dialog_in_the_repo_in_view() {
         "{dialog}"
     );
     assert!(
-        dialog.contains("│  creates flow/shop-240  ·  .flow/worktrees/shop-240  ·  slot 2"),
+        dialog.contains("│  creates flow/shop-240  ·  .saaio/worktrees/shop-240  ·  slot 2"),
         "{dialog}"
     );
     assert!(
@@ -377,13 +377,13 @@ fn names_the_branch_after_the_repos_convention_in_the_dialog() {
     );
 
     app.on_input(Routed::Command(Command::NewFlow));
-    app.on_branching(&repo, Err("/shop/.flow/config.toml is not valid".into()));
+    app.on_branching(&repo, Err("/shop/.saaio/config.toml is not valid".into()));
     let View::NewFlow(form) = &app.view else {
         panic!("expected the dialog");
     };
     assert_eq!(
         form.error.as_deref(),
-        Some("/shop/.flow/config.toml is not valid")
+        Some("/shop/.saaio/config.toml is not valid")
     );
 }
 
