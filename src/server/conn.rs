@@ -70,7 +70,7 @@ impl Server {
                 conn,
                 &ServerMsg::Refused {
                     reason: format!(
-                        "flow server runs protocol {PROTOCOL_VERSION}, this flow speaks {version}"
+                        "saaio server runs protocol {PROTOCOL_VERSION}, this flow speaks {version}"
                     ),
                 },
             );
@@ -125,14 +125,14 @@ impl Server {
     }
 
     /// Refuses a connection whose first message could not be read: a flow of an older protocol,
-    /// which then says to run flow ui --stop.
+    /// which then says to run saaio ui --stop.
     pub(super) fn refuse_unreadable(&mut self, conn: ConnId) {
         server_log::write((self.clock)(), "refused an unreadable hello");
         self.send_to(
             conn,
             &ServerMsg::Refused {
                 reason: format!(
-                    "flow server runs protocol {PROTOCOL_VERSION} and could not read this flow's hello"
+                    "saaio server runs protocol {PROTOCOL_VERSION} and could not read this flow's hello"
                 ),
             },
         );
@@ -243,7 +243,7 @@ pub(super) fn bind(socket: &Path) -> Result<UnixListener> {
         Ok(listener) => listener,
         Err(error) if error.kind() == ErrorKind::AddrInUse => {
             if UnixStream::connect(socket).is_ok() {
-                bail!("a flow server already runs on {}", socket.display());
+                bail!("a saaio server already runs on {}", socket.display());
             }
             fs::remove_file(socket)
                 .with_context(|| format!("could not remove {}", socket.display()))?;

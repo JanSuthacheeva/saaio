@@ -8,7 +8,7 @@ use crate::adapter::{Adapter, Turn, cut};
 use crate::event::EventKind;
 use crate::workflow::Workflow;
 
-/// The hook events flow listens to.
+/// The hook events saaio listens to.
 const EVENTS: [&str; 8] = [
     "UserPromptSubmit",
     "PreToolUse",
@@ -19,7 +19,7 @@ const EVENTS: [&str; 8] = [
     "PreCompact",
     "PostCompact",
 ];
-/// Seconds Claude Code waits for `flow hook` before it goes on without it.
+/// Seconds Claude Code waits for `saaio hook` before it goes on without it.
 const HOOK_TIMEOUT_SECS: u64 = 10;
 /// Seconds Claude Code lets an asyncRewake waiter sleep before it ends it: a week.
 const WAIT_TIMEOUT_SECS: u64 = 604_800;
@@ -487,7 +487,7 @@ mod tests {
         assert_eq!(
             events("stop_woken").last(),
             Some(&waiting("Shall I also quote every field?")),
-            "a turn flow woke ends like any other"
+            "a turn saaio woke ends like any other"
         );
         assert_eq!(events("session_end_exit"), vec![EventKind::Ended]);
         assert_eq!(events("session_end_hangup"), vec![], "a hangup resumes");

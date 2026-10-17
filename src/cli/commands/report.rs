@@ -20,7 +20,7 @@ pub struct Args {
 enum ReportEvent {
     /// The flow entered a phase
     Phase {
-        /// One of the flow's phases, as `flow status <name>` lists them: plan, implement, ...
+        /// One of the flow's phases, as `saaio status <name>` lists them: plan, implement, ...
         phase: Phase,
     },
     /// Work goes on, after a stop or a subagent

@@ -33,7 +33,7 @@ fn main() -> ExitCode {
     answer(cli::run(cli, &env(), now_ms))
 }
 
-/// The environment variables and the terminal flow runs in, read once here.
+/// The environment variables and the terminal saaio runs in, read once here.
 fn env() -> Env {
     let path = |name| env::var_os(name).map(PathBuf::from);
     Env {

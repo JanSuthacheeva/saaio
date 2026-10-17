@@ -90,7 +90,7 @@ impl Workflow {
         Workflow::try_from(specs).expect("a valid workflow")
     }
 
-    /// The names in order: what flow start records.
+    /// The names in order: what saaio start records.
     pub fn phases(&self) -> Vec<Phase> {
         self.phases.iter().map(|phase| phase.name.clone()).collect()
     }

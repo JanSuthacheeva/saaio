@@ -19,12 +19,12 @@ pub struct Args {
 }
 
 /// Appends the master's message to a flow its worker reads when flow wakes it, or with --type a
-/// line flow server types into its pane; only the master sends (no SAAIO_FLOW_ID in its env).
+/// line saaio server types into its pane; only the master sends (no SAAIO_FLOW_ID in its env).
 pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, Failure> {
     if env.flow_id().is_some() {
         return Err(Failure::error(
             "only the master sends",
-            vec!["End your turn with the question; flow wakes the master".to_string()],
+            vec!["End your turn with the question; saaio wakes the master".to_string()],
         ));
     }
     let text = args.text.trim();
@@ -41,7 +41,7 @@ pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, 
     if args.typed && text.contains(['\n', '\r']) {
         return Err(Failure::error(
             "a typed line is one line",
-            vec!["Queue one `flow send --type` per line".to_string()],
+            vec!["Queue one `saaio send --type` per line".to_string()],
         ));
     }
     let (flows, _) = views(store, now);
@@ -49,13 +49,13 @@ pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, 
     if flow.is_finished() {
         return Err(Failure::error(
             format!("{} is finished", flow.name),
-            vec!["Run `flow` for the flows still running".to_string()],
+            vec!["Run `saaio` for the flows still running".to_string()],
         ));
     }
     if flow.workspace.is_none() {
         return Err(Failure::error(
             format!(
-                "{} has no worker; it was not started with flow start",
+                "{} has no worker; it was not started with saaio start",
                 flow.name
             ),
             Vec::new(),
@@ -77,7 +77,7 @@ pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, 
     Ok(output::flow::sent(flow))
 }
 
-/// Appends a line for flow server to type, once the worker's agent reports its turns to flow;
+/// Appends a line for saaio server to type, once the worker's agent reports its turns to saaio;
 /// only this path reads config.toml, so a broken one leaves plain messages working.
 fn queue(
     store: &Store,
@@ -94,11 +94,11 @@ fn queue(
     if !reports {
         return Err(Failure::error(
             format!(
-                "{} runs {}, which reports no turns to flow",
+                "{} runs {}, which reports no turns to saaio",
                 flow.name,
                 agent.unwrap_or_default()
             ),
-            vec!["Use `flow send` for a message".to_string()],
+            vec!["Use `saaio send` for a message".to_string()],
         ));
     }
     let events = store.events(&flow.id)?;

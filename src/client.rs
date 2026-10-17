@@ -26,7 +26,7 @@ const STOP_WAIT: Duration = Duration::from_secs(5);
 /// How long a killed server gets to stop listening.
 const KILL_WAIT: Duration = Duration::from_secs(1);
 
-/// What became of a flow's pane when `flow remove` or `flow clear` asked the server to close it.
+/// What became of a flow's pane when `saaio remove` or `saaio clear` asked the server to close it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Closing {
     Closed,
@@ -57,14 +57,14 @@ impl Client {
             },
         )?;
         match proto::read_msg::<_, ServerMsg>(&mut stream)
-            .context("the flow server did not answer")?
+            .context("the saaio server did not answer")?
         {
             Some(ServerMsg::Welcome { .. }) => {}
             Some(ServerMsg::Refused { reason }) => {
-                bail!("{reason}; run `flow ui --stop` and start flow ui again")
+                bail!("{reason}; run `saaio ui --stop` and start saaio ui again")
             }
-            Some(other) => bail!("the flow server answered {other:?} instead of a welcome"),
-            None => bail!("the flow server closed the connection"),
+            Some(other) => bail!("the saaio server answered {other:?} instead of a welcome"),
+            None => bail!("the saaio server closed the connection"),
         }
         // macOS refuses socket options once the server hung up (EINVAL); the next recv says so.
         let _ = stream.set_read_timeout(None);
@@ -135,7 +135,7 @@ pub fn stop_server(socket: &Path, clock: fn() -> u64) -> Result<bool> {
         let _ = server_log::append(&log, clock(), &text);
     };
     note(format!(
-        "flow ui --stop (flow {BUILD}) sends SIGTERM to pid {pid}"
+        "saaio ui --stop (flow {BUILD}) sends SIGTERM to pid {pid}"
     ));
     for (signal, wait) in [(libc::SIGTERM, STOP_WAIT), (libc::SIGKILL, KILL_WAIT)] {
         if signal == libc::SIGKILL {
@@ -153,7 +153,7 @@ pub fn stop_server(socket: &Path, clock: fn() -> u64) -> Result<bool> {
         }
     }
     note(format!("pid {pid} did not stop"));
-    bail!("the flow server (pid {pid}) did not stop")
+    bail!("the saaio server (pid {pid}) did not stop")
 }
 
 fn stops_listening(socket: &Path, wait: Duration) -> bool {
@@ -266,7 +266,7 @@ fn socket_path_for(root: &Path, tmp: &Path) -> PathBuf {
 }
 
 /// `<exe> server` with `env` and without the hook variables or SAAIO_MASTER of the session it starts
-/// from, so a flow ui opened inside a worker or the master gives its panes none of that identity.
+/// from, so a saaio ui opened inside a worker or the master gives its panes none of that identity.
 fn server_command(exe: &Path, env: &[(String, String)]) -> Command {
     let mut command = Command::new(exe);
     command.arg("server");
@@ -323,7 +323,7 @@ pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Res
         }
         thread::sleep(Duration::from_millis(20));
     }
-    bail!("flow server did not start, see {}", log_path.display())
+    bail!("saaio server did not start, see {}", log_path.display())
 }
 
 #[cfg(test)]
@@ -416,14 +416,14 @@ mod tests {
         let server = fake_server(
             &socket,
             ServerMsg::Refused {
-                reason: "flow server runs protocol 9".into(),
+                reason: "saaio server runs protocol 9".into(),
             },
         );
 
         let error = Client::connect(&socket, Role::Control).err().unwrap();
 
         assert!(error.to_string().contains("protocol 9"), "{error}");
-        assert!(error.to_string().contains("flow ui --stop"), "{error}");
+        assert!(error.to_string().contains("saaio ui --stop"), "{error}");
         server.join().unwrap();
         assert!(
             Client::connect(&dir.path().join("none.sock"), Role::Control)
@@ -455,7 +455,7 @@ mod tests {
         let socket = dir.path().join("server.sock");
         let _listener = UnixListener::bind(&socket).unwrap();
 
-        ensure_server(&socket, Path::new("/no/such/flow"), &[]).unwrap();
+        ensure_server(&socket, Path::new("/no/such/saaio"), &[]).unwrap();
 
         let silent = dir.path().join("other/server.sock");
         let error = ensure_server(&silent, Path::new("/usr/bin/true"), &[]).unwrap_err();

@@ -46,7 +46,7 @@ fn render(app: &App) -> Terminal<TestBackend> {
     terminal
 }
 
-/// Row `y` of what flow draws, inside the margin.
+/// Row `y` of what saaio draws, inside the margin.
 fn row(terminal: &Terminal<TestBackend>, y: u16) -> String {
     let buffer = terminal.backend().buffer();
     let screen = layout::screen(Size {

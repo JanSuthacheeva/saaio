@@ -17,7 +17,7 @@ pub(crate) fn list(board: &Board, warnings: &[String], full: bool) -> Document {
     board_list(board, None, warnings, full)
 }
 
-const NEW_HELP: &str = "Run `flow new --name <name> --request <text>` to track a new flow";
+const NEW_HELP: &str = "Run `saaio new --name <name> --request <text>` to track a new flow";
 
 #[derive(Debug, Serialize)]
 struct ListDocument<'a> {
@@ -92,7 +92,7 @@ fn board_list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool)
     let mut help = Vec::new();
     if !board.flows.is_empty() {
         help.push(
-            "Run `flow status <name>` for one flow's phases, timeline and decisions".to_string(),
+            "Run `saaio status <name>` for one flow's phases, timeline and decisions".to_string(),
         );
     }
     help.push(NEW_HELP.to_string());
@@ -182,11 +182,11 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
     let mut help = Vec::new();
     if !rows.is_empty() {
         help.push(
-            "Run `flow status <name>` in a flow's project for its phases, timeline and decisions"
+            "Run `saaio status <name>` in a flow's project for its phases, timeline and decisions"
                 .to_string(),
         );
     }
-    help.push("Run `flow status --all --json` for every project's board".to_string());
+    help.push("Run `saaio status --all --json` for every project's board".to_string());
     Document::Toon(toon(&AllDocument {
         count: rows.len(),
         needs_you: flows.iter().filter(|(_, flow)| flow.needs_you()).count(),
@@ -316,7 +316,7 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>, prefix: Prefix) -
     if let Some(space) = &flow.workspace
         && flow.state == State::Ended
     {
-        help.push(format!("{} in flow ui resumes it", prefix.then("r")));
+        help.push(format!("{} in saaio ui resumes it", prefix.then("r")));
         if let Some(branch) = &space.branch
             && worktree_exists == Some(false)
         {
@@ -327,17 +327,17 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>, prefix: Prefix) -
     }
     match flow.state {
         State::Blocked => help.push(format!(
-            "Run `flow report --flow {} working` once the block is resolved",
+            "Run `saaio report --flow {} working` once the block is resolved",
             flow.name
         )),
         State::Waiting => help.push(format!(
-            "Run `flow report --flow {} working` once answered",
+            "Run `saaio report --flow {} working` once answered",
             flow.name
         )),
-        State::Done => help.push("Run `flow clear` after the MR is merged".to_string()),
+        State::Done => help.push("Run `saaio clear` after the MR is merged".to_string()),
         _ => {}
     }
-    help.push("Run `flow` for all flows".to_string());
+    help.push("Run `saaio` for all flows".to_string());
     help
 }
 
@@ -368,7 +368,7 @@ mod tests {
                 "  export-csv,done,merge-request,\"\",9m",
                 "blockers[1]{name,blocker}:",
                 "  shop-221,\"Task 5: migration needs a default value\"",
-                "help[2]: \"Run `flow status <name>` for one flow's phases, timeline and decisions\",Run `flow new --name <name> --request <text>` to track a new flow",
+                "help[2]: \"Run `saaio status <name>` for one flow's phases, timeline and decisions\",Run `saaio new --name <name> --request <text>` to track a new flow",
             ]
             .join("\n")
         );
@@ -384,7 +384,7 @@ mod tests {
                 "count: 0",
                 "needs_you: 0",
                 "flows: none tracked",
-                "help[1]: Run `flow new --name <name> --request <text>` to track a new flow",
+                "help[1]: Run `saaio new --name <name> --request <text>` to track a new flow",
             ]
             .join("\n")
         );
@@ -482,7 +482,7 @@ mod tests {
         let text = document.text();
 
         assert!(text.contains("flows: none tracked"), "{text}");
-        assert!(!text.contains("flow status <name>"), "{text}");
+        assert!(!text.contains("saaio status <name>"), "{text}");
     }
 
     #[test]
@@ -530,7 +530,7 @@ mod tests {
                 "  8m,\"decided: approach B\"",
                 "  7m,\"phase: implement\"",
                 "  5m,\"blocked: no default\"",
-                "help[2]: Run `flow report --flow shop-221 working` once the block is resolved,Run `flow` for all flows",
+                "help[2]: Run `saaio report --flow shop-221 working` once the block is resolved,Run `saaio` for all flows",
             ]
             .join("\n")
         );

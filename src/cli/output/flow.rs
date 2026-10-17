@@ -23,7 +23,7 @@ pub(crate) fn created(flow: &FlowView, existing: bool) -> Document {
             .map(|step| {
                 let phase = step.phase.name();
                 format!(
-                    "Run `flow report --flow {} phase {phase}` when {phase} starts",
+                    "Run `saaio report --flow {} phase {phase}` when {phase} starts",
                     flow.name
                 )
             })
@@ -47,11 +47,11 @@ pub(crate) fn reported(flow: &FlowView) -> Document {
         help: Vec<String>,
     }
     let next = match flow.state {
-        State::Blocked => "Run `flow report working` once the block is resolved".to_string(),
-        State::Waiting => "Run `flow report working` once answered".to_string(),
-        State::Done => "Run `flow clear` after the MR is merged".to_string(),
+        State::Blocked => "Run `saaio report working` once the block is resolved".to_string(),
+        State::Waiting => "Run `saaio report working` once answered".to_string(),
+        State::Done => "Run `saaio clear` after the MR is merged".to_string(),
         _ => format!(
-            "Run `flow status {}` for its phases and timeline",
+            "Run `saaio status {}` for its phases and timeline",
             flow.name
         ),
     };
@@ -100,7 +100,7 @@ pub(crate) fn queued(flow: &FlowView, line: &str, ahead: usize) -> Document {
                 flow.name
             ),
             format!(
-                "Queue the next line with another `flow send --type {} \"<line>\"`. It waits for this one's turn to end",
+                "Queue the next line with another `saaio send --type {} \"<line>\"`. It waits for this one's turn to end",
                 flow.name
             ),
         ],
@@ -136,7 +136,7 @@ mod tests {
                 "flow: shop-221",
                 "id: shop-221-id",
                 "existing: false",
-                "help[2]: Run `flow report --flow shop-221 phase plan` when plan starts,Or set SAAIO_FLOW_ID=shop-221-id in the worker's environment and leave out --flow",
+                "help[2]: Run `saaio report --flow shop-221 phase plan` when plan starts,Or set SAAIO_FLOW_ID=shop-221-id in the worker's environment and leave out --flow",
             ]
             .join("\n")
         );
@@ -161,7 +161,7 @@ mod tests {
                 "flow: shop-221",
                 "state: blocked",
                 "phase: implement",
-                "help[1]: Run `flow report working` once the block is resolved",
+                "help[1]: Run `saaio report working` once the block is resolved",
             ]
             .join("\n")
         );
@@ -176,7 +176,7 @@ mod tests {
         assert!(
             reported(&waiting)
                 .text()
-                .ends_with("help[1]: Run `flow report working` once answered")
+                .ends_with("help[1]: Run `saaio report working` once answered")
         );
 
         let done = flow(
@@ -189,13 +189,13 @@ mod tests {
         assert!(
             reported(&done)
                 .text()
-                .ends_with("help[1]: Run `flow clear` after the MR is merged")
+                .ends_with("help[1]: Run `saaio clear` after the MR is merged")
         );
 
         let working = flow("shop-221", vec![], MIN);
         assert_eq!(
             reported(&working).text(),
-            "flow: shop-221\nstate: working\nhelp[1]: Run `flow status shop-221` for its phases and timeline"
+            "flow: shop-221\nstate: working\nhelp[1]: Run `saaio status shop-221` for its phases and timeline"
         );
     }
 
@@ -244,7 +244,7 @@ mod tests {
                 "queued: shop-217",
                 "line: /compact",
                 "ahead: 0",
-                "help[2]: flow types it into shop-217's pane once its session is idle,\"Queue the next line with another `flow send --type shop-217 \\\"<line>\\\"`. It waits for this one's turn to end\"",
+                "help[2]: flow types it into shop-217's pane once its session is idle,\"Queue the next line with another `saaio send --type shop-217 \\\"<line>\\\"`. It waits for this one's turn to end\"",
             ]
             .join("\n")
         );

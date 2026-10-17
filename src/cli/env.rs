@@ -5,7 +5,7 @@ use crate::config::{self, Config};
 use crate::registry::Registry;
 use crate::store::Store;
 
-/// The environment flow runs in: its variables and its terminal, read once by main so commands get
+/// The environment saaio runs in: its variables and its terminal, read once by main so commands get
 /// them as values.
 #[derive(Debug, Clone, Default)]
 pub struct Env {

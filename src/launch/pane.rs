@@ -8,11 +8,11 @@ use crate::view::{FlowView, Workspace};
 /// Set to 1 in the master's pane, so the hooks it shares with workers know whose they are.
 pub const MASTER_ENV: &str = "SAAIO_MASTER";
 
-/// Workspace.window of a worker flow ui has opened once; its next open resumes it.
+/// Workspace.window of a worker saaio ui has opened once; its next open resumes it.
 pub const HOSTED: &str = "saaio-ui";
 
 /// What the server passes on to every pane: SAAIO_HOME, when it was set for the server, and the
-/// flow binary a worker's hooks run.
+/// saaio binary a worker's hooks run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LaunchEnv {
     pub saaio_home: Option<PathBuf>,
@@ -66,7 +66,7 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str, session: &str) -> Option
 }
 
 /// The agent's command the first time, its resume command once it ran somewhere (window set:
-/// HOSTED, or a tmux window from before flow ui), since its session id is taken from then on;
+/// HOSTED, or a tmux window from before saaio ui), since its session id is taken from then on;
 /// either way with the agent's adapter wired in right after the program. A plain session starts
 /// without a prompt and gets the adapter's plain wiring. A harness that picks its own session
 /// resumes by the one its hooks reported, and starts again when it never reported one (it had no

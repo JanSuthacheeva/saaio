@@ -10,7 +10,7 @@ use crate::server_log;
 use crate::store::Store;
 use crate::ui::theme_file;
 
-/// The session server flow ui starts on its own; runs until StopServer or SIGTERM. Its stderr is
+/// The session server saaio ui starts on its own; runs until StopServer or SIGTERM. Its stderr is
 /// server.log, so it answers nothing on success and logs why it failed.
 pub fn run(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
     server_log::exit_on_panic(clock);

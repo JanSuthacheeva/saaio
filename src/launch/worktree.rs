@@ -73,7 +73,7 @@ pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// What hook_env sets: a worker's identity, which a session flow ui starts from inside one must
+/// What hook_env sets: a worker's identity, which a session saaio ui starts from inside one must
 /// not pass on.
 pub const HOOK_VARS: [&str; 5] = [
     "SAAIO_FLOW_ID",

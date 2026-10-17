@@ -15,7 +15,7 @@ use output::{Document, Failure};
 #[command(
     version,
     about,
-    after_help = "Run alone in a terminal, flow opens flow ui.\nRun by an agent or a script, it prints every flow and what needs you."
+    after_help = "Run alone in a terminal, flow opens saaio ui.\nRun by an agent or a script, it prints every flow and what needs you."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -43,7 +43,7 @@ enum Command {
     Report(report::Args),
     /// Every flow, or one flow with its phases, timeline and decisions
     Status(status::Args),
-    /// Start a worker: a flow, a worktree, the setup hook and an agent flow ui opens
+    /// Start a worker: a flow, a worktree, the setup hook and an agent saaio ui opens
     Start(start::Args),
     /// Stop a flow's worker, tear down its worktree and forget it
     Remove(remove::Args),
@@ -56,7 +56,7 @@ enum Command {
     /// What a session's asyncRewake hook runs: sleeps until there is news for it, prints it, exits 2
     #[command(hide = true)]
     Wait(wait::Args),
-    /// The session server flow ui starts on its own
+    /// The session server saaio ui starts on its own
     #[command(hide = true)]
     Server,
     /// What a harness hook runs: reports the event on stdin into $SAAIO_FLOW_ID's flow

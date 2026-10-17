@@ -26,7 +26,7 @@ pub struct Agent {
     /// The command that continues session {id}; an agent without one is started fresh by hand.
     #[serde(default)]
     pub resume: Option<Vec<String>>,
-    /// The harness flow observes it through ("claude-code"); without one, flow ui shows only
+    /// The harness saaio observes it through ("claude-code"); without one, saaio ui shows only
     /// whether its process runs.
     #[serde(default)]
     pub adapter: Option<Adapter>,
@@ -45,12 +45,12 @@ pub struct Config {
     pub ui: UiConfig,
 }
 
-/// [worker]: what a flow runs when flow start names no agent, and what it is asked first.
+/// [worker]: what a flow runs when saaio start names no agent, and what it is asked first.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
 #[serde(default, deny_unknown_fields)]
 pub struct WorkerConfig {
-    /// The agent flow start runs, "claude" unless set.
+    /// The agent saaio start runs, "claude" unless set.
     pub agent: String,
     /// The first prompt of every agent the file gives none, the built-in ones included; unset,
     /// each keeps its built-in default.
@@ -71,9 +71,9 @@ impl Default for WorkerConfig {
 #[cfg_attr(test, derive(Serialize))]
 #[serde(default, deny_unknown_fields)]
 pub struct MasterConfig {
-    /// flow wakes the master when a worker stops (wake = false: it learns only from flow status).
+    /// saaio wakes the master when a worker stops (wake = false: it learns only from saaio status).
     pub wake: bool,
-    /// The agent flow ui runs as its master, "codex" for one; else MASTER_AGENT.
+    /// The agent saaio ui runs as its master, "codex" for one; else MASTER_AGENT.
     pub agent: Option<String>,
 }
 
@@ -86,12 +86,12 @@ impl Default for MasterConfig {
     }
 }
 
-/// [ui]: how flow ui takes keys.
+/// [ui]: how saaio ui takes keys.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
 #[serde(default, deny_unknown_fields)]
 pub struct UiConfig {
-    /// The key before every flow ui command, C-space unless set.
+    /// The key before every saaio ui command, C-space unless set.
     pub prefix: Prefix,
 }
 
@@ -221,20 +221,20 @@ fn strings(parts: &[&str]) -> Vec<String> {
     parts.iter().copied().map(String::from).collect()
 }
 
-/// What flow writes as config.toml on its first run: every setting at its default, commented out.
+/// What saaio writes as config.toml on its first run: every setting at its default, commented out.
 pub const EXAMPLE: DefaultFile = DefaultFile {
     text: include_str!("../examples/config.toml"),
     earlier: &[],
 };
 
-/// The agent flow ui runs as its master when there is one and [master] names no other; else the
+/// The agent saaio ui runs as its master when there is one and [master] names no other; else the
 /// default agent.
 pub const MASTER_AGENT: &str = "master";
 
 /// claude: ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"], prompt "/ship-feature {request}",
 /// resumed with ["claude", "-n", "{name}", "--resume", "{id}"]; codex: ["codex", "{prompt}"], prompt
 /// "$ship-feature {request}", resumed by the session Codex picked ({session}); master: claude, to
-/// which flow server adds the orchestrator instructions (the master.md beside config.toml).
+/// which saaio server adds the orchestrator instructions (the master.md beside config.toml).
 pub fn builtin_agents() -> BTreeMap<String, Agent> {
     let claude = Agent {
         command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),

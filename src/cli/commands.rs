@@ -40,8 +40,8 @@ fn no_flow(name: &str) -> Failure {
     Failure::error(
         format!("no flow named {name}"),
         vec![
-            "Run `flow` to list the flows".to_string(),
-            format!("Run `flow new --name {name} --request <text>` to start it"),
+            "Run `saaio` to list the flows".to_string(),
+            format!("Run `saaio new --name {name} --request <text>` to start it"),
         ],
     )
 }

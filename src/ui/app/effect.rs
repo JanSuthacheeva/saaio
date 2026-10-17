@@ -7,7 +7,7 @@ use crate::event::Mode;
 use crate::proto::{ClientMsg, Modes};
 use crate::ui::newflow::NewFlowForm;
 
-/// A `flow remove`, with what the person agreed to lose.
+/// A `saaio remove`, with what the person agreed to lose.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Removal {
     pub name: String,
@@ -27,12 +27,12 @@ impl Removal {
     }
 }
 
-/// A flow command flow ui runs in the background.
+/// A saaio command saaio ui runs in the background.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Job {
     Start(NewFlowForm),
     Remove(Removal),
-    /// `flow status --all --json`: every project's board.
+    /// `saaio status --all --json`: every project's board.
     Overview,
 }
 
@@ -103,7 +103,7 @@ pub enum Effect {
     Quit(String),
 }
 
-/// Why a flow command failed: its error, and the refusal it was, if flow ui asks about it.
+/// Why a flow command failed: its error, and the refusal it was, if saaio ui asks about it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobError {
     pub message: String,
@@ -111,7 +111,7 @@ pub struct JobError {
 }
 
 impl JobError {
-    /// An error flow ui only shows.
+    /// An error saaio ui only shows.
     pub fn other(message: impl Into<String>) -> JobError {
         JobError {
             message: message.into(),

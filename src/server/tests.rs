@@ -208,7 +208,7 @@ fn tells_the_ui_where_the_masters_turn_stands_from_its_start() {
     handle.join().unwrap().unwrap();
 }
 
-/// A flow with a worktree at dir/<name>, as `flow start` leaves it.
+/// A flow with a worktree at dir/<name>, as `saaio start` leaves it.
 fn started_flow(store: &Store, dir: &Path, name: &str, agent: &str) -> String {
     let id = store
         .create(&LogEvent::new(
@@ -662,7 +662,7 @@ fn fake_codex(dir: &Path) -> Agent {
     }
 }
 
-/// What a session that had its first turn reported, so flow server may type into it.
+/// What a session that had its first turn reported, so saaio server may type into it.
 fn had_a_turn(store: &Store, id: &str) {
     let session = EventKind::Session {
         id: "01a1".into(),
@@ -717,7 +717,7 @@ fn types_the_masters_message_into_an_idle_codex_worker_once() {
     thread::sleep(WATCH_EVERY * 3);
 
     let text = typed(dir.path(), "csv");
-    assert!(text.contains("message from the flow master:"), "{text:?}");
+    assert!(text.contains("message from the saaio master:"), "{text:?}");
     assert_eq!(text.matches("Tabs.").count(), 1, "once: {text:?}");
     assert_eq!(
         store.delivered(&csv),
@@ -769,7 +769,7 @@ fn never_types_into_a_session_that_had_no_turn_or_a_claude_worker() {
         "",
         "still starting, maybe at its hooks review"
     );
-    assert_eq!(typed(dir.path(), "claude"), "", "flow wait wakes it");
+    assert_eq!(typed(dir.path(), "claude"), "", "saaio wait wakes it");
     let mut ui = connect(
         &paths.socket,
         Role::Attach {

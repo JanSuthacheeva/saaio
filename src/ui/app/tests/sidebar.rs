@@ -146,7 +146,7 @@ fn shows_workers_that_exited_failed_or_have_no_session() {
     assert_eq!(side(&terminal, 11).trim_end(), "     no agent named codex");
     let pane: String = (1..43).map(|y| row(&terminal, y)).collect();
     assert!(
-        pane.contains("flow ui has no session for this flow."),
+        pane.contains("saaio ui has no session for this flow."),
         "{pane}"
     );
 }

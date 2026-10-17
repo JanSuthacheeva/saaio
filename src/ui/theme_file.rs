@@ -17,13 +17,13 @@ use crate::ui::theme::MARK;
 use crate::ui::theme::{ColorKey, KIWI, Palette, PaletteKey, PhaseColors, Section, Theme, hex};
 
 pub const THEME_FILE: &str = "theme.toml";
-/// What flow writes as theme.toml on its first run: the terminal theme, commented out.
+/// What saaio writes as theme.toml on its first run: the terminal theme, commented out.
 pub const EXAMPLE: DefaultFile = DefaultFile {
     text: include_str!("../../examples/theme.toml"),
     earlier: &[],
 };
 pub const THEMES_DIR: &str = "themes";
-/// How many extends a theme may follow before flow gives up (a loop, most likely).
+/// How many extends a theme may follow before saaio gives up (a loop, most likely).
 const EXTENDS_LIMIT: usize = 4;
 /// What a theme extends when it names nothing.
 const DEFAULT_BASE: &str = "terminal";

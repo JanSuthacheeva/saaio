@@ -9,17 +9,17 @@ use crate::store::Store;
 use crate::view::FlowView;
 use crate::workspace::{self, Hook};
 
-/// How long `flow remove` and `flow clear` wait for a flow's session to end (SIGKILL comes after 3 s).
+/// How long `saaio remove` and `saaio clear` wait for a flow's session to end (SIGKILL comes after 3 s).
 const CLOSE_WAIT: Duration = Duration::from_secs(5);
 
-/// What `flow remove` does with uncommitted work in the worktree (--force discards it).
+/// What `saaio remove` does with uncommitted work in the worktree (--force discards it).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Uncommitted {
     Keep,
     Discard,
 }
 
-/// What `flow remove` does with a branch whose commits are on no other branch
+/// What `saaio remove` does with a branch whose commits are on no other branch
 /// (--delete-unmerged deletes it).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Unmerged {
@@ -55,7 +55,7 @@ pub fn refuse_unmerged_commits(flow: &FlowView) -> Result<(), Failure> {
     }
 }
 
-/// Ends the flow's session in flow ui before its worktree goes.
+/// Ends the flow's session in saaio ui before its worktree goes.
 pub fn close_pane(store: &Store, flow: &FlowView) -> Result<Closing, Failure> {
     client::close_flow(&client::socket_path(store), &flow.id, CLOSE_WAIT).map_err(Failure::from)
 }

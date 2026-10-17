@@ -5,7 +5,7 @@ use serde::Serialize;
 use super::{Document, toon};
 use crate::view::{FlowView, Workspace};
 
-/// Whether flow ui opens a started worker now or once it runs.
+/// Whether saaio ui opens a started worker now or once it runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Opening {
     Running,
@@ -41,7 +41,7 @@ pub(crate) fn started(
         setup: setup.to_string(),
         agent: &workspace.agent,
         pane,
-        help: vec![watch, "Run `flow` for all flows".to_string()],
+        help: vec![watch, "Run `saaio` for all flows".to_string()],
     }))
 }
 
@@ -63,7 +63,7 @@ pub(crate) fn opened(flow: &FlowView, workspace: &Workspace, opening: Opening) -
         folder: &workspace.path,
         agent: &workspace.agent,
         pane,
-        help: vec![watch, "Run `flow` for all flows".to_string()],
+        help: vec![watch, "Run `saaio` for all flows".to_string()],
     }))
 }
 
@@ -72,16 +72,16 @@ fn pane(flow: &FlowView, opening: Opening, what: &str) -> (&'static str, String)
     match opening {
         Opening::Running => (
             "opening",
-            format!("flow ui opens {} in its sidebar", flow.name),
+            format!("saaio ui opens {} in its sidebar", flow.name),
         ),
         Opening::WhenUiRuns => (
-            "when flow ui runs",
-            format!("Run `flow ui` to open the {what}"),
+            "when saaio ui runs",
+            format!("Run `saaio ui` to open the {what}"),
         ),
     }
 }
 
-/// What `flow start` did with the repo's .saaio/setup.
+/// What `saaio start` did with the repo's .saaio/setup.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Setup {
     Ran,

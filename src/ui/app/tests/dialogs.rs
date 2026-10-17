@@ -56,7 +56,7 @@ fn offers_to_clean_up_a_worker_whose_session_ended() {
     );
 }
 
-/// What flow ui reads from `flow remove` when it fails with `failure`, as the binary prints it.
+/// What saaio ui reads from `saaio remove` when it fails with `failure`, as the binary prints it.
 fn printed(failure: &Failure) -> Result<String, JobError> {
     outcome(false, &format!("{}\n", failure.to_toon()))
 }
@@ -142,11 +142,11 @@ fn keeps_or_ends_unfinished_flows_when_flow_stops() {
         "{dialog}"
     );
     assert!(
-        dialog.contains("Ended, branches and worktrees stay until flow clear."),
+        dialog.contains("Ended, branches and worktrees stay until saaio clear."),
         "{dialog}"
     );
     assert!(
-        dialog.contains("k keep them   e end them   esc keep flow running"),
+        dialog.contains("k keep them   e end them   esc keep saaio running"),
         "{dialog}"
     );
 
@@ -160,7 +160,7 @@ fn keeps_or_ends_unfinished_flows_when_flow_stops() {
     assert_eq!(
         kept[1],
         Effect::Quit(
-            "stopped flow; 3 unfinished flows resume the next time you run `flow ui`".into()
+            "stopped flow; 3 unfinished flows resume the next time you run `saaio ui`".into()
         )
     );
 
@@ -174,7 +174,7 @@ fn keeps_or_ends_unfinished_flows_when_flow_stops() {
     };
     assert!(
         message
-            .starts_with("stopped flow and ended 3 flows; their code stays until `flow clear`:\n"),
+            .starts_with("stopped flow and ended 3 flows; their code stays until `saaio clear`:\n"),
         "{message}"
     );
     assert!(

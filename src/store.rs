@@ -55,7 +55,7 @@ impl Waiter {
 pub enum Busy {
     /// At its prompt: no busy file.
     Idle,
-    /// A hook or `flow wait` began a turn ("turn", or an empty file an earlier flow wrote).
+    /// A hook or `saaio wait` began a turn ("turn", or an empty file an earlier saaio wrote).
     Turn,
     /// The server typed into the pane and no turn began yet ("typed").
     Typed,
@@ -676,7 +676,7 @@ mod tests {
         assert_eq!(
             store.busy(&worker),
             Busy::Turn,
-            "the empty file an earlier flow wrote"
+            "the empty file an earlier saaio wrote"
         );
     }
 

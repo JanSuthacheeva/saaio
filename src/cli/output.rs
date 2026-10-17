@@ -15,15 +15,15 @@ pub(crate) const DESCRIPTION: &str =
 /// List views cut long texts to this many chars, with a hint; --full lifts it.
 pub(crate) const LIST_TEXT_LIMIT: usize = 80;
 
-/// What a successful command prints: TOON for agents, JSON for programs, a line for people (flow ui).
+/// What a successful command prints: TOON for agents, JSON for programs, a line for people (saaio ui).
 #[derive(Debug, PartialEq, Eq)]
 pub enum Document {
     Toon(String),
     Json(String),
     Text(String),
-    /// News that wakes a Claude Code session: printed on stderr, exit 2 (`flow wait`).
+    /// News that wakes a Claude Code session: printed on stderr, exit 2 (`saaio wait`).
     Wake(String),
-    /// Nothing at all: what `flow hook` answers, since a hook's stdout can reach the model.
+    /// Nothing at all: what `saaio hook` answers, since a hook's stdout can reach the model.
     Silent,
 }
 
@@ -172,13 +172,13 @@ mod tests {
     fn prints_an_error_with_next_steps_as_toon() {
         let failure = Failure::error(
             "no flow named shop-999",
-            vec!["Run `flow` to list the flows".into()],
+            vec!["Run `saaio` to list the flows".into()],
         );
 
         assert_eq!(failure.code, 1);
         assert_eq!(
             failure.to_toon(),
-            "error: no flow named shop-999\nhelp[1]: Run `flow` to list the flows"
+            "error: no flow named shop-999\nhelp[1]: Run `saaio` to list the flows"
         );
     }
 

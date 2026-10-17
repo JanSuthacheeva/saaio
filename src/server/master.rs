@@ -26,6 +26,7 @@ pub const INSTRUCTIONS: DefaultFile = DefaultFile {
         include_str!("master-v6.md"),
         include_str!("master-v7.md"),
         include_str!("master-v8.md"),
+        include_str!("master-v9.md"),
     ],
 };
 
@@ -325,13 +326,13 @@ mod tests {
     fn a_master_md_left_at_the_last_default_takes_the_new_one() {
         let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().join("master.md");
-        fs::write(&path, include_str!("master-v8.md")).unwrap();
+        fs::write(&path, include_str!("master-v9.md")).unwrap();
 
         INSTRUCTIONS.ensure(&path).unwrap();
 
         let text = fs::read_to_string(&path).unwrap();
         assert_eq!(text, INSTRUCTIONS.text);
-        assert!(text.contains("flow send --type"), "{text}");
+        assert!(text.contains("saaio send --type"), "{text}");
     }
 
     #[test]

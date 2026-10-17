@@ -39,7 +39,7 @@ pub struct Args {
     kind: Option<String>,
 }
 
-/// Starts a worker: a flow, a worktree, the setup hook, and the agent flow ui opens; with --plain,
+/// Starts a worker: a flow, a worktree, the setup hook, and the agent saaio ui opens; with --plain,
 /// plain::open.
 pub fn run(
     args: &Args,
@@ -61,7 +61,7 @@ pub fn run(
     let agent_name = pick_agent(config, args.agent.as_deref())?;
     let repo = workspace::repo_root(cwd).map_err(|_| {
         Failure::error(
-            "flow start needs a git repository",
+            "saaio start needs a git repository",
             vec!["Run it inside the repository the flow works on".to_string()],
         )
     })?;
@@ -108,7 +108,7 @@ pub fn run(
         }
     };
 
-    // Only now, so flow server opens the worker once setup is done.
+    // Only now, so saaio server opens the worker once setup is done.
     append_workspace(store, &id, &space, now)?;
 
     let events = store.events(&id)?;
@@ -137,7 +137,7 @@ fn pick_agent<'a>(config: &'a Config, asked: Option<&str>) -> Result<&'a str, Fa
     Ok(name)
 }
 
-/// Whether flow ui opens the new agent now or once it runs.
+/// Whether saaio ui opens the new agent now or once it runs.
 fn opening(store: &Store) -> Opening {
     match Client::connect(&client::socket_path(store), Role::Control) {
         Ok(None) => Opening::WhenUiRuns,
@@ -181,8 +181,8 @@ fn claim_slot(
             Failure::error(
                 format!("all {} slots are in use", slots::MAX_SLOTS),
                 vec![
-                    "Run `flow status --all` to see which flows hold them".to_string(),
-                    "Run `flow clear` in projects with finished flows".to_string(),
+                    "Run `saaio status --all` to see which flows hold them".to_string(),
+                    "Run `saaio clear` in projects with finished flows".to_string(),
                 ],
             )
         })

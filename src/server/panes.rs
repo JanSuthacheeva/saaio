@@ -226,7 +226,7 @@ impl Server {
         }
     }
 
-    /// Hangs up a flow's pane for `flow remove` or `flow clear`; the connection hears Closed once
+    /// Hangs up a flow's pane for `saaio remove` or `saaio clear`; the connection hears Closed once
     /// it exited, NotOpen when there is no pane.
     pub(super) fn close_flow(&mut self, conn: ConnId, id: String) {
         let key = PaneKey::Flow(id.clone());

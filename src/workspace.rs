@@ -297,8 +297,8 @@ mod tests {
         }
 
         assert_eq!(
-            ssh_hostname("flow-test-unknown-alias").as_deref(),
-            Some("flow-test-unknown-alias")
+            ssh_hostname("saaio-test-unknown-alias").as_deref(),
+            Some("saaio-test-unknown-alias")
         );
     }
 

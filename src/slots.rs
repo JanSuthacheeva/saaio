@@ -52,7 +52,7 @@ impl Slots {
         Ok(Some(slot))
     }
 
-    /// Gives a claim back when flow start fails after claiming; a slot claimed by another flow since
+    /// Gives a claim back when saaio start fails after claiming; a slot claimed by another flow since
     /// stays as it is.
     pub fn release(&self, slot: u8, claim: &Claim) -> Result<()> {
         let _lock = self.lock()?;
@@ -101,7 +101,7 @@ pub fn taken_slots(flows: &[FlowView]) -> Vec<u8> {
         .collect()
 }
 
-/// The lowest slot 1..=MAX_SLOTS no unfinished flow of this project holds; flow start decides across
+/// The lowest slot 1..=MAX_SLOTS no unfinished flow of this project holds; saaio start decides across
 /// projects.
 pub fn free_slot(flows: &[FlowView]) -> Option<u8> {
     let held = taken_slots(flows);

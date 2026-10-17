@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-/// A file flow writes with its default text: when it is missing, or still holds an earlier default
+/// A file saaio writes with its default text: when it is missing, or still holds an earlier default
 /// nobody edited. An edited file is never overwritten.
 #[derive(Debug, Clone, Copy)]
 pub struct DefaultFile {

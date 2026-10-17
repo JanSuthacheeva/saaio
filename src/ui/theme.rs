@@ -45,7 +45,7 @@ impl PhasePalette {
 }
 
 impl Palette {
-    /// ANSI, so flow takes on the terminal's palette.
+    /// ANSI, so saaio takes on the terminal's palette.
     pub const TERMINAL: Palette = Palette {
         background: Color::Reset,
         panel: Color::Indexed(235),
@@ -107,7 +107,7 @@ impl Palette {
         phases: PhasePalette::at([hex(0x7a4fc9), hex(0x2f5fd0), hex(0x13807f), hex(0xb0399c)]),
     };
 
-    /// "terminal", "flow" or "saaio-light"; None for another name.
+    /// "terminal", "saaio" or "saaio-light"; None for another name.
     pub fn named(name: &str) -> Option<Palette> {
         match name {
             "terminal" => Some(Palette::TERMINAL),
@@ -237,7 +237,7 @@ impl PaletteKey {
         }
     }
 
-    /// None for a key flow does not know.
+    /// None for a key saaio does not know.
     pub fn named(name: &str) -> Option<PaletteKey> {
         PaletteKey::ALL.into_iter().find(|key| key.name() == name)
     }
@@ -283,7 +283,7 @@ impl Section {
         }
     }
 
-    /// None for a table flow does not know.
+    /// None for a table saaio does not know.
     pub fn named(name: &str) -> Option<Section> {
         Section::ALL
             .into_iter()
@@ -321,7 +321,7 @@ impl PhaseColors {
     }
 }
 
-/// Every color and symbol flow ui draws with, by name; a theme file sets them through its Palette.
+/// Every color and symbol saaio ui draws with, by name; a theme file sets them through its Palette.
 #[derive(Debug, Clone)]
 pub struct Theme {
     pub ui: UiTokens,
@@ -334,7 +334,7 @@ pub struct Theme {
 
 #[derive(Debug, Clone)]
 pub struct UiTokens {
-    /// The ground every cell flow ui draws is painted on.
+    /// The ground every cell saaio ui draws is painted on.
     pub background: Style,
     pub text: Style,
     pub strong: Style,

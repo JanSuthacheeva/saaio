@@ -58,7 +58,7 @@ fn an_ended_session_says_the_configured_prefix_resumes_it() {
     }]));
     let exited = screen(&render_at(&app, FLEET), FLEET);
     assert!(exited.contains("C-b r resumes it"), "{exited}");
-    assert!(exited.contains("C-b Q stops flow"), "{exited}");
+    assert!(exited.contains("C-b Q stops saaio"), "{exited}");
 
     app.on_input(Routed::Command(Command::Board));
     let board = screen(&render_at(&app, FLEET), FLEET);

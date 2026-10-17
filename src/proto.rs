@@ -70,7 +70,7 @@ pub struct Size {
     pub rows: u16,
 }
 
-/// Attach draws the panes; Control sends one request (flow remove, flow clear).
+/// Attach draws the panes; Control sends one request (saaio remove, saaio clear).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     Attach { size: Size },
@@ -110,7 +110,7 @@ pub enum ServerMsg {
     Frame(Frame),
     /// The flow's pane exited after CloseFlow.
     Closed(String),
-    /// Another flow ui attached: the process `by`.
+    /// Another saaio ui attached: the process `by`.
     Detached {
         by: Peer,
     },

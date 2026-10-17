@@ -28,17 +28,17 @@ enum Hooked {
     Nobody,
 }
 
-/// `flow hook`: never prints to stdout (a hook's stdout can reach the model) and never fails (a
+/// `saaio hook`: never prints to stdout (a hook's stdout can reach the model) and never fails (a
 /// failing hook shows the user a notice); what goes wrong goes to stderr, the harness's debug log.
 /// A Stop that hands news over wakes the session with it (exit 2, the news on stderr).
 pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
     let Some(store) = env.store() else {
-        eprintln!("flow hook: cannot find a state directory");
+        eprintln!("saaio hook: cannot find a state directory");
         return Document::Silent;
     };
     // A broken config must not stop running workers from reporting; start and ui say it loudly.
     let config = env.config().unwrap_or_else(|error| {
-        eprintln!("flow hook: {error:#}; using the built-in config");
+        eprintln!("saaio hook: {error:#}; using the built-in config");
         Config::builtin()
     });
     let hooked = match env.flow_id() {
@@ -47,18 +47,18 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
         None => Hooked::Nobody,
     };
     let Some(adapter) = Adapter::named(&args.adapter) else {
-        eprintln!("flow hook: no adapter named {}", args.adapter);
+        eprintln!("saaio hook: no adapter named {}", args.adapter);
         return Document::Silent;
     };
     let mut text = String::new();
     if let Err(error) = std::io::stdin().read_to_string(&mut text) {
-        eprintln!("flow hook: could not read the event: {error}");
+        eprintln!("saaio hook: could not read the event: {error}");
         return Document::Silent;
     }
     let payload: Value = match serde_json::from_str(&text) {
         Ok(payload) => payload,
         Err(error) => {
-            eprintln!("flow hook: the event is not JSON: {error}");
+            eprintln!("saaio hook: the event is not JSON: {error}");
             return Document::Silent;
         }
     };
@@ -119,7 +119,7 @@ fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, now: u64) -> Option<
     } else {
         let (flows, _) = views(store, now);
         let Some(view) = fold::resolve(&flows, flow) else {
-            eprintln!("flow hook: no flow {flow}");
+            eprintln!("saaio hook: no flow {flow}");
             return None;
         };
         view.id.clone()
@@ -128,20 +128,20 @@ fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, now: u64) -> Option<
         if let EventKind::MergeRequest { url } = &kind
             && !of_own_repo(store, &id, url, now)
         {
-            eprintln!("flow hook: {url} is not a merge request of this flow's repository");
+            eprintln!("saaio hook: {url} is not a merge request of this flow's repository");
             continue;
         }
         let events = match store.events(&id) {
             Ok(events) => events,
             Err(error) => {
-                eprintln!("flow hook: {error:#}");
+                eprintln!("saaio hook: {error:#}");
                 return None;
             }
         };
         if fold::changes(&id, &events, &kind, now)
             && let Err(error) = store.append(&id, &Event::new(now, kind))
         {
-            eprintln!("flow hook: {error:#}");
+            eprintln!("saaio hook: {error:#}");
         }
     }
     Some(id)
@@ -168,7 +168,7 @@ fn hand_over(store: &Store, waiter: &Waiter, now: u64) -> Option<String> {
                 return None;
             };
             if let Err(error) = store.append(id, &Event::new(now, EventKind::Working)) {
-                eprintln!("flow hook: {error:#}");
+                eprintln!("saaio hook: {error:#}");
             }
             let messages: Vec<&str> = messages.iter().map(String::as_str).collect();
             Some(news::for_worker(&messages))
@@ -191,12 +191,12 @@ fn record_master_session(store: &Store, kinds: &[EventKind]) {
         && store.master_session().as_ref() != Some(id)
         && let Err(error) = store.set_master_session(id)
     {
-        eprintln!("flow hook: {error:#}");
+        eprintln!("saaio hook: {error:#}");
     }
 }
 
 /// Keeps the state the master's kinds put it in, with `now`: always when it comes to rest (a
-/// turn woken by `flow wait` runs no prompt hook, so Idle can follow Idle), else when it differs
+/// turn woken by `saaio wait` runs no prompt hook, so Idle can follow Idle), else when it differs
 /// from the one kept: tool calls repeat Working, and an unchanged file keeps the server from
 /// resending.
 fn record_master_turn(store: &Store, kinds: &[EventKind], now: u64) {
@@ -208,12 +208,12 @@ fn record_master_turn(store: &Store, kinds: &[EventKind], now: u64) {
         return;
     }
     if let Err(error) = store.set_master_turn(&MasterTurn { state, at: now }) {
-        eprintln!("flow hook: {error:#}");
+        eprintln!("saaio hook: {error:#}");
     }
 }
 
 fn mark_busy(store: &Store, waiter: &Waiter, busy: Busy) {
     if let Err(error) = store.set_busy(waiter, busy) {
-        eprintln!("flow hook: {error:#}");
+        eprintln!("saaio hook: {error:#}");
     }
 }

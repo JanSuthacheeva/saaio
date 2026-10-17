@@ -33,7 +33,7 @@ impl App {
     fn on_command(&mut self, command: Command) -> Vec<Effect> {
         match command {
             Command::Detach => vec![Effect::Quit(
-                "detached - the agents keep running; run `flow ui` to attach again".to_string(),
+                "detached - the agents keep running; run `saaio ui` to attach again".to_string(),
             )],
             Command::StopServer => {
                 let unfinished = self
@@ -136,8 +136,8 @@ impl App {
         }
     }
 
-    /// With every worker finished: y stops, any other key keeps flow running. With some unfinished:
-    /// k keeps them for the next flow ui, e ends them, esc goes back.
+    /// With every worker finished: y stops, any other key keeps saaio running. With some unfinished:
+    /// k keeps them for the next saaio ui, e ends them, esc goes back.
     fn on_stop_key(&mut self, unfinished: Vec<String>, key: Key) -> Vec<Effect> {
         let stop =
             |message: String| vec![Effect::Send(ClientMsg::StopServer), Effect::Quit(message)];
@@ -149,13 +149,13 @@ impl App {
         }
         match key {
             Key::Char('k') => stop(format!(
-                "stopped flow; {} unfinished flow{} resume the next time you run `flow ui`",
+                "stopped flow; {} unfinished flow{} resume the next time you run `saaio ui`",
                 unfinished.len(),
                 plural(unfinished.len())
             )),
             Key::Char('e') => {
                 let mut message = format!(
-                    "stopped flow and ended {} flow{}; their code stays until `flow clear`:",
+                    "stopped flow and ended {} flow{}; their code stays until `saaio clear`:",
                     unfinished.len(),
                     plural(unfinished.len())
                 );
@@ -279,7 +279,7 @@ impl App {
         vec![Effect::LoadBranching(repo)]
     }
 
-    /// Runs `flow remove` in the background; what it refuses comes back as a question (on_ran).
+    /// Runs `saaio remove` in the background; what it refuses comes back as a question (on_ran).
     pub(super) fn remove(&mut self, removal: Removal) -> Vec<Effect> {
         self.notice = Some(format!("cleaning up {}…", removal.name));
         vec![Effect::Run(Job::Remove(removal))]
