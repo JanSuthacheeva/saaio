@@ -327,10 +327,11 @@ See `.claude/plans/plan-flow-master-indicator.md`. Decisions:
   that tells you what happened ("shop-221 needs a decision on the migration") from `flow status`,
   in a line beside it. Drawn in a few terminal rows with the theme's tokens, animated on the UI's
   existing tick; off with a setting.
-- **A flow setup skill.** A skill that prepares a project for flow: it reads the repo (Docker
-  Compose services, ports, env files, migrations, package managers) and writes `.flow/setup` and
-  `.flow/teardown`, with ports taken from `FLOW_SLOT` so parallel worktrees never clash (the README's
-  Docker example as its starting point), then runs both once in a scratch worktree to prove them.
+- **A flow setup skill.** Built: `setup-flow` in agent-skills, linked from `docs/repository.md`.
+- **`flow example config|theme`.** Prints the commented example `config.toml` or `theme.toml`
+  (`config::EXAMPLE`, `theme_file::EXAMPLE`), so a user who edited theirs can see every setting and
+  default of the installed version, and an agent can read them without the docs. flow server writes
+  the examples only when the files are missing or untouched (plan `plan-flow-release-docs.md`).
 - **Extensions:** glab and ClickUp as data sources (ticket as the request, MR and pipeline status
   per flow); the new-flow dialog's "from ClickUp" list in the design waits for this.
   Decide whether both should match.

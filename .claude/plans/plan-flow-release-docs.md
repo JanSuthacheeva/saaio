@@ -234,7 +234,7 @@ colors.
 - [x] `docs/install.md`, `docs/troubleshooting.md` and the `docs/README.md` index; check whether `npx skills add` takes several `--skill` flags
 - [x] Record the picture: `docs/media/demo-setup.sh` and `demo.tape` with Claude Code and Codex workers, flow dark theme, phase_colors off; `flow-ui.png` and `flow-ui.gif`, from a scratch `FLOW_HOME` only
 - [x] Rewrite `README.md` as on the implementation page, with real `flow status` output and the picture
-- [ ] `CHANGELOG.md` under Unreleased with known issues; the CLAUDE.md changelog rule and Architecture lines; `flow example config|theme` under HANDOVER's Future improvements
+- [x] `CHANGELOG.md` under Unreleased with known issues; the CLAUDE.md changelog rule and Architecture lines; `flow example config|theme` under HANDOVER's Future improvements
 
 ### Check
 
