@@ -1,10 +1,9 @@
 # Configuration
 
-flow runs fine without any configuration. When you want to change something, it goes in one file,
-`~/.config/flow/config.toml`.
+File: `~/.config/flow/config.toml`. Optional; every key has a default.
 
 - [Use your own workflow](#use-your-own-workflow)
-- [Where the file is](#where-the-file-is)
+- [File location](#file-location)
 - [When a change applies](#when-a-change-applies)
 - [\[worker\]](#worker)
 - [\[master\]](#master)
@@ -16,14 +15,12 @@ flow runs fine without any configuration. When you want to change something, it 
 
 ## Use your own workflow
 
-Out of the box, every worker starts with `/ship-feature <request>` and walks through four phases
-named after the [agent-skills](https://github.com/JanSuthacheeva/agent-skills) set: plan,
-implement, review and merge-request. If you have skills of your own, you don't need that set.
-Two settings swap it out:
+Replaces the default `/ship-feature` prompt and the four
+[agent-skills](https://github.com/JanSuthacheeva/agent-skills) phases:
 
 ```toml
 [worker]
-prompt = "/my-feature {request}"
+prompt = "/my-feature {request}"   # $my-feature in Codex
 
 [[phases]]
 name = "plan"
@@ -38,124 +35,108 @@ name = "ship"
 skills = ["my-pr"]
 ```
 
-`[worker] prompt` is what every new worker is told first. `{request}` becomes whatever you asked
-for, so `flow start "SHOP-217 add CSV export"` opens a worker with
-`/my-feature SHOP-217 add CSV export`.
+| Setting | Effect |
+| --- | --- |
+| `[worker] prompt` | first prompt of every worker. `{request}` is the request: `flow start "SHOP-217 add CSV export"` sends `/my-feature SHOP-217 add CSV export`. |
+| `[[phases]]` | the flow's steps. A skill the worker runs moves the flow to the phase that lists it. 1 to 4 phases; replaces the built-in four. |
 
-`[[phases]]` is how flow knows how far a worker got. Each time the worker runs a skill, flow checks
-which phase lists it and moves the flow there. The sidebar draws the phases as steps
-(`●───●───○`), so this example gives every new flow three. You can have one to four phases, and
-yours replace the built-in four entirely.
-
-The two settings are independent. The prompt starts the work; the phases only watch it. Your
-`my-feature` skill might call `my-plan`, `my-build` and `my-pr` in turn, or the worker might pick
-them up as it goes. Either way, a phase starts when one of its skills runs.
-
-A few things to know:
-
-- Claude Code calls a skill `/my-feature` and Codex calls it `$my-feature`. If you use both, either
-  write a `[worker] prompt` that names no skill, or give each agent its own `prompt` (see
-  [The first prompt](#the-first-prompt)).
-- `flow start` reads `[[phases]]` each time, so the next flow uses the new phases right away. A
-  change to `[worker] prompt` needs `flow ui --stop` and `flow ui` first.
+- The prompt starts the work; the phases only track it. Either can be set without the other.
+- Claude Code calls a skill `/name`, Codex `$name`. A `[worker] prompt` used by both names no
+  skill, or each agent sets its own `prompt` ([The first prompt](#the-first-prompt)).
+- `[[phases]]` applies at the next `flow start`. `[worker] prompt` applies after
+  `flow ui --stop && flow ui`.
 - A running flow keeps the phases it started with.
 
 ### Without matching skills
 
-A flow doesn't need any of this to work. If none of the worker's skills match a phase, the flow
-still shows when the worker is working, when it's waiting on you (with its question), when its turn
-ended, and when it opened a merge request, which finishes the flow as usual. That all comes from
-the agent's hooks, not from skills.
+| | When no skill matches a phase |
+| --- | --- |
+| States (`working`, `waiting` with its question, `idle`, `done`) | shown; they come from the harness hooks |
+| Opened merge request | finishes the flow |
+| Steps | stay `○───○───○───○` |
+| Phase label in the sidebar | replaced by the state: `starting` while working, `idle`, `waiting` |
 
-What you lose is the progress. The steps stay `○───○───○───○`, and where the sidebar would name
-the phase, it names the state instead, such as `starting` while the worker works or `idle` once
-its turn ends.
+A first prompt that names an uninstalled skill: Claude Code passes the line to the model as a plain
+message. The worker gets the request and works without the skill.
 
-The same goes when the first prompt names a skill you haven't installed. Claude Code then hands
-the line to the agent as an ordinary message, so the worker still gets your request and works on
-it, just without the skill.
+## File location
 
-## Where the file is
+| Order | Path |
+| --- | --- |
+| 1 | `$FLOW_CONFIG` (the file itself) |
+| 2 | `$XDG_CONFIG_HOME/flow/config.toml` |
+| 3 | `~/.config/flow/config.toml` |
 
-flow reads the first of these that is set:
+The first set path wins.
 
-1. `$FLOW_CONFIG`, the file itself
-2. `$XDG_CONFIG_HOME/flow/config.toml`
-3. `~/.config/flow/config.toml`
-
-The first time flow ui runs, it writes this file for you, with every setting commented out at its
-default and a line on what each does. The same file is in the repository as
-[examples/config.toml](../examples/config.toml). To change a setting, remove the `#` in front of
-it. Once you've edited the file, flow never overwrites it.
-
-Two more files live next to it: `theme.toml` for colors (see [themes.md](themes.md)) and
-`master.md`, the master's instructions (see [flows.md](flows.md#the-master)).
+- flow ui writes the file on its first run: every setting commented out at its default, one line
+  per setting on what it does. Same content: [examples/config.toml](../examples/config.toml).
+- Remove the `#` in front of a setting to set it.
+- An edited file is never overwritten.
+- Next to it: `theme.toml` ([themes.md](themes.md)), `master.md`, the master's instructions
+  ([flows.md](flows.md#the-master)).
 
 ## When a change applies
 
-Most changes need a restart of flow ui:
-
-```sh
-flow ui --stop && flow ui
-```
-
-Two settings don't. `flow start` reads `[worker] agent` and `[[phases]]` every time it runs, so the
-next flow you start already uses them. The new-flow dialog's preselected agent still waits for the
-restart, and so does every prompt, since the server fills a prompt in when it opens the worker.
+| Setting | Applies |
+| --- | --- |
+| `[worker] agent` | at the next `flow start` |
+| `[[phases]]` | at the next `flow start` |
+| `[worker] prompt`, an agent's `prompt` | after `flow ui --stop && flow ui` (the server fills prompts in when it opens a worker) |
+| `[agents]` | after `flow ui --stop && flow ui` |
+| `[master]` | after `flow ui --stop && flow ui` |
+| `[ui]` | after `flow ui --stop && flow ui` |
+| the new-flow dialog's preselected agent | after `flow ui --stop && flow ui` |
 
 ## [worker]
-
-What a new flow runs.
-
-| Key | Default | Does |
-| --- | --- | --- |
-| `agent` | `"claude"` | the agent `flow start` and the new-flow dialog use when you don't pick one; a name under `[agents]` |
-| `prompt` | unset | the first prompt for every agent that doesn't set its own, built-in agents included (see [The first prompt](#the-first-prompt)) |
 
 ```toml
 [worker]
 agent = "codex"
 ```
 
-## [master]
-
-How the master behaves. [flows.md](flows.md#the-master) explains what the master is.
-
-| Key | Default | Does |
+| Key | Default | Effect |
 | --- | --- | --- |
-| `wake` | `true` | wakes the master when one of its project's flows waits, gets blocked, goes idle, finishes or stops responding. With `false`, it only finds out when it runs `flow status`, though its row in flow ui still shows when it needs you. |
-| `agent` | unset | the agent the master runs. Unset, it's the built-in `master` agent, which is Claude Code. |
+| `agent` | `"claude"` | agent used by `flow start` and the new-flow dialog when none is picked; a name under `[agents]` |
+| `prompt` | unset | first prompt of every agent without its own `prompt`, built-in agents included ([The first prompt](#the-first-prompt)) |
+
+## [master]
 
 ```toml
 [master]
 agent = "codex"
 ```
 
-## [ui]
-
-| Key | Default | Does |
+| Key | Default | Effect |
 | --- | --- | --- |
-| `prefix` | `"C-space"` | the key you press before every flow ui command: `"C-space"`, or anything from `"C-a"` to `"C-z"` |
+| `wake` | `true` | wake the master when a flow of its project waits, is blocked, goes idle, finishes or stops responding. `false`: the master learns only by running `flow status`; its row in flow ui still shows when it needs you. |
+| `agent` | unset | agent the master runs. Unset: the built-in `master` agent (Claude Code). |
 
-Some keys belong to the pane, so flow refuses them as a prefix: `C-c`, `C-d`, `C-z`, `C-s` and
-`C-q`, plus `C-h`, `C-i`, `C-j` and `C-m`, which send the same bytes as backspace, tab, newline and
-enter.
+What the master is: [flows.md](flows.md#the-master).
+
+## [ui]
 
 ```toml
 [ui]
 prefix = "C-b"
 ```
 
-flow ui's hints and help show whichever prefix you set. Pressing the prefix twice sends it to the
-pane, so a prefix like `C-b`, which flow ui also uses to page back through history, still works
-there.
+| Key | Default | Effect |
+| --- | --- | --- |
+| `prefix` | `"C-space"` | key pressed before every flow ui command: `"C-space"` or `"C-a"` to `"C-z"` |
+
+| Refused prefix | Reason |
+| --- | --- |
+| `C-c`, `C-d`, `C-z`, `C-s`, `C-q` | used by the pane |
+| `C-h`, `C-i`, `C-j`, `C-m` | same bytes as backspace, tab, newline, enter |
+
+- flow ui's hints and help show the configured prefix.
+- The prefix pressed twice is sent to the pane. A prefix that is also a flow ui key (`C-b`, page back
+  in history) still works there.
 
 ## [[phases]]: the workflow
 
-A flow walks through up to four phases. flow ui shows them as the flow's steps
-(`●───●───○───○`), with the time spent in each, and a phase starts when the worker runs one of its
-skills. The built-in workflow follows the
-[agent-skills](https://github.com/JanSuthacheeva/agent-skills) chain:
+Default:
 
 ```toml
 [[phases]]
@@ -175,13 +156,19 @@ name = "merge-request"
 skills = ["write-merge-request"]
 ```
 
-| Key | Does |
+| Key | Effect |
 | --- | --- |
-| `name` | the phase's name, in lowercase letters, digits and `-` |
-| `skills` | the skills that start the phase. A skill matches with or without its plugin's prefix, so `superpowers:brainstorming` matches `brainstorming`. Each skill can start only one phase. |
+| `name` | phase name: lowercase letters, digits, `-` |
+| `skills` | skills that start the phase. Matched with or without the plugin prefix (`superpowers:brainstorming` matches `brainstorming`). A skill starts at most one phase. |
 
-Your own `[[phases]]` replace the built-in four as a whole, with one to four phases in order. Here
-is a workflow built on the skills of [superpowers](https://github.com/obra/superpowers):
+- 1 to 4 phases, in order. A custom list replaces all four.
+- flow ui shows the phases as steps (`●───●───○───○`) with the time spent in each.
+- A phase starts when the worker runs one of its skills.
+- A flow keeps the phases it started with; a change affects new flows only.
+- A skill of a phase the running flow does not have reports nothing.
+- An opened merge request finishes the flow in its last phase, whatever its name.
+
+Example with [superpowers](https://github.com/obra/superpowers):
 
 ```toml
 [worker]
@@ -200,13 +187,9 @@ name = "ship"
 skills = ["finishing-a-development-branch"]
 ```
 
-A flow keeps the phases it started with, so a new workflow only affects new flows. If a running
-flow's worker runs a skill from a phase that flow doesn't have, nothing is reported. Whatever your
-last phase is called, an opened merge request finishes the flow there.
-
 ## Agents
 
-An agent is a command flow runs in a pane. Three come built in:
+An agent is a command flow runs in a pane. Built in:
 
 ```toml
 [agents.claude]
@@ -228,32 +211,30 @@ resume = ["claude", "-n", "{name}", "--resume", "{id}"]
 adapter = "claude-code"
 ```
 
-`claude` and `codex` run workers, and `master` runs the master. Any agent you add shows up in
-`flow start --agent` and in the new-flow dialog. If you define an agent with a built-in name, yours
-replaces the built-in one completely, so repeat every key you want to keep. The one exception is
-`prompt`: leave it out and the built-in prompt still applies.
+- `claude` and `codex` run workers; `master` runs the master.
+- An added agent appears in `flow start --agent` and the new-flow dialog.
+- An agent with a built-in name replaces the built-in one whole. Repeat every key to keep. Only a
+  missing `prompt` falls back to the built-in one.
 
-| Key | Required | Does |
+| Key | Required | Effect |
 | --- | --- | --- |
-| `command` | yes | the command line that starts a new session, one string per argument |
-| `prompt` | no | the first prompt, filled into `{prompt}` |
-| `resume` | no | the command line that continues the session after a restart. Without it, the agent starts once and isn't resumed. |
-| `adapter` | no | `"claude-code"` or `"codex"`, the harness whose hooks tell flow what the agent is doing. Without one, flow ui only shows whether the process is running. |
+| `command` | yes | command line that starts a new session, one string per argument |
+| `prompt` | no | first prompt, filled into `{prompt}` |
+| `resume` | no | command line that continues the session after a restart. Without it: started once, not resumed. |
+| `adapter` | no | `"claude-code"` or `"codex"`: the harness whose hooks report the agent's state. Without it: flow ui shows only whether the process runs. |
 
-These placeholders are filled into `command`, `prompt` and `resume`:
-
-| Placeholder | Becomes |
+| Placeholder | Value |
 | --- | --- |
 | `{id}` | flow's id for the session |
 | `{name}` | the flow's name |
-| `{request}` | what you asked for |
-| `{prompt}` | the agent's first prompt, with its own placeholders filled |
+| `{request}` | the request |
+| `{prompt}` | the agent's first prompt, its placeholders filled |
 | `{session}` | the session id the harness picked, for a harness that picks its own (Codex) |
-| `{instructions}` | the path of `master.md`, for a master that reads its instructions from a file |
+| `{instructions}` | path of `master.md`, for a master that reads its instructions from a file |
 
-An argument that ends up empty is dropped, so an agent without a prompt doesn't get an empty one.
+Filled into `command`, `prompt` and `resume`. An argument that fills to an empty string is dropped.
 
-Here's an agent of your own, [aider](https://aider.chat):
+Custom agent, [aider](https://aider.chat):
 
 ```toml
 [agents.aider]
@@ -261,39 +242,40 @@ command = ["aider", "--message", "{prompt}"]
 prompt = "{request}"
 ```
 
-flow can't see inside aider, so its row only shows whether it's running. If your custom agent runs
-Claude Code or Codex underneath, set `adapter` and flow follows it like the built-in ones.
-
-For an agent with an adapter, flow adds its own wiring to the command line: its hooks, and for
-workers a short system prompt saying who the flow master is. It installs nothing and writes nothing
-to `~/.claude` or `~/.codex`. [flows.md](flows.md#how-a-worker-reports) has the details.
+- No `adapter`: its row shows only whether it runs.
+- A custom agent that runs Claude Code or Codex sets `adapter` to be followed like the built-in ones.
+- With an adapter, flow adds to the command line: its hooks, and for workers a system prompt naming
+  the flow master. Nothing is installed; nothing is written to `~/.claude` or `~/.codex`
+  ([flows.md](flows.md#how-a-worker-reports)).
 
 ## The first prompt
 
-A worker's first prompt is what starts your workflow. flow takes the first of these that exists:
+A worker's first prompt is the first of:
 
-1. the agent's own `prompt`
-2. `[worker] prompt`, exactly as written, for every agent
-3. the prompt of the built-in agent with the same name (`/ship-feature {request}` for `claude`,
-   `$ship-feature {request}` for `codex`)
-4. no prompt at all
+| Order | Source |
+| --- | --- |
+| 1 | the agent's own `prompt` |
+| 2 | `[worker] prompt`, as written, for every agent |
+| 3 | the built-in agent of the same name: `/ship-feature {request}` (`claude`), `$ship-feature {request}` (`codex`) |
+| 4 | none |
 
-Since Claude Code calls a skill `/name` and Codex calls it `$name`, a `[worker] prompt` shared by
-both should name no skill. Otherwise give each agent its own `prompt`.
-
-A plain session never gets a first prompt.
+- Claude Code calls a skill `/name`, Codex `$name`. A `[worker] prompt` shared by both names no
+  skill, or each agent sets its own `prompt`.
+- A plain session gets no first prompt.
 
 ## Errors
 
-If `config.toml` is broken, `flow start`, `flow new` and `flow ui` stop with an error that names
-the file, the line and the key:
+A broken `config.toml` stops `flow start`, `flow new` and `flow ui` with the file, line and key:
 
 ```
 error: "/Users/jan/.config/flow/config.toml is not valid: TOML parse error at line 2, column 1\n  |\n2 | agnet = \"x\"\n  | ^^^^^\nunknown field `agnet`, expected `agent` or `prompt`"
 ```
 
-Workers that are already running keep reporting with the built-in settings until you fix the file.
+Running workers keep reporting with the built-in settings until the file is fixed.
 
-Settings from earlier versions are refused, with a message that shows the new form. That covers a
-top-level `agent` key (now `agent` under `[worker]`) and a `[phases]` table of skill names (now
-`[[phases]]`).
+Settings from earlier versions are refused with a message naming the new form:
+
+| Earlier | Now |
+| --- | --- |
+| top-level `agent` | `agent` under `[worker]` |
+| `[phases]` table of skill names | `[[phases]]` |
