@@ -15,9 +15,11 @@ not code.
 Decided in review:
 
 - flow is an orchestration hub, not a multiplexer. You talk mostly to the master, the master
-  instructs the workers, and you can watch every agent work: like a CEO talking to the team lead,
-  who instructs the developers. The README opens with this in plain, humble words; "What it does"
-  leads with the master; flows.md introduces the master the same way.
+  instructs the workers, and you can see and understand every agent's work. The picture: you are
+  the CTO, the master is the team lead, the workers are the developers. You talk mostly to the team
+  lead, who instructs the developers, but as CTO you still know the details and stay responsible
+  for things working. The README opens with this in plain, humble words; "What it does" leads with
+  the master; flows.md introduces the master the same way.
 - No first person anywhere ("I", "my"), not in the intro, not in Similar tools. Write to the reader
   ("you") throughout, humble without first person.
 - Generic skill names in the "use your own" example (`my-feature`, `my-plan`, `my-build`, `my-pr`).
@@ -71,10 +73,11 @@ README opening:
 > If you run several coding agents at once, each on its own feature, you know the routine of going
 > from one terminal to the next to see which one needs you. flow works more like a small team. You
 > talk to one agent, the master. It starts the workers, tells them what to do, and comes back to you
-> when one of them needs a decision, the way a CEO talks to the team lead while the team lead runs
-> the developers.
+> when one of them needs a decision. Think of yourself as the CTO and the master as your team lead:
+> you talk mostly to the lead, and the lead runs the developers.
 >
-> You can still watch every worker as it goes and step in whenever you want. Each one runs in its
+> A CTO still knows the details, and it's still on you that things work. So you can watch every
+> worker as it goes, read what it did and why, and step in whenever you want. Each one runs in its
 > own git worktree, and the sidebar shows what it's doing and whether it's waiting on you.
 
 README "Pick a workflow" (right after install, before first run): every worker starts with a first
