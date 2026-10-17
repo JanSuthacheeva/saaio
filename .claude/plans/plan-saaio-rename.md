@@ -84,5 +84,5 @@ pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("SAAIO_COMM
 - [x] Rename the stored and shown names: `HOSTED = "saaio-ui"`, themes `saaio`/`saaio-light` and `Palette::SAAIO`, the UI wordmark; rewrite the goldens
 - [x] Rename what agents read: `WORKER_PROMPT`, "message from the saaio master:", every help[] line, error and the about text in src/cli, and master.md (its last default kept as master-v9.md)
 - [x] Rename the docs: README, docs/*.md, HANDOVER, CLAUDE.md, ROADMAP, CHANGELOG, examples, media scripts
-- [ ] Grep for any product use of flow left; fmt, clippy, tests
+- [x] Grep for any product use of flow left; fmt, clippy, tests
 - [ ] End to end: install saaio into a scratch root and run `saaio`, `saaio new`, `saaio report`, `saaio status --json` and `saaio ui` on a scratch `SAAIO_HOME`
