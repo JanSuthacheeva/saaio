@@ -890,3 +890,24 @@ fn a_merge_request_enters_the_last_phase_whatever_its_name() {
             .all(|step| step.status == StepStatus::Done)
     );
 }
+
+#[test]
+fn a_log_with_an_empty_phase_list_folds_without_steps() {
+    let flow = view(
+        &[
+            started_with(0, &[]),
+            phase(0, Phase::of("build")),
+            at(
+                MIN,
+                EventKind::MergeRequest {
+                    url: "https://x/88".into(),
+                },
+            ),
+        ],
+        2 * MIN,
+    );
+
+    assert_eq!(flow.state, State::Done);
+    assert_eq!(flow.phase, None);
+    assert!(flow.steps.is_empty());
+}

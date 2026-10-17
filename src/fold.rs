@@ -262,8 +262,9 @@ impl Folding {
                 self.note(at, format!("review: {review}"), tone);
             }
             EventKind::MergeRequest { url } => {
-                let last = self.phases.len() - 1;
-                if self.view.phase.as_ref() != self.phases.last() {
+                if let Some(last) = self.phases.len().checked_sub(1)
+                    && self.view.phase.as_ref() != self.phases.last()
+                {
                     self.enter(last, at);
                 }
                 self.view.state = State::Done;
