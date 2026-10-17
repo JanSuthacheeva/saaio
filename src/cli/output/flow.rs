@@ -81,7 +81,7 @@ pub(crate) fn sent(flow: &FlowView) -> Document {
     }))
 }
 
-/// queued, the line, how many lines wait before it, and when flow types it.
+/// queued, the line, how many lines wait before it, and when saaio types it.
 pub(crate) fn queued(flow: &FlowView, line: &str, ahead: usize) -> Document {
     #[derive(Serialize)]
     struct Queued<'a> {

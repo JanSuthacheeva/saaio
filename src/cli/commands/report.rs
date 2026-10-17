@@ -86,7 +86,7 @@ fn no_phase(flow: &FlowView, phase: &Phase) -> Failure {
     )
 }
 
-/// Appends one event to a flow; skipped without a flow, so an agent outside flow can report.
+/// Appends one event to a flow; skipped without a flow, so an agent outside saaio can report.
 pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
     let Some(name) = args.flow.filter(|name| !name.is_empty()) else {
         return Ok(flow::skipped());

@@ -13,7 +13,7 @@ use crate::proto::PaneKey;
 
 /// The name the master session gets.
 pub const MASTER_NAME: &str = "master";
-/// What flow writes to master.md: how the master works with flow. An earlier default still in
+/// What saaio writes to master.md: how the master works with saaio. An earlier default still in
 /// master.md was never edited, so it gets the current one.
 pub const INSTRUCTIONS: DefaultFile = DefaultFile {
     text: include_str!("master.md"),
