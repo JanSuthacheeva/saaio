@@ -58,6 +58,7 @@ Details: [Use your own workflow](docs/configuration.md#use-your-own-workflow).
 
 ```sh
 flow ui    # in a repository
+flow       # the same, typed in a terminal
 ```
 
 | Do | How |
@@ -112,7 +113,7 @@ public interface. The logs are private.
 
 | Command | Does |
 | --- | --- |
-| `flow` | every flow and what needs you |
+| `flow` | flow ui in your terminal; every flow and what needs you for an agent or a script |
 | `flow ui [--stop]` | the terminal UI |
 | `flow start <request>` | a worker in its own worktree |
 | `flow start --plain <folder>` | an agent in a folder |

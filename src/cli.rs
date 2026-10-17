@@ -12,7 +12,11 @@ use output::{Document, Failure};
 
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 #[derive(Debug, Parser)]
-#[command(version, about)]
+#[command(
+    version,
+    about,
+    after_help = "Run alone in a terminal, flow opens flow ui.\nRun by an agent or a script, it prints every flow and what needs you."
+)]
 pub struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -90,6 +94,7 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
     let store = &store;
     let registry = &registry;
     match cli.command {
+        None if env.is_person() => ui::run(&ui::Args::default(), store, env, clock),
         None => home::run(store, &env.bin_path(), now),
         Some(Command::New(args)) => new::run(args, store, &env.config()?.workflow, now),
         Some(Command::Report(args)) => report::run(args, store, now),

@@ -5,7 +5,8 @@ use crate::config::{self, Config};
 use crate::registry::Registry;
 use crate::store::Store;
 
-/// The environment variables flow reads, read once by main so commands get them as values.
+/// The environment flow runs in: its variables and its terminal, read once by main so commands get
+/// them as values.
 #[derive(Debug, Clone, Default)]
 pub struct Env {
     pub flow_home: Option<PathBuf>,
@@ -17,6 +18,10 @@ pub struct Env {
     pub xdg_state_home: Option<PathBuf>,
     pub xdg_config_home: Option<PathBuf>,
     pub claude_config_dir: Option<PathBuf>,
+    /// stdin and stdout are both terminals.
+    pub terminal: bool,
+    /// $CLAUDECODE or $CODEX_THREAD_ID is set: an agent's shell tool runs flow.
+    pub agent_shell: bool,
 }
 
 impl Env {
@@ -77,6 +82,12 @@ impl Env {
     /// $FLOW_ID, unless it is empty: set in a worker's session, not in the master's.
     pub(crate) fn flow_id(&self) -> Option<&str> {
         self.flow_id.as_deref().filter(|id| !id.is_empty())
+    }
+
+    /// True when a person runs flow at a terminal: not in a flow's session, the master's, or an
+    /// agent's shell.
+    pub(crate) fn is_person(&self) -> bool {
+        self.terminal && !self.agent_shell && !self.flow_master && self.flow_id.is_none()
     }
 
     /// This binary, with ~ for the user's home.
@@ -150,6 +161,36 @@ mod tests {
 
         assert_eq!(empty.flow_id(), None);
         assert_eq!(set.flow_id(), Some("7f3c"));
+    }
+
+    #[test]
+    fn a_person_has_a_terminal_and_no_session_marker() {
+        let person = Env {
+            terminal: true,
+            ..Env::default()
+        };
+        let piped = Env::default();
+        let agent = Env {
+            agent_shell: true,
+            ..person.clone()
+        };
+        let master = Env {
+            flow_master: true,
+            ..person.clone()
+        };
+        let worker = Env {
+            flow_id: Some("7f3c".to_string()),
+            ..person.clone()
+        };
+        let empty_id = Env {
+            flow_id: Some(String::new()),
+            ..person.clone()
+        };
+
+        assert!(person.is_person());
+        for env in [piped, agent, master, worker, empty_id] {
+            assert!(!env.is_person(), "{env:?}");
+        }
     }
 
     #[test]

@@ -6,7 +6,7 @@ use crate::client;
 use crate::store::Store;
 use crate::ui;
 
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Default, clap::Args)]
 pub struct Args {
     /// Stop the server and every session in it
     #[arg(long)]
