@@ -1,68 +1,64 @@
 # Files
 
-This is every file flow reads or writes. They're all plain text, and the only ones you'd ever edit
-by hand are the ones in the config folder.
+Every file flow reads or writes. All plain text. Only the config folder is meant for editing.
 
 ## The config folder
 
-This is the folder `$FLOW_CONFIG` is in when it's set, else `$XDG_CONFIG_HOME/flow`, else
-`~/.config/flow`.
+Location: the folder of `$FLOW_CONFIG` if set, else `$XDG_CONFIG_HOME/flow`, else `~/.config/flow`.
 
 | File | Holds |
 | --- | --- |
-| `config.toml` | your settings (see [configuration.md](configuration.md)) |
-| `theme.toml` | your colors (see [themes.md](themes.md)) |
+| `config.toml` | settings ([configuration.md](configuration.md)) |
+| `theme.toml` | colors ([themes.md](themes.md)) |
 | `themes/<name>.toml` | themes `theme.toml` can extend, often written by another tool |
-| `master.md` | the master's instructions (see [flows.md](flows.md#the-master)) |
+| `master.md` | the master's instructions ([flows.md](flows.md#the-master)) |
 
-flow ui writes `config.toml`, `theme.toml` and `master.md` on its first run, and never overwrites
-one you've edited. A newer flow refreshes `master.md` as long as it still holds an earlier default.
+- flow ui writes `config.toml`, `theme.toml` and `master.md` on its first run.
+- An edited file is never overwritten.
+- A newer flow refreshes `master.md` while it still holds an earlier default.
 
 ## The store
 
-This is where flow keeps its flows: `$FLOW_HOME`, else `$XDG_STATE_HOME/flow`, else
-`~/.local/state/flow`.
+Location: `$FLOW_HOME`, else `$XDG_STATE_HOME/flow`, else `~/.local/state/flow`.
 
 | File | Holds |
 | --- | --- |
-| `flows/<id>.jsonl` | one flow's events, one JSON line each, only ever appended to |
-| `flows/<id>.alive` | its modification time is the flow's last heartbeat |
-| `waits/` | what the sessions' wake-ups need: each session's waiter, which messages a worker was given, whether a Codex session is busy, what the master last saw, the master's turn and its Codex session id |
-| `server.sock` | the socket flow ui talks to the server through; only you can open it. When its path would be 100 bytes or longer, it is `/tmp/flow-<uid>/<hash>.sock` instead, with the log beside it as `<hash>.log` |
-| `server.log` | what the server did and what went wrong; past 1 MiB it moves to `server.log.1` |
-| `master.json` | the master's session id and the folder it runs in, so it resumes after a restart |
+| `flows/<id>.jsonl` | one flow's events, one JSON line each, append-only |
+| `flows/<id>.alive` | modification time is the flow's last heartbeat |
+| `waits/` | wake-up state: each session's waiter, messages given to a worker, whether a Codex session is busy, what the master last saw, the master's turn and its Codex session id |
+| `server.sock` | the socket between flow ui and the server, owner-only. If its path would be 100 bytes or longer: `/tmp/flow-<uid>/<hash>.sock`, with the log next to it as `<hash>.log`. |
+| `server.log` | what the server did and what failed. Rotated to `server.log.1` past 1 MiB. |
+| `master.json` | the master's session id and folder, for resuming after a restart |
 
-The event log is private to flow. To read flows, use `flow status --json` (see [json.md](json.md))
-rather than these files.
+The event log is private. Read flows with `flow status --json` ([json.md](json.md)).
 
 ## The shared folder
 
-This is `$XDG_STATE_HOME/flow`, else `~/.local/state/flow`, whatever `FLOW_HOME` says. With the
-default store, it's the same folder as the store.
+Location: `$XDG_STATE_HOME/flow`, else `~/.local/state/flow`, regardless of `FLOW_HOME`. The same
+folder as the default store.
 
 | File | Holds |
 | --- | --- |
-| `stores/<hash>` | the folder of one store, so `flow status --all` finds every project; dropped when the folder is gone |
-| `slots/<n>` | which flow holds slot `n`; a claim counts only while its flow is unfinished |
-| `slots/.lock` | taken while a slot is claimed, so two starts never get the same one |
+| `stores/<hash>` | one store's folder, so `flow status --all` finds every project. Dropped when the folder is gone. |
+| `slots/<n>` | the flow holding slot `n`. Counts only while that flow is unfinished. |
+| `slots/.lock` | held while a slot is claimed, so two starts never get the same slot |
 
 ## In a repository
 
-| File | Holds |
-| --- | --- |
-| `.flow/config.toml` | the branch convention (see [repository.md](repository.md#branch-names)); committed |
-| `.flow/setup`, `.flow/teardown` | the scripts flow runs in each worktree (see [repository.md](repository.md#setup-and-teardown)); committed |
-| `.flow/worktrees/<name>` | each flow's worktree; flow lists `.flow/worktrees/` in `.git/info/exclude`, so git ignores it |
+| File | Holds | Committed |
+| --- | --- | --- |
+| `.flow/config.toml` | the branch convention ([repository.md](repository.md#branch-names)) | yes |
+| `.flow/setup`, `.flow/teardown` | the scripts run in each worktree ([repository.md](repository.md#setup-and-teardown)) | yes |
+| `.flow/worktrees/<name>` | each flow's worktree. `.flow/worktrees/` is listed in `.git/info/exclude`. | no |
 
-## What flow reads elsewhere
+## Read elsewhere
 
-| File | Why |
+| File | Purpose |
 | --- | --- |
-| `~/.claude/projects/...` (or under `$CLAUDE_CONFIG_DIR`) | a Claude Code worker's transcript, for the peek in flow ui |
+| `~/.claude/projects/...` (or under `$CLAUDE_CONFIG_DIR`) | a Claude Code worker's transcript, for the peek |
 | the transcript Codex reports | a Codex worker's transcript, for the peek |
 
-flow writes nothing to `~/.claude` or `~/.codex`. It passes its hooks on each agent's command line
-instead.
+flow writes nothing to `~/.claude` or `~/.codex`. Hooks are passed on each agent's command line.
 
 ## Removing flow
 

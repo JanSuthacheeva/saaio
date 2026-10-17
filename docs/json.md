@@ -6,9 +6,10 @@ flow status --all --json    # every project's flows
 flow status shop-217 --json # a board with just that flow
 ```
 
-If you're writing a program that reads flow, this is what to read. It prints the whole board, every
-flow with nothing cut short, with camelCase keys and `version` first. The command line and this
-JSON are flow's only public interface. The log files behind them are private and may change.
+- The whole board: every flow, nothing truncated.
+- camelCase keys, `version` first.
+- The command line and this JSON are flow's only public interface. The log files are private and
+  may change.
 
 ## The board
 
@@ -94,9 +95,9 @@ JSON are flow's only public interface. The log files behind them are private and
 | `now` | number | when the board was made, in Unix milliseconds |
 | `count` | number | how many flows there are |
 | `needsYou` | number | how many are `waiting`, `blocked` or `not-responding` |
-| `flows` | array | the flows, sorted: needs you, ready (`idle`), running, finished; the most recent change first within each group |
+| `flows` | array | the flows, sorted: needs you, ready (`idle`), running, finished. The most recent change first within each group |
 
-Every time is in Unix milliseconds.
+All times are Unix milliseconds.
 
 ## A flow
 
@@ -104,9 +105,9 @@ Every time is in Unix milliseconds.
 | --- | --- | --- |
 | `id` | string | the flow's id, a UUID |
 | `name` | string | the flow's name |
-| `request` | string | what was asked for; empty for a plain session |
+| `request` | string | what was asked for. Empty for a plain session |
 | `mode` | string | `guided`, `auto` or `plain` |
-| `phase` | string or null | the phase it is in; null before its first phase and for a plain session |
+| `phase` | string or null | the phase it is in. Null before its first phase and for a plain session |
 | `state` | string | see [States](#states) |
 | `blocker` | string or null | the question of a `waiting` flow, or the reason of a `blocked` one |
 | `delegate` | string or null | what a subagent works on while the flow is `delegated` |
@@ -114,13 +115,13 @@ Every time is in Unix milliseconds.
 | `review` | object or null | `{ "fixed", "open" }`, the review's findings |
 | `mergeRequest` | string or null | the merge request's URL |
 | `decisions` | array of strings | decisions made on your behalf, oldest first |
-| `steps` | array | one per phase of the flow's workflow; empty for a plain session. See [Steps](#steps). |
+| `steps` | array | one per phase of the flow's workflow. Empty for a plain session. See [Steps](#steps). |
 | `timeline` | array | what happened, oldest first. See [Timeline](#timeline). |
 | `startedAt` | number | when the flow started |
 | `changedAt` | number | when its state, phase or blocker last changed |
-| `workspace` | object or null | where its worker runs; null for a flow made with `flow new`. See [Workspace](#workspace). |
+| `workspace` | object or null | where its worker runs. Null for a flow made with `flow new`. See [Workspace](#workspace). |
 | `answer` | string or null | the worker's last turn's whole closing message, as its harness reported it |
-| `session` | object or null | `{ "id", "transcript" }`: the session id the harness picked and the path of its transcript (`transcript` may be null). Set for Codex, which picks its own id; null for Claude Code, which uses the flow's. |
+| `session` | object or null | `{ "id", "transcript" }`: the session id the harness picked and the path of its transcript (`transcript` may be null). Set for Codex, which picks its own id. Null for Claude Code, which uses the flow's. |
 
 ### States
 
@@ -129,7 +130,7 @@ Every time is in Unix milliseconds.
 | `working` | the worker is at work |
 | `delegated` | a subagent works on the flow |
 | `waiting` | the worker asks you something (`blocker` holds the question) |
-| `idle` | the worker's turn ended without a question; nothing to do for you |
+| `idle` | the worker's turn ended without a question |
 | `blocked` | the flow cannot go on (`blocker` holds the reason) |
 | `not-responding` | the worker sent heartbeats and stopped for 90 seconds |
 | `done` | the merge request is open |
@@ -143,9 +144,9 @@ Every time is in Unix milliseconds.
 | --- | --- | --- |
 | `phase` | string | the phase's name, as the flow's workflow names it |
 | `status` | string | `done`, `current` or `open` |
-| `durationMs` | number or null | the time spent in the phase; the current phase counts up to now; null for a phase not reached |
+| `durationMs` | number or null | the time spent in the phase. The current phase counts up to now. Null for a phase not reached |
 
-A flow keeps the phases it started with, so two flows can have different steps.
+A flow keeps the phases it started with. Two flows can have different steps.
 
 ### Timeline
 
@@ -160,14 +161,14 @@ A flow keeps the phases it started with, so two flows can have different steps.
 | Key | Type | Holds |
 | --- | --- | --- |
 | `path` | string | the worktree, or a plain session's folder |
-| `branch` | string or null | the flow's branch; null for a plain session |
-| `slot` | number or null | the flow's slot, 1 to 20; null for a plain session |
-| `window` | string or null | `flow-ui` once flow ui opened the worker; null before |
+| `branch` | string or null | the flow's branch. Null for a plain session |
+| `slot` | number or null | the flow's slot, 1 to 20. Null for a plain session |
+| `window` | string or null | `flow-ui` once flow ui opened the worker. Null before |
 | `agent` | string | the agent it runs, a name from the config |
 
 ## Every project
 
-`flow status --all --json` prints a board for each registered store that has flows:
+`flow status --all --json`: one board per registered store with flows.
 
 ```json
 {
@@ -181,14 +182,14 @@ A flow keeps the phases it started with, so two flows can have different steps.
 
 | Key | Type | Holds |
 | --- | --- | --- |
-| `name` | string | the project's name: its store's folder name, or `default` for the default store; ` (2)`, ` (3)` and so on after a name already taken |
+| `name` | string | the project's name: its store's folder name, or `default` for the default store. ` (2)`, ` (3)` and so on after a name already taken |
 | `root` | string | the store's folder |
 | `board` | object | the board, as `flow status --json` prints it |
 
 ## Versions
 
-`version` goes up when a change could break a program that reads the JSON. New keys can show up
-without a new version, so ignore keys you don't know.
+- `version` increases when a change could break a reader.
+- New keys can appear without a new version. Ignore unknown keys.
 
 | Version | Changed |
 | --- | --- |

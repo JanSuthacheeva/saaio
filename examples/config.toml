@@ -1,6 +1,6 @@
 # flow's settings.
 #
-# flow wrote this file on its first run. Every setting is commented out at its default; remove the
+# flow wrote this file on its first run. Every setting is commented out at its default. Remove the
 # # in front of one to change it. Once you've edited this file, flow never overwrites it.
 #
 # Commands read this file every time they run. flow ui and its server only read it when they start,
@@ -31,7 +31,7 @@
 
 # The workflow: one to four phases in order, each with the skills that start it. flow ui shows them
 # as a flow's steps. Your own list replaces all four. A flow whose skills match no phase still
-# works; its steps just stay empty.
+# works. Its steps stay empty.
 #[[phases]]
 #name = "plan"
 #skills = ["design-code"]
@@ -53,7 +53,7 @@
 #
 # command   the command line that starts a new session
 # prompt    the first prompt, filled into {prompt}
-# resume    the command line that continues a session after a restart; without it, the agent
+# resume    the command line that continues a session after a restart. Without it, the agent
 #           starts once and isn't resumed
 # adapter   "claude-code" or "codex", the harness whose hooks tell flow what the agent is doing.
 #           Without it, flow ui only shows whether the process is running.
@@ -74,7 +74,7 @@
 #resume = ["codex", "resume", "{session}"]
 #adapter = "codex"
 
-# The master is Claude Code without a first prompt; flow adds master.md to its instructions.
+# The master is Claude Code without a first prompt. flow adds master.md to its instructions.
 #[agents.master]
 #command = ["claude", "-n", "{name}", "--session-id", "{id}"]
 #prompt = ""

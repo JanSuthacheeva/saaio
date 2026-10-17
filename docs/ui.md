@@ -1,12 +1,10 @@
 # flow ui
 
-Most of your time with flow is spent here. Run it in a repository:
-
 ```sh
-flow ui
+flow ui    # in a repository
 ```
 
-You get one terminal with the master, every worker and every plain session in it.
+One terminal with the master, every worker and every plain session.
 
 - [The screen](#the-screen)
 - [Keys](#keys)
@@ -23,33 +21,34 @@ You get one terminal with the master, every worker and every plain session in it
 
 ![flow ui](media/flow-ui.png)
 
-The big pane on the left is the session you're looking at. When flow ui opens that's the master,
-until you jump to a worker. Everything you type goes to that session, except the
-[prefix key](#keys).
+| Area | Shows |
+| --- | --- |
+| pane (left) | the session in view. The master when flow ui opens. Receives all typing except the [prefix key](#keys). |
+| title row (above the pane) | worker: state, name, steps, phase, branch, slot. Plain session: state, folder. Master: branch, plus folder while the sidebar is folded. Notices on the right, such as a theme error or "starting the flow…". |
+| sidebar (right) | every session, see below |
+| rail | the folded sidebar: numbers and marks only. Below 110 columns, or `C-space b`. The title row then names the first flow that needs you and is not in view. |
 
-Above the pane, the title row names the session. For a worker it shows the state, name, steps,
-phase, branch and slot. For a plain session it shows the state and folder, and for the master its
-branch (plus its folder while the sidebar is folded). Notices show up on the right of that row,
-such as a theme error or "starting the flow…".
+### Sidebar
 
-The sidebar on the right lists every session. Row `0` is the master, with the folder and branch it
-runs in. It shows a spinner while the master works. If the master finishes a turn, asks something
-or wants permission while you're looking elsewhere, it gets a waiting dot until you look at it
-again.
+Row `0` is the master, with its folder and branch. Spinner while it works. Waiting dot when it ends
+a turn, asks something or wants permission while another session is in view, until you look at it.
 
-Below the master come the workers and plain sessions, grouped by what they need from you:
+Workers and plain sessions follow, grouped:
 
-- **NEEDS YOU**: waiting for your answer, blocked, or not responding
-- **READY**: the turn ended and nothing was asked (`idle`)
-- **RUNNING**: at work, itself or through a subagent
-- **DONE**: finished or ended
+| Group | States |
+| --- | --- |
+| NEEDS YOU | waiting, blocked, not responding |
+| READY | idle: the turn ended, nothing asked |
+| RUNNING | working, or a subagent is |
+| DONE | finished or ended |
 
-Each row starts with its number (`1` is the top), state, name and age. Under that come its steps
-(`●───●───○───○`), phase and task count, or how long it took once it's finished. The last line is
-what it's asking or doing. A plain session has no steps, so its second line just says its state,
-such as `idle`. When there are more rows than fit, the list ends in `… N more`.
+| Row line | Content |
+| --- | --- |
+| 1 | number (`1` is the top), state, name, age |
+| 2 | steps (`●───●───○───○`), phase, task count. Once finished: duration. Plain session: its state, such as `idle`. |
+| 3 | what it asks or does |
 
-The mark in front of each row shows the state:
+Rows that do not fit end in `… N more`.
 
 | Mark | State |
 | --- | --- |
@@ -59,22 +58,17 @@ The mark in front of each row shows the state:
 | `●` in the blocked color | blocked or not responding |
 | `✓` | done |
 | `○` faint | ended |
-
-A row can also say `exited`, when the session's process ended, or `failed`, when it couldn't start.
-
-In a terminal narrower than 110 columns the sidebar folds into a rail, just the numbers and marks.
-The title row then names the first flow that needs you and isn't in view. `C-space b` folds and
-unfolds it by hand.
+| `exited` | the session's process ended |
+| `failed` | the session could not start |
 
 ## Keys
 
-Every flow ui key starts with a prefix, `C-space` (Control and Space) unless you set another with
-`[ui] prefix` (see [configuration.md](configuration.md#ui)). Press the prefix, let go, then press
-the key.
+Prefix: `C-space` unless `[ui] prefix` sets another ([configuration.md](configuration.md#ui)).
+Press the prefix, release, press the key.
 
 | Key | Does |
 | --- | --- |
-| `C-space 0` to `9` | jump to a session; `0` is the master, `1` the top of the sidebar |
+| `C-space 0` to `9` | jump to a session. `0` is the master, `1` the top of the sidebar. |
 | `C-space j`, `C-space k` | move the [peek](#the-peek) down and up over the workers |
 | `C-space enter` | jump into the peeked worker |
 | `C-space n` | [start a flow](#starting-a-flow) |
@@ -83,24 +77,26 @@ the key.
 | `C-space r` | resume a session that exited, or a flow that ended |
 | `C-space [` | scroll back through the session's [history](#history) |
 | `C-space d` | detach: leave flow ui, every session keeps running |
-| `C-space Q` | stop flow (see [Leaving and stopping](#leaving-and-stopping)) |
-| `C-space C-space` | send `C-space` itself to the pane |
+| `C-space Q` | stop flow ([Leaving and stopping](#leaving-and-stopping)) |
+| `C-space C-space` | send `C-space` to the pane |
 | `C-space ?` | show these keys |
 
-Since the sidebar sorts flows by what they need, a flow's number changes when its state does.
+Sidebar numbers follow the sort order, so a flow's number changes with its state.
 
 ## The peek
 
-The peek lets you check on a worker without leaving the session you're in. `C-space j` and
-`C-space k` move a cursor over the workers in the sidebar, skipping the one in view. Under the
-selected worker, the sidebar shows what it did lately: its latest tool calls and text, read from
-the harness's own transcript rather than from its screen. `C-space enter` jumps into it, and moving
-past either end closes the peek.
+| Key | Does |
+| --- | --- |
+| `C-space j`, `C-space k` | move a cursor over the workers, skipping the one in view |
+| `C-space enter` | jump into the selected worker |
+| past either end | close the peek |
+
+Under the selected worker: its latest tool calls and text, read from the harness's transcript, not
+its screen.
 
 ## The board
 
-`C-space o` opens the board. It has a card per session, and under the cards the selected flow's
-timeline, decisions and steps.
+`C-space o`. A card per session. Below the cards: the selected flow's timeline, decisions and steps.
 
 | Key | Does |
 | --- | --- |
@@ -108,12 +104,11 @@ timeline, decisions and steps.
 | `h` `j` `k` `l`, arrows | move between cards |
 | `enter` | jump into the selected session |
 | `n` | start a flow |
-| `x` | clean up the selected flow, if it's finished |
-| `a` | show every project's flows, and back to this project |
+| `x` | clean up the selected flow, if finished |
+| `a` | every project's flows, and back to this project ([cli.md](cli.md#several-projects)) |
 | `esc`, `q`, `o` | back to the pane |
 
-With `a`, the board lists the flows of every project (see [cli.md](cli.md#several-projects)). You
-can look at other projects' flows, but `enter` and `x` only work on this project's.
+Other projects' flows are read-only. `enter` and `x` work on this project's flows.
 
 ## Starting a flow
 
@@ -136,86 +131,80 @@ can look at other projects' flows, but `enter` and `x` only work on this project
 ╰────────────────────────────────────────────────────────────────────────────╯
 ```
 
-Type what you want built, pick the options and press `enter`. The dialog runs `flow start` for you
-and the new session appears in the sidebar. If the start fails, the reason shows under the request.
-
 | Row | Holds |
 | --- | --- |
-| request | what to build, such as `SHOP-217 add CSV export`; in plain mode, the folder to open |
+| request | what to build, such as `SHOP-217 add CSV export`. Plain mode: the folder to open. |
 | type | the branch type, when the repository has a [branch convention](repository.md#branch-names) with types |
-| agent | the agent to run, when there's more than one |
-| mode | `auto`, `guided` or `plain` (see [flows.md](flows.md#guided-and-auto)) |
-| creates | what the start will create: the branch, worktree and slot it'll get |
+| agent | the agent to run, when there is more than one |
+| mode | `auto`, `guided` or `plain` ([flows.md](flows.md#guided-and-auto)) |
+| creates | the branch, worktree and slot the start creates |
 
 | Key | Does |
 | --- | --- |
 | typing | edits the request or folder |
 | `backspace` | deletes a character |
-| `C-w` | deletes the last word, or in plain mode the last folder |
+| `C-w` | deletes the last word, in plain mode the last folder |
 | `C-u` | clears the text |
-| `tab` | goes to the next row |
-| `space`, `l`, right arrow | picks the next option in a row |
-| `h`, left arrow | picks the previous option |
-| `enter` | starts it, once the text isn't empty |
-| `esc` | cancels |
+| `tab` | next row |
+| `space`, `l`, right arrow | next option in a row |
+| `h`, left arrow | previous option |
+| `enter` | start, once the text is not empty |
+| `esc` | cancel |
+
+`enter` runs `flow start`. The new session appears in the sidebar. A failed start shows its reason
+under the request.
 
 ## A session that ended
 
-When a worker's session ends, because you typed `/exit` or the process stopped, its pane says so
-and offers three keys:
+A worker's pane after `/exit` or a stopped process:
 
 | Key | Does |
 | --- | --- |
-| `x` | clean up: run `flow remove` for the flow (worktree, branch, flow) |
+| `x` | clean up: `flow remove` for the flow (worktree, branch, flow) |
 | `r` | resume the session |
-| `esc` | go back to the master |
+| `esc` | back to the master |
 
-Before `x` throws away uncommitted changes or commits that aren't on any other branch, it asks.
-`y` goes ahead; any other key keeps the flow.
+`x` asks before discarding uncommitted changes or commits on no other branch. `y` confirms, any
+other key keeps the flow.
 
-If the master's session ends, `C-space r` resumes it and `C-space Q` stops flow.
+The master's session ended: `C-space r` resumes it, `C-space Q` stops flow.
 
 ## History
 
-`C-space [` lets you scroll back through the session's output.
+`C-space [`.
 
 | Key | Does |
 | --- | --- |
 | `k`, `j`, arrows | one line back, one line forward |
 | `C-u`, `C-d` | half a page |
 | `C-b`, `C-f` | a page |
-| `g`, `G` | the oldest line, the newest |
+| `g`, `G` | oldest line, newest line |
 | `q`, `esc` | back to the live session |
 
 ## Mouse
 
-Click a session in the sidebar or rail to jump to it. Mouse events inside the pane go to the
-session, so an agent's own mouse support works there.
+- Click a session in the sidebar or rail to jump to it.
+- Mouse events in the pane go to the session.
 
 ## Leaving and stopping
 
-flow ui is only a window onto the sessions. A server, `flow server`, owns them and keeps them
-running, so leaving flow ui and stopping flow are two different things.
+`flow server` owns the sessions. flow ui is a client.
 
-To leave, detach with `C-space d` or just close the terminal. Every session keeps running, and the
-next `flow ui` attaches again.
+| Action | Effect |
+| --- | --- |
+| `C-space d`, or closing the terminal | detach. Sessions keep running. The next `flow ui` attaches. |
+| `C-space Q` | stop. With unfinished flows it lists them and asks, see below. With every flow finished: `y` stops, any other key cancels. |
+| `flow ui --stop` | stops the server and every session, keeps unfinished flows (like `k`) |
+| a second `flow ui` | takes over from the first. One flow ui is attached at a time. |
 
-To stop, press `C-space Q`. If there are unfinished flows, it lists them and asks what to do:
-
-- `k` keeps them. The server stops, and their sessions resume the next time you run `flow ui`.
-- `e` ends them. The server stops and the flows are marked ended, but their branches and worktrees
-  stay until `flow clear`.
-- `esc` keeps flow running.
-
-If every flow is finished, it asks once: `y` stops, any other key keeps it running.
-
-`flow ui --stop` does the same from the command line. It stops the server and every session, and
-keeps unfinished flows like `k` does.
-
-Only one flow ui can be attached at a time. Starting a second one takes over from the first.
+| Key at the stop prompt | Effect |
+| --- | --- |
+| `k` | keep: the server stops, sessions resume at the next `flow ui` |
+| `e` | end: the server stops, flows are marked ended. Branches and worktrees stay until `flow clear`. |
+| `esc` | cancel |
 
 ## After a crash or a reboot
 
-The next `flow ui` starts the server again and resumes the master and every unfinished worker in
-its conversation (`claude --resume`, `codex resume`). After you stop flow on purpose, the master
-starts a fresh conversation, but the workers still resume.
+The next `flow ui` restarts the server and resumes the master and every unfinished worker in its
+conversation (`claude --resume`, `codex resume`). After a stop, the master starts a new
+conversation. Workers still resume.

@@ -2,55 +2,59 @@
 
 ```sh
 cargo install --git https://github.com/JanSuthacheeva/flow --tag v0.1.0
+flow --version    # flow 0.1.0
 ```
 
-That puts `flow` in `~/.cargo/bin`. Check that it's there:
+Installs `flow` to `~/.cargo/bin`.
 
-```
-$ flow --version
-flow 0.1.0
-```
-
-To build it you need Rust 1.95 or newer ([rustup](https://rustup.rs) installs it). To run it you
-need macOS or Linux, git, and [Claude Code](https://github.com/anthropics/claude-code) or
-[Codex](https://github.com/openai/codex), or both.
+| Requirement | Notes |
+| --- | --- |
+| macOS or Linux | |
+| git | |
+| Rust 1.95+ | build only. Install with [rustup](https://rustup.rs). |
+| [Claude Code](https://github.com/anthropics/claude-code) or [Codex](https://github.com/openai/codex) | either or both |
 
 ## Skills
 
-Each worker starts with `/ship-feature <request>` (`$ship-feature <request>` in Codex). That's a
-skill from [agent-skills](https://github.com/JanSuthacheeva/agent-skills) that takes a feature from
-a plan to a merge request, using `design-code`, `implement-plan`, `review-changes`,
-`write-merge-request` and `commit` along the way. The same set has `setup-flow`, which prepares a
-repository for flow (see [repository.md](repository.md#the-setup-flow-skill)).
-
-To use them, install them for your user with the [skills CLI](https://github.com/vercel-labs/skills).
-It asks which agents to install them for.
+Default first prompt: `/ship-feature <request>` (`$ship-feature <request>` in Codex), a skill from
+[agent-skills](https://github.com/JanSuthacheeva/agent-skills). Install with the
+[skills CLI](https://github.com/vercel-labs/skills), which asks which agents to install for:
 
 ```sh
 npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature design-code implement-plan review-changes write-merge-request commit setup-flow
 ```
 
-If you'd rather use your own skills, skip this and set the first prompt and the phases in
-`config.toml` instead. [Use your own workflow](configuration.md#use-your-own-workflow) shows how,
-and what a flow looks like with no matching skills at all.
+| Skill | Does |
+| --- | --- |
+| `ship-feature` | takes a feature from plan to merge request, using the next four and `commit` |
+| `design-code` | starts the plan phase |
+| `implement-plan` | starts the implement phase |
+| `review-changes` | starts the review phase |
+| `write-merge-request` | starts the merge-request phase |
+| `commit` | commits |
+| `setup-flow` | prepares a repository for flow ([repository.md](repository.md#the-setup-flow-skill)) |
+
+Optional. Own skills instead: [Use your own workflow](configuration.md#use-your-own-workflow). No
+skills at all: [Without matching skills](configuration.md#without-matching-skills).
 
 ## First run
 
-In a repository:
-
 ```sh
-flow ui
+flow ui    # in a repository
 ```
 
-The first run writes three files to `~/.config/flow`, each holding its defaults:
+Writes to `~/.config/flow`:
 
-- `config.toml`, every setting commented out (see [configuration.md](configuration.md))
-- `theme.toml`, every color commented out (see [themes.md](themes.md))
-- `master.md`, the master's instructions (see [flows.md](flows.md#the-master))
+| File | Holds |
+| --- | --- |
+| `config.toml` | every setting, commented out ([configuration.md](configuration.md)) |
+| `theme.toml` | every color, commented out ([themes.md](themes.md)) |
+| `master.md` | the master's instructions ([flows.md](flows.md#the-master)) |
 
-The first time an agent opens in a new folder, it may ask whether you trust that folder. Answer in
-its pane. The first Codex worker also asks you to review flow's hooks; pick "Trust all and
-continue". Codex remembers that until flow's hooks change.
+| Prompt | Answer |
+| --- | --- |
+| an agent opening in a new folder asks whether to trust it | answer in its pane |
+| the first Codex worker asks to review flow's hooks | "Trust all and continue". Asked again only when flow's hooks change. |
 
 ## Updating
 
@@ -60,11 +64,12 @@ flow ui --stop
 flow ui
 ```
 
-The server that's already running keeps the old version until you stop it. Unfinished flows resume
-after the restart. A newer flow also refreshes `master.md`, `config.toml` and `theme.toml` as long
-as you haven't edited them; files you've edited stay as they are. [CHANGELOG.md](../CHANGELOG.md)
-says what changed.
+- The running server keeps the old version until stopped.
+- Unfinished flows resume after the restart.
+- `master.md`, `config.toml` and `theme.toml` are refreshed unless edited. Edited files stay as
+  they are.
+- Changes: [CHANGELOG.md](../CHANGELOG.md).
 
 ## Uninstalling
 
-See [files.md](files.md#removing-flow).
+[files.md](files.md#removing-flow).
