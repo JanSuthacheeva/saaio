@@ -8,12 +8,14 @@ use uuid::Uuid;
 
 use crate::event::{Event, unix_ms};
 use crate::registry::Registry;
+use crate::view::MasterTurn;
 use crate::wake::Seen;
 
 /// What the waiters keep: each session's waiter pid, deliveries, the master's seen marks.
 const WAITS_DIR: &str = "waits";
 const SEEN_FILE: &str = "master.seen";
 const MASTER_SESSION_FILE: &str = "master.session";
+const MASTER_TURN_FILE: &str = "master.turn";
 
 /// One flow's events and its last heartbeat, as read from disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -243,13 +245,7 @@ impl Store {
         if busy {
             return self.write_wait(&name, "");
         }
-        let file = self.root.join(WAITS_DIR).join(name);
-        match fs::remove_file(&file) {
-            Err(error) if error.kind() != ErrorKind::NotFound => {
-                Err(error).with_context(|| format!("could not remove {}", file.display()))
-            }
-            _ => Ok(()),
-        }
+        self.remove_wait(&name)
     }
 
     pub fn busy(&self, waiter: &Waiter) -> bool {
@@ -266,18 +262,27 @@ impl Store {
 
     /// Forgets the master's session, as a fresh master starts a new one.
     pub fn forget_master_session(&self) -> Result<()> {
-        let file = self.root.join(WAITS_DIR).join(MASTER_SESSION_FILE);
-        match fs::remove_file(&file) {
-            Err(error) if error.kind() != ErrorKind::NotFound => {
-                Err(error).with_context(|| format!("could not remove {}", file.display()))
-            }
-            _ => Ok(()),
-        }
+        self.remove_wait(MASTER_SESSION_FILE)
     }
 
     pub fn master_session(&self) -> Option<String> {
         let id = self.read_wait(MASTER_SESSION_FILE)?;
         Some(id.trim().to_string()).filter(|id| !id.is_empty())
+    }
+
+    /// The master's turn; None before its first hook or when the file does not parse.
+    pub fn master_turn(&self) -> Option<MasterTurn> {
+        serde_json::from_str(&self.read_wait(MASTER_TURN_FILE)?).ok()
+    }
+
+    pub fn set_master_turn(&self, turn: &MasterTurn) -> Result<()> {
+        let text = serde_json::to_string(turn).expect("a master turn serialises");
+        self.write_wait(MASTER_TURN_FILE, &text)
+    }
+
+    /// Forgets it, as a master process starts without a turn.
+    pub fn forget_master_turn(&self) -> Result<()> {
+        self.remove_wait(MASTER_TURN_FILE)
     }
 
     /// What the master was last woken for; None before its first wake.
@@ -317,6 +322,16 @@ impl Store {
         fs::read_to_string(self.root.join(WAITS_DIR).join(name)).ok()
     }
 
+    fn remove_wait(&self, name: &str) -> Result<()> {
+        let file = self.root.join(WAITS_DIR).join(name);
+        match fs::remove_file(&file) {
+            Err(error) if error.kind() != ErrorKind::NotFound => {
+                Err(error).with_context(|| format!("could not remove {}", file.display()))
+            }
+            _ => Ok(()),
+        }
+    }
+
     fn write_wait(&self, name: &str, text: &str) -> Result<()> {
         let waits = self.root.join(WAITS_DIR);
         fs::create_dir_all(&waits)
@@ -352,7 +367,7 @@ mod tests {
 
     use super::*;
     use crate::event::{EventKind, Mode};
-    use crate::view::State;
+    use crate::view::{MasterTurn, State};
     use crate::wake::Mark;
 
     fn started() -> Event {
@@ -517,6 +532,38 @@ mod tests {
         assert_eq!(store.master_session(), None);
         store.set_master_session("01a1").unwrap();
         assert_eq!(store.master_session().as_deref(), Some("01a1"));
+    }
+
+    #[test]
+    fn keeps_and_forgets_the_masters_turn() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let turn = MasterTurn {
+            state: State::Waiting,
+            at: 1_792_157_011_000,
+        };
+
+        assert_eq!(store.master_turn(), None);
+        store.set_master_turn(&turn).unwrap();
+        assert_eq!(store.master_turn(), Some(turn));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("waits/master.turn")).unwrap(),
+            r#"{"state":"waiting","at":1792157011000}"#
+        );
+
+        store.forget_master_turn().unwrap();
+        store.forget_master_turn().unwrap();
+        assert_eq!(store.master_turn(), None, "forgetting twice is no error");
+    }
+
+    #[test]
+    fn a_master_turn_that_does_not_parse_is_none() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        fs::create_dir_all(dir.path().join("waits")).unwrap();
+        fs::write(dir.path().join("waits/master.turn"), "{\"state\":").unwrap();
+
+        assert_eq!(store.master_turn(), None);
     }
 
     #[test]

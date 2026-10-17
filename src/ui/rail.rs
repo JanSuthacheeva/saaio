@@ -39,7 +39,10 @@ impl Rail<'_> {
             ])),
             plain(Line::styled("─".repeat(width), theme.ui.rule)),
             Row {
-                line: Line::from(vec![Span::styled(" 0", digit(master))]),
+                line: Line::from(vec![
+                    Span::styled(" 0 ", digit(master)),
+                    sidebar.master_glyph(),
+                ]),
                 key: Some(PaneKey::Master),
                 mark: mark(master),
             },

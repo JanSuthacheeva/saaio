@@ -110,9 +110,10 @@ impl Adapter {
         }
     }
 
-    /// The master's command line, `argv` being its agent's: right after the program its news wiring
-    /// (Claude Code's `flow wait --master` waiter when it `wake`s; Codex's hooks always, which in the
-    /// master's pane record its session and hand news over at Stop) and its instructions; and,
+    /// The master's command line, `argv` being its agent's: right after the program its hooks,
+    /// which in the master's pane keep where its turn stands (Claude Code's also arm the
+    /// `flow wait --master` waiter when it `wake`s; Codex's record its session and hand news over
+    /// at Stop) and its instructions; and,
     /// when it starts `fresh`, an opening prompt for a harness that hears of news only after its
     /// first turn (Codex: before it, its pane may still show a trust prompt, so flow types nothing).
     pub fn wire_master(
@@ -124,11 +125,10 @@ impl Adapter {
         fresh: bool,
     ) -> Vec<String> {
         let mut wiring = match self {
-            Adapter::ClaudeCode if wake => vec![
+            Adapter::ClaudeCode => vec![
                 "--settings".to_string(),
-                claude_code::master_settings(flow_exe),
+                claude_code::master_settings(flow_exe, wake),
             ],
-            Adapter::ClaudeCode => Vec::new(),
             Adapter::Codex => codex::hooks(flow_exe),
         };
         wiring.extend(self.instruct(instructions));
@@ -261,11 +261,20 @@ mod tests {
         let quiet = Adapter::ClaudeCode.wire_master(argv(), exe, "md", false, true);
         assert_eq!(
             quiet,
-            ["agent", "--append-system-prompt", "md", "-n", "master"]
+            [
+                "agent",
+                "--settings",
+                &claude_code::master_settings(exe, false),
+                "--append-system-prompt",
+                "md",
+                "-n",
+                "master"
+            ],
+            "report hooks even without wake"
         );
         let woken = Adapter::ClaudeCode.wire_master(argv(), exe, "md", true, true);
-        assert_eq!(woken[1], "--settings");
-        assert_eq!(woken[3..], quiet[1..]);
+        assert_eq!(woken[2], claude_code::master_settings(exe, true));
+        assert_eq!(woken[3..], quiet[3..]);
 
         let fresh = Adapter::Codex.wire_master(argv(), exe, "md", false, true);
         let hooks = codex::hooks(exe);

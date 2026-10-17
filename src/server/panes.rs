@@ -119,14 +119,19 @@ impl Server {
         }
     }
 
-    /// Opens a pane, forgetting the busy mark an earlier process of it may have left: one killed
-    /// mid-turn never reached its Stop, and a new process runs no turn yet.
+    /// Opens a pane, forgetting the busy mark (and the master's turn) an earlier process of it may
+    /// have left: one killed mid-turn never reached its Stop, and a new process runs no turn yet.
     fn open_pane(&mut self, spec: PaneSpec) -> anyhow::Result<()> {
         let waiter = match &spec.key {
             PaneKey::Master => Waiter::Master,
             PaneKey::Flow(id) => Waiter::Flow(id.clone()),
         };
         if let Err(error) = self.store.set_busy(&waiter, false) {
+            server_log::write((self.clock)(), &format!("{error:#}"));
+        }
+        if spec.key == PaneKey::Master
+            && let Err(error) = self.store.forget_master_turn()
+        {
             server_log::write((self.clock)(), &format!("{error:#}"));
         }
         self.host.open(spec)

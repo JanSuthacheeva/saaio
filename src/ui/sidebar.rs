@@ -17,7 +17,7 @@ use crate::ui::layout::SIDEBAR_WIDTH;
 use crate::ui::peek::PeekLine;
 use crate::ui::prefix::Prefix;
 use crate::ui::theme::Theme;
-use crate::view::{Board, FlowView, Group};
+use crate::view::{Board, FlowView, Group, State};
 
 const WIDTH: usize = SIDEBAR_WIDTH as usize;
 /// Rows the key hint takes at the bottom.
@@ -38,10 +38,12 @@ pub struct Sidebar<'a> {
     pub peek: &'a [PeekLine],
     /// Where the master runs: ~/projects/shop · main.
     pub master: Option<&'a str>,
+    /// Row 0's glyph: App::master_state.
+    pub master_state: Option<State>,
     pub now: u64,
     pub spin: usize,
-    /// Flows whose state changed a moment ago, by id; their rows stand out.
-    pub changed: &'a HashMap<String, u64>,
+    /// Panes whose state changed a moment ago; their rows stand out.
+    pub changed: &'a HashMap<PaneKey, u64>,
     /// The user's home, shown as ~ in paths.
     pub home: Option<&'a str>,
     /// The key before every command, for the hints that name it.
@@ -281,6 +283,7 @@ mod tests {
             cursor: None,
             peek: &[],
             master: None,
+            master_state: None,
             now: 0,
             spin: 0,
             changed: &HashMap::new(),
@@ -325,7 +328,7 @@ mod tests {
             flows,
         };
         let theme = Theme::default();
-        let changed = HashMap::from([("c".to_string(), 0)]);
+        let changed = HashMap::from([(PaneKey::Flow("c".into()), 0)]);
         let focus = PaneKey::Flow("a".into());
         let sidebar = Sidebar {
             board: &board,
@@ -334,6 +337,7 @@ mod tests {
             cursor: Some("b"),
             peek: &[],
             master: None,
+            master_state: None,
             now: 0,
             spin: 0,
             changed: &changed,
@@ -382,6 +386,7 @@ mod tests {
             cursor: None,
             peek: &[],
             master: None,
+            master_state: None,
             now: 0,
             spin: 0,
             changed: &HashMap::new(),
@@ -420,6 +425,7 @@ mod tests {
             cursor: None,
             peek: &[],
             master: None,
+            master_state: None,
             now: 0,
             spin: 0,
             changed: &HashMap::new(),

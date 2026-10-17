@@ -393,6 +393,7 @@ fn the_new_flow_dialog_keeps_its_title_beside_a_long_place() {
     app.on_server(ServerMsg::Master {
         cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
         branch: None,
+        turn: None,
     });
     app.on_input(Routed::Command(Command::NewFlow));
 

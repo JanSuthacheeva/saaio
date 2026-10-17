@@ -359,6 +359,7 @@ fn a_long_place_loses_its_middle_but_keeps_the_branch_and_the_corner() {
     fleet.on_server(ServerMsg::Master {
         cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
         branch: Some("main".into()),
+        turn: None,
     });
 
     let narrow = Size { cols: 90, rows: 20 };
@@ -366,6 +367,7 @@ fn a_long_place_loses_its_middle_but_keeps_the_branch_and_the_corner() {
     folded.on_server(ServerMsg::Master {
         cwd: "/private/tmp/claude-501/-Users-jan-projects-flow/9e99090c-c805-4120-a341-a400210fb25e/scratchpad/ui-look/repo".into(),
         branch: Some("main".into()),
+        turn: None,
     });
     let folded = render_at(&folded, narrow);
     let top = row(&folded, 0);
@@ -476,6 +478,149 @@ fn a_row_stands_out_a_moment_after_its_flow_changed() {
         "a redraw takes the mark away"
     );
     assert_ne!(background_of(&app, "shop-221"), selection);
+}
+
+#[test]
+fn the_master_waits_for_you_after_a_turn_you_did_not_see() {
+    let mut app = with_fleet();
+    app.on_input(Routed::Command(Command::Focus(1)));
+
+    app.on_server(master_at(State::Working, 1));
+    assert_eq!(app.master_state(), Some(State::Working));
+    app.on_server(master_at(State::Idle, 2));
+    assert_eq!(app.master_state(), Some(State::Waiting), "an ended turn");
+    app.on_server(master_at(State::Waiting, 3));
+    assert_eq!(app.master_state(), Some(State::Waiting), "a question");
+    app.on_server(master_at(State::Blocked, 4));
+    assert_eq!(app.master_state(), Some(State::Blocked), "a permission");
+}
+
+#[test]
+fn a_turn_that_ends_in_view_needs_nothing() {
+    let mut app = with_fleet();
+
+    app.on_server(master_at(State::Working, 1));
+    assert_eq!(
+        app.master_state(),
+        Some(State::Working),
+        "it spins in view too"
+    );
+    app.on_server(master_at(State::Idle, 2));
+    assert_eq!(app.master_state(), None);
+    app.on_input(Routed::Command(Command::Focus(1)));
+    assert_eq!(
+        app.master_state(),
+        None,
+        "looking away later changes nothing"
+    );
+}
+
+#[test]
+fn looking_at_the_master_clears_its_dot() {
+    let mut app = with_fleet();
+    app.on_input(Routed::Command(Command::Focus(1)));
+    app.on_server(master_at(State::Idle, 2));
+
+    app.on_input(Routed::Command(Command::Focus(0)));
+    assert_eq!(app.master_state(), None);
+    app.on_input(Routed::Command(Command::Focus(1)));
+    assert_eq!(app.master_state(), None, "seen stays seen");
+    app.on_server(master_at(State::Working, 3));
+    app.on_server(master_at(State::Idle, 4));
+    assert_eq!(
+        app.master_state(),
+        Some(State::Waiting),
+        "until its next turn"
+    );
+    app.on_server(ServerMsg::Master {
+        cwd: "/shop".into(),
+        branch: None,
+        turn: None,
+    });
+    assert_eq!(app.master_state(), None, "a new master runs no turn yet");
+}
+
+#[test]
+fn a_woken_turn_that_ends_idle_again_shows_the_dot_again() {
+    let mut app = with_fleet();
+    app.on_server(master_at(State::Idle, 2));
+    app.on_input(Routed::Command(Command::Focus(1)));
+    assert_eq!(app.master_state(), None);
+
+    app.on_server(master_at(State::Idle, 5));
+    assert_eq!(app.master_state(), Some(State::Waiting));
+}
+
+#[test]
+fn a_working_master_turns_the_spinner_and_its_row_lights_up_on_a_change() {
+    let mut app = App::new(FLEET);
+    app.on_server(ServerMsg::Board(fold::board(vec![], NOW)));
+    app.on_tick(NOW);
+    let spin = app.spin;
+
+    app.on_server(master_at(State::Working, 1));
+    assert!(app.on_tick(NOW + 100));
+    assert_ne!(app.spin, spin, "the master works");
+    assert!(
+        !app.changed.contains_key(&PaneKey::Master),
+        "its first turn is no change"
+    );
+    app.on_server(master_at(State::Idle, 2));
+    assert!(app.changed.contains_key(&PaneKey::Master));
+    let spin = app.spin;
+    app.on_tick(NOW + 200);
+    assert_eq!(app.spin, spin, "at rest");
+}
+
+#[test]
+fn the_masters_row_draws_its_glyph_in_its_states_color_and_lights_up() {
+    let theme = Theme::default();
+    let selection = theme.ui.selection.bg.unwrap();
+    let mut app = with_fleet();
+    app.on_input(Routed::Command(Command::Focus(1)));
+    let master_row = |app: &App| {
+        let terminal = render_at(app, FLEET);
+        let y = (0..FLEET.rows)
+            .find(|&y| side(&terminal, y).contains("master"))
+            .unwrap();
+        let x = layout::areas(FLEET, layout::Chrome::Sidebar).side.x;
+        let y_abs = layout::screen(FLEET).y + y;
+        let buffer = terminal.backend().buffer();
+        let cell = |dx: u16| buffer[(x + dx, y_abs)].clone();
+        (side(&terminal, y), cell(3).fg, cell(20).bg)
+    };
+    assert_eq!(master_row(&app).0.trim_end(), " 0   master");
+
+    app.on_server(master_at(State::Working, 1));
+    let (text, glyph, _) = master_row(&app);
+    assert!(
+        theme
+            .glyphs
+            .spinner
+            .iter()
+            .any(|frame| text.trim_end() == format!(" 0 {frame} master")),
+        "{text}"
+    );
+    assert_eq!(Some(glyph), theme.state.working.fg);
+
+    app.on_server(master_at(State::Idle, 2));
+    let (text, glyph, fill) = master_row(&app);
+    assert_eq!(
+        text.trim_end(),
+        format!(" 0 {} master", theme.glyphs.waiting)
+    );
+    assert_eq!(Some(glyph), theme.state.waiting.fg);
+    assert_eq!(fill, selection, "it just changed");
+    app.on_tick(NOW + CHANGE_SHOWN_MS);
+    assert_ne!(master_row(&app).2, selection);
+
+    app.on_input(Routed::Command(Command::Rail));
+    let terminal = render_at(&app, FLEET);
+    let rail = (0..FLEET.rows).map(|y| row(&terminal, y)).find(|line| {
+        line.trim_end()
+            .ends_with(&format!(" 0 {}", theme.glyphs.waiting))
+    });
+    assert!(rail.is_some(), "the rail shows it too");
 }
 
 #[test]

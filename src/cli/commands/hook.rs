@@ -12,7 +12,7 @@ use crate::deliver::{self, WorkerNews};
 use crate::event::{Event, EventKind};
 use crate::fold;
 use crate::store::{Store, Waiter};
-use crate::view::FlowView;
+use crate::view::{FlowView, MasterTurn, State};
 use crate::workspace;
 
 #[derive(Debug, clap::Args)]
@@ -83,6 +83,7 @@ fn hook(
         Hooked::Nobody => return None,
         Hooked::Master => {
             record_master_session(store, &kinds);
+            record_master_turn(store, &kinds, now);
             Waiter::Master
         }
         Hooked::Flow(flow) => {
@@ -189,6 +190,23 @@ fn record_master_session(store: &Store, kinds: &[EventKind]) {
         && store.master_session().as_ref() != Some(id)
         && let Err(error) = store.set_master_session(id)
     {
+        eprintln!("flow hook: {error:#}");
+    }
+}
+
+/// Keeps the state the master's kinds put it in, with `now`: always when it comes to rest (a
+/// turn woken by `flow wait` runs no prompt hook, so Idle can follow Idle), else when it differs
+/// from the one kept: tool calls repeat Working, and an unchanged file keeps the server from
+/// resending.
+fn record_master_turn(store: &Store, kinds: &[EventKind], now: u64) {
+    let Some(state) = fold::master_state(kinds) else {
+        return;
+    };
+    let busy = matches!(state, State::Working | State::Delegated);
+    if busy && store.master_turn().map(|turn| turn.state) == Some(state) {
+        return;
+    }
+    if let Err(error) = store.set_master_turn(&MasterTurn { state, at: now }) {
         eprintln!("flow hook: {error:#}");
     }
 }

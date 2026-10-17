@@ -33,16 +33,7 @@ const ARTIFACT_WATCH_PREFIX: &str = "live updates for artifact ";
 /// The --settings JSON: report_hooks, and each event in WAIT_EVENTS also arms `<flow_exe> wait`.
 pub fn settings(flow_exe: &Path) -> String {
     let mut hooks = report_hooks(flow_exe);
-    let waiter = waiter(flow_exe, &["wait"]);
-    for event in WAIT_EVENTS {
-        let entry = hooks
-            .entry(event)
-            .or_insert_with(|| json!([{ "hooks": [] }]));
-        entry[0]["hooks"]
-            .as_array_mut()
-            .expect("an entry holds a hooks list")
-            .push(waiter.clone());
-    }
+    arm(&mut hooks, &waiter(flow_exe, &["wait"]));
     json!({ "hooks": hooks }).to_string()
 }
 
@@ -73,15 +64,27 @@ fn report_hooks(flow_exe: &Path) -> serde_json::Map<String, Value> {
         .collect()
 }
 
-/// The master's --settings JSON: only its waiter, `<flow_exe> wait --master`; the master is no
-/// flow, so it reports nothing.
-pub fn master_settings(flow_exe: &Path) -> String {
-    let waiter = waiter(flow_exe, &["wait", "--master"]);
-    let hooks: serde_json::Map<String, Value> = WAIT_EVENTS
-        .iter()
-        .map(|event| (event.to_string(), json!([{ "hooks": [waiter] }])))
-        .collect();
+/// The master's --settings JSON: report_hooks, and when it `wake`s, `<flow_exe> wait --master`
+/// on each event in WAIT_EVENTS.
+pub fn master_settings(flow_exe: &Path, wake: bool) -> String {
+    let mut hooks = report_hooks(flow_exe);
+    if wake {
+        arm(&mut hooks, &waiter(flow_exe, &["wait", "--master"]));
+    }
     json!({ "hooks": hooks }).to_string()
+}
+
+/// Adds `waiter` to each event in WAIT_EVENTS; settings and master_settings share it.
+fn arm(hooks: &mut serde_json::Map<String, Value>, waiter: &Value) {
+    for event in WAIT_EVENTS {
+        let entry = hooks
+            .entry(event)
+            .or_insert_with(|| json!([{ "hooks": [] }]));
+        entry[0]["hooks"]
+            .as_array_mut()
+            .expect("an entry holds a hooks list")
+            .push(waiter.clone());
+    }
 }
 
 /// A hook Claude Code runs in the background; its exit 2 wakes the session with its stderr.
@@ -548,14 +551,16 @@ mod tests {
             })
         };
         let worker: Value = serde_json::from_str(&settings(Path::new("/bin/flow"))).unwrap();
-        let master: Value = serde_json::from_str(&master_settings(Path::new("/bin/flow"))).unwrap();
+        let master: Value =
+            serde_json::from_str(&master_settings(Path::new("/bin/flow"), true)).unwrap();
 
         for event in ["SessionStart", "Stop"] {
             let hooks = worker["hooks"][event][0]["hooks"].as_array().unwrap();
             assert_eq!(hooks.last().unwrap(), &waiter(json!(["wait"])), "{event}");
+            let hooks = master["hooks"][event][0]["hooks"].as_array().unwrap();
             assert_eq!(
-                master["hooks"][event],
-                json!([{ "hooks": [waiter(json!(["wait", "--master"]))] }]),
+                hooks.last().unwrap(),
+                &waiter(json!(["wait", "--master"])),
                 "{event}"
             );
         }
@@ -566,10 +571,26 @@ mod tests {
                 .len(),
             1
         );
-        assert_eq!(
-            master["hooks"].as_object().unwrap().len(),
-            2,
-            "the master reports nothing"
-        );
+    }
+
+    #[test]
+    fn the_master_reports_every_event_and_waits_only_when_it_wakes() {
+        for wake in [true, false] {
+            let master: Value =
+                serde_json::from_str(&master_settings(Path::new("/bin/flow"), wake)).unwrap();
+
+            for event in EVENTS {
+                let handler = &master["hooks"][event][0]["hooks"][0];
+                assert_eq!(handler["args"], json!(["hook", "claude-code"]), "{event}");
+            }
+            let waiters = master["hooks"]
+                .as_object()
+                .unwrap()
+                .values()
+                .flat_map(|entries| entries[0]["hooks"].as_array().unwrap())
+                .filter(|handler| handler["args"] == json!(["wait", "--master"]))
+                .count();
+            assert_eq!(waiters, if wake { WAIT_EVENTS.len() } else { 0 }, "{wake}");
+        }
     }
 }

@@ -1,0 +1,44 @@
+
+  ● shop-230  ●───○───○───○ design  · flow/shop-230 · slot 1                                                │ ▚▄▞ flow
+                                                                                                            ├────────────────────────────────────────
+                                                                                                            │ 0 ● master
+                                                                                                            │     ~/projects/shop · main
+                                                                                                            │
+                                                                                                            │ NEEDS YOU 2
+                                                                                                            │ 1 ● shop-221                       29m
+                                                                                                            │     ●───●───○───○ implement        4/9
+                                                                                                            │     migration needs a default value f…
+                                                                                                            │
+                                                                                                            │▌2 ● shop-230                       31m
+                                                                                                            │▌    ●───○───○───○ design
+                                                                                                            │▌    Which approach: a channel column …
+                                                                                                            │
+                          ╭─ not open ────────────────────────────────────────────╮                         │ RUNNING 1
+                          │                                                       │                         │ 3 ◓ export-csv                      1h
+                          │  flow ui has no session for this flow.                │                         │     ●───●───●───○ review           6/6
+                          │                                                       │                         │     agent: review changes
+                          ├───────────────────────────────────────────────────────┤                         │
+                          │  C-space r resumes it   C-space 0 back to the master  │                         │ DONE 1
+                          ╰───────────────────────────────────────────────────────╯                         │ 4 ✓ shop-198                        2h
+                                                                                                            │     ●───●───●───● MR !418      took 0s
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │ C-space ? keys
+

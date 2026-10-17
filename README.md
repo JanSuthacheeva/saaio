@@ -66,6 +66,8 @@ Every unfinished flow with a worktree, and every plain session, gets its own ses
 records it and the server opens it within half a second. The sidebar on the right groups the workers under
 NEEDS YOU, READY (idle: a turn ended, nothing asked), RUNNING and DONE with their steps, tasks and
 what they ask or do.
+The master's row, `0`, shows a spinner while the master works and the waiting dot once it ended a
+turn, asked or wants permission while you looked at another session, until you look at it again.
 
 Keys, after the prefix (`C-space` unless `[ui] prefix` sets another; the prefix twice sends one
 through):
@@ -287,7 +289,8 @@ It never types into a Codex session before its first turn (it may still show its
 The flow's mode decides who answers a waiting worker. In an `auto` flow the master answers what
 the code, the plan or your earlier decisions settle, and tells you what it answered. A `guided`
 flow's questions go to you, and the master sends your answer on. `flow status <name> --full`
-shows a worker's whole last answer. To stop the master being woken:
+shows a worker's whole last answer. To stop the master being woken (its row still shows when it
+needs you):
 
 ```toml
 [master]

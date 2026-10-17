@@ -13,7 +13,7 @@ use crate::fold;
 use crate::proto::{Cell, ClientMsg, Color, Flags, Frame, Mouse, ServerMsg};
 use crate::ui::input::{Command, Key, Routed, Step};
 use crate::ui::theme::PhaseColors;
-use crate::view::{State, VIEW_VERSION};
+use crate::view::{MasterTurn, State, VIEW_VERSION};
 
 const SIZE: Size = Size { cols: 80, rows: 10 };
 
@@ -171,6 +171,15 @@ fn fleet() -> Board {
     fold::board(flows, NOW)
 }
 
+/// Where the master's turn stands, as the server says it.
+fn master_at(state: State, at: u64) -> ServerMsg {
+    ServerMsg::Master {
+        cwd: "/Users/jan/projects/shop".into(),
+        branch: Some("main".into()),
+        turn: Some(MasterTurn { state, at }),
+    }
+}
+
 fn with_fleet() -> App {
     let mut app = App::new(FLEET);
     app.on_server(ServerMsg::Board(fleet()));
@@ -222,6 +231,7 @@ fn board_app() -> App {
     app.on_server(ServerMsg::Master {
         cwd: "/Users/jan/projects/shop".into(),
         branch: Some("main".into()),
+        turn: None,
     });
     app
 }

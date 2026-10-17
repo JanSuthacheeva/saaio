@@ -238,6 +238,9 @@ impl App {
         if key == self.focus {
             return vec![];
         }
+        if key == PaneKey::Master {
+            self.master_unseen = false;
+        }
         self.focus = key.clone();
         self.cursor = None;
         if matches!(self.view, View::History(_)) {

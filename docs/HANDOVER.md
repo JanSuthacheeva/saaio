@@ -232,7 +232,8 @@ See README "The master and its workers" and `.claude/plans/plan-flow-talk.md`. D
   Stop), not typing into the PTY: it never mixes into what you are typing, works without flow ui,
   and the worker can tell the master's words from yours.
 - The flow's mode decides who answers: auto -> the master when the code, plan or earlier decisions
-  settle it; guided -> you, the master relays. `[master] wake = false` turns the master's off.
+  settle it; guided -> you, the master relays. `[master] wake = false` turns the master's waking
+  off; its reporting hooks stay, for its row.
 - One waiter per session (`waits/<key>.pid`, last claim wins); the master's `waits/master.seen`
   keeps what it was woken for, so nothing wakes it twice.
 
@@ -283,6 +284,25 @@ thread, but only through Codex's shared daemon, and a session with `-c` override
 embedded server, which queue refuses. Once the daemon takes per-session hooks, queue replaces the
 server's typing.
 
+## The master's row (built 2026-10-17)
+
+See `.claude/plans/plan-flow-master-indicator.md`. Decisions:
+- The master runs the worker's reporting hooks too (Claude Code since now, also with `[master] wake
+  = false`; Codex already did). Its `flow hook` (`FLOW_MASTER=1`) appends to no log: it keeps one
+  `MasterTurn { state, at }` in `waits/master.turn`, written when the state changes and at
+  every rest (a turn `flow wait` wakes runs no UserPromptSubmit, so Idle can follow Idle), and
+  forgotten when the server opens the master's pane.
+- The server sends it with `ServerMsg::Master` (`PROTOCOL_VERSION` 5); whether you saw it is the
+  UI's: a turn that ends, asks or wants permission while the master is not focused shows the
+  waiting dot (an unseen Blocked the blocked dot) until its pane gets focus. The spinner turns
+  while it works, focused or not. A new `flow ui` opens on the master, so it starts out seen.
+- Row 0 draws the glyph a worker row draws, in the same column and `state_style` (the master has
+  no phase, so phase_colors does not tint it), lit a moment on a change; the rail's 0 the same.
+  Rejected: folding the master as a pseudo-flow (it would show in the Board, `--json` and status)
+  and keeping "seen" in the server.
+- Claude Code runs no hook on an Esc interrupt, so an interrupted Claude master keeps its spinner
+  until its next prompt, as a worker does; Codex reports the interrupt as idle.
+
 ## Future improvements
 
 - **Working across repos.** One flow ui already shows every repo's flows and the master can
@@ -298,7 +318,7 @@ server's typing.
   worker's next `Stop` carries its last message, which flow records as the answer. `flow ask` returns
   the answer to the master's Bash call, or "asked, no answer yet" after a timeout, the answer then
   arriving as a message in the master's session. The sidebar shows "asked by master", the timeline
-  the exchange. To settle: hooks for the master too, a question arriving while you type in that pane,
+  the exchange. To settle: a question arriving while you type in that pane,
   loops; start with master -> worker only.
 - **A mascot.** A small character in a corner of flow ui (bottom right of the sidebar, or the bar
   when solo) that reacts to the board: idle, working while workers run, dancing when a flow opens

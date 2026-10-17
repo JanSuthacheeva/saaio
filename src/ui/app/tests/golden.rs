@@ -40,6 +40,7 @@ fn every_view_looks_as_it_did() {
     alone.on_server(ServerMsg::Master {
         cwd: "/Users/jan/projects/shop".into(),
         branch: Some("main".into()),
+        turn: None,
     });
     golden("master-alone", &render_at(&alone, FLEET));
     alone.on_input(Routed::Command(Command::Board));
@@ -59,6 +60,16 @@ fn every_view_looks_as_it_did() {
     let mut rail = board_app();
     rail.on_input(Routed::Command(Command::Rail));
     golden("rail", &render_at(&rail, FLEET));
+
+    let mut working = board_app();
+    working.on_server(master_at(State::Working, 1));
+    golden("master-working", &render_at(&working, FLEET));
+    let mut waiting = board_app();
+    waiting.on_input(Routed::Command(Command::Focus(2)));
+    waiting.on_server(master_at(State::Idle, 1));
+    golden("master-waiting", &render_at(&waiting, FLEET));
+    waiting.on_input(Routed::Command(Command::Rail));
+    golden("rail-master-waiting", &render_at(&waiting, FLEET));
 
     let mut board = board_app();
     board.on_input(Routed::Command(Command::Board));

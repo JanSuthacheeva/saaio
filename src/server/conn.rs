@@ -191,7 +191,8 @@ impl Server {
         self.flushed_at = Instant::now();
     }
 
-    /// Where the master runs, when that changed since the attached UI last heard it.
+    /// Where the master runs and where its turn stands, when that changed since the attached UI
+    /// last heard it.
     pub(super) fn send_master(&mut self) {
         let Some(conn) = self.attached else {
             return;
@@ -199,6 +200,7 @@ impl Server {
         let master = ServerMsg::Master {
             cwd: self.record.cwd.display().to_string(),
             branch: crate::workspace::current_branch(&self.record.cwd),
+            turn: self.store.master_turn(),
         };
         if self.sent_master.as_ref() == Some(&master) {
             return;
