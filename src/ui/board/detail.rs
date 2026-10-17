@@ -442,7 +442,7 @@ mod tests {
     }
 
     #[test]
-    fn the_current_step_takes_the_color_of_its_phase_by_default() {
+    fn the_current_step_takes_the_state_color_by_default() {
         let flow = flow(
             "shop-221",
             Mode::Auto,
@@ -466,6 +466,6 @@ mod tests {
         let row = rows(&buf)[1].clone();
         let x = row[..row.find('●').unwrap()].chars().count() as u16;
         assert_ne!(implement, working);
-        assert_eq!(Some(buf[(x, 1)].fg), implement);
+        assert_eq!(Some(buf[(x, 1)].fg), working);
     }
 }

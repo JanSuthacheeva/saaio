@@ -114,7 +114,7 @@ second when it, or the theme it extends, changes. Without it flow uses the termi
 # Colors: "#rrggbb", an ANSI index, "default" (the terminal's), or another key.
 extends = "flow"        # terminal | flow | flow-light | a file in themes/, without .toml
 nerd_font = true        # the font has Nerd Font icons: a kiwi bird as the mark
-phase_colors = "steps"  # off | steps | full: how much of a working flow takes its phase's color
+phase_colors = "off"    # off | steps | full: how much of a working flow takes its phase's color
 [ui]
 accent = "#d9825b"
 [state]
@@ -129,7 +129,7 @@ faint, accent; `[state]` working, waiting, blocked, done, ended; `[phase]` any p
 4th phase get the colors of plan, implement, review and merge-request, so a workflow of your own is
 colored without a theme file. A `[phase]` color can
 name a `[ui]` or `[state]` key; no key can name a phase's color. `phase_colors` decides where a working flow shows its phase's color: `off`
-nowhere, `steps` (the default) in the current step dot, `full` also in the spinner, label, rail and
+(the default) nowhere, `steps` in the current step dot, `full` also in the spinner, label, rail and
 title row. Done steps are plain text at every level. A flow works in `working` until it reaches its first phase; a flow that waits, is blocked
 or is done keeps its state's color at every level. The terminal theme colors the phases with
 256-color indexes, since terminals often repaint ANSI blue, magenta and cyan. A key left out keeps

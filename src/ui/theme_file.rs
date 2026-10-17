@@ -434,7 +434,7 @@ mod tests {
     fn reads_how_much_takes_the_phase_color() {
         let dir = TempDir::new().unwrap();
         write(&dir, "theme.toml", "extends = \"flow\"\n");
-        assert_eq!(theme(&dir).phase_colors, PhaseColors::Steps, "the default");
+        assert_eq!(theme(&dir).phase_colors, PhaseColors::Off, "the default");
 
         write(&dir, "theme.toml", "extends = \"mine\"\n");
         write(
