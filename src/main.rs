@@ -1,4 +1,5 @@
 use std::env;
+use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::SystemTime;
@@ -32,7 +33,7 @@ fn main() -> ExitCode {
     answer(cli::run(cli, &env(), now_ms))
 }
 
-/// The environment variables flow reads, read once here.
+/// The environment variables and the terminal flow runs in, read once here.
 fn env() -> Env {
     let path = |name| env::var_os(name).map(PathBuf::from);
     Env {
@@ -44,6 +45,9 @@ fn env() -> Env {
         xdg_state_home: path("XDG_STATE_HOME"),
         xdg_config_home: path("XDG_CONFIG_HOME"),
         claude_config_dir: path("CLAUDE_CONFIG_DIR"),
+        terminal: io::stdin().is_terminal() && io::stdout().is_terminal(),
+        agent_shell: env::var_os("CLAUDECODE").is_some()
+            || env::var_os("CODEX_THREAD_ID").is_some(),
     }
 }
 
