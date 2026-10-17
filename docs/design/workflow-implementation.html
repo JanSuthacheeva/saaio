@@ -1,0 +1,448 @@
+<title>Configurable Workflow Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* layout: one 720px reading column of cards, jasu.dev (Nord + one purple accent) */
+:root {
+  --surface:#f8f9fb; --card:#eceff4; --ink:#2e3440; --muted:#4c566a; --subtle:#d8dee9; --border:#d8dee9;
+  --code-block:#2e3440; --code-bg:#e5e9f0; --code-ink:#4b6c8a; --accent:#7b5eaf; --link:#4b6c8a;
+  --constructive:#a3be8c; --warning:#d08770; --critical:#bf616a; --on-accent:#f8f9fb; --block-ink:#eceff4;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --gap:24px; --radius:6px;
+}
+:root[data-theme="dark"] {
+  --surface:#2e3440; --card:#3b4252; --ink:#eceff4; --muted:#93b1cc; --subtle:#434c5e; --border:#4c566a;
+  --code-block:#3b4252; --code-bg:#3b4252; --code-ink:#88c0d0; --accent:#bd93f9; --link:#88c0d0; --warning:#ebcb8b; --on-accent:#2e3440; color-scheme:dark }
+body { background:var(--surface); color:var(--ink); font:18px/1.6 var(--sans);
+  padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); padding-block:32px 64px; }
+main { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:var(--gap); }
+h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.1; font-weight:800; letter-spacing:-0.03em; margin:0; text-wrap:balance; }
+h2 { font-size:24px; line-height:1.3; margin:0; text-wrap:balance; }
+h3 { font-size:18px; margin:0; }
+p, ul, ol { margin:0; }
+ul, ol { padding-left:1.2em; display:flex; flex-direction:column; gap:6px; }
+.meta { font-size:13px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:var(--gap);
+  display:flex; flex-direction:column; gap:16px; min-width:0; }
+.unit { border-top:1px solid var(--border); padding-top:16px; display:flex; flex-direction:column; gap:8px; min-width:0; }
+.unit:first-of-type { border-top:0; padding-top:0; }
+.tag { display:inline-block; border-radius:99px; font-size:.75rem; font-weight:600; letter-spacing:.05em; padding:0 8px; vertical-align:middle; }
+.tag.new { background:var(--accent); color:var(--on-accent); }
+.tag.mod { border:1px dashed var(--accent); color:var(--ink); }
+code { font-family:var(--mono); font-size:.78em; background:var(--code-bg); color:var(--code-ink); border-radius:.2rem; padding:1px 4px; overflow-wrap:anywhere; }
+pre { margin:0; background:var(--code-block); color:var(--block-ink); border-radius:var(--radius); padding:14px; overflow-x:auto; font:13px/1.5 var(--mono); }
+.dia { display:flex; flex-direction:column; gap:10px; font:13px/1.4 var(--mono); }
+.layer { display:flex; flex-direction:column; gap:6px; }
+.layer > span:first-child { font:600 12px/1.2 var(--sans); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.box { border:1px solid var(--border); background:var(--surface); border-radius:4px; padding:4px 8px; }
+.box.new { border:2px solid var(--accent); }
+.box.mod { border:1px dashed var(--accent); }
+.arrow { color:var(--muted); }
+.err { color:var(--critical); }
+.legend { display:flex; gap:12px; flex-wrap:wrap; font-size:13px; color:var(--muted); align-items:center; }
+.legend .box { padding:0 6px; }
+ol.steps { font:14px/1.5 var(--mono); }
+ol.steps li.e { color:var(--muted); }
+table { border-collapse:collapse; width:100%; font-size:15px; }
+th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+th { background:var(--subtle); font-weight:600; }
+.scroll { overflow-x:auto; }
+@media (max-width:560px) { .card { padding:14px; } body { font-size:17px; } }
+</style>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:8px">
+  <p class="meta">flow · design-code · implementation · 2026-10-17 · <a href="https://claude.ai/artifact/Wr7jpU3Fj4kNdYYcs5wToU">approaches</a></p>
+  <h1>Configurable workflow</h1>
+</header>
+
+<section class="card">
+  <h2>1. Decision recap</h2>
+  <p>Approach A: each flow records its phase names in its <code>started</code> event when it starts, and <code>fold</code> builds the steps from the log, never from config. The workflow (1 to 4 phases, each with a name and the skills that start it) and the worker's first prompt move into <code>config.toml</code>.</p>
+  <ul>
+    <li>At most 4 phases. This keeps the steps row as wide as today and gives every position a built-in color.</li>
+    <li>Defaults: <code>plan</code>, <code>implement</code>, <code>review</code>, <code>merge-request</code>, with today's four skills. Logs without a recorded list read <code>design</code> as <code>plan</code>.</li>
+    <li><code>[worker] prompt = "/ship-feature {request}"</code>. An agent's own <code>prompt</code> still wins. The Codex adapter turns a leading <code>/skill</code> into <code>$skill</code>.</li>
+    <li>JSON <code>VIEW_VERSION</code> 3. theme.toml <code>[phase]</code> colors any phase by name.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>2. Structure overview</h2>
+  <div class="legend"><span class="box new">new</span><span class="box mod">modified</span><span class="box">existing</span></div>
+  <div class="dia">
+    <div class="layer"><span>config</span>
+      <div class="row"><span class="box mod">config::Config</span><span class="arrow">-&gt;</span><span class="box new">workflow::Workflow</span><span class="arrow">-&gt;</span><span class="box new">workflow::PhaseSpec</span></div>
+      <div class="row"><span class="box mod">config::WorkerConfig.prompt</span><span class="arrow">-&gt;</span><span class="box mod">Adapter::skill_prompt</span></div>
+    </div>
+    <div class="layer"><span>log and fold</span>
+      <div class="row"><span class="box mod">event::Phase (name)</span><span class="box mod">EventKind::Started.phases</span><span class="arrow">-&gt;</span><span class="box mod">fold::Folding</span><span class="arrow">-&gt;</span><span class="box mod">view::FlowView / Step</span></div>
+    </div>
+    <div class="layer"><span>commands</span>
+      <div class="row"><span class="box mod">commands::start</span><span class="box mod">commands::new</span><span class="box mod">commands::report</span><span class="box mod">commands::hook</span><span class="arrow">-&gt;</span><span class="box">Config.workflow</span></div>
+      <div class="row"><span class="box mod">adapter::claude_code::translate</span><span class="box mod">adapter::codex::translate</span><span class="arrow">-&gt;</span><span class="box new">Workflow::phase_of</span></div>
+      <div class="row"><span class="box mod">output::flow::created</span><span class="box">output::status</span></div>
+    </div>
+    <div class="layer"><span>ui</span>
+      <div class="row"><span class="box mod">theme::Palette.phases</span><span class="box new">theme::PhasePalette</span><span class="box new">theme::ColorKey</span><span class="arrow">&lt;-</span><span class="box mod">theme_file::parse / apply</span></div>
+      <div class="row"><span class="box mod">Theme::phase_style</span><span class="arrow">&lt;-</span><span class="box mod">board::cards</span><span class="box mod">board::detail</span><span class="box">sidebar::labels</span></div>
+    </div>
+    <div class="layer"><span>launch</span>
+      <div class="row"><span class="box mod">config::Agent.prompt (Option)</span><span class="arrow">-&gt;</span><span class="box mod">launch::pane::agent_argv</span><span class="box mod">server::master</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>3. Units</h2>
+
+  <div class="unit">
+    <h3><code>src/workflow.rs</code> <span class="tag new">new</span></h3>
+    <p>The phases a flow walks through and the skills that start each; replaces <code>config::PhaseMap</code> and <code>config::builtin_phases</code>.</p>
+<pre>pub const MAX_PHASES: usize = 4;
+
+/// One [[phases]] entry: its name and the skills that start it.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PhaseSpec {
+    pub name: Phase,
+    #[serde(default)]
+    pub skills: Vec&lt;String&gt;,
+}
+
+/// 1 to MAX_PHASES phases with distinct names, no skill in two.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "Vec&lt;PhaseSpec&gt;")]
+pub struct Workflow { phases: Vec&lt;PhaseSpec&gt; }
+
+impl Default for Workflow { fn default() -&gt; Workflow; }          // builtin()
+impl TryFrom&lt;Vec&lt;PhaseSpec&gt;&gt; for Workflow { type Error = String; ... }
+
+impl Workflow {
+    /// plan design-code, implement implement-plan, review review-changes,
+    /// merge-request write-merge-request.
+    pub fn builtin() -&gt; Workflow;
+    /// The names in order: what flow start records.
+    pub fn phases(&amp;self) -&gt; Vec&lt;Phase&gt;;
+    /// "/design-code" and "plugin:design-code" both find design-code's phase.
+    pub fn phase_of(&amp;self, skill: &amp;str) -&gt; Option&lt;Phase&gt;;
+}</pre>
+    <p class="meta"><code>try_from</code> errors: "a workflow has 1 to 4 phases", "two phases are named review", "design-code starts two phases", "Phase is lowercase letters, digits and -". serde puts them on the toml line.</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/event.rs</code> <span class="tag mod">modified</span></h3>
+    <p><code>Phase</code> becomes a name; <code>Started</code> records the flow's phases.</p>
+<pre>/// A phase's name: plan, implement, ... as the workflow names it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct Phase(String);
+
+impl TryFrom&lt;String&gt; for Phase { ... }   // lowercase letters, digits, '-'; not empty
+impl From&lt;Phase&gt; for String { ... }
+impl FromStr for Phase { ... }           // clap: flow report phase &lt;name&gt;
+
+impl Phase {
+    pub fn name(&amp;self) -&gt; &amp;str;
+}
+
+Started {
+    name: String,
+    request: String,
+    mode: Mode,
+    /// The flow's phases in order; None in a log from before they were configurable,
+    /// and for a plain session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    phases: Option&lt;Vec&lt;Phase&gt;&gt;,
+},</pre>
+    <p class="meta">Removed: <code>Phase::ALL</code>, <code>Phase::index</code>, the <code>ValueEnum</code> and <code>Copy</code> derives. <code>EVENT_VERSION</code> stays 1: the field is optional both ways.</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/fold.rs</code> <span class="tag mod">modified</span></h3>
+    <p>Steps come from the flow's own phases; public signatures unchanged.</p>
+<pre>struct Folding {
+    view: FlowView,
+    phases: Vec&lt;Phase&gt;,               // Started.phases, else Workflow::builtin().phases()
+    legacy: bool,                     // no list recorded: "design" reads as "plan"
+    durations: Vec&lt;Option&lt;u64&gt;&gt;,      // by position in phases
+    entered: Vec&lt;bool&gt;,
+    phase_since: u64,
+    stopped_at: Option&lt;u64&gt;,
+}
+
+impl Folding {
+    fn new(id: &amp;str, name: &amp;str, request: &amp;str, mode: Mode,
+           phases: Option&lt;&amp;[Phase]&gt;, at: u64) -&gt; Folding;
+    /// Where `phase` stands in the flow's phases (after the legacy rename); None when it has none.
+    fn position(&amp;self, phase: &amp;Phase) -&gt; Option&lt;usize&gt;;
+    fn enter(&amp;mut self, position: usize, at: u64);
+}
+
+/// "design" -&gt; "plan", for logs written before phases were configurable.
+fn legacy_name(phase: &amp;Phase) -&gt; Phase;</pre>
+    <p class="meta">A <code>phase</code> event the flow has no phase for changes nothing. A <code>merge-request</code> event enters the flow's last phase, as it entered <code>MergeRequest</code> before.</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/view.rs</code> <span class="tag mod">modified</span></h3>
+<pre>pub const VIEW_VERSION: u32 = 3;
+// FlowView.phase: Option&lt;Phase&gt;, Step.phase: Phase - same fields, now any configured name.</pre>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/config.rs</code> <span class="tag mod">modified</span></h3>
+    <p>Reads the workflow and resolves each agent's first prompt.</p>
+<pre>pub struct Config {
+    pub agents: BTreeMap&lt;String, Agent&gt;,
+    /// [[phases]]: the built-in workflow unless the file has one.
+    #[serde(rename = "phases")]
+    pub workflow: Workflow,
+    pub worker: WorkerConfig,
+    pub master: MasterConfig,
+    pub ui: UiConfig,
+}
+
+pub struct Agent {
+    pub command: Vec&lt;String&gt;,
+    /// Its own first prompt; None takes [worker] prompt. Some after load for every agent.
+    #[serde(default)]
+    pub prompt: Option&lt;String&gt;,
+    pub resume: Option&lt;Vec&lt;String&gt;&gt;,
+    pub adapter: Option&lt;Adapter&gt;,
+}
+
+pub struct WorkerConfig {
+    pub agent: String,
+    /// The first prompt of every agent that sets none, "/ship-feature {request}" unless set.
+    pub prompt: String,
+}
+
+impl Config {
+    /// Also refuses the old [phases] skill table, naming [[phases]].
+    fn parse(text: &amp;str) -&gt; Result&lt;Config&gt;;
+    /// Every agent without a prompt takes [worker] prompt, as its adapter writes a skill.
+    fn fill_prompts(&amp;mut self);
+}</pre>
+    <p class="meta">Removed: <code>PhaseMap</code>, <code>builtin_phases</code>. <code>builtin_agents</code>: <code>claude</code>, <code>codex</code> and <code>master</code> set no prompt. <code>load</code> and <code>builtin</code> call <code>fill_prompts</code> after <code>add_builtins</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/adapter.rs</code>, <code>claude_code.rs</code>, <code>codex.rs</code> <span class="tag mod">modified</span></h3>
+<pre>impl Adapter {
+    /// The prompt as this harness calls a skill: Codex writes a leading "/name" as "$name".
+    pub fn skill_prompt(self, prompt: &amp;str) -&gt; String;
+    pub fn translate(self, payload: &amp;Value, workflow: &amp;Workflow) -&gt; Vec&lt;EventKind&gt;;
+}
+pub fn claude_code::translate(payload: &amp;Value, workflow: &amp;Workflow) -&gt; Vec&lt;EventKind&gt;;
+pub fn codex::translate(payload: &amp;Value, workflow: &amp;Workflow) -&gt; Vec&lt;EventKind&gt;;</pre>
+    <p class="meta">Removed: <code>adapter::phase_of</code> (now <code>Workflow::phase_of</code>).</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>cli/commands/start.rs</code>, <code>new.rs</code>, <code>report.rs</code>, <code>hook.rs</code>; <code>cli.rs</code> <span class="tag mod">modified</span></h3>
+<pre>// start: Started { ..., phases: Some(config.workflow.phases()) }
+// start/plain: phases: None
+pub fn new::run(args: Args, store: &amp;Store, workflow: &amp;Workflow, now: u64)
+    -&gt; Result&lt;Document, Failure&gt;;
+// report: Phase { phase: Phase }  (FromStr); refuses a phase the flow has not:
+fn no_phase(flow: &amp;FlowView, phase: &amp;Phase) -&gt; Failure;   // "shop-221 has no phase deploy", help "Phases: plan, ..."
+// hook: adapter.translate(payload, &amp;config.workflow)
+// cli.rs: Command::New loads env.config()? like Start</pre>
+  </div>
+
+  <div class="unit">
+    <h3><code>cli/output/flow.rs</code> <span class="tag mod">modified</span></h3>
+    <p><code>created</code>'s help names the flow's first phase: "Run `flow report --flow shop-221 phase plan` when plan starts". <code>Phase::name</code> now borrows, so <code>reported</code> and <code>status</code> rows take <code>&amp;'a str</code> instead of <code>&amp;'static str</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/ui/theme.rs</code> <span class="tag mod">modified</span></h3>
+    <p>Phase colors by name, falling back to the color of the phase's position.</p>
+<pre>/// The phases' colors: by position (the built-in themes' four), and by name from [phase].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PhasePalette {
+    pub positions: [Color; MAX_PHASES],
+    pub names: BTreeMap&lt;String, Color&gt;,
+}
+
+pub struct Palette { ...ui and state colors..., pub phases: PhasePalette }   // no longer Copy
+// removed: fields design, implement, review, merge_request; PaletteKey::Design..MergeRequest
+
+/// A color a theme file sets: a fixed key of [ui] or [state], or a phase by name in [phase].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ColorKey { Fixed(PaletteKey), Phase(Phase) }
+
+impl Palette {
+    pub fn color(&amp;self, key: &amp;ColorKey) -&gt; Color;
+    pub fn set(&amp;mut self, key: &amp;ColorKey, color: Color);       // replaces color_mut
+}
+
+pub struct PhaseTokens {
+    pub positions: [Style; MAX_PHASES],
+    pub names: BTreeMap&lt;String, Style&gt;,
+}
+
+impl Theme {
+    /// The phase's color by name, else by its position among the flow's steps.
+    pub fn phase_style(&amp;self, phase: &amp;Phase, position: usize) -&gt; Style;
+}</pre>
+    <p class="meta"><code>tinted(flow)</code> finds the position from <code>flow.steps</code>. <code>Section::Phase</code> stays; it now holds names, not <code>PaletteKey</code>s.</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/ui/theme_file.rs</code> <span class="tag mod">modified</span></h3>
+<pre>struct Entry { key: ColorKey, value: Value, line: usize }
+
+/// [phase]: any phase name; "design" reads as "plan". [ui] and [state] as before.
+fn colors(path: &amp;Path, text: &amp;str, section: Section, table: DeTable) -&gt; Result&lt;Vec&lt;Entry&gt;&gt;;
+fn apply(file: &amp;ThemeFile, palette: &amp;mut Palette) -&gt; Result&lt;()&gt;;      // references by ColorKey</pre>
+  </div>
+
+  <div class="unit">
+    <h3><code>ui/board/cards.rs</code>, <code>ui/board/detail.rs</code> <span class="tag mod">modified</span></h3>
+    <p>Cards: a delegated flow reads <code>"{phase} · agent"</code> (for example "review · agent"); <code>gerund</code> goes. Detail: <code>merge-request</code> keeps its short label "MR", matched by name.</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>launch/pane.rs</code>, <code>server/master.rs</code> <span class="tag mod">modified</span></h3>
+    <p><code>agent_argv</code> fills <code>agent.prompt.as_deref().unwrap_or_default()</code>. The master's fresh start strips it with <code>prompt: None</code>, as it strips <code>String::new()</code> today.</p>
+  </div>
+</section>
+
+<section class="card">
+  <h2>4. Data</h2>
+  <div class="scroll"><table>
+    <tr><th>Shape</th><th>Fields</th><th>Crosses</th></tr>
+    <tr><td><code>[[phases]]</code> in config.toml</td><td><code>name</code> (string), <code>skills</code> (list of strings)</td><td>user -&gt; <code>Config</code></td></tr>
+    <tr><td><code>[worker] prompt</code></td><td>string, <code>{request}</code> <code>{name}</code> <code>{id}</code></td><td>user -&gt; <code>Agent.prompt</code></td></tr>
+    <tr><td><code>started</code> event line</td><td>+ <code>phases</code>: <code>["plan","implement","review","merge-request"]</code>, left out when None</td><td>start/new -&gt; log -&gt; fold</td></tr>
+    <tr><td><code>--json</code> v3</td><td><code>version: 3</code>; <code>phase</code>, <code>steps[].phase</code> any configured name</td><td>flow -&gt; programs</td></tr>
+    <tr><td>theme.toml <code>[phase]</code></td><td>phase name -&gt; color</td><td>user -&gt; <code>Palette.phases.names</code></td></tr>
+  </table></div>
+<pre># config.toml
+[worker]
+prompt = "/ship-feature {request}"
+
+[[phases]]
+name = "spec"
+skills = ["brainstorming"]
+
+[[phases]]
+name = "build"
+skills = ["executing-plans", "subagent-driven-development"]
+
+[[phases]]
+name = "pr"
+skills = ["finishing-a-development-branch"]</pre>
+</section>
+
+<section class="card">
+  <h2>5. Call chains</h2>
+
+  <h3>flow start records the workflow</h3>
+  <div class="dia"><div class="row"><span class="box">cli::run</span><span class="arrow">-&gt;</span><span class="box">env.config()</span><span class="arrow">-&gt;</span><span class="box mod">start::run</span><span class="arrow">-&gt;</span><span class="box new">Workflow::phases</span><span class="arrow">-&gt;</span><span class="box mod">Started{phases}</span><span class="arrow">-&gt;</span><span class="box">store.create</span></div>
+  <div class="row err">config invalid -&gt; Failure "config.toml:7 ... a workflow has 1 to 4 phases" -&gt; exit 1</div></div>
+  <ol class="steps">
+    <li>cli::run -&gt; Env::config(): Result&lt;Config&gt;</li>
+    <li>Config::load -&gt; Config::parse(text): Workflow::try_from(Vec&lt;PhaseSpec&gt;)</li>
+    <li class="e">Error: old [phases] table, more than 4, a duplicate name or skill, a bad name -&gt; anyhow with path:line -&gt; Failure, nothing created</li>
+    <li>start::run -&gt; config.workflow.phases(): Vec&lt;Phase&gt;</li>
+    <li>start::run -&gt; Event::new(now, Started { name, request, mode, phases: Some(..) })</li>
+    <li>start::run -&gt; store.create(&amp;first): id; the rest as today</li>
+  </ol>
+
+  <h3>A skill starts a phase (hook)</h3>
+  <div class="dia"><div class="row"><span class="box">Claude Code Skill hook</span><span class="arrow">-&gt;</span><span class="box mod">hook::run</span><span class="arrow">-&gt;</span><span class="box mod">claude_code::translate</span><span class="arrow">-&gt;</span><span class="box new">Workflow::phase_of</span><span class="arrow">-&gt;</span><span class="box">fold::changes</span><span class="arrow">-&gt;</span><span class="box">store.append</span></div></div>
+  <ol class="steps">
+    <li>hook::run -&gt; adapter.translate(payload, &amp;config.workflow): Vec&lt;EventKind&gt;</li>
+    <li>claude_code::translate -&gt; workflow.phase_of("buzzwoo:design-code"): Some(Phase "plan")</li>
+    <li>hook::run -&gt; fold::changes(id, events, Phase{plan}, now): bool</li>
+    <li>fold -&gt; Folding::position(&amp;plan): Some(0) -&gt; enter(0, at)</li>
+    <li>hook::run -&gt; store.append(id, event) when it changed</li>
+    <li class="e">The flow started under another workflow and has no such phase -&gt; position None -&gt; changes false -&gt; nothing appended, silently</li>
+  </ol>
+
+  <h3>flow report phase</h3>
+  <ol class="steps">
+    <li>clap -&gt; Phase::from_str("review"): Phase</li>
+    <li class="e">Bad name ("Review!") -&gt; clap usage error, exit 2</li>
+    <li>report::run -&gt; fold::resolve(flows, name): &amp;FlowView</li>
+    <li>report::run -&gt; flow.steps contains phase?</li>
+    <li class="e">No -&gt; no_phase(flow, phase): Failure "shop-221 has no phase deploy", help "Phases: plan, implement, review, merge-request", exit 1</li>
+    <li>report::run -&gt; store.append; fold::fold -&gt; output::flow::reported</li>
+  </ol>
+
+  <h3>An old log folds</h3>
+  <ol class="steps">
+    <li>fold::fold -&gt; Started { phases: None } -&gt; Folding::new(.., None, at): phases = Workflow::builtin().phases(), legacy = true</li>
+    <li>Folding::apply(Phase{design}) -&gt; position(legacy_name(design) = plan): Some(0)</li>
+    <li>Folding::finish -&gt; steps plan, implement, review, merge-request; JSON v3 never says design</li>
+  </ol>
+
+  <h3>The UI colors a working flow</h3>
+  <ol class="steps">
+    <li>theme_file::load -&gt; parse: [phase] build = "#7aa7ff" -&gt; Entry { ColorKey::Phase(build) }</li>
+    <li>apply -&gt; palette.set(&amp;ColorKey::Phase(build), color)</li>
+    <li class="e">[phase] Build = ... -&gt; "theme.toml:4: Build is no phase name" (shown as today's theme error)</li>
+    <li>Theme::from_palette -&gt; PhaseTokens { positions, names }</li>
+    <li>labels::steps -&gt; theme.step_style(flow) -&gt; tinted -&gt; phase_style(&amp;build, 1): names[build], else positions[1]</li>
+  </ol>
+
+  <h3>The worker's first prompt</h3>
+  <ol class="steps">
+    <li>Config::load -&gt; add_builtins -&gt; fill_prompts()</li>
+    <li>fill_prompts -&gt; codex has no prompt -&gt; Adapter::Codex.skill_prompt("/ship-feature {request}"): "$ship-feature {request}"</li>
+    <li>server panes -&gt; pane::worker_spec(flow, agent, env) -&gt; agent_argv: prompt filled with the request</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2>6. Conventions followed</h2>
+  <ul>
+    <li>A refused old config key names the new one, as the top-level <code>agent</code> key does (<code>config.rs:113</code>).</li>
+    <li>Built-ins under the file's values, as <code>add_builtins</code> does (<code>config.rs:127</code>); except that the workflow is replaced whole, since merging two ordered lists has no clear meaning.</li>
+    <li>An optional field on an existing event, as <code>Workspace.branch/slot</code> grew for plain sessions (<code>event.rs:337</code> test).</li>
+    <li>Validation through serde <code>try_from</code>, so the error carries the line, as <code>Prefix</code> does for <code>[ui] prefix</code> (<code>config.rs:518</code> test).</li>
+    <li>One module per noun: <code>workflow.rs</code>, a top-level private module in <code>lib.rs</code>, as <code>branching.rs</code>.</li>
+    <li>Deviation: <code>Phase</code> loses <code>Copy</code> and the theme's <code>Palette</code> loses <code>Copy</code>; both now hold strings.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>7. Test seams</h2>
+  <ul>
+    <li><code>workflow.rs</code>: unit tests for builtin, phases, phase_of (slash and plugin prefix), each try_from error.</li>
+    <li><code>event.rs</code>: Phase name rules; Started round-trips with and without phases; an old started line parses.</li>
+    <li><code>fold/tests.rs</code>: custom 3-phase steps; design-to-plan only without a list; unknown phase ignored; MR enters the last phase.</li>
+    <li><code>config.rs</code>: [[phases]] read, limits, old [phases] refused; [worker] prompt default and override; codex gets $.</li>
+    <li><code>adapter</code>: skill_prompt per adapter; translate fixtures with a Workflow.</li>
+    <li><code>theme.rs</code>, <code>theme_file.rs</code>: color by name, by position, "design" alias, bad name error.</li>
+    <li><code>tests/cli.rs</code>: start/new record phases; report refuses an unknown phase; <code>status --json</code> version 3. Goldens rewritten where "designing" or "design" showed.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>8. Assumptions</h2>
+  <ol>
+    <li>A <code>[[phases]]</code> list replaces the built-in workflow whole; it is not merged with it.</li>
+    <li>A phase event a flow has no phase for is ignored by fold, so the hook appends nothing for it.</li>
+    <li>A <code>merge-request</code> event enters the flow's last phase, whatever it is called.</li>
+    <li>A phase without a color in the theme takes the built-in color of its position (1st to 4th).</li>
+    <li>A <code>[phase]</code> color can name a <code>[ui]</code> or <code>[state]</code> key; nothing can name a phase's color.</li>
+    <li>A delegated card says "review · agent", not "reviewing · agent": no gerunds for names flow does not know.</li>
+    <li>The Codex rewrite touches only a leading <code>/name</code>; an agent's own prompt is used as written.</li>
+    <li><code>flow new</code> records the configured workflow too, so it now reads config.toml (and fails on a broken one).</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2>9. Decided in review</h2>
+  <ol>
+    <li>The old <code>[phases]</code> skill table is refused, with an error naming the <code>[[phases]]</code> shape.</li>
+    <li>Phase names are lowercase letters, digits and <code>-</code>.</li>
+    <li>A workflow has 1 to 4 phases.</li>
+  </ol>
+</section>
+</main>

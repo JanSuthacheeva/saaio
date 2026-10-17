@@ -1,0 +1,148 @@
+<title>Configurable Workflow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* layout: one 720px reading column of cards, jasu.dev (Nord + one purple accent) */
+:root {
+  --surface:#f8f9fb; --card:#eceff4; --ink:#2e3440; --muted:#4c566a; --subtle:#d8dee9; --border:#d8dee9;
+  --code-block:#2e3440; --code-bg:#e5e9f0; --code-ink:#4b6c8a; --accent:#7b5eaf; --link:#4b6c8a;
+  --constructive:#a3be8c; --warning:#d08770; --critical:#bf616a; --on-accent:#f8f9fb; --block-ink:#eceff4;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --gap:24px; --radius:6px;
+}
+:root[data-theme="dark"] {
+  --surface:#2e3440; --card:#3b4252; --ink:#eceff4; --muted:#93b1cc; --subtle:#434c5e; --border:#4c566a;
+  --code-block:#3b4252; --code-bg:#3b4252; --code-ink:#88c0d0; --accent:#bd93f9; --link:#88c0d0; --warning:#ebcb8b; --on-accent:#2e3440; color-scheme:dark }
+body { background:var(--surface); color:var(--ink); font:18px/1.6 var(--sans);
+  padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); padding-block:32px 64px; }
+main { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:var(--gap); }
+h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.1; font-weight:800; letter-spacing:-0.03em; margin:0; text-wrap:balance; }
+h2 { font-size:24px; line-height:1.3; margin:0; text-wrap:balance; }
+h3 { font-size:18px; margin:0; }
+p, ul, ol { margin:0; }
+ul, ol { padding-left:1.2em; display:flex; flex-direction:column; gap:6px; }
+.meta { font-size:13px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:var(--gap);
+  display:flex; flex-direction:column; gap:16px; min-width:0; }
+.card.rec { border-color:var(--accent); border-width:2px; }
+.pill { display:inline-block; border-radius:99px; font-size:.8rem; font-weight:600; letter-spacing:.05em; padding:1px 10px;
+  background:var(--accent); color:var(--on-accent); vertical-align:middle; }
+code { font-family:var(--mono); font-size:.78em; background:var(--code-bg); color:var(--code-ink); border-radius:.2rem; padding:1px 4px; overflow-wrap:anywhere; }
+pre { margin:0; background:var(--code-block); color:var(--block-ink); border-radius:var(--radius); padding:14px; overflow-x:auto; font:13px/1.5 var(--mono); }
+.cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.cols > div { min-width:0; display:flex; flex-direction:column; gap:6px; }
+.cols h3 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+.plus li::marker { content:"+  "; color:var(--muted); }
+.minus li::marker { content:"-  "; color:var(--muted); }
+.dia { display:flex; flex-direction:column; gap:6px; font:13px/1.4 var(--mono); }
+.row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.box { border:1px solid var(--border); background:var(--surface); border-radius:4px; padding:4px 8px; }
+.box.new { border:2px solid var(--accent); }
+.box.mod { border:1px dashed var(--accent); }
+.arrow { color:var(--muted); }
+.legend { display:flex; gap:12px; flex-wrap:wrap; font-size:13px; color:var(--muted); align-items:center; }
+.legend .box { padding:0 6px; }
+@media (max-width:560px) { .cols { grid-template-columns:1fr; } .card { padding:14px; } body { font-size:17px; } }
+</style>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:8px">
+  <p class="meta">flow · design-code · approaches · 2026-10-17</p>
+  <h1>Configurable workflow</h1>
+  <p>Users should not be tied to your four skills. The phases a flow walks through (names, order, the skills that start each) and the worker's first prompt move into <code>config.toml</code>. The defaults stay what they are today, with <code>design</code> renamed to <code>plan</code>.</p>
+</header>
+
+<section class="card">
+  <h2>What exists today</h2>
+  <ul>
+    <li><code>Phase</code> is a closed enum of four: <code>Design, Implement, Review, MergeRequest</code> with <code>ALL</code>, <code>index</code> and <code>name</code> (<code>src/event.rs:87</code>). clap parses it for <code>flow report phase</code> (<code>cli/commands/report.rs:21</code>).</li>
+    <li>The skill map is already configurable: <code>[phases]</code> maps a skill name to one of the four (<code>config.rs:14</code>, <code>builtin_phases</code> at <code>config.rs:182</code>). The adapters look a skill up with <code>adapter::phase_of</code> (<code>adapter.rs:162</code>). So users can point their own skills at the four phases, but cannot name, add, drop or reorder phases.</li>
+    <li><code>fold</code> builds <code>steps</code> from <code>Phase::ALL</code> with fixed-size arrays (<code>fold.rs:124</code>, <code>fold.rs:326</code>). A <code>merge-request</code> event forces the phase to <code>MergeRequest</code> (<code>fold.rs:240</code>). <code>fold</code> has about 15 callers (status, report, hook, start, new, send, remove, deliver, server panes) and none of them pass config.</li>
+    <li>The theme has four fixed phase keys (<code>PaletteKey::Design..MergeRequest</code>, <code>ui/theme.rs:168</code>) under <code>[phase]</code> in theme.toml. Cards use gerunds per phase, "designing", "implementing" (<code>ui/board/cards.rs:375</code>).</li>
+    <li>The first prompt is per agent: <code>[agents.claude] prompt = "/ship-feature {request}"</code>, <code>[agents.codex] prompt = "$ship-feature {request}"</code> (<code>config.rs:206</code>, <code>config.rs:212</code>). Changing the workflow skill means overriding every agent.</li>
+    <li>JSON is <code>VIEW_VERSION = 2</code> (<code>view.rs:7</code>); <code>phase</code> and <code>steps[].phase</code> are already strings on the wire.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>The same in every approach</h2>
+  <ul>
+    <li><code>Phase</code> becomes a name, <code>Phase(String)</code>, serialised as the same string. The event log format does not change for phase events.</li>
+    <li>The config gets an ordered list, which replaces the <code>[phases]</code> skill map:
+<pre>[[phases]]
+name = "plan"
+skills = ["design-code"]
+
+[[phases]]
+name = "implement"
+skills = ["implement-plan"]
+...</pre>
+    Without the list, the built-in four. A file with the old <code>[phases]</code> table is refused with a message that names the new shape, as the old top-level <code>agent</code> key is (<code>config.rs:113</code>).</li>
+    <li><code>flow report phase &lt;name&gt;</code> takes any name and refuses one the flow does not have, listing the ones it has.</li>
+    <li>Theme: <code>[phase]</code> in theme.toml takes any phase name. A phase without a color takes the built-in phase color at its position (1st, 2nd, ...), so a custom workflow is colored without a theme file. <code>design</code> in an old theme file reads as <code>plan</code>.</li>
+    <li><code>VIEW_VERSION</code> 3: <code>phase</code> is any configured name, never <code>design</code>.</li>
+  </ul>
+  <p class="meta">The approaches differ in one place: where a flow's list of phases comes from when its log is folded.</p>
+</section>
+
+<div class="legend"><span class="box new">new</span><span class="box mod">modified</span><span class="box">existing</span></div>
+
+<section class="card rec">
+  <h2>A. Each flow records its phases when it starts <span class="pill">recommended</span></h2>
+  <p><code>flow start</code> and <code>flow new</code> write the configured phase names into the flow's <code>started</code> event. <code>fold</code> reads the steps from the log, so it stays pure and none of its 15 callers change. A log without the list was written before this change: it folds with the built-in four, and its <code>design</code> events read as <code>plan</code>.</p>
+  <div class="dia">
+    <div class="row"><span class="box mod">Config.phases (list)</span><span class="arrow">-&gt;</span><span class="box mod">flow start / new</span><span class="arrow">-&gt;</span><span class="box mod">Started { ..., phases }</span><span class="arrow">-&gt;</span><span class="box">log</span></div>
+    <div class="row"><span class="box">log</span><span class="arrow">-&gt;</span><span class="box mod">fold (steps from Started)</span><span class="arrow">-&gt;</span><span class="box">FlowView.steps</span><span class="arrow">-&gt;</span><span class="box">ui, status, --json</span></div>
+    <div class="row"><span class="box mod">Config.phases</span><span class="arrow">-&gt;</span><span class="box mod">Workflow::phase_of(skill)</span><span class="arrow">-&gt;</span><span class="box">flow hook</span></div>
+  </div>
+  <div class="cols">
+    <div><h3>Gains</h3><ul class="plus">
+      <li>A running flow keeps the workflow it started with; editing config.toml never relabels it.</li>
+      <li><code>fold</code> stays a pure function of the log, the rule the crate already follows (<code>CLAUDE.md</code>: readers depend on the log, not the config).</li>
+      <li>The <code>design</code> alias has a precise boundary: only logs without a recorded list.</li>
+      <li>The server, status and the master all see the same steps.</li>
+    </ul></div>
+    <div><h3>Costs</h3><ul class="minus">
+      <li>One optional field on <code>started</code>; an older flow binary ignores it (serde skips unknown fields).</li>
+      <li>A config change reaches only new flows. To change a running flow's phases you start it again.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>B. Fold reads the phases from config</h2>
+  <p><code>fold::fold</code>, <code>views</code> and <code>board</code> take a <code>&amp;Workflow</code>. Every caller loads the config and passes it. The log keeps only phase names.</p>
+  <div class="dia">
+    <div class="row"><span class="box mod">Config.phases</span><span class="arrow">-&gt;</span><span class="box mod">15 fold callers</span><span class="arrow">-&gt;</span><span class="box mod">fold(&amp;workflow, ...)</span><span class="arrow">-&gt;</span><span class="box">FlowView.steps</span></div>
+  </div>
+  <div class="cols">
+    <div><h3>Gains</h3><ul class="plus">
+      <li>No change to any event.</li>
+      <li>A config edit shows on every flow at once.</li>
+    </ul></div>
+    <div><h3>Costs</h3><ul class="minus">
+      <li>Fold depends on config: the server, deliver, every command and their tests thread a workflow through.</li>
+      <li>A running flow is relabelled when config changes; a phase it reported that is no longer listed has no step to show.</li>
+      <li><code>flow status --all</code> folds other projects' logs with this user's config, fine today but wrong once config is per project.</li>
+      <li>The <code>design</code> alias must apply to every log, so a user cannot name a phase <code>design</code>.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Rejected: phases per repository</h2>
+  <p>Putting the list in the repo's <code>.flow/config.toml</code>, next to <code>[branch]</code> (<code>branching.rs</code>), would let a team share one workflow. The skills are the user's, not the repo's, so the request's <code>config.toml</code> fits better. Approach A leaves the door open: a later repo setting only changes what <code>flow start</code> records.</p>
+</section>
+
+<section class="card">
+  <h2>The worker's first prompt</h2>
+  <p><code>[worker] prompt = "/ship-feature {request}"</code> becomes the one place to set it. An agent's own <code>prompt</code> becomes optional and still wins when set (aider keeps <code>"{request}"</code>). The built-in <code>claude</code> and <code>codex</code> agents lose theirs, so both follow <code>[worker] prompt</code>.</p>
+  <p>Codex calls a skill <code>$name</code>, not <code>/name</code>. So the Codex adapter turns a leading <code>/skill</code> of the prompt into <code>$skill</code>, and one <code>[worker] prompt</code> works for both harnesses. The alternative is to keep per-agent prompts as they are and have <code>[worker] prompt</code> only fill agents that set none; then a user who changes it must also override <code>[agents.codex] prompt</code>.</p>
+</section>
+
+<section class="card rec">
+  <h2>Recommendation</h2>
+  <p><b>A</b>, with the Codex rewrite for the prompt. It keeps <code>fold</code> pure, gives running flows a stable workflow, and makes the <code>design</code> alias exact. The price is one optional field on the <code>started</code> event.</p>
+  <p>Please choose A or B (or a mix), and say whether the Codex <code>/</code> to <code>$</code> rewrite is right.</p>
+</section>
+</main>
