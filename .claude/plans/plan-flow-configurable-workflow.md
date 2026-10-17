@@ -325,7 +325,7 @@ The first prompt:
 - [x] `[worker] prompt: Option`, `Agent.prompt: Option`, `resolve_prompts` (own, then [worker], then the built-in default of its name); `agent_argv` and the master's bare start; config tests for each step of the order
 - [x] README: `[[phases]]`, `[worker] prompt`, phase names in `flow report`, theme `[phase]` by name, JSON v3; HANDOVER and CLAUDE.md where they name the phases or `PhaseMap`
 - [x] End to end: a scratch `FLOW_HOME` and `FLOW_CONFIG` with a 3-phase workflow; `flow new`, `flow report phase`, `flow status` and `--json` show its steps; an old log with `design` reads as plan; `flow ui` on the scratch store shows the steps colored by a theme `[phase]` entry; `flow start` builds the worker's argv with the built-in prompts (claude `/`, codex `$`), then with `[worker] prompt` set for both as written
-- [ ] Drop the `design` -> `plan` compatibility (review open items 1 and 2; nothing is released): remove `Folding.legacy` and `legacy_name`, the theme_file alias; fold and theme tests; README and CLAUDE.md
+- [x] Drop the `design` -> `plan` compatibility (review open items 1 and 2; nothing is released): remove `Folding.legacy` and `legacy_name`, the theme_file alias; fold and theme tests; README and CLAUDE.md
 - [ ] theme_file: `[phase]` takes any valid phase name, also one named like a `[ui]`/`[state]` key (review open item 3); theme_file test with a phase named `done`
 
 ## Review

@@ -823,20 +823,25 @@ fn a_flow_walks_the_phases_it_started_with() {
 }
 
 #[test]
-fn reads_design_as_plan_only_in_a_log_without_its_phases() {
-    let old = view(&[started(0), phase(MIN, Phase::of("design"))], 2 * MIN);
-    let named = view(
+fn a_log_without_its_phases_walks_the_builtin_four() {
+    let flow = view(
         &[
-            started_with(0, &["design", "plan"]),
+            started(0),
             phase(MIN, Phase::of("design")),
+            phase(2 * MIN, Phase::of("implement")),
         ],
-        2 * MIN,
+        3 * MIN,
     );
 
-    assert_eq!(old.phase, Some(Phase::of("plan")));
-    assert_eq!(texts(&old), ["started", "phase: plan"]);
-    assert_eq!(old.steps[0].status, StepStatus::Current);
-    assert_eq!(named.phase, Some(Phase::of("design")), "its own phase");
+    assert_eq!(flow.phase, Some(Phase::of("implement")));
+    assert_eq!(texts(&flow), ["started", "phase: implement"]);
+    assert_eq!(
+        flow.steps
+            .iter()
+            .map(|step| step.phase.name())
+            .collect::<Vec<_>>(),
+        ["plan", "implement", "review", "merge-request"]
+    );
 }
 
 #[test]

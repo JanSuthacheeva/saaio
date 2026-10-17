@@ -127,7 +127,7 @@ Keys, each only in its own table: `[ui]` background, panel, selection, rule, tex
 faint, accent; `[state]` working, waiting, blocked, done, ended; `[phase]` any phase name of your
 [workflow](#the-workflow). A phase without a color takes the theme's color for its place: the 1st to
 4th phase get the colors of plan, implement, review and merge-request, so a workflow of your own is
-colored without a theme file. `design` in an older theme file reads as `plan`. A `[phase]` color can
+colored without a theme file. A `[phase]` color can
 name a `[ui]` or `[state]` key; no key can name a phase's color. `phase_colors` decides where a working flow shows its phase's color: `off`
 nowhere, `steps` (the default) in the current step dot, `full` also in the spinner, label, rail and
 title row. Done steps are plain text at every level. A flow works in `working` until it reaches its first phase; a flow that waits, is blocked
@@ -314,7 +314,7 @@ skills = ["finishing-a-development-branch"]
 A flow keeps the phases it started with: `flow start` and `flow new` record them in the flow's log,
 so editing the workflow changes new flows only, and a skill of a phase a running flow does not have
 reports nothing. An opened merge request finishes the flow in its last phase, whatever its name.
-Flows started before workflows were configurable show the built-in phases, their `design` as `plan`.
+Flows started before workflows were configurable show the built-in phases.
 The old `[phases]` table of skill names is refused with a message naming `[[phases]]`.
 
 ### The master and its workers
@@ -532,7 +532,7 @@ Timeline tones: `neutral`, `progress`, `attention`, `problem`, `success`. `answe
 turn's whole closing message, as the worker's harness reported it. A plain session (`mode:
 plain`) has no steps, and its workspace is its folder, with `branch` and `slot` null. Version 2
 made them nullable. Version 3: `phase` and `steps[].phase` are the names of the flow's
-[workflow](#the-workflow), the phases it started with; a flow from before reads `design` as `plan`.
+[workflow](#the-workflow), the phases it started with.
 
 ## Where the logs live
 

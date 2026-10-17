@@ -125,8 +125,6 @@ pub fn master_state(kinds: &[EventKind]) -> Option<State> {
 struct Folding {
     view: FlowView,
     phases: Vec<Phase>,
-    /// No list recorded: "design" reads as "plan".
-    legacy: bool,
     /// By position in phases.
     durations: Vec<Option<u64>>,
     entered: Vec<bool>,
@@ -169,11 +167,9 @@ impl Folding {
             answer: None,
             session: None,
         };
-        let legacy = phases.is_none();
         let phases = phases.map_or_else(|| Workflow::builtin().phases(), <[Phase]>::to_vec);
         Folding {
             view,
-            legacy,
             durations: vec![None; phases.len()],
             entered: vec![false; phases.len()],
             phases,
@@ -321,14 +317,9 @@ impl Folding {
         }
     }
 
-    /// Where `phase` stands in the flow's phases (after the legacy rename); None when it has none.
+    /// Where `phase` stands in the flow's phases; None when it has none.
     fn position(&self, phase: &Phase) -> Option<usize> {
-        let phase = if self.legacy {
-            legacy_name(phase)
-        } else {
-            phase.clone()
-        };
-        self.phases.iter().position(|known| *known == phase)
+        self.phases.iter().position(|known| known == phase)
     }
 
     fn enter(&mut self, position: usize, at: u64) {
@@ -399,14 +390,6 @@ impl Folding {
             })
             .collect();
         self.view
-    }
-}
-
-/// "design" -> "plan", for logs written before phases were configurable.
-fn legacy_name(phase: &Phase) -> Phase {
-    match phase.name() {
-        "design" => "plan".parse().expect("a built-in phase name is valid"),
-        _ => phase.clone(),
     }
 }
 

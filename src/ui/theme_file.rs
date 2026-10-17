@@ -170,7 +170,7 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
 }
 
 /// The colors of one section; a key of another section, or of none, is an error on its line. [phase]
-/// takes any phase name, "design" as "plan".
+/// takes any phase name.
 fn colors(path: &Path, text: &str, section: Section, table: DeTable) -> Result<Vec<Entry>> {
     let mut keys: Vec<_> = table.into_iter().collect();
     keys.sort_by_key(|(key, _)| key.span().start);
@@ -181,7 +181,6 @@ fn colors(path: &Path, text: &str, section: Section, table: DeTable) -> Result<V
         let key = match PaletteKey::named(&name) {
             Some(key) if key.section() == section => ColorKey::Fixed(key),
             None if section == Section::Phase => {
-                let name = if name == "design" { "plan" } else { &name };
                 let phase = name
                     .parse::<Phase>()
                     .map_err(|_| anyhow!("{name} is no phase name"))
@@ -487,17 +486,6 @@ mod tests {
         assert_eq!(palette.phases.names["build"], Color::Indexed(4));
         assert!(!palette.phases.names.contains_key("plan"));
         assert_eq!(palette.phases.positions, Palette::FLOW.phases.positions);
-    }
-
-    #[test]
-    fn reads_design_in_an_old_theme_file_as_plan() {
-        let dir = TempDir::new().unwrap();
-        write(&dir, "theme.toml", "[phase]\ndesign = \"#b392f0\"\n");
-
-        let palette = theme(&dir).palette;
-
-        assert_eq!(palette.phases.names["plan"], hex(0xb392f0));
-        assert!(!palette.phases.names.contains_key("design"));
     }
 
     #[test]
