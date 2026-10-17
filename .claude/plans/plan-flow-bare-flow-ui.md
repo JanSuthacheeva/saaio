@@ -141,3 +141,30 @@ The first three tasks are one commit: `is_person` is dead code, which clippy ref
 - [x] Add PTY tests in `tests/cli.rs`: bare `flow` prints the overview with `FLOW_ID`, `CLAUDECODE` or `CODEX_THREAD_ID`, and opens flow ui (fake master agent, scratch `FLOW_HOME`) without them
 - [x] Rebase on main, then update the bare `flow` lines in `docs/cli.md`, `README.md` and `docs/ui.md`
 - [x] E2E check: in a real terminal with a scratch `FLOW_HOME`, bare `flow` opens flow ui and detaches; `flow | cat`, `flow < /dev/null` and bare `flow` from Claude Code's shell print the overview
+
+## Review
+
+Reviewed in isolation against this plan at ff4d8a4. Every changed line read; the two PTY tests run
+six times in a row, green each time, no server left running.
+
+**Fixed** - nothing: no finding could be proven.
+
+**Open**
+- `FLOW_MASTER` counts only as `1` (how `Env::flow_master` is read everywhere), while the rule
+  here and `docs/cli.md` say "set". The master pane always sets `1`, so no real run differs.
+  Recommendation: leave the code, and if the docs should be exact, write `FLOW_MASTER=1` there.
+- The agent-facing `help[]` lines ("Run `flow` for all flows") now open flow ui when a person
+  types them in a terminal. Intended by the plan's assumptions; worth one look before release.
+- README says "for an agent", `docs/cli.md` "for an agent or a script": wording only.
+
+**Where to look**
+1. `src/cli/env.rs` `is_person` and `src/main.rs` `env()`: the whole rule, four markers and the
+   two terminal checks.
+2. `src/cli.rs` `run`, the `None` arms: bare `flow` takes `flow ui`'s path, refusal included.
+3. `tests/cli.rs` `Terminal`: PTY spawn, env cleanup (`FLOW_*`, `CLAUDECODE`, `CODEX_THREAD_ID`)
+   and the drop order that stops the server.
+
+Routine, skim: the docs and README lines, `ui::Args: Default`, the `after_help` text.
+
+**Checks** - tests, clippy (`--all-targets -D warnings`) and `cargo fmt --check` passed at ff4d8a4;
+no code changed since.
