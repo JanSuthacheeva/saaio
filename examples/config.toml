@@ -3,9 +3,9 @@
 # flow wrote this file on its first run. Every setting is commented out and shows its default.
 # Remove the # in front of a setting to change it. flow never overwrites this file once you edit it.
 #
-# Commands read it each time they run. flow ui reads it when it starts, so a change to [agents],
-# [master] or [ui] applies after flow ui --stop and the next flow ui. A key flow does not know is an
-# error that names the file and the key.
+# Commands read it each time they run. flow ui and its server read it when they start, so a change
+# to [agents], a prompt, [master] or [ui] applies after flow ui --stop and the next flow ui. A key
+# flow does not know is an error that names the file and the key.
 # All of it, explained: https://github.com/JanSuthacheeva/flow/blob/main/docs/configuration.md
 
 #[worker]

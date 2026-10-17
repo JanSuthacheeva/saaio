@@ -5,7 +5,7 @@ except the three in the config folder.
 
 ## The config folder
 
-`~/.config/flow`, or the folder of `$FLOW_CONFIG`, or `$XDG_CONFIG_HOME/flow`.
+The folder of `$FLOW_CONFIG` when it is set, else `$XDG_CONFIG_HOME/flow`, else `~/.config/flow`.
 
 | File | Holds |
 | --- | --- |
@@ -27,7 +27,7 @@ Where flow keeps its flows: `$FLOW_HOME`, else `$XDG_STATE_HOME/flow`, else
 | `flows/<id>.jsonl` | one flow's events, one JSON line each, only ever appended to |
 | `flows/<id>.alive` | its modification time is the flow's last heartbeat |
 | `waits/` | what the sessions' wake-ups need: each session's waiter, which messages a worker was given, whether a Codex session is busy, what the master last saw, the master's turn and its Codex session id |
-| `server.sock` | the socket flow ui talks to the server through; only you can open it |
+| `server.sock` | the socket flow ui talks to the server through; only you can open it. When its path would be 100 bytes or longer, it is `/tmp/flow-<uid>/<hash>.sock` instead, with the log beside it as `<hash>.log` |
 | `server.log` | what the server did and what went wrong; past 1 MiB it moves to `server.log.1` |
 | `master.json` | the master's session id and the folder it runs in, so it resumes after a restart |
 

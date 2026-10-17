@@ -169,6 +169,6 @@ and why, until the file reads again:
 theme: ~/.config/flow/theme.toml:3: accent belongs in [ui], not [state]
 ```
 
-Other messages you may see: `#d9825 is no #rrggbb color`, `300 is no ANSI index`, `clay is no
-color and no key`, `[ui] has no key acent`, `Build is no phase name`, `themes/gone.toml does not
-exist`, `phase_colors is off, steps or full`, `accent, muted name each other`.
+Other messages you may see: `#d9825 is no #rrggbb color`, `300 is no ANSI index (0-255)`, `clay is no
+color and no key`, `[ui] has no key acent`, `Build is no phase name`, `~/.config/flow/themes/gone.toml
+does not exist`, `phase_colors is off, steps or full`, `accent, muted name each other`.

@@ -31,8 +31,10 @@ master's instructions (see [flows.md](flows.md#the-master)).
 ## When a change applies
 
 Commands read the file each time they run, so `flow start` picks up a new `[worker] agent` or
-workflow at once. flow ui and its server read it when they start: a change to `[agents]`,
-`[master]` or `[ui]` applies after `flow ui --stop` and the next `flow ui`.
+workflow at once. flow ui and its server read it when they start: a change to `[agents]`, to
+`[worker] prompt` or an agent's `prompt` (the server fills it in when it opens a worker), to
+`[master]` or `[ui]`, and the new-flow dialog's default agent, apply after `flow ui --stop` and the
+next `flow ui`.
 
 ## [worker]
 
@@ -219,7 +221,7 @@ A broken `config.toml` stops `flow start`, `flow new` and `flow ui` with an erro
 file, the line and the key:
 
 ```
-error: "~/.config/flow/config.toml is not valid: TOML parse error at line 2, column 1\n  |\n2 | agnet = \"x\"\n  | ^^^^^\nunknown field `agnet`, expected `agent` or `prompt`"
+error: "/Users/jan/.config/flow/config.toml is not valid: TOML parse error at line 2, column 1\n  |\n2 | agnet = \"x\"\n  | ^^^^^\nunknown field `agnet`, expected `agent` or `prompt`"
 ```
 
 Workers that already run keep reporting with the built-in settings until the file is fixed.
