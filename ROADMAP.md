@@ -11,18 +11,18 @@ Nothing in progress.
 | Item | Today | Planned |
 | --- | --- | --- |
 | More agents | Claude Code and Codex are followed through their hooks | other harnesses followed the same way |
-| Desktop notifications | a waiting flow shows only in the sidebar and to the master | flow ui has the terminal notify when a flow starts waiting or is blocked out of view. Switch in `config.toml`. |
+| Desktop notifications | a waiting flow shows only in the sidebar and to the master | saaio ui has the terminal notify when a flow starts waiting or is blocked out of view. Switch in `config.toml`. |
 | Every subagent in the sidebar | a worker with several background subagents looks merely working. Only the first shows, once its turn ends. | the sidebar counts every running subagent, the board lists their tasks |
-| Working across repositories | the new-flow dialog starts flows in the repository of the session in view | pick the repository in the dialog, sidebar and board show each flow's repository, `flow start --repo <path>` |
+| Working across repositories | the new-flow dialog starts flows in the repository of the session in view | pick the repository in the dialog, sidebar and board show each flow's repository, `saaio start --repo <path>` |
 | Codex phases from the skill it starts | a Codex worker that reads a later skill's `SKILL.md` early seems to start that phase early | the phase follows the skill actually started |
 | Codex commits without asking | the sandbox cannot write to the main repository's `.git`, so every commit asks permission | commits in the worktree without a prompt |
-| First prompt read at flow start | a `[worker] prompt` change needs a new `flow ui`, while `[worker] agent` applies at once | the prompt applies at the next `flow start` |
-| `flow example config`, `flow example theme` | the examples exist only as written on the first run | print every setting with its default |
+| First prompt read at saaio start | a `[worker] prompt` change needs a new `saaio ui`, while `[worker] agent` applies at once | the prompt applies at the next `saaio start` |
+| `saaio example config`, `saaio example theme` | the examples exist only as written on the first run | print every setting with its default |
 
 ## Planned future
 
 | Item | Today | Planned |
 | --- | --- | --- |
-| The master asks a worker | no command for it | `flow ask` puts the master's question to a worker and returns the answer, without waiting on the user |
+| The master asks a worker | no command for it | `saaio ask` puts the master's question to a worker and returns the answer, without waiting on the user |
 | An interrupted Claude Code turn shown as idle | Claude Code runs no hook on Esc. The spinner stays until the next prompt. | the interrupted turn shows as idle |
-| Task counts and an end event for Codex | a Codex flow shows no task counts and is ended from flow ui or with `flow remove` | both, as for Claude Code |
+| Task counts and an end event for Codex | a Codex flow shows no task counts and is ended from saaio ui or with `saaio remove` | both, as for Claude Code |

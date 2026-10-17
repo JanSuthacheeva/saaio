@@ -1,5 +1,7 @@
 # Handover: the flows system
 
+The tool was renamed from flow to saaio on 2026-10-17; this record keeps the name it was written with.
+
 Written 2026-10-14 at the end of the session that designed the system and built `flow`
 core. Everything needed to continue is here; the conversation itself is not.
 

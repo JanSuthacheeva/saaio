@@ -1,14 +1,14 @@
 # Flows, workers and the master
 
 ```sh
-flow start "SHOP-217 add CSV export"
-flow status shop-217
+saaio start "SHOP-217 add CSV export"
+saaio status shop-217
 ```
 
 | Term | Definition |
 | --- | --- |
 | flow | one feature, from request to open merge request, with its own git worktree and branch |
-| worker | the agent session flow ui runs in a flow's worktree |
+| worker | the agent session saaio ui runs in a flow's worktree |
 | master | the agent session that starts flows, answers workers and reports to you |
 | plain session | an agent in any folder, without a flow |
 
@@ -62,8 +62,8 @@ timeline.
 | From | How |
 | --- | --- |
 | the master | "start a flow for SHOP-217 add CSV export" |
-| flow ui | `C-space n` ([ui.md](ui.md#starting-a-flow)) |
-| the shell, in the repository | `flow start "SHOP-217 add CSV export"` ([cli.md](cli.md#flow-start)) |
+| saaio ui | `C-space n` ([ui.md](ui.md#starting-a-flow)) |
+| the shell, in the repository | `saaio start "SHOP-217 add CSV export"` ([cli.md](cli.md#saaio-start)) |
 
 All three run the same steps: name the flow, create its worktree and branch, claim a slot, run the
 repository's setup script, open the worker.
@@ -71,7 +71,7 @@ repository's setup script, open the worker.
 | Worker gets | Content |
 | --- | --- |
 | first prompt | default `/ship-feature SHOP-217 add CSV export` (Claude Code), `$ship-feature ...` (Codex) |
-| system prompt from flow | it runs as a worker of flow. Messages from the flow master are answers to act on. |
+| system prompt from saaio | it runs as a worker of saaio. Messages from the saaio master are answers to act on. |
 
 ## Guided and auto
 
@@ -89,11 +89,11 @@ The mode decides who answers a worker's question.
 
 ## The master
 
-- The big pane when flow ui opens, row `0` in the sidebar.
+- The big pane when saaio ui opens, row `0` in the sidebar.
 - Starts flows, reads their state, answers workers, reports what needs you. Does not do the workers'
   work.
-- Runs in the folder `flow ui` was started in.
-- System prompt includes `master.md` (next to `config.toml`). flow writes the default on the first
+- Runs in the folder `saaio ui` was started in.
+- System prompt includes `master.md` (next to `config.toml`). saaio writes the default on the first
   run and updates it with new versions until it is edited. Edits are never overwritten.
 - Claude Code unless `[master] agent` names another agent ([configuration.md](configuration.md#master)).
 
@@ -102,12 +102,12 @@ The mode decides who answers a worker's question.
 | Trigger | Delivery |
 | --- | --- |
 | a flow of its project becomes `waiting`, `blocked`, `idle`, `done` or `not-responding` | the master is woken. Flows that stop within two seconds arrive as one list. |
-| `[master] wake = false` | no wake-ups. The master learns only by running `flow status`. |
+| `[master] wake = false` | no wake-ups. The master learns only by running `saaio status`. |
 
 ### Answering
 
 ```sh
-flow send shop-221 "Count them against the refund date."
+saaio send shop-221 "Count them against the refund date."
 ```
 
 flow adds `master: <text>` to the flow's timeline and wakes the worker with it, or delivers it when
@@ -115,21 +115,21 @@ the worker's session runs again.
 
 | Harness | How a session is woken |
 | --- | --- |
-| Claude Code | `flow wait` runs in the background after each turn, sleeps until there is news, then wakes the session |
+| Claude Code | `saaio wait` runs in the background after each turn, sleeps until there is news, then wakes the session |
 | Codex, busy | news arrives when the turn ends |
 | Codex, idle | flow's server types the news in as one paste, after ten seconds without typing in that pane. Never before the session's first turn. |
 
-`flow status <name> --full` shows a worker's whole last answer.
+`saaio status <name> --full` shows a worker's whole last answer.
 
 ### Typing into a worker
 
 ```sh
-flow send --type shop-221 /compact
-flow send --type shop-221 "continue shipping"
+saaio send --type shop-221 /compact
+saaio send --type shop-221 "continue shipping"
 ```
 
 flow's server types each line and Enter into the worker's pane, as if the user typed it there, so a
-slash command or a skill runs. A message from `flow send` reaches the model as words, so `/compact`
+slash command or a skill runs. A message from `saaio send` reaches the model as words, so `/compact`
 sent that way does not compact. The lines are typed in order, each once the worker is idle again.
 The master uses it when the user asks to compact or continue a worker from their phone, away from
 the pane. Details in [cli.md](cli.md#--type).
@@ -137,7 +137,7 @@ the pane. Details in [cli.md](cli.md#--type).
 ## Plain sessions
 
 ```sh
-flow start --plain ~/projects/scratch
+saaio start --plain ~/projects/scratch
 ```
 
 Or mode `plain` in the new-flow dialog.
@@ -147,17 +147,17 @@ Or mode `plain` in the new-flow dialog.
 | a row in the sidebar | a flow, worktree, branch, slot |
 | resume after a restart | a first prompt or worker prompt |
 | state from its hooks | wake-ups for the master |
-| | `flow send` (refused) |
+| | `saaio send` (refused) |
 
 - The folder does not have to be a repository.
-- `flow remove` forgets the session and leaves the folder untouched.
+- `saaio remove` forgets the session and leaves the folder untouched.
 
 ## How a worker reports
 
 - Through the harness's own hooks. The agent and its skills take no part.
-- flow ui adds the hooks to the command line of an agent with an `adapter`. They run next to your
+- saaio ui adds the hooks to the command line of an agent with an `adapter`. They run next to your
   own hooks. Nothing is installed.
-- Each hook runs `flow hook`, which records only events that change the flow.
+- Each hook runs `saaio hook`, which records only events that change the flow.
 
 ### Claude Code
 
@@ -193,22 +193,22 @@ Or mode `plain` in the new-flow dialog.
   flow's hooks change.
 - A repository trusted in Codex covers its flow worktrees.
 - No plan-progress tool: no task counts.
-- No `/exit` event: end the flow from flow ui or with `flow remove`.
+- No `/exit` event: end the flow from saaio ui or with `saaio remove`.
 
 ### Other agents and subagents
 
 - A subagent's events are ignored, except a phase skill it runs (a review in a fresh agent).
-- An agent without an adapter reports nothing. flow ui shows only whether it runs.
-- Scripts and other tools report with `flow report` ([cli.md](cli.md#flow-report)).
+- An agent without an adapter reports nothing. saaio ui shows only whether it runs.
+- Scripts and other tools report with `saaio report` ([cli.md](cli.md#saaio-report)).
 
 ## Ending a flow
 
 | Action | Effect |
 | --- | --- |
 | merge request opened | the flow is `done`. It stays in the sidebar until cleared. |
-| `flow clear` | forgets every finished flow and removes its worktree. Keeps a worktree with uncommitted work. |
+| `saaio clear` | forgets every finished flow and removes its worktree. Keeps a worktree with uncommitted work. |
 | `x` on the board | cleans up one finished flow |
-| `flow remove <name>` | any state: closes the session, runs the teardown script, removes worktree and branch, forgets the flow. Refuses uncommitted work and commits on no other branch, unless `--force` or `--delete-unmerged`. |
-| `x` in an ended worker's pane | same as `flow remove`, asks before discarding anything |
+| `saaio remove <name>` | any state: closes the session, runs the teardown script, removes worktree and branch, forgets the flow. Refuses uncommitted work and commits on no other branch, unless `--force` or `--delete-unmerged`. |
+| `x` in an ended worker's pane | same as `saaio remove`, asks before discarding anything |
 
-Details: [cli.md](cli.md#flow-remove).
+Details: [cli.md](cli.md#saaio-remove).

@@ -1,32 +1,32 @@
 # Setting up a repository
 
-None of this is required. `flow start` works in any git repository. These additions let several
+None of this is required. `saaio start` works in any git repository. These additions let several
 workers run side by side without collisions.
 
 | File | Purpose |
 | --- | --- |
-| `.flow/config.toml` | branch name convention |
-| `.flow/setup` | runs in each new worktree |
-| `.flow/teardown` | runs when a worktree is removed |
+| `.saaio/config.toml` | branch name convention |
+| `.saaio/setup` | runs in each new worktree |
+| `.saaio/teardown` | runs when a worktree is removed |
 
 - [Worktrees](#worktrees)
 - [Branch names](#branch-names)
 - [Setup and teardown](#setup-and-teardown)
 - [Slots and ports](#slots-and-ports)
 - [A Docker Compose example](#a-docker-compose-example)
-- [The setup-flow skill](#the-setup-flow-skill)
+- [The setup-saaio skill](#the-setup-saaio-skill)
 
 ## Worktrees
 
 - Each flow gets a [git worktree](https://git-scm.com/docs/git-worktree) in
-  `.flow/worktrees/<name>`, on a new branch from the current checkout's `HEAD`.
+  `.saaio/worktrees/<name>`, on a new branch from the current checkout's `HEAD`.
 - The worker runs there. The main checkout is untouched.
-- On first use flow adds `.flow/worktrees/` to `.git/info/exclude`.
-- `flow remove` and `flow clear` remove worktrees ([cli.md](cli.md#flow-remove)).
+- On first use saaio adds `.saaio/worktrees/` to `.git/info/exclude`.
+- `saaio remove` and `saaio clear` remove worktrees ([cli.md](cli.md#saaio-remove)).
 
 ## Branch names
 
-Default: `flow/<name>`. A committed `.flow/config.toml` sets a convention:
+Default: `flow/<name>`. A committed `.saaio/config.toml` sets a convention:
 
 ```toml
 [branch]
@@ -35,12 +35,12 @@ types = ["feature", "bugfix", "hotfix", "chore"]
 ```
 
 ```
-$ flow start --type bugfix "SHOP-230 fix totals on refunds"
+$ saaio start --type bugfix "SHOP-230 fix totals on refunds"
 flow: shop-230
 ...
 branch: bugfix/SHOP-230-fix-totals-on-refunds
 
-$ flow start "add a dark mode to the admin panel please"
+$ saaio start "add a dark mode to the admin panel please"
 flow: add-a-dark-mode
 ...
 branch: feature/add-a-dark-mode-to
@@ -53,7 +53,7 @@ branch: feature/add-a-dark-mode-to
 
 | Placeholder | Value |
 | --- | --- |
-| `{type}` | `--type` of `flow start`, the type picked in the new-flow dialog, or the first in `types` |
+| `{type}` | `--type` of `saaio start`, the type picked in the new-flow dialog, or the first in `types` |
 | `{ticket}` | the ticket key at the start of the request, as written (`SHOP-230`) |
 | `{slug}` | up to five words of the request after the ticket key, lowercased, joined by `-` |
 | `{name}` | the flow's name |
@@ -66,40 +66,40 @@ branch: feature/add-a-dark-mode-to
 An unlisted type is refused:
 
 ```
-$ flow start --type nope "x"
+$ saaio start --type nope "x"
 error: "no branch type nope; this repo has feature, bugfix, hotfix, chore"
-help[1]: "Name the types in .flow/config.toml: [branch] types = [\"feature\", \"bugfix\"]"
+help[1]: "Name the types in .saaio/config.toml: [branch] types = [\"feature\", \"bugfix\"]"
 ```
 
 ## Setup and teardown
 
 | Script | Runs |
 | --- | --- |
-| `.flow/setup` | after `flow start` creates the worktree, before the worker starts |
-| `.flow/teardown` | when `flow remove` or `flow clear` removes the worktree |
+| `.saaio/setup` | after `saaio start` creates the worktree, before the worker starts |
+| `.saaio/teardown` | when `saaio remove` or `saaio clear` removes the worktree |
 
 Both must be executable. They run from the main checkout with the worktree as working directory.
 
 | Variable | Value |
 | --- | --- |
-| `FLOW_SLOT` | the flow's slot, 1 to 20 |
-| `FLOW_WORKTREE` | the worktree's path |
-| `FLOW_REPO` | the main checkout's path |
-| `FLOW_NAME` | the flow's name, such as `shop-217` |
-| `FLOW_ID` | the flow's id |
+| `SAAIO_SLOT` | the flow's slot, 1 to 20 |
+| `SAAIO_WORKTREE` | the worktree's path |
+| `SAAIO_REPO` | the main checkout's path |
+| `SAAIO_FLOW_NAME` | the flow's name, such as `shop-217` |
+| `SAAIO_FLOW_ID` | the flow's id |
 
 The worker's session gets the same variables.
 
 | Case | Result |
 | --- | --- |
-| setup runs | `flow start` waits. Output is not shown. |
+| setup runs | `saaio start` waits. Output is not shown. |
 | setup exits non-zero | the flow is blocked with the setup's last error line. The worker still opens. |
 | teardown fails | the removal goes on |
 | a script changes | applies at once (run from the main checkout) |
 | `compose.yaml` or `.gitignore` changes | reach new worktrees only once committed (worktrees are made from the last commit) |
 
 ```
-$ flow start "SHOP-240 broken setup"
+$ saaio start "SHOP-240 broken setup"
 flow: shop-240
 ...
 setup: "failed: composer: lock file out of date"
@@ -108,15 +108,15 @@ setup: "failed: composer: lock file out of date"
 ## Slots and ports
 
 - Every unfinished flow holds a slot, 1 to 20, unique across all projects.
-- `flow start` claims the lowest free slot before the setup runs.
+- `saaio start` claims the lowest free slot before the setup runs.
 - A done, ended or removed flow releases its slot.
-- Use it for ports: slot 3 serves on `$((8000 + FLOW_SLOT))`, port 8003.
+- Use it for ports: slot 3 serves on `$((8000 + SAAIO_SLOT))`, port 8003.
 
 All 20 in use:
 
 ```
 error: all 20 slots are in use
-help[2]: Run `flow status --all` to see which flows hold them,Run `flow clear` in projects with finished flows
+help[2]: Run `saaio status --all` to see which flows hold them,Run `saaio clear` in projects with finished flows
 ```
 
 ## A Docker Compose example
@@ -135,39 +135,39 @@ services:
 
 ```sh
 #!/bin/sh
-# .flow/setup
+# .saaio/setup
 set -e
-export HTTP_PORT=$((18080 + FLOW_SLOT)) DB_PORT=$((13306 + FLOW_SLOT))
+export HTTP_PORT=$((18080 + SAAIO_SLOT)) DB_PORT=$((13306 + SAAIO_SLOT))
 docker compose up -d --wait
 docker compose exec -T app php artisan migrate --seed --force
 ```
 
 ```sh
 #!/bin/sh
-# .flow/teardown
+# .saaio/teardown
 docker compose down -v --remove-orphans
 ```
 
-- `docker compose up` without flow uses the default ports.
+- `docker compose up` without saaio uses the default ports.
 - Compose names the project after its folder, so each worktree has its own stack.
   `docker compose exec` in a worktree reaches that worktree's stack.
 - Remove fixed `container_name` entries. They clash between worktrees.
 - Two repositories with same-named flows: set `COMPOSE_PROJECT_NAME` to the repository and flow
   name.
 
-## The setup-flow skill
+## The setup-saaio skill
 
-[setup-flow](https://github.com/JanSuthacheeva/agent-skills/tree/main/skills/setup-flow) writes
+[setup-saaio](https://github.com/JanSuthacheeva/agent-skills/tree/main/skills/setup-saaio) writes
 both scripts for a project.
 
 ```sh
-npx skills add JanSuthacheeva/agent-skills --skill setup-flow
+npx skills add JanSuthacheeva/agent-skills --skill setup-saaio
 ```
 
-Then ask the agent in the repository: "set up flow for this project".
+Then ask the agent in the repository: "set up saaio for this project".
 
 - Reads how the project runs: Docker Compose, Laravel Sail, npm or vite dev servers, `.env` files.
 - Plans a port per service and slot.
 - Makes the compose ports configurable.
-- Writes `.flow/setup` and `.flow/teardown` (`.env`, dependencies, migrations, ports).
+- Writes `.saaio/setup` and `.saaio/teardown` (`.env`, dependencies, migrations, ports).
 - Tests them in a scratch worktree.

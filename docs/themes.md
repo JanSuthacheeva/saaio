@@ -1,10 +1,10 @@
 # Themes
 
-File: `theme.toml`, next to `config.toml` (`~/.config/flow/theme.toml` by default). Default: the
+File: `theme.toml`, next to `config.toml` (`~/.config/saaio/theme.toml` by default). Default: the
 terminal's own colors.
 
 ```toml
-extends = "flow"
+extends = "saaio"
 nerd_font = true
 
 [ui]
@@ -18,7 +18,7 @@ merge-request = "#d08ad6"
 ```
 
 - A key left out keeps the color of the extended theme.
-- flow ui repaints within a second of saving `theme.toml` or a theme it extends.
+- saaio ui repaints within a second of saving `theme.toml` or a theme it extends.
 
 - [The file](#the-file)
 - [Colors](#colors)
@@ -32,7 +32,7 @@ merge-request = "#d08ad6"
 
 ## The file
 
-- flow ui writes it on its first run: every setting commented out at its default (the terminal
+- saaio ui writes it on its first run: every setting commented out at its default (the terminal
   theme). Same content: [examples/theme.toml](../examples/theme.toml).
 - Remove the `#` in front of a setting to set it.
 - An edited file is never overwritten.
@@ -52,7 +52,7 @@ A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase co
 
 | Key | Default | Effect |
 | --- | --- | --- |
-| `extends` | `"terminal"` | base theme: `"terminal"`, `"flow"`, `"flow-light"`, or a file name in `themes/` next to `theme.toml`, without `.toml` |
+| `extends` | `"terminal"` | base theme: `"terminal"`, `"saaio"`, `"saaio-light"`, or a file name in `themes/` next to `theme.toml`, without `.toml` |
 | `nerd_font` | `false` | `true`: flow's mark is a kiwi bird from [Nerd Font](https://www.nerdfonts.com) icons. `false`: a goose in flight, `▚▄▞`, in block characters. Both in the accent color. |
 | `phase_colors` | `"off"` | how much of a working flow takes its phase's color, see below |
 
@@ -69,7 +69,7 @@ A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase co
 
 ## [ui]
 
-| Key | Colors | `terminal` | `flow` | `flow-light` |
+| Key | Colors | `terminal` | `saaio` | `saaio-light` |
 | --- | --- | --- | --- | --- |
 | `background` | the ground everything is drawn on | `"default"` | `#141418` | `#f6f5f1` |
 | `panel` | the title row above the pane | `235` | `#1f1f26` | `#ecebe5` |
@@ -83,7 +83,7 @@ A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase co
 
 ## [state]
 
-| Key | Colors a flow that | `terminal` | `flow` | `flow-light` |
+| Key | Colors a flow that | `terminal` | `saaio` | `saaio-light` |
 | --- | --- | --- | --- | --- |
 | `working` | is at work | `4` | `#7aa7ff` | `#2f5fd0` |
 | `waiting` | needs you | `3` | `#e5b45a` | `#9a6a00` |
@@ -96,7 +96,7 @@ A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase co
 Keys: the phase names of your [workflow](configuration.md#phases-the-workflow). A phase without a
 color takes the color of its place:
 
-| Place | Built-in phase | `terminal` | `flow` | `flow-light` |
+| Place | Built-in phase | `terminal` | `saaio` | `saaio-light` |
 | --- | --- | --- | --- | --- |
 | 1st | `plan` | `141` | `#b392f0` | `#7a4fc9` |
 | 2nd | `implement` | `75` | `#7aa7ff` | `#2f5fd0` |
@@ -112,21 +112,21 @@ color takes the color of its place:
 | Theme | Colors |
 | --- | --- |
 | `terminal` (default) | the terminal's own colors, fixed shades for panel, selection, accent and phases |
-| `flow` | flow's dark colors |
-| `flow-light` | flow's light colors |
+| `saaio` | flow's dark colors |
+| `saaio-light` | flow's light colors |
 
 ## Themes of your own
 
-- Path: `~/.config/flow/themes/<name>.toml`. Named by `extends = "<name>"`.
+- Path: `~/.config/saaio/themes/<name>.toml`. Named by `extends = "<name>"`.
 - Same keys as `theme.toml`.
 - Can extend another theme, up to four files deep counting `theme.toml`.
 - Lets another tool write flow's colors.
 
 Example: a [Noctalia](https://github.com/noctalia-dev/noctalia-shell) template, rendered on every
-theme change. Save as `~/.config/noctalia/templates/flow.toml`:
+theme change. Save as `~/.config/noctalia/templates/saaio.toml`:
 
 ```toml
-# flow ui theme, written by Noctalia on every theme change.
+# saaio ui theme, written by Noctalia on every theme change.
 extends = "terminal"
 
 [ui]
@@ -147,9 +147,9 @@ working = "#7aa7ff"
 Add it to Noctalia's user templates:
 
 ```toml
-[theme.templates.user.flow]
-input_path = '~/.config/noctalia/templates/flow.toml'
-output_path = '~/.config/flow/themes/noctalia.toml'
+[theme.templates.user.saaio]
+input_path = '~/.config/noctalia/templates/saaio.toml'
+output_path = '~/.config/saaio/themes/noctalia.toml'
 ```
 
 Set `extends = "noctalia"` in `theme.toml`.
@@ -160,7 +160,7 @@ A broken theme keeps the last working colors. The title row shows the file, line
 the file reads again:
 
 ```
-theme: ~/.config/flow/theme.toml:3: accent belongs in [ui], not [state]
+theme: ~/.config/saaio/theme.toml:3: accent belongs in [ui], not [state]
 ```
 
 Other messages:
@@ -170,6 +170,6 @@ Other messages:
 - `clay is no color and no key`
 - `[ui] has no key acent`
 - `Build is no phase name`
-- `~/.config/flow/themes/gone.toml does not exist`
+- `~/.config/saaio/themes/gone.toml does not exist`
 - `phase_colors is off, steps or full`
 - `accent, muted name each other`

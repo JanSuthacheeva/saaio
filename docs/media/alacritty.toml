@@ -1,5 +1,5 @@
 [window]
-title = "flow-demo"
+title = "saaio-demo"
 dynamic_title = false
 decorations = "None"
 dimensions = { columns = 150, lines = 42 }

@@ -24,7 +24,7 @@ The product, binary and crate become `saaio`. The unit of work stays "a flow": `
 | agent text | "worker of flow", "message from the flow master:", `flow <cmd>` in help[] and errors | "worker of saaio", "message from the saaio master:", `saaio <cmd>` |
 | skill name in docs | setup-flow | setup-saaio |
 
-Stays: "a flow"/"flows" as the unit, `.claude/plans/` and `docs/design/` (history), `src/server/master-v*.md` (earlier defaults, byte for byte), docs/media file names.
+Stays: "a flow"/"flows" as the unit, `.claude/plans/`, `docs/design/` and `docs/HANDOVER.md` (history; HANDOVER says so in its first line), `src/server/master-v*.md` (earlier defaults, byte for byte), docs/media file names.
 
 ## Units
 
@@ -83,6 +83,6 @@ pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("SAAIO_COMM
 - [x] Rename the folders: state and config `saaio`, `/etc/saaio`, `.saaio/` per project, `/tmp/saaio-<uid>`, with their tests
 - [x] Rename the stored and shown names: `HOSTED = "saaio-ui"`, themes `saaio`/`saaio-light` and `Palette::SAAIO`, the UI wordmark; rewrite the goldens
 - [x] Rename what agents read: `WORKER_PROMPT`, "message from the saaio master:", every help[] line, error and the about text in src/cli, and master.md (its last default kept as master-v9.md)
-- [ ] Rename the docs: README, docs/*.md, HANDOVER, CLAUDE.md, ROADMAP, CHANGELOG, examples, media scripts
+- [x] Rename the docs: README, docs/*.md, HANDOVER, CLAUDE.md, ROADMAP, CHANGELOG, examples, media scripts
 - [ ] Grep for any product use of flow left; fmt, clippy, tests
 - [ ] End to end: install saaio into a scratch root and run `saaio`, `saaio new`, `saaio report`, `saaio status --json` and `saaio ui` on a scratch `SAAIO_HOME`

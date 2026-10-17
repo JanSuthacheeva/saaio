@@ -1,4 +1,4 @@
-# flow
+# saaio
 
 Orchestrate coding agents from one terminal. You talk to a master agent. It starts workers, answers
 what it can, and asks you the rest.
@@ -7,16 +7,16 @@ what it can, and asks you the rest.
 - Sidebar shows every worker's state: working, waiting, blocked, idle, done
 - Phases and skills are configurable, works without any skills
 - Claude Code and Codex, state comes from their hooks
-- flow CLI for agents (TOON) and scripts (--json)
+- saaio CLI for agents (TOON) and scripts (--json)
 
-![flow ui with Claude Code and Codex workers](docs/media/flow-ui.png)
+![saaio ui with Claude Code and Codex workers](docs/media/flow-ui.png)
 
 ## Install
 
 Requires macOS or Linux, git, Rust 1.95+, and Claude Code or Codex.
 
 ```sh
-cargo install --git https://github.com/JanSuthacheeva/flow --tag v0.1.0
+cargo install --git https://github.com/JanSuthacheeva/saaio --tag v0.1.0
 ```
 
 ## Workflow
@@ -27,10 +27,10 @@ A worker's first prompt is `/ship-feature <request>` (`$ship-feature` in Codex) 
 [agent-skills](https://github.com/JanSuthacheeva/agent-skills):
 
 ```sh
-npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature design-code implement-plan review-changes write-merge-request commit setup-flow
+npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature design-code implement-plan review-changes write-merge-request commit setup-saaio
 ```
 
-**Your own skills.** In `~/.config/flow/config.toml`:
+**Your own skills.** In `~/.config/saaio/config.toml`:
 
 ```toml
 [worker]
@@ -57,8 +57,8 @@ Details: [Use your own workflow](docs/configuration.md#use-your-own-workflow).
 ## Usage
 
 ```sh
-flow ui    # in a repository
-flow       # the same, typed in a terminal
+saaio ui    # in a repository
+saaio       # the same, typed in a terminal
 ```
 
 | Do | How |
@@ -66,19 +66,19 @@ flow       # the same, typed in a terminal
 | Start a flow | ask the master ("start a flow for SHOP-217 add CSV export"), or `C-space n` |
 | List every key | `C-space ?` |
 | Detach, sessions keep running | `C-space d` |
-| Stop flow | `C-space Q` or `flow ui --stop` |
+| Stop saaio | `C-space Q` or `saaio ui --stop` |
 
-![Moving through flow ui: the peek, a worker, the board](docs/media/flow-ui.gif)
+![Moving through saaio ui: the peek, a worker, the board](docs/media/flow-ui.gif)
 
-The first run writes `config.toml`, `theme.toml` and `master.md` to `~/.config/flow`, every setting
+The first run writes `config.toml`, `theme.toml` and `master.md` to `~/.config/saaio`, every setting
 commented out at its default.
 
 ## Features
 
 | Feature | What it does |
 | --- | --- |
-| Master | starts workers, answers them with `flow send`, is woken when one waits, is blocked or finishes. Guided flows bring every question to you. Auto flows let the master answer what the code and plan settle. |
-| Worktrees | one branch and worktree per flow. `.flow/setup` and `.flow/teardown` run in each. `FLOW_SLOT` (1 to 20, unique across all projects) gives each worktree its own ports. The `setup-flow` skill writes both scripts. |
+| Master | starts workers, answers them with `saaio send`, is woken when one waits, is blocked or finishes. Guided flows bring every question to you. Auto flows let the master answer what the code and plan settle. |
+| Worktrees | one branch and worktree per flow. `.saaio/setup` and `.saaio/teardown` run in each. `SAAIO_SLOT` (1 to 20, unique across all projects) gives each worktree its own ports. The `setup-saaio` skill writes both scripts. |
 | Hooks | Claude Code and Codex report through their own hooks, no screen reading. Any other command runs as a worker, shown as running or not. |
 | Plain sessions | an agent in any folder, no worktree, no flow |
 | Themes | terminal colors by default, built-in dark and light themes, live reload, themes written by other tools (Noctalia template in the docs) |
@@ -86,16 +86,16 @@ commented out at its default.
 
 ## How it works
 
-Every flow is an append-only event log. The agents' hooks run `flow hook`, which turns hook events
+Every flow is an append-only event log. The agents' hooks run `saaio hook`, which turns hook events
 into flow events (phase started, question waiting, merge request opened). flow folds the logs into
-each flow's state. `flow server` runs each agent in its own terminal. `flow ui` attaches to it.
+each flow's state. `saaio server` runs each agent in its own terminal. `saaio ui` attaches to it.
 
 ## CLI
 
 Every command answers in [TOON](https://toonformat.dev) with suggested next commands:
 
 ```
-$ flow status
+$ saaio status
 count: 3
 needs_you: 2
 flows[3]{name,state,phase,tasks,age}:
@@ -105,23 +105,23 @@ flows[3]{name,state,phase,tasks,age}:
 blockers[2]{name,blocker}:
   shop-221,Should refunds count against the original order's totals or the refund date's?
   shop-217,"Task 5: the migration needs a default value"
-help[2]: "Run `flow status <name>` for one flow's phases, timeline and decisions",Run `flow new --name <name> --request <text>` to track a new flow
+help[2]: "Run `saaio status <name>` for one flow's phases, timeline and decisions",Run `saaio new --name <name> --request <text>` to track a new flow
 ```
 
-`flow status --json` is the versioned contract for programs. The CLI and the JSON are the only
+`saaio status --json` is the versioned contract for programs. The CLI and the JSON are the only
 public interface. The logs are private.
 
 | Command | Does |
 | --- | --- |
-| `flow` | flow ui in your terminal; every flow and what needs you for an agent or a script |
-| `flow ui [--stop]` | the terminal UI |
-| `flow start <request>` | a worker in its own worktree |
-| `flow start --plain <folder>` | an agent in a folder |
-| `flow status [<flow>] [--json] [--all]` | where flows stand |
-| `flow send <flow> <text>` | tell a worker something |
-| `flow send --type <flow> <line>` | type a line such as `/compact` into a worker's pane |
-| `flow report <event>` | report into a flow by hand |
-| `flow remove <flow>`, `flow clear` | tear down and forget |
+| `saaio` | saaio ui in your terminal; every flow and what needs you for an agent or a script |
+| `saaio ui [--stop]` | the terminal UI |
+| `saaio start <request>` | a worker in its own worktree |
+| `saaio start --plain <folder>` | an agent in a folder |
+| `saaio status [<flow>] [--json] [--all]` | where flows stand |
+| `saaio send <flow> <text>` | tell a worker something |
+| `saaio send --type <flow> <line>` | type a line such as `/compact` into a worker's pane |
+| `saaio report <event>` | report into a flow by hand |
+| `saaio remove <flow>`, `saaio clear` | tear down and forget |
 
 All options: [docs/cli.md](docs/cli.md).
 
@@ -134,17 +134,17 @@ All options: [docs/cli.md](docs/cli.md).
 | [firstmate](https://github.com/kunchenguid/firstmate) | a lead agent (the first mate) starts crewmates in their own git worktrees. Shipped as a repository of instructions, skills and scripts you start your agent in. Crewmates run in tmux by default (also herdr, cmux, Zellij, Orca). No dashboard of its own. |
 | Claude Squad, ccmanager, amux, herdr | agents side by side in worktrees |
 
-flow tracks a feature, not a session: phases, task counts, decisions, blockers and a timeline per
+saaio tracks a feature, not a session: phases, task counts, decisions, blockers and a timeline per
 flow, from the agents' own hooks. The master is woken instead of polling. Each worktree gets its
 own setup, teardown and port slot.
 
-Not in flow: a diff viewer, a pull request button (the worker's skill opens the merge request and
-flow detects it), desktop notifications, phone access. macOS and Linux only.
+Not in saaio: a diff viewer, a pull request button (the worker's skill opens the merge request and
+saaio detects it), desktop notifications, phone access. macOS and Linux only.
 
 ## Documentation
 
 - [Install](docs/install.md)
-- [flow ui](docs/ui.md)
+- [saaio ui](docs/ui.md)
 - [Flows and the master](docs/flows.md)
 - [Configuration](docs/configuration.md)
 - [Themes](docs/themes.md)

@@ -1,15 +1,15 @@
 # flow's settings.
 #
-# flow wrote this file on its first run. Every setting is commented out at its default. Remove the
-# # in front of one to change it. Once you've edited this file, flow never overwrites it.
+# saaio wrote this file on its first run. Every setting is commented out at its default. Remove the
+# # in front of one to change it. Once you've edited this file, saaio never overwrites it.
 #
-# Commands read this file every time they run. flow ui and its server only read it when they start,
-# so after changing [agents], a prompt, [master] or [ui], run flow ui --stop and then flow ui. A key
-# flow doesn't know is an error that names the file and the key.
-# The whole file, explained: https://github.com/JanSuthacheeva/flow/blob/main/docs/configuration.md
+# Commands read this file every time they run. saaio ui and its server only read it when they start,
+# so after changing [agents], a prompt, [master] or [ui], run saaio ui --stop and then saaio ui. A key
+# saaio doesn't know is an error that names the file and the key.
+# The whole file, explained: https://github.com/JanSuthacheeva/saaio/blob/main/docs/configuration.md
 #
 # To use your own skills instead of the agent-skills set, set [worker] prompt and [[phases]]:
-# https://github.com/JanSuthacheeva/flow/blob/main/docs/configuration.md#use-your-own-workflow
+# https://github.com/JanSuthacheeva/saaio/blob/main/docs/configuration.md#use-your-own-workflow
 
 #[worker]
 # The agent a new flow runs when you don't pick one, by its name under [agents].
@@ -19,17 +19,17 @@
 # For example: prompt = "/my-feature {request}" ($my-feature in Codex)
 
 #[master]
-# Wakes the master when a worker stops. With false, it only finds out when it runs flow status.
+# Wakes the master when a worker stops. With false, it only finds out when it runs saaio status.
 #wake = true
-# The agent flow ui runs as the master. Unset, it's the built-in "master" agent below.
+# The agent saaio ui runs as the master. Unset, it's the built-in "master" agent below.
 # For example: agent = "codex"
 
 #[ui]
-# The key you press before every flow ui command: "C-space", or "C-a" to "C-z". C-c, C-d, C-h,
+# The key you press before every saaio ui command: "C-space", or "C-a" to "C-z". C-c, C-d, C-h,
 # C-i, C-j, C-m, C-q, C-s and C-z aren't allowed, because a pane needs them.
 #prefix = "C-space"
 
-# The workflow: one to four phases in order, each with the skills that start it. flow ui shows them
+# The workflow: one to four phases in order, each with the skills that start it. saaio ui shows them
 # as a flow's steps. Your own list replaces all four. A flow whose skills match no phase still
 # works. Its steps stay empty.
 #[[phases]]
@@ -48,15 +48,15 @@
 #name = "merge-request"
 #skills = ["write-merge-request"]
 
-# The agents a flow can run. Any agent you add here shows up in flow start --agent and the new-flow
+# The agents a flow can run. Any agent you add here shows up in saaio start --agent and the new-flow
 # dialog. An agent with a built-in name replaces the built-in one.
 #
 # command   the command line that starts a new session
 # prompt    the first prompt, filled into {prompt}
 # resume    the command line that continues a session after a restart. Without it, the agent
 #           starts once and isn't resumed
-# adapter   "claude-code" or "codex", the harness whose hooks tell flow what the agent is doing.
-#           Without it, flow ui only shows whether the process is running.
+# adapter   "claude-code" or "codex", the harness whose hooks tell saaio what the agent is doing.
+#           Without it, saaio ui only shows whether the process is running.
 #
 # Placeholders: {id} is flow's id for the session, {name} the flow's name, {request} what you asked
 # for, {prompt} the prompt above, {session} the session id the harness picked (Codex), and
@@ -74,7 +74,7 @@
 #resume = ["codex", "resume", "{session}"]
 #adapter = "codex"
 
-# The master is Claude Code without a first prompt. flow adds master.md to its instructions.
+# The master is Claude Code without a first prompt. saaio adds master.md to its instructions.
 #[agents.master]
 #command = ["claude", "-n", "{name}", "--session-id", "{id}"]
 #prompt = ""

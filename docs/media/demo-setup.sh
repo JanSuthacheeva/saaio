@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepares what docs/media/record.sh records: a throwaway sample repository, and a scratch flow
+# Prepares what docs/media/record.sh records: a throwaway sample repository, and a scratch saaio
 # store and config, so the recording never touches your own flows.
 #
 #   docs/media/demo-setup.sh <repo> <state>
@@ -104,14 +104,14 @@ skill demo-plan "Plans a change to the shop app. Use at the start of every reque
 "Read the code the request touches. Write PLAN.md: the change in two sentences, then three to five
 tasks as checkboxes. If the request asks you to check something with the user first, ask that one
 question and end your turn. Otherwise go on with the demo-build skill. Read each skill only when you
-start it: flow takes reading a skill as starting its phase."
+start it: saaio takes reading a skill as starting its phase."
 skill demo-build "Builds the change PLAN.md describes. Use after demo-plan." \
 "Work through PLAN.md one task at a time: write the test first, then the code, then run
 python3 -m unittest. Tick each task in PLAN.md when it passes. Then go on with the demo-review skill.
-Read each skill only when you start it: flow takes reading a skill as starting its phase."
+Read each skill only when you start it: saaio takes reading a skill as starting its phase."
 skill demo-review "Reviews the change before it ships. Use after demo-build." \
 "Read your whole diff against main as a reviewer would. Fix what is wrong, run python3 -m unittest
-again, then go on with the demo-ship skill. Read each skill only when you start it: flow takes
+again, then go on with the demo-ship skill. Read each skill only when you start it: saaio takes
 reading a skill as starting its phase."
 skill demo-ship "Ships the change. Use after demo-review." \
 "Commit the work with a short message. End your turn with one line saying the branch is ready."
@@ -164,18 +164,18 @@ name = "merge-request"
 skills = ["demo-ship"]
 EOF
 cat > "$state/config/theme.toml" <<'EOF'
-extends = "flow"
+extends = "saaio"
 EOF
 
 cat > "$state/env" <<EOF
-export FLOW_HOME="$state/store"
+export SAAIO_HOME="$state/store"
 export XDG_STATE_HOME="$state/xdg-state"
-export FLOW_CONFIG="$state/config/config.toml"
-unset FLOW_ID FLOW_NAME FLOW_SLOT FLOW_REPO FLOW_WORKTREE FLOW_MASTER
+export SAAIO_CONFIG="$state/config/config.toml"
+unset SAAIO_FLOW_ID SAAIO_FLOW_NAME SAAIO_SLOT SAAIO_REPO SAAIO_WORKTREE SAAIO_MASTER
 EOF
 
 cat <<EOF
-Ready. Open flow ui on the scratch store in an Alacritty window:
+Ready. Open saaio ui on the scratch store in an Alacritty window:
 
   docs/media/record.sh open $state $repo
 
