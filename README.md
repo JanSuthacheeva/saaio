@@ -172,12 +172,18 @@ macOS and Linux.
 
 ## Documentation
 
-Start with [install](docs/install.md) and [flow ui](docs/ui.md). Then there's
-[flows and the master](docs/flows.md), [configuration](docs/configuration.md),
-[themes](docs/themes.md), [repository setup](docs/repository.md),
-[the command line](docs/cli.md), [the JSON contract](docs/json.md), [files](docs/files.md) and
-[troubleshooting](docs/troubleshooting.md). [CHANGELOG.md](CHANGELOG.md) says what changed and
-[ROADMAP.md](ROADMAP.md) what comes next.
+- [Install](docs/install.md)
+- [flow ui](docs/ui.md)
+- [Flows and the master](docs/flows.md)
+- [Configuration](docs/configuration.md)
+- [Themes](docs/themes.md)
+- [Repository setup](docs/repository.md)
+- [Command line](docs/cli.md)
+- [JSON contract](docs/json.md)
+- [Files](docs/files.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Changelog](CHANGELOG.md)
+- [Roadmap](ROADMAP.md)
 
 ## License
 
