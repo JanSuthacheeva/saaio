@@ -71,7 +71,7 @@ mod tests {
             "aider".into(),
             Agent {
                 command: vec!["aider".into()],
-                prompt: String::new(),
+                prompt: None,
                 adapter: None,
                 resume: None,
             },

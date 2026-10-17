@@ -15,7 +15,10 @@ use crate::workflow::Workflow;
 #[serde(deny_unknown_fields)]
 pub struct Agent {
     pub command: Vec<String>,
-    pub prompt: String,
+    /// Its own first prompt; None takes [worker] prompt, else the built-in agent's of its name.
+    /// Some after load for every agent.
+    #[serde(default)]
+    pub prompt: Option<String>,
     /// The command that continues session {id}; an agent without one is started fresh by hand.
     #[serde(default)]
     pub resume: Option<Vec<String>>,
@@ -37,18 +40,22 @@ pub struct Config {
     pub ui: UiConfig,
 }
 
-/// [worker]: what a flow runs when flow start names no agent.
+/// [worker]: what a flow runs when flow start names no agent, and what it is asked first.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct WorkerConfig {
     /// The agent flow start runs, "claude" unless set.
     pub agent: String,
+    /// The first prompt of every agent the file gives none, the built-in ones included; unset,
+    /// each keeps its built-in default.
+    pub prompt: Option<String>,
 }
 
 impl Default for WorkerConfig {
     fn default() -> WorkerConfig {
         WorkerConfig {
             agent: "claude".to_string(),
+            prompt: None,
         }
     }
 }
@@ -128,11 +135,34 @@ impl Config {
         config
     }
 
-    /// The built-in agents under what the file set.
+    /// The built-in agents under what the file set, each with its first prompt.
     fn add_builtins(&mut self) {
-        let mut agents = builtin_agents();
+        let builtins = builtin_agents();
+        let mut agents: BTreeMap<String, Agent> = builtins
+            .iter()
+            .map(|(name, agent)| {
+                let bare = Agent {
+                    prompt: None,
+                    ..agent.clone()
+                };
+                (name.clone(), bare)
+            })
+            .collect();
         agents.append(&mut self.agents);
         self.agents = agents;
+        self.resolve_prompts(&builtins);
+    }
+
+    /// Each agent's first prompt: its own from the file, else [worker] prompt, else the built-in
+    /// agent's of its name, else none.
+    fn resolve_prompts(&mut self, builtins: &BTreeMap<String, Agent>) {
+        for (name, agent) in &mut self.agents {
+            if agent.prompt.is_some() {
+                continue;
+            }
+            let builtin = builtins.get(name).and_then(|agent| agent.prompt.clone());
+            agent.prompt = Some(self.worker.prompt.clone().or(builtin).unwrap_or_default());
+        }
     }
 
     /// The master's agent: [master] agent, else MASTER_AGENT, else the default agent; None when
@@ -194,19 +224,19 @@ pub const MASTER_AGENT: &str = "master";
 pub fn builtin_agents() -> BTreeMap<String, Agent> {
     let claude = Agent {
         command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
-        prompt: "/ship-feature {request}".to_string(),
+        prompt: Some("/ship-feature {request}".to_string()),
         adapter: Some(Adapter::ClaudeCode),
         resume: Some(strings(&["claude", "-n", "{name}", "--resume", "{id}"])),
     };
     let codex = Agent {
         command: strings(&["codex", "{prompt}"]),
-        prompt: "$ship-feature {request}".to_string(),
+        prompt: Some("$ship-feature {request}".to_string()),
         adapter: Some(Adapter::Codex),
         resume: Some(strings(&["codex", "resume", "{session}"])),
     };
     let master = Agent {
         command: strings(&["claude", "-n", "{name}", "--session-id", "{id}"]),
-        prompt: String::new(),
+        prompt: Some(String::new()),
         adapter: Some(Adapter::ClaudeCode),
         resume: Some(strings(&["claude", "-n", "{name}", "--resume", "{id}"])),
     };
@@ -236,14 +266,14 @@ mod tests {
             agent.command,
             vec!["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
         );
-        assert_eq!(agent.prompt, "/ship-feature {request}");
+        assert_eq!(agent.prompt.as_deref(), Some("/ship-feature {request}"));
         assert_eq!(
             agent.resume.as_deref(),
             Some(&["claude", "-n", "{name}", "--resume", "{id}"].map(String::from)[..])
         );
         let (_, codex) = config.agent(Some("codex")).unwrap();
         assert_eq!(codex.command, ["codex", "{prompt}"]);
-        assert_eq!(codex.prompt, "$ship-feature {request}");
+        assert_eq!(codex.prompt.as_deref(), Some("$ship-feature {request}"));
         assert_eq!(
             codex.resume.as_deref(),
             Some(&["codex", "resume", "{session}"].map(String::from)[..])
@@ -255,7 +285,7 @@ mod tests {
             master.command,
             ["claude", "-n", "{name}", "--session-id", "{id}"]
         );
-        assert_eq!(master.prompt, "");
+        assert_eq!(master.prompt.as_deref(), Some(""));
     }
 
     #[test]
@@ -366,9 +396,57 @@ prompt = "/design-code {request}"
         );
         assert_eq!(config.agent(Some("claude")).unwrap().1.resume, None);
         assert_eq!(
-            config.agent(Some("claude")).unwrap().1.prompt,
-            "/design-code {request}"
+            config.agent(Some("claude")).unwrap().1.prompt.as_deref(),
+            Some("/design-code {request}")
         );
+    }
+
+    #[test]
+    fn worker_prompt_overrides_the_built_in_prompts_but_not_an_agents_own() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        fs::write(
+            &file,
+            r#"
+[worker]
+prompt = "/my-flow {request}"
+
+[agents.aider]
+command = ["aider", "--message", "{prompt}"]
+prompt = "{request}"
+
+[agents.pi]
+command = ["pi", "{prompt}"]
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(Some(file), None, None).unwrap();
+        let prompt = |name| config.agent(Some(name)).unwrap().1.prompt.as_deref();
+
+        assert_eq!(prompt("claude"), Some("/my-flow {request}"));
+        assert_eq!(prompt("codex"), Some("/my-flow {request}"), "as written");
+        assert_eq!(prompt("aider"), Some("{request}"), "its own wins");
+        assert_eq!(prompt("pi"), Some("/my-flow {request}"));
+    }
+
+    #[test]
+    fn an_agent_without_a_prompt_keeps_the_built_in_one_of_its_name() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        fs::write(
+            &file,
+            "[agents.claude]\ncommand = [\"claude\", \"--verbose\", \"{prompt}\"]\n\n\
+             [agents.pi]\ncommand = [\"pi\"]\n",
+        )
+        .unwrap();
+
+        let config = Config::load(Some(file), None, None).unwrap();
+        let prompt = |name| config.agent(Some(name)).unwrap().1.prompt.as_deref();
+
+        assert_eq!(prompt("claude"), Some("/ship-feature {request}"));
+        assert_eq!(prompt("codex"), Some("$ship-feature {request}"));
+        assert_eq!(prompt("pi"), Some(""), "no prompt anywhere");
     }
 
     #[test]
