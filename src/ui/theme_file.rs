@@ -180,7 +180,7 @@ fn colors(path: &Path, text: &str, section: Section, table: DeTable) -> Result<V
         let name = name.into_inner();
         let key = match PaletteKey::named(&name) {
             Some(key) if key.section() == section => ColorKey::Fixed(key),
-            None if section == Section::Phase => {
+            _ if section == Section::Phase => {
                 let phase = name
                     .parse::<Phase>()
                     .map_err(|_| anyhow!("{name} is no phase name"))
@@ -489,6 +489,17 @@ mod tests {
     }
 
     #[test]
+    fn colors_a_phase_named_like_a_state() {
+        let dir = TempDir::new().unwrap();
+        write(&dir, "theme.toml", "[phase]\ndone = \"#112233\"\n");
+
+        let palette = theme(&dir).palette;
+
+        assert_eq!(palette.phases.names["done"], hex(0x112233));
+        assert_eq!(palette.done, Palette::TERMINAL.done);
+    }
+
+    #[test]
     fn says_what_is_wrong_and_where() {
         let dir = TempDir::new().unwrap();
         let cases = [
@@ -519,10 +530,6 @@ mod tests {
             (
                 "[phase]\nBuild = \"#d9825b\"\n",
                 "theme.toml:2: Build is no phase name",
-            ),
-            (
-                "[phase]\n\ndone = 2\n",
-                "theme.toml:3: done belongs in [state], not [phase]",
             ),
             (
                 "extends = \"flow\"\naccent = 3\n",
