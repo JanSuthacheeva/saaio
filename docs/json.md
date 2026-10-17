@@ -168,7 +168,7 @@ A flow keeps the phases it started with, so two flows can have different steps.
 
 ## Every project
 
-`flow status --all --json` prints one board per registered store:
+`flow status --all --json` prints one board per registered store that has flows:
 
 ```json
 {
@@ -182,7 +182,7 @@ A flow keeps the phases it started with, so two flows can have different steps.
 
 | Key | Type | Holds |
 | --- | --- | --- |
-| `name` | string | the project's name: its store's folder name, or `default` for the default store |
+| `name` | string | the project's name: its store's folder name, or `default` for the default store; ` (2)`, ` (3)` and so on after a name already taken |
 | `root` | string | the store's folder |
 | `board` | object | the board, as `flow status --json` prints it |
 

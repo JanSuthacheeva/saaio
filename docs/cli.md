@@ -62,7 +62,7 @@ help[2]: "Run `flow status <name>` for one flow's phases, timeline and decisions
 
 Flows are sorted by what they need: first the ones that need you, then the ready ones (their turn
 ended, nothing asked), then the running ones, then the finished ones. Within each group the most
-recent change comes first. `age` is the time since the flow's last change of state.
+recent change comes first. `age` is the time since the flow's state, phase or blocker last changed.
 
 ## flow ui
 
@@ -184,9 +184,11 @@ timeline[5]{ago,text}:
 help[2]: Run `flow report --flow shop-217 working` once the block is resolved,Run `flow` for all flows
 ```
 
-Fields with nothing to show are left out: `tasks` without task counts, `review` and
-`merge_request` until a review or merge request was reported, `branch` and `worktree` for a flow
-without a worktree.
+Fields with nothing to show are left out: `blocker` and `delegate` (what the worker handed to a
+subagent) while there is none, `tasks` without task counts, `review` and `merge_request` until a
+review or merge request was reported, `branch`, `worktree` and `worktree_exists` (false once the
+folder is gone) for a flow without a worktree. A plain session shows `folder` instead, and `answer`
+is the closing message of the worker's last turn.
 
 | Option | Does |
 | --- | --- |
@@ -262,8 +264,9 @@ phase: implement
 help[1]: Run `flow report working` once the block is resolved
 ```
 
-Reporting the same thing twice changes nothing, so retries are harmless. Texts are kept up to 500
-characters.
+Reporting the same state, phase, tasks or decision twice changes nothing, so retries of those are
+harmless; `review`, `merge-request` and `ended` add a timeline entry each time. Texts are kept up
+to 500 characters.
 
 ## flow new
 
@@ -343,8 +346,8 @@ These do not show in `flow --help`. You should not need to run them.
 | Command | What runs it |
 | --- | --- |
 | `flow server` | flow ui, when no server runs. It owns every session; its log is `server.log` (see [files.md](files.md)). |
-| `flow hook claude-code`, `flow hook codex` | the hooks flow adds to each worker. It reads the hook's event on stdin and reports what changes the flow. It never prints to stdout and never fails. |
-| `flow wait [--master]` | Claude Code sessions, as a hook that runs in the background. It sleeps until there is news for the session, prints it and exits 2, which wakes the session. `--master` waits for the master's news. |
+| `flow hook claude-code`, `flow hook codex` | the hooks flow adds to each worker. It reads the hook's event on stdin and reports what changes the flow. It never prints to stdout and never fails a worker's turn; for Codex it exits 2 at Stop to hand over news. |
+| `flow wait [--master]` | Claude Code sessions, as a hook that runs in the background. It sleeps until there is news for the session, prints it to stderr and exits 2, which wakes the session. `--master` waits for the master's news. |
 
 ## Output, errors and exit codes
 
