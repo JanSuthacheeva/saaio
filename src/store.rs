@@ -238,6 +238,13 @@ impl Store {
         self.write_wait(&format!("{id}.delivered"), &count.to_string())
     }
 
+    /// How many of the flow's queued lines the server typed into its pane.
+    pub fn typed(&self, id: &str) -> usize {
+        self.read_wait(&format!("{id}.typed"))
+            .and_then(|text| text.trim().parse().ok())
+            .unwrap_or(0)
+    }
+
     /// Marks the session as running a turn, or as idle at its prompt, for a session flow server
     /// types news into: it types only into an idle one.
     pub fn set_busy(&self, waiter: &Waiter, busy: bool) -> Result<()> {
@@ -307,6 +314,7 @@ impl Store {
             self.alive(id),
             waits.join(format!("{id}.pid")),
             waits.join(format!("{id}.delivered")),
+            waits.join(format!("{id}.typed")),
             waits.join(format!("{id}.busy")),
         ] {
             if let Err(error) = fs::remove_file(&file)
@@ -633,16 +641,18 @@ mod tests {
     }
 
     #[test]
-    fn removing_a_flow_forgets_its_waiter_and_deliveries() {
+    fn removing_a_flow_forgets_its_waiter_deliveries_and_typed_lines() {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
         let id = store.create(&started()).unwrap();
         store.claim_waiter(&Waiter::Flow(id.clone()), 9).unwrap();
         store.set_delivered(&id, 2).unwrap();
+        fs::write(dir.path().join(format!("waits/{id}.typed")), "1").unwrap();
 
         store.remove(&id).unwrap();
 
         assert_eq!(store.waiter(&Waiter::Flow(id.clone())), None);
         assert_eq!(store.delivered(&id), 0);
+        assert_eq!(store.typed(&id), 0);
     }
 }

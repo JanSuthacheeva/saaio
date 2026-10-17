@@ -1,22 +1,30 @@
 use super::{no_flow, views};
 use crate::cli::output::{self, Document, Failure};
+use crate::config::Config;
 use crate::event::{Event, EventKind, LONG_TEXT_LIMIT};
 use crate::fold;
 use crate::store::Store;
+use crate::view::FlowView;
+use crate::wake;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
     /// Flow name or id
     flow: String,
-    /// What to tell it
+    /// What to tell it, or with --type the line to type
     text: String,
+    /// Type the text and Enter into the worker's pane once it is idle, as if the user typed it
+    #[arg(long = "type")]
+    typed: bool,
 }
 
-/// Appends the master's message to a flow its worker reads when flow wakes it; `sender` is the
-/// FLOW_ID of the session that sends, set only in a worker's.
+/// Appends the master's message to a flow its worker reads when flow wakes it, or with --type a
+/// line flow server types into its pane; `sender` is the FLOW_ID of the session that sends, set
+/// only in a worker's.
 pub fn run(
     args: &Args,
     store: &Store,
+    config: &Config,
     sender: Option<&str>,
     now: u64,
 ) -> Result<Document, Failure> {
@@ -35,6 +43,12 @@ pub fn run(
         return Err(Failure::error(
             format!("the message is {length} chars, over {LONG_TEXT_LIMIT}"),
             vec!["Say it shorter, or point to a file in the worktree".to_string()],
+        ));
+    }
+    if args.typed && text.contains(['\n', '\r']) {
+        return Err(Failure::error(
+            "a typed line is one line",
+            vec!["Queue one `flow send --type` per line".to_string()],
         ));
     }
     let (flows, _) = views(store, now);
@@ -60,9 +74,43 @@ pub fn run(
             vec!["Plain sessions are the user's own".to_string()],
         ));
     }
+    if args.typed {
+        return queue(store, config, flow, text, now);
+    }
     let message = EventKind::Message {
         text: text.to_string(),
     };
     store.append(&flow.id, &Event::new(now, message))?;
     Ok(output::flow::sent(flow))
+}
+
+/// Appends a line for flow server to type, once the worker's agent reports its turns to flow.
+fn queue(
+    store: &Store,
+    config: &Config,
+    flow: &FlowView,
+    text: &str,
+    now: u64,
+) -> Result<Document, Failure> {
+    let agent = flow.workspace.as_ref().map(|space| space.agent.as_str());
+    let reports = config
+        .agent(agent)
+        .is_some_and(|(_, agent)| agent.adapter.is_some());
+    if !reports {
+        return Err(Failure::error(
+            format!(
+                "{} runs {}, which reports no turns to flow",
+                flow.name,
+                agent.unwrap_or_default()
+            ),
+            vec!["Use `flow send` for a message".to_string()],
+        ));
+    }
+    let events = store.events(&flow.id)?;
+    let ahead = wake::untyped(&events, store.typed(&flow.id)).len();
+    let line = EventKind::Typed {
+        text: text.to_string(),
+    };
+    store.append(&flow.id, &Event::new(now, line))?;
+    Ok(output::flow::queued(flow, text, ahead))
 }
