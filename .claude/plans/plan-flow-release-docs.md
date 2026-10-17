@@ -214,6 +214,23 @@ colors.
 - `help[]` lines and error texts are documented as they read today; no CLI text changes.
 - `vhs` (with `ttyd`) is installed with brew for the recording.
 
+## Build notes
+
+- `config::EXAMPLE` and `theme_file::EXAMPLE` carried `#[allow(dead_code)]` from their own tasks
+  until `write_defaults` used them, so every commit stayed clippy-clean.
+- `panel` colors the title row above the pane, not a bottom bar: the example, `themes.md` and the
+  `UiTokens::bar` comment say so.
+- `Cargo.toml` sets `rust-version = "1.95"`: 1.94 fails on if-let guards, 1.95 builds.
+- The README picture: the demo workers run small stand-in skills kept in the sample repo
+  (`demo-plan`, `demo-build`, `demo-review`, `demo-ship`) mapped to the four built-in phase names,
+  so they walk real phases without publishing pages or opening merge requests. The sample repo was
+  `~/projects/shop` for the recording, so the picture's paths match the docs, and deleted after.
+- The recording showed two Codex limits, added to troubleshooting and the CHANGELOG's known issues:
+  a worker that reads a later skill's `SKILL.md` early jumps to its phase, and its sandbox cannot
+  commit in a worktree without asking.
+- The sidebar has no `plain` tag (the old README said so): a plain session shows its state.
+- The end-to-end check installed the branch build into a scratch `--root`, not `~/.cargo/bin`.
+
 ## Tasks
 
 ### Code
@@ -238,4 +255,4 @@ colors.
 
 ### Check
 
-- [ ] End to end: install the branch build, start `flow ui` with a fresh scratch `FLOW_HOME` and empty config dir, confirm the three files appear and change nothing, edit one setting and restart (kept), follow the README quick start as a new user would, and read every docs page once against what flow does
+- [x] End to end: install the branch build, start `flow ui` with a fresh scratch `FLOW_HOME` and empty config dir, confirm the three files appear and change nothing, edit one setting and restart (kept), follow the README quick start as a new user would, and read every docs page once against what flow does
