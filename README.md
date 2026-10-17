@@ -1,559 +1,137 @@
 # flow
 
-Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
+![flow ui with Claude Code and Codex workers](docs/media/flow-ui.png)
 
-`flow` is an [AXI](https://axi.md), a command line tool whose main user is an agent. A worker
-reports what it does with `flow report`; anyone - an agent, a person, `flow ui` -
-asks `flow` where every flow stands. Each flow is an append-only event log; `flow` alone
-folds the logs into state, phases with durations, task counts, blockers and a timeline.
+I usually have several coding agents working at once, each on its own feature. flow is the tool I
+built to keep track of them: it opens each agent in its own git worktree, shows where every one
+stands, and tells me when one needs me. I use it every day with Claude Code and Codex, and thought
+it might help others too.
 
-## Install
+flow is a terminal UI, `flow ui`, and a command line whose main user is an agent.
+
+## Quick start
+
+You need macOS or Linux, git, Rust 1.95 or newer, and Claude Code or Codex.
 
 ```sh
-cargo install --path .
+cargo install --git https://github.com/JanSuthacheeva/flow --tag v0.1.0
 ```
 
-## Commands
-
-```
-flow                                    home view: every flow and what needs you
-flow ui [--stop]                        the terminal UI: the master, every worker, the board
-flow start <request> [--name <name>] [--mode guided|auto] [--agent <name>] [--type <type>]
-                                        a worker in its own worktree, opened in flow ui
-flow start --plain <folder> [--name <name>] [--agent <name>]
-                                        a plain session: an agent in a folder, no worktree or flow
-flow new --name <name> --request <text> [--mode guided|auto]
-flow report [--flow <name|id>] <event>  the flow comes from --flow or $FLOW_ID
-flow status [<name|id>] [--json] [--full]
-flow status --all [--json] [--full]     every project's flows, with their project
-flow remove <name|id> [--force] [--delete-unmerged]
-                                        end a flow's worker, tear down its worktree and branch, forget it
-flow send <name|id> <text>              tell a flow's worker something (the master's command)
-flow clear                              forget finished flows, tear down their worktrees
-```
-
-Events for `flow report`:
-
-| Event | Meaning |
-| --- | --- |
-| `phase <name>` | the flow entered a phase of its [workflow](#the-workflow) (`plan`, `implement`, `review`, `merge-request` by default); a phase it does not have is refused |
-| `working` | work goes on, after a stop or a subagent |
-| `delegated <description>` | a subagent works on the flow |
-| `waiting <question>` | the flow waits for the person's answer |
-| `idle <note>` | the turn ended without a question; nothing for the person to do |
-| `blocked <reason>` | the flow cannot go on |
-| `decision <text>` | a decision made on the person's behalf |
-| `tasks <done> <total>` | plan tasks done |
-| `review --fixed <n> --open <n>` | review findings fixed and still open |
-| `merge-request <url>` | the merge request is open; the flow is done |
-| `ended` | the flow is over; flow ui does not open it again |
-| `heartbeat` | the worker is alive; no event is added |
-
-`flow report` without a flow id answers `skipped: no flow id` and exits 0, so a skill can
-report unconditionally and still work in a session that is not a flow. Repeated reports fold
-to the same state, so retries are harmless.
-
-## flow ui
-
-`flow ui` is home: one Claude Code session, the master, almost full screen, and every worker
-beside it. It starts a session server (`flow server`) when none runs; the server owns every
-session, so closing the terminal, a crash of the UI or detaching (prefix `d`) leaves them
-running, and the next `flow ui` attaches again. The master runs in the folder of the first
-`flow ui` with the orchestrator instructions in `master.md` beside `config.toml` (flow writes the
-default and updates it with flow while you have not edited it; your edits are never overwritten).
-
-Every unfinished flow with a worktree, and every plain session, gets its own session: `flow start`
-records it and the server opens it within half a second. The sidebar on the right groups the workers under
-NEEDS YOU, READY (idle: a turn ended, nothing asked), RUNNING and DONE with their steps, tasks and
-what they ask or do.
-The master's row, `0`, shows a spinner while the master works and the waiting dot once it ended a
-turn, asked or wants permission while you looked at another session, until you look at it again.
-
-Keys, after the prefix (`C-space` unless `[ui] prefix` sets another; the prefix twice sends one
-through):
-
-| Key | Does |
-| --- | --- |
-| `0`-`9` | jump to a session; 0 is the master, 1 the top of the sidebar |
-| `j` `k`, `enter` | move the peek over the workers (their latest tool calls and text, read from Claude's transcript), jump in |
-| `n` | start a flow: request, mode, what it creates; or, in plain mode, a session in a folder |
-| `o` | the board: a card per session and the selected flow's timeline, decisions and steps; `a` there shows every project's flows (read-only for other projects) |
-| `b` | fold the sidebar to a rail and back |
-| `r` | resume a session that exited, or an ended flow |
-| `[` | scroll back through the session's history |
-| `d` | detach |
-| `Q` | stop: lists unfinished workers; `k` keeps them for the next `flow ui`, `e` ends them |
-| `?` | every key |
-
-When a worker's session ends, its pane offers `x` to clean the flow up (worktree, branch, flow;
-it asks first before discarding uncommitted changes or commits on no other branch), `r` to resume
-it and `esc` to go back to the master.
-
-Another prefix goes in `~/.config/flow/config.toml`; flow ui's hints and help then name it:
-
-```toml
-[ui]
-prefix = "C-b"                # C-space, or C-a to C-z
-```
-
-The keys a pane needs are refused: C-c, C-d, C-z, C-s and C-q, and C-h, C-i, C-j and C-m, which
-are the same bytes as backspace, tab, newline and enter. A prefix flow ui also uses as a key, such
-as C-b paging back in the history, reaches it pressed twice. A new prefix applies at the next
-`flow ui`.
-
-`flow ui --stop` stops the server and every session, keeping unfinished flows for the next
-start. After a crash or a reboot the next `flow ui` resumes the master and every worker
-(`claude --resume`); after a stop the master starts fresh.
-
-### Themes
-
-flow ui reads `theme.toml` beside `config.toml` (`~/.config/flow/theme.toml`) and repaints within a
-second when it, or the theme it extends, changes. Without it flow uses the terminal's own colors.
-
-```toml
-# Colors: "#rrggbb", an ANSI index, "default" (the terminal's), or another key.
-extends = "flow"        # terminal | flow | flow-light | a file in themes/, without .toml
-nerd_font = true        # the font has Nerd Font icons: a kiwi bird as the mark
-phase_colors = "off"    # off | steps | full: how much of a working flow takes its phase's color
-[ui]
-accent = "#d9825b"
-[state]
-ended = "faint"
-[phase]
-merge-request = "#d08ad6"
-```
-
-Keys, each only in its own table: `[ui]` background, panel, selection, rule, text, strong, muted,
-faint, accent; `[state]` working, waiting, blocked, done, ended; `[phase]` any phase name of your
-[workflow](#the-workflow). A phase without a color takes the theme's color for its place: the 1st to
-4th phase get the colors of plan, implement, review and merge-request, so a workflow of your own is
-colored without a theme file. A `[phase]` color can
-name a `[ui]` or `[state]` key; no key can name a phase's color. `phase_colors` decides where a working flow shows its phase's color: `off`
-(the default) nowhere, `steps` in the current step dot, `full` also in the spinner, label, rail and
-title row. Done steps are plain text at every level. A flow works in `working` until it reaches its first phase; a flow that waits, is blocked
-or is done keeps its state's color at every level. The terminal theme colors the phases with
-256-color indexes, since terminals often repaint ANSI blue, magenta and cyan. A key left out keeps
-the base's value. `nerd_font` (default false) shows flow's mark as a kiwi bird, which needs a Nerd
-Font; without it the mark is a goose in flight, `▚▄▞`, in block characters every font has. The mark
-takes the theme's accent either way. `flow` and `flow-light` are the design's dark and light colors.
-A tool can keep a theme in `~/.config/flow/themes/<name>.toml` for `extends` to name; a Noctalia
-template that writes `themes/noctalia.toml` makes flow follow Noctalia live. A broken file keeps the
-last theme and says in the title row which file and line is wrong and why, such as `theme.toml:7:
-accent belongs in [ui], not [state]`.
-
-## Starting a worker
-
-Run `flow start` inside the repository, usually from the master:
-
-```
-$ flow start "SHOP-217 add CSV export"
-flow: shop-217
-worktree: ~/projects/shop/.flow/worktrees/shop-217
-branch: flow/shop-217
-slot: 1
-setup: ran
-agent: claude
-pane: opening
-```
-
-It creates the flow, a git worktree in `.flow/worktrees/<name>` on branch `flow/<name>` (kept out
-of `git status` through `.git/info/exclude`), runs the repo's setup hook there, and records the
-flow's workspace; flow ui then opens the agent in it with `FLOW_ID` set, so it reports into the
-flow (`pane: when flow ui runs` when no flow ui runs yet). The name comes from the ticket key
-(`SHOP-217` -> `shop-217`) or the first four words.
-
-### Plain sessions
-
-For tinkering, `flow start --plain <folder>` (or plain mode in the new-flow dialog, prefix `n`)
-opens the agent in a folder of your choice, which need not be a repository:
-
-```
-$ flow start --plain ~/scratch
-flow: scratch
-id: 9b1d0e7a-4f2c-4b8e-9d6a-3c5e1f2a7b40
-folder: /Users/jan/scratch
-agent: claude
-pane: opening
-```
-
-No worktree, no branch, no slot and no first prompt: the agent opens at an empty prompt. It shows
-in the sidebar with a `plain` tag and resumes after a restart like any worker. It is yours, not the
-master's: it gets no worker prompt, never wakes the master, and `flow send` refuses it. Its hooks
-still report, so its state shows. The name is the folder's (`--name` overrides). `flow remove`
-forgets it and never touches the folder.
-
-### Agents
-
-Claude Code and Codex are built in:
-
-- `claude`: `claude -n <name> --session-id <id> "/ship-feature <request>"`, resumed with
-  `claude -n <name> --resume <id>`.
-- `codex`: `codex "$ship-feature <request>"`, resumed with `codex resume <session>`. Codex picks
-  its own session id; flow learns it from the first hook.
-
-The first prompt starts your workflow. An agent's own `prompt` wins; else `[worker] prompt`, when
-set, exactly as written, for every agent, the built-in ones included; else the built-in default
-above. Claude Code calls a skill `/name` and Codex `$name`, so a `[worker] prompt` for both names no
-skill, or give each agent its own `prompt`.
-
-`flow start --agent codex` or the new-flow dialog's agent row picks one; `[worker] agent` in the
-config is the default. The master is the built-in `master` agent (Claude Code), or the agent
-`[master] agent` names; flow adds `master.md` to its instructions. Add or change agents in
-`~/.config/flow/config.toml` (or `$XDG_CONFIG_HOME/flow/config.toml`, or `$FLOW_CONFIG`):
-
-```toml
-[worker]
-agent = "claude"              # the default for flow start
-
-[agents.claude]
-command = ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
-prompt = "/ship-feature {request}"
-resume = ["claude", "-n", "{name}", "--resume", "{id}"]
-
-[agents.aider]
-command = ["aider", "--message", "{prompt}"]
-prompt = "{request}"
-
-[master]
-agent = "codex"               # the master runs Codex; the default is the built-in master
-```
-
-Placeholders: `{id}`, `{name}`, `{request}`, `{prompt}`, `{session}` (the session id the harness
-picked, for Codex) and `{instructions}` (the path of the master's `master.md`). An agent without
-`resume` starts fresh once and is not resumed after a restart. A key or section flow does not know
-is an error that names the file and the key.
-
-### How a worker reports
-
-A worker reports through its harness's own hooks; neither the model nor the skills take part.
-When flow ui starts a worker whose agent names an `adapter`, it adds the adapter's wiring to the
-command line. For Claude Code (`adapter = "claude-code"`, the built-in agents' default) that is
-`--settings` with hooks that run `flow hook claude-code` on each event; they run beside your own
-hooks and install nothing. `flow hook` reads the event, turns it into flow events and appends
-only what changes the flow:
-
-| Claude Code event | Reported |
-| --- | --- |
-| a prompt | `working` (and the phase of a typed `/skill`) |
-| the Skill tool | `phase`, the [workflow](#the-workflow) phase whose skills name it |
-| the Agent tool | `delegated <description>` |
-| AskUserQuestion | `waiting <the question>` |
-| a permission prompt | `waiting permission: Bash(rm -rf build)` |
-| a tool finishing | `working`; plan-progress task counts and blocks; a merge request `gh pr create` / `glab mr create` printed, when it is one of a repo the worktree has as a remote (origin, or a fork's upstream) |
-| the end of a turn | `waiting <the question>` when Claude's last line asks one, else `idle <its last sentence>`; the whole closing message becomes the flow's `answer` |
-| `/exit` | `ended` (a hangup is not an end; flow ui resumes the worker) |
-
-For Codex (`adapter = "codex"`) the wiring is `-c hooks.<Event>=[...]` arguments that run
-`flow hook codex`, and `-c developer_instructions=...` for the worker prompt; nothing is written
-to `~/.codex`. The first time, Codex asks you to review the hooks (pick "Trust all and
-continue"); it remembers that until flow's hooks change. A repository you trust in Codex covers its flow
-worktrees.
-
-| Codex event | Reported |
-| --- | --- |
-| a prompt | `working` (and the phase of a `$skill` in it) |
-| a shell command reading a skill's `SKILL.md` | `phase`, the [workflow](#the-workflow) phase whose skills name it |
-| a subagent (`spawn_agent`) | `delegated <its task name>`, until the main agent goes on |
-| a permission prompt | `waiting permission: Bash(touch notes.txt)` |
-| a tool finishing | `working`; a merge request `gh pr create` / `glab mr create` printed, when it is one of a repo the worktree has as a remote (origin, or a fork's upstream) |
-| the end of a turn | as for Claude Code |
-| Esc | `idle interrupted` |
-
-Codex has no plan-progress, so a Codex flow shows no task counts, and no `/exit` event, so you
-end its flow from flow ui or with `flow remove`.
-
-A subagent's own events are ignored, but a phase skill it starts counts (a review in a fresh
-agent). A custom agent replaces the built-in one, so give it `adapter = "claude-code"` or
-`adapter = "codex"` when it runs one of them. `flow report` stays for scripts and other tools.
-
-### The workflow
-
-A flow walks through up to four phases, shown as its steps (`●───●───○───○`) with the time spent in
-each. The built-in workflow is the agent-skills chain:
-
-```toml
-[[phases]]
-name = "plan"
-skills = ["design-code"]
-
-[[phases]]
-name = "implement"
-skills = ["implement-plan"]
-
-[[phases]]
-name = "review"
-skills = ["review-changes"]
-
-[[phases]]
-name = "merge-request"
-skills = ["write-merge-request"]
-```
-
-Your own `[[phases]]` in `config.toml` replace it whole: 1 to 4 phases in order, each a `name`
-(lowercase letters, digits and `-`) and the `skills` that start it, matched with or without a
-plugin prefix (`superpowers:brainstorming` is `brainstorming`). A skill can start only one phase.
-For example, with superpowers' skills:
-
-```toml
-[worker]
-prompt = "/brainstorming {request}"
-
-[[phases]]
-name = "spec"
-skills = ["brainstorming", "writing-plans"]
-
-[[phases]]
-name = "build"
-skills = ["executing-plans", "subagent-driven-development"]
-
-[[phases]]
-name = "ship"
-skills = ["finishing-a-development-branch"]
-```
-
-A flow keeps the phases it started with: `flow start` and `flow new` record them in the flow's log,
-so editing the workflow changes new flows only, and a skill of a phase a running flow does not have
-reports nothing. An opened merge request finishes the flow in its last phase, whatever its name.
-Flows started before workflows were configurable show the built-in phases.
-The old `[phases]` table of skill names is refused with a message naming `[[phases]]`.
-
-### The master and its workers
-
-Every Claude Code session flow starts, the master included, also runs `flow wait` as an
-`asyncRewake` hook at its start and at each turn end. `flow wait` sleeps until there is news for
-its session, prints it and exits 2, and Claude Code wakes the session with it:
-
-- A worker is woken by the master's `flow send <name> "<text>"`, which adds a `master: <text>`
-  line to the flow's timeline. A worker whose session is not running gets it when it runs again.
-  Its system prompt says who the flow master is, so it acts on the message instead of taking hook
-  feedback for an untrusted voice.
-- The master is woken when flows of its project become `waiting`, `blocked`, `idle`, `done` or
-  `not-responding`; flows that stop within two seconds come as one list.
-
-Codex cannot wake a session that sits at its prompt, so a Codex session gets its news two ways:
-a busy one from its own Stop hook, which hands the news over as the turn ends; an idle one from
-flow server, which types it in as one paste once nobody has typed into that pane for ten seconds.
-It never types into a Codex session before its first turn (it may still show its hooks review).
-
-The flow's mode decides who answers a waiting worker. In an `auto` flow the master answers what
-the code, the plan or your earlier decisions settle, and tells you what it answered. A `guided`
-flow's questions go to you, and the master sends your answer on. `flow status <name> --full`
-shows a worker's whole last answer. To stop the master being woken (its row still shows when it
-needs you):
-
-```toml
-[master]
-wake = false
-```
-
-### Branch names
-
-A flow's branch is `flow/<name>`, unless the repo commits a convention in `.flow/config.toml`:
-
-```toml
-[branch]
-name  = "{type}/{ticket}-{slug}"                  # {type} {ticket} {slug} {name}
-types = ["feature", "bugfix", "hotfix", "chore"]  # the first is the default
-```
-
-`SHOP-230 fix totals on refunds` with `--type bugfix` (or `bugfix` picked in the new-flow dialog)
-becomes `bugfix/SHOP-230-fix-totals-on-refunds`. `{ticket}` is the request's ticket key as
-written, `{slug}` up to five words after it; an empty placeholder takes the separator next to it
-along. A branch that already exists gets `-2`. The worktree folder keeps the flow's name.
-
-### Hooks, slots and Docker
-
-A repo can commit two executable hooks; `flow` runs them in the worktree with `FLOW_ID`,
-`FLOW_NAME`, `FLOW_SLOT`, `FLOW_WORKTREE` and `FLOW_REPO` set:
-
-- `.flow/setup` after the worktree is created, before the worker starts. If it fails, the flow is
-  marked blocked with its last error line and the worker still opens so you can look.
-- `.flow/teardown` when `flow clear` removes a finished flow's worktree.
-
-The worker's session gets the same variables, so it can reach its own stack, for example on port
-`$((8000 + FLOW_SLOT))`.
-
-`FLOW_SLOT` is 1 to 20, unique among unfinished flows in every project, for anything that must not collide, such as
-ports. For a Docker Compose project whose tests run in the containers, read the ports from
-variables in `compose.yaml` (`"${HTTP_PORT:-80}:80"`, `"${DB_PORT:-3306}:3306"`), then:
+Each worker starts with `/ship-feature <request>` (`$ship-feature` in Codex), a skill from
+[agent-skills](https://github.com/JanSuthacheeva/agent-skills) that takes a feature from plan to
+merge request. Install it and the skills it runs, or set your own first prompt (see
+[configuration](docs/configuration.md#the-first-prompt)):
 
 ```sh
-#!/bin/sh
-# .flow/setup
-set -e
-export HTTP_PORT=$((8000 + FLOW_SLOT)) DB_PORT=$((33060 + FLOW_SLOT))
-docker compose up -d
-docker compose exec -T php php artisan migrate --seed
+npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature design-code implement-plan review-changes write-merge-request commit setup-flow
 ```
+
+Then, in a repository:
 
 ```sh
-#!/bin/sh
-# .flow/teardown
-docker compose down -v
+flow ui
 ```
 
-Compose names a project after its folder, so each worktree runs its own stack and
-`docker compose exec ...` inside a worktree reaches that stack.
+The big pane is the master, an agent that works with flow for you. Ask it to start a flow ("start
+a flow for SHOP-217 add CSV export"), or press `C-space n`. Each worker shows up in the sidebar on
+the right, grouped by what it needs from you. `C-space ?` lists every key.
 
-`flow remove <name>` does the same for one flow at any state: it ends the worker's session in
-flow ui, runs the teardown hook, removes the worktree, deletes the branch and forgets the flow.
-It refuses and touches nothing when the worktree has uncommitted work (`--force` discards it) or
-the branch has commits on no other branch, local or pushed (`--delete-unmerged` deletes them).
+![Moving through flow ui: the peek, a worker, the board](docs/media/flow-ui.gif)
 
-`flow clear` keeps a worktree with uncommitted work (listed under `kept`), and deletes a
-finished flow's branch only when its commits are on another branch; a pushed branch with its
-merge request stays on the remote. `flow status <name>` shows a flow's `branch`, `worktree`
-and whether that worktree is still there.
+On its first run flow writes `config.toml`, `theme.toml` and `master.md` to `~/.config/flow`, every
+setting commented out at its default.
 
-## Output
+## What it does
 
-Agents get [TOON](https://toonformat.dev): short default fields, counts, explicit empty states
-and `help[]` lines with the next commands. Long texts are cut at 80 characters with a hint;
-`--full` shows them whole.
+- **Works with different agents.** Claude Code and Codex are built in, each followed through its
+  own hooks. Any other command can run as a worker; flow then shows only whether it runs. The
+  phases a flow walks through, the skills that start each phase and every agent's first prompt are
+  settings.
+- **Gives each worktree its own environment.** `.flow/setup` and `.flow/teardown` run in every
+  worktree. `FLOW_SLOT` (1 to 20) is unique across all your projects, so each worktree's Docker
+  stack can get its own ports. The `setup-flow` skill writes both scripts for your repo and tries
+  them in a scratch worktree.
+- **Has a master that is woken.** The master starts workers, answers them with `flow send` and is
+  woken when one waits, is blocked or finishes. In a guided flow the questions come to you; in an
+  auto flow the master answers what the code and the plan already settle.
+- **Plain sessions.** An agent in any folder, without a worktree or a flow, next to your workers.
+- **Themes.** Your terminal's colors by default, flow's own dark and light themes built in,
+  reloaded while you edit. Another tool can write a theme for flow to follow (a Noctalia template
+  is in the docs).
+- **Sessions outlive the UI.** Closing the terminal leaves every agent running; after a reboot
+  flow resumes each conversation.
+
+## How it works
+
+Every flow is an append-only log of events. The agents' own hooks run `flow hook`, which turns what
+happens into events: a skill started a phase, a question is waiting, a merge request was opened.
+flow folds the logs into where each flow stands: its phase and how long each took, tasks,
+blockers, decisions and a timeline. `flow server` runs each agent in its own terminal and keeps it
+running; `flow ui` attaches to it.
+
+## For agents and scripts
+
+Every command answers in [TOON](https://toonformat.dev), a compact format agents read well, with
+the next steps beside it:
 
 ```
-$ flow
-bin: ~/.cargo/bin/flow
-description: "Tracks parallel feature flows: what each is doing, where it is blocked, how far it got"
-count: 1
-needs_you: 1
-flows[1]{name,state,phase,tasks,age}:
-  shop-221,blocked,implement,4/9,1m
-blockers[1]{name,blocker}:
-  shop-221,"Task 5: migration needs a default value"
+$ flow status
+count: 3
+needs_you: 2
+flows[3]{name,state,phase,tasks,age}:
+  shop-221,waiting,plan,"",2s
+  shop-217,blocked,implement,4/9,2s
+  scratch,idle,"","",11s
+blockers[2]{name,blocker}:
+  shop-221,Should refunds count against the original order's totals or the refund date's?
+  shop-217,"Task 5: the migration needs a default value"
 help[2]: "Run `flow status <name>` for one flow's phases, timeline and decisions",Run `flow new --name <name> --request <text>` to track a new flow
 ```
 
-```
-$ flow status shop-221
-name: shop-221
-id: 265ecccc-ce1c-4d32-a02a-7795fb47c01e
-request: SHOP-221 add CSV export
-mode: auto
-state: blocked
-phase: implement
-blocker: "Task 5: migration needs a default value"
-tasks: 4/9
-steps[4]{phase,status,duration}:
-  plan,done,9m
-  implement,current,31m
-  review,open,""
-  merge-request,open,""
-decisions[1]: "approach B: forge adapter"
-timeline[5]{ago,text}:
-  41m,started
-  41m,"phase: plan"
-  35m,"decided: approach B: forge adapter"
-  32m,"phase: implement"
-  1m,"blocked: Task 5: migration needs a default value"
-help[2]: Run `flow report --flow shop-221 working` once the block is resolved,Run `flow` for all flows
-```
+Programs read `flow status --json`, a versioned contract. The command line and the JSON are the
+only public interface; the logs are private.
 
-Errors are TOON on stdout too, with next steps. Exit codes: 0 ok, 1 error, 2 usage.
+| Command | Does |
+| --- | --- |
+| `flow` | every flow and what needs you |
+| `flow ui [--stop]` | the terminal UI |
+| `flow start <request>` | a worker in its own worktree |
+| `flow start --plain <folder>` | an agent in a folder |
+| `flow status [<flow>] [--json] [--all]` | where flows stand |
+| `flow send <flow> <text>` | tell a worker something |
+| `flow report <event>` | report into a flow by hand |
+| `flow remove <flow>`, `flow clear` | tear down and forget |
 
-```
-$ flow report --flow shop-999 working
-error: no flow named shop-999
-help[2]: Run `flow` to list the flows,Run `flow new --name shop-999 --request <text>` to start it
-```
+Every option is in [docs/cli.md](docs/cli.md).
 
-States: `working`, `delegated`, `waiting` (asks you something), `idle` (its turn ended without
-a question; not under NEEDS YOU), `blocked`, `not-responding` (a flow that sent heartbeats and
-stopped for 90 seconds), `done`, `ended`.
+## Similar tools
 
-## The `--json` contract
+Many tools run coding agents side by side in worktrees: Claude Squad, ccmanager, dmux, amux, herdr,
+parallel-code and Conductor among them, and several do things flow does not. Conductor,
+parallel-code and dmux have diff review and pull requests built in; parallel-code reaches your
+phone; herdr and ccmanager recognise many more agents. If you need one of those, they will suit you
+better.
 
-Programs read `flow status --json`: the whole board, nothing truncated, camelCase keys,
-`version` first. This and the command line are the only contract; the log format is private.
+What flow does differently:
 
-```json
-{
-  "version": 3,
-  "now": 1791953473760,
-  "count": 2,
-  "needsYou": 1,
-  "flows": [
-    {
-      "id": "265ecccc-ce1c-4d32-a02a-7795fb47c01e",
-      "name": "shop-221",
-      "request": "SHOP-221 add CSV export",
-      "mode": "auto",
-      "phase": "implement",
-      "state": "blocked",
-      "blocker": "Task 5: migration needs a default value",
-      "delegate": null,
-      "tasks": { "done": 4, "total": 9 },
-      "review": null,
-      "mergeRequest": null,
-      "decisions": ["approach B: forge adapter"],
-      "steps": [
-        { "phase": "plan", "status": "done", "durationMs": 540000 },
-        { "phase": "implement", "status": "current", "durationMs": 1860000 },
-        { "phase": "review", "status": "open", "durationMs": null },
-        { "phase": "merge-request", "status": "open", "durationMs": null }
-      ],
-      "timeline": [{ "at": 1791951013760, "text": "started", "tone": "neutral" }],
-      "startedAt": 1791951013760,
-      "changedAt": 1791953413760,
-      "workspace": null,
-      "answer": null
-    },
-    {
-      "id": "9b1d0e7a-4f2c-4b8e-9d6a-3c5e1f2a7b40",
-      "name": "scratch",
-      "request": "",
-      "mode": "plain",
-      "phase": null,
-      "state": "idle",
-      "blocker": null,
-      "delegate": null,
-      "tasks": null,
-      "review": null,
-      "mergeRequest": null,
-      "decisions": [],
-      "steps": [],
-      "timeline": [{ "at": 1791952213760, "text": "started", "tone": "neutral" }],
-      "startedAt": 1791952213760,
-      "changedAt": 1791953113760,
-      "workspace": {
-        "path": "/Users/jan/scratch",
-        "branch": null,
-        "slot": null,
-        "window": "flow-ui",
-        "agent": "claude"
-      },
-      "answer": null
-    }
-  ]
-}
-```
+- It follows a feature, not only a session: phases, task counts, decisions, blockers and a
+  timeline per flow.
+- It learns what an agent does from the agent's own hooks instead of reading its screen.
+- Its command line is made for agents, so a master agent can start, read and answer workers, and
+  it is woken instead of polling.
+- Each worktree gets its own setup, teardown and port slot.
 
-Timeline tones: `neutral`, `progress`, `attention`, `problem`, `success`. `answer` is the last
-turn's whole closing message, as the worker's harness reported it. A plain session (`mode:
-plain`) has no steps, and its workspace is its folder, with `branch` and `slot` null. Version 2
-made them nullable. Version 3: `phase` and `steps[].phase` are the names of the flow's
-[workflow](#the-workflow), the phases it started with.
+Where flow falls short: it has no diff viewer or pull request button (the worker's skill opens the
+merge request and flow notices it), no desktop notifications, no phone access, and it follows only
+Claude Code and Codex. It runs on macOS and Linux only.
 
-## Where the logs live
+## Documentation
 
-`$FLOW_HOME`, else `$XDG_STATE_HOME/flow`, else `~/.local/state/flow`: one
-`flows/<id>.jsonl` per flow, and `flows/<id>.alive` whose modification time is the last
-heartbeat. Beside them flow ui keeps `server.sock` (readable only by you), `server.log` and
-`master.json` (the master's session id and folder).
-
-### Several projects
-
-Give each project its own `FLOW_HOME` (for example per tmux session,
-`~/.local/state/flow/projects/<name>`) and each gets its own server, master and flows. They share
-the default folder (`$XDG_STATE_HOME/flow`, else `~/.local/state/flow`, whatever `FLOW_HOME` says):
-
-- `stores/<hash>`: every flow command registers its folder there, so `flow status --all` and the
-  board's `a` find every project; a folder that is gone is dropped.
-- `slots/<n>`: `flow start` claims its slot there before setup runs, so no two unfinished flows in
-  any project share a slot. A claim only counts while its flow is unfinished.
-
-`flow status --all --json` prints `{"version", "now", "projects": [{"name", "root", "board"}]}`,
-each board as `flow status --json` prints it. A project is named after its folder.
+[Install](docs/install.md), [flow ui](docs/ui.md), [flows and the master](docs/flows.md),
+[configuration](docs/configuration.md), [themes](docs/themes.md),
+[repository setup](docs/repository.md), [the command line](docs/cli.md),
+[the JSON contract](docs/json.md), [files](docs/files.md),
+[troubleshooting](docs/troubleshooting.md). What changed: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
