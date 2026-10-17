@@ -9,7 +9,7 @@
 #
 # A color is one of:
 #   "#rrggbb"   a hex color
-#   0-255       an ANSI index; 0-15 are your terminal's own colors (4 is its blue)
+#   0-255       an ANSI index. 0-15 are your terminal's own colors (4 is its blue)
 #   "default"   the terminal's own foreground or background
 #   "accent"    the name of another key, here or in the theme this one extends
 #
