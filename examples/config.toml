@@ -16,7 +16,7 @@
 #agent = "claude"
 # The first prompt for every agent that doesn't set its own, built-in agents included. Unset, each
 # agent keeps its own. Claude Code calls a skill /name, Codex calls it $name.
-# For example: prompt = "/my-feature {request}"
+# For example: prompt = "/my-feature {request}" ($my-feature in Codex)
 
 #[master]
 # Wakes the master when a worker stops. With false, it only finds out when it runs flow status.

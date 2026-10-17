@@ -167,6 +167,7 @@ configuration.md "When a change applies":
 - [x] Rewrite ROADMAP.md (add More agents) and CHANGELOG.md
 - [x] Rewrite the comments in examples/config.toml and examples/theme.toml; cargo test
 - [x] End to end: run the link checker and voice grep clean; read README and configuration.md top to bottom as a new user would, rendered as GitHub renders them; put the "use your own" example into a scratch `FLOW_CONFIG` and run `flow start` in a scratch repo with a scratch `FLOW_HOME`, confirming the flow records the three phases
+- [x] Review: name the Codex form in the example `[worker] prompt` comment of examples/config.toml (`$my-feature in Codex`); cargo test. Leave the README's two bold "Use ..." lead-ins as they are
 
 ## Review
 
