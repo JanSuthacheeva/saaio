@@ -135,7 +135,7 @@ pub fn stop_server(socket: &Path, clock: fn() -> u64) -> Result<bool> {
         let _ = server_log::append(&log, clock(), &text);
     };
     note(format!(
-        "saaio ui --stop (flow {BUILD}) sends SIGTERM to pid {pid}"
+        "saaio ui --stop (saaio {BUILD}) sends SIGTERM to pid {pid}"
     ));
     for (signal, wait) in [(libc::SIGTERM, STOP_WAIT), (libc::SIGKILL, KILL_WAIT)] {
         if signal == libc::SIGKILL {

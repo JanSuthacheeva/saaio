@@ -34,12 +34,12 @@ impl Peer {
     }
 }
 
-/// pid 4321 in /Users/jan/projects/flow (flow 0.1.0 2904734)
+/// pid 4321 in /Users/jan/projects/flow (saaio 0.1.0 2904734)
 impl fmt::Display for Peer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "pid {} in {} (flow {})",
+            "pid {} in {} (saaio {})",
             self.pid,
             self.folder(),
             self.build
@@ -468,7 +468,7 @@ mod tests {
     fn names_a_peer_by_pid_folder_and_build() {
         assert_eq!(
             peer().to_string(),
-            "pid 4321 in /Users/jan/projects/flow (flow 0.1.0 2904734)"
+            "pid 4321 in /Users/jan/projects/flow (saaio 0.1.0 2904734)"
         );
         let lost = Peer {
             cwd: PathBuf::new(),
@@ -476,7 +476,7 @@ mod tests {
         };
         assert_eq!(
             lost.to_string(),
-            "pid 4321 in an unknown folder (flow 0.1.0 2904734)"
+            "pid 4321 in an unknown folder (saaio 0.1.0 2904734)"
         );
     }
 

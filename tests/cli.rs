@@ -1990,9 +1990,9 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     };
     let pid_of = |line: &str| line.split(['[', ']']).nth(1).unwrap().to_string();
     let server_said = format!("[{server_pid}] ");
-    assert!(said("started (flow ").contains(&server_said));
+    assert!(said("started (saaio ").contains(&server_said));
     let stopper = said(&format!("sends SIGTERM to pid {server_pid}"));
-    assert!(stopper.contains("saaio ui --stop (flow "), "{stopper}");
+    assert!(stopper.contains("saaio ui --stop (saaio "), "{stopper}");
     let stopping = said("stopping: SIGTERM from pid ");
     assert!(stopping.contains(&server_said), "{stopping}");
     assert!(

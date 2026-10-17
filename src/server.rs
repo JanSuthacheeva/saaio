@@ -178,7 +178,7 @@ pub fn run(
     let listener = bind(&paths.socket)?;
     server_log::write(
         clock(),
-        &format!("started (flow {BUILD}, protocol {PROTOCOL_VERSION})"),
+        &format!("started (saaio {BUILD}, protocol {PROTOCOL_VERSION})"),
     );
     write_defaults(paths, clock);
     let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;

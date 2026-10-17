@@ -75,8 +75,8 @@ pub(crate) fn sent(flow: &FlowView) -> Document {
         sent: &flow.name,
         state: flow.state.name(),
         help: [
-            "flow wakes its worker with it now, or once its session runs again".to_string(),
-            format!("flow wakes you when {} changes again", flow.name),
+            "saaio wakes its worker with it now, or once its session runs again".to_string(),
+            format!("saaio wakes you when {} changes again", flow.name),
         ],
     }))
 }
@@ -96,7 +96,7 @@ pub(crate) fn queued(flow: &FlowView, line: &str, ahead: usize) -> Document {
         ahead,
         help: [
             format!(
-                "flow types it into {}'s pane once its session is idle",
+                "saaio types it into {}'s pane once its session is idle",
                 flow.name
             ),
             format!(
@@ -222,7 +222,7 @@ mod tests {
             [
                 "sent: shop-217",
                 "state: waiting",
-                "help[2]: \"flow wakes its worker with it now, or once its session runs again\",flow wakes you when shop-217 changes again",
+                "help[2]: \"saaio wakes its worker with it now, or once its session runs again\",saaio wakes you when shop-217 changes again",
             ]
             .join("\n")
         );
@@ -244,7 +244,7 @@ mod tests {
                 "queued: shop-217",
                 "line: /compact",
                 "ahead: 0",
-                "help[2]: flow types it into shop-217's pane once its session is idle,\"Queue the next line with another `saaio send --type shop-217 \\\"<line>\\\"`. It waits for this one's turn to end\"",
+                "help[2]: saaio types it into shop-217's pane once its session is idle,\"Queue the next line with another `saaio send --type shop-217 \\\"<line>\\\"`. It waits for this one's turn to end\"",
             ]
             .join("\n")
         );

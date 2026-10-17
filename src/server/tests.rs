@@ -645,7 +645,7 @@ fn says_why_it_stops() {
     assert_eq!(Stop::Asked(None).to_string(), "StopServer");
     assert_eq!(
         Stop::Asked(Some(peer(4321))).to_string(),
-        "StopServer from pid 4321 in /work (flow test)"
+        "StopServer from pid 4321 in /work (saaio test)"
     );
 }
 
