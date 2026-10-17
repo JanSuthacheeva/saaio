@@ -242,6 +242,8 @@ help[2]: flow types it into shop-221's pane once its session is idle,"Queue the 
   without typing in that pane.
 - A line that begins no turn (a command that only opens a dialog, such as `/cost`) holds the next
   line for 30 seconds.
+- Claude Code runs no hook on Esc. After an Esc in a Claude Code worker, its lines wait until the
+  next prompt typed in that pane ends its turn.
 - Lines wait while `flow ui` is closed and are typed once it runs again.
 
 ```sh

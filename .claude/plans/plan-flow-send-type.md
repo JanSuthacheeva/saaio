@@ -290,7 +290,7 @@ flow wait wakes a Claude Code worker:
 
 ### After the review
 
-- [ ] Docs: the Esc limit in `docs/cli.md` `--type` notes, the Codex hooks-review risk after an upgrade in HANDOVER
+- [x] Docs: the Esc limit in `docs/cli.md` `--type` notes, the Codex hooks-review risk after an upgrade in HANDOVER
 
 ## Review
 
