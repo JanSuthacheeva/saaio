@@ -781,3 +781,112 @@ fn ignores_a_second_started_event() {
     assert_eq!(flow.name, "shop-221");
     assert_eq!(texts(&flow), vec!["started"]);
 }
+
+fn started_with(at: u64, phases: &[&str]) -> Event {
+    Event::new(
+        at,
+        EventKind::Started {
+            name: "shop-221".into(),
+            request: "SHOP-221 add CSV export".into(),
+            mode: Mode::Auto,
+            phases: Some(phases.iter().copied().map(Phase::of).collect()),
+        },
+    )
+}
+
+#[test]
+fn a_flow_walks_the_phases_it_started_with() {
+    let flow = view(
+        &[
+            started_with(0, &["spec", "build", "ship"]),
+            phase(MIN, Phase::of("build")),
+        ],
+        3 * MIN,
+    );
+
+    assert_eq!(
+        flow.steps
+            .iter()
+            .map(|step| step.phase.name())
+            .collect::<Vec<_>>(),
+        ["spec", "build", "ship"]
+    );
+    assert_eq!(flow.phase, Some(Phase::of("build")));
+    assert_eq!(
+        steps(&flow),
+        vec![
+            (StepStatus::Done, None),
+            (StepStatus::Current, Some(2 * MIN)),
+            (StepStatus::Open, None),
+        ]
+    );
+}
+
+#[test]
+fn reads_design_as_plan_only_in_a_log_without_its_phases() {
+    let old = view(&[started(0), phase(MIN, Phase::of("design"))], 2 * MIN);
+    let named = view(
+        &[
+            started_with(0, &["design", "plan"]),
+            phase(MIN, Phase::of("design")),
+        ],
+        2 * MIN,
+    );
+
+    assert_eq!(old.phase, Some(Phase::of("plan")));
+    assert_eq!(texts(&old), ["started", "phase: plan"]);
+    assert_eq!(old.steps[0].status, StepStatus::Current);
+    assert_eq!(named.phase, Some(Phase::of("design")), "its own phase");
+}
+
+#[test]
+fn a_phase_the_flow_does_not_have_changes_nothing() {
+    let events = [
+        started_with(0, &["spec", "build"]),
+        phase(MIN, Phase::of("spec")),
+    ];
+
+    let flow = view(
+        &[
+            events[0].clone(),
+            events[1].clone(),
+            phase(2 * MIN, Phase::of("review")),
+        ],
+        3 * MIN,
+    );
+
+    assert_eq!(flow.phase, Some(Phase::of("spec")));
+    assert_eq!(texts(&flow), ["started", "phase: spec"]);
+    assert!(!changes(
+        "x",
+        &events,
+        &EventKind::Phase {
+            phase: Phase::of("review")
+        },
+        3 * MIN
+    ));
+}
+
+#[test]
+fn a_merge_request_enters_the_last_phase_whatever_its_name() {
+    let flow = view(
+        &[
+            started_with(0, &["spec", "build", "ship"]),
+            phase(0, Phase::of("build")),
+            at(
+                MIN,
+                EventKind::MergeRequest {
+                    url: "https://x/88".into(),
+                },
+            ),
+        ],
+        2 * MIN,
+    );
+
+    assert_eq!(flow.phase, Some(Phase::of("ship")));
+    assert!(
+        flow.steps
+            .iter()
+            .all(|step| step.status == StepStatus::Done)
+    );
+}
