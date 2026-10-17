@@ -226,13 +226,14 @@ The server types the next line:
    log "no turn began after typing into <name>", go on as idle.
 4. `ready(busy, opened_at, typed_at, now)` false: skip.
 5. `store.events(id)`, `store.typed(id)`, `wake::untyped(&events, typed).first()`: none, skip.
-6. `type_into(&key, &waiter, line)`: `store.set_busy(&waiter, Busy::Typed)` first (so the turn a
+6. `store.set_typed(id, typed + 1)` before the paste, as news is marked delivered before it is
+   typed: a server that stops in between loses the line rather than typing it twice.
+7. `type_into(&key, &waiter, line)`: `store.set_busy(&waiter, Busy::Typed)` first (so the turn a
    hook begins right away is not overwritten), `host.write(&key, &paste(line))` (on failure back
    to Idle), `line_at.insert(key, now)`
-7. `store.set_typed(id, typed + 1)`
 
-Errors: a failed write is logged, the count not raised, the line tried again next tick. A failed
-`set_typed` is logged; the line could be typed twice, like a failed `set_delivered`.
+Errors: a failed `set_typed` is logged and nothing is typed. A failed paste is logged, the count
+goes back to `typed` and the line is tried again next tick.
 
 The worker runs it and comes back idle:
 

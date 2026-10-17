@@ -59,15 +59,20 @@ impl Server {
             else {
                 continue;
             };
+            // Counted before the paste, as news is marked delivered before it is typed: a server
+            // that stops between the two loses the line rather than typing it twice.
+            if let Err(error) = self.store.set_typed(&id, typed + 1) {
+                server_log::write((self.clock)(), &format!("{error:#}"));
+                continue;
+            }
             if let Err(error) = self.type_into(&key, &waiter, &line) {
                 server_log::write(
                     (self.clock)(),
                     &format!("could not type into {key}: {error:#}"),
                 );
-                continue;
-            }
-            if let Err(error) = self.store.set_typed(&id, typed + 1) {
-                server_log::write((self.clock)(), &format!("{error:#}"));
+                if let Err(error) = self.store.set_typed(&id, typed) {
+                    server_log::write((self.clock)(), &format!("{error:#}"));
+                }
             }
         }
     }
