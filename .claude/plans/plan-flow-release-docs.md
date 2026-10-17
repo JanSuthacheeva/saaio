@@ -267,7 +267,7 @@ colors.
 
 ### After review
 
-- [ ] Fix the flow ui panic when the terminal shrinks before its resize event: `App::draw` lays out for the frame it draws into, not the stored size; regression test drawing an app laid out for a larger terminal into a smaller one; a CHANGELOG line; a short second review of the commit
+- [x] Fix the flow ui panic when the terminal shrinks before its resize event: `App::draw` lays out for the frame it draws into, not the stored size; regression test drawing an app laid out for a larger terminal into a smaller one; a CHANGELOG line; a short second review of the commit
 
 ## Review
 
