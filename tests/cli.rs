@@ -15,11 +15,11 @@ use tempfile::TempDir;
 
 /// The saaio binary with a test's own state: `home` as SAAIO_HOME, the shared folder inside it, a
 /// config file that does not exist (so the built-in agents), no Claude Code home of the user's
-/// and no FLOW_* variable of the shell it runs in.
+/// and no SAAIO_* variable of the shell it runs in.
 fn saaio_command(home: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_saaio"));
     for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("FLOW_") {
+        if key.to_string_lossy().starts_with("SAAIO_") {
             command.env_remove(key);
         }
     }
@@ -36,7 +36,7 @@ fn saaio(home: &Path, args: &[&str]) -> Output {
     saaio_command(home)
         .args(args)
         .output()
-        .expect("the flow binary runs")
+        .expect("the saaio binary runs")
 }
 
 fn saaio_in(home: &Path, flow_id: &str, args: &[&str]) -> Output {
@@ -44,7 +44,7 @@ fn saaio_in(home: &Path, flow_id: &str, args: &[&str]) -> Output {
         .args(args)
         .env("SAAIO_FLOW_ID", flow_id)
         .output()
-        .expect("the flow binary runs")
+        .expect("the saaio binary runs")
 }
 
 /// git in `dir`, which must succeed.
@@ -2315,7 +2315,7 @@ fn waiter(home: &Path, flow_id: Option<&str>, args: &[&str]) -> Running {
     if let Some(id) = flow_id {
         command.env("SAAIO_FLOW_ID", id);
     }
-    Running(command.spawn().expect("the flow binary runs"))
+    Running(command.spawn().expect("the saaio binary runs"))
 }
 
 /// The waiter's exit code, stdout and stderr once it ends; None while it still runs after `limit`.
