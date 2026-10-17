@@ -222,7 +222,7 @@ colors.
 - [x] Make theme indexes 0-15 the terminal's named colors in `theme_file::color`, with tests (4 Blue, 15 White, 16 Indexed)
 - [x] Change the built-in `PhaseColors` default to `Off`; update the tests that assumed `Steps`, rewrite and eye-check the goldens, update the README's theme lines until docs replace them
 - [x] Write `examples/theme.toml` and `theme_file::EXAMPLE` with tests: uncommented gives the terminal theme, every key listed, raw parses
-- [ ] Write `examples/config.toml` and `config::EXAMPLE` with test-only Serialize; tests: uncommented equals `Config::builtin()`, same TOML table, raw parses
+- [x] Write `examples/config.toml` and `config::EXAMPLE` with test-only Serialize; tests: uncommented equals `Config::builtin()`, same TOML table, raw parses
 - [ ] Add `ServerPaths::config`/`theme` and `write_defaults`, filled in `commands/server.rs`; server test writes all three and keeps an existing config.toml; check no test touches the real config dir
 
 ### Docs

@@ -5,13 +5,17 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
+#[cfg(test)]
+use serde::Serialize;
 
 use crate::adapter::Adapter;
+use crate::default_file::DefaultFile;
 use crate::ui::prefix::Prefix;
 use crate::workflow::Workflow;
 
 /// How to launch one agent: its command line, the first prompt it gets, and how to resume it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[cfg_attr(test, derive(Serialize))]
 #[serde(deny_unknown_fields)]
 pub struct Agent {
     pub command: Vec<String>,
@@ -29,6 +33,7 @@ pub struct Agent {
 }
 
 #[derive(Debug, Default, Deserialize)]
+#[cfg_attr(test, derive(Serialize, PartialEq))]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub agents: BTreeMap<String, Agent>,
@@ -42,6 +47,7 @@ pub struct Config {
 
 /// [worker]: what a flow runs when flow start names no agent, and what it is asked first.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[cfg_attr(test, derive(Serialize))]
 #[serde(default, deny_unknown_fields)]
 pub struct WorkerConfig {
     /// The agent flow start runs, "claude" unless set.
@@ -62,6 +68,7 @@ impl Default for WorkerConfig {
 
 /// [master]: how the master works with its workers.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[cfg_attr(test, derive(Serialize))]
 #[serde(default, deny_unknown_fields)]
 pub struct MasterConfig {
     /// flow wakes the master when a worker stops (wake = false: it learns only from flow status).
@@ -81,6 +88,7 @@ impl Default for MasterConfig {
 
 /// [ui]: how flow ui takes keys.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[cfg_attr(test, derive(Serialize))]
 #[serde(default, deny_unknown_fields)]
 pub struct UiConfig {
     /// The key before every flow ui command, C-space unless set.
@@ -213,6 +221,13 @@ fn strings(parts: &[&str]) -> Vec<String> {
     parts.iter().copied().map(String::from).collect()
 }
 
+/// What flow writes as config.toml on its first run: every setting at its default, commented out.
+#[allow(dead_code)]
+pub const EXAMPLE: DefaultFile = DefaultFile {
+    text: include_str!("../examples/config.toml"),
+    earlier: &[],
+};
+
 /// The agent flow ui runs as its master when there is one and [master] names no other; else the
 /// default agent.
 pub const MASTER_AGENT: &str = "master";
@@ -254,6 +269,33 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::default_file::uncommented;
+
+    #[test]
+    fn the_example_uncommented_is_the_built_in_config() {
+        let text = uncommented(EXAMPLE.text);
+
+        let mut example = Config::parse(&text).unwrap();
+        example.add_builtins();
+
+        assert_eq!(example, Config::builtin());
+    }
+
+    #[test]
+    fn the_example_lists_every_setting_and_no_other() {
+        let listed: toml::Table = toml::from_str(&uncommented(EXAMPLE.text)).unwrap();
+        let builtin = toml::Table::try_from(Config::builtin()).unwrap();
+
+        assert_eq!(listed, builtin);
+    }
+
+    #[test]
+    fn the_example_as_it_is_parses_to_the_built_in_config() {
+        let mut example = Config::parse(EXAMPLE.text).unwrap();
+        example.add_builtins();
+
+        assert_eq!(example, Config::builtin());
+    }
 
     #[test]
     fn knows_claude_code_without_a_config_file() {

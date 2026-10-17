@@ -40,6 +40,7 @@ pub enum Turn {
 
 /// A harness flow observes through its own hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(test, derive(serde::Serialize))]
 #[serde(rename_all = "kebab-case")]
 pub enum Adapter {
     ClaudeCode,
