@@ -1,0 +1,372 @@
+<title>Typed Lines Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* layout: one 720px reading column of cards, jasu.dev (Nord + one purple accent) */
+:root {
+  --surface:#f8f9fb; --card:#eceff4; --ink:#2e3440; --muted:#4c566a; --subtle:#d8dee9; --border:#d8dee9;
+  --code-block:#2e3440; --code-bg:#e5e9f0; --code-ink:#4b6c8a; --accent:#7b5eaf; --link:#4b6c8a;
+  --constructive:#a3be8c; --warning:#d08770; --critical:#bf616a; --on-accent:#f8f9fb; --block-ink:#eceff4;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --gap:24px; --radius:6px;
+}
+:root[data-theme="dark"] {
+  --surface:#2e3440; --card:#3b4252; --ink:#eceff4; --muted:#93b1cc; --subtle:#434c5e; --border:#4c566a;
+  --code-block:#3b4252; --code-bg:#3b4252; --code-ink:#88c0d0; --accent:#bd93f9; --link:#88c0d0; --warning:#ebcb8b; --on-accent:#2e3440; color-scheme:dark }
+body { background:var(--surface); color:var(--ink); font:18px/1.6 var(--sans);
+  padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); padding-block:32px 64px; }
+main { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:var(--gap); }
+h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.1; font-weight:800; letter-spacing:-0.03em; margin:0; text-wrap:balance; }
+h2 { font-size:24px; line-height:1.3; margin:0; text-wrap:balance; }
+h3 { font-size:18px; margin:0; }
+p, ul, ol { margin:0; }
+ul, ol { padding-left:1.2em; display:flex; flex-direction:column; gap:6px; }
+.meta { font-size:13px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:var(--gap);
+  display:flex; flex-direction:column; gap:16px; min-width:0; }
+.card.rec { border-color:var(--accent); border-width:2px; }
+.pill { display:inline-block; border-radius:99px; font-size:.8rem; font-weight:600; letter-spacing:.05em; padding:1px 10px;
+  background:var(--accent); color:var(--on-accent); vertical-align:middle; }
+code { font-family:var(--mono); font-size:.78em; background:var(--code-bg); color:var(--code-ink); border-radius:.2rem; padding:1px 4px; overflow-wrap:anywhere; }
+pre { margin:0; background:var(--code-block); color:var(--block-ink); border-radius:var(--radius); padding:14px; overflow-x:auto; font:13px/1.5 var(--mono); }
+.cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.cols > div { min-width:0; display:flex; flex-direction:column; gap:6px; }
+.cols h3 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+.plus li::marker { content:"+  "; color:var(--muted); }
+.minus li::marker { content:"-  "; color:var(--muted); }
+.dia { display:flex; flex-direction:column; gap:6px; font:13px/1.4 var(--mono); }
+.row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.box { border:1px solid var(--border); background:var(--surface); border-radius:4px; padding:4px 8px; }
+.box.new { border:2px solid var(--accent); }
+.box.mod { border:1px dashed var(--accent); }
+.arrow { color:var(--muted); }
+.legend { display:flex; gap:12px; flex-wrap:wrap; font-size:13px; color:var(--muted); align-items:center; }
+.legend .box { padding:0 6px; }
+@media (max-width:560px) { .cols { grid-template-columns:1fr; } .card { padding:14px; } body { font-size:17px; } }
+table { border-collapse:collapse; font-size:15px; width:100%; }
+td, th { border:1px solid var(--border); padding:6px 8px; text-align:left; vertical-align:top; }
+th { background:var(--subtle); }
+.scroll { overflow-x:auto; }
+.unit { display:flex; flex-direction:column; gap:10px; border-top:1px solid var(--border); padding-top:14px; }
+.unit:first-of-type { border-top:0; padding-top:0; }
+.tag { font-size:13px; color:var(--muted); }
+.tag b { color:var(--accent); }
+.err { color:var(--muted); font-size:15px; }
+ol.steps li { font-size:15px; }
+</style>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:8px">
+  <p class="meta">flow · design-code · implementation · 2026-10-17</p>
+  <h1>Typed lines: implementation</h1>
+  <p><code>flow send --type &lt;flow&gt; &lt;line&gt;</code> queues a line in the flow's log. The server types it and Enter into the worker's pane once the session is idle, one line per turn, in order.</p>
+</header>
+
+<section class="card">
+  <h2>1. Decision recap</h2>
+  <p>Approach A: a new <code>Typed { text }</code> event is the queue, <code>waits/&lt;id&gt;.typed</code> counts the lines typed, and a new <code>Server::type_lines</code> types the next one when the pane is ready. Both harnesses mark turns in <code>waits/&lt;id&gt;.busy</code>, so "idle" means the same for Claude Code and Codex.</p>
+  <ul>
+    <li>Decided: approach A, one line per call (<code>flow send --type shop-217 /compact</code>, then <code>flow send --type shop-217 "continue shipping"</code>).</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>2. Structure overview</h2>
+  <div class="legend"><span class="box new">new</span><span class="box mod">modified</span><span class="box">existing</span></div>
+  <div class="dia">
+    <p class="meta">CLI</p>
+    <div class="row"><span class="box mod">commands::send</span><span class="arrow">-&gt;</span><span class="box mod">output::flow (queued)</span></div>
+    <div class="row"><span class="box mod">commands::hook</span><span class="box mod">commands::wait</span><span class="arrow">-&gt;</span><span class="box mod">Store (Busy)</span></div>
+    <p class="meta">Adapters</p>
+    <div class="row"><span class="box mod">Adapter::turn</span><span class="arrow">-&gt;</span><span class="box mod">claude_code::turn</span><span class="box mod">codex::turn</span></div>
+    <p class="meta">Log and state</p>
+    <div class="row"><span class="box mod">EventKind::Typed</span><span class="box mod">fold (note, changes)</span><span class="box mod">wake::untyped</span><span class="box mod">Store (typed, Busy)</span></div>
+    <p class="meta">Server</p>
+    <div class="row"><span class="box mod">Server::serve</span><span class="arrow">-&gt;</span><span class="box new">server/typing.rs: type_lines</span><span class="arrow">-&gt;</span><span class="box">Host::write</span></div>
+    <div class="row"><span class="box mod">server/news.rs</span><span class="arrow">-&gt;</span><span class="box new">Server::type_into</span><span class="box mod">panes::open_pane (opened_at)</span></div>
+    <p class="meta">Text</p>
+    <div class="row"><span class="box mod">master.md (+ master-v8.md)</span><span class="box mod">docs/cli.md, files.md, flows.md</span><span class="box mod">HANDOVER.md</span></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>3. Units</h2>
+
+  <div class="unit">
+    <h3>cli/commands/send.rs</h3>
+    <p class="tag"><b>modified</b> · CLI · its message, or with <code>--type</code>, a line to type into the worker's pane</p>
+<pre>pub struct Args {
+    /// Flow name or id
+    flow: String,
+    /// What to tell it, or with --type the line to type
+    text: String,
+    /// Type the text and Enter into the worker's pane once it is idle, as if the user typed it
+    #[arg(long = "type")]
+    typed: bool,
+}
+
+pub fn run(args: &amp;Args, store: &amp;Store, config: &amp;Config, sender: Option&lt;&amp;str&gt;, now: u64)
+    -&gt; Result&lt;Document, Failure&gt;;</pre>
+    <p>The refusals it has stay and apply to both. With <code>--type</code>, it also refuses a line with a newline and a flow whose agent has no adapter (no turns to wait for). It appends <code>Typed</code> and answers <code>output::flow::queued</code>. <code>cli.rs</code> passes <code>env.config()</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3>cli/output/flow.rs</h3>
+    <p class="tag"><b>modified</b> · output · the TOON answer to a queued line</p>
+<pre>/// queued, the line, how many lines wait before it, and when flow types it.
+pub(crate) fn queued(flow: &amp;FlowView, line: &amp;str, ahead: usize) -&gt; Document;</pre>
+<pre>queued: shop-217
+line: /compact
+ahead: 0
+help[2]: flow types it into shop-217's pane once its session is idle,Queue the next line with another `flow send --type shop-217 "&lt;line&gt;"`; it waits for this one's turn to end</pre>
+  </div>
+
+  <div class="unit">
+    <h3>event.rs</h3>
+    <p class="tag"><b>modified</b> · log · a new kind</p>
+<pre>/// A line the master queued for the server to type into this flow's pane, through `flow send --type`.
+Typed { text: String },</pre>
+    <p>Cut to <code>LONG_TEXT_LIMIT</code> as <code>Message</code> is. On disk <code>{"kind":"typed","text":"/compact"}</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3>fold.rs</h3>
+    <p class="tag"><b>modified</b> · fold</p>
+    <p><code>changes</code> returns true for every <code>Typed</code>, as for <code>Message</code>. The timeline notes <code>master typed: &lt;text&gt;</code>, neutral. No <code>FlowView</code> field, so <code>VIEW_VERSION</code> stays.</p>
+  </div>
+
+  <div class="unit">
+    <h3>wake.rs</h3>
+    <p class="tag"><b>modified</b> · pure</p>
+<pre>/// The lines queued in a flow's log after the first `typed` of them.
+pub fn untyped(events: &amp;[Event], typed: usize) -&gt; Vec&lt;&amp;str&gt;;</pre>
+  </div>
+
+  <div class="unit">
+    <h3>store.rs</h3>
+    <p class="tag"><b>modified</b> · files</p>
+<pre>/// Whether a session runs a turn, as `waits/&lt;key&gt;.busy` says.
+pub enum Busy {
+    /// At its prompt: no busy file.
+    Idle,
+    /// A hook or `flow wait` began a turn ("turn", or an empty file an earlier flow wrote).
+    Turn,
+    /// The server typed into the pane and no turn began yet ("typed").
+    Typed,
+}
+
+pub fn set_busy(&amp;self, waiter: &amp;Waiter, busy: Busy) -&gt; Result&lt;()&gt;;   // was busy: bool
+pub fn busy(&amp;self, waiter: &amp;Waiter) -&gt; Busy;                           // was bool
+
+/// How many of the flow's queued lines the server typed.
+pub fn typed(&amp;self, id: &amp;str) -&gt; usize;
+pub fn set_typed(&amp;self, id: &amp;str, count: usize) -&gt; Result&lt;()&gt;;</pre>
+    <p><code>remove</code> also removes <code>waits/&lt;id&gt;.typed</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3>adapter.rs, adapter/claude_code.rs, adapter/codex.rs</h3>
+    <p class="tag"><b>modified</b> · adapters · turns for both harnesses</p>
+<pre>// adapter.rs
+pub fn turn(self, payload: &amp;Value) -&gt; Option&lt;Turn&gt;;   // ClaudeCode =&gt; claude_code::turn
+
+// claude_code.rs: EVENTS gains PreCompact, PostCompact
+/// A prompt or a compaction begins a turn, a Stop or the compaction's end ends it; a Stop with a
+/// background task running is no end (the agent resumes on its own); a subagent's are not the session's.
+pub fn turn(payload: &amp;Value) -&gt; Option&lt;Turn&gt;;
+
+// codex.rs: EVENTS gains PreCompact, PostCompact; turn maps them to Began, Ended</pre>
+    <p><code>translate</code> gives the two new events no kinds: a compaction does not change what a flow shows.</p>
+  </div>
+
+  <div class="unit">
+    <h3>cli/commands/hook.rs</h3>
+    <p class="tag"><b>modified</b> · CLI</p>
+    <p>At <code>Turn::Ended</code>, a session that wakes itself (Claude Code) is only marked <code>Busy::Idle</code>: its news stays <code>flow wait</code>'s. Codex keeps <code>hand_over</code>. <code>Began</code> marks <code>Busy::Turn</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3>cli/commands/wait.rs</h3>
+    <p class="tag"><b>modified</b> · CLI</p>
+    <p>Before it returns news, <code>wait</code> marks the session <code>Busy::Turn</code>: the turn its exit 2 starts runs no prompt hook. The Stop that ends it clears the mark.</p>
+  </div>
+
+  <div class="unit">
+    <h3>server/typing.rs</h3>
+    <p class="tag"><b>new</b> · server · the master's queued lines, typed into idle panes</p>
+<pre>/// How long a typed line may go without a turn beginning before the next one may follow:
+/// a command such as /cost runs no hook.
+const UNSTARTED: Duration = Duration::from_secs(30);   // 300 ms in tests
+
+impl Server {
+    /// Types each flow's next queued line into its pane when the pane is ready, and lets a line
+    /// that began no turn within UNSTARTED go.
+    pub(super) fn type_lines(&amp;mut self);
+
+    /// Pastes `text` and Enter into the pane, marks the session Busy::Typed and when; news and
+    /// queued lines both type through it.
+    pub(super) fn type_into(&amp;mut self, key: &amp;PaneKey, waiter: &amp;Waiter, text: &amp;str) -&gt; Result&lt;()&gt;;
+
+    /// The flow whose queued lines this pane takes: a running worker of a flow that is not plain
+    /// or finished, whose agent has an adapter and whose session ended a turn (answer set).
+    fn takes_lines(&amp;self, key: &amp;PaneKey) -&gt; Option&lt;String&gt;;
+}
+
+/// True when the pane takes a line now: idle, open and untouched by the person for QUIET.
+fn ready(busy: Busy, opened_at: Option&lt;Instant&gt;, typed_at: Option&lt;Instant&gt;, now: Instant) -&gt; bool;
+
+/// True when the server's own typed line began no turn within UNSTARTED.
+fn unstarted(busy: Busy, line_at: Option&lt;Instant&gt;, now: Instant) -&gt; bool;</pre>
+  </div>
+
+  <div class="unit">
+    <h3>server/news.rs</h3>
+    <p class="tag"><b>modified</b> · server</p>
+    <p><code>deliver_news</code> checks <code>busy == Busy::Idle</code> and types through <code>type_into</code>, so news and a queued line never land in the same idle moment. <code>QUIET</code> and <code>paste</code> become <code>pub(super)</code> for typing.rs.</p>
+  </div>
+
+  <div class="unit">
+    <h3>server.rs, server/panes.rs</h3>
+    <p class="tag"><b>modified</b> · server</p>
+<pre>// Server, new fields
+/// When each pane opened, so nothing is typed into a harness still starting up.
+opened_at: HashMap&lt;PaneKey, Instant&gt;,
+/// When the server last typed into each pane, for UNSTARTED.
+line_at: HashMap&lt;PaneKey, Instant&gt;,</pre>
+    <p><code>serve</code> calls <code>type_lines</code> after <code>deliver_news</code>. <code>open_pane</code> marks <code>Busy::Idle</code> as today and sets <code>opened_at</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3>server/master.md, master.rs</h3>
+    <p class="tag"><b>modified</b> · text</p>
+    <p>Today's master.md becomes <code>master-v8.md</code> (listed in <code>master.rs</code>, so an untouched file upgrades). The new bullet:</p>
+<pre>- `flow send --type &lt;name&gt; "&lt;line&gt;"` types the line and Enter into the worker's pane once it is
+  idle, as if the user typed it there, so a slash command runs: `/compact`, or a skill. One line
+  per call, typed in order, each after the turn before it ended. When the user asks to compact a
+  worker and go on, queue `/compact`, then the line they name, such as "continue shipping". Type
+  only what the user asks for.</pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>4. Data</h2>
+  <div class="scroll"><table>
+    <tr><th>What</th><th>Shape</th><th>Crosses</th></tr>
+    <tr><td><code>EventKind::Typed</code></td><td><code>{"at":..,"kind":"typed","text":"/compact"}</code></td><td>send -&gt; log -&gt; server, fold</td></tr>
+    <tr><td><code>waits/&lt;id&gt;.typed</code></td><td>a count, as <code>.delivered</code></td><td>server only</td></tr>
+    <tr><td><code>waits/&lt;key&gt;.busy</code></td><td>absent (Idle), <code>turn</code> or empty (Turn), <code>typed</code> (Typed)</td><td>hook, wait -&gt; server</td></tr>
+    <tr><td><code>Busy</code></td><td>enum Idle, Turn, Typed</td><td>inside the crate</td></tr>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>5. Call chains</h2>
+
+  <h3>The master queues a line</h3>
+<pre>master      send::run          fold / wake         Store
+  | --type ----&gt;|                   |                  |
+  |             |-- views --------&gt; |                  |
+  |             |-- resolve ------&gt; |                  |
+  |             |   refusals        |                  |
+  |             |-- untyped ------&gt; | (ahead)          |
+  |             |-- append Typed ----------------------&gt;|
+  |&lt;- queued ---|                   |                  |</pre>
+  <ol class="steps">
+    <li><code>cli::run -&gt; send::run(args, store, config, env.flow_id(), now): Result&lt;Document, Failure&gt;</code></li>
+    <li><code>send::run -&gt; views(store, now)</code>, <code>fold::resolve(&amp;flows, &amp;args.flow): Option&lt;&amp;FlowView&gt;</code></li>
+    <li>Refusals in order: sender set, empty, too long, a newline, no flow, finished, no worker, plain, agent without adapter (<code>config.agent(Some(&amp;workspace.agent))</code>).</li>
+    <li><code>send::run -&gt; store.events(id)</code>, <code>wake::untyped(&amp;events, store.typed(id)).len(): usize</code> (ahead)</li>
+    <li><code>send::run -&gt; store.append(id, Event::new(now, Typed { text }))</code></li>
+    <li><code>send::run -&gt; output::flow::queued(flow, text, ahead): Document</code></li>
+  </ol>
+  <p class="err">Errors: each refusal is a <code>Failure</code> with its help, exit 1. A newline: "a typed line is one line", help "Queue one `flow send --type` per line". No adapter: "&lt;name&gt; runs &lt;agent&gt;, which reports no turns to flow", help "Use `flow send` for a message".</p>
+
+  <h3>The server types the next line</h3>
+<pre>serve      type_lines         Store            Host (PTY)
+  | tick ----&gt;|                  |                  |
+  |           |-- takes_lines    |                  |
+  |           |-- busy ---------&gt;|                  |
+  |           |   ready?         |                  |
+  |           |-- events, typed -&gt;|                 |
+  |           |   wake::untyped  |                  |
+  |           |-- type_into ------------------------&gt;| paste + \r
+  |           |-- set_busy(Typed)&gt;|                 |
+  |           |-- set_typed(n+1)-&gt;|                 |</pre>
+  <ol class="steps">
+    <li><code>Server::serve -&gt; Server::type_lines()</code> every <code>WATCH_EVERY</code>, after <code>deliver_news</code></li>
+    <li>For each running pane: <code>takes_lines(&amp;key): Option&lt;String&gt;</code></li>
+    <li><code>type_lines -&gt; store.busy(&amp;waiter): Busy</code>. If <code>unstarted(busy, line_at, now)</code>: <code>store.set_busy(&amp;waiter, Busy::Idle)</code>, log "no turn began after typing into &lt;name&gt;", and go on as idle.</li>
+    <li><code>ready(busy, opened_at, typed_at, now)</code> false: skip this pane.</li>
+    <li><code>store.events(id)</code>, <code>store.typed(id)</code>, <code>wake::untyped(&amp;events, typed).first()</code>: none, skip.</li>
+    <li><code>type_lines -&gt; type_into(&amp;key, &amp;waiter, line)</code>: <code>host.write(&amp;key, &amp;paste(line))</code>, <code>store.set_busy(&amp;waiter, Busy::Typed)</code>, <code>line_at.insert(key, now)</code></li>
+    <li><code>type_lines -&gt; store.set_typed(id, typed + 1)</code></li>
+  </ol>
+  <p class="err">Errors: a failed write is logged to server.log and the count is not raised, so the line is tried again next tick. A failed <code>set_typed</code> is logged; the line could be typed twice, as a failed <code>set_delivered</code> today could deliver twice.</p>
+
+  <h3>The worker runs the line and comes back idle</h3>
+<pre>harness         flow hook           Store
+  | UserPromptSubmit / PreCompact -&gt;|  set_busy(Turn)
+  |   ... the turn or the compaction ...
+  | Stop / PostCompact ------------&gt;|  set_busy(Idle)   (Codex: hand_over first)</pre>
+  <ol class="steps">
+    <li><code>hook -&gt; adapter.turn(payload): Some(Turn::Began) -&gt; mark_busy(store, &amp;waiter, Busy::Turn)</code></li>
+    <li><code>hook -&gt; adapter.turn(payload): Some(Turn::Ended)</code>: <code>adapter.wakes_itself()</code> -&gt; <code>mark_busy(.., Busy::Idle)</code>; else <code>hand_over</code> as today, Idle when there is no news.</li>
+    <li>The next tick's <code>type_lines</code> sees Idle and types the next line after <code>QUIET</code> rules.</li>
+  </ol>
+  <p class="err">Esc on Claude Code runs no hook: the mark stays Turn until the next prompt's turn ends. A line that starts nothing (/cost): Typed for UNSTARTED, then Idle (step 3 above).</p>
+
+  <h3>flow wait wakes a Claude Code worker</h3>
+  <ol class="steps">
+    <li><code>wait::wait -&gt; deliver::worker_news(store, id, now): WorkerNews::News</code></li>
+    <li><code>wait::wait -&gt; store.set_busy(&amp;waiter, Busy::Turn)</code>, then returns the news (exit 2 wakes the session)</li>
+    <li>That turn's Stop marks Idle.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2>6. Conventions followed</h2>
+  <ul>
+    <li><code>Typed</code> and <code>.typed</code> mirror <code>Message</code> and <code>.delivered</code> (<code>event.rs:68</code>, <code>store.rs:231</code>, <code>wake.rs:19</code>).</li>
+    <li>Refusals and their help copy <code>send.rs:23-60</code>; the answer is a document in <code>cli/output/flow.rs</code> beside <code>sent</code>.</li>
+    <li>Typing copies <code>server/news.rs</code>: one bracketed paste and <code>\r</code>, <code>QUIET</code> after a person's key, cfg(test) constants.</li>
+    <li>One file per responsibility (<code>CLAUDE.md</code>): typing.rs is "the master's lines typed into panes", news.rs stays "news typed into Codex panes".</li>
+    <li>Earlier master.md defaults kept as <code>master-vN.md</code> (<code>server/master.rs:21</code>).</li>
+    <li>Deviation: <code>Store::busy</code> returns an enum instead of a bool, since the server must tell its own mark from a turn's.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>7. Test seams</h2>
+  <ul>
+    <li><code>wake::untyped</code>, <code>store</code> Busy and typed counts, <code>fold</code> note and <code>changes</code>: unit tests.</li>
+    <li><code>claude_code::turn</code>, <code>codex::turn</code>: unit tests on recorded PreCompact / PostCompact / Stop-with-background fixtures.</li>
+    <li><code>hook</code>: a Claude Code Stop marks Idle and hands nothing over; <code>wait</code>: marks Turn with news.</li>
+    <li><code>typing::ready</code>, <code>unstarted</code>: pure unit tests like <code>news::quiet</code>.</li>
+    <li><code>send</code>: <code>tests/cli.rs</code> end to end for <code>--type</code>, the refusals and <code>ahead</code>.</li>
+    <li>Server: <code>server/tests.rs</code> over a real socket with a fake agent (a shell script that echoes its input and runs <code>flow hook</code>): two queued lines, the second typed only after the first's Stop.</li>
+    <li>E2E with a scratch <code>FLOW_HOME</code>: a Claude Code and a Codex worker, <code>/compact</code> then "continue", seen in the pane.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>8. Assumptions</h2>
+  <ol>
+    <li>The worker sees a typed line as the user's prompt, unmarked: it is what you would have typed.</li>
+    <li>A line is typed only after the session ended a turn at least once (its flow has an answer) and its pane has been open for 10 s, so nothing lands in a harness still starting up or resuming.</li>
+    <li>A line that begins no turn holds the queue 30 s, then the next goes.</li>
+    <li>Queued lines of a flow wait while no server runs, and are typed once <code>flow ui</code> opens its pane.</li>
+    <li>No way to drop a queued line. Removing the flow drops them.</li>
+    <li>No typing into the master's pane: <code>flow send</code> names a flow.</li>
+    <li>The CHANGELOG is untouched (0.1.0 is not released, so nothing gets an entry). ROADMAP has no item for it.</li>
+    <li>Compaction changes no flow state: the sidebar shows the worker idle while it compacts.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2>9. Open questions</h2>
+  <ol>
+    <li>The log event is named <code>typed</code> and the timeline reads <code>master typed: /compact</code>. Stored, so expensive to rename later. Recommended: keep.</li>
+    <li>The answer is <code>queued: &lt;flow&gt;</code> with <code>line</code> and <code>ahead</code>, which the master reads. Recommended: keep.</li>
+  </ol>
+</section>
+</main>
