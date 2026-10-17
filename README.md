@@ -131,7 +131,8 @@ Claude Code and Codex. It runs on macOS and Linux only.
 [configuration](docs/configuration.md), [themes](docs/themes.md),
 [repository setup](docs/repository.md), [the command line](docs/cli.md),
 [the JSON contract](docs/json.md), [files](docs/files.md),
-[troubleshooting](docs/troubleshooting.md). What changed: [CHANGELOG.md](CHANGELOG.md).
+[troubleshooting](docs/troubleshooting.md). What changed: [CHANGELOG.md](CHANGELOG.md). What
+comes next: [ROADMAP.md](ROADMAP.md).
 
 ## License
 

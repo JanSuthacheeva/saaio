@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-flow is an AXI (https://axi.md): a CLI whose main user is an agent. It records each feature flow as an append-only event log and folds the logs into where every flow stands. Agents read TOON (the default output); programs read `flow status --json`. The designs and task lists live in `.claude/plans/` (`plan-flow-core.md`, `plan-flow-start.md`, `plan-flow-ui.md`, `plan-flow-adapters.md`, `plan-flow-per-project.md`, `plan-flow-theme.md`, `plan-flow-branch-names.md`, `plan-flow-talk.md`, `plan-flow-file-structure.md`, `plan-flow-codex.md`, `plan-flow-tui-polish.md`, `plan-flow-master-indicator.md`, `plan-flow-configurable-workflow.md`, `plan-flow-release-docs.md`); the whole flows system (the other five pieces, every decision, verified Claude Code facts, gotchas) is in `docs/HANDOVER.md`, with the design review pages in `docs/design/`. The user documentation is `README.md` and `docs/*.md` (index `docs/README.md`); a change a user can see updates it in the same PR.
+flow is an AXI (https://axi.md): a CLI whose main user is an agent. It records each feature flow as an append-only event log and folds the logs into where every flow stands. Agents read TOON (the default output); programs read `flow status --json`. The designs and task lists live in `.claude/plans/` (`plan-flow-core.md`, `plan-flow-start.md`, `plan-flow-ui.md`, `plan-flow-adapters.md`, `plan-flow-per-project.md`, `plan-flow-theme.md`, `plan-flow-branch-names.md`, `plan-flow-talk.md`, `plan-flow-file-structure.md`, `plan-flow-codex.md`, `plan-flow-tui-polish.md`, `plan-flow-master-indicator.md`, `plan-flow-configurable-workflow.md`, `plan-flow-release-docs.md`); the whole flows system (the other five pieces, every decision, verified Claude Code facts, gotchas) is in `docs/HANDOVER.md`, with the design review pages in `docs/design/`. The user documentation is `README.md`, `ROADMAP.md` and `docs/*.md` (index `docs/README.md`); a change a user can see updates it in the same PR.
 
 ## Build Commands
 
@@ -65,4 +65,4 @@ The log is private to this crate; readers depend only on the command line and th
 
 ## Changelog
 
-Every PR adds its line under `## [Unreleased]` in `CHANGELOG.md` (Added, Changed, Fixed, Removed, Known issues), written for users, not for reviewers. A release renames Unreleased to the version and its date.
+`CHANGELOG.md` holds only the 0.1.0 entry until 0.1.0 is released; nothing done before the release gets an entry. Entries start after it: every PR adds its line under `## [Unreleased]` (Added, Changed, Fixed, Removed), written for users, not for reviewers, and a release renames Unreleased to the version and its date. Known gaps and planned work go in `ROADMAP.md` (Implementing, Planned soon, Planned future), never in the CHANGELOG; a PR that builds or drops a roadmap item updates it.

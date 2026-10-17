@@ -234,7 +234,11 @@ colors.
   (flow ui in a private tmux, an Alacritty window from `docs/media/alacritty.toml`, the picture by
   window id with `screencapture`, the GIF with ffmpeg cropped to the window) replaces `demo.tape`.
   The demo config sets `[master] wake = false`, so the master's pane ends on its answer.
-- Found while recording, not fixed here: flow ui panics (index outside the buffer, from
+- After the review, Jan: no CHANGELOG entries or known issues before the release. CHANGELOG.md holds
+  only the 0.1.0 entry; the known issues and the relevant HANDOVER Future improvements became
+  `ROADMAP.md` (Implementing, Planned soon, Planned future); the CLAUDE.md rule says entries start
+  after 0.1.0. The resize fix's CHANGELOG line went with it.
+- Found while recording, fixed after the review (3881dbf): flow ui panics (index outside the buffer, from
   `sidebar.rs` `Row::render`) when the terminal shrinks and a redraw comes before the resize event,
   since `App::draw` lays out from the app's stored size, not the frame's. Reproduced with an app
   laid out for 150x45 drawn into a 130x40 `TestBackend`.

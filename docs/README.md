@@ -17,4 +17,4 @@ In reading order:
 
 The commented example settings: [examples/config.toml](../examples/config.toml) and
 [examples/theme.toml](../examples/theme.toml). What changed between versions:
-[CHANGELOG.md](../CHANGELOG.md).
+[CHANGELOG.md](../CHANGELOG.md); what comes next: [ROADMAP.md](../ROADMAP.md).
