@@ -12,7 +12,8 @@ stays pure.
 
 - 1 to 4 phases (`MAX_PHASES`). Default: plan (design-code), implement (implement-plan), review
   (review-changes), merge-request (write-merge-request).
-- A log without a recorded list folds with the built-in four and reads `design` as `plan`.
+- A log without a recorded list folds with the built-in four. No backwards compatibility before the
+  release: an old `design` phase is a phase that flow lacks, and is ignored.
 - JSON `VIEW_VERSION` 3. theme.toml `[phase]` colors any phase by name; a phase without one takes
   the built-in color of its position.
 - The first prompt: an agent's own `prompt` from the file wins; else `[worker] prompt`, when set,
@@ -92,7 +93,6 @@ Removed: `Phase::ALL`, `Phase::index`, the `ValueEnum` and `Copy` derives. `EVEN
 struct Folding {
     view: FlowView,
     phases: Vec<Phase>,               // Started.phases, else Workflow::builtin().phases()
-    legacy: bool,                     // no list recorded: "design" reads as "plan"
     durations: Vec<Option<u64>>,      // by position in phases
     entered: Vec<bool>,
     phase_since: u64,
@@ -101,13 +101,11 @@ struct Folding {
 
 impl Folding {
     fn new(id: &str, name: &str, request: &str, mode: Mode, phases: Option<&[Phase]>, at: u64) -> Folding;
-    /// Where `phase` stands in the flow's phases (after the legacy rename); None when it has none.
+    /// Where `phase` stands in the flow's phases; None when it has none.
     fn position(&self, phase: &Phase) -> Option<usize>;
     fn enter(&mut self, position: usize, at: u64);
 }
 
-/// "design" -> "plan", for logs written before phases were configurable.
-fn legacy_name(phase: &Phase) -> Phase;
 ```
 
 A Phase event the flow has no phase for changes nothing. A MergeRequest event enters the flow's
@@ -227,7 +225,7 @@ impl Theme {
 `tinted(flow)` finds the position in `flow.steps`. `Section::Phase` stays and holds names.
 
 `src/ui/theme_file.rs` (modified): `Entry { key: ColorKey, value, line }`; `colors` reads any phase
-name in `[phase]` ("design" reads as "plan", a bad name errors "theme.toml:4: Build is no phase
+name in `[phase]`, also one named like a `[ui]` or `[state]` key (a bad name errors "theme.toml:4: Build is no phase
 name"); `apply` resolves references by `ColorKey`.
 
 `ui/board/cards.rs` (modified): a delegated flow reads `"{phase} · agent"`; `gerund` goes.
@@ -271,8 +269,8 @@ flow report phase:
 4. report::run -> store.append; fold::fold -> output::flow::reported
 
 An old log:
-1. fold::fold -> Started { phases: None } -> Folding::new(.., None, at): builtin phases, legacy
-2. apply(Phase{design}) -> position(legacy_name(design) = plan): Some(0)
+1. fold::fold -> Started { phases: None } -> Folding::new(.., None, at): builtin phases
+2. apply(Phase{design}) -> position(design): None, ignored
 3. finish -> steps plan, implement, review, merge-request
 
 The UI colors a working flow:
@@ -293,12 +291,12 @@ The first prompt:
 
 - `workflow.rs`: builtin, phases, phase_of (slash and plugin prefix), each try_from error.
 - `event.rs`: Phase name rules; Started round-trips with and without phases; an old line parses.
-- `fold/tests.rs`: a custom 3-phase flow's steps; design -> plan only without a list; an unknown
+- `fold/tests.rs`: a custom 3-phase flow's steps; the built-in four without a list; an unknown
   phase ignored; MR enters the last phase.
 - `config.rs`: [[phases]] read, limits, old [phases] refused; the prompt order (own,
   [worker], built-in default, none).
 - `adapter`: translate fixtures with a Workflow.
-- `theme.rs`, `theme_file.rs`: color by name, by position, the "design" alias, a bad name.
+- `theme.rs`, `theme_file.rs`: color by name, by position, a phase named like a `[state]` key, a bad name.
 - `tests/cli.rs`: start and new record phases; report refuses an unknown phase; `status --json`
   version 3. Goldens rewritten where they showed "designing" or "design".
 
@@ -327,6 +325,8 @@ The first prompt:
 - [x] `[worker] prompt: Option`, `Agent.prompt: Option`, `resolve_prompts` (own, then [worker], then the built-in default of its name); `agent_argv` and the master's bare start; config tests for each step of the order
 - [x] README: `[[phases]]`, `[worker] prompt`, phase names in `flow report`, theme `[phase]` by name, JSON v3; HANDOVER and CLAUDE.md where they name the phases or `PhaseMap`
 - [x] End to end: a scratch `FLOW_HOME` and `FLOW_CONFIG` with a 3-phase workflow; `flow new`, `flow report phase`, `flow status` and `--json` show its steps; an old log with `design` reads as plan; `flow ui` on the scratch store shows the steps colored by a theme `[phase]` entry; `flow start` builds the worker's argv with the built-in prompts (claude `/`, codex `$`), then with `[worker] prompt` set for both as written
+- [ ] Drop the `design` -> `plan` compatibility (review open items 1 and 2; nothing is released): remove `Folding.legacy` and `legacy_name`, the theme_file alias; fold and theme tests; README and CLAUDE.md
+- [ ] theme_file: `[phase]` takes any valid phase name, also one named like a `[ui]`/`[state]` key (review open item 3); theme_file test with a phase named `done`
 
 ## Review
 
@@ -356,6 +356,10 @@ The fix commits were reviewed again by a separate agent: no issues.
   those names in `Phase` or document it; rare.
 - The `[worker] prompt` also lands on the `master` agent's resolved prompt; harmless, since
   `server/master.rs` starts the master with `prompt: None`.
+
+**Decided** (2026-10-17): no backwards compatibility before the release, so the `design` alias goes
+from fold and the theme file (items 1 and 2); `[phase]` takes any phase name (item 3); item 4
+stays.
 
 **Where to look**
 
