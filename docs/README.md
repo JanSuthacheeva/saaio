@@ -1,20 +1,20 @@
 # flow documentation
 
-In reading order:
+If you're new, read the first three in order. The rest you'll look up when you need them.
 
-| Page | Covers |
+| Page | Read it for |
 | --- | --- |
-| [install.md](install.md) | what you need, installing flow and the skills, the first run, updating |
-| [ui.md](ui.md) | flow ui: the screen, every key, the peek, the board, the new-flow dialog, leaving and stopping |
-| [flows.md](flows.md) | flows and their states and phases, guided and auto, the master, plain sessions, how workers report |
-| [configuration.md](configuration.md) | every setting in `config.toml`: agents, the first prompt, the workflow, the master, the prefix key |
-| [themes.md](themes.md) | every color in `theme.toml`, the built-in themes, themes another tool writes |
-| [repository.md](repository.md) | per repository: branch names, setup and teardown scripts, slots and ports, Docker |
-| [cli.md](cli.md) | every command and option, the output, exit codes, environment variables, several projects |
-| [json.md](json.md) | the `flow status --json` contract for programs |
+| [install.md](install.md) | installing flow and the skills, the first run, updating |
+| [ui.md](ui.md) | getting around flow ui: the sidebar, every key, the peek, the board, starting and stopping |
+| [flows.md](flows.md) | what a flow is, its states and phases, guided and auto, the master, plain sessions, how workers report |
+| [configuration.md](configuration.md) | using your own skills and phases, and every setting in `config.toml` |
+| [themes.md](themes.md) | colors: the built-in themes, every key in `theme.toml`, themes another tool writes |
+| [repository.md](repository.md) | making a repository ready: branch names, setup and teardown scripts, ports, Docker |
+| [cli.md](cli.md) | every command and option, exit codes, environment variables, several projects |
+| [json.md](json.md) | `flow status --json`, for programs |
 | [files.md](files.md) | every file flow reads or writes, and how to remove flow |
-| [troubleshooting.md](troubleshooting.md) | when something does not work |
+| [troubleshooting.md](troubleshooting.md) | when something doesn't work |
 
-The commented example settings: [examples/config.toml](../examples/config.toml) and
-[examples/theme.toml](../examples/theme.toml). What changed between versions:
-[CHANGELOG.md](../CHANGELOG.md); what comes next: [ROADMAP.md](../ROADMAP.md).
+The example settings, every one commented out, are [examples/config.toml](../examples/config.toml)
+and [examples/theme.toml](../examples/theme.toml). [CHANGELOG.md](../CHANGELOG.md) has what changed
+between versions, [ROADMAP.md](../ROADMAP.md) what comes next.
