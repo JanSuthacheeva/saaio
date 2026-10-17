@@ -41,11 +41,12 @@ pub struct Args {
     typed: bool,
 }
 
-pub fn run(args: &Args, store: &Store, config: &Config, sender: Option<&str>, now: u64)
-    -> Result<Document, Failure>;
+pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, Failure>;
 ```
 
-`cli.rs` passes the config. Existing refusals apply to both. With `--type` also: a newline in the
+`cli.rs` passes the `Env`; only `--type` loads the config, so a broken config.toml leaves plain
+messages working (changed in review: the build passed the loaded config, which refused every
+`flow send` while config.toml was broken). Existing refusals apply to both. With `--type` also: a newline in the
 line, and a flow whose agent has no adapter.
 
 `src/cli/output/flow.rs` (modified):
@@ -206,10 +207,10 @@ commands at a glance), `docs/files.md` (`waits/`: `.typed`, `.busy` for both har
 
 The master queues a line:
 
-1. `cli::run -> send::run(args, store, config, env.flow_id(), now): Result<Document, Failure>`
+1. `cli::run -> send::run(args, store, env, now): Result<Document, Failure>`
 2. `send::run -> views(store, now)`, `fold::resolve(&flows, &args.flow): Option<&FlowView>`
 3. Refusals in order: sender set, empty, too long, a newline (with `--type`), no flow, finished,
-   no worker, plain, agent without adapter (`config.agent(Some(&workspace.agent))`, with `--type`).
+   no worker, plain, agent without adapter (`env.config()?.agent(Some(&workspace.agent))`, with `--type`).
    Newline: "a typed line is one line", help "Queue one `flow send --type` per line". No adapter:
    "<name> runs <agent>, which reports no turns to flow", help "Use `flow send` for a message".
 4. `send::run -> store.events(id)`, `wake::untyped(&events, store.typed(id)).len()` (ahead)

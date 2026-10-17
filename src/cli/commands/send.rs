@@ -1,6 +1,6 @@
 use super::{no_flow, views};
+use crate::cli::Env;
 use crate::cli::output::{self, Document, Failure};
-use crate::config::Config;
 use crate::event::{Event, EventKind, LONG_TEXT_LIMIT};
 use crate::fold;
 use crate::store::Store;
@@ -19,16 +19,9 @@ pub struct Args {
 }
 
 /// Appends the master's message to a flow its worker reads when flow wakes it, or with --type a
-/// line flow server types into its pane; `sender` is the FLOW_ID of the session that sends, set
-/// only in a worker's.
-pub fn run(
-    args: &Args,
-    store: &Store,
-    config: &Config,
-    sender: Option<&str>,
-    now: u64,
-) -> Result<Document, Failure> {
-    if sender.is_some() {
+/// line flow server types into its pane; only the master sends (no FLOW_ID in its env).
+pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, Failure> {
+    if env.flow_id().is_some() {
         return Err(Failure::error(
             "only the master sends",
             vec!["End your turn with the question; flow wakes the master".to_string()],
@@ -75,7 +68,7 @@ pub fn run(
         ));
     }
     if args.typed {
-        return queue(store, config, flow, text, now);
+        return queue(store, env, flow, text, now);
     }
     let message = EventKind::Message {
         text: text.to_string(),
@@ -84,16 +77,18 @@ pub fn run(
     Ok(output::flow::sent(flow))
 }
 
-/// Appends a line for flow server to type, once the worker's agent reports its turns to flow.
+/// Appends a line for flow server to type, once the worker's agent reports its turns to flow;
+/// only this path reads config.toml, so a broken one leaves plain messages working.
 fn queue(
     store: &Store,
-    config: &Config,
+    env: &Env,
     flow: &FlowView,
     text: &str,
     now: u64,
 ) -> Result<Document, Failure> {
     let agent = flow.workspace.as_ref().map(|space| space.agent.as_str());
-    let reports = config
+    let reports = env
+        .config()?
         .agent(agent)
         .is_some_and(|(_, agent)| agent.adapter.is_some());
     if !reports {

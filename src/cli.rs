@@ -100,7 +100,7 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
             start::run(&args, store, registry, &config, &cwd, env.user_home(), now)
         }
         Some(Command::Remove(args)) => remove::run(&args, store, now),
-        Some(Command::Send(args)) => send::run(&args, store, &env.config()?, env.flow_id(), now),
+        Some(Command::Send(args)) => send::run(&args, store, env, now),
         Some(Command::Clear) => clear::run(store, now),
         Some(Command::Ui(args)) => ui::run(&args, store, env, clock),
         Some(Command::Server) => server::run(store.clone(), env, clock),

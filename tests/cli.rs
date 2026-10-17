@@ -2054,6 +2054,29 @@ fn send_refuses_what_has_no_worker_to_read_it() {
 }
 
 #[test]
+fn send_takes_a_message_while_config_toml_is_broken() {
+    let home = TempDir::new().unwrap();
+    seed_worker(
+        home.path(),
+        "7f3c",
+        "shop-217",
+        r#"{"v":1,"at":2000,"kind":"idle","note":"plan done"}"#,
+    );
+    fs::write(home.path().join("no-config.toml"), "agent = [\n").unwrap();
+
+    let sent = flow(home.path(), &["send", "shop-217", "Tabs."]);
+    let typed = flow(home.path(), &["send", "--type", "shop-217", "/compact"]);
+
+    assert!(sent.status.success(), "{}", stdout(&sent));
+    assert_eq!(typed.status.code(), Some(1), "{}", stdout(&typed));
+    assert!(
+        stdout(&typed).contains("no-config.toml is not valid"),
+        "{}",
+        stdout(&typed)
+    );
+}
+
+#[test]
 fn send_type_queues_lines_in_order_in_the_flows_log() {
     let home = TempDir::new().unwrap();
     seed_worker(
