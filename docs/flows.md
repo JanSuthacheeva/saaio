@@ -31,7 +31,8 @@ phase took, task counts, decisions, what it asks, and a timeline.
 | `ended` | the worker's session ended for good | DONE |
 
 A worker that quits with `/exit` ends its flow. A session that stops for any other reason, such as
-a crash or a closed connection, does not: flow ui resumes it.
+a crash or a closed connection, does not: its row says `exited`, `C-space r` resumes it, and the
+next server start resumes it on its own.
 
 ## Phases and steps
 
@@ -132,7 +133,7 @@ the event into flow's events and adds only what changes the flow.
 | AskUserQuestion | `waiting <the question>` |
 | a permission prompt | `waiting permission: Bash(rm -rf build)` |
 | a tool finishing | `working`; task counts and blocks from a plan-progress tool (`mcp__plan-progress__report`), when the worker has one; a merge request that `gh pr create` or `glab mr create` printed, when it belongs to a remote of the worktree (origin, or a fork's upstream) |
-| the end of a turn | `waiting <the question>` when the last line asks one, else `idle <the last sentence>`; the whole closing message becomes the flow's `answer` |
+| the end of a turn | `delegated <the task>` while a background task still runs, else `waiting <the question>` when the last line asks one, else `idle <the last sentence>`; the whole closing message becomes the flow's `answer` |
 | `/exit` | `ended` |
 
 **Codex** (`adapter = "codex"`): flow passes `-c hooks.<event>=[...]` and the worker prompt as

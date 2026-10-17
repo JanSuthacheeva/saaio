@@ -26,7 +26,7 @@ flow ui
 jumped to. Everything you type goes to it, except the [prefix key](#keys).
 
 **The title row** above the pane names the session in view. For a worker: its state, name, steps,
-phase, branch and slot. For a plain session: its state and folder. For the master: its branch. On the
+phase, branch and slot. For a plain session: its state and folder. For the master: its branch, and its folder too while the sidebar is folded. On the
 right it shows notices, such as a theme error or "starting the flow…".
 
 **The sidebar** on the right lists every session:
@@ -59,7 +59,7 @@ States are drawn as:
 A row can also say `exited` (the session's process ended) or `failed` (it could not start).
 
 **The rail.** In a terminal narrower than 110 columns, the sidebar folds to a rail: just the
-numbers and marks. The title row then names the flows that need you. `C-space b` folds and unfolds
+numbers and marks. The title row then names the first flow that needs you and is not in view. `C-space b` folds and unfolds
 it by hand.
 
 ## Keys

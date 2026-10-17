@@ -8,7 +8,7 @@
   why it stopped. Each line has a time and a process id:
 
   ```
-  2026-10-16 13:39:54 +07:00 [2739] started (flow 0.1.0, protocol 5)
+  2026-10-16 13:39:54 +07:00 [2739] started (flow 0.1.0 1de3dc4, protocol 5)
   ```
 
 ## flow ui

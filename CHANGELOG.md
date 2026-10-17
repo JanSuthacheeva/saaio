@@ -37,6 +37,7 @@ The first public release, 0.1.0. This heading becomes `## [0.1.0] - <date>` when
 - A Codex worker that reads a later skill's `SKILL.md` early seems to start that phase early.
 - A Codex worker asks permission to commit in its worktree, since its sandbox cannot write to the
   main repository's `.git`.
-- Background subagents are not counted: a worker running several looks merely working.
+- Background subagents are not counted: a worker running several shows only the first, and only
+  once its turn ends.
 - The new-flow dialog starts flows in the repository of the session in view.
 - macOS and Linux only.
