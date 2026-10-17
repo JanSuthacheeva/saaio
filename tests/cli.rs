@@ -400,6 +400,11 @@ fn help_and_version_still_print_normally() {
 
     assert!(help.status.success());
     assert!(stdout(&help).contains("Usage: saaio"));
+    assert!(
+        stdout(&help).contains("Run alone in a terminal, saaio opens saaio ui."),
+        "{}",
+        stdout(&help)
+    );
     assert_eq!(stdout(&version).trim(), "saaio 0.1.0");
 }
 

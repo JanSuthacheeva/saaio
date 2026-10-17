@@ -15,7 +15,7 @@ use output::{Document, Failure};
 #[command(
     version,
     about,
-    after_help = "Run alone in a terminal, flow opens saaio ui.\nRun by an agent or a script, it prints every flow and what needs you."
+    after_help = "Run alone in a terminal, saaio opens saaio ui.\nRun by an agent or a script, it prints every flow and what needs you."
 )]
 pub struct Cli {
     #[command(subcommand)]
