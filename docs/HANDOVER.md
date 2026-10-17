@@ -29,6 +29,7 @@ ship-feature orchestrator skill (planned there, not written yet; see its plan pa
 | 9 | Themes: theme.toml with extends (terminal, flow, flow-light, themes/<name>.toml), reloaded live; a Noctalia template in dotfiles-v2 | this repo, `src/ui/theme.rs`, `src/ui/theme_file.rs` | **built**, plan `.claude/plans/plan-flow-theme.md`, pages `docs/design/theme-*.html`. each key is checked against its own table (plan `.claude/plans/plan-flow-strict-theme-sections.md`); `[glyphs]` from the design is rejected until it is built |
 | 10 | Branch names after a repo's convention: `.flow/config.toml` `[branch] name`/`types`, `flow start --type`, a type row in the new-flow dialog | this repo, `src/branching.rs` | **built**, plan `.claude/plans/plan-flow-branch-names.md`, page `docs/design/branch-implementation.html` |
 | 11 | Codex as a second harness, for workers and the master | this repo, `src/adapter/codex.rs`, `src/server/news.rs` | **built**, plan `.claude/plans/plan-flow-codex.md`, pages `docs/design/codex-approaches.html`, `docs/design/codex-implementation.html` |
+| 12 | A configurable workflow: `[[phases]]` (1-4 names, the skills that start each; default plan, implement, review, merge-request), recorded per flow in its `started` event; `[worker] prompt`; theme `[phase]` by name; `--json` version 3 | this repo, `src/workflow.rs` | **built**, plan `.claude/plans/plan-flow-configurable-workflow.md`, pages `docs/design/workflow-approaches.html`, `docs/design/workflow-implementation.html`. Old logs read `design` as `plan` |
 | 6 | Auto mode + optional report line in the skills, `flow setup` hook | `~/projects/agent-skills` (+ this repo for setup) | not designed |
 
 Each piece gets its own design-code round (approaches page, implementation page, plan)
@@ -184,7 +185,7 @@ cannot import another, so shared helpers are copied. Mock of the intended look i
 `docs/design/system-approaches.html` ("The same in every approach").
 
 **4 - adapter (mod).** In a worker, map engine events to `flow report` calls: a phase skill
-starting (design-code -> design, implement-plan -> implement, review-changes -> review,
+starting (design-code -> design (now `plan`, and configurable: piece 12), implement-plan -> implement, review-changes -> review,
 write-merge-request -> merge-request), Agent tool start/end (delegated / working), an
 AskUserQuestion (waiting), a main-loop `turn.complete` (waiting), plan-progress reports
 (tasks, blocked), `gh pr create` / `glab mr create` succeeding (merge-request), `session.end`
