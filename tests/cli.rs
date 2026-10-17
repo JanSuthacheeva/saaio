@@ -6,9 +6,11 @@ use std::os::unix::net::UnixStream;
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use tempfile::TempDir;
 
 /// The flow binary with a test's own state: `home` as FLOW_HOME, the shared folder inside it, a
@@ -183,6 +185,123 @@ fn the_home_view_shortens_the_binary_only_inside_home() {
     );
     assert_eq!(bin_with(&sibling), format!("bin: {}", exe.display()));
     assert_eq!(bin_with(Path::new("")), format!("bin: {}", exe.display()));
+}
+
+/// Bare `flow` in a real terminal, as a person runs it: the test's own state, in `dir`, with
+/// no agent's shell around it and `env` added.
+struct Terminal {
+    child: Box<dyn portable_pty::Child + Send + Sync>,
+    screen: Arc<Mutex<Vec<u8>>>,
+    _master: Box<dyn MasterPty + Send>,
+}
+
+impl Terminal {
+    fn open(home: &Path, dir: &Path, env: &[(&str, &str)]) -> Terminal {
+        let template = flow_command(home);
+        let mut command = CommandBuilder::new(template.get_program());
+        for (key, value) in template.get_envs() {
+            match value {
+                Some(value) => command.env(key, value),
+                None => command.env_remove(key),
+            }
+        }
+        command.env_remove("CLAUDECODE");
+        command.env_remove("CODEX_THREAD_ID");
+        command.env("TERM", "xterm-256color");
+        for (key, value) in env {
+            command.env(key, value);
+        }
+        command.cwd(dir);
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 100,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+        let child = pair.slave.spawn_command(command).unwrap();
+        drop(pair.slave);
+        let screen = Arc::new(Mutex::new(Vec::new()));
+        let mut reader = pair.master.try_clone_reader().unwrap();
+        let shown = Arc::clone(&screen);
+        thread::spawn(move || {
+            let mut buf = [0; 4096];
+            while let Ok(n @ 1..) = reader.read(&mut buf) {
+                shown.lock().unwrap().extend_from_slice(&buf[..n]);
+            }
+        });
+        Terminal {
+            child,
+            screen,
+            _master: pair.master,
+        }
+    }
+
+    fn shows(&self, text: &str) -> bool {
+        String::from_utf8_lossy(&self.screen.lock().unwrap()).contains(text)
+    }
+
+    fn text(&self) -> String {
+        String::from_utf8_lossy(&self.screen.lock().unwrap()).to_string()
+    }
+}
+
+/// Stops the flow server of a store when the test ends, also when it fails.
+struct StopsServer<'a>(&'a Path);
+
+impl Drop for StopsServer<'_> {
+    fn drop(&mut self) {
+        let _ = flow(self.0, &["ui", "--stop"]);
+    }
+}
+
+impl Drop for Terminal {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+#[test]
+fn bare_flow_in_an_agents_or_a_flows_terminal_prints_the_overview() {
+    let home = TempDir::new().unwrap();
+    let _stops = StopsServer(home.path());
+
+    for marker in ["FLOW_ID", "FLOW_MASTER", "CLAUDECODE", "CODEX_THREAD_ID"] {
+        let mut terminal = Terminal::open(home.path(), home.path(), &[(marker, "1")]);
+
+        let status = terminal.child.wait().unwrap();
+
+        assert!(status.success(), "{marker}");
+        wait_until(Duration::from_secs(5), marker, || {
+            terminal.shows("flows: none tracked")
+        });
+        let text = terminal.text();
+        assert!(text.starts_with("bin: "), "{marker}: {text}");
+        assert!(!text.contains("\x1b[?1049h"), "{marker}: {text}");
+    }
+    assert!(!home.path().join("server.sock").exists());
+}
+
+#[test]
+fn bare_flow_in_a_persons_terminal_opens_flow_ui() {
+    let lab = Lab::new();
+    lab.agent(
+        r#"command = ["cat"]
+prompt = ""
+resume = ["cat"]"#,
+    );
+
+    let _stops = StopsServer(&lab.home);
+    let terminal = Terminal::open(&lab.home, &lab.repo, &[]);
+
+    wait_for_socket(&lab.home.join("server.sock"));
+    wait_until(Duration::from_secs(5), "flow ui never drew", || {
+        terminal.shows("\x1b[?1049h")
+    });
+    assert!(!terminal.shows("bin: "), "{}", terminal.text());
+    assert!(lab.run(&["ui", "--stop"]).status.success());
 }
 
 #[test]
