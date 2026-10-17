@@ -323,6 +323,58 @@ fn report_appends_events_to_the_flow_in_flow_id() {
 }
 
 #[test]
+fn a_flow_walks_the_configured_workflow_and_refuses_another_phase() {
+    let home = TempDir::new().unwrap();
+    fs::write(
+        home.path().join("no-config.toml"),
+        "[[phases]]\nname = \"spec\"\n\n[[phases]]\nname = \"build\"\n\n[[phases]]\nname = \"ship\"\n",
+    )
+    .unwrap();
+
+    let created = flow(
+        home.path(),
+        &["new", "--name", "shop-221", "--request", "add CSV export"],
+    );
+    let id = id_in(&stdout(&created));
+    let build = flow_in(home.path(), &id, &["report", "phase", "build"]);
+    let review = flow_in(home.path(), &id, &["report", "phase", "review"]);
+    let capital = flow_in(home.path(), &id, &["report", "phase", "Build"]);
+
+    assert!(
+        stdout(&created).contains("Run `flow report --flow shop-221 phase spec` when spec starts"),
+        "{}",
+        stdout(&created)
+    );
+    assert!(
+        stdout(&build).contains("phase: build"),
+        "{}",
+        stdout(&build)
+    );
+    assert_eq!(review.status.code(), Some(1));
+    assert!(
+        stdout(&review).starts_with("error: shop-221 has no phase review"),
+        "{}",
+        stdout(&review)
+    );
+    assert!(
+        stdout(&review).contains("Phases: spec, build, ship"),
+        "{}",
+        stdout(&review)
+    );
+    assert_eq!(capital.status.code(), Some(2));
+    let board: serde_json::Value =
+        serde_json::from_slice(&flow(home.path(), &["status", "--json"]).stdout).unwrap();
+    let steps: Vec<&str> = board["flows"][0]["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|step| step["phase"].as_str().unwrap())
+        .collect();
+    assert_eq!(steps, ["spec", "build", "ship"]);
+    assert_eq!(board["flows"][0]["phase"], "build");
+}
+
+#[test]
 fn report_takes_a_flow_name_from_the_flag() {
     let home = TempDir::new().unwrap();
     new_flow(home.path(), "shop-221");
@@ -555,6 +607,17 @@ fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_flow_ui() {
         serde_json::Value::Null
     );
     assert_eq!(board["flows"][0]["workspace"]["slot"], 1);
+    let log = fs::read_dir(lab.home.join("flows"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
+        .unwrap();
+    assert!(
+        fs::read_to_string(log)
+            .unwrap()
+            .contains(r#""phases":["plan","implement","review","merge-request"]"#),
+        "start records the workflow"
+    );
 }
 
 #[test]

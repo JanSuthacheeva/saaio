@@ -17,16 +17,22 @@ pub(crate) fn created(flow: &FlowView, existing: bool) -> Document {
         flow: &flow.name,
         id: &flow.id,
         existing,
-        help: vec![
-            format!(
-                "Run `flow report --flow {} phase design` when design starts",
-                flow.name
-            ),
-            format!(
+        help: flow
+            .steps
+            .first()
+            .map(|step| {
+                let phase = step.phase.name();
+                format!(
+                    "Run `flow report --flow {} phase {phase}` when {phase} starts",
+                    flow.name
+                )
+            })
+            .into_iter()
+            .chain([format!(
                 "Or set FLOW_ID={} in the worker's environment and leave out --flow",
                 flow.id
-            ),
-        ],
+            )])
+            .collect(),
     }))
 }
 
@@ -104,7 +110,7 @@ mod tests {
                 "flow: shop-221",
                 "id: shop-221-id",
                 "existing: false",
-                "help[2]: Run `flow report --flow shop-221 phase design` when design starts,Or set FLOW_ID=shop-221-id in the worker's environment and leave out --flow",
+                "help[2]: Run `flow report --flow shop-221 phase plan` when plan starts,Or set FLOW_ID=shop-221-id in the worker's environment and leave out --flow",
             ]
             .join("\n")
         );
