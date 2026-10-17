@@ -246,9 +246,11 @@ impl BoardView<'_> {
             State::Working => "working".into(),
             State::Idle => "ready".into(),
             State::Delegated if short => "agent".into(),
-            State::Delegated => {
-                format!("{} · agent", flow.phase.as_ref().map_or("working", gerund)).into()
-            }
+            State::Delegated => format!(
+                "{} · agent",
+                flow.phase.as_ref().map_or("working", Phase::name)
+            )
+            .into(),
             State::Done => match flow.merge_request.as_deref() {
                 Some(url) if url.contains("/pull/") => "PR open".into(),
                 Some(_) => "MR open".into(),
@@ -371,16 +373,6 @@ impl BoardView<'_> {
             }
         }
         area.y + room
-    }
-}
-
-fn gerund(phase: &Phase) -> &str {
-    match phase.name() {
-        "design" => "designing",
-        "implement" => "implementing",
-        "review" => "reviewing",
-        "merge-request" => "opening the MR",
-        name => name,
     }
 }
 

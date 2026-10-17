@@ -9,7 +9,7 @@
 
 
   ▌
-  ▌ 3 ○ scratch                           ready      4 ◓ export-csv            reviewing · agent      5 ✓ shop-198                        MR open
+  ▌ 3 ○ scratch                           ready      4 ◓ export-csv               review · agent      5 ✓ shop-198                        MR open
   ▌   idle  · plain                                    ●───●───●───○  review                            ●───●───●───●  MR !418
   ▌                                         12m        6/6 tasks                              1h        flow/shop-198                          2h
   ▌   The tree has 14 files under src.                 agent: review changes                            shop-198
