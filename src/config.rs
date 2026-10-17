@@ -222,7 +222,6 @@ fn strings(parts: &[&str]) -> Vec<String> {
 }
 
 /// What flow writes as config.toml on its first run: every setting at its default, commented out.
-#[allow(dead_code)]
 pub const EXAMPLE: DefaultFile = DefaultFile {
     text: include_str!("../examples/config.toml"),
     earlier: &[],

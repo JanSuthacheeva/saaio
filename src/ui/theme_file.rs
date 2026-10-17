@@ -18,7 +18,6 @@ use crate::ui::theme::{ColorKey, KIWI, Palette, PaletteKey, PhaseColors, Section
 
 pub const THEME_FILE: &str = "theme.toml";
 /// What flow writes as theme.toml on its first run: the terminal theme, commented out.
-#[allow(dead_code)]
 pub const EXAMPLE: DefaultFile = DefaultFile {
     text: include_str!("../../examples/theme.toml"),
     earlier: &[],

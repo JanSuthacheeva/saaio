@@ -38,6 +38,8 @@ fn start_with_agents(
         socket: dir.join("server.sock"),
         master: dir.join("master.json"),
         instructions: dir.join("master.md"),
+        config: Some(dir.join("config/config.toml")),
+        theme: Some(dir.join("config/theme.toml")),
     };
     let thread_paths = paths.clone();
     let store = Store::at(dir.to_path_buf());
@@ -598,6 +600,38 @@ fn replaces_a_stale_socket_but_not_a_live_one() {
     let error = bind(&socket).unwrap_err();
     assert!(error.to_string().contains("already runs"), "{error}");
     drop(listener);
+}
+
+fn stop(paths: &ServerPaths, handle: thread::JoinHandle<Result<()>>) {
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
+fn writes_the_default_files_on_its_first_start_and_keeps_a_config_of_your_own() {
+    let fresh = TempDir::new().unwrap();
+    let (paths, handle) = start(fresh.path());
+    stop(&paths, handle);
+
+    let read = |path: &Option<PathBuf>| fs::read_to_string(path.as_ref().unwrap()).unwrap();
+    assert_eq!(
+        fs::read_to_string(&paths.instructions).unwrap(),
+        master::INSTRUCTIONS.text
+    );
+    assert_eq!(read(&paths.config), crate::config::EXAMPLE.text);
+    assert_eq!(read(&paths.theme), crate::ui::theme_file::EXAMPLE.text);
+
+    let edited = TempDir::new().unwrap();
+    let mine = edited.path().join("config/config.toml");
+    fs::create_dir_all(mine.parent().unwrap()).unwrap();
+    fs::write(&mine, "[worker]\nagent = \"codex\"\n").unwrap();
+    let (paths, handle) = start(edited.path());
+    stop(&paths, handle);
+
+    assert_eq!(read(&paths.config), "[worker]\nagent = \"codex\"\n");
+    assert_eq!(read(&paths.theme), crate::ui::theme_file::EXAMPLE.text);
 }
 
 #[test]
