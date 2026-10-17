@@ -36,7 +36,7 @@ Events for `flow report`:
 
 | Event | Meaning |
 | --- | --- |
-| `phase <design\|implement\|review\|merge-request>` | the flow entered a phase |
+| `phase <name>` | the flow entered a phase of its [workflow](#the-workflow) (`plan`, `implement`, `review`, `merge-request` by default); a phase it does not have is refused |
 | `working` | work goes on, after a stop or a subagent |
 | `delegated <description>` | a subagent works on the flow |
 | `waiting <question>` | the flow waits for the person's answer |
@@ -124,8 +124,11 @@ merge-request = "#d08ad6"
 ```
 
 Keys, each only in its own table: `[ui]` background, panel, selection, rule, text, strong, muted,
-faint, accent; `[state]` working, waiting, blocked, done, ended; `[phase]` design, implement,
-review, merge-request. `phase_colors` decides where a working flow shows its phase's color: `off`
+faint, accent; `[state]` working, waiting, blocked, done, ended; `[phase]` any phase name of your
+[workflow](#the-workflow). A phase without a color takes the theme's color for its place: the 1st to
+4th phase get the colors of plan, implement, review and merge-request, so a workflow of your own is
+colored without a theme file. A `[phase]` color can
+name a `[ui]` or `[state]` key; no key can name a phase's color. `phase_colors` decides where a working flow shows its phase's color: `off`
 nowhere, `steps` (the default) in the current step dot, `full` also in the spinner, label, rail and
 title row. Done steps are plain text at every level. A flow works in `working` until it reaches its first phase; a flow that waits, is blocked
 or is done keeps its state's color at every level. The terminal theme colors the phases with
@@ -136,7 +139,7 @@ takes the theme's accent either way. `flow` and `flow-light` are the design's da
 A tool can keep a theme in `~/.config/flow/themes/<name>.toml` for `extends` to name; a Noctalia
 template that writes `themes/noctalia.toml` makes flow follow Noctalia live. A broken file keeps the
 last theme and says in the title row which file and line is wrong and why, such as `theme.toml:7:
-review belongs in [phase], not [state]`.
+accent belongs in [ui], not [state]`.
 
 ## Starting a worker
 
@@ -188,6 +191,11 @@ Claude Code and Codex are built in:
 - `codex`: `codex "$ship-feature <request>"`, resumed with `codex resume <session>`. Codex picks
   its own session id; flow learns it from the first hook.
 
+The first prompt starts your workflow. An agent's own `prompt` wins; else `[worker] prompt`, when
+set, exactly as written, for every agent, the built-in ones included; else the built-in default
+above. Claude Code calls a skill `/name` and Codex `$name`, so a `[worker] prompt` for both names no
+skill, or give each agent its own `prompt`.
+
 `flow start --agent codex` or the new-flow dialog's agent row picks one; `[worker] agent` in the
 config is the default. The master is the built-in `master` agent (Claude Code), or the agent
 `[master] agent` names; flow adds `master.md` to its instructions. Add or change agents in
@@ -227,7 +235,7 @@ only what changes the flow:
 | Claude Code event | Reported |
 | --- | --- |
 | a prompt | `working` (and the phase of a typed `/skill`) |
-| the Skill tool | `phase`, from the `[phases]` map |
+| the Skill tool | `phase`, the [workflow](#the-workflow) phase whose skills name it |
 | the Agent tool | `delegated <description>` |
 | AskUserQuestion | `waiting <the question>` |
 | a permission prompt | `waiting permission: Bash(rm -rf build)` |
@@ -244,7 +252,7 @@ worktrees.
 | Codex event | Reported |
 | --- | --- |
 | a prompt | `working` (and the phase of a `$skill` in it) |
-| a shell command reading a skill's `SKILL.md` | `phase`, from the `[phases]` map |
+| a shell command reading a skill's `SKILL.md` | `phase`, the [workflow](#the-workflow) phase whose skills name it |
 | a subagent (`spawn_agent`) | `delegated <its task name>`, until the main agent goes on |
 | a permission prompt | `waiting permission: Bash(touch notes.txt)` |
 | a tool finishing | `working`; a merge request `gh pr create` / `glab mr create` printed, when it is one of a repo the worktree has as a remote (origin, or a fork's upstream) |
@@ -254,19 +262,60 @@ worktrees.
 Codex has no plan-progress, so a Codex flow shows no task counts, and no `/exit` event, so you
 end its flow from flow ui or with `flow remove`.
 
-A subagent's own events are ignored. A custom agent replaces the built-in one, so give it
-`adapter = "claude-code"` or `adapter = "codex"` when it runs one of them. Which skill starts which
-phase:
+A subagent's own events are ignored, but a phase skill it starts counts (a review in a fresh
+agent). A custom agent replaces the built-in one, so give it `adapter = "claude-code"` or
+`adapter = "codex"` when it runs one of them. `flow report` stays for scripts and other tools.
+
+### The workflow
+
+A flow walks through up to four phases, shown as its steps (`●───●───○───○`) with the time spent in
+each. The built-in workflow is the agent-skills chain:
 
 ```toml
-[phases]                      # the built-in map, extend or override it
-design-code = "design"
-implement-plan = "implement"
-review-changes = "review"
-write-merge-request = "merge-request"
+[[phases]]
+name = "plan"
+skills = ["design-code"]
+
+[[phases]]
+name = "implement"
+skills = ["implement-plan"]
+
+[[phases]]
+name = "review"
+skills = ["review-changes"]
+
+[[phases]]
+name = "merge-request"
+skills = ["write-merge-request"]
 ```
 
-`flow report` stays for scripts and other tools.
+Your own `[[phases]]` in `config.toml` replace it whole: 1 to 4 phases in order, each a `name`
+(lowercase letters, digits and `-`) and the `skills` that start it, matched with or without a
+plugin prefix (`superpowers:brainstorming` is `brainstorming`). A skill can start only one phase.
+For example, with superpowers' skills:
+
+```toml
+[worker]
+prompt = "/brainstorming {request}"
+
+[[phases]]
+name = "spec"
+skills = ["brainstorming", "writing-plans"]
+
+[[phases]]
+name = "build"
+skills = ["executing-plans", "subagent-driven-development"]
+
+[[phases]]
+name = "ship"
+skills = ["finishing-a-development-branch"]
+```
+
+A flow keeps the phases it started with: `flow start` and `flow new` record them in the flow's log,
+so editing the workflow changes new flows only, and a skill of a phase a running flow does not have
+reports nothing. An opened merge request finishes the flow in its last phase, whatever its name.
+Flows started before workflows were configurable show the built-in phases.
+The old `[phases]` table of skill names is refused with a message naming `[[phases]]`.
 
 ### The master and its workers
 
@@ -386,14 +435,14 @@ phase: implement
 blocker: "Task 5: migration needs a default value"
 tasks: 4/9
 steps[4]{phase,status,duration}:
-  design,done,9m
+  plan,done,9m
   implement,current,31m
   review,open,""
   merge-request,open,""
 decisions[1]: "approach B: forge adapter"
 timeline[5]{ago,text}:
   41m,started
-  41m,"phase: design"
+  41m,"phase: plan"
   35m,"decided: approach B: forge adapter"
   32m,"phase: implement"
   1m,"blocked: Task 5: migration needs a default value"
@@ -419,7 +468,7 @@ Programs read `flow status --json`: the whole board, nothing truncated, camelCas
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "now": 1791953473760,
   "count": 2,
   "needsYou": 1,
@@ -438,7 +487,7 @@ Programs read `flow status --json`: the whole board, nothing truncated, camelCas
       "mergeRequest": null,
       "decisions": ["approach B: forge adapter"],
       "steps": [
-        { "phase": "design", "status": "done", "durationMs": 540000 },
+        { "phase": "plan", "status": "done", "durationMs": 540000 },
         { "phase": "implement", "status": "current", "durationMs": 1860000 },
         { "phase": "review", "status": "open", "durationMs": null },
         { "phase": "merge-request", "status": "open", "durationMs": null }
@@ -482,7 +531,8 @@ Programs read `flow status --json`: the whole board, nothing truncated, camelCas
 Timeline tones: `neutral`, `progress`, `attention`, `problem`, `success`. `answer` is the last
 turn's whole closing message, as the worker's harness reported it. A plain session (`mode:
 plain`) has no steps, and its workspace is its folder, with `branch` and `slot` null. Version 2
-made them nullable.
+made them nullable. Version 3: `phase` and `steps[].phase` are the names of the flow's
+[workflow](#the-workflow), the phases it started with.
 
 ## Where the logs live
 

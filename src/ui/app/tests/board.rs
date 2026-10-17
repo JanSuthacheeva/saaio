@@ -32,7 +32,7 @@ fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
             .is_some_and(|gap| gap.trim().is_empty()),
         "a flow without tasks draws no bar: {shop_230:?}"
     );
-    assert!(row(&terminal, 10).contains(" 3 ◓ export-csv            reviewing · agent "));
+    assert!(row(&terminal, 10).contains(" 3 ◓ export-csv               review · agent "));
     assert!(
         row(&terminal, 16).starts_with(" 2 shop-230  shop-230 · guided · flow/shop-230 · slot 1"),
         "{}",
@@ -189,7 +189,7 @@ fn moves_over_the_board_and_jumps_into_a_card() {
     app.on_input(Routed::View(vec![Key::Char('2')]));
     let terminal = render_at(&app, FLEET);
     assert!(
-        row(&terminal, 17).trim_start().starts_with("design ● 31m"),
+        row(&terminal, 17).trim_start().starts_with("plan ● 31m"),
         "the steps under the header: {}",
         row(&terminal, 17)
     );
@@ -344,10 +344,10 @@ fn a_working_card_takes_the_color_of_its_phase_at_full_only() {
             |text: &str| line[..line.find(text).unwrap()].chars().count() as u16 + layout::MARGIN;
         [
             buffer[(x("◓"), 10 + layout::MARGIN)].fg,
-            buffer[(x("reviewing"), 10 + layout::MARGIN)].fg,
+            buffer[(x("review · agent"), 10 + layout::MARGIN)].fg,
         ]
     };
-    let review = theme.phase.review.fg.unwrap();
+    let review = theme.phase.positions[2].fg.unwrap();
     let working = theme.state.working.fg.unwrap();
 
     assert_eq!(colors(PhaseColors::Off), [working, working], "off");
@@ -359,7 +359,7 @@ fn a_working_card_takes_the_color_of_its_phase_at_full_only() {
 fn a_notice_is_taken_back_only_when_it_is_the_one_meant() {
     let mut app = board_app();
 
-    app.say("theme: theme.toml:7: review belongs in [phase], not [state]".to_string());
+    app.say("theme: theme.toml:7: accent belongs in [ui], not [state]".to_string());
     app.take_back("theme: ");
     assert_eq!(app.notice, None);
 

@@ -3,6 +3,7 @@ use crate::cli::output::{Document, Failure, flow};
 use crate::event::{Event, EventKind, Mode};
 use crate::fold;
 use crate::store::Store;
+use crate::workflow::Workflow;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -15,7 +16,7 @@ pub struct Args {
 }
 
 /// Tracks a new flow, or returns the unfinished flow of that name.
-pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
+pub fn run(args: Args, store: &Store, workflow: &Workflow, now: u64) -> Result<Document, Failure> {
     check_request(&args.request)?;
     let (flows, _) = views(store, now);
     if let Some(existing) = fold::resolve(&flows, &args.name).filter(|flow| !flow.is_finished()) {
@@ -27,6 +28,7 @@ pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
             name: args.name,
             request: args.request,
             mode: args.mode,
+            phases: Some(workflow.phases()),
         },
     );
     let id = store.create(&first)?;

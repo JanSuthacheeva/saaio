@@ -17,16 +17,22 @@ pub(crate) fn created(flow: &FlowView, existing: bool) -> Document {
         flow: &flow.name,
         id: &flow.id,
         existing,
-        help: vec![
-            format!(
-                "Run `flow report --flow {} phase design` when design starts",
-                flow.name
-            ),
-            format!(
+        help: flow
+            .steps
+            .first()
+            .map(|step| {
+                let phase = step.phase.name();
+                format!(
+                    "Run `flow report --flow {} phase {phase}` when {phase} starts",
+                    flow.name
+                )
+            })
+            .into_iter()
+            .chain([format!(
                 "Or set FLOW_ID={} in the worker's environment and leave out --flow",
                 flow.id
-            ),
-        ],
+            )])
+            .collect(),
     }))
 }
 
@@ -37,7 +43,7 @@ pub(crate) fn reported(flow: &FlowView) -> Document {
         flow: &'a str,
         state: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
-        phase: Option<&'static str>,
+        phase: Option<&'a str>,
         help: Vec<String>,
     }
     let next = match flow.state {
@@ -52,7 +58,7 @@ pub(crate) fn reported(flow: &FlowView) -> Document {
     Document::Toon(toon(&Reported {
         flow: &flow.name,
         state: flow.state.name(),
-        phase: flow.phase.map(Phase::name),
+        phase: flow.phase.as_ref().map(Phase::name),
         help: vec![next],
     }))
 }
@@ -104,7 +110,7 @@ mod tests {
                 "flow: shop-221",
                 "id: shop-221-id",
                 "existing: false",
-                "help[2]: Run `flow report --flow shop-221 phase design` when design starts,Or set FLOW_ID=shop-221-id in the worker's environment and leave out --flow",
+                "help[2]: Run `flow report --flow shop-221 phase plan` when plan starts,Or set FLOW_ID=shop-221-id in the worker's environment and leave out --flow",
             ]
             .join("\n")
         );
@@ -117,7 +123,7 @@ mod tests {
             "shop-221",
             vec![
                 EventKind::Phase {
-                    phase: Phase::Implement,
+                    phase: Phase::of("implement"),
                 },
                 EventKind::Blocked { reason: "x".into() },
             ],

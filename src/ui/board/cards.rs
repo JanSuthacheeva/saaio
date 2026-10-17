@@ -246,7 +246,11 @@ impl BoardView<'_> {
             State::Working => "working".into(),
             State::Idle => "ready".into(),
             State::Delegated if short => "agent".into(),
-            State::Delegated => format!("{} · agent", flow.phase.map_or("working", gerund)).into(),
+            State::Delegated => format!(
+                "{} · agent",
+                flow.phase.as_ref().map_or("working", Phase::name)
+            )
+            .into(),
             State::Done => match flow.merge_request.as_deref() {
                 Some(url) if url.contains("/pull/") => "PR open".into(),
                 Some(_) => "MR open".into(),
@@ -372,15 +376,6 @@ impl BoardView<'_> {
     }
 }
 
-fn gerund(phase: Phase) -> &'static str {
-    match phase {
-        Phase::Design => "designing",
-        Phase::Implement => "implementing",
-        Phase::Review => "reviewing",
-        Phase::MergeRequest => "opening the MR",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -422,7 +417,7 @@ mod tests {
             Mode::Guided,
             vec![
                 EventKind::Phase {
-                    phase: Phase::Implement,
+                    phase: Phase::of("implement"),
                 },
                 EventKind::Tasks { done: 4, total: 9 },
                 EventKind::Blocked {
@@ -476,7 +471,7 @@ mod tests {
             Mode::Guided,
             vec![
                 EventKind::Phase {
-                    phase: Phase::Design,
+                    phase: Phase::of("plan"),
                 },
                 EventKind::Waiting {
                     question: "Which approach?".into(),
@@ -491,7 +486,7 @@ mod tests {
         });
 
         assert_eq!(card[0], " 2 ● shop-230-rate-…  waiting ");
-        assert_eq!(card[1], "   ●───○───○───○  design", "no room for the mode");
+        assert_eq!(card[1], "   ●───○───○───○  plan", "no room for the mode");
         assert_eq!(styles.0, styles.1, "the question reads as text");
     }
 

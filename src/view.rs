@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::event::{EventKind, Mode, Phase};
 
-pub const VIEW_VERSION: u32 = 2;
+pub const VIEW_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -296,7 +296,7 @@ mod tests {
             name: "shop-221".into(),
             request: "SHOP-221 add CSV export".into(),
             mode: Mode::Auto,
-            phase: Some(Phase::MergeRequest),
+            phase: Some(Phase::of("merge-request")),
             state,
             blocker: None,
             delegate: None,
@@ -305,7 +305,7 @@ mod tests {
             merge_request: None,
             decisions: vec![],
             steps: vec![Step {
-                phase: Phase::Design,
+                phase: Phase::of("plan"),
                 status: StepStatus::Done,
                 duration_ms: Some(540_000),
             }],
@@ -342,7 +342,7 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert!(
-            json.trim_start().starts_with("{\n  \"version\": 2,"),
+            json.trim_start().starts_with("{\n  \"version\": 3,"),
             "{json}"
         );
         assert_eq!(value["needsYou"], 1);

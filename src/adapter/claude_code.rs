@@ -4,9 +4,9 @@ use serde_json::{Value, json};
 
 use crate::adapter::answer::turn_end;
 use crate::adapter::calls::{created_merge_request, tool_call};
-use crate::adapter::{Adapter, cut, phase_of};
-use crate::config::PhaseMap;
+use crate::adapter::{Adapter, cut};
 use crate::event::EventKind;
+use crate::workflow::Workflow;
 
 /// The hook events flow listens to.
 const EVENTS: [&str; 6] = [
@@ -100,13 +100,14 @@ fn waiter(flow_exe: &Path, args: &[&str]) -> Value {
 
 /// The flow events one Claude Code hook payload means. Of a subagent's events (agent_id set) only
 /// a phase skill counts, as when a review runs in a fresh agent; the rest follows the main agent.
-pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
+pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
     let tool = payload["tool_name"].as_str().unwrap_or("");
     let input = &payload["tool_input"];
     if payload.get("agent_id").is_some() {
         let starts_skill = payload["hook_event_name"] == "PreToolUse" && tool == "Skill";
         return match input["skill"].as_str() {
-            Some(skill) if starts_skill => phase_of(skill, phases)
+            Some(skill) if starts_skill => workflow
+                .phase_of(skill)
                 .map(|phase| vec![EventKind::Phase { phase }])
                 .unwrap_or_default(),
             _ => Vec::new(),
@@ -116,7 +117,7 @@ pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
         "UserPromptSubmit" => {
             let mut kinds = vec![EventKind::Working];
             let skill = payload["prompt"].as_str().and_then(typed_skill);
-            if let Some(phase) = skill.and_then(|skill| phase_of(skill, phases)) {
+            if let Some(phase) = skill.and_then(|skill| workflow.phase_of(skill)) {
                 kinds.push(EventKind::Phase { phase });
             }
             kinds
@@ -124,7 +125,7 @@ pub fn translate(payload: &Value, phases: &PhaseMap) -> Vec<EventKind> {
         "PreToolUse" => match tool {
             "Skill" => input["skill"]
                 .as_str()
-                .and_then(|skill| phase_of(skill, phases))
+                .and_then(|skill| workflow.phase_of(skill))
                 .map(|phase| vec![EventKind::Phase { phase }])
                 .unwrap_or_default(),
             "Agent" if input["run_in_background"] != Value::Bool(true) => {
@@ -274,10 +275,10 @@ mod tests {
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
     }
 
-    fn phases() -> PhaseMap {
-        PhaseMap::from([
-            ("design-code".to_string(), Phase::Design),
-            ("implement-plan".to_string(), Phase::Implement),
+    fn phases() -> Workflow {
+        Workflow::of(&[
+            ("plan", &["design-code"]),
+            ("implement", &["implement-plan"]),
         ])
     }
 
@@ -299,7 +300,7 @@ mod tests {
             vec![
                 EventKind::Working,
                 EventKind::Phase {
-                    phase: Phase::Implement
+                    phase: Phase::of("implement")
                 }
             ]
         );
@@ -310,7 +311,7 @@ mod tests {
         assert_eq!(
             events("pre_skill"),
             vec![EventKind::Phase {
-                phase: Phase::Design
+                phase: Phase::of("plan")
             }]
         );
         assert_eq!(
@@ -332,11 +333,11 @@ mod tests {
             "tool_name": "Skill",
             "tool_input": {"skill": "review-changes"}
         });
-        let phases = PhaseMap::from([("review-changes".to_string(), Phase::Review)]);
+        let phases = Workflow::of(&[("review", &["review-changes"])]);
         assert_eq!(
             translate(&review, &phases),
             vec![EventKind::Phase {
-                phase: Phase::Review
+                phase: Phase::of("review")
             }]
         );
     }

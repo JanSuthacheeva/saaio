@@ -4,6 +4,7 @@ use crate::view::{
     Board, FlowView, ReviewCount, Session, State, Step, StepStatus, Tasks, TimelineEntry, Tone,
     VIEW_VERSION, Workspace,
 };
+use crate::workflow::Workflow;
 
 /// A flow with a heartbeat older than this, not done or ended, is not responding.
 pub const SILENT_AFTER_MS: u64 = 90_000;
@@ -16,15 +17,17 @@ pub fn fold<'a>(
     now: u64,
 ) -> Option<FlowView> {
     let mut events = events.into_iter();
-    let (name, request, mode, at) = events.by_ref().find_map(|event| match &event.kind {
-        EventKind::Started {
-            name,
-            request,
-            mode,
-        } => Some((name, request, *mode, event.at)),
-        _ => None,
-    })?;
-    let mut folding = Folding::new(id, name, request, mode, at);
+    let (name, request, mode, phases, at) =
+        events.by_ref().find_map(|event| match &event.kind {
+            EventKind::Started {
+                name,
+                request,
+                mode,
+                phases,
+            } => Some((name, request, *mode, phases.as_deref(), event.at)),
+            _ => None,
+        })?;
+    let mut folding = Folding::new(id, name, request, mode, phases, at);
     for event in events {
         folding.apply(event);
     }
@@ -57,7 +60,7 @@ pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
 fn shown(view: &FlowView) -> impl PartialEq + '_ {
     (
         view.state,
-        view.phase,
+        view.phase.as_ref(),
         view.blocker.as_deref(),
         view.delegate.as_deref(),
         view.tasks,
@@ -121,14 +124,23 @@ pub fn master_state(kinds: &[EventKind]) -> Option<State> {
 #[derive(Debug)]
 struct Folding {
     view: FlowView,
-    durations: [Option<u64>; Phase::ALL.len()],
-    entered: [bool; Phase::ALL.len()],
+    phases: Vec<Phase>,
+    /// By position in phases.
+    durations: Vec<Option<u64>>,
+    entered: Vec<bool>,
     phase_since: u64,
     stopped_at: Option<u64>,
 }
 
 impl Folding {
-    fn new(id: &str, name: &str, request: &str, mode: Mode, at: u64) -> Folding {
+    fn new(
+        id: &str,
+        name: &str,
+        request: &str,
+        mode: Mode,
+        phases: Option<&[Phase]>,
+        at: u64,
+    ) -> Folding {
         let view = FlowView {
             id: id.to_string(),
             name: name.to_string(),
@@ -155,30 +167,39 @@ impl Folding {
             answer: None,
             session: None,
         };
+        let phases = phases.map_or_else(|| Workflow::builtin().phases(), <[Phase]>::to_vec);
         Folding {
             view,
-            durations: [None; Phase::ALL.len()],
-            entered: [false; Phase::ALL.len()],
+            durations: vec![None; phases.len()],
+            entered: vec![false; phases.len()],
+            phases,
             phase_since: at,
             stopped_at: None,
         }
     }
 
     fn apply(&mut self, event: &Event) {
-        let before = (self.view.state, self.view.phase, self.view.blocker.clone());
+        let before = (
+            self.view.state,
+            self.view.phase.clone(),
+            self.view.blocker.clone(),
+        );
         let at = event.at;
         match &event.kind {
             EventKind::Started { .. } => {}
             EventKind::Phase { phase } => {
-                if self.view.phase != Some(*phase) {
-                    self.enter(*phase, at);
+                if let Some(position) = self.position(phase)
+                    && self.view.phase.as_ref() != Some(&self.phases[position])
+                {
+                    self.enter(position, at);
                     // A delegate can start the phase itself, as a review in a fresh agent does.
                     if self.view.state != State::Delegated {
                         self.view.state = State::Working;
                         self.view.delegate = None;
                     }
                     self.view.blocker = None;
-                    self.note(at, format!("phase: {}", phase.name()), Tone::Progress);
+                    let text = format!("phase: {}", self.phases[position].name());
+                    self.note(at, text, Tone::Progress);
                 }
             }
             EventKind::Working => {
@@ -237,8 +258,10 @@ impl Folding {
                 self.note(at, format!("review: {review}"), tone);
             }
             EventKind::MergeRequest { url } => {
-                if self.view.phase != Some(Phase::MergeRequest) {
-                    self.enter(Phase::MergeRequest, at);
+                if let Some(last) = self.phases.len().checked_sub(1)
+                    && self.view.phase.as_ref() != self.phases.last()
+                {
+                    self.enter(last, at);
                 }
                 self.view.state = State::Done;
                 self.view.blocker = None;
@@ -283,22 +306,38 @@ impl Folding {
                 self.note(at, "ended".to_string(), Tone::Neutral);
             }
         }
-        if before != (self.view.state, self.view.phase, self.view.blocker.clone()) {
+        if before
+            != (
+                self.view.state,
+                self.view.phase.clone(),
+                self.view.blocker.clone(),
+            )
+        {
             self.view.changed_at = at;
         }
     }
 
-    fn enter(&mut self, phase: Phase, at: u64) {
+    /// Where `phase` stands in the flow's phases; None when it has none.
+    fn position(&self, phase: &Phase) -> Option<usize> {
+        self.phases.iter().position(|known| known == phase)
+    }
+
+    fn enter(&mut self, position: usize, at: u64) {
         self.close_phase(at);
-        self.view.phase = Some(phase);
-        self.entered[phase.index()] = true;
+        self.view.phase = Some(self.phases[position].clone());
+        self.entered[position] = true;
         self.phase_since = at;
     }
 
     fn close_phase(&mut self, until: u64) {
-        if let Some(current) = self.view.phase {
+        if let Some(current) = self
+            .view
+            .phase
+            .as_ref()
+            .and_then(|phase| self.position(phase))
+        {
             let spent = until.saturating_sub(self.phase_since);
-            let total = &mut self.durations[current.index()];
+            let total = &mut self.durations[current];
             *total = Some(total.unwrap_or(0) + spent);
         }
     }
@@ -321,9 +360,14 @@ impl Folding {
         if self.view.is_plain() {
             return self.view;
         }
-        let current = self.view.phase.map(Phase::index);
+        let current = self
+            .view
+            .phase
+            .as_ref()
+            .and_then(|phase| self.position(phase));
         let is_done = self.view.state == State::Done;
-        self.view.steps = Phase::ALL
+        self.view.steps = self
+            .phases
             .iter()
             .enumerate()
             .map(|(position, phase)| {
@@ -339,7 +383,7 @@ impl Folding {
                     StepStatus::Open
                 };
                 Step {
-                    phase: *phase,
+                    phase: phase.clone(),
                     status,
                     duration_ms: self.durations[position],
                 }

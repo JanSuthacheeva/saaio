@@ -249,6 +249,7 @@ mod tests {
                     name: id.into(),
                     request: id.into(),
                     mode: Mode::Auto,
+                    phases: None,
                 },
             ),
             Event::new(

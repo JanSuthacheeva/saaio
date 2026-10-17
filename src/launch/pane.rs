@@ -31,7 +31,8 @@ pub struct PaneSpec {
 /// The agent's command with {id}, {name}, {prompt}, {request} filled in ({prompt} itself filled first);
 /// an argument that fills to nothing is dropped, so an agent without a prompt gets no empty one.
 pub fn agent_argv(agent: &Agent, id: &str, name: &str, request: &str) -> Vec<String> {
-    let prompt = fill(&agent.prompt, id, name, request, "", "");
+    let template = agent.prompt.as_deref().unwrap_or_default();
+    let prompt = fill(template, id, name, request, "", "");
     agent
         .command
         .iter()
@@ -158,7 +159,7 @@ mod tests {
     fn fills_the_agent_template() {
         let agent = Agent {
             command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
-            prompt: "/ship-feature {request}".into(),
+            prompt: Some("/ship-feature {request}".into()),
             adapter: None,
             resume: None,
         };
@@ -180,7 +181,7 @@ mod tests {
     fn drops_an_argument_that_fills_to_nothing() {
         let agent = Agent {
             command: strings(&["claude", "-n", "{name}", "{prompt}"]),
-            prompt: String::new(),
+            prompt: None,
             adapter: None,
             resume: None,
         };
@@ -195,7 +196,7 @@ mod tests {
     fn fills_the_resume_command_when_the_agent_has_one() {
         let mut agent = Agent {
             command: strings(&["claude"]),
-            prompt: String::new(),
+            prompt: None,
             adapter: None,
             resume: Some(strings(&["claude", "-n", "{name}", "--resume", "{id}"])),
         };
@@ -248,6 +249,7 @@ mod tests {
                     name: "shop-217".into(),
                     request: "SHOP-217 add CSV export".into(),
                     mode: Mode::Auto,
+                    phases: None,
                 },
             ),
             Event::new(
@@ -383,6 +385,7 @@ mod tests {
                     name: "scratch".into(),
                     request: String::new(),
                     mode: Mode::Plain,
+                    phases: None,
                 },
             ),
             Event::new(
@@ -438,7 +441,7 @@ mod tests {
     fn fills_a_plain_sessions_command_without_a_prompt() {
         let agent = Agent {
             command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
-            prompt: "/ship-feature {request}".into(),
+            prompt: Some("/ship-feature {request}".into()),
             adapter: None,
             resume: None,
         };
@@ -453,7 +456,7 @@ mod tests {
     fn cannot_resume_a_worker_whose_agent_has_no_resume_template() {
         let agent = Agent {
             command: strings(&["aider"]),
-            prompt: String::new(),
+            prompt: None,
             adapter: None,
             resume: None,
         };

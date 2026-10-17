@@ -4,7 +4,6 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use super::{BoardView, every_flow};
-use crate::event::Phase;
 use crate::text::{clock, long_duration, plural, short_duration};
 use crate::ui::fit::{clip, clip_place, wrap};
 use crate::ui::sidebar;
@@ -291,7 +290,7 @@ impl BoardView<'_> {
             if !steps.is_empty() {
                 steps.push(Span::raw("   "));
             }
-            let name = if step.phase == Phase::MergeRequest {
+            let name = if step.phase.name() == "merge-request" {
                 "MR"
             } else {
                 step.phase.name()
@@ -325,7 +324,7 @@ mod tests {
             Mode::Auto,
             vec![
                 EventKind::Phase {
-                    phase: Phase::Implement,
+                    phase: crate::event::Phase::of("implement"),
                 },
                 EventKind::Blocked {
                     reason: "migration needs a default".into(),
@@ -416,10 +415,10 @@ mod tests {
             Mode::Auto,
             vec![
                 EventKind::Phase {
-                    phase: Phase::Design,
+                    phase: crate::event::Phase::of("plan"),
                 },
                 EventKind::Phase {
-                    phase: Phase::Implement,
+                    phase: crate::event::Phase::of("implement"),
                 },
             ],
         );
@@ -436,7 +435,7 @@ mod tests {
         assert!(rows[0].starts_with(" 1 shop-221  "), "{rows:#?}");
         assert_eq!(
             rows[1].trim_start(),
-            "design ✓ 1m   implement ● 28m   review ○   MR ○"
+            "plan ✓ 1m   implement ● 28m   review ○   MR ○"
         );
         assert!(rows[2].starts_with("────"), "{rows:#?}");
         assert_eq!(rows[3], " TIMELINE");
@@ -448,7 +447,7 @@ mod tests {
             "shop-221",
             Mode::Auto,
             vec![EventKind::Phase {
-                phase: Phase::Implement,
+                phase: crate::event::Phase::of("implement"),
             }],
         );
         let area = Rect::new(0, 0, 80, 6);
@@ -461,7 +460,7 @@ mod tests {
         let (implement, working) = with_state(vec![flow], state, |view| {
             view.render_detail(area, &mut buf);
             let theme = view.theme();
-            (theme.phase.implement.fg, theme.state.working.fg)
+            (theme.phase.positions[1].fg, theme.state.working.fg)
         });
 
         let row = rows(&buf)[1].clone();

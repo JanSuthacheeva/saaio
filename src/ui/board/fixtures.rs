@@ -24,6 +24,7 @@ pub(super) fn flow(name: &str, mode: Mode, events: Vec<EventKind>) -> FlowView {
                 name: name.into(),
                 request: format!("{} add CSV export", name.to_uppercase()),
                 mode,
+                phases: None,
             },
         ),
         Event::new(

@@ -19,7 +19,7 @@ fn start(dir: &Path) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
         dir,
         Agent {
             command: vec!["cat".into()],
-            prompt: String::new(),
+            prompt: None,
             adapter: None,
             resume: Some(vec!["cat".into()]),
         },
@@ -43,7 +43,7 @@ fn start_with_agents(
     let store = Store::at(dir.to_path_buf());
     let config = Config {
         agents,
-        phases: crate::config::builtin_phases(),
+        workflow: crate::workflow::Workflow::builtin(),
         ..Config::default()
     };
     let handle = thread::spawn(move || {
@@ -215,6 +215,7 @@ fn started_flow(store: &Store, dir: &Path, name: &str, agent: &str) -> String {
                 name: name.into(),
                 request: "x".into(),
                 mode: crate::event::Mode::Auto,
+                phases: None,
             },
         ))
         .unwrap();
@@ -245,13 +246,13 @@ fn opens_a_pane_for_every_started_flow_and_marks_it_hosted() {
     let store = Store::at(dir.path().to_path_buf());
     let cat = Agent {
         command: vec!["cat".into()],
-        prompt: String::new(),
+        prompt: None,
         adapter: None,
         resume: Some(vec!["cat".into()]),
     };
     let broken = Agent {
         command: vec!["/nonexistent/flow-agent".into()],
-        prompt: String::new(),
+        prompt: None,
         adapter: None,
         resume: None,
     };
@@ -537,7 +538,7 @@ fn starts_the_master_fresh_when_its_session_cannot_be_resumed() {
         dir.path(),
         Agent {
             command: vec!["cat".into()],
-            prompt: String::new(),
+            prompt: None,
             adapter: None,
             resume: Some(vec![
                 "sh".into(),
@@ -621,7 +622,7 @@ fn fake_codex(dir: &Path) -> Agent {
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
     Agent {
         command: vec![script.display().to_string()],
-        prompt: String::new(),
+        prompt: None,
         adapter: Some(crate::adapter::Adapter::Codex),
         resume: Some(vec![script.display().to_string()]),
     }

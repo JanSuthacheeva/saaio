@@ -75,6 +75,7 @@ pub fn run(
             name: name.clone(),
             request: request.to_string(),
             mode: args.mode,
+            phases: Some(config.workflow.phases()),
         },
     );
     let id = store.create(&first)?;

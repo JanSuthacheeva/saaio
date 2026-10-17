@@ -1,5 +1,5 @@
 
-  ● shop-230  ●───○───○───○ design  · flow/shop-230 · slot 1                                                │ ▚▄▞ flow
+  ● shop-230  ●───○───○───○ plan  · flow/shop-230 · slot 1                                                  │ ▚▄▞ flow
                                                                                                             ├────────────────────────────────────────
                                                                                                             │ 0 ● master
                                                                                                             │     ~/projects/shop · main
@@ -10,7 +10,7 @@
                                                                                                             │     migration needs a default value f…
                                                                                                             │
                                                                                                             │▌2 ● shop-230                       31m
-                                                                                                            │▌    ●───○───○───○ design
+                                                                                                            │▌    ●───○───○───○ plan
                                                                                                             │▌    Which approach: a channel column …
                                                                                                             │
                           ╭─ not open ────────────────────────────────────────────╮                         │ RUNNING 1

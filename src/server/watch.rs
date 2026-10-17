@@ -47,6 +47,7 @@ mod tests {
                 name: "csv".into(),
                 request: "add csv".into(),
                 mode: Mode::Auto,
+                phases: None,
             },
         )
     }

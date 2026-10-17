@@ -7,18 +7,18 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
 
 use crate::adapter::Adapter;
-use crate::event::Phase;
 use crate::ui::prefix::Prefix;
-
-/// Skill name -> the phase it starts, for adapters that see skills start.
-pub type PhaseMap = BTreeMap<String, Phase>;
+use crate::workflow::Workflow;
 
 /// How to launch one agent: its command line, the first prompt it gets, and how to resume it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Agent {
     pub command: Vec<String>,
-    pub prompt: String,
+    /// Its own first prompt; None takes [worker] prompt, else the built-in agent's of its name.
+    /// Some after load for every agent.
+    #[serde(default)]
+    pub prompt: Option<String>,
     /// The command that continues session {id}; an agent without one is started fresh by hand.
     #[serde(default)]
     pub resume: Option<Vec<String>>,
@@ -32,25 +32,30 @@ pub struct Agent {
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub agents: BTreeMap<String, Agent>,
-    /// Skill name -> phase: the built-in map with the file's entries over it.
-    pub phases: PhaseMap,
+    /// [[phases]]: the built-in workflow unless the file has one.
+    #[serde(rename = "phases")]
+    pub workflow: Workflow,
     pub worker: WorkerConfig,
     pub master: MasterConfig,
     pub ui: UiConfig,
 }
 
-/// [worker]: what a flow runs when flow start names no agent.
+/// [worker]: what a flow runs when flow start names no agent, and what it is asked first.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct WorkerConfig {
     /// The agent flow start runs, "claude" unless set.
     pub agent: String,
+    /// The first prompt of every agent the file gives none, the built-in ones included; unset,
+    /// each keeps its built-in default.
+    pub prompt: Option<String>,
 }
 
 impl Default for WorkerConfig {
     fn default() -> WorkerConfig {
         WorkerConfig {
             agent: "claude".to_string(),
+            prompt: None,
         }
     }
 }
@@ -106,31 +111,58 @@ impl Config {
         Ok(config)
     }
 
-    /// The file's text as a Config; refuses the top-level `agent` key, naming [worker] agent.
+    /// The file's text as a Config; refuses the top-level `agent` key, naming [worker] agent, and
+    /// the [phases] skill table, naming [[phases]].
     fn parse(text: &str) -> Result<Config> {
         let read = |error: toml::de::Error| anyhow!("{}", error.to_string().trim_end());
         let table: toml::Table = toml::from_str(text).map_err(read)?;
         if table.contains_key("agent") {
             bail!("the top-level `agent` key is now `agent` under [worker]");
         }
+        if table.get("phases").is_some_and(toml::Value::is_table) {
+            bail!(
+                "[phases] is now a list of phases: [[phases]] with name = \"plan\" and \
+                 skills = [\"design-code\"], one per phase in order"
+            );
+        }
         toml::from_str(text).map_err(read)
     }
 
-    /// The built-in agents and phases alone, as if there were no config file.
+    /// The built-in agents and workflow alone, as if there were no config file.
     pub fn builtin() -> Config {
         let mut config = Config::default();
         config.add_builtins();
         config
     }
 
-    /// The built-in agents and phases under what the file set.
+    /// The built-in agents under what the file set, each with its first prompt.
     fn add_builtins(&mut self) {
-        let mut agents = builtin_agents();
+        let builtins = builtin_agents();
+        let mut agents: BTreeMap<String, Agent> = builtins
+            .iter()
+            .map(|(name, agent)| {
+                let bare = Agent {
+                    prompt: None,
+                    ..agent.clone()
+                };
+                (name.clone(), bare)
+            })
+            .collect();
         agents.append(&mut self.agents);
         self.agents = agents;
-        let mut phases = builtin_phases();
-        phases.append(&mut self.phases);
-        self.phases = phases;
+        self.resolve_prompts(&builtins);
+    }
+
+    /// Each agent's first prompt: its own from the file, else [worker] prompt, else the built-in
+    /// agent's of its name, else none.
+    fn resolve_prompts(&mut self, builtins: &BTreeMap<String, Agent>) {
+        for (name, agent) in &mut self.agents {
+            if agent.prompt.is_some() {
+                continue;
+            }
+            let builtin = builtins.get(name).and_then(|agent| agent.prompt.clone());
+            agent.prompt = Some(self.worker.prompt.clone().or(builtin).unwrap_or_default());
+        }
     }
 
     /// The master's agent: [master] agent, else MASTER_AGENT, else the default agent; None when
@@ -177,17 +209,6 @@ pub fn config_file(
         .or_else(|| set(home).map(|dir| dir.join(".config/flow/config.toml")))
 }
 
-/// The phases of the agent-skills chain: design-code, implement-plan, review-changes,
-/// write-merge-request. A config file adds others or points these elsewhere.
-pub fn builtin_phases() -> PhaseMap {
-    PhaseMap::from([
-        ("design-code".to_string(), Phase::Design),
-        ("implement-plan".to_string(), Phase::Implement),
-        ("review-changes".to_string(), Phase::Review),
-        ("write-merge-request".to_string(), Phase::MergeRequest),
-    ])
-}
-
 fn strings(parts: &[&str]) -> Vec<String> {
     parts.iter().copied().map(String::from).collect()
 }
@@ -203,19 +224,19 @@ pub const MASTER_AGENT: &str = "master";
 pub fn builtin_agents() -> BTreeMap<String, Agent> {
     let claude = Agent {
         command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
-        prompt: "/ship-feature {request}".to_string(),
+        prompt: Some("/ship-feature {request}".to_string()),
         adapter: Some(Adapter::ClaudeCode),
         resume: Some(strings(&["claude", "-n", "{name}", "--resume", "{id}"])),
     };
     let codex = Agent {
         command: strings(&["codex", "{prompt}"]),
-        prompt: "$ship-feature {request}".to_string(),
+        prompt: Some("$ship-feature {request}".to_string()),
         adapter: Some(Adapter::Codex),
         resume: Some(strings(&["codex", "resume", "{session}"])),
     };
     let master = Agent {
         command: strings(&["claude", "-n", "{name}", "--session-id", "{id}"]),
-        prompt: String::new(),
+        prompt: Some(String::new()),
         adapter: Some(Adapter::ClaudeCode),
         resume: Some(strings(&["claude", "-n", "{name}", "--resume", "{id}"])),
     };
@@ -245,14 +266,14 @@ mod tests {
             agent.command,
             vec!["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
         );
-        assert_eq!(agent.prompt, "/ship-feature {request}");
+        assert_eq!(agent.prompt.as_deref(), Some("/ship-feature {request}"));
         assert_eq!(
             agent.resume.as_deref(),
             Some(&["claude", "-n", "{name}", "--resume", "{id}"].map(String::from)[..])
         );
         let (_, codex) = config.agent(Some("codex")).unwrap();
         assert_eq!(codex.command, ["codex", "{prompt}"]);
-        assert_eq!(codex.prompt, "$ship-feature {request}");
+        assert_eq!(codex.prompt.as_deref(), Some("$ship-feature {request}"));
         assert_eq!(
             codex.resume.as_deref(),
             Some(&["codex", "resume", "{session}"].map(String::from)[..])
@@ -264,30 +285,32 @@ mod tests {
             master.command,
             ["claude", "-n", "{name}", "--session-id", "{id}"]
         );
-        assert_eq!(master.prompt, "");
+        assert_eq!(master.prompt.as_deref(), Some(""));
     }
 
     #[test]
-    fn maps_the_agent_skills_to_phases_and_takes_more_from_the_file() {
+    fn reads_the_workflow_from_the_file_or_takes_the_built_in_one() {
         let dir = TempDir::new().unwrap();
         let file = dir.path().join("config.toml");
         fs::write(
             &file,
-            "[phases]\nbrainstorm = \"design\"\nreview-changes = \"implement\"\n",
+            "[[phases]]\nname = \"spec\"\nskills = [\"brainstorming\"]\n\n\
+             [[phases]]\nname = \"build\"\nskills = [\"executing-plans\", \"tdd\"]\n",
         )
         .unwrap();
 
         let config = Config::load(Some(file), None, None).unwrap();
         let none = Config::load(Some(dir.path().join("missing.toml")), None, None).unwrap();
 
-        assert_eq!(none.phases, builtin_phases());
-        assert_eq!(config.phases["brainstorm"], Phase::Design);
+        assert_eq!(none.workflow, Workflow::builtin());
         assert_eq!(
-            config.phases["review-changes"],
-            Phase::Implement,
-            "the file wins"
+            config.workflow,
+            Workflow::of(&[
+                ("spec", &["brainstorming"]),
+                ("build", &["executing-plans", "tdd"])
+            ]),
+            "the file's list replaces the built-in one whole"
         );
-        assert_eq!(config.phases["design-code"], Phase::Design);
         assert_eq!(
             none.agent(None).unwrap().1.adapter,
             Some(Adapter::ClaudeCode)
@@ -296,6 +319,46 @@ mod tests {
             none.agent(Some(MASTER_AGENT)).unwrap().1.adapter,
             Some(Adapter::ClaudeCode)
         );
+    }
+
+    #[test]
+    fn refuses_a_workflow_it_cannot_draw_on_its_line() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        let error = |text: &str| {
+            fs::write(&file, text).unwrap();
+            format!(
+                "{:#}",
+                Config::load(Some(file.clone()), None, None).unwrap_err()
+            )
+        };
+        let phase = |name: &str| format!("[[phases]]\nname = \"{name}\"\n");
+
+        let five = error(&["a", "b", "c", "d", "e"].map(phase).concat());
+        assert!(five.contains(&file.display().to_string()), "{five}");
+        assert!(five.contains("a workflow has 1 to 4 phases"), "{five}");
+        let twice = error(&[phase("review"), phase("review")].concat());
+        assert!(twice.contains("two phases are named review"), "{twice}");
+        let name = error(&phase("Review"));
+        assert!(name.contains("lowercase letters, digits and -"), "{name}");
+        assert!(name.contains("line 2"), "{name}");
+        let key = error("[[phases]]\nname = \"plan\"\nskill = [\"design-code\"]\n");
+        assert!(key.contains("skill"), "{key}");
+    }
+
+    #[test]
+    fn names_the_new_shape_when_the_file_has_the_old_phases_table() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        fs::write(&file, "[phases]\nbrainstorm = \"design\"\n").unwrap();
+
+        let error = format!(
+            "{:#}",
+            Config::load(Some(file.clone()), None, None).unwrap_err()
+        );
+
+        assert!(error.contains(&file.display().to_string()), "{error}");
+        assert!(error.contains("[[phases]]"), "{error}");
     }
 
     #[test]
@@ -333,9 +396,57 @@ prompt = "/design-code {request}"
         );
         assert_eq!(config.agent(Some("claude")).unwrap().1.resume, None);
         assert_eq!(
-            config.agent(Some("claude")).unwrap().1.prompt,
-            "/design-code {request}"
+            config.agent(Some("claude")).unwrap().1.prompt.as_deref(),
+            Some("/design-code {request}")
         );
+    }
+
+    #[test]
+    fn worker_prompt_overrides_the_built_in_prompts_but_not_an_agents_own() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        fs::write(
+            &file,
+            r#"
+[worker]
+prompt = "/my-flow {request}"
+
+[agents.aider]
+command = ["aider", "--message", "{prompt}"]
+prompt = "{request}"
+
+[agents.pi]
+command = ["pi", "{prompt}"]
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(Some(file), None, None).unwrap();
+        let prompt = |name| config.agent(Some(name)).unwrap().1.prompt.as_deref();
+
+        assert_eq!(prompt("claude"), Some("/my-flow {request}"));
+        assert_eq!(prompt("codex"), Some("/my-flow {request}"), "as written");
+        assert_eq!(prompt("aider"), Some("{request}"), "its own wins");
+        assert_eq!(prompt("pi"), Some("/my-flow {request}"));
+    }
+
+    #[test]
+    fn an_agent_without_a_prompt_keeps_the_built_in_one_of_its_name() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        fs::write(
+            &file,
+            "[agents.claude]\ncommand = [\"claude\", \"--verbose\", \"{prompt}\"]\n\n\
+             [agents.pi]\ncommand = [\"pi\"]\n",
+        )
+        .unwrap();
+
+        let config = Config::load(Some(file), None, None).unwrap();
+        let prompt = |name| config.agent(Some(name)).unwrap().1.prompt.as_deref();
+
+        assert_eq!(prompt("claude"), Some("/ship-feature {request}"));
+        assert_eq!(prompt("codex"), Some("$ship-feature {request}"));
+        assert_eq!(prompt("pi"), Some(""), "no prompt anywhere");
     }
 
     #[test]

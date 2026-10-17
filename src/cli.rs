@@ -91,7 +91,7 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
     let registry = &registry;
     match cli.command {
         None => home::run(store, &env.bin_path(), now),
-        Some(Command::New(args)) => new::run(args, store, now),
+        Some(Command::New(args)) => new::run(args, store, &env.config()?.workflow, now),
         Some(Command::Report(args)) => report::run(args, store, now),
         Some(Command::Status(args)) => status::run(&args, store, registry, env, now),
         Some(Command::Start(args)) => {

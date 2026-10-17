@@ -5,6 +5,7 @@ use crate::cli::output::{Document, Failure, flow};
 use crate::event::{Event, EventKind, Phase};
 use crate::fold;
 use crate::store::Store;
+use crate::view::FlowView;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -18,7 +19,10 @@ pub struct Args {
 #[derive(Debug, Subcommand)]
 enum ReportEvent {
     /// The flow entered a phase
-    Phase { phase: Phase },
+    Phase {
+        /// One of the flow's phases, as `flow status <name>` lists them: plan, implement, ...
+        phase: Phase,
+    },
     /// Work goes on, after a stop or a subagent
     Working,
     /// A subagent works on the flow
@@ -68,16 +72,33 @@ impl ReportEvent {
     }
 }
 
+/// The failure for a phase the flow's workflow does not have; the help lists the ones it has.
+fn no_phase(flow: &FlowView, phase: &Phase) -> Failure {
+    let phases: Vec<&str> = flow.steps.iter().map(|step| step.phase.name()).collect();
+    let help = if flow.is_plain() {
+        format!("{} is a plain session, which has no phases", flow.name)
+    } else {
+        format!("Phases: {}", phases.join(", "))
+    };
+    Failure::error(
+        format!("{} has no phase {}", flow.name, phase.name()),
+        vec![help],
+    )
+}
+
 /// Appends one event to a flow; skipped without a flow, so an agent outside flow can report.
 pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
     let Some(name) = args.flow.filter(|name| !name.is_empty()) else {
         return Ok(flow::skipped());
     };
     let (flows, _) = views(store, now);
-    let id = fold::resolve(&flows, &name)
-        .ok_or_else(|| no_flow(&name))?
-        .id
-        .clone();
+    let flow = fold::resolve(&flows, &name).ok_or_else(|| no_flow(&name))?;
+    if let ReportEvent::Phase { phase } = &args.event
+        && !flow.steps.iter().any(|step| step.phase == *phase)
+    {
+        return Err(no_phase(flow, phase));
+    }
+    let id = flow.id.clone();
     match args.event.into_kind() {
         Some(kind) => store.append(&id, &Event::new(now, kind)),
         None => store.beat(&id),

@@ -78,7 +78,7 @@ fn hook(
     payload: &Value,
     now: u64,
 ) -> Option<String> {
-    let kinds = adapter.translate(payload, &config.phases);
+    let kinds = adapter.translate(payload, &config.workflow);
     let waiter = match hooked {
         Hooked::Nobody => return None,
         Hooked::Master => {

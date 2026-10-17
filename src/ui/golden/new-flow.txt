@@ -10,7 +10,7 @@
                                                                                                             │     migration needs a default value f…
                                                                                                             │
                                                                                                             │ 2 ● shop-230                       31m
-               ╭─ new flow ──────────────────────────────────────────── in ~/projects/shop ─╮               │     ●───○───○───○ design
+               ╭─ new flow ──────────────────────────────────────────── in ~/projects/shop ─╮               │     ●───○───○───○ plan
                │                                                                            │               │     Which approach: a channel column …
                │▌ request                                                                   │               │
                │▌ ╭──────────────────────────────────────────────────────────────────────╮  │               │ RUNNING 1
