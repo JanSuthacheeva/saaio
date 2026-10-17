@@ -118,7 +118,8 @@ mod tests {
     use super::*;
 
     fn run_without_a_store(args: &[&str]) -> Result<Document, Failure> {
-        let cli = Cli::try_parse_from(std::iter::once("flow").chain(args.iter().copied())).unwrap();
+        let cli =
+            Cli::try_parse_from(std::iter::once("saaio").chain(args.iter().copied())).unwrap();
         run(cli, &Env::default(), || 0)
     }
 

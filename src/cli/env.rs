@@ -93,7 +93,7 @@ impl Env {
     /// This binary, with ~ for the user's home.
     pub(crate) fn bin_path(&self) -> String {
         let Ok(exe) = env::current_exe() else {
-            return "flow".to_string();
+            return "saaio".to_string();
         };
         match self
             .user_home()

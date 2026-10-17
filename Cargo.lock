@@ -608,27 +608,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
-name = "flow"
-version = "0.1.0"
-dependencies = [
- "alacritty_terminal",
- "anyhow",
- "clap",
- "libc",
- "portable-pty",
- "postcard",
- "ratatui",
- "serde",
- "serde_json",
- "serde_toon_format",
- "signal-hook 0.4.5",
- "tempfile",
- "toml",
- "unicode-width",
- "uuid",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1552,6 +1531,27 @@ name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
+
+[[package]]
+name = "saaio"
+version = "0.1.0"
+dependencies = [
+ "alacritty_terminal",
+ "anyhow",
+ "clap",
+ "libc",
+ "portable-pty",
+ "postcard",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "serde_toon_format",
+ "signal-hook 0.4.5",
+ "tempfile",
+ "toml",
+ "unicode-width",
+ "uuid",
+]
 
 [[package]]
 name = "scopeguard"

@@ -88,8 +88,8 @@ impl Failure {
                     .join(" ")
             })
             .unwrap_or_else(|| match subcommand {
-                Some(name) => format!("flow {name}"),
-                None => "flow".to_string(),
+                Some(name) => format!("saaio {name}"),
+                None => "saaio".to_string(),
             });
         Failure {
             message,
@@ -148,7 +148,7 @@ mod tests {
     use super::*;
 
     #[derive(Debug, Parser)]
-    #[command(name = "flow")]
+    #[command(name = "saaio")]
     struct Cli {
         #[command(subcommand)]
         command: Command,
@@ -185,18 +185,21 @@ mod tests {
     #[test]
     fn turns_a_clap_error_into_a_usage_failure_naming_the_command() {
         Cli::command().debug_assert();
-        let error = Cli::try_parse_from(["flow", "report", "--nope"]).unwrap_err();
+        let error = Cli::try_parse_from(["saaio", "report", "--nope"]).unwrap_err();
 
         let failure = Failure::usage(&error, None);
 
         assert_eq!(failure.code, 2);
         assert_eq!(failure.message, "unexpected argument '--nope' found");
-        assert_eq!(failure.help, vec!["Run `flow report --help` for the usage"]);
+        assert_eq!(
+            failure.help,
+            vec!["Run `saaio report --help` for the usage"]
+        );
     }
 
     #[test]
     fn names_the_missing_arguments_clap_lists_below_its_message() {
-        let error = Cli::try_parse_from(["flow", "start"]).unwrap_err();
+        let error = Cli::try_parse_from(["saaio", "start"]).unwrap_err();
 
         let failure = Failure::usage(&error, None);
 
@@ -204,30 +207,30 @@ mod tests {
             failure.message,
             "the following required arguments were not provided: <REQUEST>"
         );
-        assert_eq!(failure.help, vec!["Run `flow start --help` for the usage"]);
+        assert_eq!(failure.help, vec!["Run `saaio start --help` for the usage"]);
     }
 
     #[test]
     fn names_the_subcommand_when_clap_prints_no_usage_line() {
-        let error = Cli::try_parse_from(["flow", "report", "--flow"]).unwrap_err();
+        let error = Cli::try_parse_from(["saaio", "report", "--flow"]).unwrap_err();
 
         assert_eq!(
             Failure::usage(&error, Some("report")).help,
-            vec!["Run `flow report --help` for the usage"]
+            vec!["Run `saaio report --help` for the usage"]
         );
         assert_eq!(
             Failure::usage(&error, None).help,
-            vec!["Run `flow --help` for the usage"]
+            vec!["Run `saaio --help` for the usage"]
         );
     }
 
     #[test]
     fn names_the_command_without_the_flags_clap_puts_in_its_usage() {
-        let error = Cli::try_parse_from(["flow", "start", "--plain", "x", "req"]).unwrap_err();
+        let error = Cli::try_parse_from(["saaio", "start", "--plain", "x", "req"]).unwrap_err();
 
         let failure = Failure::usage(&error, None);
 
-        assert_eq!(failure.help, vec!["Run `flow start --help` for the usage"]);
+        assert_eq!(failure.help, vec!["Run `saaio start --help` for the usage"]);
     }
 
     #[test]

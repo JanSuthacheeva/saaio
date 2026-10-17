@@ -78,7 +78,7 @@ If a renamed `Env` field collides with an existing method, keep a `saaio_` prefi
 
 ## Tasks
 
-- [ ] Rename the crate, lib and binary to saaio: Cargo.toml, Cargo.lock, `use saaio::` in main.rs, `CARGO_BIN_EXE_saaio` in tests/cli.rs, `SAAIO_COMMIT` in build.rs and proto.rs
+- [x] Rename the crate, lib and binary to saaio: Cargo.toml, Cargo.lock, `use saaio::` in main.rs, `CARGO_BIN_EXE_saaio` in tests/cli.rs, `SAAIO_COMMIT` in build.rs and proto.rs
 - [ ] Rename every variable to `SAAIO_*` (`SAAIO_FLOW_ID`, `SAAIO_FLOW_NAME`) and the `Env` fields, with the tests that set them
 - [ ] Rename the folders: state and config `saaio`, `/etc/saaio`, `.saaio/` per project, `$TMPDIR/saaio-<uid>`, with their tests
 - [ ] Rename the stored and shown names: `HOSTED = "saaio-ui"`, themes `saaio`/`saaio-light` and `Palette::SAAIO`, the UI wordmark; rewrite the goldens
