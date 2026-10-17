@@ -258,6 +258,10 @@ impl Store {
             .unwrap_or(0)
     }
 
+    pub fn set_typed(&self, id: &str, count: usize) -> Result<()> {
+        self.write_wait(&format!("{id}.typed"), &count.to_string())
+    }
+
     /// Marks the session as running a turn, as typed into by the server, or as idle at its
     /// prompt: the server types news and queued lines only into an idle one.
     pub fn set_busy(&self, waiter: &Waiter, busy: Busy) -> Result<()> {
@@ -635,6 +639,10 @@ mod tests {
         assert_eq!(store.delivered("7f3c"), 0);
         store.set_delivered("7f3c", 3).unwrap();
         assert_eq!(store.delivered("7f3c"), 3);
+
+        assert_eq!(store.typed("7f3c"), 0);
+        store.set_typed("7f3c", 2).unwrap();
+        assert_eq!(store.typed("7f3c"), 2);
 
         assert_eq!(store.seen(), None);
         let seen = Seen::from([(

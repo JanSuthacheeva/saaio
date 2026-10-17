@@ -140,7 +140,7 @@ session that wakes itself (Claude Code) is only marked `Busy::Idle`; Codex keeps
 #[cfg(not(test))]
 const UNSTARTED: Duration = Duration::from_secs(30);
 #[cfg(test)]
-const UNSTARTED: Duration = Duration::from_millis(300);
+const UNSTARTED: Duration = Duration::from_secs(3);
 
 impl Server {
     /// Types each flow's next queued line into its pane when the pane is ready, and lets a line
@@ -176,7 +176,7 @@ opened_at: HashMap<PaneKey, Instant>,
 line_at: HashMap<PaneKey, Instant>,
 ```
 
-`serve` calls `type_lines` after `deliver_news`. `open_pane` marks `Busy::Idle` and sets `opened_at`.
+`serve` calls `type_lines` after `deliver_news` and `refresh` (a fresh board, so no removed flow's log is read). `open_pane` marks `Busy::Idle` and sets `opened_at`.
 
 `src/server/master.md`, `src/server/master.rs` (modified): today's master.md becomes
 `master-v8.md`, listed in `master.rs`. New bullet:
@@ -218,14 +218,16 @@ The master queues a line:
 
 The server types the next line:
 
-1. `Server::serve -> Server::type_lines()` every `WATCH_EVERY`, after `deliver_news`
+1. `Server::serve -> Server::type_lines()` every `WATCH_EVERY`, after `deliver_news` and `refresh`
 2. For each running pane: `takes_lines(&key): Option<String>`
-3. `store.busy(&waiter)`. If `unstarted(busy, line_at, now)`: `store.set_busy(&waiter, Busy::Idle)`,
+3. `store.busy(&waiter)`. For every running pane, the master's too (news is typed into a Codex
+   master): if `unstarted(busy, line_at, now)`: `store.set_busy(&waiter, Busy::Idle)`,
    log "no turn began after typing into <name>", go on as idle.
 4. `ready(busy, opened_at, typed_at, now)` false: skip.
 5. `store.events(id)`, `store.typed(id)`, `wake::untyped(&events, typed).first()`: none, skip.
-6. `type_into(&key, &waiter, line)`: `host.write(&key, &paste(line))`,
-   `store.set_busy(&waiter, Busy::Typed)`, `line_at.insert(key, now)`
+6. `type_into(&key, &waiter, line)`: `store.set_busy(&waiter, Busy::Typed)` first (so the turn a
+   hook begins right away is not overwritten), `host.write(&key, &paste(line))` (on failure back
+   to Idle), `line_at.insert(key, now)`
 7. `store.set_typed(id, typed + 1)`
 
 Errors: a failed write is logged, the count not raised, the line tried again next tick. A failed
@@ -280,7 +282,7 @@ flow wait wakes a Claude Code worker:
 - [x] Add `claude_code::turn` and PreCompact/PostCompact to both adapters' EVENTS and `codex::turn`, with recorded fixtures and unit tests
 - [x] `flow hook`: Claude Code turns mark Busy only, never hand over; `flow wait` marks Busy::Turn with news; tests
 - [x] `flow send --type` with its refusals and `output::flow::queued`, with output unit tests and `tests/cli.rs` cases
-- [ ] `server/typing.rs`: `Store::set_typed`, `type_lines`, `type_into`, `takes_lines`, `ready`, `unstarted`, the `opened_at`/`line_at` fields, `deliver_news` through `type_into`; unit tests and a `server/tests.rs` case with two queued lines
+- [x] `server/typing.rs`: `Store::set_typed`, `type_lines`, `type_into`, `takes_lines`, `ready`, `unstarted`, the `opened_at`/`line_at` fields, `deliver_news` through `type_into`; unit tests and a `server/tests.rs` case with two queued lines
 - [ ] master.md bullet with `master-v8.md` kept and listed in master.rs; test that the old default upgrades
 - [ ] Docs: `docs/cli.md`, `docs/files.md`, `docs/flows.md`, README if needed, HANDOVER verified facts and decision
 - [ ] E2E with a scratch FLOW_HOME: a Claude Code worker and a Codex worker get `/compact` then a line, each typed when idle, in order
