@@ -378,3 +378,43 @@ Routine and skimmable: the `Phase::X` -> `Phase::of("x")` test churn, the golden
 
 `cargo test` (433 unit + 61 cli), `cargo clippy --all-targets -- -D warnings` and `cargo fmt
 --check` pass at dbb3279.
+
+### Second review
+
+Reviewed in an isolated context: 1e82758..HEAD (the review decisions as tasks, the `design` alias
+removed from fold and theme.toml, `[phase]` taking any phase name).
+
+**Fixed**
+
+- README's example of a broken theme still read `done belongs in [state], not [phase]`, an error
+  flow no longer prints; HANDOVER piece 12 still said old logs read `design` as `plan`. The only
+  test of the "belongs in [ui], not [state]" arm went with the removed `[phase] done` case; a
+  `[state] accent` case now covers it (fails when the section check is dropped). The board notice
+  test used a message flow can no longer print. 3ef3e9f
+
+Docs and tests only, so no second pass over the fixes was needed.
+
+**Open**
+
+- A flow started before this branch while in `design` now folds with no phase: it shows `working`
+  and its steps all pending until its next phase event, and the `phase: design` line is gone from
+  its timeline. This is the decided "no backwards compatibility"; only flows in flight at install
+  time see it. Recommend: leave.
+- `[phase] accent = ...` (a `[ui]`/`[state]` key under `[phase]`) is no longer an error but colors
+  a phase named `accent`, which a workflow will rarely have, so a misplaced key now does nothing
+  silently. Recommend: leave; it is the decided trade for any phase name.
+
+**Where to look**
+
+1. `src/ui/theme_file.rs` `colors`: the `_ if section == Section::Phase` arm now sits before the
+   section mismatch arm; `apply` keeps phase keys out of the reference wait (`ColorKey::Phase` never
+   equals a `Fixed` key), so `[phase] done = "done"` resolves.
+2. `src/fold.rs` `position`: a plain lookup now; an old `design` event is ignored like any unknown
+   phase.
+
+Routine: the plan, README and CLAUDE.md wording, the fold test rename.
+
+**Checks**
+
+`cargo test` (433 unit + 61 cli), `cargo clippy --all-targets -- -D warnings` and `cargo fmt
+--check` pass at 3ef3e9f.
