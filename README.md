@@ -91,9 +91,9 @@ settle, and only asks you the rest.
 
 Each worker gets its own branch and worktree, so nothing it does touches your checkout. If your
 project needs services, `.flow/setup` and `.flow/teardown` run in every worktree, and `FLOW_SLOT`
-(1 to 20, never shared between two of your projects) gives each worktree's Docker stack its own
-ports. The `setup-flow` skill can write both scripts for your repo and try them in a scratch
-worktree.
+(1 to 20, never held by two unfinished flows at once, in any of your projects) gives each
+worktree's Docker stack its own ports. The `setup-flow` skill can write both scripts for your
+repo and try them in a scratch worktree.
 
 flow knows what a worker is doing because Claude Code and Codex tell it through their own hooks.
 It never reads the screen. Any other command can run as a worker too; flow then shows whether it's
