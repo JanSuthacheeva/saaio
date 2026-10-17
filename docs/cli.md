@@ -23,7 +23,7 @@
 
 | Command | Does |
 | --- | --- |
-| `flow` | every flow and what needs you |
+| `flow` | flow ui in your terminal; every flow and what needs you for an agent or a script |
 | `flow ui [--stop]` | open the terminal UI, or stop it and every session |
 | `flow start <request> [--name] [--mode] [--agent] [--type]` | start a worker in its own worktree |
 | `flow start --plain <folder> [--name] [--agent]` | start an agent in a folder, without a flow |
@@ -40,7 +40,11 @@
 
 ## flow
 
-Flow counts, one line per flow, and the question or reason of each waiting or blocked flow.
+- Typed in a terminal: opens flow ui, as [`flow ui`](#flow-ui).
+- Run by an agent or a script: flow counts, one line per flow, and the question or reason of each
+  waiting or blocked flow, as below.
+- An agent or a script: stdin or stdout is not a terminal, or `FLOW_ID`, `FLOW_MASTER`,
+  `CLAUDECODE` or `CODEX_THREAD_ID` is set.
 
 ```
 $ flow

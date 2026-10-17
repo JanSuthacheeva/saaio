@@ -2,6 +2,7 @@
 
 ```sh
 flow ui    # in a repository
+flow       # the same, typed in a terminal
 ```
 
 One terminal with the master, every worker and every plain session.
