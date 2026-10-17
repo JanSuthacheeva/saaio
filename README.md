@@ -419,7 +419,7 @@ Programs read `flow status --json`: the whole board, nothing truncated, camelCas
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "now": 1791953473760,
   "count": 2,
   "needsYou": 1,
@@ -438,7 +438,7 @@ Programs read `flow status --json`: the whole board, nothing truncated, camelCas
       "mergeRequest": null,
       "decisions": ["approach B: forge adapter"],
       "steps": [
-        { "phase": "design", "status": "done", "durationMs": 540000 },
+        { "phase": "plan", "status": "done", "durationMs": 540000 },
         { "phase": "implement", "status": "current", "durationMs": 1860000 },
         { "phase": "review", "status": "open", "durationMs": null },
         { "phase": "merge-request", "status": "open", "durationMs": null }
@@ -482,7 +482,8 @@ Programs read `flow status --json`: the whole board, nothing truncated, camelCas
 Timeline tones: `neutral`, `progress`, `attention`, `problem`, `success`. `answer` is the last
 turn's whole closing message, as the worker's harness reported it. A plain session (`mode:
 plain`) has no steps, and its workspace is its folder, with `branch` and `slot` null. Version 2
-made them nullable.
+made them nullable. Version 3: `phase` and `steps[].phase` are the names of the flow's
+[workflow](#the-workflow), the phases it started with; a flow from before reads `design` as `plan`.
 
 ## Where the logs live
 
