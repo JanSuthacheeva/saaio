@@ -33,8 +33,9 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
     }
 }
 
-/// Sleeps until there is news for the session, marked busy with the turn it wakes; None once another waiter took over, the session
-/// ended (the parent changed), or a worker's flow is finished or gone.
+/// Sleeps until there is news for the session, marked busy with the turn it wakes; None once
+/// another waiter took over, the session ended (the parent changed), or a worker's flow is
+/// finished or gone.
 fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
     let me = std::process::id();
     store.claim_waiter(waiter, me).ok()?;

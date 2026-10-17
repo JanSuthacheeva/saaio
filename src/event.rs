@@ -68,7 +68,8 @@ pub enum EventKind {
     Message {
         text: String,
     },
-    /// A line the master queued for the server to type into this flow's pane, through `flow send --type`.
+    /// A line the master queued for the server to type into this flow's pane, through
+    /// `flow send --type`.
     Typed {
         text: String,
     },
