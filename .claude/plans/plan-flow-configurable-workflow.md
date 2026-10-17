@@ -327,3 +327,50 @@ The first prompt:
 - [x] `[worker] prompt: Option`, `Agent.prompt: Option`, `resolve_prompts` (own, then [worker], then the built-in default of its name); `agent_argv` and the master's bare start; config tests for each step of the order
 - [x] README: `[[phases]]`, `[worker] prompt`, phase names in `flow report`, theme `[phase]` by name, JSON v3; HANDOVER and CLAUDE.md where they name the phases or `PhaseMap`
 - [x] End to end: a scratch `FLOW_HOME` and `FLOW_CONFIG` with a 3-phase workflow; `flow new`, `flow report phase`, `flow status` and `--json` show its steps; an old log with `design` reads as plan; `flow ui` on the scratch store shows the steps colored by a theme `[phase]` entry; `flow start` builds the worker's argv with the built-in prompts (claude `/`, codex `$`), then with `[worker] prompt` set for both as written
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and the diff to main.
+
+**Fixed**
+
+- A log whose `started` carries `"phases":[]` made fold panic (usize underflow) on a merge-request
+  event, which would take down `flow status` and the server. Shown by a fold test; `checked_sub`
+  now skips entering a phase. 25e509e
+- `flow report phase plan` on a plain session printed the help `Phases: ` with nothing after it; it
+  now says `scratch is a plain session, which has no phases` (cli test). `flow report phase --help`
+  lost its possible values with the ValueEnum; `<PHASE>` now has a description. dbb3279
+
+The fix commits were reviewed again by a separate agent: no issues.
+
+**Open**
+
+- A flow started before this change (no phases in its log) refuses `flow report phase design`,
+  although fold would read `design` as `plan` for it. Only an in-flight agent that read the old
+  help hits this, and the refusal's help lists `plan`, so it corrects itself. Recommend: leave.
+- theme.toml `[phase] design = ...` always becomes `plan`, so a workflow that names a phase
+  `design` cannot color it by that name (it gets its position's color). Recommend: leave, or only
+  alias when the name `plan` is not set too; rare.
+- A phase named like a `[ui]`/`[state]` key (`done`, `working`, `accent`, ...) is a valid phase
+  name but cannot be colored in `[phase]` (error "done belongs in [state]"). Recommend: refuse
+  those names in `Phase` or document it; rare.
+- The `[worker] prompt` also lands on the `master` agent's resolved prompt; harmless, since
+  `server/master.rs` starts the master with `prompt: None`.
+
+**Where to look**
+
+1. `src/fold.rs` `Folding::new` -> `position` -> `enter`/`close_phase`/`finish`: steps from the
+   recorded list, the legacy `design` rename, unknown phases ignored.
+2. `src/config.rs` `add_builtins` -> `resolve_prompts`: the first-prompt order (own, `[worker]`,
+   built-in of its name, none).
+3. `src/cli/commands/report.rs` `run`: the phase check against the flow's steps.
+4. `src/ui/theme_file.rs` `colors` and `src/ui/theme.rs` `phase_style`/`tinted`: color by name,
+   else by position.
+
+Routine and skimmable: the `Phase::X` -> `Phase::of("x")` test churn, the goldens
+(`designing`/`design` -> `plan`), the `phases: None` added to test fixtures, README/HANDOVER.
+
+**Checks**
+
+`cargo test` (433 unit + 61 cli), `cargo clippy --all-targets -- -D warnings` and `cargo fmt
+--check` pass at dbb3279.
