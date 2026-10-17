@@ -180,12 +180,18 @@ impl App {
 
     /// The sidebar or rail, from the start: the master has its row even before there are workers.
     pub fn areas(&self) -> Areas {
+        self.areas_in(self.size)
+    }
+
+    /// The areas in a terminal of `size`. A frame can be smaller than the size the app knows,
+    /// when the terminal shrank and its resize has not arrived yet; draw lays out for the frame.
+    fn areas_in(&self, size: Size) -> Areas {
         let chrome = if self.folded() {
             Chrome::Rail
         } else {
             Chrome::Sidebar
         };
-        layout::areas(self.size, chrome)
+        layout::areas(size, chrome)
     }
 
     /// Whether the rail shows instead of the sidebar: the user's choice, else a narrow terminal.

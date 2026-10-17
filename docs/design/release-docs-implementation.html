@@ -1,0 +1,567 @@
+<title>flow 0.1.0 release plan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* One 720px reading column (jasu.dev); diagrams and code scroll in their own box. */
+:root {
+  color-scheme: light;
+  --surface: #f8f9fb; --card: #eceff4; --ink: #2e3440; --muted: #4c566a; --subtle: #d8dee9;
+  --border: #d8dee9; --code-block: #2e3440; --code-block-ink: #eceff4; --code-bg: #e5e9f0; --code-ink: #4b6c8a;
+  --accent: #7b5eaf; --on-accent: #f8f9fb; --link: #4b6c8a;
+  --new: #a3be8c; --mod: #d08770; --old: #d8dee9;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --gap: 24px; --gap-phone: 14px; --radius: 6px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #2e3440; --card: #3b4252; --ink: #eceff4; --muted: #93b1cc; --subtle: #434c5e;
+  --border: #4c566a; --code-block: #3b4252; --code-block-ink: #eceff4; --code-bg: #3b4252; --code-ink: #88c0d0;
+  --accent: #bd93f9; --on-accent: #2e3440; --link: #88c0d0;
+  --new: #a3be8c; --mod: #ebcb8b; --old: #4c566a;
+}
+body { background: var(--surface); color: var(--ink); font: 18px/1.6 var(--sans); }
+.page { max-width: 720px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: var(--gap); }
+h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+h2 { font-size: 24px; line-height: 1.3; font-weight: 700; margin: 0; text-wrap: balance; }
+h3 { font-size: 18px; margin: 0; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.meta { font-size: 13px; line-height: 1.5; color: var(--muted); }
+a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+code { font-family: var(--mono); font-size: 0.78em; background: var(--code-bg); color: var(--code-ink); border-radius: 0.2rem; padding: 0.1em 0.3em; }
+pre { background: var(--code-block); color: var(--code-block-ink); border-radius: var(--radius); padding: 14px 16px; font: 14px/1.5 var(--mono); overflow-x: auto; margin: 0; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--gap); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.pill { align-self: flex-start; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em; line-height: 1.4; padding: 2px 10px; border-radius: 99px; background: var(--accent); color: var(--on-accent); }
+.rec { border: 2px solid var(--accent); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.two > div { min-width: 0; }
+.plus, .minus { font-size: 16px; }
+.label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.diagram { overflow-x: auto; }
+.diagram svg { display: block; min-width: 520px; width: 100%; height: auto; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; border: 1px solid var(--muted); }
+svg text { fill: var(--ink); font: 13px var(--sans); }
+svg .box { stroke: var(--muted); stroke-width: 1; }
+svg .n { fill: var(--new); } svg .m { fill: var(--mod); } svg .o { fill: var(--old); }
+svg .arrow { stroke: var(--muted); stroke-width: 1.4; fill: none; marker-end: url(#ah); }
+svg #ah path { fill: var(--muted); }
+svg text.on { fill: #2e3440; }
+@media (max-width: 560px) { .two { grid-template-columns: 1fr; } .card { padding: var(--gap-phone); } .page { gap: var(--gap-phone); padding-block: 24px 48px; } }
+</style>
+<style>
+table { border-collapse: collapse; font-size: 15px; line-height: 1.45; width: 100%; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+thead th { background: var(--subtle); }
+.tbl { overflow-x: auto; }
+.tbl table { min-width: 560px; }
+details { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
+details[open] { display: flex; flex-direction: column; gap: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+pre.draft { white-space: pre-wrap; word-break: break-word; }
+.unit h3 code { font-size: 0.85em; }
+.tag { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 8px; border-radius: 99px; color: #2e3440; }
+.tag.new { background: var(--new); } .tag.mod { background: var(--mod); }
+.units { display: flex; flex-direction: column; gap: 14px; }
+.unit { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.unit .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+ol.steps { font-size: 16px; }
+ol.steps code { font-size: 0.82em; }
+.err { color: var(--muted); }
+</style>
+
+<div class="page">
+  <div class="stack">
+    <span class="meta">design-code, step 3 of 3 - flow/release-docs - 2026-10-17</span>
+    <h1>flow 0.1.0 release docs</h1>
+    <p>The README draft, the docs outline, the example files, the code that writes them, and the CHANGELOG. Approaches page: <a href="https://claude.ai/artifact/Sig9Dnm6Jui3Z1VFdJ3oQN">choices 1 to 3</a>.</p>
+  </div>
+
+  <div class="card">
+    <h2>Decision recap</h2>
+    <p>The README becomes a short front page and the manual it holds today moves into <code>docs/</code>, rewritten as reference and checked against real output. Commented example files live in <code>examples/</code>; <code>flow server</code> writes them beside <code>config.toml</code> on first run with the shared logic that already writes <code>master.md</code>.</p>
+    <ul>
+      <li>1A: write on first run, refresh while untouched. <code>flow example config|theme</code> goes into HANDOVER's Future improvements.</li>
+      <li>2: every setting commented out at its default (<code>#key = value</code>); a test uncomments them and checks the defaults and that none is missing.</li>
+      <li>3: a VHS tape against real workers in a scratch <code>FLOW_HOME</code>, at least one Codex worker beside Claude Code workers.</li>
+      <li>Install with <code>cargo install --git ... --tag v0.1.0</code>; the quick start installs the agent-skills with <code>npx skills add</code>.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>README draft</h2>
+    <p class="meta">About 150 lines instead of 470. Real command output replaces the placeholders marked with <code>&lt;real output&gt;</code> during the build.</p>
+<pre class="draft"># flow
+
+![flow ui with four workers](docs/media/flow-ui.png)
+
+I usually have several coding agents working at once, each on its own
+feature. flow is the tool I built to keep track of them: it opens each
+agent in its own git worktree, shows where every one stands, and tells me
+when one needs me. I use it every day with Claude Code and Codex, and
+thought it might help others too.
+
+flow is a terminal UI, `flow ui`, and a command line whose main user is an
+agent.
+
+## Quick start
+
+You need macOS or Linux, git, Rust 1.95 or newer, and Claude Code or Codex.
+
+    cargo install --git https://github.com/JanSuthacheeva/flow --tag v0.1.0
+
+Each worker starts with `/ship-feature &lt;request&gt;` (`$ship-feature` in
+Codex), a skill from agent-skills that takes a feature from plan to merge
+request. Install it and the skills it runs, or set your own first prompt
+(see Configuration):
+
+    npx skills add JanSuthacheeva/agent-skills --skill ship-feature
+    npx skills add JanSuthacheeva/agent-skills --skill design-code
+    ... implement-plan, review-changes, write-merge-request, commit
+
+Then, in a repository:
+
+    flow ui
+
+The big pane is the master, an agent that works with flow for you. Ask it
+to start a flow ("start a flow for SHOP-217 add CSV export"), or press
+`C-space n`. Each worker shows up in the sidebar on the right, grouped by
+what it needs from you. `C-space ?` lists every key.
+
+On its first run flow writes `config.toml`, `theme.toml` and `master.md`
+to `~/.config/flow`, every setting commented out at its default.
+
+## What it does
+
+- **Works with different agents.** Claude Code and Codex are built in,
+  each followed through its own hooks. Any other command can run as a
+  worker; flow then shows only whether it runs. The phases a flow walks
+  through, the skills that start each phase and every agent's first
+  prompt are settings.
+- **Gives each worktree its own environment.** `.flow/setup` and
+  `.flow/teardown` run in every worktree. `FLOW_SLOT` (1 to 20) is unique
+  across all your projects, so each worktree's Docker stack can get its
+  own ports. The `setup-flow` skill writes both scripts for your repo and
+  tries them in a scratch worktree.
+- **Has a master that is woken.** The master starts workers, answers them
+  with `flow send` and is woken when one waits, is blocked or finishes.
+  A guided flow asks you at every step; in an auto flow the master
+  answers what the code and plan already settle.
+- **Plain sessions.** An agent in any folder, without a worktree or a
+  flow, next to your workers.
+- **Themes.** Your terminal's colors by default, flow's own dark and
+  light themes built in, reloaded while you edit. Another tool can write
+  a theme for flow to follow (a Noctalia template is in the docs).
+- **Sessions outlive the UI.** Closing the terminal leaves every agent
+  running; after a reboot flow resumes each conversation.
+
+## How it works
+
+Every flow is an append-only log of events. The agents' own hooks run
+`flow hook`, which turns what happens into events: a skill started a
+phase, a question is waiting, a merge request was opened. flow folds the
+logs into where each flow stands: its phase and how long each took,
+tasks, blockers, decisions and a timeline. `flow server` runs each agent
+in its own terminal and keeps it running; `flow ui` attaches to it.
+
+## For agents and scripts
+
+Every command answers in TOON, a compact format agents read well, with
+the next steps beside it:
+
+    $ flow status
+    &lt;real output with three flows&gt;
+
+Programs read `flow status --json`, a versioned contract. The command
+line and the JSON are the only public interface; the logs are private.
+
+| Command | Does |
+| --- | --- |
+| `flow` | every flow and what needs you |
+| `flow ui [--stop]` | the terminal UI |
+| `flow start &lt;request&gt;` | a worker in its own worktree |
+| `flow start --plain &lt;folder&gt;` | an agent in a folder |
+| `flow status [&lt;flow&gt;] [--json] [--all]` | where flows stand |
+| `flow send &lt;flow&gt; &lt;text&gt;` | tell a worker something |
+| `flow report &lt;event&gt;` | report into a flow by hand |
+| `flow remove &lt;flow&gt;`, `flow clear` | tear down and forget |
+
+Every flag is in docs/cli.md.
+
+## Similar tools
+
+Many tools run coding agents side by side in worktrees: Claude Squad,
+ccmanager, dmux, amux, herdr, parallel-code and Conductor among them, and
+several do things flow does not. Conductor, parallel-code and dmux have
+diff review and pull requests built in; parallel-code reaches your phone;
+herdr and ccmanager recognise many more agents. If you need one of those,
+they will suit you better.
+
+What flow does differently:
+
+- It follows a feature, not only a session: phases, task counts,
+  decisions, blockers and a timeline per flow.
+- It learns what an agent does from the agent's own hooks instead of
+  reading its screen.
+- Its command line is made for agents, so a master agent can start,
+  read and answer workers, and it is woken instead of polling.
+- Each worktree gets its own setup, teardown and port slot.
+
+Where flow falls short: it has no diff viewer or pull request button (the
+worker's skill opens the merge request and flow notices it), no desktop
+notifications, no phone access, and it follows only Claude Code and Codex.
+It runs on macOS and Linux only.
+
+## Documentation
+
+Install, flow ui, flows and the master, configuration, themes, repository
+setup, the command line, the JSON contract, files, troubleshooting:
+see docs/README.md. What changed: CHANGELOG.md.
+
+## License
+
+MIT or Apache-2.0, at your option.</pre>
+  </div>
+
+  <div class="card">
+    <h2>Docs outline</h2>
+    <p>Plain Markdown in <code>docs/</code>, one file per subject, so GitHub renders it and an agent can read one file. Everything in the README's current manual moves here; nothing from <code>HANDOVER.md</code> (design rationale stays there). Each statement is checked against the code, and every output block is pasted from a run in a scratch <code>FLOW_HOME</code>.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>File</th><th>Covers</th></tr></thead>
+      <tbody>
+        <tr><td><code>README.md</code></td><td>The index: one line per file below, in reading order.</td></tr>
+        <tr><td><code>install.md</code></td><td>Requirements, <code>cargo install</code>, the agent-skills, what the first run writes, Codex's one-time hook trust, updating (the examples refresh), uninstalling (binary, <code>~/.config/flow</code>, <code>~/.local/state/flow</code>, worktrees).</td></tr>
+        <tr><td><code>ui.md</code></td><td>The layout (master, sidebar groups NEEDS YOU / READY / RUNNING / DONE, the rail, the title row); the prefix and every key after it; the peek; the board and <code>a</code>; the new-flow dialog's rows and keys; a session that exited (<code>x</code>, <code>r</code>, <code>esc</code>); history; mouse; detach, stop (<code>Q</code>, <code>k</code>/<code>e</code>), <code>--stop</code>; what resumes after a crash or reboot.</td></tr>
+        <tr><td><code>flows.md</code></td><td>What a flow is; states; phases and steps; <code>flow start</code> (name, worktree, branch, slot, setup, which agent); guided vs auto (only the master reads the mode: who answers); plain sessions; the master (<code>master.md</code>, waking, <code>flow send</code>, <code>[master] wake</code>); how a worker reports (the Claude Code and Codex event tables); the workflow; removing and clearing (what is refused and the flags that force it).</td></tr>
+        <tr><td><code>configuration.md</code></td><td><code>config.toml</code>: where it is found (<code>FLOW_CONFIG</code>, XDG, home), every key of <code>[worker]</code>, <code>[agents.*]</code>, <code>[[phases]]</code>, <code>[master]</code>, <code>[ui]</code> with type and default, the placeholders, the prompt order, errors. Points to <code>examples/config.toml</code>.</td></tr>
+        <tr><td><code>themes.md</code></td><td><code>theme.toml</code>: every key with its default, color values (including 0-15 as the terminal's own), the three built-in themes with their colors, <code>extends</code> and <code>themes/</code>, <code>phase_colors</code> levels, <code>nerd_font</code>, the Noctalia template, error messages. Points to <code>examples/theme.toml</code>.</td></tr>
+        <tr><td><code>repository.md</code></td><td>Per repo: <code>.flow/config.toml</code> <code>[branch]</code> (<code>name</code> template, <code>types</code>, placeholders, <code>--type</code>); <code>.flow/setup</code> and <code>.flow/teardown</code> (when they run, their environment <code>FLOW_ID</code>, <code>FLOW_NAME</code>, <code>FLOW_SLOT</code>, <code>FLOW_REPO</code>, <code>FLOW_WORKTREE</code>, what a failure does); slots 1 to 20 and ports; a Docker Compose example; the <code>setup-flow</code> skill; where worktrees live and why <code>git status</code> stays clean.</td></tr>
+        <tr><td><code>cli.md</code></td><td>Every command and flag, the hidden <code>hook</code>, <code>wait</code>, <code>server</code> included; every <code>flow report</code> event; TOON output and its <code>help[]</code>; exit codes 0, 1, 2; environment variables flow reads and sets; several projects with <code>FLOW_HOME</code>.</td></tr>
+        <tr><td><code>json.md</code></td><td>The <code>--json</code> contract: the board, every flow field with type and nullability, states, tones, step status, versions 1 to 3 and what changed, the <code>--all</code> shape.</td></tr>
+        <tr><td><code>files.md</code></td><td>Every file flow reads or writes: config dir, state dir (<code>flows/</code>, <code>waits/</code>, <code>server.sock</code>, <code>server.log</code>, <code>master.json</code>), shared <code>stores/</code> and <code>slots/</code>, per repo <code>.flow/</code>.</td></tr>
+        <tr><td><code>troubleshooting.md</code></td><td>Reading <code>server.log</code>; a worker that reports nothing (no adapter, Codex hooks not trusted); <code>pane: when flow ui runs</code>; <code>not-responding</code>; setup failed; a config or theme error in the title row; a prefix the terminal eats; <code>flow ui</code> refused inside a worker; a stale socket; slots all taken; remove refusing unmerged work.</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <h2>Example files</h2>
+    <p><code>#key = value</code> is a setting at its default; <code># text</code> explains it; section headers are commented too (<code>#[worker]</code>), since a live <code>[agents.claude]</code> without <code>command</code> would not parse. A setting with no default appears only as an explanation (<code># For example: ...</code>).</p>
+    <details open><summary>examples/config.toml, first part</summary>
+<pre># flow's settings. flow wrote this file on its first run; edit it freely,
+# flow never overwrites it once you have. Every setting is shown commented
+# out at its default: remove the leading # to change one.
+# Reference: https://github.com/JanSuthacheeva/flow/blob/main/docs/configuration.md
+
+#[worker]
+# The agent `flow start` runs when it names none (--agent picks another).
+#agent = "claude"
+# The first prompt of every agent that sets none of its own, the built-in
+# ones included. Unset: each keeps its own ("/ship-feature {request}" for
+# claude, "$ship-feature {request}" for codex).
+# For example: prompt = "/brainstorming {request}"
+
+#[master]
+# Wake the master when a worker waits, is blocked, goes idle or finishes.
+#wake = true
+# The agent the master runs. Unset: the built-in master (Claude Code).
+# For example: agent = "codex"
+
+#[ui]
+# The key before every flow ui command: C-space, or C-a to C-z except
+# the keys a pane needs (C-c, C-d, C-h, C-i, C-j, C-m, C-q, C-s, C-z).
+#prefix = "C-space"
+
+# The phases a flow walks through: 1 to 4, in order, each started by the
+# skills it lists (with or without a plugin prefix). Yours replace these whole.
+#[[phases]]
+#name = "plan"
+#skills = ["design-code"]
+# ... implement, review, merge-request
+
+# An agent: the command that starts it, its first prompt, how to resume it,
+# and the harness flow follows it through (claude-code or codex; without
+# one flow shows only whether it runs). Placeholders: {id} {name} {request}
+# {prompt} {session} {instructions}.
+#[agents.claude]
+#command = ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
+#prompt = "/ship-feature {request}"
+#resume = ["claude", "-n", "{name}", "--resume", "{id}"]
+#adapter = "claude-code"
+# ... codex, master</pre>
+    </details>
+    <details><summary>examples/theme.toml, first part</summary>
+<pre># flow ui's colors. flow wrote this file on its first run and reloads it
+# within a second of a change. Every setting is shown commented out at its
+# default, the terminal theme. A color is "#rrggbb", an index 0-255 (0-15
+# are your terminal's own colors), "default" (the terminal's), or another key.
+# Reference: https://github.com/JanSuthacheeva/flow/blob/main/docs/themes.md
+
+# The theme this file changes: terminal, flow, flow-light, or a file in
+# themes/ named without .toml.
+#extends = "terminal"
+# Your font has Nerd Font icons: flow's mark becomes a kiwi bird.
+#nerd_font = false
+# How much of a working flow takes its phase's color: off (state colors
+# only), steps (the current step dot) or full (also spinner, label, rail).
+#phase_colors = "off"
+
+#[ui]
+# Behind everything.
+#background = "default"
+# The sidebar and dialogs.
+#panel = 235
+# ... selection, rule, text, strong, muted, faint, accent
+
+#[state]
+#working = 4
+# ... waiting, blocked, done, ended
+
+#[phase]
+# A phase by its name; one without a color takes the color of its place.
+#plan = 141
+# ... implement, review, merge-request</pre>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>Structure overview</h2>
+    <div class="diagram"><svg viewBox="0 0 620 300" role="img" aria-label="Units and their dependencies">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <text x="10" y="18" class="meta">cli</text>
+      <rect class="box m" x="10" y="26" width="180" height="40" rx="5"/><text class="on" x="100" y="51" text-anchor="middle">commands/server.rs</text>
+      <text x="230" y="18">server</text>
+      <rect class="box m" x="230" y="26" width="160" height="40" rx="5"/><text class="on" x="310" y="51" text-anchor="middle">server.rs run</text>
+      <rect class="box m" x="230" y="110" width="160" height="40" rx="5"/><text class="on" x="310" y="135" text-anchor="middle">master::INSTRUCTIONS</text>
+      <rect class="box m" x="20" y="110" width="160" height="40" rx="5"/><text class="on" x="100" y="135" text-anchor="middle">config::EXAMPLE</text>
+      <rect class="box m" x="440" y="110" width="170" height="40" rx="5"/><text class="on" x="525" y="135" text-anchor="middle">theme_file::EXAMPLE</text>
+      <rect class="box n" x="230" y="200" width="160" height="40" rx="5"/><text class="on" x="310" y="225" text-anchor="middle">default_file.rs</text>
+      <rect class="box n" x="20" y="250" width="160" height="40" rx="5"/><text class="on" x="100" y="275" text-anchor="middle">examples/config.toml</text>
+      <rect class="box n" x="440" y="250" width="170" height="40" rx="5"/><text class="on" x="525" y="275" text-anchor="middle">examples/theme.toml</text>
+      <rect class="box o" x="440" y="26" width="170" height="40" rx="5"/><text class="on" x="525" y="51" text-anchor="middle">theme_file::color</text>
+      <path class="arrow" d="M190,46 L228,46"/>
+      <path class="arrow" d="M300,66 L300,108"/>
+      <path class="arrow" d="M260,66 L150,108"/>
+      <path class="arrow" d="M360,66 L480,108"/>
+      <path class="arrow" d="M310,150 L310,198"/>
+      <path class="arrow" d="M120,150 L270,198"/>
+      <path class="arrow" d="M500,150 L360,198"/>
+      <path class="arrow" d="M100,150 L100,248"/>
+      <path class="arrow" d="M525,150 L525,248"/>
+    </svg></div>
+    <div class="legend"><span><span class="sw" style="background:var(--new)"></span>new</span><span><span class="sw" style="background:var(--mod)"></span>modified</span><span><span class="sw" style="background:var(--old)"></span>modified behaviour, same signature</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Units</h2>
+    <div class="units">
+      <div class="unit">
+        <div class="row"><h3><code>src/default_file.rs</code></h3><span class="tag new">new</span></div>
+        <p>A file flow writes with its default text, kept current until someone edits it.</p>
+<pre>/// A file flow writes with its default text: when it is missing, or still holds an earlier default
+/// nobody edited. An edited file is never overwritten.
+#[derive(Debug, Clone, Copy)]
+pub struct DefaultFile {
+    pub text: &amp;'static str,
+    /// Every earlier default, oldest first.
+    pub earlier: &amp;'static [&amp;'static str],
+}
+
+impl DefaultFile {
+    /// Writes `text` to `path` when it is missing or an earlier default, creating its folder.
+    pub fn ensure(&amp;self, path: &amp;Path) -&gt; Result&lt;()&gt; { ... }
+}
+
+/// An example's settings uncommented: every `#key` and `#[section]` line loses its `#`.
+#[cfg(test)]
+pub fn uncommented(text: &amp;str) -&gt; String { ... }</pre>
+      </div>
+      <div class="unit">
+        <div class="row"><h3><code>src/server/master.rs</code></h3><span class="tag mod">modified</span></div>
+        <p><code>DEFAULT_INSTRUCTIONS</code>, <code>PREVIOUS_DEFAULTS</code> and <code>ensure_instructions</code> become one constant; behaviour unchanged, its two tests move with it.</p>
+<pre>pub const INSTRUCTIONS: DefaultFile = DefaultFile {
+    text: include_str!("master.md"),
+    earlier: &amp;[include_str!("master-v1.md"), /* ... */ include_str!("master-v7.md")],
+};</pre>
+      </div>
+      <div class="unit">
+        <div class="row"><h3><code>src/config.rs</code></h3><span class="tag mod">modified</span></div>
+<pre>/// What flow writes as config.toml on its first run: every setting at its default, commented out.
+pub const EXAMPLE: DefaultFile = DefaultFile {
+    text: include_str!("../examples/config.toml"),
+    earlier: &amp;[],
+};</pre>
+        <p>Test-only <code>#[cfg_attr(test, derive(Serialize))]</code> on <code>Config</code>, <code>Agent</code>, <code>WorkerConfig</code>, <code>MasterConfig</code>, <code>UiConfig</code>, <code>PhaseSpec</code>, <code>Adapter</code>; <code>Workflow</code> serializes <code>into = "Vec&lt;PhaseSpec&gt;"</code>, <code>Prefix</code> <code>into = "String"</code> (its name). Plus <code>PartialEq</code> on <code>Config</code>.</p>
+      </div>
+      <div class="unit">
+        <div class="row"><h3><code>src/ui/theme_file.rs</code></h3><span class="tag mod">modified</span></div>
+<pre>/// What flow writes as theme.toml on its first run: the terminal theme, commented out.
+pub const EXAMPLE: DefaultFile = DefaultFile {
+    text: include_str!("../../examples/theme.toml"),
+    earlier: &amp;[],
+};
+
+/// "#rrggbb", an ANSI index 0-255 (0-15 the terminal's named colors), "default", or another key.
+fn color(value: &amp;Value, palette: &amp;Palette) -&gt; Result&lt;Color&gt;; // signature unchanged</pre>
+      </div>
+      <div class="unit">
+        <div class="row"><h3><code>src/ui/theme.rs</code></h3><span class="tag mod">modified</span></div>
+        <p>The built-in <code>phase_colors</code> becomes <code>off</code>: every step dot and glyph takes the flow's state color, finished dots stay plain, phase colors only when a theme asks for <code>steps</code> or <code>full</code>.</p>
+<pre>#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PhaseColors {
+    /// State colors only.
+    #[default]
+    Off,
+    /// The current step dot; spinner, label, rail and title keep the state color.
+    Steps,
+    /// Everything that takes the state color.
+    Full,
+}</pre>
+        <p>Follows through: the tests that assume <code>Steps</code> without a theme file (<code>theme_file.rs</code>, <code>app/tests/sidebar.rs</code>, <code>board.rs</code>) set it explicitly or expect the state color; goldens rewritten with <code>FLOW_UPDATE_GOLDEN=1</code> and checked by eye; <code>themes.md</code>, the example and the CHANGELOG say <code>off</code>. The README picture is recorded with it.</p>
+      </div>
+      <div class="unit">
+        <div class="row"><h3><code>src/server.rs</code></h3><span class="tag mod">modified</span></div>
+<pre>pub struct ServerPaths {
+    pub socket: PathBuf,
+    pub master: PathBuf,
+    pub instructions: PathBuf,
+    /// Where flow writes the example config.toml; None without a config location.
+    pub config: Option&lt;PathBuf&gt;,
+    /// Where flow writes the example theme.toml, beside config.toml.
+    pub theme: Option&lt;PathBuf&gt;,
+}
+
+/// Writes master.md and, when missing, the example config.toml and theme.toml; logs what fails.
+fn write_defaults(paths: &amp;ServerPaths, clock: fn() -&gt; u64);</pre>
+        <p><code>run</code> calls <code>write_defaults</code> where it calls <code>ensure_instructions</code> today.</p>
+      </div>
+      <div class="unit">
+        <div class="row"><h3><code>src/cli/commands/server.rs</code></h3><span class="tag mod">modified</span></div>
+        <p>Fills <code>config</code> from <code>config::config_file(...)</code> and <code>theme</code> from <code>env.config_dir()</code> joined with <code>THEME_FILE</code>.</p>
+      </div>
+      <div class="unit">
+        <div class="row"><h3>Files</h3><span class="tag new">new</span></div>
+        <ul>
+          <li><code>examples/config.toml</code>, <code>examples/theme.toml</code></li>
+          <li><code>docs/*.md</code> as outlined; <code>README.md</code> rewritten</li>
+          <li><code>docs/media/demo.tape</code>, <code>docs/media/demo-setup.sh</code> (scratch store, sample repo, config with a Codex worker), <code>docs/media/flow-ui.png</code>, <code>docs/media/flow-ui.gif</code></li>
+          <li><code>CHANGELOG.md</code>; a <code>## Changelog</code> rule in <code>CLAUDE.md</code>, plus <code>default_file.rs</code> and <code>examples/</code> in its Architecture</li>
+          <li><code>docs/HANDOVER.md</code>: <code>flow example config|theme</code> under Future improvements</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Call chains</h2>
+    <h3>flow ui starts the server for the first time</h3>
+    <div class="diagram"><svg viewBox="0 0 620 230" role="img" aria-label="First-run sequence">
+      <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
+      <text x="60" y="18" text-anchor="middle">commands::server</text>
+      <text x="230" y="18" text-anchor="middle">server::run</text>
+      <text x="400" y="18" text-anchor="middle">DefaultFile</text>
+      <text x="550" y="18" text-anchor="middle">disk</text>
+      <path d="M60,26 V220 M230,26 V220 M400,26 V220 M550,26 V220" style="stroke:var(--border);stroke-dasharray:4 4"/>
+      <path d="M60,45 H228" style="stroke:var(--muted);marker-end:url(#ah2)"/><text x="145" y="40" text-anchor="middle">run(paths, ...)</text>
+      <path d="M230,75 H398" style="stroke:var(--muted);marker-end:url(#ah2)"/><text x="315" y="70" text-anchor="middle">INSTRUCTIONS.ensure</text>
+      <path d="M230,110 H398" style="stroke:var(--muted);marker-end:url(#ah2)"/><text x="315" y="105" text-anchor="middle">config::EXAMPLE.ensure</text>
+      <path d="M230,145 H398" style="stroke:var(--muted);marker-end:url(#ah2)"/><text x="315" y="140" text-anchor="middle">theme_file::EXAMPLE.ensure</text>
+      <path d="M400,125 H548" style="stroke:var(--muted);marker-end:url(#ah2)"/><text x="475" y="120" text-anchor="middle">write if missing</text>
+      <path d="M398,185 H232" style="stroke:var(--muted);stroke-dasharray:3 3;marker-end:url(#ah2)"/><text x="315" y="180" text-anchor="middle" class="err">Err -&gt; server.log, go on</text>
+    </svg></div>
+    <ol class="steps">
+      <li><code>commands::server::run -&gt; server::run(&amp;ServerPaths { config, theme, .. }, ...)</code></li>
+      <li><code>server::run -&gt; write_defaults(paths, clock)</code></li>
+      <li><code>write_defaults -&gt; master::INSTRUCTIONS.ensure(&amp;paths.instructions): Result&lt;()&gt;</code></li>
+      <li><code>write_defaults -&gt; config::EXAMPLE.ensure(path)</code> when <code>paths.config</code> is Some</li>
+      <li><code>write_defaults -&gt; theme_file::EXAMPLE.ensure(path)</code> when <code>paths.theme</code> is Some</li>
+      <li><code>DefaultFile::ensure</code>: file is <code>text</code> or not in <code>earlier</code> -&gt; nothing; missing or an earlier default -&gt; <code>create_dir_all</code>, <code>fs::write(path, text)</code></li>
+      <li class="err">Error: an unreadable or unwritable file returns <code>Err</code> naming the path; <code>write_defaults</code> logs it to server.log and the server starts anyway, as master.md does today.</li>
+    </ol>
+    <p>The config was already loaded before this (<code>env.config()?</code>), so the written file takes effect at the next command; it changes nothing anyway. The UI's theme watcher sees the new <code>theme.toml</code> within a second and reloads the same colors.</p>
+  </div>
+
+  <div class="card">
+    <h2>Conventions followed</h2>
+    <ul>
+      <li>First-run write and refresh: <code>src/server/master.rs:30</code>, now generalised, not copied.</li>
+      <li>Write failures logged, server goes on: <code>src/server.rs:157</code>.</li>
+      <li>Defaults stay in code (<code>Config::default</code>, <code>Palette::TERMINAL</code>); the examples are documentation the tests hold to them, never a second source loaded at runtime.</li>
+      <li>One responsibility per file: <code>default_file.rs</code> holds one struct; module is a noun (CLAUDE.md Structure).</li>
+      <li>Deviation: <code>Serialize</code> derives only under <code>cfg(test)</code>, so production code gains nothing unused and dead code still warns.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Test seams</h2>
+    <ul>
+      <li><code>DefaultFile::ensure</code>: writes when missing, replaces an earlier default, keeps an edited file, creates the folder (the two master.md tests move here).</li>
+      <li><code>config</code>: the uncommented example parses and equals <code>Config::builtin()</code>; written out as TOML both have the same keys and values; the raw example (all commented) also parses to the defaults.</li>
+      <li><code>theme_file</code>: the uncommented example as <code>theme.toml</code> gives every <code>PaletteKey</code> and each built-in phase the terminal theme's color, <code>nerd_font</code> false, <code>phase_colors</code> steps; every <code>PaletteKey::ALL</code> name appears as a <code>#key =</code> line; <code>4</code> parses to <code>Blue</code>, <code>16</code> to <code>Indexed(16)</code>.</li>
+      <li><code>server/tests.rs</code>: a server started on a temp config dir writes all three files and keeps an existing <code>config.toml</code> byte for byte.</li>
+      <li>Docs: every output block pasted from a real run in a scratch <code>FLOW_HOME</code>; every key in <code>ui.md</code> checked against <code>keys.rs</code>, <code>board_keys.rs</code>, <code>newflow</code> and the <code>?</code> overlay.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>CHANGELOG draft</h2>
+<pre class="draft"># Changelog
+
+All notable changes to flow are listed here. The format follows
+Keep a Changelog, and flow uses Semantic Versioning.
+
+## [Unreleased]
+
+The first public release, 0.1.0; the heading becomes
+`## [0.1.0] - &lt;date&gt;` when it is tagged.
+
+### Added
+- flow ui: the master, every worker and plain session in one terminal,
+  the sidebar, the peek, the board, the new-flow dialog.
+- flow server: sessions outlive the UI and resume after a reboot.
+- Claude Code and Codex workers, followed through their own hooks.
+- Configurable workflow: 1 to 4 phases and the skills that start them.
+- The master: starts and answers workers, woken by their news.
+- Guided and auto flows, plain sessions.
+- Per-worktree setup and teardown, FLOW_SLOT, branch conventions.
+- Themes: terminal, flow, flow-light, live reload, extends.
+- The command line for agents (TOON) and `flow status --json`.
+- Commented example config.toml and theme.toml, written on first run.
+
+### Known issues
+- No desktop notifications; a waiting flow shows only in the sidebar
+  and to the master.
+- A Claude Code session interrupted with Esc keeps its spinner until
+  its next prompt (Claude Code runs no hook on an interrupt).
+- Codex flows show no task counts, and their flow is ended from flow ui
+  or `flow remove`, since Codex has no exit event.
+- Codex asks once to trust flow's hooks, again after they change.
+- Background subagents are not counted; a worker running several looks
+  merely working.
+- The new-flow dialog starts flows in the repo of the session in view.
+- macOS and Linux only.</pre>
+    <p class="meta">CLAUDE.md rule: "Every PR adds a line under <code>## [Unreleased]</code> in CHANGELOG.md (Added, Changed, Fixed, Removed), written for users. A release renames Unreleased to the version and date."</p>
+  </div>
+
+  <div class="card">
+    <h2>Assumptions</h2>
+    <ul>
+      <li>Only <code>flow server</code> writes the examples (first <code>flow ui</code>), not every command: hooks run <code>flow</code> constantly and should touch no files.</li>
+      <li>With <code>FLOW_CONFIG</code> set, the example goes to that path, and theme.toml beside it.</li>
+      <li>The demo repo is a tiny throwaway app in the scratchpad, not a real project; requests like "add CSV export". Recorded at 1600x900.</li>
+      <li>The README picture is a PNG; the GIF shows navigation (sidebar, peek, board) and sits below the quick start, not at the top.</li>
+      <li><code>docs/design/</code> and <code>HANDOVER.md</code> stay as they are, linked from nowhere public except CLAUDE.md.</li>
+      <li>The README's current reference tables (events, hook tables, JSON) move to docs unchanged in substance, rewritten in plainer words.</li>
+      <li>The <code>help[]</code> lines and error texts are documented as they read today; no CLI text changes in this branch.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Open questions</h2>
+    <p>None left. Settled in review: no release date yet, everything stays under Unreleased until the tag; one skills line if <code>npx skills add</code> takes several <code>--skill</code> flags; the picture in flow's dark theme; <code>phase_colors</code> defaults to <code>off</code> and the picture shows it.</p>
+  </div>
+</div>

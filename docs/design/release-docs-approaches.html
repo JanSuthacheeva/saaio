@@ -1,0 +1,146 @@
+<title>flow 0.1.0 release docs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* One 720px reading column (jasu.dev); diagrams and code scroll in their own box. */
+:root {
+  color-scheme: light;
+  --surface: #f8f9fb; --card: #eceff4; --ink: #2e3440; --muted: #4c566a; --subtle: #d8dee9;
+  --border: #d8dee9; --code-block: #2e3440; --code-block-ink: #eceff4; --code-bg: #e5e9f0; --code-ink: #4b6c8a;
+  --accent: #7b5eaf; --on-accent: #f8f9fb; --link: #4b6c8a;
+  --new: #a3be8c; --mod: #d08770; --old: #d8dee9;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --gap: 24px; --gap-phone: 14px; --radius: 6px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #2e3440; --card: #3b4252; --ink: #eceff4; --muted: #93b1cc; --subtle: #434c5e;
+  --border: #4c566a; --code-block: #3b4252; --code-block-ink: #eceff4; --code-bg: #3b4252; --code-ink: #88c0d0;
+  --accent: #bd93f9; --on-accent: #2e3440; --link: #88c0d0;
+  --new: #a3be8c; --mod: #ebcb8b; --old: #4c566a;
+}
+body { background: var(--surface); color: var(--ink); font: 18px/1.6 var(--sans); }
+.page { max-width: 720px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: var(--gap); }
+h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+h2 { font-size: 24px; line-height: 1.3; font-weight: 700; margin: 0; text-wrap: balance; }
+h3 { font-size: 18px; margin: 0; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.meta { font-size: 13px; line-height: 1.5; color: var(--muted); }
+a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+code { font-family: var(--mono); font-size: 0.78em; background: var(--code-bg); color: var(--code-ink); border-radius: 0.2rem; padding: 0.1em 0.3em; }
+pre { background: var(--code-block); color: var(--code-block-ink); border-radius: var(--radius); padding: 14px 16px; font: 14px/1.5 var(--mono); overflow-x: auto; margin: 0; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--gap); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.pill { align-self: flex-start; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em; line-height: 1.4; padding: 2px 10px; border-radius: 99px; background: var(--accent); color: var(--on-accent); }
+.rec { border: 2px solid var(--accent); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.two > div { min-width: 0; }
+.plus, .minus { font-size: 16px; }
+.label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.diagram { overflow-x: auto; }
+.diagram svg { display: block; min-width: 520px; width: 100%; height: auto; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; border: 1px solid var(--muted); }
+svg text { fill: var(--ink); font: 13px var(--sans); }
+svg .box { stroke: var(--muted); stroke-width: 1; }
+svg .n { fill: var(--new); } svg .m { fill: var(--mod); } svg .o { fill: var(--old); }
+svg .arrow { stroke: var(--muted); stroke-width: 1.4; fill: none; marker-end: url(#ah); }
+svg #ah path { fill: var(--muted); }
+svg text.on { fill: #2e3440; }
+@media (max-width: 560px) { .two { grid-template-columns: 1fr; } .card { padding: var(--gap-phone); } .page { gap: var(--gap-phone); padding-block: 24px 48px; } }
+</style>
+
+<div class="page">
+  <div class="stack">
+    <span class="meta">design-code, step 2 of 3 - flow/release-docs - 2026-10-17</span>
+    <h1>flow 0.1.0 release docs</h1>
+    <p>Three choices shape the rest: how the commented example files reach a new user, how they are commented so a test can prove them, and how the README picture is made. The README draft and the docs outline follow on the next page, once these are settled.</p>
+  </div>
+
+  <div class="card">
+    <h2>What exists today</h2>
+    <ul>
+      <li><code>README.md</code> (~470 lines) is the whole manual: commands, events, keys, themes, agents, hooks, workflow, master, the JSON contract, where logs live. <code>docs/</code> holds only <code>HANDOVER.md</code> and design pages.</li>
+      <li><code>config.toml</code> is optional: no file means the built-in agents, workflow, <code>[worker]</code>, <code>[master]</code> and <code>[ui]</code> defaults (<code>src/config.rs:93</code>). Unknown keys are errors (<code>deny_unknown_fields</code>).</li>
+      <li><code>theme.toml</code> is optional too: no file means the <code>terminal</code> theme (<code>src/ui/theme_file.rs:47</code>), whose colors are ANSI names like <code>Blue</code> and <code>DarkGray</code> (<code>src/ui/theme.rs:49</code>). A theme file can only write <code>"#rrggbb"</code>, an index 0-255, <code>"default"</code> or another key (<code>theme_file.rs:262</code>), so <code>Blue</code> is today not writable as itself: index <code>4</code> parses to <code>Indexed(4)</code>, not <code>Blue</code>.</li>
+      <li>flow already writes one file on first run: <code>master.md</code> beside <code>config.toml</code>. <code>ensure_instructions</code> writes it when missing and replaces it when it still holds an earlier default, never when edited (<code>src/server/master.rs:30</code>, earlier defaults in <code>master-v1.md</code> to <code>-v7.md</code>).</li>
+      <li>The default first prompt is <code>/ship-feature {request}</code>, from the public <a href="https://github.com/JanSuthacheeva/agent-skills">agent-skills</a> repo, which also has <code>setup-flow</code> and the <code>npx skills add</code> install lines.</li>
+      <li>No <code>vhs</code> or <code>asciinema</code> installed; <code>ffmpeg</code> is.</li>
+    </ul>
+  </div>
+
+  <h2>1. How the example files reach a new user</h2>
+
+  <div class="card rec">
+    <span class="pill">Recommended</span>
+    <h3>A. flow writes them on first run, like master.md</h3>
+    <p>The examples live in the repo (<code>examples/config.toml</code>, <code>examples/theme.toml</code>) and are compiled in with <code>include_str!</code>. When <code>flow ui</code> starts and finds no <code>config.toml</code> or <code>theme.toml</code>, it writes the example there. Every setting in them is commented out, so the written file changes nothing. The master.md logic becomes one small shared unit, so an untouched example is refreshed by a newer flow and an edited one is never touched.</p>
+    <div class="diagram"><svg viewBox="0 0 560 170" role="img" aria-label="Approach A components">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <rect class="box m" x="10" y="20" width="150" height="40" rx="5"/><text class="on" x="85" y="45" text-anchor="middle">server start</text>
+      <rect class="box n" x="210" y="20" width="160" height="40" rx="5"/><text class="on" x="290" y="45" text-anchor="middle">default_file::ensure</text>
+      <rect class="box m" x="410" y="5" width="140" height="34" rx="5"/><text class="on" x="480" y="27" text-anchor="middle">master.md</text>
+      <rect class="box n" x="410" y="45" width="140" height="34" rx="5"/><text class="on" x="480" y="67" text-anchor="middle">config.toml</text>
+      <rect class="box n" x="410" y="85" width="140" height="34" rx="5"/><text class="on" x="480" y="107" text-anchor="middle">theme.toml</text>
+      <rect class="box n" x="210" y="115" width="160" height="40" rx="5"/><text class="on" x="290" y="140" text-anchor="middle">examples/*.toml</text>
+      <path class="arrow" d="M160,40 L208,40"/>
+      <path class="arrow" d="M370,35 L408,22"/><path class="arrow" d="M370,40 L408,62"/><path class="arrow" d="M370,48 L408,100"/>
+      <path class="arrow" d="M290,115 L290,62"/>
+    </svg></div>
+    <div class="legend"><span><span class="sw" style="background:var(--new)"></span>new</span><span><span class="sw" style="background:var(--mod)"></span>modified</span></div>
+    <p class="meta">Touches: <code>src/server/master.rs</code> (its write logic moves), a new <code>src/default_file.rs</code>, the server start where <code>ensure_instructions</code> is called, <code>examples/</code>.</p>
+    <div class="two">
+      <div class="plus"><p class="label">Gains</p><ul><li>Found where people look: the file is just there, as Hyprland does.</li><li>Follows the one first-run write flow already has, and makes it shared instead of a second copy.</li><li>Untouched files stay current across releases.</li></ul></div>
+      <div class="minus"><p class="label">Costs</p><ul><li>Writes into <code>~/.config/flow</code> without asking (as master.md already does).</li><li>Each future change to an example keeps the old text as <code>config-vN.toml</code> for the refresh check.</li><li>An edited file stops getting new comments; the docs and <code>examples/</code> stay the reference.</li></ul></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>B. A command prints them</h3>
+    <p><code>flow example config</code> and <code>flow example theme</code> print the current text; the user redirects it into place. The README and the docs point to the command. Nothing is written unasked.</p>
+    <div class="two">
+      <div class="plus"><p class="label">Gains</p><ul><li>Never writes files; always matches the installed version.</li><li>Works to diff an edited file against the current example.</li></ul></div>
+      <div class="minus"><p class="label">Costs</p><ul><li>A new command in the public surface, kept forever.</li><li>Only found by reading docs.</li></ul></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>C. Both</h3>
+    <p>A, plus the command from B for people who edited their file and want the current one to compare. Largest surface; I would add the command later if anyone asks for it.</p>
+  </div>
+
+  <h2>2. How the examples are commented</h2>
+  <div class="card rec">
+    <span class="pill">Recommended</span>
+    <h3>Settings commented out at their default, sshd_config style</h3>
+<pre># The agent flow start runs when it names none.
+#agent = "claude"
+
+# The first prompt of every agent that sets none. Unset: each keeps its own.
+# For example: prompt = "/brainstorming {request}"</pre>
+    <p><code>#key = value</code> (no space) is a setting at its default; <code># text</code> is explanation. A key with no default (<code>[worker] prompt</code>, <code>[master] agent</code>) appears only in an explanation line. The test uncomments every <code>#key</code> line and checks two things: the result parses to exactly the built-in defaults, and no setting is missing (for config.toml by comparing with the built-in config written out as TOML; for theme.toml against every color key the code knows).</p>
+    <p>The alternative, live values like Hyprland's file, pins today's defaults into every user's file: when a default changes later, users who edited one line keep the old value for every other key. Commented settings keep following flow.</p>
+    <p>One code change this needs: index <code>0</code>-<code>15</code> in a theme should mean the terminal's named colors (<code>4</code> is <code>Blue</code>), so the terminal theme can be written in its own file. It renders the same; today <code>4</code> sends the 256-color code for the same palette entry.</p>
+  </div>
+
+  <h2>3. The README picture</h2>
+  <div class="card rec">
+    <span class="pill">Recommended</span>
+    <h3>A VHS tape in the repo, run against real workers in a scratch store</h3>
+    <p><code>docs/media/demo.tape</code> (VHS, installed with brew) opens <code>flow ui</code> with a scratch <code>FLOW_HOME</code> on a small sample repo, starts three or four real Claude Code workers, waits until they sit in different states (planning, waiting for you, implementing, done), and takes a PNG screenshot plus a short GIF: sidebar, a peek, the board. The tape makes it repeatable for the next release; the agents' text will differ each run.</p>
+    <div class="two">
+      <div class="plus"><p class="label">Gains</p><ul><li>Real sessions, nothing staged.</li><li>Regenerate after a UI change with one command.</li></ul></div>
+      <div class="minus"><p class="label">Costs</p><ul><li>A few dollars of tokens per take, and some retakes until the states line up.</li><li>Needs <code>vhs</code> (with <code>ttyd</code>) installed.</li></ul></div>
+    </div>
+    <p class="meta">Alternatives: a scripted fake agent that prints a session and calls <code>flow report</code> (exactly repeatable, but staged, which does not fit the tone); or a hand-taken screenshot only (cheapest, not repeatable).</p>
+  </div>
+
+  <div class="card">
+    <h2>My recommendation</h2>
+    <p>1A, 2 as shown, 3 with VHS. It reuses the one first-run write flow already has instead of adding a second mechanism or a new command, the tests prove the examples stay true, and the picture shows real work.</p>
+    <p>Please answer, for example: <code>1A, 2 ok, 3 VHS</code>, or say what to change.</p>
+  </div>
+</div>

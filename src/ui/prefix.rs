@@ -3,6 +3,7 @@ use serde::Deserialize;
 /// C-space or C-a..C-z, as the byte a terminal sends (C-space is NUL, C-b is 0x02); C-space unless
 /// set.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[cfg_attr(test, derive(serde::Serialize), serde(into = "String"))]
 #[serde(try_from = "String")]
 pub struct Prefix(u8);
 
@@ -41,6 +42,13 @@ impl TryFrom<String> for Prefix {
             ));
         }
         Ok(Prefix(letter as u8 - b'a' + 1))
+    }
+}
+
+#[cfg(test)]
+impl From<Prefix> for String {
+    fn from(prefix: Prefix) -> String {
+        prefix.name()
     }
 }
 

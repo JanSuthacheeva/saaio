@@ -1,0 +1,37 @@
+[window]
+title = "flow-demo"
+dynamic_title = false
+decorations = "None"
+dimensions = { columns = 150, lines = 42 }
+position = { x = 200, y = 120 }
+padding = { x = 14, y = 12 }
+dynamic_padding = false
+
+[font]
+size = 15.0
+normal = { family = "FiraCode Nerd Font Mono", style = "Regular" }
+bold = { family = "FiraCode Nerd Font Mono", style = "Bold" }
+
+[colors.primary]
+background = "#141418"
+foreground = "#c8c8d0"
+
+[colors.normal]
+black = "#141418"
+red = "#f0717f"
+green = "#93c46d"
+yellow = "#e5b45a"
+blue = "#7aa7ff"
+magenta = "#b392f0"
+cyan = "#56c2c2"
+white = "#c8c8d0"
+
+[colors.bright]
+black = "#6c6c78"
+red = "#f0717f"
+green = "#93c46d"
+yellow = "#e5b45a"
+blue = "#7aa7ff"
+magenta = "#b392f0"
+cyan = "#56c2c2"
+white = "#f0f0f4"

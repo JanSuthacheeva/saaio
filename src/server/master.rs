@@ -7,43 +7,26 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::config::Agent;
+use crate::default_file::DefaultFile;
 use crate::launch::pane::{self, LaunchEnv, PaneSpec};
 use crate::proto::PaneKey;
 
 /// The name the master session gets.
 pub const MASTER_NAME: &str = "master";
-/// What flow writes to master.md: how the master works with flow.
-pub const DEFAULT_INSTRUCTIONS: &str = include_str!("master.md");
-/// Earlier defaults: a master.md still holding one of them was never edited, so it gets the current one.
-const PREVIOUS_DEFAULTS: [&str; 7] = [
-    include_str!("master-v1.md"),
-    include_str!("master-v2.md"),
-    include_str!("master-v3.md"),
-    include_str!("master-v4.md"),
-    include_str!("master-v5.md"),
-    include_str!("master-v6.md"),
-    include_str!("master-v7.md"),
-];
-
-/// Writes the default instructions to `file` when it is missing or still an earlier default; an edited
-/// file is never overwritten.
-pub fn ensure_instructions(file: &Path) -> Result<()> {
-    match fs::read_to_string(file) {
-        Ok(text) if text == DEFAULT_INSTRUCTIONS || !PREVIOUS_DEFAULTS.contains(&text.as_str()) => {
-            return Ok(());
-        }
-        Ok(_) => {}
-        Err(error) if error.kind() == ErrorKind::NotFound => {}
-        Err(error) => {
-            return Err(error).with_context(|| format!("could not read {}", file.display()));
-        }
-    }
-    if let Some(dir) = file.parent() {
-        fs::create_dir_all(dir).with_context(|| format!("could not create {}", dir.display()))?;
-    }
-    fs::write(file, DEFAULT_INSTRUCTIONS)
-        .with_context(|| format!("could not write {}", file.display()))
-}
+/// What flow writes to master.md: how the master works with flow. An earlier default still in
+/// master.md was never edited, so it gets the current one.
+pub const INSTRUCTIONS: DefaultFile = DefaultFile {
+    text: include_str!("master.md"),
+    earlier: &[
+        include_str!("master-v1.md"),
+        include_str!("master-v2.md"),
+        include_str!("master-v3.md"),
+        include_str!("master-v4.md"),
+        include_str!("master-v5.md"),
+        include_str!("master-v6.md"),
+        include_str!("master-v7.md"),
+    ],
+};
 
 /// master.md beside config.toml: its path for an agent's {instructions}, its text for the adapter.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -338,29 +321,9 @@ mod tests {
     }
 
     #[test]
-    fn writes_the_default_instructions_once_and_keeps_an_edited_file() {
-        let dir = TempDir::new().unwrap();
-        let file = dir.path().join("flow/master.md");
-
-        ensure_instructions(&file).unwrap();
-        assert_eq!(fs::read_to_string(&file).unwrap(), DEFAULT_INSTRUCTIONS);
-        fs::write(&file, "mine").unwrap();
-        ensure_instructions(&file).unwrap();
-
-        assert_eq!(fs::read_to_string(&file).unwrap(), "mine");
-    }
-
-    #[test]
-    fn replaces_an_earlier_default_nobody_edited() {
-        let dir = TempDir::new().unwrap();
-        let file = dir.path().join("master.md");
-        for previous in PREVIOUS_DEFAULTS {
-            fs::write(&file, previous).unwrap();
-
-            ensure_instructions(&file).unwrap();
-
-            assert_eq!(fs::read_to_string(&file).unwrap(), DEFAULT_INSTRUCTIONS);
-            assert_ne!(previous, DEFAULT_INSTRUCTIONS);
+    fn every_earlier_default_differs_from_the_current_one() {
+        for earlier in INSTRUCTIONS.earlier {
+            assert_ne!(*earlier, INSTRUCTIONS.text);
         }
     }
 }

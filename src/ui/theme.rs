@@ -301,9 +301,9 @@ pub const fn hex(rgb: u32) -> Color {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PhaseColors {
     /// State colors only.
-    Off,
-    /// The reached step dots; spinner, label, rail and title keep the state color.
     #[default]
+    Off,
+    /// The current step dot; spinner, label, rail and title keep the state color.
     Steps,
     /// Everything that takes the state color.
     Full,
@@ -344,7 +344,7 @@ pub struct UiTokens {
     pub rule: Style,
     pub selection: Style,
     pub key: Style,
-    /// The bottom bar: a dark panel row with light text on it.
+    /// The title row above the pane: a dark panel row with light text on it.
     pub bar: Style,
 }
 
@@ -706,10 +706,10 @@ mod tests {
         let flow = flow(State::Delegated, Some(Phase::of("review")));
         let styles = |theme: &Theme| (theme.step_style(&flow), theme.flow_style(&flow));
 
-        assert_eq!(theme.phase_colors, PhaseColors::Steps, "the default");
-        assert_eq!(styles(&theme), (review, working), "steps");
-        theme.phase_colors = PhaseColors::Off;
+        assert_eq!(theme.phase_colors, PhaseColors::Off, "the default");
         assert_eq!(styles(&theme), (working, working), "off");
+        theme.phase_colors = PhaseColors::Steps;
+        assert_eq!(styles(&theme), (review, working), "steps");
         theme.phase_colors = PhaseColors::Full;
         assert_eq!(styles(&theme), (review, review), "full");
     }
@@ -761,7 +761,8 @@ mod tests {
     fn a_phase_takes_its_color_by_name_else_by_its_position() {
         let mut palette = Palette::FLOW;
         palette.set(&ColorKey::Phase(Phase::of("build")), hex(0x123456));
-        let theme = Theme::from_palette(palette);
+        let mut theme = Theme::from_palette(palette);
+        theme.phase_colors = PhaseColors::Steps;
 
         assert_eq!(
             theme.phase_style(&Phase::of("build"), 0),

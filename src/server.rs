@@ -25,12 +25,13 @@ use signal_hook::iterator::SignalsInfo;
 use signal_hook::iterator::exfiltrator::WithOrigin;
 use signal_hook::low_level::signal_name;
 
-use crate::config::Config;
+use crate::config::{self, Config};
 use crate::fold;
 use crate::launch::pane::LaunchEnv;
 use crate::proto::{BUILD, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, ServerMsg, Size};
 use crate::server_log;
 use crate::store::Store;
+use crate::ui::theme_file;
 use crate::view::Board;
 use conn::{accept_in_background, bind};
 use host::{Host, HostEvent};
@@ -61,6 +62,10 @@ pub struct ServerPaths {
     pub master: PathBuf,
     /// The master's orchestrator instructions, master.md beside config.toml.
     pub instructions: PathBuf,
+    /// Where flow writes the example config.toml; None without a config location.
+    pub config: Option<PathBuf>,
+    /// Where flow writes the example theme.toml, beside config.toml.
+    pub theme: Option<PathBuf>,
 }
 
 pub(super) type ConnId = u64;
@@ -139,6 +144,22 @@ struct Server {
     typed_at: HashMap<PaneKey, Instant>,
 }
 
+/// Writes master.md and, when missing, the example config.toml and theme.toml; logs what fails.
+fn write_defaults(paths: &ServerPaths, clock: fn() -> u64) {
+    let files = [
+        (master::INSTRUCTIONS, Some(&paths.instructions)),
+        (config::EXAMPLE, paths.config.as_ref()),
+        (theme_file::EXAMPLE, paths.theme.as_ref()),
+    ];
+    for (file, path) in files {
+        if let Some(path) = path
+            && let Err(error) = file.ensure(path)
+        {
+            server_log::write(clock(), &format!("{error:#}"));
+        }
+    }
+}
+
 /// Binds the socket (removing a stale one), opens the master, then loops until StopServer or a
 /// stopping signal; logs the start, the reason and the end.
 pub fn run(
@@ -154,9 +175,7 @@ pub fn run(
         clock(),
         &format!("started (flow {BUILD}, protocol {PROTOCOL_VERSION})"),
     );
-    if let Err(error) = master::ensure_instructions(&paths.instructions) {
-        server_log::write(clock(), &format!("{error:#}"));
-    }
+    write_defaults(paths, clock);
     let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;
     let (events, inbox) = mpsc::channel();
     stop_on_signals(events.clone())?;

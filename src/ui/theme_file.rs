@@ -9,6 +9,7 @@ use toml::Spanned;
 use toml::Value;
 use toml::de::{DeTable, DeValue, ValueDeserializer};
 
+use crate::default_file::DefaultFile;
 use crate::event::Phase;
 use crate::store::Stamp;
 #[cfg(test)]
@@ -16,6 +17,11 @@ use crate::ui::theme::MARK;
 use crate::ui::theme::{ColorKey, KIWI, Palette, PaletteKey, PhaseColors, Section, Theme, hex};
 
 pub const THEME_FILE: &str = "theme.toml";
+/// What flow writes as theme.toml on its first run: the terminal theme, commented out.
+pub const EXAMPLE: DefaultFile = DefaultFile {
+    text: include_str!("../../examples/theme.toml"),
+    earlier: &[],
+};
 pub const THEMES_DIR: &str = "themes";
 /// How many extends a theme may follow before flow gives up (a loop, most likely).
 const EXTENDS_LIMIT: usize = 4;
@@ -258,11 +264,11 @@ fn apply(file: &ThemeFile, palette: &mut Palette) -> Result<()> {
     Ok(())
 }
 
-/// "#rrggbb", an ANSI index 0-255, "default", or another key of the palette.
+/// "#rrggbb", an ANSI index 0-255 (0-15 the terminal's named colors), "default", or another key.
 fn color(value: &Value, palette: &Palette) -> Result<Color> {
     match value {
         Value::Integer(index) => u8::try_from(*index)
-            .map(Color::Indexed)
+            .map(ansi)
             .map_err(|_| anyhow!("{index} is no ANSI index (0-255)")),
         Value::String(text) if text == "default" => Ok(Color::Reset),
         Value::String(text) => match text.strip_prefix('#') {
@@ -278,6 +284,32 @@ fn color(value: &Value, palette: &Palette) -> Result<Color> {
         },
         _ => bail!("a color is \"#rrggbb\", an ANSI index, \"default\" or another key"),
     }
+}
+
+/// The terminal's own sixteen colors by name, so a theme can say what the terminal theme says.
+fn ansi(index: u8) -> Color {
+    const NAMED: [Color; 16] = [
+        Color::Black,
+        Color::Red,
+        Color::Green,
+        Color::Yellow,
+        Color::Blue,
+        Color::Magenta,
+        Color::Cyan,
+        Color::Gray,
+        Color::DarkGray,
+        Color::LightRed,
+        Color::LightGreen,
+        Color::LightYellow,
+        Color::LightBlue,
+        Color::LightMagenta,
+        Color::LightCyan,
+        Color::White,
+    ];
+    NAMED
+        .get(usize::from(index))
+        .copied()
+        .unwrap_or(Color::Indexed(index))
 }
 
 /// Knows the files the current theme came from, by size and time; a missing file counts too.
@@ -328,6 +360,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::default_file::uncommented;
+    use crate::workflow::Workflow;
 
     fn write(dir: &TempDir, name: &str, text: &str) {
         let path = dir.path().join(name);
@@ -366,7 +400,7 @@ mod tests {
 
         let flow = Palette::FLOW;
         assert_eq!(palette.accent, Color::Rgb(0xd9, 0x82, 0x5b));
-        assert_eq!(palette.rule, Color::Indexed(8));
+        assert_eq!(palette.rule, Color::DarkGray);
         assert_eq!(palette.ended, Color::Reset);
         assert_eq!(palette.text, flow.text);
     }
@@ -408,7 +442,7 @@ mod tests {
     fn reads_how_much_takes_the_phase_color() {
         let dir = TempDir::new().unwrap();
         write(&dir, "theme.toml", "extends = \"flow\"\n");
-        assert_eq!(theme(&dir).phase_colors, PhaseColors::Steps, "the default");
+        assert_eq!(theme(&dir).phase_colors, PhaseColors::Off, "the default");
 
         write(&dir, "theme.toml", "extends = \"mine\"\n");
         write(
@@ -483,7 +517,7 @@ mod tests {
             Color::Rgb(0xcb, 0x91, 0x68)
         );
         assert_eq!(palette.phases.names["review"], Palette::FLOW.done);
-        assert_eq!(palette.phases.names["build"], Color::Indexed(4));
+        assert_eq!(palette.phases.names["build"], Color::Blue);
         assert!(!palette.phases.names.contains_key("plan"));
         assert_eq!(palette.phases.positions, Palette::FLOW.phases.positions);
     }
@@ -628,8 +662,79 @@ mod tests {
 
         let palette = theme(&dir).palette;
 
-        assert_eq!(palette.accent, Color::Indexed(3));
-        assert_eq!(palette.done, Color::Indexed(4));
+        assert_eq!(palette.accent, Color::Yellow);
+        assert_eq!(palette.done, Color::Blue);
+    }
+
+    #[test]
+    fn reads_the_first_sixteen_indexes_as_the_terminal_colors() {
+        let dir = TempDir::new().unwrap();
+        write(
+            &dir,
+            "theme.toml",
+            "[ui]\naccent = 0\nrule = 4\ntext = 8\nmuted = 15\nfaint = 16\n",
+        );
+
+        let palette = theme(&dir).palette;
+
+        assert_eq!(palette.accent, Color::Black);
+        assert_eq!(palette.rule, Color::Blue);
+        assert_eq!(palette.text, Color::DarkGray);
+        assert_eq!(palette.muted, Color::White);
+        assert_eq!(palette.faint, Color::Indexed(16));
+    }
+
+    #[test]
+    fn the_example_uncommented_is_the_terminal_theme() {
+        let dir = TempDir::new().unwrap();
+        write(&dir, "theme.toml", &uncommented(EXAMPLE.text));
+
+        let theme = theme(&dir);
+
+        let terminal = Palette::TERMINAL;
+        for key in PaletteKey::ALL {
+            assert_eq!(
+                theme.palette.color(key),
+                terminal.color(key),
+                "{}",
+                key.name()
+            );
+        }
+        let phases = Workflow::builtin().phases();
+        for (phase, color) in phases.iter().zip(terminal.phases.positions) {
+            assert_eq!(
+                theme.palette.phases.names[phase.name()],
+                color,
+                "{}",
+                phase.name()
+            );
+        }
+        assert_eq!(theme.glyphs.mark, MARK);
+        assert_eq!(theme.phase_colors, PhaseColors::Off);
+    }
+
+    #[test]
+    fn the_example_lists_every_key_and_parses_as_it_is() {
+        let lines: Vec<&str> = EXAMPLE.text.lines().collect();
+        let names = ["extends", "nerd_font", "phase_colors"]
+            .into_iter()
+            .chain(PaletteKey::ALL.map(PaletteKey::name));
+        for name in names {
+            let setting = format!("#{name} = ");
+            assert!(
+                lines.iter().any(|line| line.starts_with(&setting)),
+                "{name} is missing"
+            );
+        }
+        for section in Section::ALL {
+            let header = format!("#[{}]", section.name());
+            assert!(lines.contains(&header.as_str()), "{header} is missing");
+        }
+
+        let dir = TempDir::new().unwrap();
+        write(&dir, "theme.toml", EXAMPLE.text);
+
+        assert_eq!(theme(&dir).palette, Palette::TERMINAL);
     }
 
     #[test]
@@ -665,7 +770,7 @@ mod tests {
             .changed()
             .expect("the extended file appeared")
             .unwrap();
-        assert_eq!(theme.palette.accent, Color::Indexed(3));
+        assert_eq!(theme.palette.accent, Color::Yellow);
         assert!(watch.changed().is_none());
 
         // A new length, so the change shows on filesystems whose mtimes are a second coarse.

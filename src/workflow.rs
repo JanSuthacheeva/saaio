@@ -1,4 +1,6 @@
 use serde::Deserialize;
+#[cfg(test)]
+use serde::Serialize;
 
 use crate::event::Phase;
 
@@ -7,6 +9,7 @@ pub const MAX_PHASES: usize = 4;
 
 /// One [[phases]] entry: its name and the skills that start it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[cfg_attr(test, derive(Serialize))]
 #[serde(deny_unknown_fields)]
 pub struct PhaseSpec {
     pub name: Phase,
@@ -16,6 +19,7 @@ pub struct PhaseSpec {
 
 /// 1 to MAX_PHASES phases with distinct names, no skill in two.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[cfg_attr(test, derive(Serialize), serde(into = "Vec<PhaseSpec>"))]
 #[serde(try_from = "Vec<PhaseSpec>")]
 pub struct Workflow {
     phases: Vec<PhaseSpec>,
@@ -45,6 +49,13 @@ impl TryFrom<Vec<PhaseSpec>> for Workflow {
             }
         }
         Ok(Workflow { phases })
+    }
+}
+
+#[cfg(test)]
+impl From<Workflow> for Vec<PhaseSpec> {
+    fn from(workflow: Workflow) -> Vec<PhaseSpec> {
+        workflow.phases
     }
 }
 

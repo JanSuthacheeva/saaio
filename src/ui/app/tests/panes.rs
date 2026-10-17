@@ -334,3 +334,27 @@ fn reads_an_error_toon_quoted_without_its_quotes() {
         "escapes inside the quotes are undone"
     );
 }
+
+#[test]
+fn draws_for_a_terminal_that_shrank_before_its_resize_arrived() {
+    let mut app = board_app();
+    let theme = Theme::default();
+    let shrunk = Size {
+        cols: FLEET.cols - 20,
+        rows: FLEET.rows - 5,
+    };
+    let mut terminal = Terminal::new(TestBackend::new(shrunk.cols, shrunk.rows)).unwrap();
+
+    terminal.draw(|frame| app.draw(frame, &theme, &[])).unwrap();
+
+    let buffer = terminal.backend().buffer();
+    let header: String = (shrunk.cols - 40..shrunk.cols)
+        .map(|x| buffer[(x, 1)].symbol().to_string())
+        .collect();
+    assert!(
+        header.contains("flow"),
+        "the sidebar at the new edge: {header:?}"
+    );
+    app.on_input(Routed::Command(Command::Board));
+    terminal.draw(|frame| app.draw(frame, &theme, &[])).unwrap();
+}
