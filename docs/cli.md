@@ -43,7 +43,7 @@
 - Typed in a terminal: opens flow ui, as [`flow ui`](#flow-ui).
 - Run by an agent or a script: flow counts, one line per flow, and the question or reason of each
   waiting or blocked flow, as below.
-- An agent or a script: stdin or stdout is not a terminal, or `FLOW_ID`, `FLOW_MASTER`,
+- An agent or a script: stdin or stdout is not a terminal, or `FLOW_ID`, `FLOW_MASTER=1`,
   `CLAUDECODE` or `CODEX_THREAD_ID` is set.
 
 ```

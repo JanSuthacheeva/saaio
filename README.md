@@ -113,7 +113,7 @@ public interface. The logs are private.
 
 | Command | Does |
 | --- | --- |
-| `flow` | flow ui in your terminal; every flow and what needs you for an agent |
+| `flow` | flow ui in your terminal; every flow and what needs you for an agent or a script |
 | `flow ui [--stop]` | the terminal UI |
 | `flow start <request>` | a worker in its own worktree |
 | `flow start --plain <folder>` | an agent in a folder |
