@@ -167,3 +167,50 @@ configuration.md "When a change applies":
 - [x] Rewrite ROADMAP.md (add More agents) and CHANGELOG.md
 - [x] Rewrite the comments in examples/config.toml and examples/theme.toml; cargo test
 - [x] End to end: run the link checker and voice grep clean; read README and configuration.md top to bottom as a new user would, rendered as GitHub renders them; put the "use your own" example into a scratch `FLOW_CONFIG` and run `flow start` in a scratch repo with a scratch `FLOW_HOME`, confirming the flow records the three phases
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and the code the docs describe
+(`src/slots.rs`, `src/workflow.rs`, `src/ui/sidebar/labels.rs`). Checked mechanically: no em dash,
+no emoji, no first person in the scope; every code block in the docs is unchanged or newly added
+(real output byte for byte); every `#key = value` and `#[section]` line in `examples/*.toml`
+unchanged; every relative link and anchor resolves, and no file outside the scope links to a
+renamed anchor.
+
+### Fixed
+
+- README said `FLOW_SLOT` is "never shared between two of your projects", which reads as if flows
+  in one project could share a slot; `slots.rs` gives each unfinished flow its own across every
+  project. 3a62254.
+- flows.md "Phases" sent readers to `configuration.md#phases-the-workflow` for running without
+  matching skills, which that section doesn't cover; now links "Without matching skills" too. Also
+  rewrapped a 112-column line in troubleshooting.md. e744cdc.
+
+Both fixes are docs only; they were re-read in a separate pass, not by an independent agent.
+
+### Open
+
+- `examples/config.toml` now gives `prompt = "/my-feature {request}"` as the `[worker] prompt`
+  example, while configuration.md says a prompt shared by Claude Code and Codex should name no
+  skill. Recommendation: keep it (it points at the "use your own" path) but add
+  "($my-feature in Codex)" as the README does; needs a `cargo test` run.
+- README "Pick a workflow" uses two `**Use ...**` lead-ins. Two paragraphs, not a run of bullets,
+  so it fits the style rule; leave as is unless it reads as labels on GitHub.
+
+### Where to look
+
+1. `README.md` from the opening to "First run": the pitch and the two workflow paths are what a
+   new user meets first.
+2. `docs/configuration.md` "Use your own workflow" and "When a change applies": the only new
+   claims about behaviour (phases read every `flow start`, prompts after a restart, the
+   no-skills sidebar labels).
+3. `examples/config.toml` header comments: shipped in the binary and written to every new user's
+   config.
+
+The rest (cli, json, files, ui, themes, repository, roadmap, changelog) is rewording around
+unchanged tables and output and can be skimmed.
+
+### Checks
+
+`cargo test` (506) and `cargo clippy -- -D warnings` passed at 2b8f272; only docs and the plan
+changed since, so they were not rerun.
