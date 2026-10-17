@@ -140,4 +140,4 @@ The first three tasks are one commit: `is_person` is dead code, which clippy ref
 - [x] Dispatch bare `flow` to `ui::run` for a person in `cli::run` (`ui::Args: Default`), with the `after_help` text
 - [x] Add PTY tests in `tests/cli.rs`: bare `flow` prints the overview with `FLOW_ID`, `CLAUDECODE` or `CODEX_THREAD_ID`, and opens flow ui (fake master agent, scratch `FLOW_HOME`) without them
 - [x] Rebase on main, then update the bare `flow` lines in `docs/cli.md`, `README.md` and `docs/ui.md`
-- [ ] E2E check: in a real terminal with a scratch `FLOW_HOME`, bare `flow` opens flow ui and detaches; `flow | cat`, `flow < /dev/null` and bare `flow` from Claude Code's shell print the overview
+- [x] E2E check: in a real terminal with a scratch `FLOW_HOME`, bare `flow` opens flow ui and detaches; `flow | cat`, `flow < /dev/null` and bare `flow` from Claude Code's shell print the overview
