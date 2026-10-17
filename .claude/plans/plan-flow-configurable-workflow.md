@@ -202,8 +202,14 @@ pub struct Palette { /* ui and state colors */ pub phases: PhasePalette }  // no
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ColorKey { Fixed(PaletteKey), Phase(Phase) }
 
+impl ColorKey {
+    /// The key as a theme file writes it.
+    pub fn name(&self) -> &str;
+}
+
 impl Palette {
-    pub fn color(&self, key: &ColorKey) -> Color;
+    /// Fixed keys only: nothing names a phase's color, so references never need one.
+    pub fn color(&self, key: PaletteKey) -> Color;
     pub fn set(&mut self, key: &ColorKey, color: Color);   // replaces color_mut
 }
 
@@ -316,7 +322,7 @@ The first prompt:
 - [x] Fold builds steps from `Started.phases` (builtin and the design -> plan rename without them), ignores unknown phases, MR enters the last phase; fold tests for each
 - [x] `flow start` and `flow new` record the workflow's phases (plain records none); `flow report phase` takes any name and refuses one the flow lacks; `created` help names the first phase; cli tests
 - [x] `VIEW_VERSION` 3; README's JSON example and the cli test that checks the version
-- [ ] Theme: `PhasePalette`, `ColorKey`, `Palette::color/set`, `PhaseTokens`, `Theme::phase_style(phase, position)`; theme_file reads any phase name in `[phase]`, "design" as "plan"; theme tests
+- [x] Theme: `PhasePalette`, `ColorKey`, `Palette::color/set`, `PhaseTokens`, `Theme::phase_style(phase, position)`; theme_file reads any phase name in `[phase]`, "design" as "plan"; theme tests
 - [ ] Cards say "{phase} · agent"; detail keeps "MR" by name; goldens updated
 - [ ] `[worker] prompt: Option`, `Agent.prompt: Option`, `resolve_prompts` (own, then [worker], then the built-in default of its name); `agent_argv` and the master's bare start; config tests for each step of the order
 - [ ] README: `[[phases]]`, `[worker] prompt`, phase names in `flow report`, theme `[phase]` by name, JSON v3; HANDOVER and CLAUDE.md where they name the phases or `PhaseMap`

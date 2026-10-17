@@ -1,11 +1,14 @@
+use std::collections::BTreeMap;
+
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 
 use crate::event::Phase;
 use crate::view::{FlowView, State, Tone};
+use crate::workflow::MAX_PHASES;
 
 /// The colors a theme file names, by its keys; Color::Reset is "default", the terminal's own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Palette {
     pub background: Color,
     pub panel: Color,
@@ -21,10 +24,24 @@ pub struct Palette {
     pub blocked: Color,
     pub done: Color,
     pub ended: Color,
-    pub design: Color,
-    pub implement: Color,
-    pub review: Color,
-    pub merge_request: Color,
+    pub phases: PhasePalette,
+}
+
+/// The phases' colors: by position (the built-in themes' four), and by name from [phase].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PhasePalette {
+    pub positions: [Color; MAX_PHASES],
+    pub names: BTreeMap<String, Color>,
+}
+
+impl PhasePalette {
+    /// The colors of the 1st to 4th phase, none by name.
+    const fn at(positions: [Color; MAX_PHASES]) -> PhasePalette {
+        PhasePalette {
+            positions,
+            names: BTreeMap::new(),
+        }
+    }
 }
 
 impl Palette {
@@ -44,10 +61,12 @@ impl Palette {
         blocked: Color::Red,
         done: Color::Green,
         ended: Color::DarkGray,
-        design: Color::Indexed(141),
-        implement: Color::Indexed(75),
-        review: Color::Indexed(80),
-        merge_request: Color::Indexed(176),
+        phases: PhasePalette::at([
+            Color::Indexed(141),
+            Color::Indexed(75),
+            Color::Indexed(80),
+            Color::Indexed(176),
+        ]),
     };
 
     /// The design's dark colors.
@@ -66,10 +85,7 @@ impl Palette {
         blocked: hex(0xf0717f),
         done: hex(0x93c46d),
         ended: hex(0x6c6c78),
-        design: hex(0xb392f0),
-        implement: hex(0x7aa7ff),
-        review: hex(0x56c2c2),
-        merge_request: hex(0xe07fd0),
+        phases: PhasePalette::at([hex(0xb392f0), hex(0x7aa7ff), hex(0x56c2c2), hex(0xe07fd0)]),
     };
 
     /// The design's light colors.
@@ -88,10 +104,7 @@ impl Palette {
         blocked: hex(0xc2283f),
         done: hex(0x3d7a22),
         ended: hex(0x73737c),
-        design: hex(0x7a4fc9),
-        implement: hex(0x2f5fd0),
-        review: hex(0x13807f),
-        merge_request: hex(0xb0399c),
+        phases: PhasePalette::at([hex(0x7a4fc9), hex(0x2f5fd0), hex(0x13807f), hex(0xb0399c)]),
     };
 
     /// "terminal", "flow" or "flow-light"; None for another name.
@@ -120,15 +133,18 @@ impl Palette {
             PaletteKey::Blocked => self.blocked,
             PaletteKey::Done => self.done,
             PaletteKey::Ended => self.ended,
-            PaletteKey::Design => self.design,
-            PaletteKey::Implement => self.implement,
-            PaletteKey::Review => self.review,
-            PaletteKey::MergeRequest => self.merge_request,
         }
     }
 
-    pub fn color_mut(&mut self, key: PaletteKey) -> &mut Color {
-        match key {
+    pub fn set(&mut self, key: &ColorKey, color: Color) {
+        let key = match key {
+            ColorKey::Fixed(key) => *key,
+            ColorKey::Phase(phase) => {
+                self.phases.names.insert(phase.name().to_string(), color);
+                return;
+            }
+        };
+        *match key {
             PaletteKey::Background => &mut self.background,
             PaletteKey::Panel => &mut self.panel,
             PaletteKey::Selection => &mut self.selection,
@@ -143,15 +159,28 @@ impl Palette {
             PaletteKey::Blocked => &mut self.blocked,
             PaletteKey::Done => &mut self.done,
             PaletteKey::Ended => &mut self.ended,
-            PaletteKey::Design => &mut self.design,
-            PaletteKey::Implement => &mut self.implement,
-            PaletteKey::Review => &mut self.review,
-            PaletteKey::MergeRequest => &mut self.merge_request,
+        } = color;
+    }
+}
+
+/// A color a theme file sets: a fixed key of [ui] or [state], or a phase by name in [phase].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ColorKey {
+    Fixed(PaletteKey),
+    Phase(Phase),
+}
+
+impl ColorKey {
+    /// The key as a theme file writes it.
+    pub fn name(&self) -> &str {
+        match self {
+            ColorKey::Fixed(key) => key.name(),
+            ColorKey::Phase(phase) => phase.name(),
         }
     }
 }
 
-/// A color a theme file can set, by its key in [ui], [state] or [phase].
+/// A fixed color a theme file can set, by its key in [ui] or [state].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaletteKey {
     Background,
@@ -168,14 +197,10 @@ pub enum PaletteKey {
     Blocked,
     Done,
     Ended,
-    Design,
-    Implement,
-    Review,
-    MergeRequest,
 }
 
 impl PaletteKey {
-    pub const ALL: [PaletteKey; 18] = [
+    pub const ALL: [PaletteKey; 14] = [
         PaletteKey::Background,
         PaletteKey::Panel,
         PaletteKey::Selection,
@@ -190,10 +215,6 @@ impl PaletteKey {
         PaletteKey::Blocked,
         PaletteKey::Done,
         PaletteKey::Ended,
-        PaletteKey::Design,
-        PaletteKey::Implement,
-        PaletteKey::Review,
-        PaletteKey::MergeRequest,
     ];
 
     /// The key a theme file writes: accent, working, ...
@@ -213,10 +234,6 @@ impl PaletteKey {
             PaletteKey::Blocked => "blocked",
             PaletteKey::Done => "done",
             PaletteKey::Ended => "ended",
-            PaletteKey::Design => "design",
-            PaletteKey::Implement => "implement",
-            PaletteKey::Review => "review",
-            PaletteKey::MergeRequest => "merge-request",
         }
     }
 
@@ -242,15 +259,11 @@ impl PaletteKey {
             | PaletteKey::Blocked
             | PaletteKey::Done
             | PaletteKey::Ended => Section::State,
-            PaletteKey::Design
-            | PaletteKey::Implement
-            | PaletteKey::Review
-            | PaletteKey::MergeRequest => Section::Phase,
         }
     }
 }
 
-/// A table of colors in a theme file: [ui], [state] or [phase].
+/// A table of colors in a theme file: [ui], [state] or [phase], whose keys are phase names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Section {
     Ui,
@@ -346,10 +359,8 @@ pub struct StateTokens {
 
 #[derive(Debug, Clone)]
 pub struct PhaseTokens {
-    pub design: Style,
-    pub implement: Style,
-    pub review: Style,
-    pub merge_request: Style,
+    pub positions: [Style; MAX_PHASES],
+    pub names: BTreeMap<String, Style>,
 }
 
 /// flow's mark: a goose in flight, in block characters every font has.
@@ -428,10 +439,13 @@ impl Theme {
                 ended: fg(palette.ended),
             },
             phase: PhaseTokens {
-                design: fg(palette.design),
-                implement: fg(palette.implement),
-                review: fg(palette.review),
-                merge_request: fg(palette.merge_request),
+                positions: palette.phases.positions.map(fg),
+                names: palette
+                    .phases
+                    .names
+                    .iter()
+                    .map(|(name, color)| (name.clone(), fg(*color)))
+                    .collect(),
             },
             phase_colors: PhaseColors::default(),
             glyphs: Glyphs {
@@ -470,13 +484,13 @@ impl Theme {
         }
     }
 
-    pub fn phase_style(&self, phase: &Phase) -> Style {
-        match phase.name() {
-            "implement" => self.phase.implement,
-            "review" => self.phase.review,
-            "merge-request" => self.phase.merge_request,
-            _ => self.phase.design,
-        }
+    /// The phase's color by name, else by its position among the flow's steps.
+    pub fn phase_style(&self, phase: &Phase, position: usize) -> Style {
+        self.phase
+            .names
+            .get(phase.name())
+            .copied()
+            .unwrap_or_else(|| self.phase.positions[position.min(MAX_PHASES - 1)])
     }
 
     /// The phase's color at Full while the flow works in one, else its state's.
@@ -492,7 +506,11 @@ impl Theme {
     /// The phase's color when `colored` and the flow works in one, else its state's.
     fn tinted(&self, flow: &FlowView, colored: bool) -> Style {
         match (flow.state, &flow.phase) {
-            (State::Working | State::Delegated, Some(phase)) if colored => self.phase_style(phase),
+            (State::Working | State::Delegated, Some(phase)) if colored => {
+                let at = flow.steps.iter().position(|step| step.phase == *phase);
+                let position = at.unwrap_or(0);
+                self.phase_style(phase, position)
+            }
             (state, _) => self.state_style(state),
         }
     }
@@ -517,6 +535,7 @@ impl Theme {
 mod tests {
     use super::*;
     use crate::event::Mode;
+    use crate::view::{Step, StepStatus};
 
     #[test]
     fn every_key_belongs_in_one_section() {
@@ -546,9 +565,9 @@ mod tests {
             names(Section::State),
             ["working", "waiting", "blocked", "done", "ended"]
         );
-        assert_eq!(
-            names(Section::Phase),
-            ["design", "implement", "review", "merge-request"]
+        assert!(
+            names(Section::Phase).is_empty(),
+            "[phase] takes phase names"
         );
         for section in Section::ALL {
             assert_eq!(Section::named(section.name()), Some(section));
@@ -602,16 +621,24 @@ mod tests {
         let mut palette = Palette::TERMINAL;
         let accent = PaletteKey::named("accent").unwrap();
 
-        *palette.color_mut(accent) = Color::Indexed(5);
+        palette.set(&ColorKey::Fixed(accent), Color::Indexed(5));
+        palette.set(&ColorKey::Phase(Phase::of("build")), Color::Indexed(6));
 
         assert_eq!(palette.color(accent), Color::Indexed(5));
+        assert_eq!(palette.phases.names["build"], Color::Indexed(6));
         assert_eq!(PaletteKey::named("acent"), None);
         for key in PaletteKey::ALL {
             assert_eq!(PaletteKey::named(key.name()), Some(key));
         }
     }
 
+    /// A flow in the built-in workflow's phases.
     fn flow(state: State, phase: Option<Phase>) -> FlowView {
+        let step = |name| Step {
+            phase: Phase::of(name),
+            status: StepStatus::Open,
+            duration_ms: None,
+        };
         FlowView {
             id: "shop-217".into(),
             name: "shop-217".into(),
@@ -625,7 +652,9 @@ mod tests {
             review: None,
             merge_request: None,
             decisions: Vec::new(),
-            steps: Vec::new(),
+            steps: ["plan", "implement", "review", "merge-request"]
+                .map(step)
+                .to_vec(),
             timeline: Vec::new(),
             started_at: 0,
             changed_at: 0,
@@ -639,19 +668,19 @@ mod tests {
     fn at_full_a_working_flow_takes_the_color_of_its_phase() {
         let mut theme = Theme::from_palette(Palette::FLOW);
         theme.phase_colors = PhaseColors::Full;
-        let phase = |phase| Style::default().fg(Palette::FLOW.color(phase));
+        let phase = |position: usize| Style::default().fg(Palette::FLOW.phases.positions[position]);
 
         assert_eq!(
             theme.flow_style(&flow(State::Working, Some(Phase::of("plan")))),
-            phase(PaletteKey::Design)
+            phase(0)
         );
         assert_eq!(
             theme.flow_style(&flow(State::Delegated, Some(Phase::of("review")))),
-            phase(PaletteKey::Review)
+            phase(2)
         );
         assert_eq!(
             theme.flow_style(&flow(State::Working, Some(Phase::of("merge-request")))),
-            phase(PaletteKey::MergeRequest)
+            phase(3)
         );
         assert_eq!(
             theme.flow_style(&flow(State::Working, None)),
@@ -672,7 +701,7 @@ mod tests {
     #[test]
     fn the_level_decides_what_takes_the_phase_color() {
         let mut theme = Theme::from_palette(Palette::FLOW);
-        let review = theme.phase.review;
+        let review = theme.phase.positions[2];
         let working = theme.state.working;
         let flow = flow(State::Delegated, Some(Phase::of("review")));
         let styles = |theme: &Theme| (theme.step_style(&flow), theme.flow_style(&flow));
@@ -706,14 +735,7 @@ mod tests {
 
     #[test]
     fn the_built_in_themes_color_each_phase() {
-        let phases = |palette: Palette| {
-            [
-                palette.design,
-                palette.implement,
-                palette.review,
-                palette.merge_request,
-            ]
-        };
+        let phases = |palette: Palette| palette.phases.positions;
 
         assert_eq!(
             phases(Palette::TERMINAL),
@@ -732,9 +754,31 @@ mod tests {
             phases(Palette::FLOW_LIGHT),
             [hex(0x7a4fc9), hex(0x2f5fd0), hex(0x13807f), hex(0xb0399c)]
         );
+        assert_eq!(PaletteKey::named("merge-request"), None);
+    }
+
+    #[test]
+    fn a_phase_takes_its_color_by_name_else_by_its_position() {
+        let mut palette = Palette::FLOW;
+        palette.set(&ColorKey::Phase(Phase::of("build")), hex(0x123456));
+        let theme = Theme::from_palette(palette);
+
         assert_eq!(
-            PaletteKey::named("merge-request"),
-            Some(PaletteKey::MergeRequest)
+            theme.phase_style(&Phase::of("build"), 0),
+            Style::default().fg(hex(0x123456))
+        );
+        assert_eq!(
+            theme.phase_style(&Phase::of("spec"), 1),
+            Style::default().fg(hex(0x7aa7ff)),
+            "the 2nd phase's built-in color"
+        );
+        let mut custom = flow(State::Working, Some(Phase::of("ship")));
+        custom.steps.truncate(3);
+        custom.steps[2].phase = Phase::of("ship");
+        assert_eq!(
+            theme.step_style(&custom),
+            Style::default().fg(hex(0x56c2c2)),
+            "the position among the flow's own steps"
         );
     }
 

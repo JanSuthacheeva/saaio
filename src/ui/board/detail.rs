@@ -460,7 +460,7 @@ mod tests {
         let (implement, working) = with_state(vec![flow], state, |view| {
             view.render_detail(area, &mut buf);
             let theme = view.theme();
-            (theme.phase.implement.fg, theme.state.working.fg)
+            (theme.phase.positions[1].fg, theme.state.working.fg)
         });
 
         let row = rows(&buf)[1].clone();

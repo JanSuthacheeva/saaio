@@ -76,7 +76,7 @@ mod tests {
     #[test]
     fn takes_its_colors_from_the_theme() {
         for palette in [Palette::TERMINAL, Palette::FLOW, Palette::FLOW_LIGHT] {
-            let theme = Theme::from_palette(palette);
+            let theme = Theme::from_palette(palette.clone());
             let mut buf = filled(" abcde");
 
             mark(&mut buf, Rect::new(0, 0, 6, 1), &theme);

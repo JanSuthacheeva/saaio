@@ -347,7 +347,7 @@ fn a_working_card_takes_the_color_of_its_phase_at_full_only() {
             buffer[(x("reviewing"), 10 + layout::MARGIN)].fg,
         ]
     };
-    let review = theme.phase.review.fg.unwrap();
+    let review = theme.phase.positions[2].fg.unwrap();
     let working = theme.state.working.fg.unwrap();
 
     assert_eq!(colors(PhaseColors::Off), [working, working], "off");

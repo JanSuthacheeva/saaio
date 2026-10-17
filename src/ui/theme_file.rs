@@ -9,10 +9,11 @@ use toml::Spanned;
 use toml::Value;
 use toml::de::{DeTable, DeValue, ValueDeserializer};
 
+use crate::event::Phase;
 use crate::store::Stamp;
 #[cfg(test)]
 use crate::ui::theme::MARK;
-use crate::ui::theme::{KIWI, Palette, PaletteKey, PhaseColors, Section, Theme, hex};
+use crate::ui::theme::{ColorKey, KIWI, Palette, PaletteKey, PhaseColors, Section, Theme, hex};
 
 pub const THEME_FILE: &str = "theme.toml";
 pub const THEMES_DIR: &str = "themes";
@@ -35,7 +36,7 @@ struct ThemeFile {
 /// One color a theme file sets, and the line it is on.
 #[derive(Debug)]
 struct Entry {
-    key: PaletteKey,
+    key: ColorKey,
     value: Value,
     line: usize,
 }
@@ -168,7 +169,8 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
     })
 }
 
-/// The colors of one section; a key of another section, or of none, is an error on its line.
+/// The colors of one section; a key of another section, or of none, is an error on its line. [phase]
+/// takes any phase name, "design" as "plan".
 fn colors(path: &Path, text: &str, section: Section, table: DeTable) -> Result<Vec<Entry>> {
     let mut keys: Vec<_> = table.into_iter().collect();
     keys.sort_by_key(|(key, _)| key.span().start);
@@ -177,7 +179,15 @@ fn colors(path: &Path, text: &str, section: Section, table: DeTable) -> Result<V
         let line = line(text, name.span().start);
         let name = name.into_inner();
         let key = match PaletteKey::named(&name) {
-            Some(key) if key.section() == section => key,
+            Some(key) if key.section() == section => ColorKey::Fixed(key),
+            None if section == Section::Phase => {
+                let name = if name == "design" { "plan" } else { &name };
+                let phase = name
+                    .parse::<Phase>()
+                    .map_err(|_| anyhow!("{name} is no phase name"))
+                    .with_context(|| at(path, line))?;
+                ColorKey::Phase(phase)
+            }
             Some(key) => {
                 return Err(anyhow!(
                     "{name} belongs in [{}], not [{}]",
@@ -212,8 +222,8 @@ fn line(text: &str, offset: usize) -> usize {
     text[..offset.min(text.len())].matches('\n').count() + 1
 }
 
-/// One file's colors over `palette`: values first, then keys that name another key, whatever their
-/// order in the file.
+/// One file's colors over `palette`: values first, then keys that name a [ui] or [state] key,
+/// whatever their order in the file.
 fn apply(file: &ThemeFile, palette: &mut Palette) -> Result<()> {
     let mut references = Vec::new();
     for entry in &file.colors {
@@ -222,21 +232,22 @@ fn apply(file: &ThemeFile, palette: &mut Palette) -> Result<()> {
                 references.push((entry, other));
             }
             value => {
-                *palette.color_mut(entry.key) = color(value, palette)
-                    .with_context(|| entry.key.name())
+                let color = color(value, palette)
+                    .with_context(|| entry.key.name().to_string())
                     .with_context(|| at(&file.path, entry.line))?;
+                palette.set(&entry.key, color);
             }
         }
     }
     // A key naming a key that itself still names another waits for it; none moving is a loop.
     while !references.is_empty() {
-        let pending: Vec<PaletteKey> = references.iter().map(|(entry, _)| entry.key).collect();
+        let pending: Vec<&ColorKey> = references.iter().map(|(entry, _)| &entry.key).collect();
         let before = references.len();
         references.retain(|&(entry, other)| {
-            if pending.contains(&other) {
+            if pending.contains(&&ColorKey::Fixed(other)) {
                 return true;
             }
-            *palette.color_mut(entry.key) = palette.color(other);
+            palette.set(&entry.key, palette.color(other));
             false
         });
         if references.len() == before {
@@ -463,14 +474,30 @@ mod tests {
         write(
             &dir,
             "theme.toml",
-            "extends = \"flow\"\n[phase]\nmerge-request = \"#cb9168\"\nreview = \"done\"\n",
+            "extends = \"flow\"\n[phase]\nmerge-request = \"#cb9168\"\nreview = \"done\"\nbuild = 4\n",
         );
 
         let palette = theme(&dir).palette;
 
-        assert_eq!(palette.merge_request, Color::Rgb(0xcb, 0x91, 0x68));
-        assert_eq!(palette.review, Palette::FLOW.done);
-        assert_eq!(palette.design, Palette::FLOW.design);
+        assert_eq!(
+            palette.phases.names["merge-request"],
+            Color::Rgb(0xcb, 0x91, 0x68)
+        );
+        assert_eq!(palette.phases.names["review"], Palette::FLOW.done);
+        assert_eq!(palette.phases.names["build"], Color::Indexed(4));
+        assert!(!palette.phases.names.contains_key("plan"));
+        assert_eq!(palette.phases.positions, Palette::FLOW.phases.positions);
+    }
+
+    #[test]
+    fn reads_design_in_an_old_theme_file_as_plan() {
+        let dir = TempDir::new().unwrap();
+        write(&dir, "theme.toml", "[phase]\ndesign = \"#b392f0\"\n");
+
+        let palette = theme(&dir).palette;
+
+        assert_eq!(palette.phases.names["plan"], hex(0xb392f0));
+        assert!(!palette.phases.names.contains_key("design"));
     }
 
     #[test]
@@ -499,7 +526,11 @@ mod tests {
             ),
             (
                 "[state]\nreview = \"#d9825b\"\n",
-                "theme.toml:2: review belongs in [phase], not [state]",
+                "theme.toml:2: [state] has no key review",
+            ),
+            (
+                "[phase]\nBuild = \"#d9825b\"\n",
+                "theme.toml:2: Build is no phase name",
             ),
             (
                 "[phase]\n\ndone = 2\n",

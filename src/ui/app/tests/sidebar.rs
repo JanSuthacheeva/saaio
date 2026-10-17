@@ -700,7 +700,7 @@ fn export_csv_colors(level: PhaseColors) -> [ratatui::style::Color; 4] {
 #[test]
 fn the_phase_colors_level_decides_what_takes_the_color_of_the_phase() {
     let theme = Theme::default();
-    let review = theme.phase.review.fg.unwrap();
+    let review = theme.phase.positions[2].fg.unwrap();
     let working = theme.state.working.fg.unwrap();
     let faint = theme.ui.faint.fg.unwrap();
     // A done dot is text at every level; only the current one takes a color.

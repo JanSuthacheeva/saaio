@@ -186,7 +186,7 @@ mod tests {
             [
                 theme.ui.text,
                 theme.ui.text,
-                theme.phase.implement,
+                theme.phase.positions[1],
                 theme.ui.faint,
                 theme.ui.faint,
                 theme.ui.faint,
