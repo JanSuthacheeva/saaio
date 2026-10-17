@@ -231,7 +231,7 @@ colors.
 - [x] `docs/configuration.md` and `docs/themes.md`, every key with its default, pointing to the examples
 - [x] `docs/repository.md` and `docs/files.md`: branches, setup/teardown, slots and ports, the setup-flow skill, every file flow keeps
 - [x] `docs/ui.md` and `docs/flows.md`: layout, every key, dialogs, the master, guided vs auto, plain sessions, reporting, the workflow
-- [ ] `docs/install.md`, `docs/troubleshooting.md` and the `docs/README.md` index; check whether `npx skills add` takes several `--skill` flags
+- [x] `docs/install.md`, `docs/troubleshooting.md` and the `docs/README.md` index; check whether `npx skills add` takes several `--skill` flags
 - [ ] Record the picture: `docs/media/demo-setup.sh` and `demo.tape` with Claude Code and Codex workers, flow dark theme, phase_colors off; `flow-ui.png` and `flow-ui.gif`, from a scratch `FLOW_HOME` only
 - [ ] Rewrite `README.md` as on the implementation page, with real `flow status` output and the picture
 - [ ] `CHANGELOG.md` under Unreleased with known issues; the CLAUDE.md changelog rule and Architecture lines; `flow example config|theme` under HANDOVER's Future improvements
