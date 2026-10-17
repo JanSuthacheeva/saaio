@@ -68,6 +68,10 @@ pub enum EventKind {
     Message {
         text: String,
     },
+    /// A line the master queued for the server to type into this flow's pane, through `flow send --type`.
+    Typed {
+        text: String,
+    },
     /// A turn's whole closing message, for the master to read; Waiting and Idle keep its short form.
     Answer {
         text: String,
@@ -147,7 +151,9 @@ impl EventKind {
             | EventKind::Blocked { reason: text }
             | EventKind::Decision { text }
             | EventKind::MergeRequest { url: text } => cut_to(text, TEXT_LIMIT),
-            EventKind::Message { text } | EventKind::Answer { text } => {
+            EventKind::Message { text }
+            | EventKind::Typed { text }
+            | EventKind::Answer { text } => {
                 cut_to(text, LONG_TEXT_LIMIT);
             }
             _ => {}
@@ -285,6 +291,9 @@ mod tests {
             EventKind::MergeRequest {
                 url: "https://gitlab.com/acme/shop/-/merge_requests/88".into(),
             },
+            EventKind::Typed {
+                text: "/compact".into(),
+            },
             EventKind::Ended,
             EventKind::Workspace {
                 path: "/Users/jan/scratch".into(),
@@ -329,6 +338,28 @@ mod tests {
             .to_line(),
             r#"{"v":1,"at":7,"kind":"phase","phase":"merge-request"}"#
         );
+        assert_eq!(
+            Event::new(
+                7,
+                EventKind::Typed {
+                    text: "/compact".into()
+                }
+            )
+            .to_line(),
+            r#"{"v":1,"at":7,"kind":"typed","text":"/compact"}"#
+        );
+    }
+
+    #[test]
+    fn cuts_a_typed_line_to_the_long_limit() {
+        let long = "x".repeat(LONG_TEXT_LIMIT + 5);
+
+        let event = Event::new(0, EventKind::Typed { text: long });
+
+        let EventKind::Typed { text } = event.kind else {
+            panic!("kind changed");
+        };
+        assert_eq!(text.chars().count(), LONG_TEXT_LIMIT);
     }
 
     #[test]
