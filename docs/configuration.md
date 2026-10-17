@@ -1,6 +1,6 @@
 # Configuration
 
-File: `~/.config/flow/config.toml`. Optional; every key has a default.
+File: `~/.config/flow/config.toml`. Optional. Every key has a default.
 
 - [Use your own workflow](#use-your-own-workflow)
 - [File location](#file-location)
@@ -38,9 +38,9 @@ skills = ["my-pr"]
 | Setting | Effect |
 | --- | --- |
 | `[worker] prompt` | first prompt of every worker. `{request}` is the request: `flow start "SHOP-217 add CSV export"` sends `/my-feature SHOP-217 add CSV export`. |
-| `[[phases]]` | the flow's steps. A skill the worker runs moves the flow to the phase that lists it. 1 to 4 phases; replaces the built-in four. |
+| `[[phases]]` | the flow's steps. A skill the worker runs moves the flow to the phase that lists it. 1 to 4 phases. Replaces the built-in four. |
 
-- The prompt starts the work; the phases only track it. Either can be set without the other.
+- The prompt starts the work. The phases only track it. Either can be set without the other.
 - Claude Code calls a skill `/name`, Codex `$name`. A `[worker] prompt` used by both names no
   skill, or each agent sets its own `prompt` ([The first prompt](#the-first-prompt)).
 - `[[phases]]` applies at the next `flow start`. `[worker] prompt` applies after
@@ -51,7 +51,7 @@ skills = ["my-pr"]
 
 | | When no skill matches a phase |
 | --- | --- |
-| States (`working`, `waiting` with its question, `idle`, `done`) | shown; they come from the harness hooks |
+| States (`working`, `waiting` with its question, `idle`, `done`) | shown, from the harness hooks |
 | Opened merge request | finishes the flow |
 | Steps | stay `○───○───○───○` |
 | Phase label in the sidebar | replaced by the state: `starting` while working, `idle`, `waiting` |
@@ -97,7 +97,7 @@ agent = "codex"
 
 | Key | Default | Effect |
 | --- | --- | --- |
-| `agent` | `"claude"` | agent used by `flow start` and the new-flow dialog when none is picked; a name under `[agents]` |
+| `agent` | `"claude"` | agent used by `flow start` and the new-flow dialog when none is picked. A name under `[agents]`. |
 | `prompt` | unset | first prompt of every agent without its own `prompt`, built-in agents included ([The first prompt](#the-first-prompt)) |
 
 ## [master]
@@ -109,7 +109,7 @@ agent = "codex"
 
 | Key | Default | Effect |
 | --- | --- | --- |
-| `wake` | `true` | wake the master when a flow of its project waits, is blocked, goes idle, finishes or stops responding. `false`: the master learns only by running `flow status`; its row in flow ui still shows when it needs you. |
+| `wake` | `true` | wake the master when a flow of its project waits, is blocked, goes idle, finishes or stops responding. `false`: the master learns only by running `flow status`. Its row in flow ui still shows when it needs you. |
 | `agent` | unset | agent the master runs. Unset: the built-in `master` agent (Claude Code). |
 
 What the master is: [flows.md](flows.md#the-master).
@@ -164,7 +164,7 @@ skills = ["write-merge-request"]
 - 1 to 4 phases, in order. A custom list replaces all four.
 - flow ui shows the phases as steps (`●───●───○───○`) with the time spent in each.
 - A phase starts when the worker runs one of its skills.
-- A flow keeps the phases it started with; a change affects new flows only.
+- A flow keeps the phases it started with. A change affects new flows only.
 - A skill of a phase the running flow does not have reports nothing.
 - An opened merge request finishes the flow in its last phase, whatever its name.
 
@@ -211,7 +211,7 @@ resume = ["claude", "-n", "{name}", "--resume", "{id}"]
 adapter = "claude-code"
 ```
 
-- `claude` and `codex` run workers; `master` runs the master.
+- `claude` and `codex` run workers. `master` runs the master.
 - An added agent appears in `flow start --agent` and the new-flow dialog.
 - An agent with a built-in name replaces the built-in one whole. Repeat every key to keep. Only a
   missing `prompt` falls back to the built-in one.
@@ -245,7 +245,7 @@ prompt = "{request}"
 - No `adapter`: its row shows only whether it runs.
 - A custom agent that runs Claude Code or Codex sets `adapter` to be followed like the built-in ones.
 - With an adapter, flow adds to the command line: its hooks, and for workers a system prompt naming
-  the flow master. Nothing is installed; nothing is written to `~/.claude` or `~/.codex`
+  the flow master. Nothing is installed. Nothing is written to `~/.claude` or `~/.codex`
   ([flows.md](flows.md#how-a-worker-reports)).
 
 ## The first prompt
