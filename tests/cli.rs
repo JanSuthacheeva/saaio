@@ -901,6 +901,44 @@ fn a_codex_stop_hands_the_masters_message_over_and_goes_on_working() {
 }
 
 #[test]
+fn a_claude_code_turn_marks_the_session_busy_and_its_stop_hands_nothing_over() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let busy = home.path().join(format!("waits/{id}.busy"));
+    let prompt = r#"{"session_id":"7f3c","hook_event_name":"UserPromptSubmit","prompt":"go"}"#;
+    let stop = r#"{"session_id":"7f3c","hook_event_name":"Stop","last_assistant_message":"Tabs or spaces?","background_tasks":[]}"#;
+    let compact = |event: &str| {
+        format!(r#"{{"session_id":"7f3c","hook_event_name":"{event}","trigger":"manual"}}"#)
+    };
+
+    assert!(hook(home.path(), Some(&id), prompt).status.success());
+    assert_eq!(fs::read_to_string(&busy).unwrap(), "turn");
+    message_for(home.path(), &id, "Tabs.");
+    let stopped = hook(home.path(), Some(&id), stop);
+    assert!(stopped.status.success(), "flow wait wakes it, not its Stop");
+    assert!(stopped.stdout.is_empty() && stopped.stderr.is_empty());
+    assert!(!busy.exists(), "idle after its Stop");
+
+    assert!(
+        hook(home.path(), Some(&id), &compact("PreCompact"))
+            .status
+            .success()
+    );
+    assert!(busy.exists(), "busy while it compacts");
+    assert!(
+        hook(home.path(), Some(&id), &compact("PostCompact"))
+            .status
+            .success()
+    );
+    assert!(
+        !busy.exists(),
+        "idle once the compaction ends, with no Stop"
+    );
+    let log = fs::read_to_string(home.path().join(format!("flows/{id}.jsonl"))).unwrap();
+    assert!(!log.contains("Compact"), "{log}");
+}
+
+#[test]
 fn a_codex_master_records_its_session_and_reports_nothing() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");
@@ -2171,6 +2209,11 @@ fn a_workers_wait_ends_with_the_masters_message_once() {
     assert_eq!(
         err.trim_end(),
         "message from the flow master:\n  Semicolons."
+    );
+    assert_eq!(
+        fs::read_to_string(home.path().join("waits/7f3c.busy")).unwrap(),
+        "turn",
+        "the turn it wakes runs no prompt hook"
     );
 
     let mut again = waiter(home.path(), Some("7f3c"), &[]);

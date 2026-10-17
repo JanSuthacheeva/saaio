@@ -68,8 +68,8 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
     }
 }
 
-/// Translates one hook event and appends what changes the flow; for a session that does not wake
-/// itself, also marks it busy or idle and, at its Stop, takes the news it is handed.
+/// Translates one hook event and appends what changes the flow; marks the session busy or idle
+/// and, at the Stop of one that does not wake itself, takes the news it is handed.
 fn hook(
     store: &Store,
     config: &Config,
@@ -93,7 +93,8 @@ fn hook(
     };
     match adapter.turn(payload)? {
         Turn::Began => mark_busy(store, &waiter, Busy::Turn),
-        Turn::Interrupted => mark_busy(store, &waiter, Busy::Idle),
+        Turn::Idle => mark_busy(store, &waiter, Busy::Idle),
+        Turn::Ended if adapter.wakes_itself() => mark_busy(store, &waiter, Busy::Idle),
         Turn::Ended => {
             let wakes = !matches!(waiter, Waiter::Master) || config.master.wake;
             let news = if wakes {

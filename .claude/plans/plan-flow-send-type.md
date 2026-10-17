@@ -110,13 +110,20 @@ pub fn set_typed(&self, id: &str, count: usize) -> Result<()>;
 // adapter.rs
 pub fn turn(self, payload: &Value) -> Option<Turn>; // ClaudeCode => claude_code::turn
 
+// Turn::Interrupted is renamed Turn::Idle: at its prompt with no Stop (an Esc, the end of a
+// compaction), its hook hands nothing over
 // claude_code.rs: EVENTS gains PreCompact, PostCompact
-/// A prompt or a compaction begins a turn, a Stop or the compaction's end ends it; a Stop with a
-/// background task running is no end (the agent resumes on its own); a subagent's are not the session's.
+/// A prompt or a compaction begins a turn (Began), a Stop ends it (Ended), the compaction's end
+/// leaves it at its prompt (Idle); a Stop with a background task running is no end (the agent
+/// resumes on its own); a subagent's are not the session's.
 pub fn turn(payload: &Value) -> Option<Turn>;
 
-// codex.rs: EVENTS gains PreCompact, PostCompact; turn maps them to Began, Ended
+// codex.rs: EVENTS gains PreCompact, PostCompact; turn maps them to Began, Idle
 ```
+
+Changed in the build: PostCompact is `Turn::Idle`, not `Ended`. Codex runs no Stop after a
+compaction, and news handed over (exit 2) at PostCompact would be marked delivered with nothing
+to wake the session with it.
 
 `translate` gives the new events no kinds.
 
@@ -270,8 +277,8 @@ flow wait wakes a Claude Code worker:
 - [x] Add `EventKind::Typed`, its cut, the fold note `master typed: <text>` and `fold::changes` for it, with unit tests
 - [x] Add `wake::untyped` and `Store::typed` (removed with the flow), with unit tests; built with `flow send --type`, its first caller, and `set_typed` with the server, its only caller (dead code fails clippy)
 - [x] Replace `Store::set_busy`/`busy` bool with `Busy { Idle, Turn, Typed }` and update hook.rs, news.rs, panes.rs, with store unit tests including an empty file reading Turn
-- [ ] Add `claude_code::turn` and PreCompact/PostCompact to both adapters' EVENTS and `codex::turn`, with recorded fixtures and unit tests
-- [ ] `flow hook`: Claude Code turns mark Busy only, never hand over; `flow wait` marks Busy::Turn with news; tests
+- [x] Add `claude_code::turn` and PreCompact/PostCompact to both adapters' EVENTS and `codex::turn`, with recorded fixtures and unit tests
+- [x] `flow hook`: Claude Code turns mark Busy only, never hand over; `flow wait` marks Busy::Turn with news; tests
 - [x] `flow send --type` with its refusals and `output::flow::queued`, with output unit tests and `tests/cli.rs` cases
 - [ ] `server/typing.rs`: `Store::set_typed`, `type_lines`, `type_into`, `takes_lines`, `ready`, `unstarted`, the `opened_at`/`line_at` fields, `deliver_news` through `type_into`; unit tests and a `server/tests.rs` case with two queued lines
 - [ ] master.md bullet with `master-v8.md` kept and listed in master.rs; test that the old default upgrades

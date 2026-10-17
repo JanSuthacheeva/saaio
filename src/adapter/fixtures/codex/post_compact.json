@@ -1,0 +1,9 @@
+{
+ "session_id": "01a14000-0000-7000-8000-000000000000",
+ "turn_id": "01a14a63-f2da-7470-9dc6-8bb7a9aaad0d",
+ "transcript_path": "/home/dev/.codex/sessions/2026/10/16/rollout-2026-10-16T14-51-43-01a14000-0000-7000-8000-000000000000.jsonl",
+ "cwd": "/repo",
+ "hook_event_name": "PostCompact",
+ "model": "gpt-6-luna",
+ "trigger": "manual"
+}

@@ -4,7 +4,7 @@ use std::time::Duration;
 use crate::cli::Env;
 use crate::cli::output::{Document, news};
 use crate::deliver::{self, WorkerNews};
-use crate::store::{Store, Waiter};
+use crate::store::{Busy, Store, Waiter};
 use crate::view::FlowView;
 
 /// How often `flow wait` looks for news, as often as the server looks at the store.
@@ -33,7 +33,7 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
     }
 }
 
-/// Sleeps until there is news for the session; None once another waiter took over, the session
+/// Sleeps until there is news for the session, marked busy with the turn it wakes; None once another waiter took over, the session
 /// ended (the parent changed), or a worker's flow is finished or gone.
 fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
     let me = std::process::id();
@@ -58,6 +58,10 @@ fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
             }
         };
         if news.is_some() {
+            // The turn it wakes runs no prompt hook: its Stop marks it idle again.
+            if let Err(error) = store.set_busy(waiter, Busy::Turn) {
+                eprintln!("flow wait: {error:#}");
+            }
             return news;
         }
         thread::sleep(WAIT_EVERY);

@@ -4,18 +4,20 @@ use serde_json::{Value, json};
 
 use crate::adapter::answer::turn_end;
 use crate::adapter::calls::{created_merge_request, tool_call};
-use crate::adapter::{Adapter, cut};
+use crate::adapter::{Adapter, Turn, cut};
 use crate::event::EventKind;
 use crate::workflow::Workflow;
 
 /// The hook events flow listens to.
-const EVENTS: [&str; 6] = [
+const EVENTS: [&str; 8] = [
     "UserPromptSubmit",
     "PreToolUse",
     "PostToolUse",
     "PermissionRequest",
     "Stop",
     "SessionEnd",
+    "PreCompact",
+    "PostCompact",
 ];
 /// Seconds Claude Code waits for `flow hook` before it goes on without it.
 const HOOK_TIMEOUT_SECS: u64 = 10;
@@ -183,6 +185,22 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
         }
         "SessionEnd" if payload["reason"] == "prompt_input_exit" => vec![EventKind::Ended],
         _ => Vec::new(),
+    }
+}
+
+/// A prompt or a compaction begins a turn, a Stop ends it, the compaction's end leaves it at its
+/// prompt with no Stop; a Stop with a background task running is no end (the agent resumes on its
+/// own); a subagent's (agent_id set) are not the session's. Claude Code runs no hook on an Esc.
+pub fn turn(payload: &Value) -> Option<Turn> {
+    if payload.get("agent_id").is_some() {
+        return None;
+    }
+    match payload["hook_event_name"].as_str()? {
+        "UserPromptSubmit" | "PreCompact" => Some(Turn::Began),
+        "Stop" if running_background_task(&payload["background_tasks"]).is_some() => None,
+        "Stop" => Some(Turn::Ended),
+        "PostCompact" => Some(Turn::Idle),
+        _ => None,
     }
 }
 
@@ -473,6 +491,24 @@ mod tests {
         );
         assert_eq!(events("session_end_exit"), vec![EventKind::Ended]);
         assert_eq!(events("session_end_hangup"), vec![], "a hangup resumes");
+    }
+
+    #[test]
+    fn a_prompt_or_compaction_begins_a_turn_and_a_stop_or_its_end_leaves_it_idle() {
+        assert_eq!(turn(&fixture("user_prompt")), Some(Turn::Began));
+        assert_eq!(turn(&fixture("pre_compact")), Some(Turn::Began));
+        assert_eq!(turn(&fixture("post_compact")), Some(Turn::Idle));
+        assert_eq!(turn(&fixture("stop")), Some(Turn::Ended));
+        assert_eq!(turn(&fixture("stop_artifact_watch")), Some(Turn::Ended));
+        assert_eq!(
+            turn(&fixture("stop_background")),
+            None,
+            "it resumes on its own"
+        );
+        assert_eq!(turn(&fixture("subagent_bash")), None);
+        assert_eq!(turn(&fixture("pre_write")), None);
+        assert_eq!(events("pre_compact"), vec![]);
+        assert_eq!(events("post_compact"), vec![]);
     }
 
     #[test]
