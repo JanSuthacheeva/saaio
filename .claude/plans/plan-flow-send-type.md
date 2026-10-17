@@ -287,3 +287,48 @@ flow wait wakes a Claude Code worker:
 - [x] master.md bullet with `master-v8.md` kept and listed in master.rs; test that the old default upgrades
 - [x] Docs: `docs/cli.md`, `docs/files.md`, `docs/flows.md`, README if needed, HANDOVER verified facts and decision
 - [x] E2E with a scratch FLOW_HOME: a Claude Code worker and a Codex worker get `/compact` then a line, each typed when idle, in order
+
+## Review
+
+Reviewed 2026-10-17 in an isolated context against this plan, `CLAUDE.md` and the code around the
+diff. The fix commits were re-checked by the reviewer in a separate pass, not by an independent
+agent.
+
+**Fixed**
+
+- Plain `flow send` refused every message while config.toml did not parse: `cli.rs` loaded the
+  config for every send. Shown by `flow send demo hi` with `garbage = [` in config.toml (exit 1,
+  "config.toml is not valid"). `send::run` now takes the `Env` and only `--type` loads the config.
+  Test `send_takes_a_message_while_config_toml_is_broken`. Commit 87bdfaf.
+- Three doc comments ran past 100 columns, one wrapped mid-sentence (`wait.rs`). Commit 7b0109a.
+
+**Open**
+
+- A Claude Code Stop that another Stop hook blocks (the turn goes on) marks the session Idle, so a
+  queued line can be typed mid-turn. Claude Code queues input typed during a turn, so the cost is
+  a line arriving early, not lost. Recommendation: accept, or skip `stop_hook_active` Stops later.
+- Esc in a Claude Code worker runs no hook, so `.busy` stays `turn` and queued lines wait until
+  the next prompt in that pane ends its turn. Documented as an assumption, but `docs/cli.md` does
+  not say it. Recommendation: one line in the `--type` notes.
+- A pane reopened after a restart takes a queued line once it has been open for 10 s (QUIET). If
+  Codex shows its "review hooks again" prompt there (two new hooks), the paste and Enter land in
+  that prompt. Unproven. Recommendation: check once with a Codex worker resumed with a queued line.
+- Two `flow send --type` at once can both report `ahead: 0`; order in the log is still right.
+  Accept.
+
+**Where to look**
+
+1. `src/server/typing.rs` `type_lines` -> `type_into`, with `src/cli/commands/hook.rs` `hook`: the
+   Busy handshake (Typed set before the paste, Turn at the prompt hook, Idle at Stop/PostCompact,
+   UNSTARTED fallback). This is where a line could be typed twice or mid-turn.
+2. `src/adapter/claude_code.rs` `turn` and `codex.rs` `turn`: which events count as begin and end,
+   especially the background-task Stop and PostCompact as Idle.
+3. `src/cli/commands/wait.rs`: marking Turn before returning news, so the rewoken Claude Code turn
+   is not typed into.
+
+Routine, skim: `event.rs`, `fold.rs`, `wake::untyped`, `store.rs` counts, `output/flow.rs`,
+master.md bump, docs.
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 7b0109a.
