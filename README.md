@@ -139,7 +139,7 @@ takes the theme's accent either way. `flow` and `flow-light` are the design's da
 A tool can keep a theme in `~/.config/flow/themes/<name>.toml` for `extends` to name; a Noctalia
 template that writes `themes/noctalia.toml` makes flow follow Noctalia live. A broken file keeps the
 last theme and says in the title row which file and line is wrong and why, such as `theme.toml:7:
-done belongs in [state], not [phase]`.
+accent belongs in [ui], not [state]`.
 
 ## Starting a worker
 

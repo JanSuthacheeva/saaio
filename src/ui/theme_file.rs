@@ -528,6 +528,10 @@ mod tests {
                 "theme.toml:2: [state] has no key review",
             ),
             (
+                "[state]\n\naccent = 2\n",
+                "theme.toml:3: accent belongs in [ui], not [state]",
+            ),
+            (
                 "[phase]\nBuild = \"#d9825b\"\n",
                 "theme.toml:2: Build is no phase name",
             ),
