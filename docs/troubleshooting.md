@@ -82,9 +82,9 @@ start, for example because its command isn't installed. Jump to it, then press `
 For an agent in any folder, use `flow start --plain <folder>`.
 
 **`setup: failed: ...`.** The repository's `.flow/setup` exited with an error, and the text is its
-last error line. The flow is blocked, but the worker opened anyway so you can look into it. Fix the script, then
-remove the flow and start it again. The [setup-flow](repository.md#the-setup-flow-skill) skill
-writes or repairs the script.
+last error line. The flow is blocked, but the worker opened anyway so you can look into it. Fix
+the script, then remove the flow and start it again. The
+[setup-flow](repository.md#the-setup-flow-skill) skill writes or repairs the script.
 
 **`all 20 slots are in use`.** Twenty unfinished flows, across all your projects, hold every slot.
 `flow status --all` shows them, and `flow clear` in a project with finished flows frees theirs.

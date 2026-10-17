@@ -47,9 +47,9 @@ current, still to come. Each step keeps the time spent in it.
 The built-in phases are `plan`, `implement`, `review` and `merge-request`. Each starts when the
 worker runs its skill: `design-code`, `implement-plan`, `review-changes` and `write-merge-request`.
 
-You can name your own phases and the skills that start them, and a flow keeps working without any
-matching skills at all. [configuration.md](configuration.md#phases-the-workflow) covers both. A
-flow keeps the phases it started with.
+You can [name your own phases](configuration.md#phases-the-workflow) and the skills that start
+them, and a flow keeps working [without any matching skills](configuration.md#without-matching-skills)
+at all. A flow keeps the phases it started with.
 
 ## Start a flow
 
