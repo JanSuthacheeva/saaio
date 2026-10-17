@@ -30,10 +30,7 @@ shipped is in [CHANGELOG.md](CHANGELOG.md).
 
 - **The master asks a worker.** A `flow ask` that puts the master's question to a worker and
   brings the answer back, without waiting on the user.
-- **Tickets and merge requests from their own tools.** ClickUp as a source of requests, and the
-  merge request and pipeline state from GitLab, shown per flow.
 - **An interrupted Claude Code turn shown as idle.** Claude Code runs no hook when you press Esc,
   so the worker keeps its spinner until its next prompt.
 - **Task counts and an end event for Codex.** Codex has neither, so a Codex flow shows no task
   counts and is ended from flow ui or with `flow remove`.
-- **A small mascot** in a corner of flow ui that reacts to the board.
