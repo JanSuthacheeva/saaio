@@ -344,7 +344,7 @@ pub struct UiTokens {
     pub rule: Style,
     pub selection: Style,
     pub key: Style,
-    /// The bottom bar: a dark panel row with light text on it.
+    /// The title row above the pane: a dark panel row with light text on it.
     pub bar: Style,
 }
 

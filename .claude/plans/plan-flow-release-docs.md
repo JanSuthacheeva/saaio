@@ -228,7 +228,7 @@ colors.
 ### Docs
 
 - [x] `docs/cli.md` and `docs/json.md`, every command, flag, event and field checked against the code and real output in a scratch `FLOW_HOME`
-- [ ] `docs/configuration.md` and `docs/themes.md`, every key with its default, pointing to the examples
+- [x] `docs/configuration.md` and `docs/themes.md`, every key with its default, pointing to the examples
 - [ ] `docs/repository.md` and `docs/files.md`: branches, setup/teardown, slots and ports, the setup-flow skill, every file flow keeps
 - [ ] `docs/ui.md` and `docs/flows.md`: layout, every key, dialogs, the master, guided vs auto, plain sessions, reporting, the workflow
 - [ ] `docs/install.md`, `docs/troubleshooting.md` and the `docs/README.md` index; check whether `npx skills add` takes several `--skill` flags

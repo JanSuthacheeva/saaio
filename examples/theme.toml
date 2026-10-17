@@ -31,7 +31,7 @@
 #[ui]
 # The ground everything is drawn on.
 #background = "default"
-# The bottom bar of key hints.
+# The title row above the pane.
 #panel = 235
 # The row the keys go to: the selected session, field or card.
 #selection = 236
