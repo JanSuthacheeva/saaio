@@ -328,6 +328,10 @@ See `.claude/plans/plan-flow-master-indicator.md`. Decisions:
   in a line beside it. Drawn in a few terminal rows with the theme's tokens, animated on the UI's
   existing tick; off with a setting.
 - **A flow setup skill.** Built: `setup-flow` in agent-skills, linked from `docs/repository.md`.
+- **The first prompt filled at `flow start`.** Today the server fills an agent's `prompt` from the
+  config it loaded at its start, so a changed `[worker] prompt` needs a new flow ui while
+  `[worker] agent` applies at once. `flow start` could fill the prompt and record it in the flow's
+  events, so the server only reads it back.
 - **`flow example config|theme`.** Prints the commented example `config.toml` or `theme.toml`
   (`config::EXAMPLE`, `theme_file::EXAMPLE`), so a user who edited theirs can see every setting and
   default of the installed version, and an agent can read them without the docs. flow server writes

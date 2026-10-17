@@ -306,6 +306,15 @@ the review; every fix is documentation.
   against how per-project stores are named. Worth a glance.
 - Fixes were reviewed by me in a separate pass, not by an independent agent; they are docs only.
 
+**Decided** (Jan, after the review)
+
+- The README picture: re-recorded in Alacritty (`1a5c6d5`).
+- `[worker] prompt` needing a new flow ui: stays as documented for 0.1.0; filling the prompt at
+  `flow start` is under HANDOVER's Future improvements.
+- Default files coming back when deleted: kept.
+- The `--all --json` example's `root`: right as written (per-project stores are
+  `~/.local/state/flow/projects/<name>`).
+
 **Where to look**
 
 1. `src/default_file.rs` `ensure` with `src/server.rs` `write_defaults`: what is written, when, and
