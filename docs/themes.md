@@ -1,26 +1,7 @@
 # Themes
 
-flow ui takes on your terminal's own colors unless you tell it otherwise. Colors live in
-`theme.toml`, beside `config.toml` (`~/.config/flow/theme.toml` by default).
-
-- [The file](#the-file)
-- [Colors](#colors)
-- [Top-level keys](#top-level-keys)
-- [\[ui\]](#ui)
-- [\[state\]](#state)
-- [\[phase\]](#phase)
-- [The built-in themes](#the-built-in-themes)
-- [Themes of your own](#themes-of-your-own)
-- [Errors](#errors)
-
-## The file
-
-On its first run, flow ui writes `theme.toml` with every setting commented out at its default, the
-terminal theme. The same file is in the repository as [examples/theme.toml](../examples/theme.toml).
-Remove the `#` in front of a setting to change it. flow never overwrites the file once you edited
-it.
-
-flow ui repaints within a second when you save `theme.toml` or a theme it extends. A short example:
+flow ui uses your terminal's own colors until you tell it otherwise. To change them, edit
+`theme.toml`, which sits next to `config.toml` (`~/.config/flow/theme.toml` by default):
 
 ```toml
 extends = "flow"
@@ -36,11 +17,30 @@ ended = "faint"
 merge-request = "#d08ad6"
 ```
 
-A key you leave out keeps the color of the theme the file extends.
+This starts from flow's own dark theme, turns on Nerd Font icons and changes three colors. Every
+key you leave out keeps the color of the theme you extend. flow ui repaints within a second of
+saving `theme.toml` or any theme it extends.
+
+- [The file](#the-file)
+- [Colors](#colors)
+- [Top-level keys](#top-level-keys)
+- [\[ui\]](#ui)
+- [\[state\]](#state)
+- [\[phase\]](#phase)
+- [The built-in themes](#the-built-in-themes)
+- [Themes of your own](#themes-of-your-own)
+- [Errors](#errors)
+
+## The file
+
+The first time flow ui runs, it writes `theme.toml` with every setting commented out at its
+default, which is the terminal theme. The same file is in the repository as
+[examples/theme.toml](../examples/theme.toml). To change a setting, remove the `#` in front of it.
+Once you've edited the file, flow never overwrites it.
 
 ## Colors
 
-A color is one of:
+A color can be written four ways:
 
 | Value | Means |
 | --- | --- |
@@ -49,29 +49,29 @@ A color is one of:
 | `"default"` | the terminal's own foreground or background |
 | a key's name | the color of another key, such as `"faint"`, from this file or the theme it extends |
 
-A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase's color.
+A `[phase]` color can name a `[ui]` or `[state]` key, but no key can name a phase's color.
 
 ## Top-level keys
 
 | Key | Default | Does |
 | --- | --- | --- |
-| `extends` | `"terminal"` | the theme to start from: `"terminal"`, `"flow"`, `"flow-light"`, or the name of a file in `themes/` beside `theme.toml`, without `.toml` |
-| `nerd_font` | `false` | `true` when your font has [Nerd Font](https://www.nerdfonts.com) icons: flow's mark becomes a kiwi bird. Without it the mark is a goose in flight, `▚▄▞`, in block characters every font has. Either way it takes the accent color. |
+| `extends` | `"terminal"` | the theme to start from: `"terminal"`, `"flow"`, `"flow-light"`, or the name of a file in `themes/` next to `theme.toml`, without `.toml` |
+| `nerd_font` | `false` | set it to `true` if your font has [Nerd Font](https://www.nerdfonts.com) icons, and flow's mark becomes a kiwi bird. Without it, the mark is a goose in flight, `▚▄▞`, drawn in block characters every font has. Either way it takes the accent color. |
 | `phase_colors` | `"off"` | how much of a working flow takes its phase's color, see below |
 
-`phase_colors`:
+`phase_colors` has three levels:
 
 | Value | A working flow shows its phase's color in |
 | --- | --- |
-| `"off"` | nothing: state colors only. The current step dot takes the state color. |
+| `"off"` | nothing, only state colors. The current step dot takes the state color. |
 | `"steps"` | the current step dot; the spinner, label, rail and title row keep the state color |
 | `"full"` | the current step dot, the spinner, the label, the rail and the title row |
 
-At every level, finished steps are plain and a flow that waits, is blocked or is done keeps its
-state's color. A flow takes the `working` color until it reaches its first phase.
+At every level, finished steps are plain, and a flow that's waiting, blocked or done keeps its
+state's color. Until a flow reaches its first phase, it takes the `working` color.
 
-`nerd_font` and `phase_colors` come from the nearest file that sets them: `theme.toml` over the
-themes it extends.
+`nerd_font` and `phase_colors` come from the nearest file that sets them, so `theme.toml` wins over
+the themes it extends.
 
 ## [ui]
 
@@ -99,8 +99,8 @@ themes it extends.
 
 ## [phase]
 
-The keys are the phase names of your [workflow](configuration.md#phases-the-workflow). A phase
-without a color here takes the color of its place, so a workflow of your own is colored without a
+The keys here are the phase names of your [workflow](configuration.md#phases-the-workflow). A phase
+you don't give a color takes the color of its place, so your own workflow is colored without a
 theme file:
 
 | Place | Built-in phase | `terminal` | `flow` | `flow-light` |
@@ -110,26 +110,24 @@ theme file:
 | 3rd | `review` | `80` | `#56c2c2` | `#13807f` |
 | 4th | `merge-request` | `176` | `#e07fd0` | `#b0399c` |
 
-The terminal theme colors the phases with indexes above 15, since terminals often repaint their own
+The terminal theme uses indexes above 15 for the phases, since terminals often repaint their own
 blue, magenta and cyan.
 
-Phase colors show only when `phase_colors` is `"steps"` or `"full"`.
+Phase colors only show when `phase_colors` is `"steps"` or `"full"`.
 
 ## The built-in themes
 
-- `terminal`, the default: your terminal's own colors, with a few fixed shades for the panel,
-  selection, accent and phases.
-- `flow`: flow's own dark colors.
-- `flow-light`: flow's own light colors.
+`terminal` is the default. It uses your terminal's own colors, with a few fixed shades for the
+panel, selection, accent and phases. `flow` and `flow-light` are flow's own dark and light colors.
 
 ## Themes of your own
 
-A theme in `~/.config/flow/themes/<name>.toml` can be named by `extends`. It has the same keys as
-`theme.toml` and can extend another theme, up to four files deep counting `theme.toml`. This lets another tool write
-flow's colors.
+Put a theme in `~/.config/flow/themes/<name>.toml` and `extends` can name it. It takes the same
+keys as `theme.toml` and can extend another theme in turn, up to four files deep counting
+`theme.toml`. That's how another tool can write flow's colors for you.
 
-For example, [Noctalia](https://github.com/noctalia-dev/noctalia-shell) can render this template
-on every theme change:
+[Noctalia](https://github.com/noctalia-dev/noctalia-shell), for example, can render this template
+every time its theme changes:
 
 ```toml
 # flow ui theme, written by Noctalia on every theme change.
@@ -158,17 +156,18 @@ input_path = '~/.config/noctalia/templates/flow.toml'
 output_path = '~/.config/flow/themes/noctalia.toml'
 ```
 
-Then set `extends = "noctalia"` in `theme.toml`, and flow follows Noctalia as it changes.
+Then set `extends = "noctalia"` in `theme.toml`, and flow follows along whenever Noctalia changes.
 
 ## Errors
 
-A broken theme keeps the last colors that worked. The title row says which file and line is wrong
-and why, until the file reads again:
+A broken theme keeps the last colors that worked. Until the file reads again, the title row says
+which file and line is wrong, and why:
 
 ```
 theme: ~/.config/flow/theme.toml:3: accent belongs in [ui], not [state]
 ```
 
-Other messages you may see: `#d9825 is no #rrggbb color`, `300 is no ANSI index (0-255)`, `clay is no
-color and no key`, `[ui] has no key acent`, `Build is no phase name`, `~/.config/flow/themes/gone.toml
-does not exist`, `phase_colors is off, steps or full`, `accent, muted name each other`.
+Other messages you might see: `#d9825 is no #rrggbb color`, `300 is no ANSI index (0-255)`,
+`clay is no color and no key`, `[ui] has no key acent`, `Build is no phase name`,
+`~/.config/flow/themes/gone.toml does not exist`, `phase_colors is off, steps or full`,
+`accent, muted name each other`.

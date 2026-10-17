@@ -161,7 +161,7 @@ configuration.md "When a change applies":
 - [x] Rewrite docs/install.md and docs/README.md
 - [x] Rewrite docs/flows.md
 - [x] Rewrite docs/ui.md
-- [ ] Rewrite docs/themes.md and docs/repository.md
+- [x] Rewrite docs/themes.md and docs/repository.md
 - [ ] Rewrite docs/cli.md, docs/json.md and docs/files.md
 - [ ] Light pass on docs/troubleshooting.md
 - [ ] Rewrite ROADMAP.md (add More agents) and CHANGELOG.md
