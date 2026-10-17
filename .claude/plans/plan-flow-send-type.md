@@ -288,6 +288,10 @@ flow wait wakes a Claude Code worker:
 - [x] Docs: `docs/cli.md`, `docs/files.md`, `docs/flows.md`, README if needed, HANDOVER verified facts and decision
 - [x] E2E with a scratch FLOW_HOME: a Claude Code worker and a Codex worker get `/compact` then a line, each typed when idle, in order
 
+### After the review
+
+- [ ] Docs: the Esc limit in `docs/cli.md` `--type` notes, the Codex hooks-review risk after an upgrade in HANDOVER
+
 ## Review
 
 Reviewed 2026-10-17 in an isolated context against this plan, `CLAUDE.md` and the code around the
@@ -332,3 +336,12 @@ master.md bump, docs.
 **Checks**
 
 `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 7b0109a.
+
+**Decided** (by the flow master, going with the recommendations)
+
+- Blocked Stop: accepted.
+- Esc: one line in `docs/cli.md`, task above.
+- Codex hooks review after a restart: accepted, written down in HANDOVER. Typed Codex news has the
+  same exposure, and waiting for a turn after a restart would defeat typing from a phone.
+- Simultaneous sends: accepted.
+
