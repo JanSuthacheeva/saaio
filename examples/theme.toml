@@ -1,0 +1,69 @@
+# flow ui's colors.
+#
+# flow wrote this file on its first run. Every setting is commented out and shows its default, the
+# terminal theme, which takes on your terminal's own colors. Remove the # in front of a setting to
+# change it. flow never overwrites this file once you edit it.
+#
+# flow ui repaints within a second when you save. A broken file keeps the last good colors and
+# says in the title row which line is wrong and why.
+#
+# A color is one of:
+#   "#rrggbb"   a hex color
+#   0-255       an ANSI index; 0-15 are your terminal's own colors (4 is its blue)
+#   "default"   the terminal's own foreground or background
+#   "accent"    the name of another key, here or in the theme this one extends
+#
+# A key left out keeps the color of the theme this file extends.
+# All of it, explained: https://github.com/JanSuthacheeva/flow/blob/main/docs/themes.md
+
+# The theme to start from: "terminal", "flow" (dark), "flow-light", or the name of a file in
+# themes/ beside this one, without .toml.
+#extends = "terminal"
+
+# true when your font has Nerd Font icons: flow's mark becomes a kiwi bird. Without it the mark is a
+# goose in flight in block characters every font has.
+#nerd_font = false
+
+# How much of a working flow takes its phase's color: "off" (state colors only), "steps" (the
+# current step dot) or "full" (also the spinner, label, rail and title row).
+#phase_colors = "off"
+
+#[ui]
+# The ground everything is drawn on.
+#background = "default"
+# The bottom bar of key hints.
+#panel = 235
+# The row the keys go to: the selected session, field or card.
+#selection = 236
+# Lines and borders.
+#rule = 8
+# Ordinary text.
+#text = "default"
+# Names and titles, drawn bold.
+#strong = "default"
+# Quieter text: idle sessions, what a flow is doing.
+#muted = 7
+# The quietest text: key hints, headings, counts.
+#faint = 8
+# flow's mark and the bar beside the selected row.
+#accent = 173
+
+#[state]
+# A flow at work.
+#working = 4
+# A flow that needs you.
+#waiting = 3
+# A flow that is blocked or not responding.
+#blocked = 1
+# A finished flow.
+#done = 2
+# A session that ended.
+#ended = 8
+
+#[phase]
+# A phase's color, by the phase's name in your workflow (config.toml [[phases]]). A phase without
+# a color here takes the color of its place: the 1st to 4th phase get these four.
+#plan = 141
+#implement = 75
+#review = 80
+#merge-request = 176

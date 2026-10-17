@@ -9,6 +9,7 @@ use toml::Spanned;
 use toml::Value;
 use toml::de::{DeTable, DeValue, ValueDeserializer};
 
+use crate::default_file::DefaultFile;
 use crate::event::Phase;
 use crate::store::Stamp;
 #[cfg(test)]
@@ -16,6 +17,12 @@ use crate::ui::theme::MARK;
 use crate::ui::theme::{ColorKey, KIWI, Palette, PaletteKey, PhaseColors, Section, Theme, hex};
 
 pub const THEME_FILE: &str = "theme.toml";
+/// What flow writes as theme.toml on its first run: the terminal theme, commented out.
+#[allow(dead_code)]
+pub const EXAMPLE: DefaultFile = DefaultFile {
+    text: include_str!("../../examples/theme.toml"),
+    earlier: &[],
+};
 pub const THEMES_DIR: &str = "themes";
 /// How many extends a theme may follow before flow gives up (a loop, most likely).
 const EXTENDS_LIMIT: usize = 4;
@@ -354,6 +361,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::default_file::uncommented;
+    use crate::workflow::Workflow;
 
     fn write(dir: &TempDir, name: &str, text: &str) {
         let path = dir.path().join(name);
@@ -674,6 +683,59 @@ mod tests {
         assert_eq!(palette.text, Color::DarkGray);
         assert_eq!(palette.muted, Color::White);
         assert_eq!(palette.faint, Color::Indexed(16));
+    }
+
+    #[test]
+    fn the_example_uncommented_is_the_terminal_theme() {
+        let dir = TempDir::new().unwrap();
+        write(&dir, "theme.toml", &uncommented(EXAMPLE.text));
+
+        let theme = theme(&dir);
+
+        let terminal = Palette::TERMINAL;
+        for key in PaletteKey::ALL {
+            assert_eq!(
+                theme.palette.color(key),
+                terminal.color(key),
+                "{}",
+                key.name()
+            );
+        }
+        let phases = Workflow::builtin().phases();
+        for (phase, color) in phases.iter().zip(terminal.phases.positions) {
+            assert_eq!(
+                theme.palette.phases.names[phase.name()],
+                color,
+                "{}",
+                phase.name()
+            );
+        }
+        assert_eq!(theme.glyphs.mark, MARK);
+        assert_eq!(theme.phase_colors, PhaseColors::Off);
+    }
+
+    #[test]
+    fn the_example_lists_every_key_and_parses_as_it_is() {
+        let lines: Vec<&str> = EXAMPLE.text.lines().collect();
+        let names = ["extends", "nerd_font", "phase_colors"]
+            .into_iter()
+            .chain(PaletteKey::ALL.map(PaletteKey::name));
+        for name in names {
+            let setting = format!("#{name} = ");
+            assert!(
+                lines.iter().any(|line| line.starts_with(&setting)),
+                "{name} is missing"
+            );
+        }
+        for section in Section::ALL {
+            let header = format!("#[{}]", section.name());
+            assert!(lines.contains(&header.as_str()), "{header} is missing");
+        }
+
+        let dir = TempDir::new().unwrap();
+        write(&dir, "theme.toml", EXAMPLE.text);
+
+        assert_eq!(theme(&dir).palette, Palette::TERMINAL);
     }
 
     #[test]
