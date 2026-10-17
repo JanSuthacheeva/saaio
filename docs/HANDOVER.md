@@ -304,6 +304,41 @@ See `.claude/plans/plan-flow-master-indicator.md`. Decisions:
 - Claude Code runs no hook on an Esc interrupt, so an interrupted Claude master keeps its spinner
   until its next prompt, as a worker does; Codex reports the interrupt as idle.
 
+## Typing into a worker (built 2026-10-17)
+
+See `.claude/plans/plan-flow-send-type.md`. Decisions:
+- `flow send --type <flow> "<line>"` appends a `typed` event: the flow's log is the queue, and
+  `waits/<id>.typed` counts the lines the server typed. It survives a server restart, and the
+  protocol does not change. One line per call, a newline is refused.
+- `Server::type_lines` (`server/typing.rs`) types the next line as one bracketed paste and Enter,
+  once the session is idle, it had a turn (an answer), its pane has been open for ten seconds and
+  nobody typed there for ten. Codex news goes through the same `type_into`.
+- `waits/<key>.busy` holds `turn` (a hook or `flow wait` began a turn, or an empty file from an
+  earlier flow) or `typed` (the server typed and no turn began yet), and is absent when idle. Both
+  harnesses mark it now. A Claude Code Stop only marks idle, never hands news over (`flow wait`
+  wakes it), and `flow wait` marks the turn it wakes, which runs no UserPromptSubmit.
+- A line still `typed` after 30 seconds is let go, so a command that runs no hook (`/cost`) holds
+  the queue only that long.
+- Rejected: a server message from `flow send` (lost when no server runs, a protocol change), one
+  call with several lines, typing into the master's pane.
+
+Verified 2026-10-17 (Claude Code 2.1.302, Codex 0.163.0), hooks logged while lines were typed into
+the pane (payloads in `src/adapter/fixtures/*/pre_compact.json`, `post_compact.json`):
+
+| Typed | Claude Code | Codex |
+| --- | --- | --- |
+| a prompt | UserPromptSubmit, Stop | UserPromptSubmit, Stop |
+| `/compact` | PreCompact, SessionStart (compact), PostCompact, no Stop | PreCompact, PostCompact, no Stop (SessionStart compact at the next prompt) |
+| a skill such as `/commit` | UserPromptSubmit, UserPromptExpansion, tool hooks, Stop | |
+| `/clear` | SessionEnd (reason clear), SessionStart (clear) | |
+| `/cost` | no hook, opens a dialog that takes the next keys | |
+
+- Both run `/compact` from a bracketed paste and `\r`.
+- PreCompact begins a turn and PostCompact leaves the session idle (`Turn::Idle`, as an Esc in
+  Codex). Codex runs no Stop after a compaction, so its hook hands no news over there.
+- Claude Code runs no hook on an Esc, so an interrupted Claude Code worker takes typed lines again
+  only after its next turn ends. Codex asks once to review flow's hooks again (two new hooks).
+
 ## Future improvements
 
 - **Working across repos.** One flow ui already shows every repo's flows and the master can

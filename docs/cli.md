@@ -29,6 +29,7 @@
 | `flow start --plain <folder> [--name] [--agent]` | start an agent in a folder, without a flow |
 | `flow status [<flow>] [--json] [--full] [--all]` | where flows stand |
 | `flow send <flow> <text>` | tell a worker something |
+| `flow send --type <flow> <line>` | type a line into a worker's pane, such as `/compact` |
 | `flow report [--flow <flow>] <event>` | add an event to a flow by hand |
 | `flow new --name <name> --request <text> [--mode]` | track a flow without starting a worker |
 | `flow remove <flow> [--force] [--delete-unmerged]` | end a flow and tear down its worktree |
@@ -215,6 +216,44 @@ help[2]: "flow wakes its worker with it now, or once its session runs again",flo
 | inside a worker | `only the master sends`. Workers end their turn with the question. |
 | a finished flow, a flow without a worker, a plain session | no worker to receive it |
 | an empty text, a text over 4000 characters | |
+
+### --type
+
+```
+flow send --type <flow> <line>
+```
+
+Types the line and Enter into the worker's pane, as if the user typed it there, so a slash command
+or a skill runs: `/compact`, `/review`. Adds `master typed: <line>` to the timeline.
+
+```
+$ flow send --type shop-221 /compact
+queued: shop-221
+line: /compact
+ahead: 0
+help[2]: flow types it into shop-221's pane once its session is idle,"Queue the next line with another `flow send --type shop-221 \"<line>\"`. It waits for this one's turn to end"
+```
+
+- The line waits in the flow's log until flow's server types it. `ahead` counts the lines queued
+  before it.
+- One line per call. Lines are typed in the order they were queued, each once the turn the line
+  before it began has ended.
+- A line is typed only into an idle session, after the session's first turn, and after ten seconds
+  without typing in that pane.
+- A line that begins no turn (a command that only opens a dialog, such as `/cost`) holds the next
+  line for 30 seconds.
+- Lines wait while `flow ui` is closed and are typed once it runs again.
+
+```sh
+flow send --type shop-221 /compact
+flow send --type shop-221 "continue shipping"
+```
+
+| Refused | Reason |
+| --- | --- |
+| a line with a newline | `a typed line is one line`. Queue one call per line. |
+| an agent without an adapter | it reports no turns, so flow cannot tell when it is idle |
+| everything `flow send` refuses | |
 
 ## flow report
 

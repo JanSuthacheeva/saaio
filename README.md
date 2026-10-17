@@ -118,6 +118,7 @@ public interface. The logs are private.
 | `flow start --plain <folder>` | an agent in a folder |
 | `flow status [<flow>] [--json] [--all]` | where flows stand |
 | `flow send <flow> <text>` | tell a worker something |
+| `flow send --type <flow> <line>` | type a line such as `/compact` into a worker's pane |
 | `flow report <event>` | report into a flow by hand |
 | `flow remove <flow>`, `flow clear` | tear down and forget |
 

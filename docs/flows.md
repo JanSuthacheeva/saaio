@@ -121,6 +121,19 @@ the worker's session runs again.
 
 `flow status <name> --full` shows a worker's whole last answer.
 
+### Typing into a worker
+
+```sh
+flow send --type shop-221 /compact
+flow send --type shop-221 "continue shipping"
+```
+
+flow's server types each line and Enter into the worker's pane, as if the user typed it there, so a
+slash command or a skill runs. A message from `flow send` reaches the model as words, so `/compact`
+sent that way does not compact. The lines are typed in order, each once the worker is idle again.
+The master uses it when the user asks to compact or continue a worker from their phone, away from
+the pane. Details in [cli.md](cli.md#--type).
+
 ## Plain sessions
 
 ```sh

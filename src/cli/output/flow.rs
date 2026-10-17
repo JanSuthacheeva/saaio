@@ -100,7 +100,7 @@ pub(crate) fn queued(flow: &FlowView, line: &str, ahead: usize) -> Document {
                 flow.name
             ),
             format!(
-                "Queue the next line with another `flow send --type {} \"<line>\"`; it waits for this one's turn to end",
+                "Queue the next line with another `flow send --type {} \"<line>\"`. It waits for this one's turn to end",
                 flow.name
             ),
         ],
@@ -244,7 +244,7 @@ mod tests {
                 "queued: shop-217",
                 "line: /compact",
                 "ahead: 0",
-                "help[2]: flow types it into shop-217's pane once its session is idle,\"Queue the next line with another `flow send --type shop-217 \\\"<line>\\\"`; it waits for this one's turn to end\"",
+                "help[2]: flow types it into shop-217's pane once its session is idle,\"Queue the next line with another `flow send --type shop-217 \\\"<line>\\\"`. It waits for this one's turn to end\"",
             ]
             .join("\n")
         );

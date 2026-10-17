@@ -25,7 +25,7 @@ Location: `$FLOW_HOME`, else `$XDG_STATE_HOME/flow`, else `~/.local/state/flow`.
 | --- | --- |
 | `flows/<id>.jsonl` | one flow's events, one JSON line each, append-only |
 | `flows/<id>.alive` | modification time is the flow's last heartbeat |
-| `waits/` | wake-up state: each session's waiter, messages given to a worker, whether a Codex session is busy, what the master last saw, the master's turn and its Codex session id |
+| `waits/` | wake-up state: each session's waiter, messages given to a worker, lines typed into a worker's pane, whether a session is busy, what the master last saw, the master's turn and its Codex session id |
 | `server.sock` | the socket between flow ui and the server, owner-only. If its path would be 100 bytes or longer: `/tmp/flow-<uid>/<hash>.sock`, with the log next to it as `<hash>.log`. |
 | `server.log` | what the server did and what failed. Rotated to `server.log.1` past 1 MiB. |
 | `master.json` | the master's session id and folder, for resuming after a restart |
