@@ -340,8 +340,8 @@ the pane (payloads in `src/adapter/fixtures/*/pre_compact.json`, `post_compact.j
 - PreCompact begins a turn and PostCompact leaves the session idle (`Turn::Idle`, as an Esc in
   Codex). Codex runs no Stop after a compaction, so its hook hands no news over there.
 - Claude Code runs no hook on an Esc, so an interrupted Claude Code worker takes typed lines again
-  only after its next turn ends. Codex asks once to review flow's hooks again (two new hooks).
-- Not checked: a Codex pane reopened after an upgrade that changed flow's hooks shows the hooks
+  only after its next turn ends. Codex asks once to review saaio's hooks again (two new hooks).
+- Not checked: a Codex pane reopened after an upgrade that changed saaio's hooks shows the hooks
   review, and a line queued for it is typed into that prompt once the pane has been open ten
   seconds. Typed Codex news has the same exposure. Waiting for a turn after each reopen would hold
   every line until someone types in the pane, which defeats typing from a phone.

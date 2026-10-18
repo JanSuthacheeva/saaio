@@ -4,7 +4,7 @@
 
 | Source | Shows |
 | --- | --- |
-| `saaio status <name> --full` | everything flow knows about a flow, nothing truncated |
+| `saaio status <name> --full` | everything saaio knows about a flow, nothing truncated |
 | `server.log` in the store (`~/.local/state/saaio/projects/<repository>/server.log`, `~/.local/state/saaio/server.log` outside a repository, or under `$SAAIO_HOME`) | sessions opened, resumed or failed to start, files that could not be written, why the server stopped |
 
 Each `server.log` line starts with a time and a process id:
@@ -17,7 +17,7 @@ Each `server.log` line starts with a time and a process id:
 
 | Problem | Cause | Fix |
 | --- | --- | --- |
-| `saaio server runs protocol 4, this flow speaks 5` | after an update, the old server still runs | `saaio ui --stop`, then `saaio ui`. Unfinished flows resume. |
+| `saaio server runs protocol 4, this saaio ui speaks 5` | after an update, the old server still runs | `saaio ui --stop`, then `saaio ui`. Unfinished flows resume. |
 | the prefix key does nothing | the terminal or a surrounding tmux keeps `C-space` | set another prefix, such as `prefix = "C-b"` under `[ui]` in `config.toml`. It applies on save ([configuration.md](configuration.md#ui)) |
 | saaio ui refuses to start inside a worker | it would take over the saaio ui the worker runs in | use a separate store: `SAAIO_HOME=$(mktemp -d) saaio ui` |
 | saaio ui or `saaio status` shows none of a project's flows | each git repository has its own store, picked from the folder saaio runs in | run it in that repository, or `saaio status --all` for every project ([cli.md](cli.md#several-projects)) |
@@ -30,7 +30,7 @@ Each `server.log` line starts with a time and a process id:
 | --- | --- | --- |
 | `pane: when saaio ui runs` | the flow is recorded, saaio ui is not running | run `saaio ui`. It opens the worker within half a second. |
 | the row shows only whether it runs | the agent has no `adapter` | set `adapter = "claude-code"` or `"codex"` on a custom agent that runs one of them ([configuration.md](configuration.md#agents)) |
-| a Codex worker reports nothing | Codex waits for you to review flow's hooks (first time, and after they change) | jump to the worker, pick "Trust all and continue" |
+| a Codex worker reports nothing | Codex waits for you to review saaio's hooks (first time, and after they change) | jump to the worker, pick "Trust all and continue" |
 | steps stay `○───○───○───○`, the sidebar shows the state instead of a phase | no skill the worker ran matches a phase. The flow still works. | list your skills under `[[phases]]` ([configuration.md](configuration.md#use-your-own-workflow)) |
 | the worker sits at a folder trust question | first time an agent opens in a new folder | jump to the worker and answer |
 | a Claude Code worker keeps its spinner after Esc | Claude Code runs no hook on interrupt | none. The state corrects at the worker's next prompt. |

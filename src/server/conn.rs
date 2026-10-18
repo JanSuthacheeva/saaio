@@ -70,7 +70,7 @@ impl Server {
                 conn,
                 &ServerMsg::Refused {
                     reason: format!(
-                        "saaio server runs protocol {PROTOCOL_VERSION}, this flow speaks {version}"
+                        "saaio server runs protocol {PROTOCOL_VERSION}, this saaio ui speaks {version}"
                     ),
                 },
             );

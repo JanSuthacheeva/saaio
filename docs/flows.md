@@ -190,7 +190,7 @@ Or mode `plain` in the new-flow dialog.
 | Esc | `idle interrupted` |
 
 - First run: Codex asks to review the hooks. Answer "Trust all and continue". Asked again only when
-  flow's hooks change.
+  saaio's hooks change.
 - A repository trusted in Codex covers its flow worktrees.
 - No plan-progress tool: no task counts.
 - No `/exit` event: end the flow from saaio ui or with `saaio remove`.

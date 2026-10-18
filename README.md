@@ -88,7 +88,7 @@ commented out at its default.
 ## How it works
 
 Every flow is an append-only event log. The agents' hooks run `saaio hook`, which turns hook events
-into flow events (phase started, question waiting, merge request opened). flow folds the logs into
+into flow events (phase started, question waiting, merge request opened). saaio folds the logs into
 each flow's state. `saaio server` runs each agent in its own terminal. `saaio ui` attaches to it.
 
 ## CLI
