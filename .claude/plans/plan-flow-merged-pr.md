@@ -311,6 +311,17 @@ closed" -> state change -> `wake::changed_flows` sees Idle -> the master is woke
   repository (PR #42, merged): the sidebar shows "merged" and the board "PR merged" within the
   first round
 
+### Review decisions
+
+Decided by the worker on the user's instruction to take its recommendations: the closed merge
+request on an ended flow and the merge while the worker still works are accepted as they are;
+the timeout is built now, not in a follow-up, since a hung call would stop every later round
+silently.
+
+- [ ] `workspace::output_in(dir, argv, limit: Duration)`: kills the command past `limit` and fails
+  with "gh gave no answer within 60s"; `forge_watch::ASK_LIMIT = 60s`; unit test with a sleeping
+  script and a short limit
+
 ## Review
 
 Reviewed in a fresh context against this plan, CLAUDE.md and the global rules. The fix commits
