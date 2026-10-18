@@ -1,0 +1,44 @@
+
+  master  main                                                                                              │ ▚▄▞ saaio
+                                                                                                            ├────────────────────────────────────────
+                                                                                                            │▌0   master
+                                                                                                            │▌    ~/projects/shop · main
+                                                                                                            │
+                                                                                                            │ NEEDS YOU 2
+                                                                                                            │ 1 ● a-very-long-feature-name  my-agent
+                                                                                                            │     ●───●───○───○ implement    4/9 29m
+                                                                                                            │     migration needs a default value f…
+                                                                                                            │
+                                                                                                            │ 2 ● shop-230                claude 31m
+                                                                                                            │     ●───○───○───○ plan
+                                                                                                            │     Which approach: a channel column …
+                                                                                                            │
+                                                                                                            │ RUNNING 1
+                                                                                                            │ 3 ◓ export-csv               claude 1h
+                                                                                                            │     ●───●───●───○ review           6/6
+                                                                                                            │     agent: review changes
+                                                                                                            │
+                                                                                                            │ DONE 1
+                                                                                                            │ 4 ✓ shop-198                 claude 2h
+                                                                                                            │     ●───●───●───● MR !418      took 0s
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │ C-space ? keys
+

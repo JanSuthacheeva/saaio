@@ -5,21 +5,21 @@
                                                                                                             │▌    ~/projects/shop · main
                                                                                                             │
                                                                                                             │ NEEDS YOU 2
-                                                                                                            │ 1 ● shop-221                       29m
+                                                                                                            │ 1 ● shop-221                claude 29m
                                                                                                             │     ●───●───○───○ implement        4/9
                                                                                                             │     migration needs a default value f…
                             ╭─ keys ───────────────────────────────────────────╮                            │
-                            │                                                  │                            │ 2 ● shop-230                       31m
+                            │                                                  │                            │ 2 ● shop-230                claude 31m
                             │  C-space then                                    │                            │     ●───○───○───○ plan
                             │    0-9      jump to a session (0 is the master)  │                            │     Which approach: a channel column …
                             │    j k      move the peek over the workers       │                            │
                             │    enter    jump into the peeked worker          │                            │ RUNNING 1
-                            │    n        start a new flow                     │                            │ 3 ◓ export-csv                      1h
+                            │    n        start a new flow                     │                            │ 3 ◓ export-csv               claude 1h
                             │    o        the board of every session           │                            │     ●───●───●───○ review           6/6
                             │    b        fold the sidebar to a rail and back  │                            │     agent: review changes
                             │    r        resume a session that ended          │                            │
                             │    [        scroll back through the history      │                            │ DONE 1
-                            │    d        detach; every session keeps running  │                            │ 4 ✓ shop-198                        2h
+                            │    d        detach; every session keeps running  │                            │ 4 ✓ shop-198                 claude 2h
                             │    Q        stop saaio                           │                            │     ●───●───●───● MR !418      took 0s
                             │    C-space  send C-space itself                  │                            │
                             │    ?        these keys                           │                            │

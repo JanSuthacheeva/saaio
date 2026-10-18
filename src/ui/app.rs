@@ -70,6 +70,8 @@ pub struct App {
     offset_secs: i64,
     /// Where the master runs, as shown: ~/projects/shop · main.
     master: Option<String>,
+    /// The configured harness running the master.
+    master_agent: Option<String>,
     master_cwd: Option<String>,
     master_turn: Option<MasterTurn>,
     /// A turn of the master ended, asked or wants permission while its pane was not in view.
@@ -109,6 +111,7 @@ impl App {
             home: None,
             offset_secs: 0,
             master: None,
+            master_agent: None,
             master_cwd: None,
             master_turn: None,
             master_unseen: false,
@@ -163,6 +166,11 @@ impl App {
     /// The agents the new-flow dialog offers, the default first; an open dialog keeps its list.
     pub fn set_agents(&mut self, agents: Vec<String>) {
         self.agents = agents;
+    }
+
+    /// The configured harness running the master, refreshed with config.toml.
+    pub fn set_master_agent(&mut self, agent: Option<String>) {
+        self.master_agent = agent;
     }
 
     /// The key before every command, for the hints that name it.
@@ -292,6 +300,7 @@ impl App {
             cursor: self.cursor.as_deref(),
             peek,
             master: self.master.as_deref(),
+            master_agent: self.master_agent.as_deref(),
             master_state: self.master_state(),
             now: self.now,
             spin: self.spin,

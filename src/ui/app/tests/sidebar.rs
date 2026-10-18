@@ -46,7 +46,7 @@ fn draws_the_fleet_in_the_sidebar_grouped_by_what_it_needs() {
     assert_eq!(side(&terminal, 4).trim_end(), " NEEDS YOU 2");
     assert_eq!(
         side(&terminal, 5),
-        " 1 ● shop-221                       29m "
+        " 1 ● shop-221                claude 29m "
     );
     assert_eq!(
         side(&terminal, 6),
@@ -76,6 +76,51 @@ fn draws_the_fleet_in_the_sidebar_grouped_by_what_it_needs() {
         buffer[(112, 6)].fg,
         Theme::default().state.blocked.fg.unwrap()
     );
+}
+
+#[test]
+fn fits_agent_and_age_by_display_width_and_moves_age_to_existing_second_row() {
+    let mut app = with_fleet();
+    let mut board = fleet();
+    board.flows[0].name = "a-very-long-feature-name".into();
+    board.flows[0].workspace.as_mut().unwrap().agent = "my-agent".into();
+    app.on_server(ServerMsg::Board(board));
+
+    let terminal = render_at(&app, FLEET);
+    assert!(side(&terminal, 5).trim_end().ends_with("my-agent"));
+    assert!(side(&terminal, 5).contains("a-very-long-feature-name"));
+    assert!(side(&terminal, 6).trim_end().ends_with("4/9 29m"));
+    assert!(side(&terminal, 9).trim_end().ends_with("claude 31m"));
+
+    let mut board = fleet();
+    board.flows[0].name = "界".repeat(12);
+    app.on_server(ServerMsg::Board(board));
+    let terminal = render_at(&app, FLEET);
+    assert!(side(&terminal, 5).trim_end().ends_with("claude"));
+    assert!(side(&terminal, 6).trim_end().ends_with("4/9 29m"));
+}
+
+#[test]
+fn clips_a_long_agent_before_clipping_a_flow_name_that_fits() {
+    let mut app = with_fleet();
+    let mut board = fleet();
+    board.flows[0].workspace.as_mut().unwrap().agent =
+        "custom-agent-with-an-excessively-long-name".into();
+    app.on_server(ServerMsg::Board(board));
+
+    let terminal = render_at(&app, FLEET);
+    let first = side(&terminal, 5);
+    assert!(first.contains("shop-221"), "{first}");
+    assert!(first.trim_end().ends_with('…'), "{first}");
+    assert!(side(&terminal, 6).trim_end().ends_with("4/9 29m"));
+}
+
+#[test]
+fn shows_the_configured_master_agent_on_its_first_row() {
+    let mut app = board_app();
+    app.set_master_agent(Some("codex".into()));
+    let terminal = render_at(&app, FLEET);
+    assert!(side(&terminal, 2).trim_end().ends_with("codex"));
 }
 
 #[test]
