@@ -304,7 +304,10 @@ impl<'a> Renderer<'a> {
             if part.ends_with('\n') {
                 self.flush();
                 if line.is_empty() {
-                    self.rows.push(Line::raw(""));
+                    self.ensure_line();
+                    self.rows.push(Line::from(std::mem::take(&mut self.line)));
+                    self.used = 0;
+                    self.continued = true;
                 }
             }
         }
@@ -414,13 +417,17 @@ mod tests {
 
     #[test]
     fn fenced_code_inside_quote_keeps_quote_marker() {
-        let rows = lines("> ```\n> command\n> ```", 20, &Theme::default());
-        assert_eq!(text(&rows), ["│ command"]);
+        let rows = lines("> ```\n> command\n>\n> next\n> ```", 20, &Theme::default());
+        assert_eq!(text(&rows), ["│ command", "│ ", "│ next"]);
     }
 
     #[test]
     fn fenced_code_inside_list_keeps_hanging_indent() {
-        let rows = lines("- item\n\n  ```\n  command\n  ```", 20, &Theme::default());
-        assert_eq!(text(&rows), ["• item", "", "  command"]);
+        let rows = lines(
+            "- item\n\n  ```\n  command\n\n  next\n  ```",
+            20,
+            &Theme::default(),
+        );
+        assert_eq!(text(&rows), ["• item", "", "  command", "  ", "  next"]);
     }
 }
