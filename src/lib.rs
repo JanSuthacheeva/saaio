@@ -16,6 +16,7 @@ mod server;
 mod server_log;
 mod slots;
 mod store;
+mod system;
 mod text;
 mod ui;
 mod view;

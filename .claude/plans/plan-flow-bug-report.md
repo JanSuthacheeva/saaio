@@ -304,7 +304,7 @@ Server start
 
 ## Tasks
 
-- [ ] `proto::BUILD` as `0.1.0 (e035b96)`, clap `version = BUILD`, tests/cli.rs `--version` test updated
+- [x] `proto::BUILD` as `0.1.0 (e035b96)`, clap `version = BUILD`, tests/cli.rs `--version` test updated
 - [ ] `system.rs`: `System::probe`, `summary`, `Probe`, `run`, `version_of` with unit tests
 - [ ] Server start line names the System: `server::run(.., system, ..)`, `commands::server` probes, server test for the line
 - [ ] `client::log_path`, hook `Log` replacing every `eprintln!` in `hook.rs`, unit test for `Log::error` and tests/cli.rs for a silent hook that logs
