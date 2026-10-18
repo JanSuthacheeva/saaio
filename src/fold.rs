@@ -195,6 +195,22 @@ impl Folding {
     }
 
     fn apply(&mut self, event: &Event) {
+        // An open or merged MR finishes the flow. Later worker hooks can still arrive, but only
+        // closing that MR may make its phase and state active again.
+        if self.view.merge_request.is_some()
+            && matches!(
+                event.kind,
+                EventKind::Phase { .. }
+                    | EventKind::Working
+                    | EventKind::Delegated { .. }
+                    | EventKind::Waiting { .. }
+                    | EventKind::PermissionPending { .. }
+                    | EventKind::Idle { .. }
+                    | EventKind::Blocked { .. }
+            )
+        {
+            return;
+        }
         let before = (
             self.view.state,
             self.view.phase.clone(),
