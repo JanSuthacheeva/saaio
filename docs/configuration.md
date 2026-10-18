@@ -269,11 +269,14 @@ A worker's first prompt is the first of:
 
 ## Errors
 
-Every error names the file, the line and the reason:
+Every error names the file, the line and the reason. `saaio start` prints:
 
 ```
-config: ~/.config/saaio/config.toml:2: unknown field `agnet`, expected `agent` or `prompt`
+error: "/Users/jan/.config/saaio/config.toml:2: unknown field `agnet`, expected `agent` or `prompt`"
 ```
+
+A running saaio ui shows the same in its title row, as
+``config: ~/.config/saaio/config.toml:2: unknown field `agnet`, ...``.
 
 | Where | A broken file |
 | --- | --- |
