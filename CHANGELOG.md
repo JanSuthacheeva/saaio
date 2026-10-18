@@ -14,7 +14,7 @@ The first public release. The date is added when it is tagged. Planned next:
 - saaio ui: the master, every worker and every plain session in one terminal, with the sidebar, the
   peek, the board and the new-flow dialog.
 - saaio server: sessions outlive the UI and resume after a crash or a reboot.
-- Claude Code and Codex workers, followed through their own hooks. Any other command as a worker,
+- Claude Code workers, and Codex workers as experimental, followed through their own hooks. Any other command as a worker,
   shown as running or not.
 - Configurable workflow: 1 to 4 phases, the skills that start them, every agent's first prompt.
 - The master: starts and answers workers, woken by their news.

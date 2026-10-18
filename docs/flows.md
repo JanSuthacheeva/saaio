@@ -117,7 +117,7 @@ the worker's session runs again.
 | --- | --- |
 | Claude Code | `saaio wait` runs in the background after each turn, sleeps until there is news, then wakes the session |
 | Codex, busy | news arrives when the turn ends |
-| Codex, idle | flow's server types the news in as one paste, after ten seconds without typing in that pane. Never before the session's first turn. |
+| Codex, idle | saaio's server types the news in as one paste, after ten seconds without typing in that pane. Never before the session's first turn. |
 
 `saaio status <name> --full` shows a worker's whole last answer.
 
@@ -175,6 +175,9 @@ Or mode `plain` in the new-flow dialog.
 | `/exit` | `ended` |
 
 ### Codex
+
+Experimental: Codex support works, but is less tested than Claude Code and has the gaps listed
+under Codex in [ROADMAP.md](../ROADMAP.md).
 
 `adapter = "codex"`. Hooks passed as `-c hooks.<event>=[...]`, the worker prompt as
 `-c developer_instructions=...`. Nothing written to `~/.codex`.
