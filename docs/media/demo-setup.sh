@@ -11,8 +11,8 @@
 # the sample repository, so they walk through plan, implement, review and merge-request on a real
 # agent without opening merge requests or publishing anything. The agents run on your own logins
 # and agent config; Claude Code starts without your user settings, MCP servers and CLAUDE.md files,
-# so your plugins, hooks, MCP servers and instructions stay out of the recording. Codex still loads ~/.codex/config.toml: turn off
-# anything in it you would not show.
+# so your plugins, hooks, MCP servers and instructions stay out of the recording. Codex still loads
+# ~/.codex/config.toml: turn off anything in it you would not show.
 #
 # Then: docs/media/record.sh open <state> <repo>, ask the master to start the flows printed at the
 # end and answer the agents' first-run questions in their panes (folder trust, Codex's hooks review).
