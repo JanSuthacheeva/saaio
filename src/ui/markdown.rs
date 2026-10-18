@@ -162,6 +162,7 @@ impl<'a> Renderer<'a> {
             Tag::CodeBlock(_) => {
                 self.block();
                 self.code_block = true;
+                self.continued = self.in_item;
             }
             Tag::Strong => self.strong += 1,
             Tag::Emphasis => self.emphasis += 1,
@@ -291,6 +292,7 @@ impl<'a> Renderer<'a> {
         for part in text.split_inclusive('\n') {
             let line = part.trim_end_matches('\n');
             if !line.is_empty() {
+                self.ensure_line();
                 let room = self.width.saturating_sub(self.used);
                 if room > 0 {
                     let fitted = clip(line, room);
@@ -395,5 +397,30 @@ mod tests {
         let list = lines("3. alpha beta gamma", 10, &Theme::default());
         assert_eq!(text(&list), ["3. alpha", "   beta", "   gamma"]);
         assert!(list.iter().all(|line| line.width() <= 10));
+    }
+
+    #[test]
+    fn nested_list_keeps_parent_item_context() {
+        let rows = lines(
+            "- parent\n  - child\n  - sibling\n- next",
+            20,
+            &Theme::default(),
+        );
+        assert_eq!(
+            text(&rows),
+            ["• parent", "  • child", "  • sibling", "• next"]
+        );
+    }
+
+    #[test]
+    fn fenced_code_inside_quote_keeps_quote_marker() {
+        let rows = lines("> ```\n> command\n> ```", 20, &Theme::default());
+        assert_eq!(text(&rows), ["│ command"]);
+    }
+
+    #[test]
+    fn fenced_code_inside_list_keeps_hanging_indent() {
+        let rows = lines("- item\n\n  ```\n  command\n  ```", 20, &Theme::default());
+        assert_eq!(text(&rows), ["• item", "", "  command"]);
     }
 }
