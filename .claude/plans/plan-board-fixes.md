@@ -26,9 +26,9 @@ pub fn lines(text: &str, width: usize, theme: &Theme) -> Vec<Line<'static>>;
 
 `BoardView::render_answer` calls `markdown::lines` for `FlowView.answer`. It preserves the decisions, heading, overflow glyph and tail-first height behavior.
 
-### `Cargo.toml`, `src/ui.rs`, `README.md`, `CHANGELOG.md` — modified
+### `Cargo.toml`, `src/ui.rs`, `README.md` — modified
 
-Add `pulldown-cmark`, declare the module, and document the user-visible change.
+Add `pulldown-cmark`, declare the module, and document the user-visible change. `CHANGELOG.md` remains unchanged because this is before the 0.1.0 release.
 
 ## Data and rendering
 
@@ -58,7 +58,7 @@ Only worker text in `PeekLine::Text` and `FlowView.answer` gets Markdown styling
 - [x] Add `pulldown-cmark`, `ui::markdown::lines`, and focused tests for Markdown styling and width.
 - [x] Use `markdown::lines` in `Sidebar::peek_rows`; add peek behavior tests and refresh intended golden output with `SAAIO_UPDATE_GOLDEN=1`.
 - [x] Use `markdown::lines` in `BoardView::render_answer`; add answer behavior tests and refresh intended golden output with `SAAIO_UPDATE_GOLDEN=1`.
-- [x] Update README and CHANGELOG, then run a scratch PTY worker flow to verify the agent label, full tests, formatting, and `cargo clippy --all-targets -- -D warnings`.
+- [x] Update README, then run a scratch PTY worker flow to verify the agent label, full tests, formatting, and `cargo clippy --all-targets -- -D warnings`.
 
 ## Review
 

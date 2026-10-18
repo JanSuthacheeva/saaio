@@ -15,8 +15,7 @@ well tested.
 ### Added
 
 - The terminal UI (`saaio`): the master, every worker and every plain session in one terminal, with the sidebar, the
-  peek, the board and the new-flow dialog. Worker Markdown in the peek and board's last answer uses
-  terminal text styles.
+  peek, the board and the new-flow dialog.
 - saaio server: sessions outlive the UI and resume after a crash or a reboot.
 - Claude Code workers, and Codex workers as experimental, followed through their own hooks. Any other command as a worker,
   shown as running or not.
