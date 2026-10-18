@@ -2264,6 +2264,73 @@ fn seed_worker(home: &Path, id: &str, name: &str, last: &str) {
 }
 
 #[test]
+fn sends_after_pr_until_worker_ends() {
+    let home = TempDir::new().unwrap();
+    let repo = home.path().join("repo");
+    fs::create_dir(&repo).unwrap();
+    git(&repo, &["init", "-q"]);
+    git(
+        &repo,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/probe/repo.git",
+        ],
+    );
+    let workspace = format!(
+        r#"{{"v":1,"at":1500,"kind":"workspace","path":"{}","branch":"flow/slot-reclaim","slot":1,"window":"saaio-ui","agent":"codex"}}"#,
+        repo.display()
+    );
+    seed(
+        home.path(),
+        "7f3c",
+        &[
+            r#"{"v":1,"at":1000,"kind":"started","name":"slot-reclaim","request":"fix a race","mode":"auto"}"#,
+            &workspace,
+        ],
+    );
+    for payload in [
+        include_str!("../src/adapter/fixtures/codex/post_bash_merge_request.json"),
+        include_str!("../src/adapter/fixtures/codex/stop_question.json"),
+    ] {
+        let output = hook_with(home.path(), &["codex"], Some("7f3c"), payload);
+        assert!(output.status.success(), "{}", stderr(&output));
+    }
+    let status: serde_json::Value =
+        serde_json::from_slice(&saaio(home.path(), &["status", "--json"]).stdout).unwrap();
+    let flow = &status["flows"][0];
+    assert_eq!(flow["state"], "waiting");
+    assert_eq!(flow["mergeRequest"], "https://github.com/probe/repo/pull/7");
+
+    let sent = saaio(
+        home.path(),
+        &["send", "slot-reclaim", "Fix the race first."],
+    );
+    let typed = saaio(home.path(), &["send", "--type", "slot-reclaim", "/review"]);
+    assert!(sent.status.success(), "{}", stdout(&sent));
+    assert!(typed.status.success(), "{}", stdout(&typed));
+    let log = fs::read_to_string(home.path().join("flows/7f3c.jsonl")).unwrap();
+    assert!(log.contains(r#""kind":"message","text":"Fix the race first.""#));
+    assert!(log.contains(r#""kind":"typed","text":"/review""#));
+
+    let ended = saaio_in(home.path(), "7f3c", &["report", "ended"]);
+    assert!(ended.status.success(), "{}", stderr(&ended));
+    for args in [
+        vec!["send", "slot-reclaim", "late"],
+        vec!["send", "--type", "slot-reclaim", "/review"],
+    ] {
+        let output = saaio(home.path(), &args);
+        assert_eq!(output.status.code(), Some(1));
+        assert!(stdout(&output).contains("slot-reclaim is finished"));
+    }
+    fs::remove_file(home.path().join("flows/7f3c.jsonl")).unwrap();
+    let removed = saaio(home.path(), &["send", "7f3c", "late"]);
+    assert_eq!(removed.status.code(), Some(1));
+    assert!(stdout(&removed).contains("no flow named 7f3c"));
+}
+
+#[test]
 fn send_puts_the_masters_message_into_the_flows_log() {
     let home = TempDir::new().unwrap();
     seed_worker(

@@ -38,7 +38,7 @@ timeline.
 | `idle` | the worker's turn ended without a question | READY |
 | `blocked` | the flow cannot go on | NEEDS YOU |
 | `not-responding` | a worker that sent heartbeats has sent none for 90 seconds | NEEDS YOU |
-| `done` | the merge request is open or merged | DONE |
+| `done` | the merge request opened or merged; the worker can still report activity | DONE |
 | `ended` | the worker's session ended for good | DONE |
 
 | Session stops by | Result |
@@ -225,15 +225,16 @@ or merged it: the worker, the master or you.
 
 | Found on the flow's branch | Result |
 | --- | --- |
-| an open merge request the flow does not show | the flow is `done`. Sidebar `PR #42`, board `PR open`. |
-| a merged one | the flow is `done` and merged. Sidebar `merged`, board `PR merged`, its detail `PR #42 merged`. Not asked again. |
+| an open merge request the flow does not show | a live flow is `done`. Sidebar `PR #42`, board `PR open`. The worker keeps running and may later become `waiting`. |
+| a merged one | the flow records the merge. A live flow shows `done` if it had no newer worker state; an ended flow stays `ended`. |
 | the flow's merge request, closed without a merge, worker still unfinished | the flow is `idle` in its last phase, timeline `PR #42 closed`. The master is woken. |
 | the flow's merge request, closed without a merge, worker already ended | the flow stays `ended`, timeline `PR #42 closed`. Its worker does not restart or reclaim a slot. |
 | nothing, or a closed one the flow does not show | no change |
 
 - Asked: every flow with a branch that is not merged, ended ones included. Never a plain session.
 - An open or merged request keeps the workflow's last phase even if later worker hooks mention an
-  earlier skill. Closing an unmerged request returns an unfinished flow to `idle` in its last phase;
+  earlier skill. Later questions and work can update the state while the worker remains live.
+  Closing an unmerged request returns a `done` live flow to `idle` in its last phase;
   a flow whose worker ended stays `ended`.
 - Only merge requests opened after the flow started count. One from an earlier branch of the same
   name, such as a cleared flow's, is ignored.
@@ -250,7 +251,8 @@ or merged it: the worker, the master or you.
 
 | Action | Effect |
 | --- | --- |
-| merge request opened or merged, by anyone | the flow is `done`. It stays in the sidebar until cleared. |
+| merge request opened or merged, by anyone | a live flow can show `done` but still runs, keeps its slot, and can ask questions. |
+| worker session ended | the flow is `ended`; its slot is released and it can be cleared. |
 | `saaio clear` | forgets every finished flow and removes its worktree. Keeps a worktree with uncommitted work. |
 | `x` on the board | cleans up one finished flow |
 | `saaio remove <name>` | any state: closes the session, runs the teardown script, removes worktree and branch, forgets the flow. Refuses uncommitted work and commits on no other branch, unless `--force` or `--delete-unmerged`. |

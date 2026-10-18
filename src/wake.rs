@@ -233,4 +233,35 @@ mod tests {
         assert_eq!(news.len(), 1);
         assert_eq!(news[0].name, "asks");
     }
+
+    #[test]
+    fn a_question_after_pr_is_new_for_the_master() {
+        let done = flow(
+            "shipped",
+            vec![(
+                2,
+                EventKind::MergeRequest {
+                    url: "https://x/1".into(),
+                },
+            )],
+        );
+        let waiting = flow(
+            "shipped",
+            vec![
+                (
+                    2,
+                    EventKind::MergeRequest {
+                        url: "https://x/1".into(),
+                    },
+                ),
+                (3, waiting("What about the race?")),
+            ],
+        );
+        let mut seen = Seen::new();
+        mark_seen(&mut seen, &[&done]);
+        let flows = [waiting];
+        let changed = changed_flows(&flows, &seen);
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].state, State::Waiting);
+    }
 }

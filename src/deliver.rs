@@ -134,6 +134,29 @@ mod tests {
     }
 
     #[test]
+    fn a_pr_open_worker_can_receive_the_masters_message() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let id = started(&store);
+        store
+            .append(
+                &id,
+                &Event::new(
+                    2,
+                    EventKind::MergeRequest {
+                        url: "https://x/1".into(),
+                    },
+                ),
+            )
+            .unwrap();
+        send(&store, &id, "Fix the race first");
+        assert_eq!(
+            worker_news(&store, &id, 3),
+            WorkerNews::News(vec!["Fix the race first".into()])
+        );
+    }
+
+    #[test]
     fn the_master_has_no_news_before_a_flow_stops() {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());

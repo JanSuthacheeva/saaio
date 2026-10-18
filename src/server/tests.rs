@@ -948,7 +948,7 @@ fn wait_until_typed(dir: &Path, name: &str, want: &str) {
 }
 
 #[test]
-fn types_queued_lines_in_order_each_once_the_turn_before_it_ended() {
+fn types_queued_lines_after_pr_once_the_turn_before_it_ended() {
     let dir = TempDir::new().unwrap();
     let store = Store::at(dir.path().to_path_buf());
     let id = started_flow(&store, dir.path(), "csv", "claude-cat");
@@ -956,6 +956,17 @@ fn types_queued_lines_in_order_each_once_the_turn_before_it_ended() {
         text: "Plan done.".into(),
     };
     store.append(&id, &LogEvent::new(2, answer)).unwrap();
+    store
+        .append(
+            &id,
+            &LogEvent::new(
+                2,
+                EventKind::MergeRequest {
+                    url: "https://github.com/a/b/pull/7".into(),
+                },
+            ),
+        )
+        .unwrap();
     queue(&store, &id, "/compact");
     queue(&store, &id, "continue shipping");
     let (paths, handle) = start_with_agents(
