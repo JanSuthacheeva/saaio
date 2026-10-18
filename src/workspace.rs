@@ -222,7 +222,7 @@ pub fn output_in(dir: &Path, argv: &[String], limit: Duration) -> Result<String>
             let _ = child.kill();
             let _ = child.wait();
             let millis = u64::try_from(limit.as_millis()).unwrap_or(u64::MAX);
-            bail!("{program} gave no answer within {}", short_duration(millis));
+            bail!("no answer within {}", short_duration(millis));
         }
         thread::sleep(WAIT_STEP);
     };
@@ -395,7 +395,7 @@ mod tests {
 
         assert!(started.elapsed() < Duration::from_secs(5));
         assert!(
-            format!("{error:#}").ends_with("hang gave no answer within 0s"),
+            format!("{error:#}").ends_with("no answer within 0s"),
             "{error:#}"
         );
         let failing = dir.path().join("fail");

@@ -319,7 +319,7 @@ the timeout is built now, not in a follow-up, since a hung call would stop every
 silently.
 
 - [x] `workspace::output_in(dir, argv, limit: Duration)`: kills the command past `limit` and fails
-  with "gh gave no answer within 1m"; `forge_watch::ASK_LIMIT = 60s`; unit test with a sleeping
+  with "no answer within 1m" (logged as "gh failed: no answer within 1m"); `forge_watch::ASK_LIMIT = 60s`; unit test with a sleeping
   script and a short limit
 
 ## Review
