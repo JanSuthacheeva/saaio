@@ -273,7 +273,7 @@ closed" -> state change -> `wake::changed_flows` sees Idle -> the master is woke
 ### Forge
 
 - [x] Add `forge.rs`: `Forge::of`, `argv`, `parse`, `pick` with the recorded gh/glab fixtures
-- [ ] Add `forge::asks` and `forge::news` with tests over the news table
+- [x] Add `forge::asks` and `forge::news` with tests over the news table
 - [ ] Add `workspace::output_in` with a test running a script in a dir
 
 ### Server

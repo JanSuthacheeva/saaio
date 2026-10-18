@@ -1,13 +1,25 @@
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use crate::adapter::calls;
+use crate::event::EventKind;
+use crate::view::FlowView;
 
 /// Who hosts a repository's merge requests, as its remote says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Forge {
     GitHub,
     GitLab,
+}
+
+/// A flow to ask about: its id, its worktree and its branch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ask {
+    pub id: String,
+    pub dir: PathBuf,
+    pub branch: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,6 +142,35 @@ impl Forge {
     }
 }
 
+/// The flows worth asking about: not plain, with a branch, not merged.
+pub fn asks(flows: &[FlowView]) -> Vec<Ask> {
+    flows
+        .iter()
+        .filter(|flow| !flow.is_plain() && !flow.merged)
+        .filter_map(|flow| {
+            let space = flow.workspace.as_ref()?;
+            Some(Ask {
+                id: flow.id.clone(),
+                dir: PathBuf::from(&space.path),
+                branch: space.branch.clone()?,
+            })
+        })
+        .collect()
+}
+
+/// What to append so `flow` shows `found`: merge-request for an open one it does not show yet,
+/// merged for a merged one, merge-request-closed for the closed one it shows; None otherwise.
+pub fn news(flow: &FlowView, found: Option<&Found>) -> Option<EventKind> {
+    let found = found?;
+    let shown = flow.merge_request.as_ref() == Some(&found.url);
+    let url = found.url.clone();
+    match found.status {
+        Status::Open => (!shown).then_some(EventKind::MergeRequest { url }),
+        Status::Merged => (!flow.merged).then_some(EventKind::Merged { url }),
+        Status::Closed => (shown && !flow.merged).then_some(EventKind::MergeRequestClosed { url }),
+    }
+}
+
 /// The one that speaks for the branch: the first open, else the first merged, else the first
 /// closed (both tools list newest first).
 pub fn pick(found: Vec<Found>) -> Option<Found> {
@@ -148,6 +189,107 @@ pub fn pick(found: Vec<Found>) -> Option<Found> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::event::{Event, Mode};
+    use crate::fold;
+
+    const A: &str = "https://github.com/acme/shop/pull/7";
+    const B: &str = "https://github.com/acme/shop/pull/8";
+
+    fn flow_of(mode: Mode, branch: Option<&str>, more: Vec<EventKind>) -> FlowView {
+        let started = EventKind::Started {
+            name: "csv".into(),
+            request: "add csv".into(),
+            mode,
+            phases: None,
+        };
+        let workspace = EventKind::Workspace {
+            path: "/work/csv".into(),
+            branch: branch.map(String::from),
+            slot: None,
+            window: None,
+            agent: "claude".into(),
+        };
+        let events: Vec<Event> = [started, workspace]
+            .into_iter()
+            .chain(more)
+            .map(|kind| Event::new(1, kind))
+            .collect();
+        fold::fold("csv-1", &events, None, 2).unwrap()
+    }
+
+    fn flow(more: Vec<EventKind>) -> FlowView {
+        flow_of(Mode::Auto, Some("flow/csv"), more)
+    }
+
+    fn opened(url: &str) -> EventKind {
+        EventKind::MergeRequest { url: url.into() }
+    }
+
+    fn merged(url: &str) -> EventKind {
+        EventKind::Merged { url: url.into() }
+    }
+
+    fn closed(url: &str) -> EventKind {
+        EventKind::MergeRequestClosed { url: url.into() }
+    }
+
+    #[test]
+    fn asks_about_every_flow_with_a_branch_until_it_is_merged() {
+        let ids = |flows: &[FlowView]| -> Vec<String> {
+            asks(flows).into_iter().map(|ask| ask.id).collect()
+        };
+
+        assert_eq!(
+            asks(&[flow(vec![])]),
+            [Ask {
+                id: "csv-1".into(),
+                dir: PathBuf::from("/work/csv"),
+                branch: "flow/csv".into(),
+            }]
+        );
+        assert_eq!(ids(&[flow(vec![opened(A)])]), ["csv-1"], "done, not merged");
+        assert_eq!(ids(&[flow(vec![EventKind::Ended])]), ["csv-1"], "ended");
+        assert!(ids(&[flow(vec![merged(A)])]).is_empty(), "merged");
+        assert!(
+            ids(&[flow_of(Mode::Auto, None, vec![])]).is_empty(),
+            "no branch"
+        );
+        assert!(
+            ids(&[flow_of(Mode::Plain, Some("main"), vec![])]).is_empty(),
+            "plain"
+        );
+    }
+
+    #[test]
+    fn records_only_what_the_flow_does_not_show_yet() {
+        let open = |url: &str| found(url, Status::Open);
+        let shut = |url: &str| found(url, Status::Closed);
+        let done = |url: &str| found(url, Status::Merged);
+
+        assert_eq!(news(&flow(vec![]), Some(&open(A))), Some(opened(A)));
+        assert_eq!(news(&flow(vec![opened(A)]), Some(&open(A))), None);
+        assert_eq!(
+            news(&flow(vec![opened(A)]), Some(&open(B))),
+            Some(opened(B))
+        );
+        assert_eq!(news(&flow(vec![]), Some(&done(A))), Some(merged(A)));
+        assert_eq!(
+            news(&flow(vec![opened(A)]), Some(&done(A))),
+            Some(merged(A))
+        );
+        assert_eq!(news(&flow(vec![merged(A)]), Some(&done(A))), None);
+        assert_eq!(
+            news(&flow(vec![opened(A)]), Some(&shut(A))),
+            Some(closed(A))
+        );
+        assert_eq!(news(&flow(vec![]), Some(&shut(A))), None);
+        assert_eq!(news(&flow(vec![opened(B)]), Some(&shut(A))), None);
+        assert_eq!(
+            news(&flow(vec![opened(A), closed(A)]), Some(&shut(A))),
+            None
+        );
+        assert_eq!(news(&flow(vec![opened(A)]), None), None);
+    }
 
     fn fixture(name: &str) -> &'static str {
         match name {
