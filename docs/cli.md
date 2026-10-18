@@ -239,7 +239,7 @@ ahead: 0
 help[2]: saaio types it into shop-221's pane once its session is idle,"Queue the next line with another `saaio send --type shop-221 \"<line>\"`. It waits for this one's turn to end"
 ```
 
-- The line waits in the flow's log until flow's server types it. `ahead` counts the lines queued
+- The line waits in the flow's log until saaio's server types it. `ahead` counts the lines queued
   before it.
 - One line per call. Lines are typed in the order they were queued, each once the turn the line
   before it began has ended.
@@ -388,7 +388,7 @@ Not listed in `saaio --help`. Not for manual use.
 | Command | Run by |
 | --- | --- |
 | `saaio server` | saaio ui, when no server runs. Owns every session. Log: `server.log` ([files.md](files.md)). |
-| `saaio hook claude-code`, `saaio hook codex` | the hooks flow adds to each worker. Reads the hook's event on stdin and reports what changes the flow. Never prints to stdout, never fails a worker's turn. For Codex, exits 2 at Stop to hand over news. |
+| `saaio hook claude-code`, `saaio hook codex` | the hooks saaio adds to each worker. Reads the hook's event on stdin and reports what changes the flow. Never prints to stdout, never fails a worker's turn. For Codex, exits 2 at Stop to hand over news. |
 | `saaio wait [--master]` | Claude Code sessions, as a background hook. Sleeps until there is news for the session, prints it to stderr and exits 2, which wakes the session. `--master` waits for the master's news. |
 
 ## Output, errors and exit codes

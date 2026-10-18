@@ -5,7 +5,6 @@ terminal's own colors.
 
 ```toml
 extends = "saaio"
-nerd_font = true
 
 [ui]
 accent = "#d9825b"
@@ -19,6 +18,7 @@ merge-request = "#d08ad6"
 
 - A key left out keeps the color of the extended theme.
 - saaio ui repaints within a second of saving `theme.toml` or a theme it extends.
+- saaio's mark is always `▚▄▞`, drawn with block characters in the accent color.
 
 - [The file](#the-file)
 - [Colors](#colors)
@@ -53,7 +53,6 @@ A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase co
 | Key | Default | Effect |
 | --- | --- | --- |
 | `extends` | `"terminal"` | base theme: `"terminal"`, `"saaio"`, `"saaio-light"`, or a file name in `themes/` next to `theme.toml`, without `.toml` |
-| `nerd_font` | `false` | `true`: flow's mark is a kiwi bird from [Nerd Font](https://www.nerdfonts.com) icons. `false`: a goose in flight, `▚▄▞`, in block characters. Both in the accent color. |
 | `phase_colors` | `"off"` | how much of a working flow takes its phase's color, see below |
 
 | `phase_colors` | A working flow shows its phase color in |
@@ -64,7 +63,7 @@ A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase co
 
 - At every level: finished steps are plain. A waiting, blocked or done flow keeps its state color.
 - Before its first phase, a flow takes the `working` color.
-- `nerd_font` and `phase_colors` come from the nearest file that sets them. `theme.toml` wins over
+- `phase_colors` comes from the nearest file that sets it. `theme.toml` wins over
   the themes it extends.
 
 ## [ui]
@@ -79,7 +78,7 @@ A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase co
 | `strong` | names and titles, drawn bold | `"default"` | `#f0f0f4` | `#111114` |
 | `muted` | quieter text: idle sessions, what a flow is doing | `7` | `#9a9aa6` | `#5d5d66` |
 | `faint` | the quietest text: key hints, headings, counts | `8` | `#6c6c78` | `#73737c` |
-| `accent` | flow's mark and the bar beside the selected row | `173` | `#e07a52` | `#b8532f` |
+| `accent` | saaio's `▚▄▞` mark and the bar beside the selected row | `173` | `#e07a52` | `#b8532f` |
 
 ## [state]
 
@@ -112,15 +111,15 @@ color takes the color of its place:
 | Theme | Colors |
 | --- | --- |
 | `terminal` (default) | the terminal's own colors, fixed shades for panel, selection, accent and phases |
-| `saaio` | flow's dark colors |
-| `saaio-light` | flow's light colors |
+| `saaio` | saaio's dark colors |
+| `saaio-light` | saaio's light colors |
 
 ## Themes of your own
 
 - Path: `~/.config/saaio/themes/<name>.toml`. Named by `extends = "<name>"`.
 - Same keys as `theme.toml`.
 - Can extend another theme, up to four files deep counting `theme.toml`.
-- Lets another tool write flow's colors.
+- Lets another tool write saaio's colors.
 
 Example: a [Noctalia](https://github.com/noctalia-dev/noctalia-shell) template, rendered on every
 theme change. Save as `~/.config/noctalia/templates/saaio.toml`:
@@ -172,4 +171,5 @@ Other messages:
 - `Build is no phase name`
 - `~/.config/saaio/themes/gone.toml does not exist`
 - `phase_colors is off, steps or full`
+- `nerd_font was removed; remove this line` (remove the old setting from `theme.toml` or an extended theme)
 - `accent, muted name each other`

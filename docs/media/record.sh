@@ -11,8 +11,8 @@
 # anything personal before you commit.
 #
 # saaio ui runs in a private tmux server (status line off), which the Alacritty window attaches to
-# and this script sends keys through. Needs Alacritty, tmux, ffmpeg, swift, FiraCode Nerd Font
-# Mono, and Screen Recording permission for the terminal you run it from.
+# and this script sends keys through. Needs Alacritty, tmux, ffmpeg, swift, Menlo, and Screen
+# Recording permission for the terminal you run it from.
 set -euo pipefail
 
 media=$(cd "$(dirname "$0")" && pwd)
