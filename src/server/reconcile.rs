@@ -97,7 +97,7 @@ mod tests {
             Event::new(
                 1,
                 EventKind::Workspace {
-                    path: format!("/repo/.flow/worktrees/{id}"),
+                    path: format!("/repo/.saaio/worktrees/{id}"),
                     branch: Some(format!("flow/{id}")),
                     slot: Some(1),
                     window: window.map(String::from),

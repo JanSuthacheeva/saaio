@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-/// A file flow writes with its default text: when it is missing, or still holds an earlier default
+/// A file saaio writes with its default text: when it is missing, or still holds an earlier default
 /// nobody edited. An edited file is never overwritten.
 #[derive(Debug, Clone, Copy)]
 pub struct DefaultFile {
@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn writes_a_missing_file_and_its_folder() {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("flow/file");
+        let path = dir.path().join("saaio/file");
 
         FILE.ensure(&path).unwrap();
 
@@ -108,11 +108,11 @@ mod tests {
 
     #[test]
     fn uncomments_settings_and_sections_but_not_explanations() {
-        let text = "# A theme.\n#extends = \"flow\"\n\n#[ui]\n## heading\n# For example: x = 1\n#[[phases]]\nkey = 2\n";
+        let text = "# A theme.\n#extends = \"saaio\"\n\n#[ui]\n## heading\n# For example: x = 1\n#[[phases]]\nkey = 2\n";
 
         assert_eq!(
             uncommented(text),
-            "# A theme.\nextends = \"flow\"\n\n[ui]\n## heading\n# For example: x = 1\n[[phases]]\nkey = 2\n"
+            "# A theme.\nextends = \"saaio\"\n\n[ui]\n## heading\n# For example: x = 1\n[[phases]]\nkey = 2\n"
         );
     }
 }

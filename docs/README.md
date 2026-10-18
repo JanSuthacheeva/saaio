@@ -1,16 +1,16 @@
-# flow documentation
+# saaio documentation
 
 | Page | Covers |
 | --- | --- |
-| [install.md](install.md) | requirements, installing flow and the skills, first run, updating |
-| [ui.md](ui.md) | flow ui: screen, keys, peek, board, new-flow dialog, stopping |
+| [install.md](install.md) | requirements, installing saaio and the skills, first run, updating |
+| [ui.md](ui.md) | saaio ui: screen, keys, peek, board, new-flow dialog, stopping |
 | [flows.md](flows.md) | flows, states, phases, guided and auto, the master, plain sessions, hooks |
 | [configuration.md](configuration.md) | `config.toml`: your own workflow, every setting |
 | [themes.md](themes.md) | `theme.toml`: built-in themes, every color, themes from other tools |
 | [repository.md](repository.md) | per repository: branch names, setup and teardown, slots and ports, Docker |
 | [cli.md](cli.md) | every command and option, exit codes, environment variables, several projects |
-| [json.md](json.md) | the `flow status --json` contract |
-| [files.md](files.md) | every file flow reads or writes, removing flow |
+| [json.md](json.md) | the `saaio status --json` contract |
+| [files.md](files.md) | every file saaio reads or writes, removing saaio |
 | [troubleshooting.md](troubleshooting.md) | problems and fixes |
 
 Example settings: [examples/config.toml](../examples/config.toml),

@@ -15,22 +15,22 @@ use crate::workflow::Workflow;
 pub const REPORT_TEXT_LIMIT: usize = 200;
 
 /// What a worker is told about the master, added to its instructions: the master's messages arrive
-/// as hook feedback or as a prompt flow types in, which it would rightly not take as the user's
+/// as hook feedback or as a prompt saaio types in, which it would rightly not take as the user's
 /// words otherwise.
-pub const WORKER_PROMPT: &str = "You run as a worker of flow, in your own git worktree. The flow \
+pub const WORKER_PROMPT: &str = "You run as a worker of saaio, in your own git worktree. The saaio \
 master is the agent session that coordinates the workers for the user. Its messages reach you as \
-hook feedback or as a prompt that starts with \"message from the flow master:\"; they answer what \
+hook feedback or as a prompt that starts with \"message from the saaio master:\"; they answer what \
 you asked or pass on what the user said, so act on them as you would on the user's own answer. To \
 ask the master or the user something, end your turn with the question.";
 
 /// What a fresh Codex master is asked first, so its first turn runs at once.
-pub const MASTER_OPENING: &str = "flow ui just started you. Run `flow status` and say in one line \
+pub const MASTER_OPENING: &str = "saaio ui just started you. Run `saaio status` and say in one line \
 what needs the user, if anything.";
 
 /// Where a session's turn stands after a hook event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Turn {
-    /// It runs a turn (a prompt, a compaction): flow types nothing into it.
+    /// It runs a turn (a prompt, a compaction): saaio types nothing into it.
     Began,
     /// It ended its turn at a Stop, and its hook can hand news over (exit 2).
     Ended,
@@ -39,7 +39,7 @@ pub enum Turn {
     Idle,
 }
 
-/// A harness flow observes through its own hooks.
+/// A harness saaio observes through its own hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[cfg_attr(test, derive(serde::Serialize))]
 #[serde(rename_all = "kebab-case")]
@@ -49,7 +49,7 @@ pub enum Adapter {
 }
 
 impl Adapter {
-    /// "claude-code" -> ClaudeCode, "codex" -> Codex; None for a name flow does not know.
+    /// "claude-code" -> ClaudeCode, "codex" -> Codex; None for a name saaio does not know.
     pub fn named(name: &str) -> Option<Adapter> {
         match name {
             "claude-code" => Some(Adapter::ClaudeCode),
@@ -103,8 +103,8 @@ impl Adapter {
         }
     }
 
-    /// True when the session wakes itself for news (Claude Code: an asyncRewake `flow wait`); false
-    /// when flow hands news over at its Stop and flow server types it in (Codex).
+    /// True when the session wakes itself for news (Claude Code: an asyncRewake `saaio wait`); false
+    /// when saaio hands news over at its Stop and saaio server types it in (Codex).
     pub fn wakes_itself(self) -> bool {
         match self {
             Adapter::ClaudeCode => true,
@@ -114,10 +114,10 @@ impl Adapter {
 
     /// The master's command line, `argv` being its agent's: right after the program its hooks,
     /// which in the master's pane keep where its turn stands (Claude Code's also arm the
-    /// `flow wait --master` waiter when it `wake`s; Codex's record its session and hand news over
+    /// `saaio wait --master` waiter when it `wake`s; Codex's record its session and hand news over
     /// at Stop) and its instructions; and,
     /// when it starts `fresh`, an opening prompt for a harness that hears of news only after its
-    /// first turn (Codex: before it, its pane may still show a trust prompt, so flow types nothing).
+    /// first turn (Codex: before it, its pane may still show a trust prompt, so saaio types nothing).
     pub fn wire_master(
         self,
         mut argv: Vec<String>,
@@ -188,12 +188,12 @@ mod tests {
 
     #[test]
     fn tells_a_worker_who_the_flow_master_is() {
-        assert!(WORKER_PROMPT.contains("message from the flow master:"));
+        assert!(WORKER_PROMPT.contains("message from the saaio master:"));
         assert!(
             !WORKER_PROMPT.contains("Claude"),
             "the prompt names no harness"
         );
-        let wiring = Adapter::ClaudeCode.wiring(Path::new("/bin/flow"));
+        let wiring = Adapter::ClaudeCode.wiring(Path::new("/bin/saaio"));
         assert_eq!(wiring[0], "--settings");
         assert_eq!(wiring[2..], ["--append-system-prompt", WORKER_PROMPT]);
     }
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn codex_takes_instructions_as_config_and_its_hooks_on_every_launch() {
-        let exe = Path::new("/bin/flow");
+        let exe = Path::new("/bin/saaio");
         let instructions = Adapter::Codex.instruct("be \"brief\"\nplease");
         assert_eq!(instructions[0], "-c");
         let parsed: toml::Table = toml::from_str(&instructions[1]).unwrap();
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn wires_each_master_its_own_way() {
-        let exe = Path::new("/bin/flow");
+        let exe = Path::new("/bin/saaio");
         let argv = || vec!["agent".to_string(), "-n".to_string(), "master".to_string()];
 
         let quiet = Adapter::ClaudeCode.wire_master(argv(), exe, "md", false, true);

@@ -7,8 +7,8 @@ use std::time::SystemTime;
 use clap::Parser;
 use clap::error::ErrorKind;
 
-use flow::cli::output::{Document, Failure};
-use flow::cli::{self, Cli, Env};
+use saaio::cli::output::{Document, Failure};
+use saaio::cli::{self, Cli, Env};
 
 fn main() -> ExitCode {
     let cli = match Cli::try_parse() {
@@ -33,14 +33,14 @@ fn main() -> ExitCode {
     answer(cli::run(cli, &env(), now_ms))
 }
 
-/// The environment variables and the terminal flow runs in, read once here.
+/// The environment variables and the terminal saaio runs in, read once here.
 fn env() -> Env {
     let path = |name| env::var_os(name).map(PathBuf::from);
     Env {
-        flow_home: path("FLOW_HOME"),
-        flow_config: path("FLOW_CONFIG"),
-        flow_id: env::var("FLOW_ID").ok(),
-        flow_master: env::var("FLOW_MASTER").is_ok_and(|value| value == "1"),
+        saaio_home: path("SAAIO_HOME"),
+        saaio_config: path("SAAIO_CONFIG"),
+        flow_id: env::var("SAAIO_FLOW_ID").ok(),
+        saaio_master: env::var("SAAIO_MASTER").is_ok_and(|value| value == "1"),
         home: path("HOME"),
         xdg_state_home: path("XDG_STATE_HOME"),
         xdg_config_home: path("XDG_CONFIG_HOME"),

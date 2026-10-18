@@ -50,8 +50,8 @@ pub struct Session {
     pub transcript: Option<String>,
 }
 
-/// Where a started flow's worker runs: its worktree, branch, port slot, window (flow-ui once
-/// flow ui opened it; a tmux window id from before) and agent.
+/// Where a started flow's worker runs: its worktree, branch, port slot, window (saaio-ui once
+/// saaio ui opened it; a tmux window id from before) and agent.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
@@ -138,7 +138,7 @@ pub struct ReviewCount {
     pub open: u32,
 }
 
-/// What `flow start` and `flow server` append when a flow gets or reopens its workspace.
+/// What `saaio start` and `saaio server` append when a flow gets or reopens its workspace.
 impl From<Workspace> for EventKind {
     fn from(space: Workspace) -> EventKind {
         EventKind::Workspace {
@@ -189,7 +189,7 @@ impl Board {
     }
 }
 
-/// What `flow status --all --json` prints: a board per project.
+/// What `saaio status --all --json` prints: a board per project.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Projects {
@@ -317,7 +317,7 @@ mod tests {
             started_at: 1,
             changed_at: 2,
             workspace: Some(Workspace {
-                path: "/repo/.flow/worktrees/shop-221".into(),
+                path: "/repo/.saaio/worktrees/shop-221".into(),
                 branch: Some("flow/shop-221".into()),
                 slot: Some(1),
                 window: Some("@14".into()),

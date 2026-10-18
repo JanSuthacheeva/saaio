@@ -6,16 +6,16 @@ use crate::proto::PaneKey;
 use crate::view::{FlowView, Workspace};
 
 /// Set to 1 in the master's pane, so the hooks it shares with workers know whose they are.
-pub const MASTER_ENV: &str = "FLOW_MASTER";
+pub const MASTER_ENV: &str = "SAAIO_MASTER";
 
-/// Workspace.window of a worker flow ui has opened once; its next open resumes it.
-pub const HOSTED: &str = "flow-ui";
+/// Workspace.window of a worker saaio ui has opened once; its next open resumes it.
+pub const HOSTED: &str = "saaio-ui";
 
-/// What the server passes on to every pane: FLOW_HOME, when it was set for the server, and the
-/// flow binary a worker's hooks run.
+/// What the server passes on to every pane: SAAIO_HOME, when it was set for the server, and the
+/// saaio binary a worker's hooks run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LaunchEnv {
-    pub flow_home: Option<PathBuf>,
+    pub saaio_home: Option<PathBuf>,
     pub flow_exe: PathBuf,
 }
 
@@ -66,7 +66,7 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str, session: &str) -> Option
 }
 
 /// The agent's command the first time, its resume command once it ran somewhere (window set:
-/// HOSTED, or a tmux window from before flow ui), since its session id is taken from then on;
+/// HOSTED, or a tmux window from before saaio ui), since its session id is taken from then on;
 /// either way with the agent's adapter wired in right after the program. A plain session starts
 /// without a prompt and gets the adapter's plain wiring. A harness that picks its own session
 /// resumes by the one its hooks reported, and starts again when it never reported one (it had no
@@ -99,7 +99,7 @@ pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<Pa
     })
 }
 
-/// True when the agent resumes by the session its harness picked, not by flow's id.
+/// True when the agent resumes by the session its harness picked, not by saaio's flow id.
 pub fn names_session(agent: &Agent) -> bool {
     agent
         .resume
@@ -109,21 +109,21 @@ pub fn names_session(agent: &Agent) -> bool {
 }
 
 /// What a worker's session knows of its flow: the hooks' variables, so it can find its own ports
-/// from FLOW_SLOT, then pane_env's.
+/// from SAAIO_SLOT, then pane_env's.
 fn worker_env(flow: &FlowView, space: &Workspace, env: &LaunchEnv) -> Vec<(String, String)> {
     let mut vars = match repo_of(space) {
         Some(repo) => hook_env(&flow.id, &flow.name, &repo, space),
-        None => vec![("FLOW_ID".to_string(), flow.id.clone())],
+        None => vec![("SAAIO_FLOW_ID".to_string(), flow.id.clone())],
     };
     vars.extend(pane_env(env));
     vars
 }
 
-/// FLOW_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
+/// SAAIO_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
 pub fn pane_env(env: &LaunchEnv) -> Vec<(String, String)> {
     let mut vars = Vec::new();
-    if let Some(home) = &env.flow_home {
-        vars.push(("FLOW_HOME".to_string(), home.display().to_string()));
+    if let Some(home) = &env.saaio_home {
+        vars.push(("SAAIO_HOME".to_string(), home.display().to_string()));
     }
     vars.push(("TERM".to_string(), "xterm-256color".to_string()));
     vars.push(("COLORTERM".to_string(), "truecolor".to_string()));
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn gives_every_pane_a_terminal_type_and_workers_their_flow() {
         let env = LaunchEnv {
-            flow_home: Some(PathBuf::from("/state/flow")),
+            saaio_home: Some(PathBuf::from("/state/saaio")),
             ..LaunchEnv::default()
         };
         let pairs = |items: &[(&str, &str)]| -> Vec<(String, String)> {
@@ -230,7 +230,7 @@ mod tests {
         assert_eq!(
             pane_env(&env),
             pairs(&[
-                ("FLOW_HOME", "/state/flow"),
+                ("SAAIO_HOME", "/state/saaio"),
                 ("TERM", "xterm-256color"),
                 ("COLORTERM", "truecolor"),
             ])
@@ -255,7 +255,7 @@ mod tests {
             Event::new(
                 1,
                 EventKind::Workspace {
-                    path: "/repo/.flow/worktrees/shop-217".into(),
+                    path: "/repo/.saaio/worktrees/shop-217".into(),
                     branch: Some("flow/shop-217".into()),
                     slot: Some(2),
                     window: window.map(String::from),
@@ -278,7 +278,7 @@ mod tests {
 
         let fresh = worker_spec(&worker(None), claude, &env).unwrap();
         assert_eq!(fresh.key, PaneKey::Flow("7f3c".into()));
-        assert_eq!(fresh.cwd, PathBuf::from("/repo/.flow/worktrees/shop-217"));
+        assert_eq!(fresh.cwd, PathBuf::from("/repo/.saaio/worktrees/shop-217"));
         assert_eq!(
             fresh.argv,
             agent_argv(claude, "7f3c", "shop-217", "SHOP-217 add CSV export")
@@ -287,7 +287,7 @@ mod tests {
         expected.extend(pane_env(&env));
         assert_eq!(
             fresh.env, expected,
-            "FLOW_SLOT and the rest, as the hooks get them"
+            "SAAIO_SLOT and the rest, as the hooks get them"
         );
 
         let resumed = worker_spec(&worker(Some(HOSTED)), claude, &env).unwrap();
@@ -308,7 +308,7 @@ mod tests {
         let mut claude = agents["claude"].clone();
         claude.adapter = Some(crate::adapter::Adapter::ClaudeCode);
         let env = LaunchEnv {
-            flow_exe: PathBuf::from("/bin/flow"),
+            flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
 
@@ -318,7 +318,7 @@ mod tests {
         for spec in [&fresh, &resumed] {
             assert_eq!(spec.argv[0], "claude");
             assert_eq!(spec.argv[1], "--settings");
-            assert!(spec.argv[2].contains("\"/bin/flow\""), "{}", spec.argv[2]);
+            assert!(spec.argv[2].contains("\"/bin/saaio\""), "{}", spec.argv[2]);
         }
         assert_eq!(fresh.argv[3], "--append-system-prompt");
         assert_eq!(&fresh.argv[5..7], ["-n", "shop-217"]);
@@ -365,13 +365,13 @@ mod tests {
         let agents = crate::config::builtin_agents();
         let codex = &agents["codex"];
         let env = LaunchEnv {
-            flow_exe: PathBuf::from("/bin/flow"),
+            flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
 
         let resumed = worker_spec(&codex_worker(Some(HOSTED), Some("01a1")), codex, &env).unwrap();
 
-        let wiring = crate::adapter::Adapter::Codex.wiring(Path::new("/bin/flow"));
+        let wiring = crate::adapter::Adapter::Codex.wiring(Path::new("/bin/saaio"));
         assert_eq!(resumed.argv[0], "codex");
         assert_eq!(resumed.argv[1..=wiring.len()], wiring[..]);
         assert_eq!(resumed.argv[wiring.len() + 1..], ["resume", "01a1"]);
@@ -407,10 +407,10 @@ mod tests {
         let agents = crate::config::builtin_agents();
         let claude = &agents["claude"];
         let env = LaunchEnv {
-            flow_exe: PathBuf::from("/bin/flow"),
+            flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
-        let wiring = crate::adapter::Adapter::ClaudeCode.plain_wiring(Path::new("/bin/flow"));
+        let wiring = crate::adapter::Adapter::ClaudeCode.plain_wiring(Path::new("/bin/saaio"));
 
         let fresh = worker_spec(&scratch(None), claude, &env).unwrap();
         let mut expected = vec![claude.command[0].clone()];
@@ -423,11 +423,11 @@ mod tests {
             fresh.argv
         );
         assert_eq!(fresh.cwd, PathBuf::from("/Users/jan/scratch"));
-        let mut env_expected = vec![("FLOW_ID".to_string(), "9b1d".to_string())];
+        let mut env_expected = vec![("SAAIO_FLOW_ID".to_string(), "9b1d".to_string())];
         env_expected.extend(pane_env(&env));
         assert_eq!(
             fresh.env, env_expected,
-            "no FLOW_SLOT, FLOW_WORKTREE or FLOW_REPO"
+            "no SAAIO_SLOT, SAAIO_WORKTREE or SAAIO_REPO"
         );
 
         let resumed = worker_spec(&scratch(Some(HOSTED)), claude, &env).unwrap();

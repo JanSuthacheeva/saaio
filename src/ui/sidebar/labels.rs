@@ -155,7 +155,7 @@ mod tests {
         ]
         .map(|kind| Event::new(0, kind));
         let flow = crate::fold::fold("id", &events, None, 0).unwrap();
-        let theme = Theme::from_palette(Palette::FLOW);
+        let theme = Theme::from_palette(Palette::SAAIO);
         let board = Board {
             version: VIEW_VERSION,
             now: 0,

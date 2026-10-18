@@ -1,6 +1,6 @@
 use super::*;
 
-/// The whole screen as text, compared with src/ui/golden/<name>.txt. FLOW_UPDATE_GOLDEN=1
+/// The whole screen as text, compared with src/ui/golden/<name>.txt. SAAIO_UPDATE_GOLDEN=1
 /// writes the file instead, for a change to the look that is meant; a missing file is written
 /// and fails, so a new view is looked at once.
 fn golden(name: &str, terminal: &Terminal<TestBackend>) {
@@ -16,11 +16,11 @@ fn golden(name: &str, terminal: &Terminal<TestBackend>) {
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("src/ui/golden")
         .join(format!("{name}.txt"));
-    let update = std::env::var_os("FLOW_UPDATE_GOLDEN").is_some();
+    let update = std::env::var_os("SAAIO_UPDATE_GOLDEN").is_some();
     match std::fs::read_to_string(&file) {
         Ok(expected) if !update => assert!(
             expected == text,
-            "{name} looks different; if that is meant, run FLOW_UPDATE_GOLDEN=1 cargo test\n{text}"
+            "{name} looks different; if that is meant, run SAAIO_UPDATE_GOLDEN=1 cargo test\n{text}"
         ),
         found => {
             std::fs::create_dir_all(file.parent().unwrap()).unwrap();

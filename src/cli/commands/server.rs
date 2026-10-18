@@ -10,13 +10,13 @@ use crate::server_log;
 use crate::store::Store;
 use crate::ui::theme_file;
 
-/// The session server flow ui starts on its own; runs until StopServer or SIGTERM. Its stderr is
+/// The session server saaio ui starts on its own; runs until StopServer or SIGTERM. Its stderr is
 /// server.log, so it answers nothing on success and logs why it failed.
 pub fn run(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
     server_log::exit_on_panic(clock);
     let config = env.config()?;
     let config_file = config::config_file(
-        env.flow_config.clone(),
+        env.saaio_config.clone(),
         env.xdg_config_home.clone(),
         env.home.clone(),
     );
@@ -32,7 +32,7 @@ pub fn run(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Fail
         theme,
     };
     let launch_env = LaunchEnv {
-        flow_home: env.flow_home.clone(),
+        saaio_home: env.saaio_home.clone(),
         flow_exe: std::env::current_exe()?,
     };
     let cwd = std::env::current_dir().context("could not read the current directory")?;

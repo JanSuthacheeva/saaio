@@ -102,14 +102,14 @@ fn lets_go_when_another_ui_attaches_and_says_which() {
     assert_eq!(
         app.on_server(ServerMsg::Detached { by }),
         vec![Effect::Quit(
-            "another flow ui took over: pid 4321 in ~/projects/flow (flow 0.1.0 2904734)"
+            "another saaio ui took over: pid 4321 in ~/projects/flow (saaio 0.1.0 2904734)"
                 .to_string()
         )]
     );
     assert_eq!(
         app.on_server(ServerMsg::Detached { by: lost }),
         vec![Effect::Quit(
-            "another flow ui took over: pid 4321 in an unknown folder (flow 0.1.0 2904734)"
+            "another saaio ui took over: pid 4321 in an unknown folder (saaio 0.1.0 2904734)"
                 .to_string()
         )]
     );
@@ -247,7 +247,7 @@ fn shows_where_the_master_runs_with_home_as_a_tilde() {
 #[test]
 fn paints_every_cell_on_the_themes_ground() {
     let app = board_app();
-    let theme = Theme::from_palette(crate::ui::theme::Palette::FLOW);
+    let theme = Theme::from_palette(crate::ui::theme::Palette::SAAIO);
     let mut terminal = Terminal::new(TestBackend::new(FLEET.cols, FLEET.rows)).unwrap();
 
     terminal.draw(|frame| app.draw(frame, &theme, &[])).unwrap();
@@ -314,7 +314,7 @@ fn reads_what_a_flow_command_printed() {
 fn reads_an_error_toon_quoted_without_its_quotes() {
     let failure = Failure::error(
         "could not create flow in /shop: Permission denied (os error 13)",
-        vec!["Set FLOW_HOME to a directory".to_string()],
+        vec!["Set SAAIO_HOME to a directory".to_string()],
     );
     let printed = format!("{}\n", failure.to_toon());
     assert!(
@@ -352,7 +352,7 @@ fn draws_for_a_terminal_that_shrank_before_its_resize_arrived() {
         .map(|x| buffer[(x, 1)].symbol().to_string())
         .collect();
     assert!(
-        header.contains("flow"),
+        header.contains("saaio"),
         "the sidebar at the new edge: {header:?}"
     );
     app.on_input(Routed::Command(Command::Board));

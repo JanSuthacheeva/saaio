@@ -241,11 +241,11 @@ impl App {
         };
         body.push(Line::raw(""));
         body.push(Line::styled(
-            format!("Kept, {they} the next time flow ui starts."),
+            format!("Kept, {they} the next time saaio ui starts."),
             theme.ui.muted,
         ));
         body.push(Line::styled(
-            "Ended, branches and worktrees stay until flow clear.",
+            "Ended, branches and worktrees stay until saaio clear.",
             theme.ui.muted,
         ));
         Dialog {
@@ -253,7 +253,7 @@ impl App {
             keys: vec![
                 Hint::new("k", format!("keep {them}")),
                 Hint::new("e", format!("end {them}")),
-                Hint::new("esc", "keep flow running").kept(),
+                Hint::new("esc", "keep saaio running").kept(),
             ],
             ..Dialog::new("stop", body, theme)
         }

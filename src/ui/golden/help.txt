@@ -1,5 +1,5 @@
 
-  master  main                                                                                              │ ▚▄▞ flow
+  master  main                                                                                              │ ▚▄▞ saaio
                                                                                                             ├────────────────────────────────────────
                                                                                                             │▌0   master
                                                                                                             │▌    ~/projects/shop · main
@@ -20,7 +20,7 @@
                             │    r        resume a session that ended          │                            │
                             │    [        scroll back through the history      │                            │ DONE 1
                             │    d        detach; every session keeps running  │                            │ 4 ✓ shop-198                        2h
-                            │    Q        stop flow                            │                            │     ●───●───●───● MR !418      took 0s
+                            │    Q        stop saaio                           │                            │     ●───●───●───● MR !418      took 0s
                             │    C-space  send C-space itself                  │                            │
                             │    ?        these keys                           │                            │
                             │                                                  │                            │

@@ -57,7 +57,7 @@ fn one_store(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document
             .workspace
             .as_ref()
             .map(|space| Path::new(&space.path).exists());
-        // flow ui reports a config it refuses; status only names the key in a hint.
+        // saaio ui reports a config it refuses; status only names the key in a hint.
         let prefix = env
             .config()
             .map(|config| config.ui.prefix)

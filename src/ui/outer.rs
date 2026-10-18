@@ -12,7 +12,7 @@ use crate::proto::{Modes, Mouse, Size};
 const RESET_MODES: &str =
     "\x1b[?2004l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1l\x1b[?1004l";
 
-/// The real terminal flow ui runs in.
+/// The real terminal saaio ui runs in.
 #[derive(Debug)]
 pub struct Outer {
     mirrored: Modes,

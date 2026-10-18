@@ -47,7 +47,7 @@ impl Areas {
     }
 }
 
-/// The part of the terminal flow draws in: all of it but MARGIN on every side.
+/// The part of the terminal saaio draws in: all of it but MARGIN on every side.
 pub fn screen(size: Size) -> Rect {
     if size.cols < MARGIN_FROM.cols || size.rows < MARGIN_FROM.rows {
         return Rect::new(0, 0, size.cols, size.rows);

@@ -13,38 +13,38 @@ use std::time::{Duration, Instant};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use tempfile::TempDir;
 
-/// The flow binary with a test's own state: `home` as FLOW_HOME, the shared folder inside it, a
+/// The saaio binary with a test's own state: `home` as SAAIO_HOME, the shared folder inside it, a
 /// config file that does not exist (so the built-in agents), no Claude Code home of the user's
-/// and no FLOW_* variable of the shell it runs in.
-fn flow_command(home: &Path) -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_flow"));
+/// and no SAAIO_* variable of the shell it runs in.
+fn saaio_command(home: &Path) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_saaio"));
     for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("FLOW_") {
+        if key.to_string_lossy().starts_with("SAAIO_") {
             command.env_remove(key);
         }
     }
     command
-        .env("FLOW_HOME", home)
+        .env("SAAIO_HOME", home)
         .env("XDG_STATE_HOME", shared(home))
-        .env("FLOW_CONFIG", home.join("no-config.toml"))
+        .env("SAAIO_CONFIG", home.join("no-config.toml"))
         .env("XDG_CONFIG_HOME", home.join("no-config-home"))
         .env("CLAUDE_CONFIG_DIR", home.join("no-claude-home"));
     command
 }
 
-fn flow(home: &Path, args: &[&str]) -> Output {
-    flow_command(home)
+fn saaio(home: &Path, args: &[&str]) -> Output {
+    saaio_command(home)
         .args(args)
         .output()
-        .expect("the flow binary runs")
+        .expect("the saaio binary runs")
 }
 
-fn flow_in(home: &Path, flow_id: &str, args: &[&str]) -> Output {
-    flow_command(home)
+fn saaio_in(home: &Path, flow_id: &str, args: &[&str]) -> Output {
+    saaio_command(home)
         .args(args)
-        .env("FLOW_ID", flow_id)
+        .env("SAAIO_FLOW_ID", flow_id)
         .output()
-        .expect("the flow binary runs")
+        .expect("the saaio binary runs")
 }
 
 /// git in `dir`, which must succeed.
@@ -74,7 +74,7 @@ fn wait_for_socket(socket: &Path) {
     });
 }
 
-/// A flow process the test started, killed when the test ends, also when it fails.
+/// A saaio process the test started, killed when the test ends, also when it fails.
 struct Running(Child);
 
 impl Deref for Running {
@@ -99,7 +99,7 @@ impl Drop for Running {
 }
 
 fn new_flow(home: &Path, name: &str) -> String {
-    let output = flow(
+    let output = saaio(
         home,
         &[
             "new",
@@ -155,7 +155,7 @@ fn seed_blocked(home: &Path) {
 fn the_home_view_shows_the_binary_and_an_empty_state() {
     let home = TempDir::new().unwrap();
 
-    let output = flow(home.path(), &[]);
+    let output = saaio(home.path(), &[]);
 
     assert!(output.status.success());
     let text = stdout(&output);
@@ -167,10 +167,10 @@ fn the_home_view_shows_the_binary_and_an_empty_state() {
 #[test]
 fn the_home_view_shortens_the_binary_only_inside_home() {
     let home = TempDir::new().unwrap();
-    let exe = Path::new(env!("CARGO_BIN_EXE_flow"));
+    let exe = Path::new(env!("CARGO_BIN_EXE_saaio"));
     let folder = exe.parent().unwrap();
     let bin_with = |user_home: &Path| {
-        let output = flow_command(home.path())
+        let output = saaio_command(home.path())
             .env("HOME", user_home)
             .output()
             .unwrap();
@@ -181,13 +181,13 @@ fn the_home_view_shortens_the_binary_only_inside_home() {
 
     assert_eq!(
         bin_with(folder.parent().unwrap()),
-        format!("bin: ~/{name}/flow")
+        format!("bin: ~/{name}/saaio")
     );
     assert_eq!(bin_with(&sibling), format!("bin: {}", exe.display()));
     assert_eq!(bin_with(Path::new("")), format!("bin: {}", exe.display()));
 }
 
-/// Bare `flow` in a real terminal, as a person runs it: the test's own state, in `dir`, with
+/// Bare `saaio` in a real terminal, as a person runs it: the test's own state, in `dir`, with
 /// no agent's shell around it and `env` added.
 struct Terminal {
     child: Box<dyn portable_pty::Child + Send + Sync>,
@@ -197,7 +197,7 @@ struct Terminal {
 
 impl Terminal {
     fn open(home: &Path, dir: &Path, env: &[(&str, &str)]) -> Terminal {
-        let template = flow_command(home);
+        let template = saaio_command(home);
         let mut command = CommandBuilder::new(template.get_program());
         for (key, value) in template.get_envs() {
             match value {
@@ -247,12 +247,12 @@ impl Terminal {
     }
 }
 
-/// Stops the flow server of a store when the test ends, also when it fails.
+/// Stops the saaio server of a store when the test ends, also when it fails.
 struct StopsServer<'a>(&'a Path);
 
 impl Drop for StopsServer<'_> {
     fn drop(&mut self) {
-        let _ = flow(self.0, &["ui", "--stop"]);
+        let _ = saaio(self.0, &["ui", "--stop"]);
     }
 }
 
@@ -264,11 +264,16 @@ impl Drop for Terminal {
 }
 
 #[test]
-fn bare_flow_in_an_agents_or_a_flows_terminal_prints_the_overview() {
+fn bare_saaio_in_an_agents_or_a_flows_terminal_prints_the_overview() {
     let home = TempDir::new().unwrap();
     let _stops = StopsServer(home.path());
 
-    for marker in ["FLOW_ID", "FLOW_MASTER", "CLAUDECODE", "CODEX_THREAD_ID"] {
+    for marker in [
+        "SAAIO_FLOW_ID",
+        "SAAIO_MASTER",
+        "CLAUDECODE",
+        "CODEX_THREAD_ID",
+    ] {
         let mut terminal = Terminal::open(home.path(), home.path(), &[(marker, "1")]);
 
         let status = terminal.child.wait().unwrap();
@@ -285,7 +290,7 @@ fn bare_flow_in_an_agents_or_a_flows_terminal_prints_the_overview() {
 }
 
 #[test]
-fn bare_flow_in_a_persons_terminal_opens_flow_ui() {
+fn bare_saaio_in_a_persons_terminal_opens_saaio_ui() {
     let lab = Lab::new();
     lab.agent(
         r#"command = ["cat"]
@@ -297,7 +302,7 @@ resume = ["cat"]"#,
     let terminal = Terminal::open(&lab.home, &lab.repo, &[]);
 
     wait_for_socket(&lab.home.join("server.sock"));
-    wait_until(Duration::from_secs(5), "flow ui never drew", || {
+    wait_until(Duration::from_secs(5), "saaio ui never drew", || {
         terminal.shows("\x1b[?1049h")
     });
     assert!(!terminal.shows("bin: "), "{}", terminal.text());
@@ -309,14 +314,14 @@ fn status_lists_flows_and_shows_one_in_detail() {
     let home = TempDir::new().unwrap();
     seed_blocked(home.path());
 
-    let list = stdout(&flow(home.path(), &["status"]));
+    let list = stdout(&saaio(home.path(), &["status"]));
     assert!(list.contains("shop-221,blocked,implement,"), "{list}");
     assert!(
         list.contains("blockers[1]{name,blocker}:\n  shop-221,no default"),
         "{list}"
     );
 
-    let detail = stdout(&flow(home.path(), &["status", "shop-221"]));
+    let detail = stdout(&saaio(home.path(), &["status", "shop-221"]));
     assert!(detail.starts_with("name: shop-221\nid: 7f3c\n"), "{detail}");
 }
 
@@ -325,7 +330,7 @@ fn status_json_is_the_versioned_board() {
     let home = TempDir::new().unwrap();
     seed_blocked(home.path());
 
-    let output = flow(home.path(), &["status", "--json"]);
+    let output = saaio(home.path(), &["status", "--json"]);
 
     assert!(output.status.success());
     let board: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -339,7 +344,7 @@ fn status_json_is_the_versioned_board() {
 fn an_unknown_flag_fails_loudly_on_stdout_with_exit_2() {
     let home = TempDir::new().unwrap();
 
-    let output = flow(home.path(), &["status", "--nope"]);
+    let output = saaio(home.path(), &["status", "--nope"]);
 
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stderr.is_empty());
@@ -349,7 +354,7 @@ fn an_unknown_flag_fails_loudly_on_stdout_with_exit_2() {
         "{text}"
     );
     assert!(
-        text.contains("Run `flow status --help` for the usage"),
+        text.contains("Run `saaio status --help` for the usage"),
         "{text}"
     );
 }
@@ -359,11 +364,11 @@ fn a_flag_without_its_value_names_the_command_to_read_up_on() {
     let home = TempDir::new().unwrap();
 
     for (args, command) in [
-        (vec!["start", "--name"], "flow start"),
-        (vec!["report", "--flow"], "flow report"),
-        (vec!["--nope"], "flow"),
+        (vec!["start", "--name"], "saaio start"),
+        (vec!["report", "--flow"], "saaio report"),
+        (vec!["--nope"], "saaio"),
     ] {
-        let output = flow(home.path(), &args);
+        let output = saaio(home.path(), &args);
 
         assert_eq!(output.status.code(), Some(2), "{args:?}");
         let text = stdout(&output);
@@ -378,24 +383,29 @@ fn a_flag_without_its_value_names_the_command_to_read_up_on() {
 fn a_missing_flow_fails_with_exit_1_and_next_steps() {
     let home = TempDir::new().unwrap();
 
-    let output = flow(home.path(), &["status", "shop-999"]);
+    let output = saaio(home.path(), &["status", "shop-999"]);
 
     assert_eq!(output.status.code(), Some(1));
     let text = stdout(&output);
     assert!(text.starts_with("error: no flow named shop-999"), "{text}");
-    assert!(text.contains("Run `flow` to list the flows"), "{text}");
+    assert!(text.contains("Run `saaio` to list the flows"), "{text}");
 }
 
 #[test]
 fn help_and_version_still_print_normally() {
     let home = TempDir::new().unwrap();
 
-    let help = flow(home.path(), &["--help"]);
-    let version = flow(home.path(), &["--version"]);
+    let help = saaio(home.path(), &["--help"]);
+    let version = saaio(home.path(), &["--version"]);
 
     assert!(help.status.success());
-    assert!(stdout(&help).contains("Usage: flow"));
-    assert_eq!(stdout(&version).trim(), "flow 0.1.0");
+    assert!(stdout(&help).contains("Usage: saaio"));
+    assert!(
+        stdout(&help).contains("Run alone in a terminal, saaio opens saaio ui."),
+        "{}",
+        stdout(&help)
+    );
+    assert_eq!(stdout(&version).trim(), "saaio 0.1.0");
 }
 
 #[test]
@@ -403,7 +413,7 @@ fn new_creates_a_flow_once_and_returns_it_again_while_unfinished() {
     let home = TempDir::new().unwrap();
 
     let id = new_flow(home.path(), "shop-221");
-    let again = flow(
+    let again = saaio(
         home.path(),
         &["new", "--name", "shop-221", "--request", "other"],
     );
@@ -411,7 +421,7 @@ fn new_creates_a_flow_once_and_returns_it_again_while_unfinished() {
     let text = stdout(&again);
     assert_eq!(id_in(&text), id, "{text}");
     assert!(text.contains("existing: true"), "{text}");
-    assert!(stdout(&flow(home.path(), &["status"])).contains("count: 1"));
+    assert!(stdout(&saaio(home.path(), &["status"])).contains("count: 1"));
 }
 
 #[test]
@@ -419,22 +429,22 @@ fn report_appends_events_to_the_flow_in_flow_id() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");
 
-    let phase = flow_in(home.path(), &id, &["report", "phase", "implement"]);
-    flow_in(home.path(), &id, &["report", "tasks", "4", "9"]);
-    flow_in(
+    let phase = saaio_in(home.path(), &id, &["report", "phase", "implement"]);
+    saaio_in(home.path(), &id, &["report", "tasks", "4", "9"]);
+    saaio_in(
         home.path(),
         &id,
         &["report", "review", "--fixed", "3", "--open", "1"],
     );
-    let blocked = flow_in(home.path(), &id, &["report", "blocked", "no default"]);
+    let blocked = saaio_in(home.path(), &id, &["report", "blocked", "no default"]);
 
     assert_eq!(
         stdout(&phase),
-        "flow: shop-221\nstate: working\nphase: implement\nhelp[1]: Run `flow status shop-221` for its phases and timeline\n"
+        "flow: shop-221\nstate: working\nphase: implement\nhelp[1]: Run `saaio status shop-221` for its phases and timeline\n"
     );
     assert!(stdout(&blocked).contains("state: blocked"));
     let board: serde_json::Value =
-        serde_json::from_slice(&flow(home.path(), &["status", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&saaio(home.path(), &["status", "--json"]).stdout).unwrap();
     let shown = &board["flows"][0];
     assert_eq!(shown["blocker"], "no default");
     assert_eq!(shown["tasks"]["done"], 4);
@@ -450,17 +460,17 @@ fn a_flow_walks_the_configured_workflow_and_refuses_another_phase() {
     )
     .unwrap();
 
-    let created = flow(
+    let created = saaio(
         home.path(),
         &["new", "--name", "shop-221", "--request", "add CSV export"],
     );
     let id = id_in(&stdout(&created));
-    let build = flow_in(home.path(), &id, &["report", "phase", "build"]);
-    let review = flow_in(home.path(), &id, &["report", "phase", "review"]);
-    let capital = flow_in(home.path(), &id, &["report", "phase", "Build"]);
+    let build = saaio_in(home.path(), &id, &["report", "phase", "build"]);
+    let review = saaio_in(home.path(), &id, &["report", "phase", "review"]);
+    let capital = saaio_in(home.path(), &id, &["report", "phase", "Build"]);
 
     assert!(
-        stdout(&created).contains("Run `flow report --flow shop-221 phase spec` when spec starts"),
+        stdout(&created).contains("Run `saaio report --flow shop-221 phase spec` when spec starts"),
         "{}",
         stdout(&created)
     );
@@ -482,7 +492,7 @@ fn a_flow_walks_the_configured_workflow_and_refuses_another_phase() {
     );
     assert_eq!(capital.status.code(), Some(2));
     let board: serde_json::Value =
-        serde_json::from_slice(&flow(home.path(), &["status", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&saaio(home.path(), &["status", "--json"]).stdout).unwrap();
     let steps: Vec<&str> = board["flows"][0]["steps"]
         .as_array()
         .unwrap()
@@ -503,7 +513,7 @@ fn a_plain_session_refuses_a_phase_and_says_it_has_none() {
     )
     .unwrap();
 
-    let report = flow(
+    let report = saaio(
         home.path(),
         &["report", "--flow", "scratch", "phase", "plan"],
     );
@@ -526,7 +536,7 @@ fn report_takes_a_flow_name_from_the_flag() {
     let home = TempDir::new().unwrap();
     new_flow(home.path(), "shop-221");
 
-    let output = flow(
+    let output = saaio(
         home.path(),
         &[
             "report",
@@ -545,7 +555,7 @@ fn report_takes_a_flow_name_from_the_flag() {
 fn report_without_a_flow_id_is_skipped_not_failed() {
     let home = TempDir::new().unwrap();
 
-    let output = flow(home.path(), &["report", "working"]);
+    let output = saaio(home.path(), &["report", "working"]);
 
     assert!(output.status.success());
     assert!(stdout(&output).starts_with("skipped: no flow id"));
@@ -555,7 +565,7 @@ fn report_without_a_flow_id_is_skipped_not_failed() {
 fn report_to_a_flow_that_does_not_exist_fails_with_exit_1() {
     let home = TempDir::new().unwrap();
 
-    let output = flow(home.path(), &["report", "--flow", "shop-999", "working"]);
+    let output = saaio(home.path(), &["report", "--flow", "shop-999", "working"]);
 
     assert_eq!(output.status.code(), Some(1));
     assert!(stdout(&output).starts_with("error: no flow named shop-999"));
@@ -566,7 +576,7 @@ fn a_heartbeat_marks_the_flow_alive_without_an_event() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");
 
-    let output = flow_in(home.path(), &id, &["report", "heartbeat"]);
+    let output = saaio_in(home.path(), &id, &["report", "heartbeat"]);
 
     assert!(output.status.success());
     assert!(home.path().join(format!("flows/{id}.alive")).exists());
@@ -579,21 +589,21 @@ fn clear_forgets_finished_flows_only() {
     let home = TempDir::new().unwrap();
     let done = new_flow(home.path(), "export-csv");
     new_flow(home.path(), "shop-221");
-    flow_in(
+    saaio_in(
         home.path(),
         &done,
         &["report", "merge-request", "https://x/88"],
     );
 
-    let cleared = flow(home.path(), &["clear"]);
-    let again = flow(home.path(), &["clear"]);
+    let cleared = saaio(home.path(), &["clear"]);
+    let again = saaio(home.path(), &["clear"]);
 
     assert_eq!(
         stdout(&cleared),
-        "cleared: 1\nnames[1]: export-csv\nhelp[1]: Run `flow` to see what is left\n"
+        "cleared: 1\nnames[1]: export-csv\nhelp[1]: Run `saaio` to see what is left\n"
     );
     assert!(stdout(&again).starts_with("cleared: 0"));
-    let list = stdout(&flow(home.path(), &["status"]));
+    let list = stdout(&saaio(home.path(), &["status"]));
     assert!(
         list.contains("count: 1") && list.contains("shop-221"),
         "{list}"
@@ -638,16 +648,16 @@ impl Lab {
         self.run(&all)
     }
 
-    /// Runs flow in the repo with the lab's state.
+    /// Runs saaio in the repo with the lab's state.
     fn run(&self, args: &[&str]) -> Output {
-        flow_command(&self.home)
+        saaio_command(&self.home)
             .args(args)
             .current_dir(&self.repo)
             .output()
             .unwrap()
     }
 
-    /// The claude agent flow runs, as config.toml lines.
+    /// The claude agent saaio runs, as config.toml lines.
     fn agent(&self, lines: &str) {
         fs::create_dir_all(&self.home).unwrap();
         fs::write(
@@ -657,9 +667,9 @@ impl Lab {
         .unwrap();
     }
 
-    /// `flow server` in the repo, once it listens.
+    /// `saaio server` in the repo, once it listens.
     fn server(&self) -> Running {
-        let server = flow_command(&self.home)
+        let server = saaio_command(&self.home)
             .arg("server")
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -688,7 +698,7 @@ impl Lab {
 
     /// A commit in the flow's worktree, on its branch only.
     fn commit_in(&self, name: &str) {
-        let worktree = self.repo.join(".flow/worktrees").join(name);
+        let worktree = self.repo.join(".saaio/worktrees").join(name);
         fs::write(worktree.join("work.txt"), "done").unwrap();
         git(&worktree, &["add", "work.txt"]);
         git(
@@ -707,7 +717,7 @@ impl Lab {
     }
 
     fn hook(&self, name: &str, script: &str) {
-        let dir = self.repo.join(".flow");
+        let dir = self.repo.join(".saaio");
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join(name), script).unwrap();
         set_executable(&dir.join(name));
@@ -719,15 +729,18 @@ fn set_executable(file: &Path) {
 }
 
 #[test]
-fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_flow_ui() {
+fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_saaio_ui() {
     let lab = Lab::new();
-    lab.hook("setup", "#!/bin/sh\necho \"slot $FLOW_SLOT\" > setup-ran\n");
+    lab.hook(
+        "setup",
+        "#!/bin/sh\necho \"slot $SAAIO_SLOT\" > setup-ran\n",
+    );
 
     let output = lab.start(&["SHOP-217 add CSV export"]);
 
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
-    let worktree = lab.repo.join(".flow/worktrees/shop-217");
+    let worktree = lab.repo.join(".saaio/worktrees/shop-217");
     assert!(text.starts_with("flow: shop-217\n"), "{text}");
     assert!(
         text.contains(&format!("worktree: {}", worktree.display())),
@@ -735,11 +748,11 @@ fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_flow_ui() {
     );
     assert!(
         text.contains(
-            "branch: flow/shop-217\nslot: 1\nsetup: ran\nagent: claude\npane: when flow ui runs"
+            "branch: flow/shop-217\nslot: 1\nsetup: ran\nagent: claude\npane: when saaio ui runs"
         ),
         "{text}"
     );
-    assert!(text.contains("Run `flow ui` to open the worker"), "{text}");
+    assert!(text.contains("Run `saaio ui` to open the worker"), "{text}");
     assert_eq!(
         fs::read_to_string(worktree.join("setup-ran"))
             .unwrap()
@@ -748,7 +761,7 @@ fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_flow_ui() {
     );
 
     let board: serde_json::Value =
-        serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&saaio(&lab.home, &["status", "--json"]).stdout).unwrap();
     assert_eq!(
         board["flows"][0]["workspace"]["window"],
         serde_json::Value::Null
@@ -768,7 +781,7 @@ fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_flow_ui() {
 }
 
 #[test]
-fn start_hands_the_worker_to_a_running_flow_server() {
+fn start_hands_the_worker_to_a_running_saaio_server() {
     let lab = Lab::new();
     lab.agent(
         r#"command = ["cat"]
@@ -782,13 +795,13 @@ resume = ["cat"]"#,
     let text = stdout(&output);
     assert!(text.contains("pane: opening"), "{text}");
     assert!(
-        text.contains("flow ui opens shop-217 in its sidebar"),
+        text.contains("saaio ui opens shop-217 in its sidebar"),
         "{text}"
     );
     let hosted = || {
         let board: serde_json::Value =
-            serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
-        board["flows"][0]["workspace"]["window"] == "flow-ui"
+            serde_json::from_slice(&saaio(&lab.home, &["status", "--json"]).stdout).unwrap();
+        board["flows"][0]["workspace"]["window"] == "saaio-ui"
     };
     wait_until(
         Duration::from_secs(5),
@@ -803,7 +816,7 @@ resume = ["cat"]"#,
 fn status_says_where_a_flows_code_is_and_whether_its_worktree_is_left() {
     let lab = Lab::new();
     assert!(lab.start(&["SHOP-217 add CSV export"]).status.success());
-    let worktree = lab.repo.join(".flow/worktrees/shop-217");
+    let worktree = lab.repo.join(".saaio/worktrees/shop-217");
     assert!(
         lab.run(&["report", "--flow", "shop-217", "ended"])
             .status
@@ -819,18 +832,21 @@ fn status_says_where_a_flows_code_is_and_whether_its_worktree_is_left() {
         )),
         "{ended}"
     );
-    assert!(ended.contains("C-space r in flow ui resumes it"), "{ended}");
+    assert!(
+        ended.contains("C-space r in saaio ui resumes it"),
+        "{ended}"
+    );
     let config = lab.home.join("no-config.toml");
     fs::write(&config, "[ui]\nprefix = \"C-b\"\n").unwrap();
     let ended = stdout(&lab.run(&["status", "shop-217"]));
-    assert!(ended.contains("C-b r in flow ui resumes it"), "{ended}");
+    assert!(ended.contains("C-b r in saaio ui resumes it"), "{ended}");
     fs::write(&config, "[ui]\nprefix = \"C-c\"\n").unwrap();
     let broken = lab.run(&["status", "shop-217"]);
     assert!(
         broken.status.success(),
-        "a config flow ui refuses leaves status working"
+        "a config saaio ui refuses leaves status working"
     );
-    assert!(stdout(&broken).contains("C-space r in flow ui resumes it"));
+    assert!(stdout(&broken).contains("C-space r in saaio ui resumes it"));
     fs::remove_file(&config).unwrap();
     git(
         &lab.repo,
@@ -906,28 +922,28 @@ resume = ["cat"]"#,
     });
     assert_eq!(prompt(), request);
     let board: serde_json::Value =
-        serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&saaio(&lab.home, &["status", "--json"]).stdout).unwrap();
     assert_eq!(board["flows"][0]["request"], request.as_str());
     assert!(lab.run(&["ui", "--stop"]).status.success());
     assert!(server.wait().unwrap().success());
 }
 
-/// Runs `flow hook claude-code` with a hook payload on stdin, as Claude Code does.
+/// Runs `saaio hook claude-code` with a hook payload on stdin, as Claude Code does.
 fn hook(home: &Path, flow_id: Option<&str>, payload: &str) -> Output {
     hook_with(home, &["claude-code"], flow_id, payload)
 }
 
-/// Runs `flow hook <args>` with a hook payload on stdin.
+/// Runs `saaio hook <args>` with a hook payload on stdin.
 fn hook_with(home: &Path, args: &[&str], flow_id: Option<&str>, payload: &str) -> Output {
     feed(hook_command(home, args, flow_id), payload)
 }
 
-/// `flow hook <args>` for the flow `flow_id`, not yet run.
+/// `saaio hook <args>` for the flow `flow_id`, not yet run.
 fn hook_command(home: &Path, args: &[&str], flow_id: Option<&str>) -> Command {
-    let mut command = flow_command(home);
+    let mut command = saaio_command(home);
     command.arg("hook").args(args);
     if let Some(id) = flow_id {
-        command.env("FLOW_ID", id);
+        command.env("SAAIO_FLOW_ID", id);
     }
     command
 }
@@ -963,7 +979,7 @@ fn a_hook_event_reports_into_the_flow_silently_and_only_once() {
         assert!(output.status.success());
         assert!(output.stdout.is_empty(), "{}", stdout(output));
     }
-    let detail = stdout(&flow(home.path(), &["status", "shop-221"]));
+    let detail = stdout(&saaio(home.path(), &["status", "shop-221"]));
     assert!(detail.contains("phase: plan"), "{detail}");
     let log = fs::read_to_string(home.path().join(format!("flows/{id}.jsonl"))).unwrap();
     assert_eq!(
@@ -975,7 +991,7 @@ fn a_hook_event_reports_into_the_flow_silently_and_only_once() {
     );
 }
 
-/// What `flow send` would append: the master's message to the flow's worker.
+/// What `saaio send` would append: the master's message to the flow's worker.
 fn message_for(home: &Path, id: &str, text: &str) {
     let line = format!("{{\"v\":1,\"at\":5,\"kind\":\"message\",\"text\":\"{text}\"}}\n");
     let mut log = fs::OpenOptions::new()
@@ -1007,9 +1023,9 @@ fn a_codex_stop_hands_the_masters_message_over_and_goes_on_working() {
     assert_eq!(handed.status.code(), Some(2), "Codex goes on with stderr");
     assert!(handed.stdout.is_empty());
     let news = String::from_utf8_lossy(&handed.stderr);
-    assert!(news.contains("message from the flow master:"), "{news}");
+    assert!(news.contains("message from the saaio master:"), "{news}");
     assert!(news.contains("Tabs."), "{news}");
-    let detail = stdout(&flow(home.path(), &["status", "shop-221", "--json"]));
+    let detail = stdout(&saaio(home.path(), &["status", "shop-221", "--json"]));
     assert!(detail.contains(r#""state": "working""#), "{detail}");
     assert!(
         detail.contains(r#""id": "01a1""#),
@@ -1034,7 +1050,10 @@ fn a_claude_code_turn_marks_the_session_busy_and_its_stop_hands_nothing_over() {
     assert_eq!(fs::read_to_string(&busy).unwrap(), "turn");
     message_for(home.path(), &id, "Tabs.");
     let stopped = hook(home.path(), Some(&id), stop);
-    assert!(stopped.status.success(), "flow wait wakes it, not its Stop");
+    assert!(
+        stopped.status.success(),
+        "saaio wait wakes it, not its Stop"
+    );
     assert!(stopped.stdout.is_empty() && stopped.stderr.is_empty());
     assert!(!busy.exists(), "idle after its Stop");
 
@@ -1063,11 +1082,11 @@ fn a_codex_master_records_its_session_and_reports_nothing() {
     let id = new_flow(home.path(), "shop-221");
     let prompt = r#"{"session_id":"02b2","hook_event_name":"UserPromptSubmit","prompt":"status?"}"#;
 
-    let mut command = flow_command(home.path());
+    let mut command = saaio_command(home.path());
     command
         .args(["hook", "codex"])
-        .env("FLOW_MASTER", "1")
-        .env("FLOW_ID", &id)
+        .env("SAAIO_MASTER", "1")
+        .env("SAAIO_FLOW_ID", &id)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1093,10 +1112,10 @@ fn a_codex_master_records_its_session_and_reports_nothing() {
     assert!(!log.contains("02b2"), "{log}");
 }
 
-/// Runs `flow hook claude-code` as the master's pane does.
+/// Runs `saaio hook claude-code` as the master's pane does.
 fn master_hook(home: &Path, payload: &str) -> Output {
     let mut command = hook_command(home, &["claude-code"], None);
-    command.env("FLOW_MASTER", "1");
+    command.env("SAAIO_MASTER", "1");
     feed(command, payload)
 }
 
@@ -1145,7 +1164,7 @@ fn a_woken_master_turn_that_ends_idle_again_is_a_new_turn() {
     assert!(kept.contains(r#""state":"idle""#), "{kept}");
     assert!(
         !kept.contains(r#""at":1}"#),
-        "a turn woken by flow wait runs no prompt hook, so its end must still count: {kept}"
+        "a turn woken by saaio wait runs no prompt hook, so its end must still count: {kept}"
     );
 }
 
@@ -1187,7 +1206,7 @@ fn a_merge_request_counts_only_for_the_flows_own_repo() {
         &created("https://github.com/probe/repo/pull/7"),
     );
     assert!(probe.status.success());
-    let status = stdout(&flow(home.path(), &["status", "shop-221"]));
+    let status = stdout(&saaio(home.path(), &["status", "shop-221"]));
     assert!(!status.contains("probe/repo"), "today's case: {status}");
     assert!(!status.contains("done"), "{status}");
 
@@ -1196,7 +1215,7 @@ fn a_merge_request_counts_only_for_the_flows_own_repo() {
         Some(&id),
         &created("https://github.com/shop/app/pull/12"),
     );
-    let status = stdout(&flow(home.path(), &["status", "shop-221"]));
+    let status = stdout(&saaio(home.path(), &["status", "shop-221"]));
     assert!(
         status.contains("https://github.com/shop/app/pull/12"),
         "{status}"
@@ -1243,7 +1262,7 @@ fn a_merge_request_of_a_forks_upstream_counts() {
         r#"{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"gh pr create --fill"},"tool_response":{"stdout":"https://github.com/shop/app/pull/12\n"}}"#,
     );
 
-    let status = stdout(&flow(home.path(), &["status", "shop-221"]));
+    let status = stdout(&saaio(home.path(), &["status", "shop-221"]));
     assert!(
         status.contains("https://github.com/shop/app/pull/12"),
         "gh pr create in a fork opens it upstream: {status}"
@@ -1295,7 +1314,7 @@ fn a_merge_request_counts_through_an_ssh_host_alias() {
     );
     assert!(output.status.success());
 
-    let status = stdout(&flow(home.path(), &["status", "shop-221"]));
+    let status = stdout(&saaio(home.path(), &["status", "shop-221"]));
     assert!(
         status.contains("https://github.com/shop/app/pull/12"),
         "origin git@github-work: is github.com: {status}"
@@ -1319,7 +1338,7 @@ fn a_hook_keeps_reporting_when_the_config_does_not_load() {
     assert!(output.stdout.is_empty(), "{}", stdout(&output));
     let err = String::from_utf8_lossy(&output.stderr);
     assert!(err.contains("no-config.toml is not valid"), "{err}");
-    let detail = stdout(&flow(home.path(), &["status", "shop-221"]));
+    let detail = stdout(&saaio(home.path(), &["status", "shop-221"]));
     assert!(detail.contains("phase: plan"), "{detail}");
 }
 
@@ -1346,7 +1365,7 @@ fn a_hook_never_fails_or_prints_whatever_it_gets() {
     }
     assert!(String::from_utf8_lossy(&cases[1].stderr).contains("not JSON"));
     assert!(String::from_utf8_lossy(&cases[2].stderr).contains("no flow no-such-flow"));
-    let list = stdout(&flow(home.path(), &["status"]));
+    let list = stdout(&saaio(home.path(), &["status"]));
     assert!(!list.contains("waiting"), "{list}");
 }
 
@@ -1355,7 +1374,7 @@ fn start_refuses_outside_a_repository() {
     let lab = Lab::new();
     let elsewhere = TempDir::new().unwrap();
 
-    let output = flow_command(&lab.home)
+    let output = saaio_command(&lab.home)
         .args(["start", "x"])
         .current_dir(elsewhere.path())
         .output()
@@ -1390,7 +1409,7 @@ fn start_refuses_a_config_with_the_top_level_agent_key() {
 
 /// The slots claimed in the lab's shared folder.
 fn claimed_slots(home: &Path) -> Vec<String> {
-    fs::read_dir(shared(home).join("flow/slots"))
+    fs::read_dir(shared(home).join("saaio/slots"))
         .map(|entries| {
             entries
                 .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
@@ -1406,7 +1425,7 @@ fn start_plain_opens_an_agent_in_any_folder_without_a_worktree_branch_or_slot() 
     let scratch = lab.dir.path().canonicalize().unwrap().join("scratch");
     fs::create_dir_all(&scratch).unwrap();
 
-    let output = flow_command(&lab.home)
+    let output = saaio_command(&lab.home)
         .args(["start", "--plain"])
         .arg(&scratch)
         .current_dir(&scratch)
@@ -1426,17 +1445,17 @@ fn start_plain_opens_an_agent_in_any_folder_without_a_worktree_branch_or_slot() 
         text.contains(&format!(
             "folder: {}
 agent: claude
-pane: when flow ui runs",
+pane: when saaio ui runs",
             scratch.display()
         )),
         "{text}"
     );
     assert!(!text.contains("branch"), "{text}");
-    assert!(!scratch.join(".flow").exists(), "no worktree");
+    assert!(!scratch.join(".saaio").exists(), "no worktree");
     assert!(claimed_slots(&lab.home).is_empty(), "no slot");
 
     let board: serde_json::Value =
-        serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&saaio(&lab.home, &["status", "--json"]).stdout).unwrap();
     let session = &board["flows"][0];
     assert_eq!(session["mode"], "plain");
     assert_eq!(session["state"], "idle", "it waits at an empty prompt");
@@ -1453,7 +1472,7 @@ fn start_plain_takes_a_name_and_a_folder_under_home() {
     let home = lab.dir.path().canonicalize().unwrap();
     fs::create_dir_all(home.join("scratch")).unwrap();
 
-    let output = flow_command(&lab.home)
+    let output = saaio_command(&lab.home)
         .args(["start", "--plain", "~/scratch", "--name", "Try It"])
         .env("HOME", &home)
         .current_dir(&lab.repo)
@@ -1518,7 +1537,7 @@ fn start_plain_refuses_a_request_mode_or_type_and_a_missing_folder() {
     assert_eq!(lab.start(&["--plain", "file.txt"]).status.code(), Some(1));
 
     let board: serde_json::Value =
-        serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&saaio(&lab.home, &["status", "--json"]).stdout).unwrap();
     assert_eq!(board["count"], 0, "nothing written");
 }
 
@@ -1563,9 +1582,9 @@ fn a_failing_setup_marks_the_flow_blocked_but_still_records_the_worker() {
         text.contains("setup: \"failed: port 8001 is taken\""),
         "{text}"
     );
-    assert!(text.contains("pane: when flow ui runs"), "{text}");
+    assert!(text.contains("pane: when saaio ui runs"), "{text}");
     let board: serde_json::Value =
-        serde_json::from_slice(&flow(&lab.home, &["status", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&saaio(&lab.home, &["status", "--json"]).stdout).unwrap();
     assert_eq!(board["flows"][0]["state"], "blocked");
     assert_eq!(
         board["flows"][0]["blocker"],
@@ -1609,7 +1628,7 @@ fn start_says_when_every_slot_is_taken() {
 #[test]
 fn a_start_whose_worktree_fails_forgets_its_flow_and_gives_its_slot_back() {
     let lab = Lab::new();
-    let worktrees = lab.repo.join(".flow/worktrees");
+    let worktrees = lab.repo.join(".saaio/worktrees");
     fs::create_dir_all(&worktrees).unwrap();
     fs::write(worktrees.join("shop-9"), "in the way").unwrap();
 
@@ -1619,7 +1638,7 @@ fn a_start_whose_worktree_fails_forgets_its_flow_and_gives_its_slot_back() {
     let logs = fs::read_dir(lab.home.join("flows")).map_or(0, Iterator::count);
     assert_eq!(logs, 0, "the failed start forgets its flow");
     assert!(
-        !shared(&lab.home).join("flow/slots/1").exists(),
+        !shared(&lab.home).join("saaio/slots/1").exists(),
         "the failed start gives its slot back"
     );
 }
@@ -1630,7 +1649,7 @@ fn projects_never_share_a_slot_and_show_up_together() {
     let mut api = Lab::new();
     api.home = shop.dir.path().join("projects/api");
     let shared_with_shop = |lab: &Lab, args: &[&str]| {
-        flow_command(&lab.home)
+        saaio_command(&lab.home)
             .args(args)
             .current_dir(&lab.repo)
             .env("XDG_STATE_HOME", shared(&shop.home))
@@ -1662,8 +1681,8 @@ fn projects_never_share_a_slot_and_show_up_together() {
 #[test]
 fn a_failed_start_gives_its_slot_back() {
     let lab = Lab::new();
-    fs::create_dir_all(lab.repo.join(".flow/worktrees/shop-1")).unwrap();
-    fs::write(lab.repo.join(".flow/worktrees/shop-1/x"), "in the way").unwrap();
+    fs::create_dir_all(lab.repo.join(".saaio/worktrees/shop-1")).unwrap();
+    fs::write(lab.repo.join(".saaio/worktrees/shop-1/x"), "in the way").unwrap();
 
     let failed = lab.start(&["SHOP-1 one"]);
     let next = lab.start(&["SHOP-2 two"]);
@@ -1679,22 +1698,22 @@ fn clear_tears_down_and_removes_clean_worktrees_but_keeps_uncommitted_work() {
     let lab = Lab::new();
     lab.hook(
         "teardown",
-        "#!/bin/sh\necho \"$FLOW_NAME\" >> \"$FLOW_REPO/torn-down\"\n",
+        "#!/bin/sh\necho \"$SAAIO_FLOW_NAME\" >> \"$SAAIO_REPO/torn-down\"\n",
     );
     assert!(lab.start(&["SHOP-1 clean one"]).status.success());
     assert!(lab.start(&["SHOP-2 dirty one"]).status.success());
     assert!(lab.start(&["SHOP-3 still running"]).status.success());
-    let worktrees = lab.repo.join(".flow/worktrees");
+    let worktrees = lab.repo.join(".saaio/worktrees");
     fs::write(worktrees.join("shop-2/work.txt"), "unsaved").unwrap();
     for name in ["shop-1", "shop-2"] {
         assert!(
-            flow(&lab.home, &["report", "--flow", name, "ended"])
+            saaio(&lab.home, &["report", "--flow", name, "ended"])
                 .status
                 .success()
         );
     }
 
-    let output = flow(&lab.home, &["clear"]);
+    let output = saaio(&lab.home, &["clear"]);
 
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
@@ -1728,7 +1747,7 @@ fn remove_tears_down_and_forgets_a_running_flow() {
     let lab = Lab::new();
     lab.hook(
         "teardown",
-        "#!/bin/sh\necho \"$FLOW_NAME\" >> \"$FLOW_REPO/torn-down\"\n",
+        "#!/bin/sh\necho \"$SAAIO_FLOW_NAME\" >> \"$SAAIO_REPO/torn-down\"\n",
     );
     assert!(lab.start(&["SHOP-1 first try"]).status.success());
     assert!(lab.start(&["SHOP-2 keep me"]).status.success());
@@ -1741,14 +1760,14 @@ fn remove_tears_down_and_forgets_a_running_flow() {
         text.starts_with("removed: shop-1\npane: none\nworktree: removed\nbranch: deleted\n"),
         "{text}"
     );
-    assert!(!lab.repo.join(".flow/worktrees/shop-1").exists());
+    assert!(!lab.repo.join(".saaio/worktrees/shop-1").exists());
     assert_eq!(
         fs::read_to_string(lab.repo.join("torn-down"))
             .unwrap()
             .trim(),
         "shop-1"
     );
-    let list = stdout(&flow(&lab.home, &["status"]));
+    let list = stdout(&saaio(&lab.home, &["status"]));
     assert!(
         list.contains("count: 1") && list.contains("shop-2"),
         "{list}"
@@ -1758,12 +1777,12 @@ fn remove_tears_down_and_forgets_a_running_flow() {
 #[test]
 fn remove_forgets_a_plain_session_and_leaves_its_folder_alone() {
     let lab = Lab::new();
-    lab.hook("teardown", "#!/bin/sh\ntouch \"$FLOW_REPO/torn-down\"\n");
-    let folder = lab.repo.join(".flow/worktrees/mine");
+    lab.hook("teardown", "#!/bin/sh\ntouch \"$SAAIO_REPO/torn-down\"\n");
+    let folder = lab.repo.join(".saaio/worktrees/mine");
     fs::create_dir_all(&folder).unwrap();
     fs::write(folder.join("notes.txt"), "keep").unwrap();
     assert!(
-        lab.start(&["--plain", ".flow/worktrees/mine"])
+        lab.start(&["--plain", ".saaio/worktrees/mine"])
             .status
             .success()
     );
@@ -1793,15 +1812,15 @@ fn remove_forgets_a_plain_session_and_leaves_its_folder_alone() {
         "keep"
     );
     assert!(!lab.repo.join("torn-down").exists(), "no teardown");
-    assert!(stdout(&flow(&lab.home, &["status"])).contains("count: 0"));
+    assert!(stdout(&saaio(&lab.home, &["status"])).contains("count: 0"));
 }
 
 #[test]
 fn start_names_the_branch_after_the_repos_convention() {
     let lab = Lab::new();
-    fs::create_dir_all(lab.repo.join(".flow")).unwrap();
+    fs::create_dir_all(lab.repo.join(".saaio")).unwrap();
     fs::write(
-        lab.repo.join(".flow/config.toml"),
+        lab.repo.join(".saaio/config.toml"),
         "[branch]\nname = \"{type}/{ticket}-{slug}\"\ntypes = [\"feature\", \"bugfix\"]\n",
     )
     .unwrap();
@@ -1822,7 +1841,7 @@ fn start_names_the_branch_after_the_repos_convention() {
         stdout(&feature)
     );
     assert!(
-        lab.repo.join(".flow/worktrees/shop-1").exists(),
+        lab.repo.join(".saaio/worktrees/shop-1").exists(),
         "worktrees keep the flow's name"
     );
     assert_eq!(unknown.status.code(), Some(1));
@@ -1845,7 +1864,7 @@ fn start_refuses_a_type_in_a_repo_without_types() {
 
     assert_eq!(output.status.code(), Some(1));
     assert!(
-        stdout(&output).contains("no .flow/config.toml"),
+        stdout(&output).contains("no .saaio/config.toml"),
         "{}",
         stdout(&output)
     );
@@ -1866,11 +1885,11 @@ fn remove_keeps_a_branch_with_its_own_commits_unless_told() {
         "{text}"
     );
     assert!(
-        text.contains("flow remove shop-1 --delete-unmerged"),
+        text.contains("saaio remove shop-1 --delete-unmerged"),
         "{text}"
     );
     assert!(
-        lab.repo.join(".flow/worktrees/shop-1").exists(),
+        lab.repo.join(".saaio/worktrees/shop-1").exists(),
         "nothing touched"
     );
     assert!(stdout(&lab.run(&[])).contains("shop-1"));
@@ -1887,7 +1906,7 @@ fn remove_keeps_a_branch_with_its_own_commits_unless_told() {
 fn remove_refuses_uncommitted_work_unless_forced() {
     let lab = Lab::new();
     assert!(lab.start(&["SHOP-1 dirty"]).status.success());
-    let worktree = lab.repo.join(".flow/worktrees/shop-1");
+    let worktree = lab.repo.join(".saaio/worktrees/shop-1");
     fs::write(worktree.join("work.txt"), "unsaved").unwrap();
 
     let refused = lab.run(&["remove", "shop-1"]);
@@ -1897,7 +1916,7 @@ fn remove_refuses_uncommitted_work_unless_forced() {
         text.starts_with("error: shop-1 has uncommitted work"),
         "{text}"
     );
-    assert!(text.contains("flow remove shop-1 --force"), "{text}");
+    assert!(text.contains("saaio remove shop-1 --force"), "{text}");
     assert!(worktree.exists());
     assert!(stdout(&lab.run(&[])).contains("shop-1"));
 
@@ -1936,11 +1955,11 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     let socket = home.path().join("server.sock");
     let log = home.path().join("server.log");
 
-    let none = flow(home.path(), &["ui", "--stop"]);
+    let none = saaio(home.path(), &["ui", "--stop"]);
     assert!(none.status.success());
-    assert_eq!(stdout(&none).trim(), "no flow server runs");
+    assert_eq!(stdout(&none).trim(), "no saaio server runs");
 
-    let server = flow_command(home.path())
+    let server = saaio_command(home.path())
         .arg("server")
         .stdout(Stdio::null())
         .stderr(
@@ -1950,18 +1969,18 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
                 .open(&log)
                 .unwrap(),
         )
-        .env("FLOW_CONFIG", &config)
+        .env("SAAIO_CONFIG", &config)
         .spawn()
         .unwrap();
     let server_pid = server.id();
     let mut server = Running(server);
     wait_for_socket(&socket);
 
-    let stopped = flow(home.path(), &["ui", "--stop"]);
+    let stopped = saaio(home.path(), &["ui", "--stop"]);
 
     assert_eq!(
         stdout(&stopped).trim(),
-        "stopped the flow server and every session in it"
+        "stopped the saaio server and every session in it"
     );
     assert!(server.wait().unwrap().success());
     assert!(!socket.exists());
@@ -1976,9 +1995,9 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     };
     let pid_of = |line: &str| line.split(['[', ']']).nth(1).unwrap().to_string();
     let server_said = format!("[{server_pid}] ");
-    assert!(said("started (flow ").contains(&server_said));
+    assert!(said("started (saaio ").contains(&server_said));
     let stopper = said(&format!("sends SIGTERM to pid {server_pid}"));
-    assert!(stopper.contains("flow ui --stop (flow "), "{stopper}");
+    assert!(stopper.contains("saaio ui --stop (saaio "), "{stopper}");
     let stopping = said("stopping: SIGTERM from pid ");
     assert!(stopping.contains(&server_said), "{stopping}");
     assert!(
@@ -1994,20 +2013,20 @@ fn ui_refuses_inside_a_worker_on_its_own_store_and_points_to_a_scratch_home() {
     let id = new_flow(home.path(), "shop-221");
 
     for args in [&["ui"][..], &["ui", "--stop"]] {
-        let refused = flow_in(home.path(), &id, args);
+        let refused = saaio_in(home.path(), &id, args);
         assert_eq!(refused.status.code(), Some(1), "{args:?}");
         let text = stdout(&refused);
         assert!(
-            text.contains("would take over the user's flow ui"),
+            text.contains("would take over the user's saaio ui"),
             "{text}"
         );
-        assert!(text.contains("FLOW_HOME"), "{text}");
+        assert!(text.contains("SAAIO_HOME"), "{text}");
     }
 
     let scratch = TempDir::new().unwrap();
-    let elsewhere = flow_in(scratch.path(), &id, &["ui", "--stop"]);
+    let elsewhere = saaio_in(scratch.path(), &id, &["ui", "--stop"]);
     assert!(elsewhere.status.success(), "{}", stdout(&elsewhere));
-    assert_eq!(stdout(&elsewhere).trim(), "no flow server runs");
+    assert_eq!(stdout(&elsewhere).trim(), "no saaio server runs");
 }
 
 #[test]
@@ -2016,7 +2035,7 @@ fn ui_refuses_a_prefix_the_panes_need_before_it_starts_anything() {
     let config = home.path().join("no-config.toml");
     fs::write(&config, "[ui]\nprefix = \"C-c\"\n").unwrap();
 
-    let refused = flow(home.path(), &["ui"]);
+    let refused = saaio(home.path(), &["ui"]);
 
     assert_eq!(refused.status.code(), Some(1));
     let text = stdout(&refused);
@@ -2033,7 +2052,7 @@ fn ui_refuses_a_prefix_the_panes_need_before_it_starts_anything() {
     );
 
     fs::write(&config, "[ui]\nprefix = \"Ctrl+b\"\n").unwrap();
-    let unknown = stdout(&flow(home.path(), &["ui"]));
+    let unknown = stdout(&saaio(home.path(), &["ui"]));
     assert!(
         unknown.contains("unknown prefix \\\"Ctrl+b\\\": use C-space or C-a to C-z"),
         "{unknown}"
@@ -2057,11 +2076,11 @@ fn ui_stop_ends_a_server_that_speaks_another_protocol() {
     let mut stranger = Running(stranger);
     wait_for_socket(&socket);
 
-    let stopped = flow(home.path(), &["ui", "--stop"]);
+    let stopped = saaio(home.path(), &["ui", "--stop"]);
 
     assert_eq!(
         stdout(&stopped).trim(),
-        "stopped the flow server and every session in it"
+        "stopped the saaio server and every session in it"
     );
     assert!(stranger.wait().unwrap().signal().is_some());
 }
@@ -2070,7 +2089,7 @@ fn ui_stop_ends_a_server_that_speaks_another_protocol() {
 fn the_server_command_stays_out_of_the_help() {
     let home = TempDir::new().unwrap();
 
-    let help = stdout(&flow(home.path(), &["--help"]));
+    let help = stdout(&saaio(home.path(), &["--help"]));
 
     assert!(help.contains("ui"), "{help}");
     assert!(!help.contains("server"), "{help}");
@@ -2081,7 +2100,7 @@ fn seed_worker(home: &Path, id: &str, name: &str, last: &str) {
         r#"{{"v":1,"at":1000,"kind":"started","name":"{name}","request":"x","mode":"auto"}}"#
     );
     let workspace = format!(
-        r#"{{"v":1,"at":1500,"kind":"workspace","path":"/repo/.flow/worktrees/{name}","branch":"flow/{name}","slot":1,"window":"flow-ui","agent":"claude"}}"#
+        r#"{{"v":1,"at":1500,"kind":"workspace","path":"/repo/.saaio/worktrees/{name}","branch":"flow/{name}","slot":1,"window":"saaio-ui","agent":"claude"}}"#
     );
     seed(home, id, &[&started, &workspace, last]);
 }
@@ -2096,7 +2115,7 @@ fn send_puts_the_masters_message_into_the_flows_log() {
         r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
     );
 
-    let output = flow(home.path(), &["send", "shop-217", "Semicolons."]);
+    let output = saaio(home.path(), &["send", "shop-217", "Semicolons."]);
 
     assert!(output.status.success(), "{}", stdout(&output));
     assert!(stdout(&output).starts_with("sent: shop-217\nstate: waiting\n"));
@@ -2108,7 +2127,7 @@ fn send_puts_the_masters_message_into_the_flows_log() {
             .contains(r#""kind":"message","text":"Semicolons.""#),
         "{log}"
     );
-    let detail = stdout(&flow(home.path(), &["status", "shop-217"]));
+    let detail = stdout(&saaio(home.path(), &["status", "shop-217"]));
     assert!(detail.contains("master: Semicolons."), "{detail}");
 }
 
@@ -2135,8 +2154,8 @@ fn send_refuses_what_has_no_worker_to_read_it() {
 
     let refused = |args: &[&str], from: Option<&str>| {
         let output = match from {
-            Some(id) => flow_in(home.path(), id, args),
-            None => flow(home.path(), args),
+            Some(id) => saaio_in(home.path(), id, args),
+            None => saaio(home.path(), args),
         };
         assert_eq!(
             output.status.code(),
@@ -2159,7 +2178,7 @@ fn send_refuses_what_has_no_worker_to_read_it() {
         "dddd",
         &[
             r#"{"v":1,"at":1000,"kind":"started","name":"scratch","request":"","mode":"plain"}"#,
-            r#"{"v":1,"at":1500,"kind":"workspace","path":"/tmp","branch":null,"slot":null,"window":"flow-ui","agent":"claude"}"#,
+            r#"{"v":1,"at":1500,"kind":"workspace","path":"/tmp","branch":null,"slot":null,"window":"saaio-ui","agent":"claude"}"#,
         ],
     );
     let plain = refused(&["send", "scratch", "hi"], None);
@@ -2183,8 +2202,8 @@ fn send_takes_a_message_while_config_toml_is_broken() {
     );
     fs::write(home.path().join("no-config.toml"), "agent = [\n").unwrap();
 
-    let sent = flow(home.path(), &["send", "shop-217", "Tabs."]);
-    let typed = flow(home.path(), &["send", "--type", "shop-217", "/compact"]);
+    let sent = saaio(home.path(), &["send", "shop-217", "Tabs."]);
+    let typed = saaio(home.path(), &["send", "--type", "shop-217", "/compact"]);
 
     assert!(sent.status.success(), "{}", stdout(&sent));
     assert_eq!(typed.status.code(), Some(1), "{}", stdout(&typed));
@@ -2205,8 +2224,8 @@ fn send_type_queues_lines_in_order_in_the_flows_log() {
         r#"{"v":1,"at":2000,"kind":"idle","note":"plan done"}"#,
     );
 
-    let first = flow(home.path(), &["send", "--type", "shop-217", "/compact"]);
-    let second = flow(
+    let first = saaio(home.path(), &["send", "--type", "shop-217", "/compact"]);
+    let second = saaio(
         home.path(),
         &["send", "--type", "shop-217", "continue shipping"],
     );
@@ -2226,12 +2245,12 @@ fn send_type_queues_lines_in_order_in_the_flows_log() {
     assert_eq!(typed.len(), 2, "{log}");
     assert!(typed[0].contains(r#""text":"/compact""#), "{log}");
     assert!(!log.contains(r#""kind":"message""#), "{log}");
-    let detail = stdout(&flow(home.path(), &["status", "shop-217"]));
+    let detail = stdout(&saaio(home.path(), &["status", "shop-217"]));
     assert!(detail.contains("master typed: /compact"), "{detail}");
 
     fs::create_dir_all(home.path().join("waits")).unwrap();
     fs::write(home.path().join("waits/7f3c.typed"), "2").unwrap();
-    let after = flow(home.path(), &["send", "--type", "shop-217", "/review"]);
+    let after = saaio(home.path(), &["send", "--type", "shop-217", "/review"]);
     assert!(stdout(&after).contains("ahead: 0"), "{}", stdout(&after));
 }
 
@@ -2249,7 +2268,7 @@ fn send_type_refuses_more_than_one_line_and_an_agent_without_turns() {
         "aaaa",
         &[
             r#"{"v":1,"at":1000,"kind":"started","name":"old-cli","request":"x","mode":"auto"}"#,
-            r#"{"v":1,"at":1500,"kind":"workspace","path":"/repo","branch":"flow/old-cli","slot":2,"window":"flow-ui","agent":"aider"}"#,
+            r#"{"v":1,"at":1500,"kind":"workspace","path":"/repo","branch":"flow/old-cli","slot":2,"window":"saaio-ui","agent":"aider"}"#,
         ],
     );
     let config = home.path().join("config.toml");
@@ -2259,9 +2278,9 @@ fn send_type_refuses_more_than_one_line_and_an_agent_without_turns() {
     )
     .unwrap();
     let refused = |args: &[&str]| {
-        let output = flow_command(home.path())
+        let output = saaio_command(home.path())
             .args(args)
-            .env("FLOW_CONFIG", &config)
+            .env("SAAIO_CONFIG", &config)
             .output()
             .unwrap();
         assert_eq!(
@@ -2276,13 +2295,13 @@ fn send_type_refuses_more_than_one_line_and_an_agent_without_turns() {
     let lines = refused(&["send", "--type", "shop-217", "/compact\ncontinue"]);
     assert!(
         lines.contains("a typed line is one line")
-            && lines.contains("Queue one `flow send --type` per line"),
+            && lines.contains("Queue one `saaio send --type` per line"),
         "{lines}"
     );
     let aider = refused(&["send", "--type", "old-cli", "/compact"]);
     assert!(
-        aider.contains("old-cli runs aider, which reports no turns to flow")
-            && aider.contains("Use `flow send` for a message"),
+        aider.contains("old-cli runs aider, which reports no turns to saaio")
+            && aider.contains("Use `saaio send` for a message"),
         "{aider}"
     );
     assert!(refused(&["send", "--type", "shop-217", "  "]).contains("nothing to send"));
@@ -2291,7 +2310,7 @@ fn send_type_refuses_more_than_one_line_and_an_agent_without_turns() {
 }
 
 fn waiter(home: &Path, flow_id: Option<&str>, args: &[&str]) -> Running {
-    let mut command = flow_command(home);
+    let mut command = saaio_command(home);
     command
         .arg("wait")
         .args(args)
@@ -2299,9 +2318,9 @@ fn waiter(home: &Path, flow_id: Option<&str>, args: &[&str]) -> Running {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if let Some(id) = flow_id {
-        command.env("FLOW_ID", id);
+        command.env("SAAIO_FLOW_ID", id);
     }
-    Running(command.spawn().expect("the flow binary runs"))
+    Running(command.spawn().expect("the saaio binary runs"))
 }
 
 /// The waiter's exit code, stdout and stderr once it ends; None while it still runs after `limit`.
@@ -2343,14 +2362,14 @@ fn a_workers_wait_ends_with_the_masters_message_once() {
     let mut first = waiter(home.path(), Some("7f3c"), &[]);
     assert!(ended(&mut first, short).is_none(), "nothing to deliver yet");
 
-    flow(home.path(), &["send", "shop-217", "Semicolons."]);
+    saaio(home.path(), &["send", "shop-217", "Semicolons."]);
 
     let (code, out, err) = ended(&mut first, Duration::from_secs(5)).expect("woken");
     assert_eq!(code, 2);
     assert_eq!(out, "");
     assert_eq!(
         err.trim_end(),
-        "message from the flow master:\n  Semicolons."
+        "message from the saaio master:\n  Semicolons."
     );
     assert_eq!(
         fs::read_to_string(home.path().join("waits/7f3c.busy")).unwrap(),

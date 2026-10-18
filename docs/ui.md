@@ -1,8 +1,8 @@
-# flow ui
+# saaio ui
 
 ```sh
-flow ui    # in a repository
-flow       # the same, typed in a terminal
+saaio ui    # in a repository
+saaio       # the same, typed in a terminal
 ```
 
 One terminal with the master, every worker and every plain session.
@@ -20,11 +20,11 @@ One terminal with the master, every worker and every plain session.
 
 ## The screen
 
-![flow ui](media/flow-ui.png)
+![saaio ui](media/flow-ui.png)
 
 | Area | Shows |
 | --- | --- |
-| pane (left) | the session in view. The master when flow ui opens. Receives all typing except the [prefix key](#keys). |
+| pane (left) | the session in view. The master when saaio ui opens. Receives all typing except the [prefix key](#keys). |
 | title row (above the pane) | worker: state, name, steps, phase, branch, slot. Plain session: state, folder. Master: branch, plus folder while the sidebar is folded. Notices on the right, such as a theme error or "starting the flow…". |
 | sidebar (right) | every session, see below |
 | rail | the folded sidebar: numbers and marks only. Below 110 columns, or `C-space b`. The title row then names the first flow that needs you and is not in view. |
@@ -77,8 +77,8 @@ Press the prefix, release, press the key.
 | `C-space b` | fold the sidebar to a rail, and back |
 | `C-space r` | resume a session that exited, or a flow that ended |
 | `C-space [` | scroll back through the session's [history](#history) |
-| `C-space d` | detach: leave flow ui, every session keeps running |
-| `C-space Q` | stop flow ([Leaving and stopping](#leaving-and-stopping)) |
+| `C-space d` | detach: leave saaio ui, every session keeps running |
+| `C-space Q` | stop saaio ([Leaving and stopping](#leaving-and-stopping)) |
 | `C-space C-space` | send `C-space` to the pane |
 | `C-space ?` | show these keys |
 
@@ -152,7 +152,7 @@ Other projects' flows are read-only. `enter` and `x` work on this project's flow
 | `enter` | start, once the text is not empty |
 | `esc` | cancel |
 
-`enter` runs `flow start`. The new session appears in the sidebar. A failed start shows its reason
+`enter` runs `saaio start`. The new session appears in the sidebar. A failed start shows its reason
 under the request.
 
 ## A session that ended
@@ -161,14 +161,14 @@ A worker's pane after `/exit` or a stopped process:
 
 | Key | Does |
 | --- | --- |
-| `x` | clean up: `flow remove` for the flow (worktree, branch, flow) |
+| `x` | clean up: `saaio remove` for the flow (worktree, branch, flow) |
 | `r` | resume the session |
 | `esc` | back to the master |
 
 `x` asks before discarding uncommitted changes or commits on no other branch. `y` confirms, any
 other key keeps the flow.
 
-The master's session ended: `C-space r` resumes it, `C-space Q` stops flow.
+The master's session ended: `C-space r` resumes it, `C-space Q` stops saaio.
 
 ## History
 
@@ -189,23 +189,23 @@ The master's session ended: `C-space r` resumes it, `C-space Q` stops flow.
 
 ## Leaving and stopping
 
-`flow server` owns the sessions. flow ui is a client.
+`saaio server` owns the sessions. saaio ui is a client.
 
 | Action | Effect |
 | --- | --- |
-| `C-space d`, or closing the terminal | detach. Sessions keep running. The next `flow ui` attaches. |
+| `C-space d`, or closing the terminal | detach. Sessions keep running. The next `saaio ui` attaches. |
 | `C-space Q` | stop. With unfinished flows it lists them and asks, see below. With every flow finished: `y` stops, any other key cancels. |
-| `flow ui --stop` | stops the server and every session, keeps unfinished flows (like `k`) |
-| a second `flow ui` | takes over from the first. One flow ui is attached at a time. |
+| `saaio ui --stop` | stops the server and every session, keeps unfinished flows (like `k`) |
+| a second `saaio ui` | takes over from the first. One saaio ui is attached at a time. |
 
 | Key at the stop prompt | Effect |
 | --- | --- |
-| `k` | keep: the server stops, sessions resume at the next `flow ui` |
-| `e` | end: the server stops, flows are marked ended. Branches and worktrees stay until `flow clear`. |
+| `k` | keep: the server stops, sessions resume at the next `saaio ui` |
+| `e` | end: the server stops, flows are marked ended. Branches and worktrees stay until `saaio clear`. |
 | `esc` | cancel |
 
 ## After a crash or a reboot
 
-The next `flow ui` restarts the server and resumes the master and every unfinished worker in its
+The next `saaio ui` restarts the server and resumes the master and every unfinished worker in its
 conversation (`claude --resume`, `codex resume`). After a stop, the master starts a new
 conversation. Workers still resume.

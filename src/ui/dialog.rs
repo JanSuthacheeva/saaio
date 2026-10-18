@@ -163,7 +163,7 @@ pub fn help(prefix: Prefix, theme: &Theme) -> Dialog<'_> {
         ("r", "resume a session that ended"),
         ("[", "scroll back through the history"),
         ("d", "detach; every session keeps running"),
-        ("Q", "stop flow"),
+        ("Q", "stop saaio"),
         (name.as_str(), itself.as_str()),
         ("?", "these keys"),
     ];
@@ -211,7 +211,7 @@ pub fn not_running<'a>(
         ],
         None => vec![
             Hint::new(prefix.then("r"), "resumes it").kept(),
-            Hint::new(prefix.then("Q"), "stops flow"),
+            Hint::new(prefix.then("Q"), "stops saaio"),
         ],
     };
     Some(Dialog {
@@ -221,7 +221,7 @@ pub fn not_running<'a>(
     })
 }
 
-/// A worker pane flow ui has no session for, such as a flow that ended before it opened.
+/// A worker pane saaio ui has no session for, such as a flow that ended before it opened.
 pub fn no_session(prefix: Prefix, theme: &Theme) -> Dialog<'_> {
     Dialog {
         keys: vec![
@@ -231,7 +231,7 @@ pub fn no_session(prefix: Prefix, theme: &Theme) -> Dialog<'_> {
         ..Dialog::new(
             "not open",
             vec![Line::styled(
-                "flow ui has no session for this flow.",
+                "saaio ui has no session for this flow.",
                 theme.ui.text,
             )],
             theme,

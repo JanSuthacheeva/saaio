@@ -5,15 +5,15 @@ use crate::config::{self, Config};
 use crate::registry::Registry;
 use crate::store::Store;
 
-/// The environment flow runs in: its variables and its terminal, read once by main so commands get
+/// The environment saaio runs in: its variables and its terminal, read once by main so commands get
 /// them as values.
 #[derive(Debug, Clone, Default)]
 pub struct Env {
-    pub flow_home: Option<PathBuf>,
-    pub flow_config: Option<PathBuf>,
+    pub saaio_home: Option<PathBuf>,
+    pub saaio_config: Option<PathBuf>,
     pub flow_id: Option<String>,
-    /// $FLOW_MASTER is 1: the master's pane, whose hooks report no flow.
-    pub flow_master: bool,
+    /// $SAAIO_MASTER is 1: the master's pane, whose hooks report no flow.
+    pub saaio_master: bool,
     pub home: Option<PathBuf>,
     pub xdg_state_home: Option<PathBuf>,
     pub xdg_config_home: Option<PathBuf>,
@@ -25,10 +25,10 @@ pub struct Env {
 }
 
 impl Env {
-    /// The store $FLOW_HOME, $XDG_STATE_HOME or $HOME point to.
+    /// The store $SAAIO_HOME, $XDG_STATE_HOME or $HOME point to.
     pub(crate) fn store(&self) -> Option<Store> {
         Store::locate(
-            self.flow_home.clone(),
+            self.saaio_home.clone(),
             self.xdg_state_home.clone(),
             self.home.clone(),
         )
@@ -39,10 +39,10 @@ impl Env {
         Registry::locate(self.xdg_state_home.clone(), self.home.clone())
     }
 
-    /// The config file $FLOW_CONFIG, $XDG_CONFIG_HOME or $HOME point to.
+    /// The config file $SAAIO_CONFIG, $XDG_CONFIG_HOME or $HOME point to.
     pub(crate) fn config(&self) -> anyhow::Result<Config> {
         Config::load(
-            self.flow_config.clone(),
+            self.saaio_config.clone(),
             self.xdg_config_home.clone(),
             self.home.clone(),
         )
@@ -51,7 +51,7 @@ impl Env {
     /// The folder of the config file, where master.md and theme.toml live.
     pub(crate) fn config_dir(&self) -> Option<PathBuf> {
         config::config_file(
-            self.flow_config.clone(),
+            self.saaio_config.clone(),
             self.xdg_config_home.clone(),
             self.home.clone(),
         )
@@ -76,10 +76,10 @@ impl Env {
 
     /// True in the master's session: its hooks record the master, not a flow.
     pub(crate) fn is_master(&self) -> bool {
-        self.flow_master
+        self.saaio_master
     }
 
-    /// $FLOW_ID, unless it is empty: set in a worker's session, not in the master's.
+    /// $SAAIO_FLOW_ID, unless it is empty: set in a worker's session, not in the master's.
     pub(crate) fn flow_id(&self) -> Option<&str> {
         self.flow_id.as_deref().filter(|id| !id.is_empty())
     }
@@ -87,13 +87,13 @@ impl Env {
     /// True when a person runs flow at a terminal: not in a flow's session, the master's, or an
     /// agent's shell.
     pub(crate) fn is_person(&self) -> bool {
-        self.terminal && !self.agent_shell && !self.flow_master && self.flow_id.is_none()
+        self.terminal && !self.agent_shell && !self.saaio_master && self.flow_id.is_none()
     }
 
     /// This binary, with ~ for the user's home.
     pub(crate) fn bin_path(&self) -> String {
         let Ok(exe) = env::current_exe() else {
-            return "flow".to_string();
+            return "saaio".to_string();
         };
         match self
             .user_home()
@@ -110,9 +110,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn finds_the_store_in_flow_home_first() {
+    fn finds_the_store_in_saaio_home_first() {
         let env = Env {
-            flow_home: Some(PathBuf::from("/flows")),
+            saaio_home: Some(PathBuf::from("/flows")),
             home: Some(PathBuf::from("/home/jan")),
             ..Env::default()
         };
@@ -124,11 +124,11 @@ mod tests {
     #[test]
     fn finds_the_config_folder_from_the_config_file() {
         let env = Env {
-            flow_config: Some(PathBuf::from("/etc/flow/config.toml")),
+            saaio_config: Some(PathBuf::from("/etc/saaio/config.toml")),
             ..Env::default()
         };
 
-        assert_eq!(env.config_dir(), Some(PathBuf::from("/etc/flow")));
+        assert_eq!(env.config_dir(), Some(PathBuf::from("/etc/saaio")));
     }
 
     #[test]
@@ -175,7 +175,7 @@ mod tests {
             ..person.clone()
         };
         let master = Env {
-            flow_master: true,
+            saaio_master: true,
             ..person.clone()
         };
         let worker = Env {

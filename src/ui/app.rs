@@ -27,7 +27,7 @@ use crate::view::{Board, FlowView, MasterTurn, Projects, State};
 const CHANGE_SHOWN_MS: u64 = 3_000;
 /// Ticks between redraws that only refresh how long ago things changed.
 const TICKS_PER_AGE: u32 = 10;
-/// How often the board asks `flow status --all` again while every project is in view.
+/// How often the board asks `saaio status --all` again while every project is in view.
 const OVERVIEW_EVERY_MS: u64 = 2_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,7 +48,7 @@ pub enum View {
     },
 }
 
-/// What flow ui shows and what it does with input; no I/O of its own.
+/// What saaio ui shows and what it does with input; no I/O of its own.
 #[derive(Debug)]
 pub struct App {
     size: Size,
@@ -80,7 +80,7 @@ pub struct App {
     rail: Option<bool>,
     /// This project's store, to tell its flows from other projects'.
     here: Option<String>,
-    /// Every project's flows, this project first, from the last `flow status --all`.
+    /// Every project's flows, this project first, from the last `saaio status --all`.
     projects: Option<Projects>,
     /// When the board last asked for them, and whether that answer is still out.
     overview_at: u64,
@@ -154,7 +154,7 @@ impl App {
         self
     }
 
-    /// The store this flow ui belongs to, as `flow status --all` names its root.
+    /// The store this saaio ui belongs to, as `saaio status --all` names its root.
     pub fn with_store(mut self, root: String) -> App {
         self.here = Some(root);
         self

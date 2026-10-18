@@ -8,7 +8,7 @@ pub const EVENT_VERSION: u32 = 1;
 pub const TEXT_LIMIT: usize = 500;
 /// The longest message or answer: what the master tells a worker, a turn's whole closing message.
 pub const LONG_TEXT_LIMIT: usize = 4000;
-/// The longest request flow start and flow new take; past it they refuse. Kept whole, since it
+/// The longest request saaio start and saaio new take; past it they refuse. Kept whole, since it
 /// becomes the worker's prompt, one argv string (Linux refuses one over 128 KiB).
 pub const REQUEST_LIMIT: usize = 20_000;
 
@@ -64,12 +64,12 @@ pub enum EventKind {
     MergeRequest {
         url: String,
     },
-    /// What the master told this flow's worker, through `flow send`.
+    /// What the master told this flow's worker, through `saaio send`.
     Message {
         text: String,
     },
     /// A line the master queued for the server to type into this flow's pane, through
-    /// `flow send --type`.
+    /// `saaio send --type`.
     Typed {
         text: String,
     },
@@ -134,7 +134,7 @@ impl Event {
     }
 
     /// None for a broken line, another version or an unknown kind,
-    /// so a log written by a newer flow still folds.
+    /// so a log written by a newer saaio still folds.
     pub fn from_line(line: &str) -> Option<Event> {
         serde_json::from_str::<Event>(line)
             .ok()
@@ -401,7 +401,7 @@ mod tests {
 
     #[test]
     fn reads_a_workspace_line_written_before_plain_sessions() {
-        let line = r#"{"v":1,"at":7,"kind":"workspace","path":"/repo/.flow/worktrees/shop-221","branch":"flow/shop-221","slot":2,"window":"flow-ui","agent":"claude"}"#;
+        let line = r#"{"v":1,"at":7,"kind":"workspace","path":"/repo/.saaio/worktrees/shop-221","branch":"flow/shop-221","slot":2,"window":"saaio-ui","agent":"claude"}"#;
 
         let Some(Event {
             kind: EventKind::Workspace { branch, slot, .. },

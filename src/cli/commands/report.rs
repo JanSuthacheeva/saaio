@@ -9,8 +9,8 @@ use crate::view::FlowView;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
-    /// Flow name or id [default: $FLOW_ID]
-    #[arg(long, env = "FLOW_ID")]
+    /// Flow name or id [default: $SAAIO_FLOW_ID]
+    #[arg(long, env = "SAAIO_FLOW_ID")]
     flow: Option<String>,
     #[command(subcommand)]
     event: ReportEvent,
@@ -20,7 +20,7 @@ pub struct Args {
 enum ReportEvent {
     /// The flow entered a phase
     Phase {
-        /// One of the flow's phases, as `flow status <name>` lists them: plan, implement, ...
+        /// One of the flow's phases, as `saaio status <name>` lists them: plan, implement, ...
         phase: Phase,
     },
     /// Work goes on, after a stop or a subagent
@@ -86,7 +86,7 @@ fn no_phase(flow: &FlowView, phase: &Phase) -> Failure {
     )
 }
 
-/// Appends one event to a flow; skipped without a flow, so an agent outside flow can report.
+/// Appends one event to a flow; skipped without a flow, so an agent outside saaio can report.
 pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
     let Some(name) = args.flow.filter(|name| !name.is_empty()) else {
         return Ok(flow::skipped());

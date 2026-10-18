@@ -1,4 +1,4 @@
-//! FLOW_COMMIT: the commit this binary is built from, so server.log can say which flow ran.
+//! SAAIO_COMMIT: the commit this binary is built from, so server.log can say which saaio ran.
 
 use std::path::Path;
 use std::process::Command;
@@ -6,7 +6,7 @@ use std::process::Command;
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     let commit = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "unknown".to_string());
-    println!("cargo:rustc-env=FLOW_COMMIT={commit}");
+    println!("cargo:rustc-env=SAAIO_COMMIT={commit}");
     if let Some(dir) = git(&["rev-parse", "--git-dir"]) {
         let dir = Path::new(&dir);
         watch(&dir.join("HEAD"));

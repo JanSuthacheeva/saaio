@@ -10,7 +10,7 @@ use crate::fold;
 use crate::launch::{name, worktree};
 use crate::store::Store;
 
-/// Started{mode: plain} and a Workspace with the folder; flow ui opens the agent there.
+/// Started{mode: plain} and a Workspace with the folder; saaio ui opens the agent there.
 pub(super) fn open(
     folder: &Path,
     args: &Args,

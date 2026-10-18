@@ -15,7 +15,7 @@ use output::{Document, Failure};
 #[command(
     version,
     about,
-    after_help = "Run alone in a terminal, flow opens flow ui.\nRun by an agent or a script, it prints every flow and what needs you."
+    after_help = "Run alone in a terminal, saaio opens saaio ui.\nRun by an agent or a script, it prints every flow and what needs you."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -43,7 +43,7 @@ enum Command {
     Report(report::Args),
     /// Every flow, or one flow with its phases, timeline and decisions
     Status(status::Args),
-    /// Start a worker: a flow, a worktree, the setup hook and an agent flow ui opens
+    /// Start a worker: a flow, a worktree, the setup hook and an agent saaio ui opens
     Start(start::Args),
     /// Stop a flow's worker, tear down its worktree and forget it
     Remove(remove::Args),
@@ -56,10 +56,10 @@ enum Command {
     /// What a session's asyncRewake hook runs: sleeps until there is news for it, prints it, exits 2
     #[command(hide = true)]
     Wait(wait::Args),
-    /// The session server flow ui starts on its own
+    /// The session server saaio ui starts on its own
     #[command(hide = true)]
     Server,
-    /// What a harness hook runs: reports the event on stdin into $FLOW_ID's flow
+    /// What a harness hook runs: reports the event on stdin into $SAAIO_FLOW_ID's flow
     #[command(hide = true)]
     Hook(hook::Args),
 }
@@ -79,7 +79,7 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
     let Some(store) = env.store() else {
         return Err(Failure::error(
             "cannot find a state directory",
-            vec!["Set FLOW_HOME to a directory".to_string()],
+            vec!["Set SAAIO_HOME to a directory".to_string()],
         ));
     };
     let Some(registry) = env.registry() else {
@@ -118,7 +118,8 @@ mod tests {
     use super::*;
 
     fn run_without_a_store(args: &[&str]) -> Result<Document, Failure> {
-        let cli = Cli::try_parse_from(std::iter::once("flow").chain(args.iter().copied())).unwrap();
+        let cli =
+            Cli::try_parse_from(std::iter::once("saaio").chain(args.iter().copied())).unwrap();
         run(cli, &Env::default(), || 0)
     }
 
@@ -142,7 +143,7 @@ mod tests {
         assert_eq!(failure.message, "cannot find a state directory");
         assert_eq!(
             failure.help,
-            vec!["Set FLOW_HOME to a directory".to_string()]
+            vec!["Set SAAIO_HOME to a directory".to_string()]
         );
         assert_eq!(failure.code, 1);
     }

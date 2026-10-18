@@ -9,7 +9,7 @@ use crate::registry::Registry;
 use crate::store::write_atomic;
 use crate::view::FlowView;
 
-/// Slots across every project: FLOW_SLOT, which setup hooks turn into ports.
+/// Slots across every project: SAAIO_SLOT, which setup hooks turn into ports.
 pub const MAX_SLOTS: u8 = 20;
 
 /// slots/<n>: which flow in which store took slot n.
@@ -52,7 +52,7 @@ impl Slots {
         Ok(Some(slot))
     }
 
-    /// Gives a claim back when flow start fails after claiming; a slot claimed by another flow since
+    /// Gives a claim back when saaio start fails after claiming; a slot claimed by another flow since
     /// stays as it is.
     pub fn release(&self, slot: u8, claim: &Claim) -> Result<()> {
         let _lock = self.lock()?;
@@ -101,7 +101,7 @@ pub fn taken_slots(flows: &[FlowView]) -> Vec<u8> {
         .collect()
 }
 
-/// The lowest slot 1..=MAX_SLOTS no unfinished flow of this project holds; flow start decides across
+/// The lowest slot 1..=MAX_SLOTS no unfinished flow of this project holds; saaio start decides across
 /// projects.
 pub fn free_slot(flows: &[FlowView]) -> Option<u8> {
     let held = taken_slots(flows);
@@ -171,7 +171,7 @@ mod tests {
 
     fn claim(flow: &str) -> Claim {
         Claim {
-            store: PathBuf::from("/state/flow/projects/shop"),
+            store: PathBuf::from("/state/saaio/projects/shop"),
             flow: flow.to_string(),
         }
     }

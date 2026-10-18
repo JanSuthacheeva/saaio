@@ -1,10 +1,10 @@
-# flow ui's colors.
+# saaio ui's colors.
 #
-# flow wrote this file on its first run. Every setting is commented out at its default, which is
+# saaio wrote this file on its first run. Every setting is commented out at its default, which is
 # the terminal theme: your terminal's own colors. Remove the # in front of a setting to change it.
-# Once you've edited this file, flow never overwrites it.
+# Once you've edited this file, saaio never overwrites it.
 #
-# flow ui repaints within a second of saving. If the file is broken, it keeps the last good colors
+# saaio ui repaints within a second of saving. If the file is broken, it keeps the last good colors
 # and says in the title row which line is wrong and why.
 #
 # A color is one of:
@@ -14,9 +14,9 @@
 #   "accent"    the name of another key, here or in the theme this one extends
 #
 # A key you leave out keeps the color of the theme this file extends.
-# The whole file, explained: https://github.com/JanSuthacheeva/flow/blob/main/docs/themes.md
+# The whole file, explained: https://github.com/JanSuthacheeva/saaio/blob/main/docs/themes.md
 
-# The theme to start from: "terminal", "flow" (dark), "flow-light", or the name of a file in
+# The theme to start from: "terminal", "saaio" (dark), "saaio-light", or the name of a file in
 # themes/ next to this one, without .toml.
 #extends = "terminal"
 

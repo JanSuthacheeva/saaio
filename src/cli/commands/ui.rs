@@ -40,7 +40,7 @@ pub fn run(args: &Args, store: &Store, env: &Env, clock: fn() -> u64) -> Result<
     Ok(Document::Text(message))
 }
 
-/// Err when $FLOW_ID names a flow in `store`: a worker's flow ui would take over the user's, and
+/// Err when $SAAIO_FLOW_ID names a flow in `store`: a worker's saaio ui would take over the user's, and
 /// its --stop would end every session in it.
 fn refuse_inside_own_flow(store: &Store, env: &Env) -> Result<(), Failure> {
     let Some(id) = env.flow_id() else {
@@ -50,9 +50,9 @@ fn refuse_inside_own_flow(store: &Store, env: &Env) -> Result<(), Failure> {
         return Ok(());
     }
     Err(Failure::error(
-        "flow ui runs inside a flow's worker, on the store that flow lives in: it would take over the user's flow ui",
+        "saaio ui runs inside a flow's worker, on the store that flow lives in: it would take over the user's saaio ui",
         vec![
-            "Set FLOW_HOME to a scratch folder for a flow ui of your own: FLOW_HOME=$(mktemp -d) flow ui"
+            "Set SAAIO_HOME to a scratch folder for a saaio ui of your own: SAAIO_HOME=$(mktemp -d) saaio ui"
                 .to_string(),
         ],
     ))
@@ -60,9 +60,9 @@ fn refuse_inside_own_flow(store: &Store, env: &Env) -> Result<(), Failure> {
 
 fn stop_server(socket: &Path, clock: fn() -> u64) -> Result<Document, Failure> {
     let message = if client::stop_server(socket, clock)? {
-        "stopped the flow server and every session in it"
+        "stopped the saaio server and every session in it"
     } else {
-        "no flow server runs"
+        "no saaio server runs"
     };
     Ok(Document::Text(message.to_string()))
 }

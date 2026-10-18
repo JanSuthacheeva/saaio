@@ -4,19 +4,19 @@ use super::{LIST_TEXT_LIMIT, toon, truncated};
 use crate::event::Mode;
 use crate::view::FlowView;
 
-/// What a worker reads when flow wakes it: each of the master's messages, indented.
+/// What a worker reads when saaio wakes it: each of the master's messages, indented.
 pub(crate) fn for_worker(messages: &[&str]) -> String {
     messages
         .iter()
         .flat_map(|message| {
-            std::iter::once("message from the flow master:".to_string())
+            std::iter::once("message from the saaio master:".to_string())
                 .chain(message.lines().map(|line| format!("  {line}")))
         })
         .collect::<Vec<_>>()
         .join("\n")
 }
 
-/// What the master reads when flow wakes it: changed[n]{name,state,mode,says}, and who answers
+/// What the master reads when saaio wakes it: changed[n]{name,state,mode,says}, and who answers
 /// by the flows' modes.
 pub(crate) fn for_master(flows: &[&FlowView]) -> String {
     #[derive(Serialize)]
@@ -34,12 +34,14 @@ pub(crate) fn for_master(flows: &[&FlowView]) -> String {
     let has = |mode: Mode| flows.iter().any(|flow| flow.mode == mode);
     let mut help = Vec::new();
     if has(Mode::Auto) {
-        help.push("auto: answer what the code, the plan or the user's decisions settle with `flow send <name> \"<answer>\"`, then tell the user what you answered; else ask the user");
+        help.push("auto: answer what the code, the plan or the user's decisions settle with `saaio send <name> \"<answer>\"`, then tell the user what you answered; else ask the user");
     }
     if has(Mode::Guided) {
-        help.push("guided: tell the user what it says or asks; send their answer with `flow send`");
+        help.push(
+            "guided: tell the user what it says or asks; send their answer with `saaio send`",
+        );
     }
-    help.push("`flow status <name> --full` shows its whole last answer");
+    help.push("`saaio status <name> --full` shows its whole last answer");
     let says = |flow: &FlowView| {
         let text = flow.blocker.as_deref().unwrap_or_else(|| {
             let last = flow.timeline.last().map_or("", |entry| entry.text.as_str());
@@ -75,9 +77,9 @@ mod tests {
                 "Keep the header row,\nas in the old export."
             ]),
             [
-                "message from the flow master:",
+                "message from the saaio master:",
                 "  Use semicolons.",
-                "message from the flow master:",
+                "message from the saaio master:",
                 "  Keep the header row,",
                 "  as in the old export.",
             ]
@@ -110,7 +112,7 @@ mod tests {
                 "changed[2]{name,state,mode,says}:",
                 "  shop-217,waiting,auto,Which delimiter?",
                 "  shop-220,idle,guided,The design is ready for review.",
-                "help[3]: \"auto: answer what the code, the plan or the user's decisions settle with `flow send <name> \\\"<answer>\\\"`, then tell the user what you answered; else ask the user\",\"guided: tell the user what it says or asks; send their answer with `flow send`\",`flow status <name> --full` shows its whole last answer",
+                "help[3]: \"auto: answer what the code, the plan or the user's decisions settle with `saaio send <name> \\\"<answer>\\\"`, then tell the user what you answered; else ask the user\",\"guided: tell the user what it says or asks; send their answer with `saaio send`\",`saaio status <name> --full` shows its whole last answer",
             ]
             .join("\n")
         );

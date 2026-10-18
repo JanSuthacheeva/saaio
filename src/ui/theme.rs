@@ -45,7 +45,7 @@ impl PhasePalette {
 }
 
 impl Palette {
-    /// ANSI, so flow takes on the terminal's palette.
+    /// ANSI, so saaio takes on the terminal's palette.
     pub const TERMINAL: Palette = Palette {
         background: Color::Reset,
         panel: Color::Indexed(235),
@@ -70,7 +70,7 @@ impl Palette {
     };
 
     /// The design's dark colors.
-    pub const FLOW: Palette = Palette {
+    pub const SAAIO: Palette = Palette {
         background: hex(0x141418),
         panel: hex(0x1f1f26),
         selection: hex(0x26262e),
@@ -89,7 +89,7 @@ impl Palette {
     };
 
     /// The design's light colors.
-    pub const FLOW_LIGHT: Palette = Palette {
+    pub const SAAIO_LIGHT: Palette = Palette {
         background: hex(0xf6f5f1),
         panel: hex(0xecebe5),
         selection: hex(0xe2e0d8),
@@ -107,12 +107,12 @@ impl Palette {
         phases: PhasePalette::at([hex(0x7a4fc9), hex(0x2f5fd0), hex(0x13807f), hex(0xb0399c)]),
     };
 
-    /// "terminal", "flow" or "flow-light"; None for another name.
+    /// "terminal", "saaio" or "saaio-light"; None for another name.
     pub fn named(name: &str) -> Option<Palette> {
         match name {
             "terminal" => Some(Palette::TERMINAL),
-            "flow" => Some(Palette::FLOW),
-            "flow-light" => Some(Palette::FLOW_LIGHT),
+            "saaio" => Some(Palette::SAAIO),
+            "saaio-light" => Some(Palette::SAAIO_LIGHT),
             _ => None,
         }
     }
@@ -237,7 +237,7 @@ impl PaletteKey {
         }
     }
 
-    /// None for a key flow does not know.
+    /// None for a key saaio does not know.
     pub fn named(name: &str) -> Option<PaletteKey> {
         PaletteKey::ALL.into_iter().find(|key| key.name() == name)
     }
@@ -283,7 +283,7 @@ impl Section {
         }
     }
 
-    /// None for a table flow does not know.
+    /// None for a table saaio does not know.
     pub fn named(name: &str) -> Option<Section> {
         Section::ALL
             .into_iter()
@@ -321,7 +321,7 @@ impl PhaseColors {
     }
 }
 
-/// Every color and symbol flow ui draws with, by name; a theme file sets them through its Palette.
+/// Every color and symbol saaio ui draws with, by name; a theme file sets them through its Palette.
 #[derive(Debug, Clone)]
 pub struct Theme {
     pub ui: UiTokens,
@@ -334,7 +334,7 @@ pub struct Theme {
 
 #[derive(Debug, Clone)]
 pub struct UiTokens {
-    /// The ground every cell flow ui draws is painted on.
+    /// The ground every cell saaio ui draws is painted on.
     pub background: Style,
     pub text: Style,
     pub strong: Style,
@@ -594,7 +594,7 @@ mod tests {
 
     #[test]
     fn builds_the_designs_dark_theme() {
-        let theme = Theme::from_palette(Palette::FLOW);
+        let theme = Theme::from_palette(Palette::SAAIO);
 
         assert_eq!(theme.ui.background, Style::default().bg(hex(0x141418)));
         assert_eq!(theme.ui.text, Style::default().fg(hex(0xc8c8d0)));
@@ -602,13 +602,13 @@ mod tests {
             theme.ui.bar,
             Style::default().bg(hex(0x1f1f26)).fg(hex(0xc8c8d0))
         );
-        assert!(Palette::named("flow-light").is_some());
+        assert!(Palette::named("saaio-light").is_some());
         assert_eq!(Palette::named("solarized"), None);
     }
 
     #[test]
     fn a_heading_is_its_name_in_faint_capitals() {
-        let theme = Theme::from_palette(Palette::FLOW);
+        let theme = Theme::from_palette(Palette::SAAIO);
 
         let heading = theme.heading("last answer");
 
@@ -666,9 +666,10 @@ mod tests {
 
     #[test]
     fn at_full_a_working_flow_takes_the_color_of_its_phase() {
-        let mut theme = Theme::from_palette(Palette::FLOW);
+        let mut theme = Theme::from_palette(Palette::SAAIO);
         theme.phase_colors = PhaseColors::Full;
-        let phase = |position: usize| Style::default().fg(Palette::FLOW.phases.positions[position]);
+        let phase =
+            |position: usize| Style::default().fg(Palette::SAAIO.phases.positions[position]);
 
         assert_eq!(
             theme.flow_style(&flow(State::Working, Some(Phase::of("plan")))),
@@ -700,7 +701,7 @@ mod tests {
 
     #[test]
     fn the_level_decides_what_takes_the_phase_color() {
-        let mut theme = Theme::from_palette(Palette::FLOW);
+        let mut theme = Theme::from_palette(Palette::SAAIO);
         let review = theme.phase.positions[2];
         let working = theme.state.working;
         let flow = flow(State::Delegated, Some(Phase::of("review")));
@@ -716,7 +717,7 @@ mod tests {
 
     #[test]
     fn a_waiting_flow_keeps_its_state_color_at_every_level() {
-        let mut theme = Theme::from_palette(Palette::FLOW);
+        let mut theme = Theme::from_palette(Palette::SAAIO);
         let flow = flow(State::Waiting, Some(Phase::of("implement")));
         for level in [PhaseColors::Off, PhaseColors::Steps, PhaseColors::Full] {
             theme.phase_colors = level;
@@ -747,11 +748,11 @@ mod tests {
             ]
         );
         assert_eq!(
-            phases(Palette::FLOW),
+            phases(Palette::SAAIO),
             [hex(0xb392f0), hex(0x7aa7ff), hex(0x56c2c2), hex(0xe07fd0)]
         );
         assert_eq!(
-            phases(Palette::FLOW_LIGHT),
+            phases(Palette::SAAIO_LIGHT),
             [hex(0x7a4fc9), hex(0x2f5fd0), hex(0x13807f), hex(0xb0399c)]
         );
         assert_eq!(PaletteKey::named("merge-request"), None);
@@ -759,7 +760,7 @@ mod tests {
 
     #[test]
     fn a_phase_takes_its_color_by_name_else_by_its_position() {
-        let mut palette = Palette::FLOW;
+        let mut palette = Palette::SAAIO;
         palette.set(&ColorKey::Phase(Phase::of("build")), hex(0x123456));
         let mut theme = Theme::from_palette(palette);
         theme.phase_colors = PhaseColors::Steps;

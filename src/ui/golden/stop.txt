@@ -1,5 +1,5 @@
 
-  master  main                                                                                              │ ▚▄▞ flow
+  master  main                                                                                              │ ▚▄▞ saaio
                                                                                                             ├────────────────────────────────────────
                                                                                                             │▌0   master
                                                                                                             │▌    ~/projects/shop · main
@@ -17,11 +17,11 @@
                      │    ● shop-230    Which approach: a channel column or a join …  │                     │ 3 ◓ export-csv                      1h
                      │    ◓ export-csv  agent: review changes                         │                     │     ●───●───●───○ review           6/6
                      │                                                                │                     │     agent: review changes
-                     │  Kept, they resume the next time flow ui starts.               │                     │
-                     │  Ended, branches and worktrees stay until flow clear.          │                     │ DONE 1
+                     │  Kept, they resume the next time saaio ui starts.              │                     │
+                     │  Ended, branches and worktrees stay until saaio clear.         │                     │ DONE 1
                      │                                                                │                     │ 4 ✓ shop-198                        2h
                      ├────────────────────────────────────────────────────────────────┤                     │     ●───●───●───● MR !418      took 0s
-                     │  k keep them   e end them   esc keep flow running              │                     │
+                     │  k keep them   e end them   esc keep saaio running             │                     │
                      ╰────────────────────────────────────────────────────────────────╯                     │
                                                                                                             │
                                                                                                             │

@@ -754,7 +754,7 @@ fn resolves_an_id_then_the_unfinished_flow_then_the_newest_finished_one() {
 
 fn workspace(slot: u8, window: Option<&str>) -> EventKind {
     EventKind::Workspace {
-        path: "/repo/.flow/worktrees/shop-221".into(),
+        path: "/repo/.saaio/worktrees/shop-221".into(),
         branch: Some("flow/shop-221".into()),
         slot: Some(slot),
         window: window.map(String::from),

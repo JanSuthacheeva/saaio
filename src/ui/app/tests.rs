@@ -46,7 +46,7 @@ fn render(app: &App) -> Terminal<TestBackend> {
     terminal
 }
 
-/// Row `y` of what flow draws, inside the margin.
+/// Row `y` of what saaio draws, inside the margin.
 fn row(terminal: &Terminal<TestBackend>, y: u16) -> String {
     let buffer = terminal.backend().buffer();
     let screen = layout::screen(Size {
@@ -77,10 +77,10 @@ fn worker(id: &str, mode: crate::event::Mode, age: u64, events: Vec<EventKind>) 
         Event::new(
             at,
             EventKind::Workspace {
-                path: format!("/shop/.flow/worktrees/{id}"),
+                path: format!("/shop/.saaio/worktrees/{id}"),
                 branch: Some(format!("flow/{id}")),
                 slot: Some(1),
-                window: Some("flow-ui".into()),
+                window: Some("saaio-ui".into()),
                 agent: "claude".into(),
             },
         ),
@@ -108,7 +108,7 @@ fn plain_session(id: &str, folder: &str, age: u64, events: Vec<EventKind>) -> Fl
                 path: folder.into(),
                 branch: None,
                 slot: None,
-                window: Some("flow-ui".into()),
+                window: Some("saaio-ui".into()),
                 agent: "claude".into(),
             },
         ),

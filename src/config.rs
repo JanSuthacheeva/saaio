@@ -26,7 +26,7 @@ pub struct Agent {
     /// The command that continues session {id}; an agent without one is started fresh by hand.
     #[serde(default)]
     pub resume: Option<Vec<String>>,
-    /// The harness flow observes it through ("claude-code"); without one, flow ui shows only
+    /// The harness saaio observes it through ("claude-code"); without one, saaio ui shows only
     /// whether its process runs.
     #[serde(default)]
     pub adapter: Option<Adapter>,
@@ -45,12 +45,12 @@ pub struct Config {
     pub ui: UiConfig,
 }
 
-/// [worker]: what a flow runs when flow start names no agent, and what it is asked first.
+/// [worker]: what a flow runs when saaio start names no agent, and what it is asked first.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
 #[serde(default, deny_unknown_fields)]
 pub struct WorkerConfig {
-    /// The agent flow start runs, "claude" unless set.
+    /// The agent saaio start runs, "claude" unless set.
     pub agent: String,
     /// The first prompt of every agent the file gives none, the built-in ones included; unset,
     /// each keeps its built-in default.
@@ -71,9 +71,9 @@ impl Default for WorkerConfig {
 #[cfg_attr(test, derive(Serialize))]
 #[serde(default, deny_unknown_fields)]
 pub struct MasterConfig {
-    /// flow wakes the master when a worker stops (wake = false: it learns only from flow status).
+    /// saaio wakes the master when a worker stops (wake = false: it learns only from saaio status).
     pub wake: bool,
-    /// The agent flow ui runs as its master, "codex" for one; else MASTER_AGENT.
+    /// The agent saaio ui runs as its master, "codex" for one; else MASTER_AGENT.
     pub agent: Option<String>,
 }
 
@@ -86,24 +86,24 @@ impl Default for MasterConfig {
     }
 }
 
-/// [ui]: how flow ui takes keys.
+/// [ui]: how saaio ui takes keys.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
 #[serde(default, deny_unknown_fields)]
 pub struct UiConfig {
-    /// The key before every flow ui command, C-space unless set.
+    /// The key before every saaio ui command, C-space unless set.
     pub prefix: Prefix,
 }
 
 impl Config {
-    /// $FLOW_CONFIG, else $XDG_CONFIG_HOME/flow/config.toml, else ~/.config/flow/config.toml;
+    /// $SAAIO_CONFIG, else $XDG_CONFIG_HOME/saaio/config.toml, else ~/.config/saaio/config.toml;
     /// the built-in agents alone when there is no file.
     pub fn load(
-        flow_config: Option<PathBuf>,
+        saaio_config: Option<PathBuf>,
         xdg_config: Option<PathBuf>,
         home: Option<PathBuf>,
     ) -> Result<Config> {
-        let mut config = match config_file(flow_config, xdg_config, home) {
+        let mut config = match config_file(saaio_config, xdg_config, home) {
             None => Config::default(),
             Some(file) => match fs::read_to_string(&file) {
                 Ok(text) => Config::parse(&text)
@@ -205,36 +205,36 @@ impl Config {
     }
 }
 
-/// $FLOW_CONFIG, else $XDG_CONFIG_HOME/flow/config.toml, else ~/.config/flow/config.toml.
+/// $SAAIO_CONFIG, else $XDG_CONFIG_HOME/saaio/config.toml, else ~/.config/saaio/config.toml.
 pub fn config_file(
-    flow_config: Option<PathBuf>,
+    saaio_config: Option<PathBuf>,
     xdg_config: Option<PathBuf>,
     home: Option<PathBuf>,
 ) -> Option<PathBuf> {
     let set = |path: Option<PathBuf>| path.filter(|path| !path.as_os_str().is_empty());
-    set(flow_config)
-        .or_else(|| set(xdg_config).map(|dir| dir.join("flow/config.toml")))
-        .or_else(|| set(home).map(|dir| dir.join(".config/flow/config.toml")))
+    set(saaio_config)
+        .or_else(|| set(xdg_config).map(|dir| dir.join("saaio/config.toml")))
+        .or_else(|| set(home).map(|dir| dir.join(".config/saaio/config.toml")))
 }
 
 fn strings(parts: &[&str]) -> Vec<String> {
     parts.iter().copied().map(String::from).collect()
 }
 
-/// What flow writes as config.toml on its first run: every setting at its default, commented out.
+/// What saaio writes as config.toml on its first run: every setting at its default, commented out.
 pub const EXAMPLE: DefaultFile = DefaultFile {
     text: include_str!("../examples/config.toml"),
     earlier: &[],
 };
 
-/// The agent flow ui runs as its master when there is one and [master] names no other; else the
+/// The agent saaio ui runs as its master when there is one and [master] names no other; else the
 /// default agent.
 pub const MASTER_AGENT: &str = "master";
 
 /// claude: ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"], prompt "/ship-feature {request}",
 /// resumed with ["claude", "-n", "{name}", "--resume", "{id}"]; codex: ["codex", "{prompt}"], prompt
 /// "$ship-feature {request}", resumed by the session Codex picked ({session}); master: claude, to
-/// which flow server adds the orchestrator instructions (the master.md beside config.toml).
+/// which saaio server adds the orchestrator instructions (the master.md beside config.toml).
 pub fn builtin_agents() -> BTreeMap<String, Agent> {
     let claude = Agent {
         command: strings(&["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]),
@@ -494,16 +494,16 @@ command = ["pi", "{prompt}"]
     fn finds_the_file_by_flow_config_then_xdg_then_home() {
         let dir = TempDir::new().unwrap();
         let xdg = dir.path().join("xdg");
-        fs::create_dir_all(xdg.join("flow")).unwrap();
+        fs::create_dir_all(xdg.join("saaio")).unwrap();
         fs::write(
-            xdg.join("flow/config.toml"),
+            xdg.join("saaio/config.toml"),
             "[worker]\nagent = \"from-xdg\"\n",
         )
         .unwrap();
         let home = dir.path().join("home");
-        fs::create_dir_all(home.join(".config/flow")).unwrap();
+        fs::create_dir_all(home.join(".config/saaio")).unwrap();
         fs::write(
-            home.join(".config/flow/config.toml"),
+            home.join(".config/saaio/config.toml"),
             "[worker]\nagent = \"from-home\"\n",
         )
         .unwrap();

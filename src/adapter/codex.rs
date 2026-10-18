@@ -9,7 +9,7 @@ use crate::adapter::{Adapter, Turn, cut};
 use crate::event::{EventKind, Phase};
 use crate::workflow::Workflow;
 
-/// The hook events flow listens to.
+/// The hook events saaio listens to.
 const EVENTS: [&str; 8] = [
     "UserPromptSubmit",
     "PreToolUse",
@@ -20,13 +20,13 @@ const EVENTS: [&str; 8] = [
     "PreCompact",
     "PostCompact",
 ];
-/// Seconds Codex waits for `flow hook` before it goes on without it.
+/// Seconds Codex waits for `saaio hook` before it goes on without it.
 const HOOK_TIMEOUT_SECS: u64 = 10;
 
 /// The `-c` arguments that run `'<flow_exe>' hook codex` on each event in EVENTS, synchronously so
 /// the events reach the log in order and a Stop can hand news over; and keep Codex from asking
-/// about updates in a pane flow opened. The same for workers, plain sessions and the master (its
-/// pane's FLOW_MASTER tells them apart): Codex keys hook trust by position, so different hooks
+/// about updates in a pane saaio opened. The same for workers, plain sessions and the master (its
+/// pane's SAAIO_MASTER tells them apart): Codex keys hook trust by position, so different hooks
 /// would each undo the other's trust.
 pub fn hooks(flow_exe: &Path) -> Vec<String> {
     let command = format!(
@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn hooks_every_event_to_flow_hook_codex() {
-        let args = hooks(Path::new("/opt/my flow/flow"));
+        let args = hooks(Path::new("/opt/my saaio/saaio"));
 
         assert_eq!(args[..2], ["-c", "check_for_update_on_startup=false"]);
         let values: Vec<&String> = args.iter().skip(3).step_by(2).collect();
@@ -388,12 +388,12 @@ mod tests {
             assert_eq!(handler["type"].as_str(), Some("command"));
             assert_eq!(
                 handler["command"].as_str(),
-                Some("'/opt/my flow/flow' hook codex"),
+                Some("'/opt/my saaio/saaio' hook codex"),
                 "{event}"
             );
             assert_eq!(handler["timeout"].as_integer(), Some(10));
         }
-        assert!(hooks(Path::new("/b'in/flow"))[3].contains(r"'/b'\\''in/flow'"));
+        assert!(hooks(Path::new("/b'in/saaio"))[3].contains(r"'/b'\\''in/saaio'"));
     }
 
     #[test]

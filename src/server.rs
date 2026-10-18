@@ -63,9 +63,9 @@ pub struct ServerPaths {
     pub master: PathBuf,
     /// The master's orchestrator instructions, master.md beside config.toml.
     pub instructions: PathBuf,
-    /// Where flow writes the example config.toml; None without a config location.
+    /// Where saaio writes the example config.toml; None without a config location.
     pub config: Option<PathBuf>,
-    /// Where flow writes the example theme.toml, beside config.toml.
+    /// Where saaio writes the example theme.toml, beside config.toml.
     pub theme: Option<PathBuf>,
 }
 
@@ -178,7 +178,7 @@ pub fn run(
     let listener = bind(&paths.socket)?;
     server_log::write(
         clock(),
-        &format!("started (flow {BUILD}, protocol {PROTOCOL_VERSION})"),
+        &format!("started (saaio {BUILD}, protocol {PROTOCOL_VERSION})"),
     );
     write_defaults(paths, clock);
     let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;

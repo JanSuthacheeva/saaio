@@ -55,7 +55,7 @@ impl Waiter {
 pub enum Busy {
     /// At its prompt: no busy file.
     Idle,
-    /// A hook or `flow wait` began a turn ("turn", or an empty file an earlier flow wrote).
+    /// A hook or `saaio wait` began a turn ("turn", or an empty file an earlier saaio wrote).
     Turn,
     /// The server typed into the pane and no turn began yet ("typed").
     Typed,
@@ -67,13 +67,13 @@ pub struct Store {
 }
 
 impl Store {
-    /// $FLOW_HOME, else $XDG_STATE_HOME/flow, else $HOME/.local/state/flow.
+    /// $SAAIO_HOME, else $XDG_STATE_HOME/saaio, else $HOME/.local/state/saaio.
     pub fn locate(
-        flow_home: Option<PathBuf>,
+        saaio_home: Option<PathBuf>,
         xdg_state: Option<PathBuf>,
         home: Option<PathBuf>,
     ) -> Option<Store> {
-        flow_home
+        saaio_home
             .filter(|path| !path.as_os_str().is_empty())
             .or_else(|| Registry::default_root(xdg_state, home))
             .map(|root| Store { root })
@@ -460,11 +460,11 @@ mod tests {
         );
         assert_eq!(
             Store::locate(None, xdg, home.clone()).unwrap().root,
-            Path::new("/state/flow")
+            Path::new("/state/saaio")
         );
         assert_eq!(
             Store::locate(None, None, home).unwrap().root,
-            Path::new("/home/jan/.local/state/flow")
+            Path::new("/home/jan/.local/state/saaio")
         );
         assert!(Store::locate(None, None, None).is_none());
     }
@@ -477,7 +477,7 @@ mod tests {
             Some(PathBuf::from("/home/jan")),
         )
         .unwrap();
-        assert_eq!(store.root, Path::new("/home/jan/.local/state/flow"));
+        assert_eq!(store.root, Path::new("/home/jan/.local/state/saaio"));
     }
 
     #[test]
@@ -676,7 +676,7 @@ mod tests {
         assert_eq!(
             store.busy(&worker),
             Busy::Turn,
-            "the empty file an earlier flow wrote"
+            "the empty file an earlier saaio wrote"
         );
     }
 

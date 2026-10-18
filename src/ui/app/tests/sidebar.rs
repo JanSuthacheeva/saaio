@@ -37,7 +37,7 @@ fn draws_the_fleet_in_the_sidebar_grouped_by_what_it_needs() {
 
     assert_eq!(
         side(&terminal, 0),
-        " ▚▄▞ flow                               "
+        " ▚▄▞ saaio                              "
     );
     assert_eq!(
         side(&terminal, 2),
@@ -95,7 +95,7 @@ fn focuses_a_worker_by_digit_or_click_and_marks_it() {
         "{title}"
     );
     assert!(
-        title.ends_with("  │ ▚▄▞ flow                               "),
+        title.ends_with("  │ ▚▄▞ saaio                              "),
         "{title}"
     );
     assert_eq!(
@@ -146,7 +146,7 @@ fn shows_workers_that_exited_failed_or_have_no_session() {
     assert_eq!(side(&terminal, 11).trim_end(), "     no agent named codex");
     let pane: String = (1..43).map(|y| row(&terminal, y)).collect();
     assert!(
-        pane.contains("flow ui has no session for this flow."),
+        pane.contains("saaio ui has no session for this flow."),
         "{pane}"
     );
 }
@@ -311,7 +311,7 @@ fn peeks_at_where_an_ended_flows_code_is() {
     );
     let peek = vec![PeekLine::Code {
         branch: Some("flow/shop-198".into()),
-        worktree: "/shop/.flow/worktrees/shop-198".into(),
+        worktree: "/shop/.saaio/worktrees/shop-198".into(),
         exists: false,
     }];
 

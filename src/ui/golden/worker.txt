@@ -1,5 +1,5 @@
 
-  ● shop-230  ●───○───○───○ plan  · flow/shop-230 · slot 1                                                  │ ▚▄▞ flow
+  ● shop-230  ●───○───○───○ plan  · flow/shop-230 · slot 1                                                  │ ▚▄▞ saaio
                                                                                                             ├────────────────────────────────────────
                                                                                                             │ 0   master
                                                                                                             │     ~/projects/shop · main
@@ -15,7 +15,7 @@
                                                                                                             │
                           ╭─ not open ────────────────────────────────────────────╮                         │ RUNNING 1
                           │                                                       │                         │ 3 ◓ export-csv                      1h
-                          │  flow ui has no session for this flow.                │                         │     ●───●───●───○ review           6/6
+                          │  saaio ui has no session for this flow.               │                         │     ●───●───●───○ review           6/6
                           │                                                       │                         │     agent: review changes
                           ├───────────────────────────────────────────────────────┤                         │
                           │  C-space r resumes it   C-space 0 back to the master  │                         │ DONE 1

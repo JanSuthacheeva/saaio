@@ -6,12 +6,12 @@ use super::{Document, Failure, toon};
 use crate::client::Closing;
 use crate::text::plural;
 
-/// How `flow remove` says a worktree has uncommitted work.
+/// How `saaio remove` says a worktree has uncommitted work.
 const UNCOMMITTED: &str = "has uncommitted work";
-/// How `flow remove` says a branch has work no other branch has.
+/// How `saaio remove` says a branch has work no other branch has.
 const UNMERGED: &str = "on no other branch";
 
-/// Work `flow remove` refuses to lose unless told to; flow ui asks the person instead.
+/// Work `saaio remove` refuses to lose unless told to; saaio ui asks the person instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Refusal {
     /// The worktree has uncommitted work (--force discards it).
@@ -21,7 +21,7 @@ pub(crate) enum Refusal {
 }
 
 impl Refusal {
-    /// The refusal a failure's message says, for a program that reads what `flow remove` printed.
+    /// The refusal a failure's message says, for a program that reads what `saaio remove` printed.
     pub(crate) fn of(message: &str) -> Option<Refusal> {
         if message.contains(UNCOMMITTED) {
             Some(Refusal::Uncommitted)
@@ -38,8 +38,8 @@ pub(crate) fn uncommitted(name: &str, path: &str) -> Failure {
     Failure::error(
         format!("{name} {UNCOMMITTED} in {path}"),
         vec![
-            format!("Commit or stash it in {path}, then run `flow remove {name}` again"),
-            format!("Run `flow remove {name} --force` to discard the uncommitted work"),
+            format!("Commit or stash it in {path}, then run `saaio remove {name}` again"),
+            format!("Run `saaio remove {name} --force` to discard the uncommitted work"),
         ],
     )
 }
@@ -49,8 +49,8 @@ pub(crate) fn unmerged(name: &str, branch: &str, count: u32) -> Failure {
     Failure::error(
         format!("{branch} has {count} commit{} {UNMERGED}", plural(count)),
         vec![
-            format!("Merge or push {branch}, then run `flow remove {name}` again"),
-            format!("Run `flow remove {name} --delete-unmerged` to delete it with its commits"),
+            format!("Merge or push {branch}, then run `saaio remove {name}` again"),
+            format!("Run `saaio remove {name} --delete-unmerged` to delete it with its commits"),
         ],
     )
 }
@@ -122,7 +122,7 @@ pub(crate) fn removed(
             "Run `git worktree remove --force {path}` to discard what is left"
         ));
     }
-    help.push("Run `flow` to see what is left".to_string());
+    help.push("Run `saaio` to see what is left".to_string());
     Document::Toon(toon(&Removed {
         removed: name,
         pane: pane_name(pane),
@@ -148,7 +148,7 @@ pub(crate) fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
         kept: Vec<Kept<'a>>,
         help: Vec<&'static str>,
     }
-    let mut help = vec!["Run `flow` to see what is left"];
+    let mut help = vec!["Run `saaio` to see what is left"];
     if !kept.is_empty() {
         help.push("Commit or discard the work in a kept worktree, then remove it with `git worktree remove <path>`");
     }
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn reads_each_refusal_back_from_its_own_message() {
-        let uncommitted = uncommitted("shop-230", "/shop/.flow/worktrees/shop-230");
+        let uncommitted = uncommitted("shop-230", "/shop/.saaio/worktrees/shop-230");
         let unmerged = unmerged("shop-230", "flow/shop-230", 2);
 
         assert_eq!(
@@ -184,11 +184,11 @@ mod tests {
     fn cleared_counts_and_names_the_removed_flows() {
         assert_eq!(
             cleared(&["export-csv".into(), "shop-198".into()], &[]).text(),
-            "cleared: 2\nnames[2]: export-csv,shop-198\nhelp[1]: Run `flow` to see what is left"
+            "cleared: 2\nnames[2]: export-csv,shop-198\nhelp[1]: Run `saaio` to see what is left"
         );
         assert_eq!(
             cleared(&[], &[]).text(),
-            "cleared: 0\nhelp[1]: Run `flow` to see what is left"
+            "cleared: 0\nhelp[1]: Run `saaio` to see what is left"
         );
     }
 }

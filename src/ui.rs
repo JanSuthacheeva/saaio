@@ -58,20 +58,20 @@ const TICKS_PER_PEEK: u32 = 10;
 /// Ticks between two looks at theme.toml and the theme it extends.
 const TICKS_PER_THEME: u32 = 10;
 
-/// What flow ui reads from where it runs: Claude's home for the peek, the user's home for ~.
+/// What saaio ui reads from where it runs: Claude's home for the peek, the user's home for ~.
 #[derive(Debug)]
 pub struct UiEnv {
     pub claude_home: PathBuf,
     pub home: Option<PathBuf>,
     /// This flow binary, for the flow commands the UI runs (start, remove, status --all).
     pub exe: PathBuf,
-    /// This project's store, as `flow status --all` names its root.
+    /// This project's store, as `saaio status --all` names its root.
     pub store: PathBuf,
     /// Where theme.toml lives: config.toml's folder.
     pub theme_dir: PathBuf,
     /// The agents a flow can run, the default first, for the new-flow dialog.
     pub agents: Vec<String>,
-    /// The key before every flow ui command.
+    /// The key before every saaio ui command.
     pub prefix: Prefix,
 }
 
@@ -94,7 +94,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
             size: app.areas().pane_size(),
         },
     )?
-    .context("no flow server answers")?;
+    .context("no saaio server answers")?;
     let mut writer = client.try_clone()?;
     let (events, inbox) = mpsc::channel();
     let jobs = events.clone();
@@ -126,7 +126,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                     effects
                 }
                 Event::Server(message) => app.on_server(message),
-                Event::ServerGone => vec![Effect::Quit("the flow server stopped".to_string())],
+                Event::ServerGone => vec![Effect::Quit("the saaio server stopped".to_string())],
                 Event::Resize => {
                     let size = outer.size()?;
                     terminal.autoresize()?;
@@ -196,7 +196,7 @@ fn run_job(exe: &Path, job: Job, events: Sender<Event>) {
     let mut command = std::process::Command::new(exe);
     command
         .args(job.args())
-        .env_remove("FLOW_ID")
+        .env_remove("SAAIO_FLOW_ID")
         .stdin(std::process::Stdio::null());
     if let Some(dir) = job.dir() {
         command.current_dir(dir);

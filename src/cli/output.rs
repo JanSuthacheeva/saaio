@@ -15,15 +15,15 @@ pub(crate) const DESCRIPTION: &str =
 /// List views cut long texts to this many chars, with a hint; --full lifts it.
 pub(crate) const LIST_TEXT_LIMIT: usize = 80;
 
-/// What a successful command prints: TOON for agents, JSON for programs, a line for people (flow ui).
+/// What a successful command prints: TOON for agents, JSON for programs, a line for people (saaio ui).
 #[derive(Debug, PartialEq, Eq)]
 pub enum Document {
     Toon(String),
     Json(String),
     Text(String),
-    /// News that wakes a Claude Code session: printed on stderr, exit 2 (`flow wait`).
+    /// News that wakes a Claude Code session: printed on stderr, exit 2 (`saaio wait`).
     Wake(String),
-    /// Nothing at all: what `flow hook` answers, since a hook's stdout can reach the model.
+    /// Nothing at all: what `saaio hook` answers, since a hook's stdout can reach the model.
     Silent,
 }
 
@@ -88,8 +88,8 @@ impl Failure {
                     .join(" ")
             })
             .unwrap_or_else(|| match subcommand {
-                Some(name) => format!("flow {name}"),
-                None => "flow".to_string(),
+                Some(name) => format!("saaio {name}"),
+                None => "saaio".to_string(),
             });
         Failure {
             message,
@@ -148,7 +148,7 @@ mod tests {
     use super::*;
 
     #[derive(Debug, Parser)]
-    #[command(name = "flow")]
+    #[command(name = "saaio")]
     struct Cli {
         #[command(subcommand)]
         command: Command,
@@ -172,31 +172,34 @@ mod tests {
     fn prints_an_error_with_next_steps_as_toon() {
         let failure = Failure::error(
             "no flow named shop-999",
-            vec!["Run `flow` to list the flows".into()],
+            vec!["Run `saaio` to list the flows".into()],
         );
 
         assert_eq!(failure.code, 1);
         assert_eq!(
             failure.to_toon(),
-            "error: no flow named shop-999\nhelp[1]: Run `flow` to list the flows"
+            "error: no flow named shop-999\nhelp[1]: Run `saaio` to list the flows"
         );
     }
 
     #[test]
     fn turns_a_clap_error_into_a_usage_failure_naming_the_command() {
         Cli::command().debug_assert();
-        let error = Cli::try_parse_from(["flow", "report", "--nope"]).unwrap_err();
+        let error = Cli::try_parse_from(["saaio", "report", "--nope"]).unwrap_err();
 
         let failure = Failure::usage(&error, None);
 
         assert_eq!(failure.code, 2);
         assert_eq!(failure.message, "unexpected argument '--nope' found");
-        assert_eq!(failure.help, vec!["Run `flow report --help` for the usage"]);
+        assert_eq!(
+            failure.help,
+            vec!["Run `saaio report --help` for the usage"]
+        );
     }
 
     #[test]
     fn names_the_missing_arguments_clap_lists_below_its_message() {
-        let error = Cli::try_parse_from(["flow", "start"]).unwrap_err();
+        let error = Cli::try_parse_from(["saaio", "start"]).unwrap_err();
 
         let failure = Failure::usage(&error, None);
 
@@ -204,30 +207,30 @@ mod tests {
             failure.message,
             "the following required arguments were not provided: <REQUEST>"
         );
-        assert_eq!(failure.help, vec!["Run `flow start --help` for the usage"]);
+        assert_eq!(failure.help, vec!["Run `saaio start --help` for the usage"]);
     }
 
     #[test]
     fn names_the_subcommand_when_clap_prints_no_usage_line() {
-        let error = Cli::try_parse_from(["flow", "report", "--flow"]).unwrap_err();
+        let error = Cli::try_parse_from(["saaio", "report", "--flow"]).unwrap_err();
 
         assert_eq!(
             Failure::usage(&error, Some("report")).help,
-            vec!["Run `flow report --help` for the usage"]
+            vec!["Run `saaio report --help` for the usage"]
         );
         assert_eq!(
             Failure::usage(&error, None).help,
-            vec!["Run `flow --help` for the usage"]
+            vec!["Run `saaio --help` for the usage"]
         );
     }
 
     #[test]
     fn names_the_command_without_the_flags_clap_puts_in_its_usage() {
-        let error = Cli::try_parse_from(["flow", "start", "--plain", "x", "req"]).unwrap_err();
+        let error = Cli::try_parse_from(["saaio", "start", "--plain", "x", "req"]).unwrap_err();
 
         let failure = Failure::usage(&error, None);
 
-        assert_eq!(failure.help, vec!["Run `flow start --help` for the usage"]);
+        assert_eq!(failure.help, vec!["Run `saaio start --help` for the usage"]);
     }
 
     #[test]

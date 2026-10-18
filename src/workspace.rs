@@ -10,7 +10,7 @@ use anyhow::{Context, Result, bail};
 use crate::launch::worktree::{WORKTREES_DIR, worktree_add_argv, worktree_remove_argv};
 use crate::view::Workspace;
 
-/// The repo's own hooks: .flow/setup after the worktree exists, .flow/teardown before it goes.
+/// The repo's own hooks: .saaio/setup after the worktree exists, .saaio/teardown before it goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hook {
     Setup,
@@ -56,13 +56,13 @@ pub fn current_branch(dir: &Path) -> Option<String> {
     None
 }
 
-/// Creates the worktree and branch; adds .flow/worktrees/ to .git/info/exclude once.
+/// Creates the worktree and branch; adds .saaio/worktrees/ to .git/info/exclude once.
 pub fn create_worktree(repo: &Path, workspace: &Workspace) -> Result<()> {
     run(&worktree_add_argv(repo, workspace))?;
     exclude_worktrees(repo)
 }
 
-/// Runs <repo>/.flow/<hook> in the worktree with env when it exists and is executable;
+/// Runs <repo>/.saaio/<hook> in the worktree with env when it exists and is executable;
 /// Ok(false) when there is none. A non-zero exit is an Err with the last stderr line.
 pub fn run_hook(
     repo: &Path,
@@ -70,7 +70,7 @@ pub fn run_hook(
     workspace: &Workspace,
     env: &[(String, String)],
 ) -> Result<bool> {
-    let file = repo.join(".flow").join(match hook {
+    let file = repo.join(".saaio").join(match hook {
         Hook::Setup => "setup",
         Hook::Teardown => "teardown",
     });
@@ -214,7 +214,7 @@ fn last_line(stderr: &[u8], stdout: &[u8]) -> String {
         .to_string()
 }
 
-/// Adds .flow/worktrees/ to .git/info/exclude once, so worktrees never show in git status.
+/// Adds .saaio/worktrees/ to .git/info/exclude once, so worktrees never show in git status.
 fn exclude_worktrees(repo: &Path) -> Result<()> {
     let git_dir = PathBuf::from(git(repo, &["rev-parse", "--git-common-dir"])?.trim());
     let git_dir = if git_dir.is_absolute() {
@@ -282,7 +282,7 @@ mod tests {
     }
 
     fn hook(repo: &Path, name: &str, script: &str) {
-        let dir = repo.join(".flow");
+        let dir = repo.join(".saaio");
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join(name);
         fs::write(&file, script).unwrap();
@@ -297,8 +297,8 @@ mod tests {
         }
 
         assert_eq!(
-            ssh_hostname("flow-test-unknown-alias").as_deref(),
-            Some("flow-test-unknown-alias")
+            ssh_hostname("saaio-test-unknown-alias").as_deref(),
+            Some("saaio-test-unknown-alias")
         );
     }
 
@@ -332,7 +332,7 @@ mod tests {
             .unwrap();
         assert_eq!(String::from_utf8(status.stdout).unwrap(), "");
         let exclude = fs::read_to_string(repo.join(".git/info/exclude")).unwrap();
-        assert_eq!(exclude.matches(".flow/worktrees/").count(), 1);
+        assert_eq!(exclude.matches(".saaio/worktrees/").count(), 1);
         assert!(create_worktree(&repo, &workspace).is_err());
     }
 
@@ -344,14 +344,14 @@ mod tests {
         hook(
             &repo,
             "setup",
-            "#!/bin/sh\necho \"$FLOW_SLOT $(pwd)\" > ran.txt\n",
+            "#!/bin/sh\necho \"$SAAIO_SLOT $(pwd)\" > ran.txt\n",
         );
 
         let ran = run_hook(
             &repo,
             Hook::Setup,
             &workspace,
-            &[("FLOW_SLOT".into(), "3".into())],
+            &[("SAAIO_SLOT".into(), "3".into())],
         )
         .unwrap();
 

@@ -62,7 +62,7 @@ pub struct BoardView<'a> {
     pub offset_secs: i64,
     /// Shown in place of the keys, such as why clearing a flow failed.
     pub notice: Option<&'a str>,
-    /// Every project's flows, this project first, once `flow status --all` answered.
+    /// Every project's flows, this project first, once `saaio status --all` answered.
     pub projects: Option<&'a Projects>,
     /// This project's store, to tell its flows from other projects'.
     pub here: Option<&'a str>,
@@ -126,7 +126,7 @@ impl BoardView<'_> {
             vec![
                 Span::raw(" "),
                 Span::styled(theme.glyphs.mark, theme.ui.accent),
-                Span::styled(" flow", theme.ui.strong),
+                Span::styled(" saaio", theme.ui.strong),
                 Span::styled(" board", theme.ui.faint),
             ],
             right,

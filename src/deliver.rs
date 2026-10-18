@@ -55,7 +55,7 @@ pub fn master_news(store: &Store, clock: fn() -> u64, is_mine: &dyn Fn() -> bool
 }
 
 /// The flows that stopped since the master last saw them, marked seen, without waiting for more:
-/// what a Stop hands over and flow server types into an idle master.
+/// what a Stop hands over and saaio server types into an idle master.
 pub fn master_news_now(store: &Store, flows: &[FlowView]) -> Vec<FlowView> {
     let mut seen = store.seen().unwrap_or_else(|| wake::first_seen(flows));
     let changed = wake::changed_flows(flows, &seen);

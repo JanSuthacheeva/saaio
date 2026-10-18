@@ -13,7 +13,7 @@ use crate::proto::PaneKey;
 
 /// The name the master session gets.
 pub const MASTER_NAME: &str = "master";
-/// What flow writes to master.md: how the master works with flow. An earlier default still in
+/// What saaio writes to master.md: how the master works with saaio. An earlier default still in
 /// master.md was never edited, so it gets the current one.
 pub const INSTRUCTIONS: DefaultFile = DefaultFile {
     text: include_str!("master.md"),
@@ -26,6 +26,7 @@ pub const INSTRUCTIONS: DefaultFile = DefaultFile {
         include_str!("master-v6.md"),
         include_str!("master-v7.md"),
         include_str!("master-v8.md"),
+        include_str!("master-v9.md"),
     ],
 };
 
@@ -207,11 +208,11 @@ mod tests {
             ["claude", "-n", "master", "--resume", "5e55"].map(String::from)
         );
         assert_eq!(resumed.cwd, PathBuf::from("/work"));
-        assert!(resumed.env.iter().all(|(key, _)| key != "FLOW_ID"));
+        assert!(resumed.env.iter().all(|(key, _)| key != "SAAIO_FLOW_ID"));
         assert!(
             resumed
                 .env
-                .contains(&("FLOW_MASTER".to_string(), "1".to_string()))
+                .contains(&("SAAIO_MASTER".to_string(), "1".to_string()))
         );
         let unresumable = Agent {
             resume: None,
@@ -242,7 +243,7 @@ mod tests {
         let agents = builtin_agents();
         let master = &agents[crate::config::MASTER_AGENT];
         let env = LaunchEnv {
-            flow_exe: PathBuf::from("/bin/flow"),
+            flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
         let md = instructions();
@@ -286,11 +287,11 @@ mod tests {
         let agents = builtin_agents();
         let codex = &agents["codex"];
         let env = LaunchEnv {
-            flow_exe: PathBuf::from("/bin/flow"),
+            flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
         let md = instructions();
-        let exe = Path::new("/bin/flow");
+        let exe = Path::new("/bin/saaio");
         let mut wired = crate::adapter::codex::hooks(exe);
         wired.extend(Adapter::Codex.instruct("# You are the master"));
 
@@ -325,13 +326,13 @@ mod tests {
     fn a_master_md_left_at_the_last_default_takes_the_new_one() {
         let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().join("master.md");
-        fs::write(&path, include_str!("master-v8.md")).unwrap();
+        fs::write(&path, include_str!("master-v9.md")).unwrap();
 
         INSTRUCTIONS.ensure(&path).unwrap();
 
         let text = fs::read_to_string(&path).unwrap();
         assert_eq!(text, INSTRUCTIONS.text);
-        assert!(text.contains("flow send --type"), "{text}");
+        assert!(text.contains("saaio send --type"), "{text}");
     }
 
     #[test]

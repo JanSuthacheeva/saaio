@@ -1,9 +1,9 @@
 # The JSON contract
 
 ```sh
-flow status --json          # this project's flows
-flow status --all --json    # every project's flows
-flow status shop-217 --json # a board with just that flow
+saaio status --json          # this project's flows
+saaio status --all --json    # every project's flows
+saaio status shop-217 --json # a board with just that flow
 ```
 
 - The whole board: every flow, nothing truncated.
@@ -49,7 +49,7 @@ flow status shop-217 --json # a board with just that flow
       "startedAt": 1792214574703,
       "changedAt": 1792214583915,
       "workspace": {
-        "path": "/Users/jan/projects/shop/.flow/worktrees/shop-217",
+        "path": "/Users/jan/projects/shop/.saaio/worktrees/shop-217",
         "branch": "flow/shop-217",
         "slot": 1,
         "window": null,
@@ -119,7 +119,7 @@ All times are Unix milliseconds.
 | `timeline` | array | what happened, oldest first. See [Timeline](#timeline). |
 | `startedAt` | number | when the flow started |
 | `changedAt` | number | when its state, phase or blocker last changed |
-| `workspace` | object or null | where its worker runs. Null for a flow made with `flow new`. See [Workspace](#workspace). |
+| `workspace` | object or null | where its worker runs. Null for a flow made with `saaio new`. See [Workspace](#workspace). |
 | `answer` | string or null | the worker's last turn's whole closing message, as its harness reported it |
 | `session` | object or null | `{ "id", "transcript" }`: the session id the harness picked and the path of its transcript (`transcript` may be null). Set for Codex, which picks its own id. Null for Claude Code, which uses the flow's. |
 
@@ -163,19 +163,19 @@ A flow keeps the phases it started with. Two flows can have different steps.
 | `path` | string | the worktree, or a plain session's folder |
 | `branch` | string or null | the flow's branch. Null for a plain session |
 | `slot` | number or null | the flow's slot, 1 to 20. Null for a plain session |
-| `window` | string or null | `flow-ui` once flow ui opened the worker. Null before |
+| `window` | string or null | `saaio-ui` once saaio ui opened the worker. Null before |
 | `agent` | string | the agent it runs, a name from the config |
 
 ## Every project
 
-`flow status --all --json`: one board per registered store with flows.
+`saaio status --all --json`: one board per registered store with flows.
 
 ```json
 {
   "version": 3,
   "now": 1792214602016,
   "projects": [
-    { "name": "shop", "root": "/Users/jan/.local/state/flow/projects/shop", "board": { "version": 3, "...": "..." } }
+    { "name": "shop", "root": "/Users/jan/.local/state/saaio/projects/shop", "board": { "version": 3, "...": "..." } }
   ]
 }
 ```
@@ -184,7 +184,7 @@ A flow keeps the phases it started with. Two flows can have different steps.
 | --- | --- | --- |
 | `name` | string | the project's name: its store's folder name, or `default` for the default store. ` (2)`, ` (3)` and so on after a name already taken |
 | `root` | string | the store's folder |
-| `board` | object | the board, as `flow status --json` prints it |
+| `board` | object | the board, as `saaio status --json` prints it |
 
 ## Versions
 

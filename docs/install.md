@@ -1,11 +1,11 @@
 # Install
 
 ```sh
-cargo install --git https://github.com/JanSuthacheeva/flow --tag v0.1.0
-flow --version    # flow 0.1.0
+cargo install --git https://github.com/JanSuthacheeva/saaio --tag v0.1.0
+saaio --version    # saaio 0.1.0
 ```
 
-Installs `flow` to `~/.cargo/bin`.
+Installs `saaio` to `~/.cargo/bin`.
 
 | Requirement | Notes |
 | --- | --- |
@@ -21,7 +21,7 @@ Default first prompt: `/ship-feature <request>` (`$ship-feature <request>` in Co
 [skills CLI](https://github.com/vercel-labs/skills), which asks which agents to install for:
 
 ```sh
-npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature design-code implement-plan review-changes write-merge-request commit setup-flow
+npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature design-code implement-plan review-changes write-merge-request commit setup-saaio
 ```
 
 | Skill | Does |
@@ -32,7 +32,7 @@ npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature design-code i
 | `review-changes` | starts the review phase |
 | `write-merge-request` | starts the merge-request phase |
 | `commit` | commits |
-| `setup-flow` | prepares a repository for flow ([repository.md](repository.md#the-setup-flow-skill)) |
+| `setup-saaio` | prepares a repository for saaio ([repository.md](repository.md#the-setup-saaio-skill)) |
 
 Optional. Own skills instead: [Use your own workflow](configuration.md#use-your-own-workflow). No
 skills at all: [Without matching skills](configuration.md#without-matching-skills).
@@ -40,10 +40,10 @@ skills at all: [Without matching skills](configuration.md#without-matching-skill
 ## First run
 
 ```sh
-flow ui    # in a repository
+saaio ui    # in a repository
 ```
 
-Writes to `~/.config/flow`:
+Writes to `~/.config/saaio`:
 
 | File | Holds |
 | --- | --- |
@@ -59,9 +59,9 @@ Writes to `~/.config/flow`:
 ## Updating
 
 ```sh
-cargo install --git https://github.com/JanSuthacheeva/flow --tag <new tag> --force
-flow ui --stop
-flow ui
+cargo install --git https://github.com/JanSuthacheeva/saaio --tag <new tag> --force
+saaio ui --stop
+saaio ui
 ```
 
 - The running server keeps the old version until stopped.
@@ -72,4 +72,4 @@ flow ui
 
 ## Uninstalling
 
-[files.md](files.md#removing-flow).
+[files.md](files.md#removing-saaio).

@@ -12,7 +12,7 @@ use crate::view::{Board, MasterTurn};
 
 pub const PROTOCOL_VERSION: u32 = 5;
 /// This binary: `0.1.0 2904734`, the commit from build.rs, `unknown` outside a git checkout.
-pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("FLOW_COMMIT"));
+pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("SAAIO_COMMIT"));
 pub const MAX_MESSAGE: usize = 8 << 20;
 
 /// The process at the other end: what the log and a dropped UI say about it.
@@ -34,12 +34,12 @@ impl Peer {
     }
 }
 
-/// pid 4321 in /Users/jan/projects/flow (flow 0.1.0 2904734)
+/// pid 4321 in /Users/jan/projects/flow (saaio 0.1.0 2904734)
 impl fmt::Display for Peer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "pid {} in {} (flow {})",
+            "pid {} in {} (saaio {})",
             self.pid,
             self.folder(),
             self.build
@@ -70,7 +70,7 @@ pub struct Size {
     pub rows: u16,
 }
 
-/// Attach draws the panes; Control sends one request (flow remove, flow clear).
+/// Attach draws the panes; Control sends one request (saaio remove, saaio clear).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     Attach { size: Size },
@@ -110,7 +110,7 @@ pub enum ServerMsg {
     Frame(Frame),
     /// The flow's pane exited after CloseFlow.
     Closed(String),
-    /// Another flow ui attached: the process `by`.
+    /// Another saaio ui attached: the process `by`.
     Detached {
         by: Peer,
     },
@@ -468,7 +468,7 @@ mod tests {
     fn names_a_peer_by_pid_folder_and_build() {
         assert_eq!(
             peer().to_string(),
-            "pid 4321 in /Users/jan/projects/flow (flow 0.1.0 2904734)"
+            "pid 4321 in /Users/jan/projects/flow (saaio 0.1.0 2904734)"
         );
         let lost = Peer {
             cwd: PathBuf::new(),
@@ -476,7 +476,7 @@ mod tests {
         };
         assert_eq!(
             lost.to_string(),
-            "pid 4321 in an unknown folder (flow 0.1.0 2904734)"
+            "pid 4321 in an unknown folder (saaio 0.1.0 2904734)"
         );
     }
 
