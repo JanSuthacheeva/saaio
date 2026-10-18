@@ -33,7 +33,7 @@ impl App {
     fn on_command(&mut self, command: Command) -> Vec<Effect> {
         match command {
             Command::Detach => vec![Effect::Quit(
-                "detached - the agents keep running; run `saaio ui` to attach again".to_string(),
+                "detached - the agents keep running; run `saaio` to attach again".to_string(),
             )],
             Command::StopServer => {
                 let unfinished = self
@@ -149,7 +149,7 @@ impl App {
         }
         match key {
             Key::Char('k') => stop(format!(
-                "stopped flow; {} unfinished flow{} resume the next time you run `saaio ui`",
+                "stopped flow; {} unfinished flow{} resume the next time you run `saaio`",
                 unfinished.len(),
                 plural(unfinished.len())
             )),

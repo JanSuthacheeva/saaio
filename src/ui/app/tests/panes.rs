@@ -102,14 +102,14 @@ fn lets_go_when_another_ui_attaches_and_says_which() {
     assert_eq!(
         app.on_server(ServerMsg::Detached { by }),
         vec![Effect::Quit(
-            "another saaio ui took over: pid 4321 in ~/projects/flow (saaio 0.1.0 2904734)"
+            "another terminal took over: pid 4321 in ~/projects/flow (saaio 0.1.0 2904734)"
                 .to_string()
         )]
     );
     assert_eq!(
         app.on_server(ServerMsg::Detached { by: lost }),
         vec![Effect::Quit(
-            "another saaio ui took over: pid 4321 in an unknown folder (saaio 0.1.0 2904734)"
+            "another terminal took over: pid 4321 in an unknown folder (saaio 0.1.0 2904734)"
                 .to_string()
         )]
     );

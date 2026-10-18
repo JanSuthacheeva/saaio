@@ -241,7 +241,7 @@ impl App {
         };
         body.push(Line::raw(""));
         body.push(Line::styled(
-            format!("Kept, {they} the next time saaio ui starts."),
+            format!("Kept, {they} the next time saaio starts."),
             theme.ui.muted,
         ));
         body.push(Line::styled(

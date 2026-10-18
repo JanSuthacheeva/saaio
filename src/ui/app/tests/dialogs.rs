@@ -160,7 +160,7 @@ fn keeps_or_ends_unfinished_flows_when_flow_stops() {
     assert_eq!(
         kept[1],
         Effect::Quit(
-            "stopped flow; 3 unfinished flows resume the next time you run `saaio ui`".into()
+            "stopped flow; 3 unfinished flows resume the next time you run `saaio`".into()
         )
     );
 

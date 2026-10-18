@@ -210,7 +210,6 @@ fn reload_config(configs: &mut ConfigWatch, app: &mut App, router: &mut Router) 
                     .map(String::from)
                     .collect(),
             );
-            app.set_master_agent(config.master_agent().map(|(name, _)| name.to_string()));
             app.take_back(CONFIG_NOTICE);
             true
         }

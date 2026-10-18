@@ -37,7 +37,6 @@ fn golden(name: &str, terminal: &Terminal<TestBackend>) {
 #[test]
 fn every_view_looks_as_it_did() {
     let mut alone = App::new(FLEET).with_home(Some("/Users/jan".into()));
-    alone.set_master_agent(Some("codex".into()));
     alone.on_server(ServerMsg::Master {
         cwd: "/Users/jan/projects/shop".into(),
         branch: Some("main".into()),
@@ -47,9 +46,7 @@ fn every_view_looks_as_it_did() {
     alone.on_input(Routed::Command(Command::Board));
     golden("empty-board", &render_at(&alone, FLEET));
 
-    let mut fleet = board_app();
-    fleet.set_master_agent(Some("codex".into()));
-    golden("fleet", &render_at(&fleet, FLEET));
+    golden("fleet", &render_at(&board_app(), FLEET));
 
     let mut long = board_app();
     let mut board = super::fleet();

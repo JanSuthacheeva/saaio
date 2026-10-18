@@ -166,7 +166,7 @@ A flow keeps the phases it started with. Two flows can have different steps.
 | `path` | string | the worktree, or a plain session's folder |
 | `branch` | string or null | the flow's branch. Null for a plain session |
 | `slot` | number or null | the flow's slot, 1 to 20. Null for a plain session |
-| `window` | string or null | `saaio-ui` once saaio ui opened the worker. Null before |
+| `window` | string or null | `saaio-ui` once the UI opened the worker. Null before |
 | `agent` | string | the agent it runs, a name from the config |
 
 ## Every project

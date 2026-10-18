@@ -46,6 +46,7 @@ impl BoardView<'_> {
             facts.push(flow.request.clone());
         }
         facts.push(flow.mode.name().to_string());
+        facts.extend(flow.workspace.as_ref().map(|space| space.agent.clone()));
         if let Some(space) = flow.workspace.as_ref().filter(|_| flow.is_plain()) {
             facts.push(self.sidebar.tilde(&space.path));
         } else if let Some(space) = &flow.workspace {
@@ -463,6 +464,10 @@ mod tests {
         let open = header(EventKind::MergeRequest { url: url() });
         let merged = header(EventKind::Merged { url: url() });
 
+        assert!(
+            open.contains(" · auto · claude · flow/shop-221 · "),
+            "{open}"
+        );
         assert!(open.contains(" · PR #42 open · started "), "{open}");
         assert!(merged.contains(" · PR #42 merged · started "), "{merged}");
     }

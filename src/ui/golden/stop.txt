@@ -17,7 +17,7 @@
                      │    ● shop-230    Which approach: a channel column or a join …  │                     │ 3 ◓ export-csv               claude 1h
                      │    ◓ export-csv  agent: review changes                         │                     │     ●───●───●───○ review           6/6
                      │                                                                │                     │     agent: review changes
-                     │  Kept, they resume the next time saaio ui starts.              │                     │
+                     │  Kept, they resume the next time saaio starts.                 │                     │
                      │  Ended, branches and worktrees stay until saaio clear.         │                     │ DONE 1
                      │                                                                │                     │ 4 ✓ shop-198                 claude 2h
                      ├────────────────────────────────────────────────────────────────┤                     │     ●───●───●───● MR !418      took 0s

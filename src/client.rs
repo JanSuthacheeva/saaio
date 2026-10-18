@@ -61,7 +61,7 @@ impl Client {
         {
             Some(ServerMsg::Welcome { .. }) => {}
             Some(ServerMsg::Refused { reason }) => {
-                bail!("{reason}; run `saaio ui --stop` and start saaio ui again")
+                bail!("{reason}; run `saaio --stop` and start saaio again")
             }
             Some(other) => bail!("the saaio server answered {other:?} instead of a welcome"),
             None => bail!("the saaio server closed the connection"),
@@ -135,7 +135,7 @@ pub fn stop_server(socket: &Path, clock: fn() -> u64) -> Result<bool> {
         let _ = server_log::append(&log, clock(), &text);
     };
     note(format!(
-        "saaio ui --stop (saaio {BUILD}) sends SIGTERM to pid {pid}"
+        "saaio --stop (saaio {BUILD}) sends SIGTERM to pid {pid}"
     ));
     for (signal, wait) in [(libc::SIGTERM, STOP_WAIT), (libc::SIGKILL, KILL_WAIT)] {
         if signal == libc::SIGKILL {
@@ -423,7 +423,7 @@ mod tests {
         let error = Client::connect(&socket, Role::Control).err().unwrap();
 
         assert!(error.to_string().contains("protocol 9"), "{error}");
-        assert!(error.to_string().contains("saaio ui --stop"), "{error}");
+        assert!(error.to_string().contains("saaio --stop"), "{error}");
         server.join().unwrap();
         assert!(
             Client::connect(&dir.path().join("none.sock"), Role::Control)

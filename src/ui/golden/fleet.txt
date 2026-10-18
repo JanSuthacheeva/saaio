@@ -1,7 +1,7 @@
 
   master  main                                                                                              │ ▚▄▞ saaio
                                                                                                             ├────────────────────────────────────────
-                                                                                                            │▌0   master                       codex
+                                                                                                            │▌0   master
                                                                                                             │▌    ~/projects/shop · main
                                                                                                             │
                                                                                                             │ NEEDS YOU 2

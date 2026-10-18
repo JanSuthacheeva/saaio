@@ -13,7 +13,7 @@ Location: the folder of `$SAAIO_CONFIG` if set, else `$XDG_CONFIG_HOME/saaio`, e
 | `themes/<name>.toml` | themes `theme.toml` can extend, often written by another tool |
 | `master.md` | the master's instructions ([flows.md](flows.md#the-master)) |
 
-- saaio ui writes `config.toml`, `theme.toml` and `master.md` on its first run.
+- The UI writes `config.toml`, `theme.toml` and `master.md` on its first run.
 - An edited file is never overwritten.
 - A newer saaio refreshes `master.md` while it still holds an earlier default.
 
@@ -29,7 +29,7 @@ Location, the first that applies:
 `<repository>` is the repository's folder name. A second repository with the same folder name gets
 `<repository>-2`, a third `-3`.
 
-saaio ui passes its store to every session it opens as `SAAIO_HOME`, so a worker reports into its
+The UI passes its store to every session it opens as `SAAIO_HOME`, so a worker reports into its
 flow's store from any folder.
 
 | File | Holds |
@@ -37,7 +37,7 @@ flow's store from any folder.
 | `flows/<id>.jsonl` | one flow's events, one JSON line each, append-only |
 | `flows/<id>.alive` | modification time is the flow's last heartbeat |
 | `waits/` | wake-up state: each session's waiter, messages given to a worker, lines typed into a worker's pane, whether a session is busy, what the master last saw, the master's turn and its Codex session id |
-| `server.sock` | the socket between saaio ui and the server, owner-only. If its path would be 100 bytes or longer: `/tmp/saaio-<uid>/<hash>.sock`, with the log next to it as `<hash>.log`. |
+| `server.sock` | the socket between the UI and the server, owner-only. If its path would be 100 bytes or longer: `/tmp/saaio-<uid>/<hash>.sock`, with the log next to it as `<hash>.log`. |
 | `server.log` | what the server did and what failed. Rotated to `server.log.1` past 1 MiB. |
 | `master.json` | the master's session id and folder, for resuming after a restart |
 | `repo` | in a project store: the git folder of the repository it belongs to. A store without it is taken by the first repository of its name. |
@@ -76,7 +76,7 @@ saaio writes nothing to `~/.claude` or `~/.codex`. Hooks are passed on each agen
 ## Removing saaio
 
 ```sh
-saaio ui --stop      # end the server and every session
+saaio --stop      # end the server and every session
 saaio clear          # or saaio remove <name>, for flows whose worktrees you want gone
 cargo uninstall saaio
 rm -rf ~/.config/saaio ~/.local/state/saaio   # and any SAAIO_HOME you used

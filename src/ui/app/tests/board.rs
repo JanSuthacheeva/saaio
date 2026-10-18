@@ -28,13 +28,14 @@ fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
     assert!(
         shop_230
             .strip_prefix('▌')
-            .and_then(|rest| rest.strip_suffix("31m"))
+            .and_then(|rest| rest.strip_suffix("claude · 31m"))
             .is_some_and(|gap| gap.trim().is_empty()),
         "a flow without tasks draws no bar: {shop_230:?}"
     );
     assert!(row(&terminal, 10).contains(" 3 ◓ export-csv               review · agent "));
     assert!(
-        row(&terminal, 16).starts_with(" 2 shop-230  shop-230 · guided · flow/shop-230 · slot 1"),
+        row(&terminal, 16)
+            .starts_with(" 2 shop-230  shop-230 · guided · claude · flow/shop-230 · slot 1"),
         "{}",
         row(&terminal, 16)
     );

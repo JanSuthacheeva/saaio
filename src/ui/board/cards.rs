@@ -158,11 +158,9 @@ impl BoardView<'_> {
                 Some(space) => space.branch.clone().unwrap_or_default(),
                 None => String::new(),
             };
-            split(
-                vec![Span::styled(format!("   {text}"), theme.ui.faint)],
-                vec![Span::styled(ago, theme.ui.faint)],
-                width,
-            )
+            let left = vec![Span::styled(format!("   {text}"), theme.ui.faint)];
+            let right = self.agent_and_age(flow, &left, ago, width);
+            split(left, right, width)
         } else {
             let tasks = flow
                 .tasks
@@ -178,7 +176,8 @@ impl BoardView<'_> {
                     ]
                 }
             };
-            split(progress, vec![Span::styled(ago, theme.ui.faint)], width)
+            let right = self.agent_and_age(flow, &progress, ago, width);
+            split(progress, right, width)
         };
 
         let (note, style) = match flow.state {
@@ -201,6 +200,28 @@ impl BoardView<'_> {
             style,
         );
         [first, Line::from(second), third, fourth]
+    }
+
+    /// The right of a card's third row: the worker's agent and `ago`, as the sidebar shows them, or
+    /// only `ago` where both do not fit beside `left`.
+    fn agent_and_age(
+        &self,
+        flow: &FlowView,
+        left: &[Span<'static>],
+        ago: String,
+        width: usize,
+    ) -> Vec<Span<'static>> {
+        let faint = self.theme().ui.faint;
+        let agent = flow
+            .workspace
+            .as_ref()
+            .map(|space| format!("{} · ", space.agent))
+            .filter(|agent| spans_width(left) + columns(agent) + columns(&ago) < width);
+        agent
+            .into_iter()
+            .chain([ago])
+            .map(|text| Span::styled(text, faint))
+            .collect()
     }
 
     /// A card's first row: `left` cut with … to stay two columns clear of the state label; the
@@ -438,8 +459,25 @@ mod tests {
         assert!(card[0].ends_with("  blocked "), "{card:#?}");
         assert!(card[1].ends_with("  · guided"), "{card:#?}");
         assert!(card[2].starts_with("   4/9 tasks"), "{card:#?}");
-        assert!(card[2].ends_with(" 27m "), "{card:#?}");
+        assert!(card[2].ends_with(" claude · 27m "), "{card:#?}");
         assert_eq!(card[3], "   migration needs a default");
+    }
+
+    #[test]
+    fn a_narrow_card_drops_the_agent_before_the_age() {
+        let working = flow(
+            "shop-221",
+            Mode::Auto,
+            vec![EventKind::Tasks { done: 4, total: 9 }],
+        );
+
+        let third = with_view(vec![working.clone()], |view| {
+            text(&view.flow_card(&working, Some(1), 22)[2])
+        });
+
+        assert!(!third.contains("claude"), "{third:?}");
+        assert!(third.starts_with("   4/9 tasks"), "{third:?}");
+        assert!(third.ends_with(" 30m "), "{third:?}");
     }
 
     #[test]
@@ -460,6 +498,7 @@ mod tests {
         for (card, name) in cards.iter().zip(["shop-240", "shop-241"]) {
             assert!(!card[1].contains("guided"), "{card:#?}");
             assert!(card[2].starts_with(&format!("   flow/{name}")), "{card:#?}");
+            assert!(card[2].contains(" claude · "), "{card:#?}");
             assert_eq!(
                 card[3],
                 format!("   {} add CSV export", name.to_uppercase())

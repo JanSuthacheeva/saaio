@@ -17,7 +17,7 @@ merge-request = "#d08ad6"
 ```
 
 - A key left out keeps the color of the extended theme.
-- saaio ui repaints within a second of saving `theme.toml` or a theme it extends.
+- The UI repaints within a second of saving `theme.toml` or a theme it extends.
 - saaio's mark is always `▚▄▞`, drawn with block characters in the accent color.
 
 - [The file](#the-file)
@@ -32,7 +32,7 @@ merge-request = "#d08ad6"
 
 ## The file
 
-- saaio ui writes it on its first run: every setting commented out at its default (the terminal
+- The UI writes it on its first run: every setting commented out at its default (the terminal
   theme). Same content: [examples/theme.toml](../examples/theme.toml).
 - Remove the `#` in front of a setting to set it.
 - An edited file is never overwritten.
@@ -125,7 +125,7 @@ Example: a [Noctalia](https://github.com/noctalia-dev/noctalia-shell) template, 
 theme change. Save as `~/.config/noctalia/templates/saaio.toml`:
 
 ```toml
-# saaio ui theme, written by Noctalia on every theme change.
+# saaio theme, written by Noctalia on every theme change.
 extends = "terminal"
 
 [ui]
