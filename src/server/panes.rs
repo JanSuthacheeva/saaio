@@ -191,7 +191,7 @@ impl Server {
         }
     }
 
-    /// Resumes a worker whose pane exited or never opened, also one whose flow ended.
+    /// Resumes an unfinished worker whose pane exited or never opened.
     pub(super) fn reopen_worker(&mut self, id: &str) {
         let key = PaneKey::Flow(id.to_string());
         if self.host.status(&key) == Some(&PaneStatus::Running) {
@@ -200,6 +200,13 @@ impl Server {
         let Some(flow) = self.flow(id).cloned() else {
             return;
         };
+        if flow.is_finished() {
+            self.host.fail(
+                key,
+                "finished flow cannot reopen; start a new flow".to_string(),
+            );
+            return;
+        }
         let Some(space) = &flow.workspace else {
             return;
         };
@@ -217,17 +224,24 @@ impl Server {
     /// Opens a pane once more with the agent's first command: its resume failed before the agent
     /// ever saved the session.
     pub(super) fn open_fresh(&mut self, key: &PaneKey) {
-        server_log::write(
-            (self.clock)(),
-            &format!("resuming {key} failed, starting it fresh"),
-        );
         let PaneKey::Flow(id) = key else {
+            server_log::write(
+                (self.clock)(),
+                &format!("resuming {key} failed, starting it fresh"),
+            );
             self.open_master(Start::Fresh);
             return;
         };
         let Some(mut flow) = self.flow(id).cloned() else {
             return;
         };
+        if flow.is_finished() {
+            return;
+        }
+        server_log::write(
+            (self.clock)(),
+            &format!("resuming {key} failed, starting it fresh"),
+        );
         let Some(space) = flow.workspace.as_mut() else {
             return;
         };
