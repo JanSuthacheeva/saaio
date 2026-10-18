@@ -27,7 +27,7 @@ read_phase(command: &str, workflow: &Workflow) -> Option<Phase>;
 
 ## Tests and assumptions
 
-Recorded hook fixtures cover Codex permission pending and completion and batched skill reads. Fold tests cover the delay, cancellation, MR state and custom workflows. Keep the five-second server refold, so a prompt appears as waiting between three and eight seconds after the request. No new dependency, CLI flag or environment variable.
+Recorded hook fixtures cover Codex permission pending and completion; hook-shaped test payloads cover batched skill reads. Fold tests cover the delay, cancellation, MR state and custom workflows. Keep the five-second server refold, so a prompt appears as waiting between three and eight seconds after the request. No new dependency, CLI flag or environment variable.
 
 ## Tasks
 
