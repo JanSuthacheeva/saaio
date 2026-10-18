@@ -50,9 +50,14 @@ impl Env {
         Registry::locate(self.xdg_state_home.clone(), self.home.clone())
     }
 
-    /// The config file $SAAIO_CONFIG, $XDG_CONFIG_HOME or $HOME point to.
+    /// The config in the file config_file() names.
     pub(crate) fn config(&self) -> anyhow::Result<Config> {
-        Config::load(
+        Config::read(self.config_file().as_deref())
+    }
+
+    /// The config file $SAAIO_CONFIG, $XDG_CONFIG_HOME or $HOME point to.
+    pub(crate) fn config_file(&self) -> Option<PathBuf> {
+        config::config_file(
             self.saaio_config.clone(),
             self.xdg_config_home.clone(),
             self.home.clone(),
@@ -61,12 +66,8 @@ impl Env {
 
     /// The folder of the config file, where master.md and theme.toml live.
     pub(crate) fn config_dir(&self) -> Option<PathBuf> {
-        config::config_file(
-            self.saaio_config.clone(),
-            self.xdg_config_home.clone(),
-            self.home.clone(),
-        )
-        .and_then(|file| file.parent().map(Path::to_path_buf))
+        self.config_file()
+            .and_then(|file| file.parent().map(Path::to_path_buf))
     }
 
     /// Claude Code's home, for the peek: $CLAUDE_CONFIG_DIR, else ~/.claude.

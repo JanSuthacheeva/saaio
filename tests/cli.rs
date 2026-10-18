@@ -1337,7 +1337,7 @@ fn a_hook_keeps_reporting_when_the_config_does_not_load() {
     assert!(output.status.success());
     assert!(output.stdout.is_empty(), "{}", stdout(&output));
     let err = String::from_utf8_lossy(&output.stderr);
-    assert!(err.contains("no-config.toml is not valid"), "{err}");
+    assert!(err.contains("no-config.toml:4: "), "{err}");
     let detail = stdout(&saaio(home.path(), &["status", "shop-221"]));
     assert!(detail.contains("phase: plan"), "{detail}");
 }
@@ -1402,7 +1402,7 @@ fn start_refuses_a_config_with_the_top_level_agent_key() {
         stdout(&output),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(said.contains("no-config.toml is not valid"), "{said}");
+    assert!(said.contains("no-config.toml:1: "), "{said}");
     assert!(said.contains("`agent` under [worker]"), "{said}");
     assert!(claimed_slots(&lab.home).is_empty());
 }
@@ -2208,7 +2208,7 @@ fn send_takes_a_message_while_config_toml_is_broken() {
     assert!(sent.status.success(), "{}", stdout(&sent));
     assert_eq!(typed.status.code(), Some(1), "{}", stdout(&typed));
     assert!(
-        stdout(&typed).contains("no-config.toml is not valid"),
+        stdout(&typed).contains("no-config.toml:1: "),
         "{}",
         stdout(&typed)
     );

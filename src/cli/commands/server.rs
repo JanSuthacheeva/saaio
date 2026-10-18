@@ -3,7 +3,6 @@ use anyhow::Context;
 use crate::cli::Env;
 use crate::cli::output::{Document, Failure};
 use crate::client;
-use crate::config;
 use crate::launch::pane::LaunchEnv;
 use crate::server::{self, ServerPaths};
 use crate::server_log;
@@ -15,11 +14,7 @@ use crate::ui::theme_file;
 pub fn run(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
     server_log::exit_on_panic(clock);
     let config = env.config()?;
-    let config_file = config::config_file(
-        env.saaio_config.clone(),
-        env.xdg_config_home.clone(),
-        env.home.clone(),
-    );
+    let config_file = env.config_file();
     let theme = env.config_dir().map(|dir| dir.join(theme_file::THEME_FILE));
     let config_dir = env
         .config_dir()

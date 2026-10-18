@@ -63,8 +63,6 @@ Moved from `ui/theme_file.rs` (`at`, `line`), which then uses them.
 mod watch;
 
 impl Config {
-    /// load() keeps its signature and calls read() with config_file(...).
-    pub fn load(saaio_config: Option<PathBuf>, xdg_config: Option<PathBuf>, home: Option<PathBuf>) -> Result<Config>;
     /// The file's config with the built-in agents; the built-in alone when `file` is None or missing.
     /// Errors read "<file>:<line>: <message>".
     pub fn read(file: Option<&Path>) -> Result<Config>;
@@ -158,7 +156,8 @@ fn wait(store: &Store, waiter: &Waiter, configs: &mut ConfigWatch, clock: fn() -
 pub(crate) fn config_file(&self) -> Option<PathBuf>;
 ```
 
-`config_dir` uses it.
+`config()` and `config_dir` use it. `Config::load` goes: `Env::config` was its only caller
+(changed in the build).
 
 ### `src/ui/input.rs`, `src/ui/app.rs`, `src/ui.rs`, `src/cli/commands/ui.rs` (modified)
 
@@ -205,7 +204,7 @@ fn reload_config(configs: &mut ConfigWatch, app: &mut App, router: &mut Router) 
    - `Some(Err(e))` -> `app.say_about_file("config: {e:#}")`; prefix and agents stay.
 4. UI start: `ui::run` builds `Router::new(Prefix::default())`, then `reload_config` once before the loop.
 5. Master waiter: `wait --master` loop -> `configs.changed()` updates `wake` -> `wake == false`: sleep, no `master_news`; true: `deliver::master_news` as today.
-6. CLI with a broken file: `Env::config -> Config::load -> Config::read -> parse(path, text)`: `Err("<file>:<line>: <message>")` -> Failure, exit 1.
+6. CLI with a broken file: `Env::config -> Config::read -> parse(path, text)`: `Err("<file>:<line>: <message>")` -> Failure, exit 1.
 
 ## Test seams
 
@@ -232,7 +231,7 @@ fn reload_config(configs: &mut ConfigWatch, app: &mut App, router: &mut Router) 
 ## Tasks
 
 - [x] Add `Stamp::of` in store.rs and `text::place`/`text::line_of`; ThemeWatch and theme errors use them; tests for each
-- [ ] Add `Config::read(file)` and `parse(path, text)` with `<file>:<line>: <message>` errors; `Env::config_file`; unit tests and tests/cli.rs error assertions updated
+- [x] Add `Config::read(file)` and `parse(path, text)` with `<file>:<line>: <message>` errors; `Env::config_file`; unit tests and tests/cli.rs error assertions updated
 - [ ] Add `config::watch::ConfigWatch` with unit tests (first call, unchanged, edited, broken then fixed, removed)
 - [ ] Add `PaneSpec.adapter` and `Server.adapters`; news.rs and typing.rs read the pane's adapter; tests
 - [ ] `Server::reload_config` at the top of refresh, logging errors; server tests: a saved prompt reaches the next worker, a broken file keeps the last config
