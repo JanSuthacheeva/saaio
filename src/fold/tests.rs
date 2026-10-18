@@ -3,6 +3,35 @@ use super::*;
 const MIN: u64 = 60_000;
 
 #[test]
+fn codex_permission_waits_after_a_grace_period_and_completion_cancels_it() {
+    let pending = at(
+        1_000,
+        EventKind::PermissionPending {
+            question: "permission: Bash(touch notes.txt)".into(),
+        },
+    );
+    let started = started(0);
+    let events = [started, pending];
+    assert!(changes("x", &events[..1], &events[1].kind, 1_000));
+    assert_eq!(view(&events, 3_999).state, State::Working);
+    let waiting = view(&events, 4_000);
+    assert_eq!(waiting.state, State::Waiting);
+    assert_eq!(
+        waiting.blocker.as_deref(),
+        Some("permission: Bash(touch notes.txt)")
+    );
+    assert_eq!(waiting.changed_at, 4_000);
+    assert!(changes("x", &events, &EventKind::Working, 2_000));
+    let completed = [
+        events[0].clone(),
+        events[1].clone(),
+        at(2_000, EventKind::Working),
+    ];
+    assert_eq!(view(&completed, 10_000).state, State::Working);
+    assert_eq!(texts(&view(&completed, 10_000)), vec!["started"]);
+}
+
+#[test]
 fn an_idle_worker_does_not_need_you_but_shows_its_last_line() {
     let idle = |note: &str| EventKind::Idle { note: note.into() };
     let events = vec![

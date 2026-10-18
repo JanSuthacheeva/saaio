@@ -9,6 +9,8 @@ use crate::workflow::Workflow;
 
 /// A flow with a heartbeat older than this, not done or ended, is not responding.
 pub const SILENT_AFTER_MS: u64 = 90_000;
+/// A Codex automatic review normally finishes before this becomes a user-facing wait.
+const PERMISSION_GRACE_MS: u64 = 3_000;
 
 /// One flow's view at `now`; None when the log has no Started event to name it.
 pub fn fold<'a>(
@@ -44,14 +46,23 @@ pub fn fold<'a>(
 /// tasks, review, merge request and its merge, decisions, answer or session; every message and typed line
 /// does. Adapters skip the rest, so a log does not grow by a line for every tool call.
 pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
-    if matches!(kind, EventKind::Message { .. } | EventKind::Typed { .. }) {
+    if matches!(
+        kind,
+        EventKind::Message { .. } | EventKind::Typed { .. } | EventKind::PermissionPending { .. }
+    ) {
         return true;
     }
-    let Some(before) = fold(id, events, None, now) else {
+    // A quick PostToolUse must be recorded even though pending was never shown as waiting.
+    let comparison_at = if matches!(kind, EventKind::Working) {
+        now.saturating_add(PERMISSION_GRACE_MS)
+    } else {
+        now
+    };
+    let Some(before) = fold(id, events, None, comparison_at) else {
         return true;
     };
     let next = Event::new(now, kind.clone());
-    let Some(after) = fold(id, events.iter().chain([&next]), None, now) else {
+    let Some(after) = fold(id, events.iter().chain([&next]), None, comparison_at) else {
         return true;
     };
     shown(&before) != shown(&after)
@@ -132,6 +143,7 @@ struct Folding {
     entered: Vec<bool>,
     phase_since: u64,
     stopped_at: Option<u64>,
+    pending_permission: Option<(u64, String)>,
 }
 
 impl Folding {
@@ -178,6 +190,7 @@ impl Folding {
             phases,
             phase_since: at,
             stopped_at: None,
+            pending_permission: None,
         }
     }
 
@@ -206,6 +219,7 @@ impl Folding {
                 }
             }
             EventKind::Working => {
+                self.pending_permission = None;
                 if matches!(self.view.state, State::Waiting | State::Blocked) {
                     self.note(at, "answered".to_string(), Tone::Progress);
                 }
@@ -218,9 +232,14 @@ impl Folding {
                 self.view.delegate = Some(description.clone());
             }
             EventKind::Waiting { question } => {
+                self.pending_permission = None;
                 self.stop_for(State::Waiting, question, at, "waiting", Tone::Attention);
             }
+            EventKind::PermissionPending { question } => {
+                self.pending_permission = Some((at, question.clone()));
+            }
             EventKind::Idle { note } => {
+                self.pending_permission = None;
                 let text = format!("idle: {note}");
                 let same = self.view.state == State::Idle
                     && self.view.timeline.last().map(|entry| &entry.text) == Some(&text);
@@ -233,6 +252,7 @@ impl Folding {
                 }
             }
             EventKind::Blocked { reason } => {
+                self.pending_permission = None;
                 self.stop_for(State::Blocked, reason, at, "blocked", Tone::Problem);
             }
             EventKind::Decision { text } => {
@@ -261,10 +281,12 @@ impl Folding {
                 self.note(at, format!("review: {review}"), tone);
             }
             EventKind::MergeRequest { url } => {
+                self.pending_permission = None;
                 self.open_merge_request(url, at);
                 self.note(at, "MR opened".to_string(), Tone::Success);
             }
             EventKind::Merged { url } => {
+                self.pending_permission = None;
                 self.open_merge_request(url, at);
                 self.view.merged = true;
                 self.note(
@@ -315,6 +337,7 @@ impl Folding {
                 });
             }
             EventKind::Ended => {
+                self.pending_permission = None;
                 if self.view.state != State::Done {
                     self.view.state = State::Ended;
                 }
@@ -387,6 +410,14 @@ impl Folding {
     }
 
     fn finish(mut self, now: u64) -> FlowView {
+        if let Some((at, question)) = self.pending_permission.take()
+            && now >= at.saturating_add(PERMISSION_GRACE_MS)
+            && self.view.state != State::Done
+        {
+            let due = at.saturating_add(PERMISSION_GRACE_MS);
+            self.stop_for(State::Waiting, &question, due, "waiting", Tone::Attention);
+            self.view.changed_at = due;
+        }
         self.close_phase(self.stopped_at.unwrap_or(now));
         if self.view.is_plain() {
             return self.view;

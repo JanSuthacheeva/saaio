@@ -31,7 +31,7 @@ Recorded hook fixtures cover Codex permission pending and completion and batched
 
 ## Tasks
 
-- [ ] Add Codex pending permission translation and fold delay/cancellation with fixture and fold tests.
+- [x] Add Codex pending permission translation and fold delay/cancellation with fixture and fold tests.
 - [ ] Keep opened and merged MRs in the workflow's final phase with fold tests for both adapters' common event path and custom phases.
 - [ ] Ignore Codex multi-phase skill reads and tell workers to report the active phase, with adapter and prompt tests.
 - [ ] Update plain reference docs and run the end-to-end check using scratch `SAAIO_HOME`; run the full suite and `cargo clippy --all-targets -- -D warnings`.

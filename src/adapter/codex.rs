@@ -189,7 +189,7 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
         }
         "PermissionRequest" if !tool.is_empty() => {
             let cwd = payload["cwd"].as_str().unwrap_or("");
-            kinds.push(EventKind::Waiting {
+            kinds.push(EventKind::PermissionPending {
                 question: cut(&format!("permission: {}", tool_call(tool, input, cwd))),
             });
         }
@@ -404,10 +404,10 @@ mod tests {
     }
 
     #[test]
-    fn a_permission_or_a_question_waits_for_you() {
+    fn a_permission_is_pending_until_codex_decides_and_a_question_waits() {
         assert_eq!(
             events("permission_bash"),
-            after_session(vec![EventKind::Waiting {
+            after_session(vec![EventKind::PermissionPending {
                 question: "permission: Bash(touch notes.txt)".into()
             }])
         );

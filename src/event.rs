@@ -43,6 +43,10 @@ pub enum EventKind {
     Waiting {
         question: String,
     },
+    /// Codex may approve a PermissionRequest itself. It becomes waiting only after a grace period.
+    PermissionPending {
+        question: String,
+    },
     /// The turn ended without asking anything: the worker waits, but not on the person.
     Idle {
         note: String,
@@ -156,6 +160,7 @@ impl EventKind {
             EventKind::Started { name: text, .. }
             | EventKind::Delegated { description: text }
             | EventKind::Waiting { question: text }
+            | EventKind::PermissionPending { question: text }
             | EventKind::Idle { note: text }
             | EventKind::Blocked { reason: text }
             | EventKind::Decision { text }
