@@ -731,7 +731,7 @@ fn closing_another_or_a_merged_one_changes_nothing() {
 }
 
 #[test]
-fn closing_keeps_an_ended_flow_ended() {
+fn closing_brings_an_ended_flow_back_to_idle() {
     let flow = view(
         &[
             started(0),
