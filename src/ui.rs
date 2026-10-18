@@ -6,6 +6,8 @@ pub mod focus;
 pub mod hints;
 pub mod input;
 pub mod layout;
+#[allow(dead_code)] // Wired into both views by the next plan tasks.
+pub mod markdown;
 pub mod newflow;
 pub mod outer;
 pub mod peek;
