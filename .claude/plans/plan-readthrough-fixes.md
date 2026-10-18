@@ -138,7 +138,7 @@ changes.
 - [x] Remove the sidebar master agent marker (`Sidebar::master_agent`, `App::set_master_agent`, reload_config call), tests and goldens
 - [x] Board: agent on the card's third row and in the detail facts, with card tests and goldens
 - [x] docs/cli.md reworked for the current command set
-- [ ] README (usage, how it works with what a flow is, CLI table, features, setup-saaio), docs/flows.md lead, docs/repository.md setup-saaio recommendation
-- [ ] Every other `saaio ui` in docs, examples, ROADMAP, CHANGELOG 0.1.0, CLAUDE.md (with the PTY E2E line); ROADMAP drops "Codex commits without asking"
+- [x] README (usage, how it works with what a flow is, CLI table, features, setup-saaio), docs/flows.md lead, docs/repository.md setup-saaio recommendation
+- [x] Every other `saaio ui` in docs, examples, ROADMAP, CHANGELOG 0.1.0, CLAUDE.md (with the PTY E2E line); ROADMAP drops "Codex commits without asking"
 - [ ] CONTRIBUTING.md, .github/pull_request_template.md, .github/CODEOWNERS
 - [ ] End to end: in a PTY with a scratch store run `saaio` (UI opens), `saaio --stop`, `saaio ui` (usage error), look at the board cards and the detail; `cargo test`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`

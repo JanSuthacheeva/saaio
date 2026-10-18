@@ -32,7 +32,7 @@ npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature design-code i
 | `review-changes` | starts the review phase |
 | `write-merge-request` | starts the merge-request phase |
 | `commit` | commits |
-| `setup-saaio` | prepares a repository for saaio ([repository.md](repository.md#the-setup-saaio-skill)) |
+| `setup-saaio` | prepares a repository for saaio, recommended once per project ([repository.md](repository.md#the-setup-saaio-skill)) |
 
 Optional. Own skills instead: [Use your own workflow](configuration.md#use-your-own-workflow). No
 skills at all: [Without matching skills](configuration.md#without-matching-skills).
@@ -40,7 +40,7 @@ skills at all: [Without matching skills](configuration.md#without-matching-skill
 ## First run
 
 ```sh
-saaio ui    # in a repository
+saaio    # in a repository
 ```
 
 Writes to `~/.config/saaio`:
@@ -60,8 +60,8 @@ Writes to `~/.config/saaio`:
 
 ```sh
 cargo install --git https://github.com/JanSuthacheeva/saaio --tag <new tag> --force
-saaio ui --stop
-saaio ui
+saaio --stop
+saaio
 ```
 
 - The running server keeps the old version until stopped.

@@ -14,7 +14,7 @@ well tested.
 
 ### Added
 
-- saaio ui: the master, every worker and every plain session in one terminal, with the sidebar, the
+- The terminal UI (`saaio`): the master, every worker and every plain session in one terminal, with the sidebar, the
   peek, the board and the new-flow dialog.
 - saaio server: sessions outlive the UI and resume after a crash or a reboot.
 - Claude Code workers, and Codex workers as experimental, followed through their own hooks. Any other command as a worker,

@@ -3,7 +3,7 @@
 # saaio wrote this file on its first run. Every setting is commented out at its default. Remove the
 # # in front of one to change it. Once you've edited this file, saaio never overwrites it.
 #
-# Commands read this file every time they run. saaio ui and its server read it again when you save
+# Commands read this file every time they run. The UI and its server read it again when you save
 # it. A running session keeps the command it started with. A broken file keeps the last working
 # settings. A key saaio doesn't know is an error that names the file, line and key.
 # The whole file, explained: https://github.com/JanSuthacheeva/saaio/blob/main/docs/configuration.md
@@ -21,15 +21,15 @@
 #[master]
 # Wakes the master when a worker stops. With false, it only finds out when it runs saaio status.
 #wake = true
-# The agent saaio ui runs as the master. Unset, it's the built-in "master" agent below.
+# The agent the UI runs as the master. Unset, it's the built-in "master" agent below.
 # For example: agent = "codex"
 
 #[ui]
-# The key you press before every saaio ui command: "C-space", or "C-a" to "C-z". C-c, C-d, C-h,
+# The key you press before every UI command: "C-space", or "C-a" to "C-z". C-c, C-d, C-h,
 # C-i, C-j, C-m, C-q, C-s and C-z aren't allowed, because a pane needs them.
 #prefix = "C-space"
 
-# The workflow: one to four phases in order, each with the skills that start it. saaio ui shows them
+# The workflow: one to four phases in order, each with the skills that start it. The UI shows them
 # as a flow's steps. Your own list replaces all four. A flow whose skills match no phase still
 # works. Its steps stay empty.
 #[[phases]]
@@ -56,7 +56,7 @@
 # resume    the command line that continues a session after a restart. Without it, the agent
 #           starts once and isn't resumed
 # adapter   "claude-code" or "codex", the harness whose hooks tell saaio what the agent is doing.
-#           Without it, saaio ui only shows whether the process is running.
+#           Without it, the UI only shows whether the process is running.
 #
 # Placeholders: {id} is flow's id for the session, {name} the flow's name, {request} what you asked
 # for, {prompt} the prompt above, {session} the session id the harness picked (Codex), and

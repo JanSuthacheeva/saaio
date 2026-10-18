@@ -1,10 +1,10 @@
-# saaio ui's colors.
+# saaio's colors.
 #
 # saaio wrote this file on its first run. Every setting is commented out at its default, which is
 # the terminal theme: your terminal's own colors. Remove the # in front of a setting to change it.
 # Once you've edited this file, saaio never overwrites it.
 #
-# saaio ui repaints within a second of saving. If the file is broken, it keeps the last good colors
+# The UI repaints within a second of saving. If the file is broken, it keeps the last good colors
 # and says in the title row which line is wrong and why.
 #
 # A color is one of:

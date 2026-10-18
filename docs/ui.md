@@ -1,7 +1,7 @@
-# saaio ui
+# The terminal UI
 
 ```sh
-saaio ui    # in a repository
+saaio    # in a repository
 saaio       # the same, typed in a terminal
 ```
 
@@ -20,11 +20,11 @@ One terminal with the master, every worker and every plain session.
 
 ## The screen
 
-![saaio ui](media/saaio-ui.png)
+![The terminal UI](media/saaio-ui.png)
 
 | Area | Shows |
 | --- | --- |
-| pane (left) | the session in view. The master when saaio ui opens. Receives all typing except the [prefix key](#keys). |
+| pane (left) | the session in view. The master when the UI opens. Receives all typing except the [prefix key](#keys). |
 | title row (above the pane) | worker: state, name, steps, phase, branch, slot. Plain session: state, folder. Master: branch, plus folder while the sidebar is folded. Notices on the right, such as a theme error or "starting the flow…". |
 | sidebar (right) | every session, see below |
 | rail | the folded sidebar: numbers and marks only. Below 110 columns, or `C-space b`. The title row then names the first flow that needs you and is not in view. |
@@ -77,7 +77,7 @@ Press the prefix, release, press the key.
 | `C-space b` | fold the sidebar to a rail, and back |
 | `C-space r` | resume a session that exited, or a flow that ended |
 | `C-space [` | scroll back through the session's [history](#history) |
-| `C-space d` | detach: leave saaio ui, every session keeps running |
+| `C-space d` | detach: leave the UI, every session keeps running |
 | `C-space Q` | stop saaio ([Leaving and stopping](#leaving-and-stopping)) |
 | `C-space C-space` | send `C-space` to the pane |
 | `C-space ?` | show these keys |
@@ -189,23 +189,23 @@ The master's session ended: `C-space r` resumes it, `C-space Q` stops saaio.
 
 ## Leaving and stopping
 
-`saaio server` owns the sessions. saaio ui is a client.
+`saaio server` owns the sessions. The UI is a client.
 
 | Action | Effect |
 | --- | --- |
-| `C-space d`, or closing the terminal | detach. Sessions keep running. The next `saaio ui` attaches. |
+| `C-space d`, or closing the terminal | detach. Sessions keep running. The next `saaio` attaches. |
 | `C-space Q` | stop. With unfinished flows it lists them and asks, see below. With every flow finished: `y` stops, any other key cancels. |
-| `saaio --stop` (or `saaio ui --stop`) | stops the server and every session, keeps unfinished flows (like `k`) |
-| a second `saaio ui` | takes over from the first. One saaio ui is attached at a time. |
+| `saaio --stop` | stops the server and every session, keeps unfinished flows (like `k`) |
+| a second `saaio` in a terminal | takes over from the first. One UI is attached at a time. |
 
 | Key at the stop prompt | Effect |
 | --- | --- |
-| `k` | keep: the server stops, sessions resume at the next `saaio ui` |
+| `k` | keep: the server stops, sessions resume at the next `saaio` |
 | `e` | end: the server stops, flows are marked ended. Branches and worktrees stay until `saaio clear`. |
 | `esc` | cancel |
 
 ## After a crash or a reboot
 
-The next `saaio ui` restarts the server and resumes the master and every unfinished worker in its
+The next `saaio` restarts the server and resumes the master and every unfinished worker in its
 conversation (`claude --resume`, `codex resume`). After a stop, the master starts a new
 conversation. Workers still resume.

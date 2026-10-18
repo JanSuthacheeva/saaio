@@ -66,7 +66,7 @@ timeline.
 | From | How |
 | --- | --- |
 | the master | "start a flow for SHOP-217 add CSV export" |
-| saaio ui | `C-space n` ([ui.md](ui.md#starting-a-flow)) |
+| the UI | `C-space n` ([ui.md](ui.md#starting-a-flow)) |
 | the shell, in the repository | `saaio start "SHOP-217 add CSV export"` ([cli.md](cli.md#saaio-start)) |
 
 All three run the same steps: name the flow, create its worktree and branch, claim a slot, run the
@@ -93,10 +93,10 @@ The mode decides who answers a worker's question.
 
 ## The master
 
-- The big pane when saaio ui opens, row `0` in the sidebar.
+- The big pane when the UI opens, row `0` in the sidebar.
 - Starts flows, reads their state, answers workers, reports what needs you. Does not do the workers'
   work.
-- Runs in the folder `saaio ui` was started in.
+- Runs in the folder `saaio` was started in.
 - System prompt includes `master.md` (next to `config.toml`). saaio writes the default on the first
   run and updates it with new versions until it is edited. Edits are never overwritten.
 - Claude Code unless `[master] agent` names another agent ([configuration.md](configuration.md#master)).
@@ -159,7 +159,7 @@ Or mode `plain` in the new-flow dialog.
 ## How a worker reports
 
 - Through the harness's own hooks. The agent and its skills take no part.
-- saaio ui adds the hooks to the command line of an agent with an `adapter`. They run next to your
+- The UI adds the hooks to the command line of an agent with an `adapter`. They run next to your
   own hooks. Nothing is installed.
 - Each hook runs `saaio hook`, which records only events that change the flow.
 
@@ -207,17 +207,17 @@ arguments. A worker also trusts its own worktree for that launch. Nothing is wri
 - A running Codex worker with no first turn after 30 seconds becomes `waiting`; answer the dialog
   in its pane, then its first prompt returns it to `working`.
 - No plan-progress tool: no task counts.
-- No `/exit` event: end the flow from saaio ui or with `saaio remove`.
+- No `/exit` event: end the flow from the UI or with `saaio remove`.
 
 ### Other agents and subagents
 
 - A subagent's events are ignored, except a phase skill it runs (a review in a fresh agent).
-- An agent without an adapter reports nothing. saaio ui shows only whether it runs.
+- An agent without an adapter reports nothing. The UI shows only whether it runs.
 - Scripts and other tools report with `saaio report` ([cli.md](cli.md#saaio-report)).
 
 ## Merge requests opened or merged elsewhere
 
-saaio ui asks GitHub or GitLab about each flow's branch, so a merge request counts whoever opened
+The UI asks GitHub or GitLab about each flow's branch, so a merge request counts whoever opened
 or merged it: the worker, the master or you.
 
 | Found on the flow's branch | Result |
@@ -239,7 +239,7 @@ or merged it: the worker, the master or you.
 - Runs in the worktree, logged in as you are (`gh auth login`, `glab auth login`).
 - No `gh` or `glab`, not logged in, offline, or no answer within a minute: no change. The error goes
   to `server.log` once.
-- Only while saaio ui (its server) runs. `saaio status` asks no one.
+- Only while the UI (its server) runs. `saaio status` asks no one.
 
 ## Ending a flow
 

@@ -69,7 +69,7 @@ message. The worker gets the request and works without the skill.
 
 The first set path wins.
 
-- saaio ui writes the file on its first run: every setting commented out at its default, one line
+- The UI writes the file on its first run: every setting commented out at its default, one line
   per setting on what it does. Same content: [examples/config.toml](../examples/config.toml).
 - Remove the `#` in front of a setting to set it.
 - An edited file is never overwritten.
@@ -78,7 +78,7 @@ The first set path wins.
 
 ## When a change applies
 
-Commands read the file every time they run. saaio ui and its server read it again within a second
+Commands read the file every time they run. The UI and its server read it again within a second
 of a save. No restart.
 
 | Setting | Applies |
@@ -113,7 +113,7 @@ agent = "codex"
 
 | Key | Default | Effect |
 | --- | --- | --- |
-| `wake` | `true` | wake the master when a flow of its project waits, is blocked, goes idle, finishes or stops responding. `false`: the master learns only by running `saaio status`. Its row in saaio ui still shows when it needs you. |
+| `wake` | `true` | wake the master when a flow of its project waits, is blocked, goes idle, finishes or stops responding. `false`: the master learns only by running `saaio status`. Its row in the UI still shows when it needs you. |
 | `agent` | unset | agent the master runs. Unset: the built-in `master` agent (Claude Code). |
 
 What the master is: [flows.md](flows.md#the-master).
@@ -127,15 +127,15 @@ prefix = "C-b"
 
 | Key | Default | Effect |
 | --- | --- | --- |
-| `prefix` | `"C-space"` | key pressed before every saaio ui command: `"C-space"` or `"C-a"` to `"C-z"` |
+| `prefix` | `"C-space"` | key pressed before every UI command: `"C-space"` or `"C-a"` to `"C-z"` |
 
 | Refused prefix | Reason |
 | --- | --- |
 | `C-c`, `C-d`, `C-z`, `C-s`, `C-q` | used by the pane |
 | `C-h`, `C-i`, `C-j`, `C-m` | same bytes as backspace, tab, newline, enter |
 
-- saaio ui's hints and help show the configured prefix.
-- The prefix pressed twice is sent to the pane. A prefix that is also a saaio ui key (`C-b`, page back
+- The UI's hints and help show the configured prefix.
+- The prefix pressed twice is sent to the pane. A prefix that is also a UI key (`C-b`, page back
   in history) still works there.
 
 ## [[phases]]: the workflow
@@ -166,7 +166,7 @@ skills = ["write-merge-request"]
 | `skills` | skills that start the phase. Matched with or without the plugin prefix (`superpowers:brainstorming` matches `brainstorming`). A skill starts at most one phase. |
 
 - 1 to 4 phases, in order. A custom list replaces all four.
-- saaio ui shows the phases as steps (`●───●───○───○`) with the time spent in each.
+- The UI shows the phases as steps (`●───●───○───○`) with the time spent in each.
 - A phase starts when the worker runs one of its skills.
 - Codex workers also report a phase when they begin its skill. Reading `SKILL.md` files does not
   start a phase, because Codex may read future skills ahead in separate commands.
@@ -228,7 +228,7 @@ adapter = "claude-code"
 | `command` | yes | command line that starts a new session, one string per argument |
 | `prompt` | no | first prompt, filled into `{prompt}` |
 | `resume` | no | command line that continues the session after a restart. Without it: started once, not resumed. |
-| `adapter` | no | `"claude-code"` or `"codex"`: the harness whose hooks report the agent's state. Without it: saaio ui shows only whether the process runs. |
+| `adapter` | no | `"claude-code"` or `"codex"`: the harness whose hooks report the agent's state. Without it: the UI shows only whether the process runs. |
 
 | Placeholder | Value |
 | --- | --- |
@@ -278,13 +278,13 @@ Every error names the file, the line and the reason. `saaio start` prints:
 error: "/Users/jan/.config/saaio/config.toml:2: unknown field `agnet`, expected `agent` or `prompt`"
 ```
 
-A running saaio ui shows the same in its title row, as
+A running UI shows the same in its title row, as
 ``config: ~/.config/saaio/config.toml:2: unknown field `agnet`, ...``.
 
 | Where | A broken file |
 | --- | --- |
-| a running saaio ui and its server | keep the last working settings. The title row shows the error until the file reads again. The server writes it to `server.log`. |
-| `saaio start`, `saaio new`, a new `saaio ui` | stop with the error |
+| a running UI and its server | keep the last working settings. The title row shows the error until the file reads again. The server writes it to `server.log`. |
+| `saaio start`, `saaio new`, a new `saaio` | stop with the error |
 | running workers | keep reporting with the built-in settings until the file is fixed |
 
 Settings from earlier versions are refused with a message naming the new form:
