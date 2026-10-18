@@ -59,3 +59,13 @@ Only worker text in `PeekLine::Text` and `FlowView.answer` gets Markdown styling
 - [x] Use `markdown::lines` in `Sidebar::peek_rows`; add peek behavior tests and refresh intended golden output with `SAAIO_UPDATE_GOLDEN=1`.
 - [x] Use `markdown::lines` in `BoardView::render_answer`; add answer behavior tests and refresh intended golden output with `SAAIO_UPDATE_GOLDEN=1`.
 - [x] Update README and CHANGELOG, then run a scratch PTY worker flow to verify the agent label, full tests, formatting, and `cargo clippy --all-targets -- -D warnings`.
+
+## Review
+
+**Fixed:** Fenced code inside a blockquote lost its quote marker, and fenced code inside a list item repeated the bullet. Regression tests demonstrated both cases; commit `27c08f0` keeps the surrounding block prefix. A fresh review found that blank fenced-code lines still lost that prefix; commit `94a7004` keeps it there too.
+
+**Open:** None found.
+
+**Where to look:** Read `src/ui/markdown.rs` from block transitions through `code()` first, especially quote and list prefixes. Then read `src/ui/sidebar/rows.rs` at `peek_rows` for glyph and row budget handling, followed by `src/ui/board/detail.rs` at `render_answer` for tail selection. The docs and golden files are routine and can be skimmed.
+
+**Checks:** At `94a7004`, `cargo test -q` (555 unit tests, 78 integration tests), `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings` passed. The second fix was re-read against its failing case but was not reviewed independently.
