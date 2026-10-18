@@ -33,3 +33,10 @@ struct Args {
 - [x] Parse and route bare `--stop` in `src/cli.rs` through `ui::run`; update CLI help.
 - [x] Update README, CLI, UI, and troubleshooting docs with the plain `saaio --stop` reference style.
 - [x] Run the end-to-end stop check, full tests, formatting, and `cargo clippy --all-targets -- -D warnings`.
+
+## Review
+
+- **Fixed:** None.
+- **Open:** None found.
+- **Where to look:** `src/cli.rs` parses and dispatches root `--stop`; `src/cli/commands/ui.rs` applies the worker store guard and stops the server; `tests/cli.rs` exercises terminal, agent, worker, and running server paths. The documentation edits are routine.
+- **Checks:** `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check` passed at `cacf95a`. No code changed during review.
