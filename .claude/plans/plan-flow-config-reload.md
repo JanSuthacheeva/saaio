@@ -238,4 +238,4 @@ fn reload_config(configs: &mut ConfigWatch, app: &mut App, router: &mut Router) 
 - [x] Always wire the master's waiter (`master_settings`, `wire_master`, `MasterRecord::spec` lose `wake`); `wait --master` reads `[master] wake` through a ConfigWatch; tests
 - [x] `Router::set_prefix`, `App::set_agents`/`set_prefix`, `UiEnv.config_file`, `ui::reload_config` with the `config: ` notice; unit tests
 - [x] Docs: docs/configuration.md (When a change applies, Use your own workflow, Errors), examples/config.toml header, ROADMAP.md drops "First prompt read at saaio start"; any other doc naming `saaio ui --stop` for config
-- [ ] End to end with scratch SAAIO_HOME and SAAIO_CONFIG: saaio ui running, change the prefix, the worker prompt, break and fix the file, start a flow after a prompt change
+- [x] End to end with scratch SAAIO_HOME and SAAIO_CONFIG: saaio ui running, change the prefix, the worker prompt, break and fix the file, start a flow after a prompt change
