@@ -1,5 +1,6 @@
-use std::io::{ErrorKind, Read};
-use std::process::{Command, Stdio};
+use std::io::{self, BufRead, BufReader, ErrorKind};
+use std::process::{ChildStdout, Command, Stdio};
+use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -88,7 +89,8 @@ fn version(tool: &str, deadline: Instant) -> Probe {
     }
 }
 
-/// Runs `program args`, killed at `deadline`; the first line it prints as Probe::Version.
+/// Runs `program args`, killed at `deadline`; the first line it prints as Probe::Version. The
+/// line is read on its own thread: a child it leaves running can hold its output open.
 fn run(program: &str, args: &[&str], deadline: Instant) -> Probe {
     let spawned = Command::new(program)
         .args(args)
@@ -101,6 +103,7 @@ fn run(program: &str, args: &[&str], deadline: Instant) -> Probe {
         Err(error) if error.kind() == ErrorKind::NotFound => return Probe::Missing,
         Err(error) => return Probe::Failed(error.to_string()),
     };
+    let first_line = child.stdout.take().map(read_first_line);
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
@@ -108,7 +111,7 @@ fn run(program: &str, args: &[&str], deadline: Instant) -> Probe {
             Ok(None) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Probe::Failed("no answer in time".to_string());
+                return Probe::Failed(NO_ANSWER.to_string());
             }
             Err(error) => return Probe::Failed(error.to_string()),
         }
@@ -116,14 +119,39 @@ fn run(program: &str, args: &[&str], deadline: Instant) -> Probe {
     if !status.success() {
         return Probe::Failed(format!("{status}"));
     }
-    let mut out = String::new();
-    if let Some(mut stdout) = child.stdout.take() {
-        let _ = stdout.read_to_string(&mut out);
+    let left = deadline.saturating_duration_since(Instant::now());
+    match first_line.map(|line| line.recv_timeout(left)) {
+        Some(Ok(Some(line))) => Probe::Version(line),
+        Some(Err(_)) => Probe::Failed(NO_ANSWER.to_string()),
+        Some(Ok(None)) | None => Probe::Failed("printed nothing".to_string()),
     }
-    match out.lines().map(str::trim).find(|line| !line.is_empty()) {
-        Some(line) => Probe::Version(line.to_string()),
-        None => Probe::Failed("printed nothing".to_string()),
-    }
+}
+
+/// Why a probe that took longer than its deadline failed.
+const NO_ANSWER: &str = "no answer in time";
+
+/// The first non-empty line `out` gives, trimmed (None at its end without one), sent once it is
+/// read; the rest is drained so the program never blocks on a full pipe.
+fn read_first_line(out: ChildStdout) -> Receiver<Option<String>> {
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut out = BufReader::new(out);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match out.read_line(&mut line) {
+                Ok(0) | Err(_) => {
+                    let _ = sender.send(None);
+                    return;
+                }
+                Ok(_) if !line.trim().is_empty() => break,
+                Ok(_) => {}
+            }
+        }
+        let _ = sender.send(Some(line.trim().to_string()));
+        let _ = io::copy(&mut out, &mut io::sink());
+    });
+    receiver
 }
 
 /// The version part of a `--version` line.
@@ -244,5 +272,15 @@ mod tests {
         );
         assert_eq!(probe, Probe::Failed("no answer in time".to_string()));
         assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn a_tool_whose_child_keeps_its_output_open_still_answers_in_time() {
+        let dir = TempDir::new().unwrap();
+        let tool = script(dir.path(), "forks", "sleep 30 & echo 1.0");
+        let started = Instant::now();
+        let probe = run(tool.to_str().unwrap(), &[], soon());
+        assert_eq!(probe, Probe::Version("1.0".to_string()));
+        assert!(started.elapsed() < Duration::from_secs(10));
     }
 }
