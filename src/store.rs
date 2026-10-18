@@ -7,7 +7,6 @@ use anyhow::{Context, Result, bail};
 use uuid::Uuid;
 
 use crate::event::{Event, unix_ms};
-use crate::registry::Registry;
 use crate::view::MasterTurn;
 use crate::wake::Seen;
 
@@ -67,18 +66,6 @@ pub struct Store {
 }
 
 impl Store {
-    /// $SAAIO_HOME, else $XDG_STATE_HOME/saaio, else $HOME/.local/state/saaio.
-    pub fn locate(
-        saaio_home: Option<PathBuf>,
-        xdg_state: Option<PathBuf>,
-        home: Option<PathBuf>,
-    ) -> Option<Store> {
-        saaio_home
-            .filter(|path| !path.as_os_str().is_empty())
-            .or_else(|| Registry::default_root(xdg_state, home))
-            .map(|root| Store { root })
-    }
-
     /// The store in this folder, as the registry lists it.
     pub fn at(root: PathBuf) -> Store {
         Store { root }
@@ -388,8 +375,6 @@ pub fn write_atomic(path: &Path, contents: &[u8]) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use tempfile::TempDir;
 
     use super::*;
@@ -444,40 +429,6 @@ mod tests {
         assert!(appended.len > before.len);
         assert!(beaten.modified > appended.modified);
         assert_eq!(beaten.len, appended.len);
-    }
-
-    #[test]
-    fn locates_flow_home_first_then_xdg_state_then_home() {
-        let home = Some(PathBuf::from("/home/jan"));
-        let xdg = Some(PathBuf::from("/state"));
-        let explicit = Some(PathBuf::from("/flows"));
-
-        assert_eq!(
-            Store::locate(explicit, xdg.clone(), home.clone())
-                .unwrap()
-                .root,
-            Path::new("/flows")
-        );
-        assert_eq!(
-            Store::locate(None, xdg, home.clone()).unwrap().root,
-            Path::new("/state/saaio")
-        );
-        assert_eq!(
-            Store::locate(None, None, home).unwrap().root,
-            Path::new("/home/jan/.local/state/saaio")
-        );
-        assert!(Store::locate(None, None, None).is_none());
-    }
-
-    #[test]
-    fn ignores_empty_environment_values() {
-        let store = Store::locate(
-            Some(PathBuf::new()),
-            Some(PathBuf::new()),
-            Some(PathBuf::from("/home/jan")),
-        )
-        .unwrap();
-        assert_eq!(store.root, Path::new("/home/jan/.local/state/saaio"));
     }
 
     #[test]

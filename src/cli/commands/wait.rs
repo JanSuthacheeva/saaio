@@ -19,7 +19,8 @@ pub struct Args {
 
 /// `saaio wait`: the news to wake the session with; Silent when the wait ends without news.
 pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
-    let Some(store) = env.store() else {
+    let cwd = std::env::current_dir().ok();
+    let Ok(Some(store)) = env.store(cwd.as_deref()) else {
         return Document::Silent;
     };
     let waiter = match env.flow_id() {
