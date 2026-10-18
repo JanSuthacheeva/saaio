@@ -10,8 +10,8 @@
 # It writes <state>/env for the tape to source. The workers run small stand-in skills that live in
 # the sample repository, so they walk through plan, implement, review and merge-request on a real
 # agent without opening merge requests or publishing anything. The agents run on your own logins
-# and agent config; Claude Code starts without your user settings and MCP servers, so your plugins,
-# hooks and MCP servers stay out of the recording. Codex still loads ~/.codex/config.toml: turn off
+# and agent config; Claude Code starts without your user settings, MCP servers and CLAUDE.md files,
+# so your plugins, hooks, MCP servers and instructions stay out of the recording. Codex still loads ~/.codex/config.toml: turn off
 # anything in it you would not show.
 #
 # Then: docs/media/record.sh open <state> <repo>, ask the master to start the flows printed at the
@@ -88,6 +88,9 @@ class OrderTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+EOF
+cat > .gitignore <<'EOF'
+__pycache__/
 EOF
 cat > README.md <<'EOF'
 # shop
@@ -183,6 +186,10 @@ export SAAIO_HOME="$state/store"
 export XDG_STATE_HOME="$state/xdg-state"
 export SAAIO_CONFIG="$state/config/config.toml"
 unset SAAIO_FLOW_ID SAAIO_FLOW_NAME SAAIO_SLOT SAAIO_REPO SAAIO_WORKTREE SAAIO_MASTER
+# Your own instructions (~/.claude/CLAUDE.md) stay out of the agents' answers; without TMUX, Claude
+# Code leaves out its tmux scrolling hint.
+export CLAUDE_CODE_DISABLE_CLAUDE_MDS=1
+unset TMUX TMUX_PANE
 EOF
 
 cat <<EOF
