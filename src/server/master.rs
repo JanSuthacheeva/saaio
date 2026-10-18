@@ -129,6 +129,7 @@ impl MasterRecord {
                 .into_iter()
                 .chain(pane::pane_env(env))
                 .collect(),
+            adapter: agent.adapter,
         })
     }
 }

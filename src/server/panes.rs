@@ -149,7 +149,12 @@ impl Server {
             server_log::write((self.clock)(), &format!("{error:#}"));
         }
         let key = spec.key.clone();
+        let adapter = spec.adapter;
         self.host.open(spec)?;
+        match adapter {
+            Some(adapter) => self.adapters.insert(key.clone(), adapter),
+            None => self.adapters.remove(&key),
+        };
         self.opened_at.insert(key.clone(), Instant::now());
         self.line_at.remove(&key);
         Ok(())

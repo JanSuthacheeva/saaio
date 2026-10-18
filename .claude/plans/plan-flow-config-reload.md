@@ -233,7 +233,7 @@ fn reload_config(configs: &mut ConfigWatch, app: &mut App, router: &mut Router) 
 - [x] Add `Stamp::of` in store.rs and `text::place`/`text::line_of`; ThemeWatch and theme errors use them; tests for each
 - [x] Add `Config::read(file)` and `parse(path, text)` with `<file>:<line>: <message>` errors; `Env::config_file`; unit tests and tests/cli.rs error assertions updated
 - [x] Add `config::watch::ConfigWatch` with unit tests (first call, unchanged, edited, broken then fixed, removed)
-- [ ] Add `PaneSpec.adapter` and `Server.adapters`; news.rs and typing.rs read the pane's adapter; tests
+- [x] Add `PaneSpec.adapter` and `Server.adapters`; news.rs and typing.rs read the pane's adapter; tests
 - [x] `Server::reload_config` at the top of refresh, logging errors; server tests: a saved prompt reaches the next worker, a broken file keeps the last config
 - [ ] Always wire the master's waiter (`master_settings`, `wire_master`, `MasterRecord::spec` lose `wake`); `wait --master` reads `[master] wake` through a ConfigWatch; tests
 - [ ] `Router::set_prefix`, `App::set_agents`/`set_prefix`, `UiEnv.config_file`, `ui::reload_config` with the `config: ` notice; unit tests

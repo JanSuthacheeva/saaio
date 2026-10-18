@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::launch::worktree::{hook_env, repo_of};
 use crate::proto::PaneKey;
@@ -26,6 +27,8 @@ pub struct PaneSpec {
     pub argv: Vec<String>,
     pub cwd: PathBuf,
     pub env: Vec<(String, String)>,
+    /// The harness the session is followed through, as it was when it opened.
+    pub adapter: Option<Adapter>,
 }
 
 /// The agent's command with {id}, {name}, {prompt}, {request} filled in ({prompt} itself filled first);
@@ -96,6 +99,7 @@ pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<Pa
         argv,
         cwd: PathBuf::from(&space.path),
         env: worker_env(flow, space, env),
+        adapter: agent.adapter,
     })
 }
 

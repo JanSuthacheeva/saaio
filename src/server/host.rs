@@ -352,6 +352,7 @@ mod tests {
             argv: vec!["sh".into(), "-c".into(), script.into()],
             cwd: std::env::temp_dir(),
             env: vec![("GREETING".into(), "hi there".into())],
+            adapter: None,
         }
     }
 
@@ -453,6 +454,7 @@ mod tests {
                 argv: vec!["/no/such/program".into()],
                 cwd: std::env::temp_dir(),
                 env: vec![],
+                adapter: None,
             })
             .unwrap_err();
 

@@ -26,6 +26,7 @@ use signal_hook::iterator::SignalsInfo;
 use signal_hook::iterator::exfiltrator::WithOrigin;
 use signal_hook::low_level::signal_name;
 
+use crate::adapter::Adapter;
 use crate::config::watch::ConfigWatch;
 use crate::config::{self, Config};
 use crate::fold;
@@ -131,6 +132,8 @@ struct Server {
     master_file: PathBuf,
     instructions: PathBuf,
     host: Host,
+    /// The adapter each open pane started with.
+    adapters: HashMap<PaneKey, Adapter>,
     conns: HashMap<ConnId, UnixStream>,
     /// Who each connection said it is.
     peers: HashMap<ConnId, Peer>,
@@ -207,6 +210,7 @@ pub fn run(
         master_file: paths.master.clone(),
         instructions: paths.instructions.clone(),
         host,
+        adapters: HashMap::new(),
         conns: HashMap::new(),
         peers: HashMap::new(),
         next_conn: 0,

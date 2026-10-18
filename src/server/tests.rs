@@ -918,3 +918,35 @@ fn opens_the_next_worker_with_the_config_saved_while_it_runs() {
 
     stop(&paths, handle);
 }
+
+#[test]
+fn a_running_worker_keeps_the_adapter_it_started_with() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let csv = started_flow(&store, dir.path(), "csv", "codex");
+    had_a_turn(&store, &csv);
+    let codex = fake_codex(dir.path());
+    let (paths, handle) = start_with_agents(
+        dir.path(),
+        BTreeMap::from([("codex".to_string(), codex.clone())]),
+    );
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !dir.path().join("csv/typed").exists() {
+        assert!(Instant::now() < deadline, "the worker never started");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let without_adapter = format!("[agents.codex]\ncommand = [\"{}\"]\n", codex.command[0]);
+    fs::write(paths.config.as_ref().unwrap(), without_adapter).unwrap();
+    thread::sleep(WATCH_EVERY * 2);
+
+    tell(&store, &csv, "Tabs.");
+    while !typed(dir.path(), "csv").contains("Tabs.") {
+        assert!(
+            Instant::now() < deadline,
+            "an edited agent took the running worker's adapter"
+        );
+        thread::sleep(Duration::from_millis(50));
+    }
+
+    stop(&paths, handle);
+}
