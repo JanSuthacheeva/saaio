@@ -50,9 +50,9 @@ Reviewed `flow/media-saaio` against `main` (commits 69dbde1..1225991). I viewed 
 
 The user chose to retake both with the recorder's own plugins off and to say so in the scripts.
 
-- [ ] `demo-setup.sh` starts the Claude Code agents without user-level settings and MCP servers
+- [x] `demo-setup.sh` starts the Claude Code agents without user-level settings and MCP servers
   (`--setting-sources project,local --strict-mcp-config`), so personal plugins, MCP servers and
   hooks stay out of the recording; `demo-setup.sh` and `record.sh` say the agents otherwise run
   with your own config
-- [ ] Retake the picture and GIF, check every frame for the old name and for personal setup
-- [ ] Clean up the scratch session, store and repo again
+- [x] Retake the picture and GIF, check every frame for the old name and for personal setup
+- [x] Clean up the scratch session, store and repo again
