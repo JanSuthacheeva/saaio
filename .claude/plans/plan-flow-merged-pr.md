@@ -282,7 +282,7 @@ closed" -> state change -> `wake::changed_flows` sees Idle -> the master is woke
 
 - [x] Add `server/forge_watch.rs`: `ForgeWatch`, `Answer`, `ask_in_background`, `ask`, with
   `ForgeWatch` unit tests
-- [ ] Wire `Event::Forge`, `ask_forges` and `forge_answer` into the server; E2E tests in
+- [x] Wire `Event::Forge`, `ask_forges` and `forge_answer` into the server; E2E tests in
   `tests/cli.rs` with a fake `gh` (merged recorded; failing gh records nothing, logs once)
 
 ### Show it
