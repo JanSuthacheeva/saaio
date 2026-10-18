@@ -32,8 +32,19 @@ pub fn in_repo(url: &str, remote: &str, real_host: impl Fn(&str) -> Option<Strin
             .is_some_and(|rest| rest.starts_with("pull/") || rest.starts_with("-/merge_requests/"));
     same_repo
         && (host == repo_host
-            || is_ssh(remote)
-                && real_host(&repo_host).is_some_and(|real| web_host(&real.to_lowercase()) == host))
+            || is_ssh(remote) && web_host_of(remote, real_host).is_some_and(|real| real == host))
+}
+
+/// The web host a remote points to, lowercase: its host, or for an SSH remote the host
+/// `real_host` resolves its alias to (ssh.github.com -> github.com); the host as written when
+/// `real_host` names none. None for no host.
+pub fn web_host_of(remote: &str, real_host: impl Fn(&str) -> Option<String>) -> Option<String> {
+    let (host, _) = host_and_path(remote)?;
+    if !is_ssh(remote) {
+        return Some(host);
+    }
+    let real = real_host(&host).map_or(host, |real| real.to_lowercase());
+    Some(web_host(&real).to_string())
 }
 
 /// The web host of a provider's SSH-over-443 host (ssh.github.com, altssh.gitlab.com); any other
@@ -316,6 +327,43 @@ mod tests {
             !in_repo(pull, "git@github-work:shop/admin.git", never_asked),
             "another repo needs no ssh"
         );
+    }
+
+    #[test]
+    fn names_the_web_host_a_remote_points_to() {
+        let github = |alias: &str| (alias == "github-work").then(|| "GitHub.com".to_string());
+        let host = |remote| web_host_of(remote, github);
+
+        assert_eq!(
+            host("https://GitHub.com/shop/app").as_deref(),
+            Some("github.com")
+        );
+        assert_eq!(
+            host("git@github-work:shop/app.git").as_deref(),
+            Some("github.com")
+        );
+        assert_eq!(
+            host("ssh://git@github-work/shop/app.git").as_deref(),
+            Some("github.com")
+        );
+        assert_eq!(
+            host("git@gitlab.com:shop/app.git").as_deref(),
+            Some("gitlab.com"),
+            "no alias"
+        );
+        assert_eq!(
+            web_host_of("git@github-443:shop/app.git", |_| Some(
+                "ssh.github.com".into()
+            ))
+            .as_deref(),
+            Some("github.com")
+        );
+        assert_eq!(
+            web_host_of("https://github-work/shop/app", never_asked).as_deref(),
+            Some("github-work"),
+            "an https remote is never an ssh alias"
+        );
+        assert_eq!(host(""), None);
     }
 
     #[test]
