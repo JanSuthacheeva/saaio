@@ -89,10 +89,10 @@ impl Sidebar<'_> {
                 theme.ui.text
             },
         ));
-        let right = match status {
-            Some(PaneStatus::Exited { .. }) => Span::styled("exited ", theme.state.waiting),
-            Some(PaneStatus::Failed { .. }) => Span::styled("failed ", theme.state.blocked),
-            _ => Span::styled(
+        let (age, age_style) = match status {
+            Some(PaneStatus::Exited { .. }) => ("exited ".to_string(), theme.state.waiting),
+            Some(PaneStatus::Failed { .. }) => ("failed ".to_string(), theme.state.blocked),
+            _ => (
                 format!(
                     "{} ",
                     short_duration(self.now.saturating_sub(flow.changed_at))
@@ -100,6 +100,21 @@ impl Sidebar<'_> {
                 theme.ui.faint,
             ),
         };
+        let agent = flow
+            .workspace
+            .as_ref()
+            .map(|space| fit::clip(&space.agent, width.saturating_sub(9)));
+        let marker = agent.as_ref().map(|agent| format!("{agent} "));
+        let age_on_first = marker.as_ref().is_none_or(|marker| {
+            fit::spans_width(&first) + fit::columns(marker) + fit::columns(&age) < width
+        });
+        let mut right = Vec::new();
+        if let Some(marker) = marker {
+            right.push(Span::styled(marker, theme.ui.faint));
+        }
+        if age_on_first {
+            right.push(Span::styled(age.clone(), age_style));
+        }
 
         let mut second = lead("    ");
         let steps = self.steps(flow);
@@ -117,15 +132,19 @@ impl Sidebar<'_> {
             Some(tasks) => format!("{tasks} "),
             None => String::new(),
         };
+        let mut second_right = vec![Span::styled(detail, theme.ui.faint)];
+        if !age_on_first {
+            second_right.push(Span::styled(age, age_style));
+        }
 
         let mut rows = vec![
             Row {
-                line: split(first, vec![right], width),
+                line: split(first, right, width),
                 key: Some(key.clone()),
                 mark,
             },
             Row {
-                line: split(second, vec![Span::styled(detail, theme.ui.faint)], width),
+                line: split(second, second_right, width),
                 key: Some(key.clone()),
                 mark,
             },

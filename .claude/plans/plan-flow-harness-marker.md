@@ -57,6 +57,6 @@ No stored or protocol data changes. `Workspace.agent` is already the name used t
 
 ## Tasks
 
-- [ ] Render width-aware worker and plain-session markers in `Sidebar::flow_rows`, with first/second-row and golden tests.
+- [x] Render width-aware worker and plain-session markers in `Sidebar::flow_rows`, with first/second-row and golden tests.
 - [ ] Pass the configured master agent through `reload_config`, `App::set_master_agent` and `Sidebar::master_rows`; cover it in tests and update user documentation.
 - [ ] Run the UI golden test as an end-to-end rendering check, the full test suite and `cargo clippy --all-targets -- -D warnings`.

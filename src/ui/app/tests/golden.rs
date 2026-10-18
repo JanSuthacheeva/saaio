@@ -49,6 +49,13 @@ fn every_view_looks_as_it_did() {
     let fleet = board_app();
     golden("fleet", &render_at(&fleet, FLEET));
 
+    let mut long = board_app();
+    let mut board = super::fleet();
+    board.flows[0].name = "a-very-long-feature-name".into();
+    board.flows[0].workspace.as_mut().unwrap().agent = "my-agent".into();
+    long.on_server(ServerMsg::Board(board));
+    golden("long-agent", &render_at(&long, FLEET));
+
     let mut worker = board_app();
     worker.on_input(Routed::Command(Command::Focus(2)));
     golden("worker", &render_at(&worker, FLEET));

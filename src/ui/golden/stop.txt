@@ -5,21 +5,21 @@
                                                                                                             │▌    ~/projects/shop · main
                                                                                                             │
                                                                                                             │ NEEDS YOU 2
-                                                                                                            │ 1 ● shop-221                       29m
+                                                                                                            │ 1 ● shop-221                claude 29m
                                                                                                             │     ●───●───○───○ implement        4/9
                                                                                                             │     migration needs a default value f…
                                                                                                             │
-                                                                                                            │ 2 ● shop-230                       31m
+                                                                                                            │ 2 ● shop-230                claude 31m
                      ╭─ stop ─────────────────────────────────────────────────────────╮                     │     ●───○───○───○ plan
                      │                                                                │                     │     Which approach: a channel column …
                      │  3 flows are not finished:                                     │                     │
                      │    ● shop-221    migration needs a default value for orders.…  │                     │ RUNNING 1
-                     │    ● shop-230    Which approach: a channel column or a join …  │                     │ 3 ◓ export-csv                      1h
+                     │    ● shop-230    Which approach: a channel column or a join …  │                     │ 3 ◓ export-csv               claude 1h
                      │    ◓ export-csv  agent: review changes                         │                     │     ●───●───●───○ review           6/6
                      │                                                                │                     │     agent: review changes
                      │  Kept, they resume the next time saaio ui starts.              │                     │
                      │  Ended, branches and worktrees stay until saaio clear.         │                     │ DONE 1
-                     │                                                                │                     │ 4 ✓ shop-198                        2h
+                     │                                                                │                     │ 4 ✓ shop-198                 claude 2h
                      ├────────────────────────────────────────────────────────────────┤                     │     ●───●───●───● MR !418      took 0s
                      │  k keep them   e end them   esc keep saaio running             │                     │
                      ╰────────────────────────────────────────────────────────────────╯                     │
