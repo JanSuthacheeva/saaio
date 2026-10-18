@@ -6,7 +6,6 @@
 
 - [Commands at a glance](#commands-at-a-glance)
 - [saaio](#saaio)
-- [saaio ui](#saaio-ui)
 - [saaio start](#saaio-start)
 - [saaio status](#saaio-status)
 - [saaio send](#saaio-send)
@@ -23,9 +22,8 @@
 
 | Command | Does |
 | --- | --- |
-| `saaio` | saaio ui in your terminal; every flow and what needs you for an agent or a script |
+| `saaio` | the terminal UI in your terminal. Every flow and what needs you for an agent or a script. |
 | `saaio --stop` | stop the server and every session |
-| `saaio ui [--stop]` | open the terminal UI; `--stop` also stops the server |
 | `saaio start <request> [--name] [--mode] [--agent] [--type]` | start a worker in its own worktree |
 | `saaio start --plain <folder> [--name] [--agent]` | start an agent in a folder, without a flow |
 | `saaio status [<flow>] [--json] [--full] [--all]` | where flows stand |
@@ -42,12 +40,25 @@
 
 ## saaio
 
-- Typed in a terminal: opens saaio ui, as [`saaio ui`](#saaio-ui).
-- `saaio --stop` stops the server and every session, including when an agent or script runs it.
-- Run by an agent or a script: flow counts, one line per flow, and the question or reason of each
-  waiting or blocked flow, as below.
+```
+saaio
+saaio --stop
+```
+
+### In a terminal
+
+- Opens the terminal UI ([ui.md](ui.md)). Starts the session server if none runs.
+- On leaving, prints what happened, such as
+  ``detached - the agents keep running; run `saaio` to attach again``.
+- A broken `config.toml` stops it before the server starts.
+
+### Run by an agent or a script
+
+Flow counts, one line per flow, and the question or reason of each waiting or blocked flow.
+
 - An agent or a script: stdin or stdout is not a terminal, or `SAAIO_FLOW_ID`, `SAAIO_MASTER=1`,
   `CLAUDECODE` or `CODEX_THREAD_ID` is set.
+- The UI never opens there, so a worker or the master can run `saaio` safely.
 
 ```
 $ saaio
@@ -69,21 +80,13 @@ help[2]: "Run `saaio status <name>` for one flow's phases, timeline and decision
   within each group.
 - `age`: time since the flow's state, phase or blocker last changed.
 
-## saaio ui
+### --stop
 
-```
-saaio ui
-saaio --stop
-saaio ui --stop
-```
-
-- Opens the terminal UI. Starts the session server if none runs. Screen: [ui.md](ui.md).
-- On leaving, prints what happened, such as
-  ``detached - the agents keep running; run `saaio ui` to attach again``.
-- `saaio --stop` (or `saaio ui --stop`): stops the server and every session. Unfinished flows are kept and resume at the next
-  `saaio ui`. Prints `stopped the saaio server and every session in it` or `no saaio server runs`.
-- Inside a worker, refused on the worker's own store (it would take over your saaio ui). Set
-  `SAAIO_HOME` to another folder to run one there.
+- Stops the server and every session, typed in a terminal or run by an agent or a script.
+- Unfinished flows are kept and resume the next time `saaio` opens the UI.
+- Prints `stopped the saaio server and every session in it` or `no saaio server runs`.
+- Inside a worker, refused on the worker's own store (it would end your sessions). Set
+  `SAAIO_HOME` to another folder to stop a server there.
 
 ## saaio start
 
@@ -98,7 +101,7 @@ Run in the repository the flow works on. Steps:
 2. claims a slot (1 to 20, [repository.md](repository.md#slots-and-ports))
 3. creates a git worktree in `.saaio/worktrees/<name>` on a new branch
 4. runs the repository's `.saaio/setup` there, if present
-5. records the flow, so saaio ui opens the agent in the worktree
+5. records the flow, so the UI opens the agent in the worktree
 
 ```
 $ saaio start "SHOP-217 add CSV export"
@@ -109,14 +112,14 @@ branch: flow/shop-217
 slot: 1
 setup: none
 agent: claude
-pane: when saaio ui runs
-help[2]: Run `saaio ui` to open the worker,Run `saaio` for all flows
+pane: when saaio opens
+help[2]: Run `saaio` in a terminal to open the worker,Run `saaio` for all flows
 ```
 
 | Field | Values |
 | --- | --- |
 | `setup` | `ran`, `none` (no setup hook), `failed: <its last error line>`. A failed setup marks the flow blocked. The worker still opens. |
-| `pane` | `opening` when saaio ui runs, else `when saaio ui runs` |
+| `pane` | `opening` while the UI runs, else `when saaio opens` |
 
 | Option | Default | Effect |
 | --- | --- | --- |
@@ -141,8 +144,8 @@ flow: scratch
 id: 5418e55e-581e-4117-a46c-0824b8e475d9
 folder: ~/projects/scratch
 agent: claude
-pane: when saaio ui runs
-help[2]: Run `saaio ui` to open the session,Run `saaio` for all flows
+pane: when saaio opens
+help[2]: Run `saaio` in a terminal to open the session,Run `saaio` for all flows
 ```
 
 - Name: the folder's name, unless `--name`.
@@ -252,7 +255,7 @@ help[2]: saaio types it into shop-221's pane once its session is idle,"Queue the
   line for 30 seconds.
 - Claude Code runs no hook on Esc. After an Esc in a Claude Code worker, its lines wait until the
   next prompt typed in that pane ends its turn.
-- Lines wait while `saaio ui` is closed and are typed once it runs again.
+- Lines wait while the UI is closed and are typed once it opens again.
 
 ```sh
 saaio send --type shop-221 /compact
@@ -294,7 +297,7 @@ help[1]: Set SAAIO_FLOW_ID or pass --flow <name>
 | `tasks <done> <total>` | how many of the plan's tasks are done |
 | `review --fixed <n> --open <n>` | review findings fixed and still open |
 | `merge-request <url>` | the merge request is open. The flow is done. |
-| `ended` | the worker's session ended. saaio ui does not reopen it. |
+| `ended` | the worker's session ended. The UI does not reopen it. |
 | `heartbeat` | the worker is alive. Adds no event (see `not-responding` in [flows.md](flows.md#states)). |
 
 Each answers with the flow's new state:
@@ -334,7 +337,7 @@ help[2]: Run `saaio report --flow shop-230 phase plan` when plan starts,Or set S
 saaio remove <flow> [--force] [--delete-unmerged]
 ```
 
-Ends one flow in any state: closes the worker's session in saaio ui, runs `.saaio/teardown`, removes
+Ends one flow in any state: closes the worker's session in the UI, runs `.saaio/teardown`, removes
 the worktree, deletes the branch, forgets the flow.
 
 ```
@@ -390,7 +393,7 @@ Not listed in `saaio --help`. Not for manual use.
 
 | Command | Run by |
 | --- | --- |
-| `saaio server` | saaio ui, when no server runs. Owns every session. Log: `server.log` ([files.md](files.md)). |
+| `saaio server` | `saaio`, when it opens the UI and no server runs. Owns every session. Log: `server.log` ([files.md](files.md)). |
 | `saaio hook claude-code`, `saaio hook codex` | the hooks saaio adds to each worker. Reads the hook's event on stdin and reports what changes the flow. Never prints to stdout, never fails a worker's turn. For Codex, exits 2 at Stop to hand over news. |
 | `saaio wait [--master]` | Claude Code sessions, as a background hook. Sleeps until there is news for the session, prints it to stderr and exits 2, which wakes the session. `--master` waits for the master's news. |
 
@@ -421,7 +424,7 @@ Read by saaio:
 | `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `HOME` | base of the defaults above |
 | `SAAIO_FLOW_ID` | the flow `saaio report` and `saaio hook` report into. Set in every worker. |
 | `SAAIO_MASTER` | `1` in the master's session, whose hooks report no flow |
-| `CLAUDE_CONFIG_DIR` | Claude Code's folder, where saaio ui reads a worker's transcript for the peek. Default: `~/.claude`. |
+| `CLAUDE_CONFIG_DIR` | Claude Code's folder, where the UI reads a worker's transcript for the peek. Default: `~/.claude`. |
 
 Set by saaio in every worker's session and in the setup and teardown hooks:
 
@@ -434,13 +437,13 @@ Set by saaio in every worker's session and in the setup and teardown hooks:
 | `SAAIO_REPO` | the repository's path |
 
 - A plain session gets only `SAAIO_FLOW_ID`.
-- Every session also gets `SAAIO_HOME` (the store of the saaio ui that opened it), `TERM=xterm-256color`
+- Every session also gets `SAAIO_HOME` (the store of the UI that opened it), `TERM=xterm-256color`
   and `COLORTERM=truecolor`.
 
 ## Several projects
 
 Default: one store per git repository, picked from the folder saaio runs in
-([files.md](files.md#the-store)). Each store has its own flows, server and master: run `saaio ui`
+([files.md](files.md#the-store)). Each store has its own flows, server and master: run `saaio`
 in a repository for its sidebar and master. Outside a repository saaio uses the shared folder.
 
 `SAAIO_HOME` overrides the choice, for example to keep several repositories in one store:
