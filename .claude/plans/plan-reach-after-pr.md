@@ -69,3 +69,10 @@ Existing `EventKind::MergeRequest`, `Waiting`, `Ended`, `Merged`, `MergeRequestC
 - [x] Change `FlowView::is_finished` and `Folding::{apply,open_merge_request,finish}` with lifecycle tests in `src/fold/tests.rs`.
 - [x] Add recorded-fixture CLI coverage for `send` and `send --type` after PR, and focused slot, pane and master-news regression coverage; update user-facing docs for the new lifecycle.
 - [x] Run end-to-end checks using a scratch `SAAIO_HOME`, `cargo test`, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.
+
+## Review
+
+- **Fixed:** PR-open and merged workers were told to run `saaio clear`, which skips them until their session ends. The output tests failed on the old guidance; commit `7aa7349` corrects the CLI help and lifecycle documentation.
+- **Open:** No proven findings remain.
+- **Where to look:** Read `src/fold.rs` from `Folding::apply` through `finish` for event ordering and final-step duration, then `src/view.rs` `is_finished` with its callers in `src/cli/commands/send.rs`, `src/slots.rs`, and `src/server/reconcile.rs`. The UI golden changes are routine fixture updates.
+- **Checks:** `cargo test` (546 unit, 78 CLI), `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings` passed with code at `7aa7349`. The production help fix was re-read against its failed test and the `clear` predicate in a separate pass; it was not independently reviewed.
