@@ -433,7 +433,8 @@ fn keeps_what_a_new_flow_creates_inside_the_dialog() {
 
 #[test]
 fn picks_the_agent_in_the_dialog_when_there_are_two() {
-    let mut app = board_app().with_agents(vec!["claude".into(), "codex".into()]);
+    let mut app = board_app();
+    app.set_agents(vec!["claude".into(), "codex".into()]);
     app.on_input(Routed::Command(Command::NewFlow));
     app.on_input(Routed::View(
         "SHOP-240 fix totals".chars().map(Key::Char).collect(),
@@ -481,8 +482,29 @@ fn picks_the_agent_in_the_dialog_when_there_are_two() {
 }
 
 #[test]
+fn an_open_dialog_keeps_its_agents_and_the_next_takes_the_new_ones() {
+    let mut app = board_app();
+    app.set_agents(vec!["claude".into(), "codex".into()]);
+    app.on_input(Routed::Command(Command::NewFlow));
+    let dialog = |app: &App| -> String {
+        let terminal = render_at(app, FLEET);
+        (10..26).map(|y| row(&terminal, y) + "\n").collect()
+    };
+
+    app.set_agents(vec!["codex".into(), "claude".into()]);
+    let open = dialog(&app);
+    assert!(open.contains("agent   (•) claude   ( ) codex"), "{open}");
+
+    app.on_input(Routed::View(vec![Key::Esc]));
+    app.on_input(Routed::Command(Command::NewFlow));
+    let next = dialog(&app);
+    assert!(next.contains("agent   (•) codex   ( ) claude"), "{next}");
+}
+
+#[test]
 fn shows_no_agent_row_with_one_agent() {
-    let mut app = board_app().with_agents(vec!["claude".into()]);
+    let mut app = board_app();
+    app.set_agents(vec!["claude".into()]);
     app.on_input(Routed::Command(Command::NewFlow));
 
     let terminal = render_at(&app, FLEET);

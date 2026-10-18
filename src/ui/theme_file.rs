@@ -12,6 +12,7 @@ use toml::de::{DeTable, DeValue, ValueDeserializer};
 use crate::default_file::DefaultFile;
 use crate::event::Phase;
 use crate::store::Stamp;
+use crate::text::{line_of, place};
 #[cfg(test)]
 use crate::ui::theme::MARK;
 use crate::ui::theme::{ColorKey, KIWI, Palette, PaletteKey, PhaseColors, Section, Theme, hex};
@@ -121,8 +122,8 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
     let table = match DeTable::parse(text) {
         Ok(table) => table.into_inner(),
         Err(error) => {
-            let line = line(text, error.span().map_or(0, |span| span.start));
-            return Err(anyhow!("{}", error.message())).context(at(path, line));
+            let line = line_of(text, error.span().map_or(0, |span| span.start));
+            return Err(anyhow!("{}", error.message())).context(place(path, line));
         }
     };
     let mut keys: Vec<_> = table.into_iter().collect();
@@ -132,37 +133,37 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
     let mut nerd_font = None;
     let mut phase_colors = None;
     for (key, value) in keys {
-        let line = line(text, key.span().start);
+        let line = line_of(text, key.span().start);
         let key = key.into_inner();
-        let place = || at(path, line);
+        let here = || place(path, line);
         if let Some(section) = Section::named(&key) {
             let DeValue::Table(table) = value.into_inner() else {
-                return Err(anyhow!("[{key}] is a table of colors")).context(place());
+                return Err(anyhow!("[{key}] is a table of colors")).context(here());
             };
             colors.extend(self::colors(path, text, section, table)?);
             continue;
         }
-        match (key.as_ref(), plain(value).with_context(place)?) {
+        match (key.as_ref(), plain(value).with_context(here)?) {
             ("extends", Value::String(name)) => extends = name,
             ("extends", _) => {
-                return Err(anyhow!("extends must be a theme's name")).context(place());
+                return Err(anyhow!("extends must be a theme's name")).context(here());
             }
             ("nerd_font", Value::Boolean(on)) => nerd_font = Some(on),
-            ("nerd_font", _) => return Err(anyhow!("nerd_font is true or false")).context(place()),
+            ("nerd_font", _) => return Err(anyhow!("nerd_font is true or false")).context(here()),
             ("phase_colors", Value::String(name))
                 if let Some(level) = PhaseColors::named(&name) =>
             {
                 phase_colors = Some(level);
             }
             ("phase_colors", _) => {
-                return Err(anyhow!("phase_colors is off, steps or full")).context(place());
+                return Err(anyhow!("phase_colors is off, steps or full")).context(here());
             }
             (name, _) => {
                 let message = match PaletteKey::named(name) {
                     Some(color) => format!("{name} belongs in [{}]", color.section().name()),
                     None => format!("unknown key {name}"),
                 };
-                return Err(anyhow!(message)).context(place());
+                return Err(anyhow!(message)).context(here());
             }
         }
     }
@@ -182,7 +183,7 @@ fn colors(path: &Path, text: &str, section: Section, table: DeTable) -> Result<V
     keys.sort_by_key(|(key, _)| key.span().start);
     let mut entries = Vec::new();
     for (name, value) in keys {
-        let line = line(text, name.span().start);
+        let line = line_of(text, name.span().start);
         let name = name.into_inner();
         let key = match PaletteKey::named(&name) {
             Some(key) if key.section() == section => ColorKey::Fixed(key),
@@ -190,7 +191,7 @@ fn colors(path: &Path, text: &str, section: Section, table: DeTable) -> Result<V
                 let phase = name
                     .parse::<Phase>()
                     .map_err(|_| anyhow!("{name} is no phase name"))
-                    .with_context(|| at(path, line))?;
+                    .with_context(|| place(path, line))?;
                 ColorKey::Phase(phase)
             }
             Some(key) => {
@@ -199,14 +200,14 @@ fn colors(path: &Path, text: &str, section: Section, table: DeTable) -> Result<V
                     key.section().name(),
                     section.name()
                 ))
-                .context(at(path, line));
+                .context(place(path, line));
             }
             None => {
                 return Err(anyhow!("[{}] has no key {name}", section.name()))
-                    .context(at(path, line));
+                    .context(place(path, line));
             }
         };
-        let value = plain(value).with_context(|| at(path, line))?;
+        let value = plain(value).with_context(|| place(path, line))?;
         entries.push(Entry { key, value, line });
     }
     Ok(entries)
@@ -215,16 +216,6 @@ fn colors(path: &Path, text: &str, section: Section, table: DeTable) -> Result<V
 /// A value of the file as a plain toml Value.
 fn plain(value: Spanned<DeValue>) -> Result<Value> {
     Ok(Value::deserialize(ValueDeserializer::from(value))?)
-}
-
-/// "path:line", the context every error of a theme file carries.
-fn at(path: &Path, line: usize) -> String {
-    format!("{}:{line}", path.display())
-}
-
-/// The 1-based line `offset` is on.
-fn line(text: &str, offset: usize) -> usize {
-    text[..offset.min(text.len())].matches('\n').count() + 1
 }
 
 /// One file's colors over `palette`: values first, then keys that name a [ui] or [state] key,
@@ -239,7 +230,7 @@ fn apply(file: &ThemeFile, palette: &mut Palette) -> Result<()> {
             value => {
                 let color = color(value, palette)
                     .with_context(|| entry.key.name().to_string())
-                    .with_context(|| at(&file.path, entry.line))?;
+                    .with_context(|| place(&file.path, entry.line))?;
                 palette.set(&entry.key, color);
             }
         }
@@ -258,7 +249,7 @@ fn apply(file: &ThemeFile, palette: &mut Palette) -> Result<()> {
         if references.len() == before {
             let names: Vec<&str> = pending.iter().map(|key| key.name()).collect();
             return Err(anyhow!("{} name each other", names.join(", ")))
-                .context(at(&file.path, references[0].0.line));
+                .context(place(&file.path, references[0].0.line));
         }
     }
     Ok(())
@@ -327,7 +318,7 @@ impl ThemeWatch {
     /// The theme again when one of its files appeared, changed or went away; always on the first call.
     pub fn changed(&mut self) -> Option<Result<Theme>> {
         if let Some(stamps) = &self.stamps
-            && stamps.iter().all(|(path, stamp)| &stamp_of(path) == stamp)
+            && stamps.iter().all(|(path, stamp)| &Stamp::of(path) == stamp)
         {
             return None;
         }
@@ -336,21 +327,13 @@ impl ThemeWatch {
             files
                 .into_iter()
                 .map(|path| {
-                    let stamp = stamp_of(&path);
+                    let stamp = Stamp::of(&path);
                     (path, stamp)
                 })
                 .collect(),
         );
         Some(theme)
     }
-}
-
-fn stamp_of(path: &Path) -> Option<Stamp> {
-    let metadata = fs::metadata(path).ok()?;
-    Some(Stamp {
-        modified: metadata.modified().ok()?,
-        len: metadata.len(),
-    })
 }
 
 #[cfg(test)]

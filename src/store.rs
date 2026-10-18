@@ -33,6 +33,17 @@ pub struct Stamp {
     pub len: u64,
 }
 
+impl Stamp {
+    /// The file's size and time; None when it is missing or unreadable.
+    pub fn of(path: &Path) -> Option<Stamp> {
+        let metadata = fs::metadata(path).ok()?;
+        Some(Stamp {
+            modified: metadata.modified().ok()?,
+            len: metadata.len(),
+        })
+    }
+}
+
 /// Whose wait: the master's or a flow's worker's.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Waiter {
@@ -381,6 +392,15 @@ mod tests {
     use crate::event::{EventKind, Mode};
     use crate::view::{MasterTurn, State};
     use crate::wake::Mark;
+
+    #[test]
+    fn stamps_a_file_by_size_and_none_when_missing() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        assert_eq!(Stamp::of(&path), None);
+        fs::write(&path, "abc").unwrap();
+        assert_eq!(Stamp::of(&path).map(|stamp| stamp.len), Some(3));
+    }
 
     fn started() -> Event {
         Event::new(

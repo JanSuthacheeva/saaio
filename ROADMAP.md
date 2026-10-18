@@ -16,7 +16,6 @@ Nothing in progress.
 | Working across repositories | each repository has its own saaio ui. In one store shared through `SAAIO_HOME`, the new-flow dialog starts flows in the repository of the session in view. | pick the repository in the dialog, sidebar and board show each flow's repository, `saaio start --repo <path>` |
 | Codex phases from the skill it starts | a Codex worker that reads a later skill's `SKILL.md` early seems to start that phase early | the phase follows the skill actually started |
 | Codex commits without asking | the sandbox cannot write to the main repository's `.git`, so every commit asks permission | commits in the worktree without a prompt |
-| First prompt read at saaio start | a `[worker] prompt` change needs a new `saaio ui`, while `[worker] agent` applies at once | the prompt applies at the next `saaio start` |
 | `saaio example config`, `saaio example theme` | the examples exist only as written on the first run | print every setting with its default |
 | Prebuilt binaries | install builds from source with `cargo install`, which needs Rust | binaries for macOS and Linux on every release, an install script at saaio.dev, a Homebrew tap and `cargo binstall saaio` |
 

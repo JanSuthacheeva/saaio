@@ -18,6 +18,7 @@ impl Server {
     /// Re-folds when the store changed, reconciles, sends Board and Panes to the attached UI.
     pub(super) fn refresh(&mut self) {
         self.refreshed_at = Instant::now();
+        self.reload_config();
         self.send_master();
         let now = (self.clock)();
         match self.watch.changed(&self.store, now) {
@@ -49,6 +50,18 @@ impl Server {
         self.send_board();
         if panes_change {
             self.send_panes();
+        }
+    }
+
+    /// Takes config.toml again when it changed; a broken one keeps the last and is logged.
+    fn reload_config(&mut self) {
+        match self.configs.changed() {
+            None => {}
+            Some(Ok(config)) => {
+                self.config = config;
+                server_log::write((self.clock)(), "config.toml read again");
+            }
+            Some(Err(error)) => server_log::write((self.clock)(), &format!("config: {error:#}")),
         }
     }
 
@@ -99,7 +112,6 @@ impl Server {
             agent,
             &self.env,
             &instructions,
-            self.config.master.wake,
             self.store.master_session().as_deref(),
         ) {
             Some(spec) => match self.open_pane(spec) {
@@ -136,7 +148,12 @@ impl Server {
             server_log::write((self.clock)(), &format!("{error:#}"));
         }
         let key = spec.key.clone();
+        let adapter = spec.adapter;
         self.host.open(spec)?;
+        match adapter {
+            Some(adapter) => self.adapters.insert(key.clone(), adapter),
+            None => self.adapters.remove(&key),
+        };
         self.opened_at.insert(key.clone(), Instant::now());
         self.line_at.remove(&key);
         Ok(())

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// "s" unless there is exactly one: `format!("{n} flow{}", plural(n))`.
 pub fn plural<N: Copy + PartialEq + From<u8>>(count: N) -> &'static str {
     if count == N::from(1) { "" } else { "s" }
@@ -81,9 +83,28 @@ pub fn local_offset_secs() -> i64 {
     }
 }
 
+/// "path:line", where a file's error is.
+pub fn place(path: &Path, line: usize) -> String {
+    format!("{}:{line}", path.display())
+}
+
+/// The 1-based line `offset` is on.
+pub fn line_of(text: &str, offset: usize) -> usize {
+    text[..offset.min(text.len())].matches('\n').count() + 1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn places_an_offset_on_its_line_of_a_file() {
+        let text = "a = 1\nb = 2\n";
+        assert_eq!(line_of(text, 0), 1);
+        assert_eq!(line_of(text, 6), 2);
+        assert_eq!(line_of(text, 999), 3);
+        assert_eq!(place(Path::new("/x/config.toml"), 2), "/x/config.toml:2");
+    }
 
     #[test]
     fn says_s_unless_there_is_exactly_one() {

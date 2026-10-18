@@ -26,6 +26,8 @@ use signal_hook::iterator::SignalsInfo;
 use signal_hook::iterator::exfiltrator::WithOrigin;
 use signal_hook::low_level::signal_name;
 
+use crate::adapter::Adapter;
+use crate::config::watch::ConfigWatch;
 use crate::config::{self, Config};
 use crate::fold;
 use crate::launch::pane::LaunchEnv;
@@ -123,11 +125,15 @@ struct Server {
     known: HashSet<String>,
     refreshed_at: Instant,
     config: Config,
+    /// config.toml, looked at before every refresh.
+    configs: ConfigWatch,
     env: LaunchEnv,
     record: MasterRecord,
     master_file: PathBuf,
     instructions: PathBuf,
     host: Host,
+    /// The adapter each open pane started with.
+    adapters: HashMap<PaneKey, Adapter>,
     conns: HashMap<ConnId, UnixStream>,
     /// Who each connection said it is.
     peers: HashMap<ConnId, Peer>,
@@ -181,6 +187,9 @@ pub fn run(
         &format!("started (saaio {BUILD}, protocol {PROTOCOL_VERSION})"),
     );
     write_defaults(paths, clock);
+    let mut configs = ConfigWatch::new(paths.config.clone());
+    // The server was handed this config; the watch only needs to know the file as it is.
+    let _ = configs.changed();
     let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;
     let (events, inbox) = mpsc::channel();
     stop_on_signals(events.clone())?;
@@ -195,11 +204,13 @@ pub fn run(
         known: HashSet::new(),
         refreshed_at: Instant::now(),
         config,
+        configs,
         env,
         record,
         master_file: paths.master.clone(),
         instructions: paths.instructions.clone(),
         host,
+        adapters: HashMap::new(),
         conns: HashMap::new(),
         peers: HashMap::new(),
         next_conn: 0,

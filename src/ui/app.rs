@@ -160,16 +160,14 @@ impl App {
         self
     }
 
-    /// The agents the new-flow dialog offers, the default first.
-    pub fn with_agents(mut self, agents: Vec<String>) -> App {
+    /// The agents the new-flow dialog offers, the default first; an open dialog keeps its list.
+    pub fn set_agents(&mut self, agents: Vec<String>) {
         self.agents = agents;
-        self
     }
 
     /// The key before every command, for the hints that name it.
-    pub fn with_prefix(mut self, prefix: Prefix) -> App {
+    pub fn set_prefix(&mut self, prefix: Prefix) {
         self.prefix = prefix;
-        self
     }
 
     /// Paths under `home` show as ~/...

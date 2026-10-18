@@ -53,7 +53,7 @@ impl Server {
     fn server_delivered(&self, key: &PaneKey) -> Option<Waiter> {
         match key {
             PaneKey::Master => {
-                let adapter = self.config.master_agent()?.1.adapter?;
+                let adapter = *self.adapters.get(key)?;
                 let delivers = !adapter.wakes_itself()
                     && self.config.master.wake
                     && self.store.master_session().is_some();
@@ -61,8 +61,7 @@ impl Server {
             }
             PaneKey::Flow(id) => {
                 let flow = self.board.flows.iter().find(|flow| &flow.id == id)?;
-                let agent = &flow.workspace.as_ref()?.agent;
-                let adapter = self.config.agent(Some(agent))?.1.adapter?;
+                let adapter = *self.adapters.get(key)?;
                 let delivers = !adapter.wakes_itself()
                     && !flow.is_plain()
                     && !flow.is_finished()

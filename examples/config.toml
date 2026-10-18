@@ -3,9 +3,9 @@
 # saaio wrote this file on its first run. Every setting is commented out at its default. Remove the
 # # in front of one to change it. Once you've edited this file, saaio never overwrites it.
 #
-# Commands read this file every time they run. saaio ui and its server only read it when they start,
-# so after changing [agents], a prompt, [master] or [ui], run saaio ui --stop and then saaio ui. A key
-# saaio doesn't know is an error that names the file and the key.
+# Commands read this file every time they run. saaio ui and its server read it again when you save
+# it. A running session keeps the command it started with. A broken file keeps the last working
+# settings. A key saaio doesn't know is an error that names the file, line and key.
 # The whole file, explained: https://github.com/JanSuthacheeva/saaio/blob/main/docs/configuration.md
 #
 # To use your own skills instead of the agent-skills set, set [worker] prompt and [[phases]]:

@@ -41,6 +41,8 @@ use prefix::Prefix;
 use theme::Theme;
 use theme_file::ThemeWatch;
 
+use crate::config::watch::ConfigWatch;
+
 #[derive(Debug)]
 enum Event {
     Input(Vec<u8>),
@@ -55,7 +57,7 @@ enum Event {
 const TICK_EVERY: Duration = Duration::from_millis(100);
 /// Ticks between two looks at the peeked transcript.
 const TICKS_PER_PEEK: u32 = 10;
-/// Ticks between two looks at theme.toml and the theme it extends.
+/// Ticks between two looks at theme.toml and the theme it extends, and at config.toml.
 const TICKS_PER_THEME: u32 = 10;
 
 /// What saaio ui reads from where it runs: Claude's home for the peek, the user's home for ~.
@@ -69,10 +71,8 @@ pub struct UiEnv {
     pub store: PathBuf,
     /// Where theme.toml lives: config.toml's folder.
     pub theme_dir: PathBuf,
-    /// The agents a flow can run, the default first, for the new-flow dialog.
-    pub agents: Vec<String>,
-    /// The key before every saaio ui command.
-    pub prefix: Prefix,
+    /// config.toml, watched while the ui runs.
+    pub config_file: Option<PathBuf>,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
@@ -85,9 +85,10 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let mut app = App::new(outer.size()?)
         .with_offset(crate::text::local_offset_secs())
         .with_home(home)
-        .with_store(env.store.display().to_string())
-        .with_agents(env.agents)
-        .with_prefix(env.prefix);
+        .with_store(env.store.display().to_string());
+    let mut router = Router::new(Prefix::default());
+    let mut configs = ConfigWatch::new(env.config_file);
+    reload_config(&mut configs, &mut app, &mut router);
     let client = Client::connect(
         socket,
         Role::Attach {
@@ -103,7 +104,6 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     watch_resize(events.clone())?;
     tick(events);
 
-    let mut router = Router::new(env.prefix);
     let mut peek = PeekCache::new(env.claude_home);
     let mut ticks: u32 = 0;
     let mut themes = ThemeWatch::new(env.theme_dir);
@@ -144,6 +144,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                     }
                     if ticks.is_multiple_of(TICKS_PER_THEME) {
                         redraw |= reload_theme(&mut themes, &mut theme, &mut app);
+                        redraw |= reload_config(&mut configs, &mut app, &mut router);
                     }
                     app.overview_due()
                 }
@@ -186,6 +187,34 @@ fn reload_theme(themes: &mut ThemeWatch, theme: &mut Theme, app: &mut App) -> bo
         }
         Some(Err(error)) => {
             app.say_about_file(format!("{THEME_NOTICE}{error:#}"));
+            true
+        }
+    }
+}
+
+/// How a notice about the config begins.
+const CONFIG_NOTICE: &str = "config: ";
+
+/// Takes config.toml again when it changed; a broken one keeps the last and says why until it
+/// reads again. True when something changed on screen.
+fn reload_config(configs: &mut ConfigWatch, app: &mut App, router: &mut Router) -> bool {
+    match configs.changed() {
+        None => false,
+        Some(Ok(config)) => {
+            router.set_prefix(config.ui.prefix);
+            app.set_prefix(config.ui.prefix);
+            app.set_agents(
+                config
+                    .worker_agents()
+                    .into_iter()
+                    .map(String::from)
+                    .collect(),
+            );
+            app.take_back(CONFIG_NOTICE);
+            true
+        }
+        Some(Err(error)) => {
+            app.say_about_file(format!("{CONFIG_NOTICE}{error:#}"));
             true
         }
     }

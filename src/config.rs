@@ -1,17 +1,21 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
 #[cfg(test)]
 use serde::Serialize;
+use toml::de::{DeTable, DeValue};
 
 use crate::adapter::Adapter;
 use crate::default_file::DefaultFile;
+use crate::text::{line_of, place};
 use crate::ui::prefix::Prefix;
 use crate::workflow::Workflow;
+
+pub mod watch;
 
 /// How to launch one agent: its command line, the first prompt it gets, and how to resume it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -96,18 +100,13 @@ pub struct UiConfig {
 }
 
 impl Config {
-    /// $SAAIO_CONFIG, else $XDG_CONFIG_HOME/saaio/config.toml, else ~/.config/saaio/config.toml;
-    /// the built-in agents alone when there is no file.
-    pub fn load(
-        saaio_config: Option<PathBuf>,
-        xdg_config: Option<PathBuf>,
-        home: Option<PathBuf>,
-    ) -> Result<Config> {
-        let mut config = match config_file(saaio_config, xdg_config, home) {
+    /// The file's config with the built-in agents; the built-in alone when `file` is None or
+    /// missing. Errors read "<file>:<line>: <message>".
+    pub fn read(file: Option<&Path>) -> Result<Config> {
+        let mut config = match file {
             None => Config::default(),
-            Some(file) => match fs::read_to_string(&file) {
-                Ok(text) => Config::parse(&text)
-                    .with_context(|| format!("{} is not valid", file.display()))?,
+            Some(file) => match fs::read_to_string(file) {
+                Ok(text) => Config::parse(file, &text)?,
                 Err(error) if error.kind() == ErrorKind::NotFound => Config::default(),
                 Err(error) => {
                     return Err(error)
@@ -120,20 +119,26 @@ impl Config {
     }
 
     /// The file's text as a Config; refuses the top-level `agent` key, naming [worker] agent, and
-    /// the [phases] skill table, naming [[phases]].
-    fn parse(text: &str) -> Result<Config> {
-        let read = |error: toml::de::Error| anyhow!("{}", error.to_string().trim_end());
-        let table: toml::Table = toml::from_str(text).map_err(read)?;
-        if table.contains_key("agent") {
-            bail!("the top-level `agent` key is now `agent` under [worker]");
+    /// the [phases] skill table, naming [[phases]], each on the line of its key.
+    fn parse(path: &Path, text: &str) -> Result<Config> {
+        let at = |error: toml::de::Error| {
+            let line = line_of(text, error.span().map_or(0, |span| span.start));
+            anyhow!("{}", error.message().trim_end()).context(place(path, line))
+        };
+        let table = DeTable::parse(text).map_err(at)?.into_inner();
+        for (key, value) in &table {
+            let refusal = match key.get_ref().as_ref() {
+                "agent" => "the top-level `agent` key is now `agent` under [worker]",
+                "phases" if matches!(value.get_ref(), DeValue::Table(_)) => {
+                    "[phases] is now a list of phases: [[phases]] with name = \"plan\" and \
+                     skills = [\"design-code\"], one per phase in order"
+                }
+                _ => continue,
+            };
+            let line = line_of(text, key.span().start);
+            return Err(anyhow!(refusal).context(place(path, line)));
         }
-        if table.get("phases").is_some_and(toml::Value::is_table) {
-            bail!(
-                "[phases] is now a list of phases: [[phases]] with name = \"plan\" and \
-                 skills = [\"design-code\"], one per phase in order"
-            );
-        }
-        toml::from_str(text).map_err(read)
+        toml::from_str(text).map_err(at)
     }
 
     /// The built-in agents and workflow alone, as if there were no config file.
@@ -274,7 +279,7 @@ mod tests {
     fn the_example_uncommented_is_the_built_in_config() {
         let text = uncommented(EXAMPLE.text);
 
-        let mut example = Config::parse(&text).unwrap();
+        let mut example = Config::parse(Path::new("config.toml"), &text).unwrap();
         example.add_builtins();
 
         assert_eq!(example, Config::builtin());
@@ -290,7 +295,7 @@ mod tests {
 
     #[test]
     fn the_example_as_it_is_parses_to_the_built_in_config() {
-        let mut example = Config::parse(EXAMPLE.text).unwrap();
+        let mut example = Config::parse(Path::new("config.toml"), EXAMPLE.text).unwrap();
         example.add_builtins();
 
         assert_eq!(example, Config::builtin());
@@ -299,7 +304,7 @@ mod tests {
     #[test]
     fn knows_claude_code_without_a_config_file() {
         let dir = TempDir::new().unwrap();
-        let config = Config::load(Some(dir.path().join("missing.toml")), None, None).unwrap();
+        let config = Config::read(Some(&dir.path().join("missing.toml"))).unwrap();
 
         let (name, agent) = config.agent(None).unwrap();
         assert_eq!(name, "claude");
@@ -340,8 +345,8 @@ mod tests {
         )
         .unwrap();
 
-        let config = Config::load(Some(file), None, None).unwrap();
-        let none = Config::load(Some(dir.path().join("missing.toml")), None, None).unwrap();
+        let config = Config::read(Some(&file)).unwrap();
+        let none = Config::read(Some(&dir.path().join("missing.toml"))).unwrap();
 
         assert_eq!(none.workflow, Workflow::builtin());
         assert_eq!(
@@ -368,10 +373,7 @@ mod tests {
         let file = dir.path().join("config.toml");
         let error = |text: &str| {
             fs::write(&file, text).unwrap();
-            format!(
-                "{:#}",
-                Config::load(Some(file.clone()), None, None).unwrap_err()
-            )
+            format!("{:#}", Config::read(Some(&file)).unwrap_err())
         };
         let phase = |name: &str| format!("[[phases]]\nname = \"{name}\"\n");
 
@@ -382,7 +384,7 @@ mod tests {
         assert!(twice.contains("two phases are named review"), "{twice}");
         let name = error(&phase("Review"));
         assert!(name.contains("lowercase letters, digits and -"), "{name}");
-        assert!(name.contains("line 2"), "{name}");
+        assert!(name.contains("config.toml:2: "), "{name}");
         let key = error("[[phases]]\nname = \"plan\"\nskill = [\"design-code\"]\n");
         assert!(key.contains("skill"), "{key}");
     }
@@ -393,10 +395,7 @@ mod tests {
         let file = dir.path().join("config.toml");
         fs::write(&file, "[phases]\nbrainstorm = \"design\"\n").unwrap();
 
-        let error = format!(
-            "{:#}",
-            Config::load(Some(file.clone()), None, None).unwrap_err()
-        );
+        let error = format!("{:#}", Config::read(Some(&file)).unwrap_err());
 
         assert!(error.contains(&file.display().to_string()), "{error}");
         assert!(error.contains("[[phases]]"), "{error}");
@@ -424,7 +423,7 @@ prompt = "/design-code {request}"
         )
         .unwrap();
 
-        let config = Config::load(Some(file), None, None).unwrap();
+        let config = Config::read(Some(&file)).unwrap();
 
         assert_eq!(config.agent(None).map(|(name, _)| name), Some("codex"));
         assert_eq!(
@@ -462,7 +461,7 @@ command = ["pi", "{prompt}"]
         )
         .unwrap();
 
-        let config = Config::load(Some(file), None, None).unwrap();
+        let config = Config::read(Some(&file)).unwrap();
         let prompt = |name| config.agent(Some(name)).unwrap().1.prompt.as_deref();
 
         assert_eq!(prompt("claude"), Some("/my-flow {request}"));
@@ -482,7 +481,7 @@ command = ["pi", "{prompt}"]
         )
         .unwrap();
 
-        let config = Config::load(Some(file), None, None).unwrap();
+        let config = Config::read(Some(&file)).unwrap();
         let prompt = |name| config.agent(Some(name)).unwrap().1.prompt.as_deref();
 
         assert_eq!(prompt("claude"), Some("/ship-feature {request}"));
@@ -509,16 +508,55 @@ command = ["pi", "{prompt}"]
         .unwrap();
 
         assert_eq!(
-            Config::load(None, Some(xdg), Some(home.clone()))
+            Config::read(config_file(None, Some(xdg), Some(home.clone())).as_deref())
                 .unwrap()
                 .worker
                 .agent,
             "from-xdg"
         );
         assert_eq!(
-            Config::load(None, None, Some(home)).unwrap().worker.agent,
+            Config::read(config_file(None, None, Some(home)).as_deref())
+                .unwrap()
+                .worker
+                .agent,
             "from-home"
         );
+    }
+
+    #[test]
+    fn says_every_error_as_file_line_and_message() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        let error = |text: &str| {
+            fs::write(&file, text).unwrap();
+            format!("{:#}", Config::read(Some(&file)).unwrap_err())
+        };
+        let at = |line: usize| format!("{}:{line}: ", file.display());
+
+        let unknown = error("[worker]\nagnet = \"x\"\n");
+        assert_eq!(
+            unknown,
+            format!(
+                "{}unknown field `agnet`, expected `agent` or `prompt`",
+                at(2)
+            )
+        );
+        assert!(error("\n\n[worker\n").starts_with(&at(3)));
+        assert_eq!(
+            error("[ui]\nprefix = \"C-b\"\nagent = \"codex\"\n"),
+            format!("{}unknown field `agent`, expected `prefix`", at(3))
+        );
+        let top = error("# old\nagent = \"codex\"\n");
+        assert!(top.starts_with(&at(2)), "{top}");
+        assert!(top.contains("`agent` under [worker]"), "{top}");
+        let phases = error("\n[phases]\nplan = \"design-code\"\n");
+        assert!(phases.starts_with(&at(2)), "{phases}");
+        assert!(phases.contains("[[phases]]"), "{phases}");
+    }
+
+    #[test]
+    fn reads_the_built_in_config_without_a_file() {
+        assert_eq!(Config::read(None).unwrap(), Config::builtin());
     }
 
     #[test]
@@ -527,7 +565,7 @@ command = ["pi", "{prompt}"]
         let file = dir.path().join("config.toml");
         fs::write(&file, "[worker]\nagent = [").unwrap();
 
-        let error = Config::load(Some(file.clone()), None, None).unwrap_err();
+        let error = Config::read(Some(&file)).unwrap_err();
 
         assert!(
             format!("{error:#}").contains(&file.display().to_string()),
@@ -545,10 +583,7 @@ command = ["pi", "{prompt}"]
         )
         .unwrap();
 
-        let error = format!(
-            "{:#}",
-            Config::load(Some(file.clone()), None, None).unwrap_err()
-        );
+        let error = format!("{:#}", Config::read(Some(&file)).unwrap_err());
 
         assert!(error.contains(&file.display().to_string()), "{error}");
         assert!(error.contains("claud-code"), "{error}");
@@ -558,7 +593,7 @@ command = ["pi", "{prompt}"]
     fn wakes_the_master_unless_the_file_says_not_to() {
         let dir = TempDir::new().unwrap();
         let file = dir.path().join("config.toml");
-        let load = || Config::load(Some(file.clone()), None, None).unwrap();
+        let load = || Config::read(Some(&file)).unwrap();
 
         assert!(load().master.wake, "no file");
         fs::write(&file, "[worker]\nagent = \"claude\"\n").unwrap();
@@ -566,17 +601,14 @@ command = ["pi", "{prompt}"]
         fs::write(&file, "[master]\nwake = false\n").unwrap();
         assert!(!load().master.wake);
         fs::write(&file, "[master]\nwke = false\n").unwrap();
-        assert!(
-            Config::load(Some(file.clone()), None, None).is_err(),
-            "a typo is an error"
-        );
+        assert!(Config::read(Some(&file)).is_err(), "a typo is an error");
     }
 
     #[test]
     fn runs_the_master_agent_unless_the_file_names_another() {
         let dir = TempDir::new().unwrap();
         let file = dir.path().join("config.toml");
-        let load = || Config::load(Some(file.clone()), None, None).unwrap();
+        let load = || Config::read(Some(&file)).unwrap();
 
         assert_eq!(
             load().master_agent().map(|(name, _)| name),
@@ -607,7 +639,7 @@ command = ["pi", "{prompt}"]
         let file = dir.path().join("config.toml");
         fs::write(&file, "[worker]\nagent = \"codex\"\n").unwrap();
 
-        let config = Config::load(Some(file), None, None).unwrap();
+        let config = Config::read(Some(&file)).unwrap();
 
         assert_eq!(config.worker_agents(), ["codex", "claude"]);
         assert_eq!(Config::builtin().worker_agents(), ["claude", "codex"]);
@@ -619,10 +651,7 @@ command = ["pi", "{prompt}"]
         let file = dir.path().join("config.toml");
         fs::write(&file, "agent = \"codex\"\n").unwrap();
 
-        let error = format!(
-            "{:#}",
-            Config::load(Some(file.clone()), None, None).unwrap_err()
-        );
+        let error = format!("{:#}", Config::read(Some(&file)).unwrap_err());
 
         assert!(error.contains(&file.display().to_string()), "{error}");
         assert!(error.contains("[worker]"), "{error}");
@@ -634,16 +663,13 @@ command = ["pi", "{prompt}"]
         let file = dir.path().join("config.toml");
         let error = |text: &str| {
             fs::write(&file, text).unwrap();
-            format!(
-                "{:#}",
-                Config::load(Some(file.clone()), None, None).unwrap_err()
-            )
+            format!("{:#}", Config::read(Some(&file)).unwrap_err())
         };
 
         let key = error("agnets = 1\n");
         assert!(key.contains(&file.display().to_string()), "{key}");
         assert!(key.contains("agnets"), "{key}");
-        assert!(key.contains("line 1"), "{key}");
+        assert!(key.contains("config.toml:1: "), "{key}");
         assert!(!key.ends_with('\n'), "{key:?}");
         let section = error("[mastr]\nwake = false\n");
         assert!(section.contains("mastr"), "{section}");
@@ -659,7 +685,7 @@ command = ["pi", "{prompt}"]
         let file = dir.path().join("config.toml");
         let load = |text: &str| {
             fs::write(&file, text).unwrap();
-            Config::load(Some(file.clone()), None, None)
+            Config::read(Some(&file))
         };
 
         assert_eq!(Config::builtin().ui.prefix, Prefix::default());
@@ -669,7 +695,7 @@ command = ["pi", "{prompt}"]
         );
         let needed = format!("{:#}", load("[ui]\nprefix = \"C-c\"\n").unwrap_err());
         assert!(needed.contains(&file.display().to_string()), "{needed}");
-        assert!(needed.contains("line 2"), "{needed}");
+        assert!(needed.contains("config.toml:2: "), "{needed}");
         assert!(
             needed.contains("C-c interrupts the agent in a pane"),
             "{needed}"

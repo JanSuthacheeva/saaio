@@ -98,8 +98,7 @@ impl Server {
             return None;
         };
         let flow = self.board.flows.iter().find(|flow| &flow.id == id)?;
-        let agent = &flow.workspace.as_ref()?.agent;
-        self.config.agent(Some(agent))?.1.adapter?;
+        self.adapters.get(key)?;
         let takes = !flow.is_plain() && !flow.is_finished() && flow.answer.is_some();
         takes.then(|| id.clone())
     }

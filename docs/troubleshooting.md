@@ -18,7 +18,7 @@ Each `server.log` line starts with a time and a process id:
 | Problem | Cause | Fix |
 | --- | --- | --- |
 | `saaio server runs protocol 4, this flow speaks 5` | after an update, the old server still runs | `saaio ui --stop`, then `saaio ui`. Unfinished flows resume. |
-| the prefix key does nothing | the terminal or a surrounding tmux keeps `C-space` | set another prefix, such as `prefix = "C-b"` under `[ui]` in `config.toml`, then `saaio ui --stop` and `saaio ui` ([configuration.md](configuration.md#ui)) |
+| the prefix key does nothing | the terminal or a surrounding tmux keeps `C-space` | set another prefix, such as `prefix = "C-b"` under `[ui]` in `config.toml`. It applies on save ([configuration.md](configuration.md#ui)) |
 | saaio ui refuses to start inside a worker | it would take over the saaio ui the worker runs in | use a separate store: `SAAIO_HOME=$(mktemp -d) saaio ui` |
 | saaio ui or `saaio status` shows none of a project's flows | each git repository has its own store, picked from the folder saaio runs in | run it in that repository, or `saaio status --all` for every project ([cli.md](cli.md#several-projects)) |
 | a second saaio ui took over the first | one saaio ui is attached at a time, the newest wins | run `saaio ui` again in the terminal you want |
@@ -48,7 +48,7 @@ Each `server.log` line starts with a time and a process id:
 | `saaio start` needs a git repository | run outside a repository | run it in the repository, or use `saaio start --plain <folder>` |
 | `setup: failed: ...` | `.saaio/setup` exited with an error. The text is its last error line. The flow is blocked, the worker is open. | fix the script, remove the flow, start it again. The [setup-saaio](repository.md#the-setup-saaio-skill) skill writes or repairs the script. |
 | `all 20 slots are in use` | 20 unfinished flows across all projects | `saaio status --all` lists them. `saaio clear` in a project with finished flows frees theirs. |
-| `... is not valid` about `config.toml` | a broken config. The message names the file, line and key. | fix the key. A key from an earlier version names its new form ([configuration.md](configuration.md#errors)). |
+| `config.toml:<line>: ...` | a broken config. The message names the file, line and key. | fix the key. A key from an earlier version names its new form ([configuration.md](configuration.md#errors)). |
 | the request is too long | over 20000 characters | put the details in a file in the repository and name the file in the request |
 
 ## Removing flows

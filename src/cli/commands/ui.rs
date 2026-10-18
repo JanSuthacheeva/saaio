@@ -20,22 +20,18 @@ pub fn run(args: &Args, store: &Store, env: &Env, clock: fn() -> u64) -> Result<
     if args.stop {
         return stop_server(&socket, clock);
     }
-    let config = env.config()?;
+    // A broken config.toml stops saaio ui here: there is no last good one to keep yet.
+    env.config()?;
     let exe = std::env::current_exe()?;
     let pinned = [("SAAIO_HOME".to_string(), store.root().display().to_string())];
     client::ensure_server(&socket, &exe, &pinned)?;
     let ui_env = ui::UiEnv {
-        agents: config
-            .worker_agents()
-            .into_iter()
-            .map(String::from)
-            .collect(),
         exe,
         claude_home: env.claude_home(),
         home: env.user_home().map(Path::to_path_buf),
         store: store.root().to_path_buf(),
         theme_dir: env.config_dir().unwrap_or_else(|| PathBuf::from(".")),
-        prefix: config.ui.prefix,
+        config_file: env.config_file(),
     };
     let message = ui::run(&socket, ui_env, clock)?;
     Ok(Document::Text(message))
