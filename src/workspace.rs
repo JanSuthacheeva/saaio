@@ -196,7 +196,6 @@ fn git(dir: impl AsRef<OsStr>, args: &[&str]) -> Result<String> {
 
 /// Runs an argv in `dir` with GH_PROMPT_DISABLED=1 and no stdin; its stdout, or an error with
 /// the last line it printed.
-#[allow(dead_code)] // until the server asks the forges
 pub fn output_in(dir: &Path, argv: &[String]) -> Result<String> {
     let (program, args) = argv.split_first().context("empty command")?;
     let mut command = Command::new(program);

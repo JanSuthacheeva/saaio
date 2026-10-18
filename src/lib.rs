@@ -8,8 +8,6 @@ mod default_file;
 mod deliver;
 mod event;
 mod fold;
-// Until the server asks the forges.
-#[allow(dead_code)]
 mod forge;
 mod launch;
 mod proto;

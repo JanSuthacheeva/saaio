@@ -83,7 +83,7 @@ pub fn output_in(dir: &Path, argv: &[String]) -> Result<String>;
 
 ```rust
 /// How often a round of questions starts; the first starts with the server.
-pub const ASK_EVERY: Duration = Duration::from_secs(120);
+pub const ASK_EVERY: Duration = Duration::from_mins(2);
 
 /// What the forge thread sends back.
 #[derive(Debug)]
@@ -101,16 +101,18 @@ pub enum Answer {
 pub struct ForgeWatch {
     asked_at: Option<Instant>,
     asking: bool,
+    /// The running round had a failure.
+    failed: bool,
     logged: Option<String>,
 }
 
 impl ForgeWatch {
     /// The asks of a round when one is due, none runs and `flows` has any; marks it running.
-    pub fn due(&mut self, flows: &[FlowView]) -> Option<Vec<Ask>>;
-    /// The round ended.
+    pub fn due(&mut self, flows: &[FlowView], now: Instant) -> Option<Vec<Ask>>;
+    /// The round ended; one without a failure forgets the error logged last.
     pub fn done(&mut self);
     /// `error` when it is not the one logged last.
-    pub fn to_log(&mut self, error: String) -> Option<String>;
+    pub fn worth_logging(&mut self, error: String) -> Option<String>;
 }
 
 /// Asks about each flow in turn on the "forge" thread, sending an Answer for each and Done last.
@@ -182,7 +184,7 @@ MergeRequestClosed { url: String },
 ### A round of questions
 
 1. `Server::serve` -> `Server::refresh()`, then `Server::ask_forges()`
-2. `ask_forges` -> `ForgeWatch::due(&self.board.flows): Option<Vec<Ask>>` -> `forge::asks(flows)`;
+2. `ask_forges` -> `ForgeWatch::due(&self.board.flows, Instant::now()): Option<Vec<Ask>>` -> `forge::asks(flows)`;
    None when not due, a round runs, or no flow qualifies
 3. `ask_forges` -> `forge_watch::ask_in_background(asks, self.events.clone())`
 4. thread, per ask -> `ask(&ask)`:
@@ -196,7 +198,7 @@ MergeRequestClosed { url: String },
    - `Found`: `store.events(id)` -> `fold::fold(id, &events, None, now)` -> `forge::news(&flow,
      found.as_ref())` -> `store.append(id, &Event::new(now, kind))`. The next refresh sees the
      log change and sends the board.
-   - `Failed(error)`: `ForgeWatch::to_log(error)` -> `server_log::write` when new.
+   - `Failed(error)`: `ForgeWatch::worth_logging(error)` -> `server_log::write` when new.
    - `Done`: `ForgeWatch::done()`.
 
 Errors: gh/glab missing -> `output_in` fails "could not run gh" -> Failed, logged once. Not
@@ -233,7 +235,7 @@ closed" -> state change -> `wake::changed_flows` sees Idle -> the master is woke
   no state change), `merge-request-closed` on its done flow (idle, note, changed_at), on another
   URL or a merged flow (nothing), `changes` true for merged.
 - `ForgeWatch`: `due` first time, not again within ASK_EVERY, not while asking, after `done` and
-  ASK_EVERY; `to_log` once per distinct error.
+  ASK_EVERY; `worth_logging` once per distinct error.
 - `text::merge_request`: the moved tests.
 - UI: sidebar label and card for a merged flow; golden files updated with
   `SAAIO_UPDATE_GOLDEN=1`.
@@ -274,11 +276,11 @@ closed" -> state change -> `wake::changed_flows` sees Idle -> the master is woke
 
 - [x] Add `forge.rs`: `Forge::of`, `argv`, `parse`, `pick` with the recorded gh/glab fixtures
 - [x] Add `forge::asks` and `forge::news` with tests over the news table
-- [ ] Add `workspace::output_in` with a test running a script in a dir
+- [x] Add `workspace::output_in` with a test running a script in a dir
 
 ### Server
 
-- [ ] Add `server/forge_watch.rs`: `ForgeWatch`, `Answer`, `ask_in_background`, `ask`, with
+- [x] Add `server/forge_watch.rs`: `ForgeWatch`, `Answer`, `ask_in_background`, `ask`, with
   `ForgeWatch` unit tests
 - [ ] Wire `Event::Forge`, `ask_forges` and `forge_answer` into the server; E2E tests in
   `tests/cli.rs` with a fake `gh` (merged recorded; failing gh records nothing, logs once)
