@@ -77,8 +77,8 @@ pub fn web_host_of(remote: &str, real_host: impl Fn(&str) -> Option<String>) -> 
 
 ```rust
 /// Runs an argv in `dir` with GH_PROMPT_DISABLED=1 and no stdin; its stdout, or an error with
-/// the last line it printed.
-pub fn output_in(dir: &Path, argv: &[String]) -> Result<String>;
+/// the last line it printed. Past `limit` it is killed and fails.
+pub fn output_in(dir: &Path, argv: &[String], limit: Duration) -> Result<String>;
 ```
 
 `src/server/forge_watch.rs` (new): when the server asks the forges, on its own thread.
@@ -271,7 +271,7 @@ closed" -> state change -> `wake::changed_flows` sees Idle -> the master is woke
   applies; `--head` / `--source-branch` match the branch name in any fork.
 - Becoming merged on a done flow does not wake the master (state stays done); a flow at review
   that turns merged does (it becomes done).
-- No timeout of our own on gh/glab; a hung call only delays the next round.
+- gh/glab get a minute (`ASK_LIMIT`); a call past it is killed and logged like any failure.
 - No CHANGELOG entry before 0.1.0; master.md unchanged.
 
 ## Tasks
@@ -318,8 +318,8 @@ request on an ended flow and the merge while the worker still works are accepted
 the timeout is built now, not in a follow-up, since a hung call would stop every later round
 silently.
 
-- [ ] `workspace::output_in(dir, argv, limit: Duration)`: kills the command past `limit` and fails
-  with "gh gave no answer within 60s"; `forge_watch::ASK_LIMIT = 60s`; unit test with a sleeping
+- [x] `workspace::output_in(dir, argv, limit: Duration)`: kills the command past `limit` and fails
+  with "gh gave no answer within 1m"; `forge_watch::ASK_LIMIT = 60s`; unit test with a sleeping
   script and a short limit
 
 ## Review

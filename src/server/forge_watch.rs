@@ -14,6 +14,9 @@ use crate::workspace;
 /// How often a round of questions starts; the first starts with the server.
 pub const ASK_EVERY: Duration = Duration::from_mins(2);
 
+/// How long gh or glab may take to answer before it is killed.
+pub const ASK_LIMIT: Duration = Duration::from_mins(1);
+
 /// What the forge thread sends back.
 #[derive(Debug)]
 pub enum Answer {
@@ -100,7 +103,7 @@ fn ask(ask: &Ask) -> Result<Option<Found>> {
     let Some(forge) = Forge::of(&remotes, workspace::ssh_hostname) else {
         return Ok(None);
     };
-    let json = workspace::output_in(&ask.dir, &forge.argv(&ask.branch))
+    let json = workspace::output_in(&ask.dir, &forge.argv(&ask.branch), ASK_LIMIT)
         .with_context(|| format!("{} failed", forge.program()))?;
     Ok(forge::pick(forge.parse(&json)?, ask.since))
 }

@@ -221,7 +221,8 @@ or merged it: the worker, the master or you.
 - With `gh` for a remote on github.com, `glab` for a host with `gitlab` in its name. Every remote of
   the worktree counts: origin, a fork's upstream, an SSH host alias. Other hosts are not asked.
 - Runs in the worktree, logged in as you are (`gh auth login`, `glab auth login`).
-- No `gh` or `glab`, not logged in, offline: no change. The error goes to `server.log` once.
+- No `gh` or `glab`, not logged in, offline, or no answer within a minute: no change. The error goes
+  to `server.log` once.
 - Only while saaio ui (its server) runs. `saaio status` asks no one.
 
 ## Ending a flow
