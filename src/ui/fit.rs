@@ -103,6 +103,19 @@ pub fn tilde(path: &str, home: Option<&str>) -> String {
     }
 }
 
+/// `text` with the paths in `folder` written relative to it and the rest under `home` with ~:
+/// Write(/Users/jan/shop/PLAN.md) -> Write(PLAN.md) in /Users/jan/shop.
+pub fn shorten(text: &str, folder: Option<&str>, home: Option<&str>) -> String {
+    let mut text = text.to_string();
+    if let Some(folder) = folder {
+        text = text.replace(&format!("{folder}/"), "");
+    }
+    if let Some(home) = home {
+        text = text.replace(&format!("{home}/"), "~/");
+    }
+    text
+}
+
 /// A place (`path · branch`) in `width` columns: the path loses folders from its middle first
 /// (/private/…/ui-look/repo · main), then its first folder; the branch goes only when the last
 /// folder alone does not fit beside it.
@@ -157,6 +170,49 @@ mod tests {
                 "{width}"
             );
         }
+    }
+
+    #[test]
+    fn writes_paths_in_the_folder_relative_and_the_rest_under_home_with_a_tilde() {
+        let folder = Some("/Users/jan/projects/shop/.saaio/worktrees/shop-198");
+        let home = Some("/Users/jan");
+
+        assert_eq!(
+            shorten(
+                "/Users/jan/projects/shop/.saaio/worktrees/shop-198/PLAN.md",
+                folder,
+                home
+            ),
+            "PLAN.md"
+        );
+        assert_eq!(
+            shorten(
+                "Write(/Users/jan/projects/shop/.saaio/worktrees/shop-198/a/b.py)",
+                folder,
+                home
+            ),
+            "Write(a/b.py)"
+        );
+        assert_eq!(
+            shorten("cat /Users/jan/.claude/settings.json", folder, home),
+            "cat ~/.claude/settings.json"
+        );
+        assert_eq!(
+            shorten(
+                "/Users/jan/projects/shop/.saaio/worktrees/shop-198",
+                folder,
+                home
+            ),
+            "~/projects/shop/.saaio/worktrees/shop-198"
+        );
+        assert_eq!(
+            shorten("/Users/janet/notes.md", folder, home),
+            "/Users/janet/notes.md"
+        );
+        assert_eq!(
+            shorten("python3 -m unittest", None, None),
+            "python3 -m unittest"
+        );
     }
 
     #[test]

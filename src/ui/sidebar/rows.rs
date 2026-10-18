@@ -3,7 +3,7 @@ use ratatui::text::{Line, Span};
 use super::{Mark, Row, Sidebar, WIDTH, digit, plain};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::text::short_duration;
-use crate::ui::fit::{clip, clip_place, split, wrap};
+use crate::ui::fit::{self, clip, clip_place, split, wrap};
 use crate::ui::peek::PeekLine;
 use crate::view::FlowView;
 
@@ -178,6 +178,8 @@ impl Sidebar<'_> {
         let glyphs = &theme.glyphs;
         let tone = theme.flow_style(flow);
         let text_width = WIDTH - 4;
+        let worktree = flow.workspace.as_ref().map(|space| space.path.as_str());
+        let short = |text: &str| fit::shorten(text, worktree, self.home);
         let mut body: Vec<Vec<Span<'static>>> = Vec::new();
         for line in self.peek {
             match line {
@@ -187,7 +189,10 @@ impl Sidebar<'_> {
                     Span::styled(
                         format!(
                             "({})",
-                            clip(target, text_width.saturating_sub(name.chars().count() + 3))
+                            clip(
+                                &short(target),
+                                text_width.saturating_sub(name.chars().count() + 3)
+                            )
                         ),
                         theme.ui.text,
                     ),
@@ -208,7 +213,10 @@ impl Sidebar<'_> {
                 PeekLine::Now(call) => body.push(vec![
                     Span::raw(" "),
                     Span::styled(self.spinner(), tone),
-                    Span::styled(format!(" {}", clip(call, text_width)), theme.ui.muted),
+                    Span::styled(
+                        format!(" {}", clip(&short(call), text_width)),
+                        theme.ui.muted,
+                    ),
                 ]),
                 PeekLine::Code {
                     branch,
