@@ -80,8 +80,8 @@ impl MasterRecord {
 
     /// The agent's command (name master, no prompt) when new, its resume command after, by
     /// `session` when its harness picked one (else a new session), with {instructions} filled in.
-    /// After the program: the adapter's master wiring (its hooks always, which keep where its turn
-    /// stands; Claude Code's waiter only when it `wake`s; Codex's hooks also record its session),
+    /// After the program: the adapter's master wiring (its hooks, which keep where its turn stands;
+    /// Claude Code's waiter; Codex's hooks also record its session),
     /// then the instructions. None when it
     /// must resume and the agent has no resume template.
     pub fn spec(
@@ -90,7 +90,6 @@ impl MasterRecord {
         agent: &Agent,
         env: &LaunchEnv,
         instructions: &Instructions,
-        wake: bool,
         session: Option<&str>,
     ) -> Option<PaneSpec> {
         let start = match start {
@@ -119,7 +118,7 @@ impl MasterRecord {
             .collect();
         if let Some(adapter) = agent.adapter {
             let fresh = start == Start::Fresh;
-            argv = adapter.wire_master(argv, &env.flow_exe, &instructions.text, wake, fresh);
+            argv = adapter.wire_master(argv, &env.flow_exe, &instructions.text, fresh);
         }
         Some(PaneSpec {
             key: PaneKey::Master,
@@ -192,11 +191,9 @@ mod tests {
         let env = LaunchEnv::default();
         let md = instructions();
 
-        let fresh = record()
-            .spec(Start::Fresh, &bare, &env, &md, false, None)
-            .unwrap();
+        let fresh = record().spec(Start::Fresh, &bare, &env, &md, None).unwrap();
         let resumed = record()
-            .spec(Start::Resume, &bare, &env, &md, false, None)
+            .spec(Start::Resume, &bare, &env, &md, None)
             .unwrap();
 
         assert_eq!(fresh.key, PaneKey::Master);
@@ -220,7 +217,7 @@ mod tests {
             ..bare.clone()
         };
         assert_eq!(
-            record().spec(Start::Resume, &unresumable, &env, &md, true, None),
+            record().spec(Start::Resume, &unresumable, &env, &md, None),
             None
         );
         let pointed = Agent {
@@ -231,7 +228,7 @@ mod tests {
         };
         assert_eq!(
             record()
-                .spec(Start::Fresh, &pointed, &env, &md, false, None)
+                .spec(Start::Fresh, &pointed, &env, &md, None)
                 .unwrap()
                 .argv[2],
             "/cfg/master.md",
@@ -240,7 +237,7 @@ mod tests {
     }
 
     #[test]
-    fn gives_the_claude_master_its_hooks_instructions_and_its_waiter_when_it_wakes() {
+    fn gives_the_claude_master_its_hooks_instructions_and_its_waiter() {
         let agents = builtin_agents();
         let master = &agents[crate::config::MASTER_AGENT];
         let env = LaunchEnv {
@@ -250,36 +247,26 @@ mod tests {
         let md = instructions();
 
         for start in [Start::Fresh, Start::Resume] {
-            let quiet = record()
-                .spec(start, master, &env, &md, false, None)
-                .unwrap();
-            assert_eq!(quiet.argv[1], "--settings");
+            let spec = record().spec(start, master, &env, &md, None).unwrap();
+            assert_eq!(spec.argv[0], "claude");
+            assert_eq!(spec.argv[1], "--settings");
             assert!(
-                quiet.argv[2].contains(r#""args":["hook","claude-code"]"#)
-                    && !quiet.argv[2].contains("--master"),
+                spec.argv[2].contains(r#""args":["hook","claude-code"]"#)
+                    && spec.argv[2].contains(r#""args":["wait","--master"]"#),
                 "{}",
-                quiet.argv[2]
+                spec.argv[2]
             );
             assert_eq!(
-                quiet.argv[3..5],
+                spec.argv[3..5],
                 ["--append-system-prompt", "# You are the master"]
             );
             assert!(
-                !quiet
+                !spec
                     .argv
                     .iter()
                     .any(|arg| arg == crate::adapter::MASTER_OPENING),
                 "Claude Code wakes itself"
             );
-            let woken = record().spec(start, master, &env, &md, true, None).unwrap();
-            assert_eq!(woken.argv[0], "claude");
-            assert_eq!(woken.argv[1], "--settings");
-            assert!(
-                woken.argv[2].contains(r#""args":["wait","--master"]"#),
-                "{}",
-                woken.argv[2]
-            );
-            assert_eq!(woken.argv[3..], quiet.argv[3..]);
         }
     }
 
@@ -296,23 +283,17 @@ mod tests {
         let mut wired = crate::adapter::codex::hooks(exe);
         wired.extend(Adapter::Codex.instruct("# You are the master"));
 
-        let fresh = record()
-            .spec(Start::Fresh, codex, &env, &md, false, None)
-            .unwrap();
+        let fresh = record().spec(Start::Fresh, codex, &env, &md, None).unwrap();
         let resumed = record()
-            .spec(Start::Resume, codex, &env, &md, true, Some("01a1"))
+            .spec(Start::Resume, codex, &env, &md, Some("01a1"))
             .unwrap();
         let never_ran = record()
-            .spec(Start::Resume, codex, &env, &md, true, None)
+            .spec(Start::Resume, codex, &env, &md, None)
             .unwrap();
 
         let opening = crate::adapter::MASTER_OPENING;
         assert_eq!(fresh.argv[0], "codex");
-        assert_eq!(
-            fresh.argv[1..=wired.len()],
-            wired[..],
-            "hooks even without wake"
-        );
+        assert_eq!(fresh.argv[1..=wired.len()], wired[..]);
         assert_eq!(
             fresh.argv[wired.len() + 1..],
             [opening],

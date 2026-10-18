@@ -66,13 +66,11 @@ fn report_hooks(flow_exe: &Path) -> serde_json::Map<String, Value> {
         .collect()
 }
 
-/// The master's --settings JSON: report_hooks, and when it `wake`s, `<flow_exe> wait --master`
-/// on each event in WAIT_EVENTS.
-pub fn master_settings(flow_exe: &Path, wake: bool) -> String {
+/// The master's --settings JSON: report_hooks and `<flow_exe> wait --master` on each event in
+/// WAIT_EVENTS; the waiter itself reads [master] wake.
+pub fn master_settings(flow_exe: &Path) -> String {
     let mut hooks = report_hooks(flow_exe);
-    if wake {
-        arm(&mut hooks, &waiter(flow_exe, &["wait", "--master"]));
-    }
+    arm(&mut hooks, &waiter(flow_exe, &["wait", "--master"]));
     json!({ "hooks": hooks }).to_string()
 }
 
@@ -589,7 +587,7 @@ mod tests {
         };
         let worker: Value = serde_json::from_str(&settings(Path::new("/bin/saaio"))).unwrap();
         let master: Value =
-            serde_json::from_str(&master_settings(Path::new("/bin/saaio"), true)).unwrap();
+            serde_json::from_str(&master_settings(Path::new("/bin/saaio"))).unwrap();
 
         for event in ["SessionStart", "Stop"] {
             let hooks = worker["hooks"][event][0]["hooks"].as_array().unwrap();
@@ -611,23 +609,21 @@ mod tests {
     }
 
     #[test]
-    fn the_master_reports_every_event_and_waits_only_when_it_wakes() {
-        for wake in [true, false] {
-            let master: Value =
-                serde_json::from_str(&master_settings(Path::new("/bin/saaio"), wake)).unwrap();
+    fn the_master_reports_every_event_and_always_waits() {
+        let master: Value =
+            serde_json::from_str(&master_settings(Path::new("/bin/saaio"))).unwrap();
 
-            for event in EVENTS {
-                let handler = &master["hooks"][event][0]["hooks"][0];
-                assert_eq!(handler["args"], json!(["hook", "claude-code"]), "{event}");
-            }
-            let waiters = master["hooks"]
-                .as_object()
-                .unwrap()
-                .values()
-                .flat_map(|entries| entries[0]["hooks"].as_array().unwrap())
-                .filter(|handler| handler["args"] == json!(["wait", "--master"]))
-                .count();
-            assert_eq!(waiters, if wake { WAIT_EVENTS.len() } else { 0 }, "{wake}");
+        for event in EVENTS {
+            let handler = &master["hooks"][event][0]["hooks"][0];
+            assert_eq!(handler["args"], json!(["hook", "claude-code"]), "{event}");
         }
+        let waiters = master["hooks"]
+            .as_object()
+            .unwrap()
+            .values()
+            .flat_map(|entries| entries[0]["hooks"].as_array().unwrap())
+            .filter(|handler| handler["args"] == json!(["wait", "--master"]))
+            .count();
+        assert_eq!(waiters, WAIT_EVENTS.len());
     }
 }

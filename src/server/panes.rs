@@ -112,7 +112,6 @@ impl Server {
             agent,
             &self.env,
             &instructions,
-            self.config.master.wake,
             self.store.master_session().as_deref(),
         ) {
             Some(spec) => match self.open_pane(spec) {

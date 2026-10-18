@@ -235,7 +235,7 @@ fn reload_config(configs: &mut ConfigWatch, app: &mut App, router: &mut Router) 
 - [x] Add `config::watch::ConfigWatch` with unit tests (first call, unchanged, edited, broken then fixed, removed)
 - [x] Add `PaneSpec.adapter` and `Server.adapters`; news.rs and typing.rs read the pane's adapter; tests
 - [x] `Server::reload_config` at the top of refresh, logging errors; server tests: a saved prompt reaches the next worker, a broken file keeps the last config
-- [ ] Always wire the master's waiter (`master_settings`, `wire_master`, `MasterRecord::spec` lose `wake`); `wait --master` reads `[master] wake` through a ConfigWatch; tests
+- [x] Always wire the master's waiter (`master_settings`, `wire_master`, `MasterRecord::spec` lose `wake`); `wait --master` reads `[master] wake` through a ConfigWatch; tests
 - [ ] `Router::set_prefix`, `App::set_agents`/`set_prefix`, `UiEnv.config_file`, `ui::reload_config` with the `config: ` notice; unit tests
 - [ ] Docs: docs/configuration.md (When a change applies, Use your own workflow, Errors), examples/config.toml header, ROADMAP.md drops "First prompt read at saaio start"; any other doc naming `saaio ui --stop` for config
 - [ ] End to end with scratch SAAIO_HOME and SAAIO_CONFIG: saaio ui running, change the prefix, the worker prompt, break and fix the file, start a flow after a prompt change

@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use crate::cli::Env;
 use crate::cli::output::{Document, news};
+use crate::config::watch::ConfigWatch;
 use crate::deliver::{self, WorkerNews};
 use crate::store::{Busy, Store, Waiter};
 use crate::view::FlowView;
@@ -28,7 +29,8 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
         Some(id) => Waiter::Flow(id.to_string()),
         None => return Document::Silent,
     };
-    match wait(&store, &waiter, clock) {
+    let mut configs = ConfigWatch::new(env.config_file());
+    match wait(&store, &waiter, &mut configs, clock) {
         Some(news) => Document::Wake(news),
         None => Document::Silent,
     }
@@ -36,14 +38,24 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
 
 /// Sleeps until there is news for the session, marked busy with the turn it wakes; None once
 /// another waiter took over, the session ended (the parent changed), or a worker's flow is
-/// finished or gone.
-fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
+/// finished or gone. The master gets none while [master] wake is false; a broken config keeps
+/// the last value it read.
+fn wait(
+    store: &Store,
+    waiter: &Waiter,
+    configs: &mut ConfigWatch,
+    clock: fn() -> u64,
+) -> Option<String> {
     let me = std::process::id();
     store.claim_waiter(waiter, me).ok()?;
     let parent = std::os::unix::process::parent_id();
     let is_mine =
         || store.waiter(waiter) == Some(me) && std::os::unix::process::parent_id() == parent;
+    let mut wakes = true;
     while is_mine() {
+        if let Some(Ok(config)) = configs.changed() {
+            wakes = config.master.wake;
+        }
         let news = match waiter {
             Waiter::Flow(id) => match deliver::worker_news(store, id, clock()) {
                 WorkerNews::Gone => return None,
@@ -53,6 +65,7 @@ fn wait(store: &Store, waiter: &Waiter, clock: fn() -> u64) -> Option<String> {
                     Some(news::for_worker(&messages))
                 }
             },
+            Waiter::Master if !wakes => None,
             Waiter::Master => {
                 let changed = deliver::master_news(store, clock, &is_mine);
                 let changed: Vec<&FlowView> = changed.iter().collect();

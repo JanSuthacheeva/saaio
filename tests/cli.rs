@@ -2431,6 +2431,30 @@ fn the_masters_wait_ends_with_the_flows_that_stopped() {
 }
 
 #[test]
+fn the_masters_wait_brings_no_news_while_it_does_not_wake() {
+    let home = TempDir::new().unwrap();
+    let config = home.path().join("no-config.toml");
+    fs::write(&config, "[master]\nwake = false\n").unwrap();
+    seed_worker(
+        home.path(),
+        "7f3c",
+        "shop-217",
+        r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
+    );
+
+    let mut master = waiter(home.path(), None, &["--master"]);
+    assert!(
+        ended(&mut master, Duration::from_secs(4)).is_none(),
+        "no news while wake is false"
+    );
+    fs::write(&config, "[master]\nwake = true\n").unwrap();
+    let (code, _, err) = ended(&mut master, Duration::from_secs(6)).expect("woken once it wakes");
+
+    assert_eq!(code, 2);
+    assert!(err.contains("shop-217,waiting"), "{err}");
+}
+
+#[test]
 fn a_wait_with_nobody_to_wait_for_ends_quietly() {
     let home = TempDir::new().unwrap();
     let mut nobody = waiter(home.path(), None, &[]);
