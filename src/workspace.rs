@@ -1,13 +1,16 @@
 use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
 use crate::launch::worktree::{WORKTREES_DIR, worktree_add_argv, worktree_remove_argv};
+use crate::text::short_duration;
 use crate::view::Workspace;
 
 /// The repo's own hooks: .saaio/setup after the worktree exists, .saaio/teardown before it goes.
@@ -194,6 +197,57 @@ fn git(dir: impl AsRef<OsStr>, args: &[&str]) -> Result<String> {
     stdout_of(command, "git")
 }
 
+/// Runs an argv in `dir` with GH_PROMPT_DISABLED=1 and no stdin; its stdout, or an error with
+/// the last line it printed. Past `limit` it is killed and fails.
+pub fn output_in(dir: &Path, argv: &[String], limit: Duration) -> Result<String> {
+    let (program, args) = argv.split_first().context("empty command")?;
+    let mut child = Command::new(program)
+        .args(args)
+        .current_dir(dir)
+        .env("GH_PROMPT_DISABLED", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("could not run {program}"))?;
+    // Read in the background, so a full pipe never stops the command before it ends.
+    let stdout = read_in_background(child.stdout.take());
+    let stderr = read_in_background(child.stderr.take());
+    let deadline = Instant::now() + limit;
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            let millis = u64::try_from(limit.as_millis()).unwrap_or(u64::MAX);
+            bail!("no answer within {}", short_duration(millis));
+        }
+        thread::sleep(WAIT_STEP);
+    };
+    let stdout = stdout.join().unwrap_or_default();
+    let stderr = stderr.join().unwrap_or_default();
+    if !status.success() {
+        bail!("{}", last_line(&stderr, &stdout));
+    }
+    Ok(String::from_utf8_lossy(&stdout).into_owned())
+}
+
+/// How often output_in looks whether its command ended.
+const WAIT_STEP: Duration = Duration::from_millis(20);
+
+/// All a pipe gives until it closes, read on a thread of its own.
+fn read_in_background(pipe: Option<impl Read + Send + 'static>) -> JoinHandle<Vec<u8>> {
+    thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(mut pipe) = pipe {
+            let _ = pipe.read_to_end(&mut bytes);
+        }
+        bytes
+    })
+}
+
 /// Runs an argv; its stdout, or an error with the last line it printed.
 fn run(argv: &[String]) -> Result<String> {
     let (program, args) = argv.split_first().context("empty command")?;
@@ -303,6 +357,52 @@ mod tests {
             ssh_hostname("saaio-test-unknown-alias").as_deref(),
             Some("saaio-test-unknown-alias")
         );
+    }
+
+    #[test]
+    fn runs_a_command_in_a_folder_without_prompts() {
+        let dir = TempDir::new().unwrap();
+        let script = dir.path().join("ask");
+        fs::write(
+            &script,
+            "#!/bin/sh\nread -r line\necho \"$(basename \"$PWD\") $GH_PROMPT_DISABLED $1 [$line]\"\n",
+        )
+        .unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        let folder = dir.path().join("csv");
+        fs::create_dir(&folder).unwrap();
+        let argv = [script.display().to_string(), "list".to_string()];
+
+        assert_eq!(output_in(&folder, &argv, LIMIT).unwrap(), "csv 1 list []\n");
+
+        let missing = ["saaio-test-no-such-program".to_string()];
+        let error = output_in(&folder, &missing, LIMIT).unwrap_err();
+        assert!(format!("{error:#}").starts_with("could not run saaio-test-no-such-program"));
+    }
+
+    const LIMIT: Duration = Duration::from_secs(10);
+
+    #[test]
+    fn a_command_that_gives_no_answer_in_time_is_killed() {
+        let dir = TempDir::new().unwrap();
+        let script = dir.path().join("hang");
+        fs::write(&script, "#!/bin/sh\necho started\nexec sleep 30\n").unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        let argv = [script.display().to_string()];
+        let started = Instant::now();
+
+        let error = output_in(dir.path(), &argv, Duration::from_millis(200)).unwrap_err();
+
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(
+            format!("{error:#}").ends_with("no answer within 0s"),
+            "{error:#}"
+        );
+        let failing = dir.path().join("fail");
+        fs::write(&failing, "#!/bin/sh\necho 'not logged in' >&2\nexit 4\n").unwrap();
+        fs::set_permissions(&failing, fs::Permissions::from_mode(0o755)).unwrap();
+        let error = output_in(dir.path(), &[failing.display().to_string()], LIMIT).unwrap_err();
+        assert_eq!(format!("{error:#}"), "not logged in");
     }
 
     #[test]

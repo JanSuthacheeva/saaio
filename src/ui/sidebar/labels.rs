@@ -3,6 +3,7 @@ use ratatui::text::Span;
 
 use super::Sidebar;
 use crate::proto::PaneStatus;
+use crate::text::merge_request;
 use crate::view::{FlowView, State, StepStatus};
 
 impl Sidebar<'_> {
@@ -53,6 +54,10 @@ impl Sidebar<'_> {
     pub fn label(&self, flow: &FlowView) -> Span<'static> {
         let theme = self.theme;
         match (flow.state, flow.merge_request.as_deref()) {
+            // The row has no room for the number too; the board and the detail show it.
+            (State::Done | State::Ended, Some(_)) if flow.merged => {
+                Span::styled("merged", theme.state.done)
+            }
             (State::Done | State::Ended, Some(url)) => {
                 Span::styled(merge_request(url), theme.ui.faint)
             }
@@ -115,30 +120,78 @@ pub fn last_note(flow: &FlowView) -> Option<String> {
     (text != "answered").then(|| text.strip_prefix("idle: ").unwrap_or(text).to_string())
 }
 
-/// !418 for a GitLab merge request, #12 for a GitHub pull request, else MR.
-fn merge_request(url: &str) -> String {
-    let number = url.trim_end_matches('/').rsplit('/').next().unwrap_or("");
-    let numeric = !number.is_empty() && number.chars().all(|c| c.is_ascii_digit());
-    if numeric && url.contains("merge_requests/") {
-        format!("MR !{number}")
-    } else if numeric && url.contains("/pull/") {
-        format!("PR #{number}")
-    } else {
-        "MR".to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
+    use crate::event::{Event, EventKind, Mode};
+    use crate::proto::PaneKey;
     use crate::ui::prefix::Prefix;
+    use crate::ui::theme::{Palette, Theme};
+    use crate::view::{Board, VIEW_VERSION};
+
+    fn empty_board() -> Board {
+        Board {
+            version: VIEW_VERSION,
+            now: 0,
+            count: 0,
+            needs_you: 0,
+            flows: Vec::new(),
+        }
+    }
+
+    fn sidebar<'a>(
+        board: &'a Board,
+        theme: &'a Theme,
+        changed: &'a HashMap<PaneKey, u64>,
+    ) -> Sidebar<'a> {
+        Sidebar {
+            board,
+            panes: &[],
+            focus: &PaneKey::Master,
+            cursor: None,
+            peek: &[],
+            master: None,
+            master_state: None,
+            now: 0,
+            spin: 0,
+            changed,
+            home: None,
+            prefix: Prefix::default(),
+            theme,
+        }
+    }
+
+    #[test]
+    fn says_a_merged_merge_request_is_merged() {
+        let flow = |kind: EventKind| {
+            let started = EventKind::Started {
+                name: "shop".into(),
+                request: "x".into(),
+                mode: Mode::Auto,
+                phases: None,
+            };
+            let events = [started, kind].map(|kind| Event::new(0, kind));
+            crate::fold::fold("id", &events, None, 0).unwrap()
+        };
+        let url = || "https://github.com/acme/shop/pull/42".to_string();
+        let theme = Theme::from_palette(Palette::SAAIO);
+        let board = empty_board();
+        let changed = HashMap::new();
+        let sidebar = sidebar(&board, &theme, &changed);
+
+        let open = sidebar.label(&flow(EventKind::MergeRequest { url: url() }));
+        let merged = sidebar.label(&flow(EventKind::Merged { url: url() }));
+
+        assert_eq!(open.content, "PR #42");
+        assert_eq!(merged.content, "merged");
+        assert_eq!(merged.style, theme.state.done);
+    }
 
     #[test]
     fn colors_only_the_current_step() {
-        use crate::event::{Event, EventKind, Mode, Phase};
-        use crate::proto::PaneKey;
-        use crate::ui::theme::{Palette, Theme};
-        use crate::view::{Board, VIEW_VERSION};
+        use crate::event::Phase;
         let events = [
             EventKind::Started {
                 name: "shop".into(),
@@ -156,28 +209,9 @@ mod tests {
         .map(|kind| Event::new(0, kind));
         let flow = crate::fold::fold("id", &events, None, 0).unwrap();
         let theme = Theme::from_palette(Palette::SAAIO);
-        let board = Board {
-            version: VIEW_VERSION,
-            now: 0,
-            count: 0,
-            needs_you: 0,
-            flows: Vec::new(),
-        };
-        let sidebar = Sidebar {
-            board: &board,
-            panes: &[],
-            focus: &PaneKey::Master,
-            cursor: None,
-            peek: &[],
-            master: None,
-            master_state: None,
-            now: 0,
-            spin: 0,
-            changed: &std::collections::HashMap::new(),
-            home: None,
-            prefix: Prefix::default(),
-            theme: &theme,
-        };
+        let board = empty_board();
+        let changed = HashMap::new();
+        let sidebar = sidebar(&board, &theme, &changed);
 
         let styles: Vec<_> = sidebar.steps(&flow).iter().map(|span| span.style).collect();
 
@@ -198,7 +232,7 @@ mod tests {
 
     #[test]
     fn a_note_is_what_the_flow_last_said_not_what_the_row_shows() {
-        use crate::event::{Event, EventKind, Mode, Phase};
+        use crate::event::Phase;
         let flow = |kinds: Vec<EventKind>| {
             let mut events = vec![Event::new(
                 0,
@@ -245,15 +279,5 @@ mod tests {
             EventKind::Working,
         ]);
         assert_eq!(last_note(&answered), None, "not the old question");
-    }
-
-    #[test]
-    fn names_merge_requests_by_their_number() {
-        assert_eq!(
-            merge_request("https://gitlab.com/shop/-/merge_requests/418"),
-            "MR !418"
-        );
-        assert_eq!(merge_request("https://github.com/a/b/pull/12"), "PR #12");
-        assert_eq!(merge_request("somewhere"), "MR");
     }
 }

@@ -231,6 +231,8 @@ pub(crate) fn detail(
         review: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         merge_request: Option<String>,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        merged: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         folder: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -279,6 +281,7 @@ pub(crate) fn detail(
         tasks: flow.tasks.map(|tasks| tasks.to_string()),
         review: flow.review.map(|review| review.to_string()),
         merge_request: flow.merge_request.clone(),
+        merged: flow.merged,
         folder: plain.map(|space| space.path.clone()),
         branch: worktree.and_then(|space| space.branch.clone()),
         worktree: worktree.map(|space| space.path.clone()),
@@ -334,6 +337,9 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>, prefix: Prefix) -
             "Run `saaio report --flow {} working` once answered",
             flow.name
         )),
+        State::Done if flow.merged => {
+            help.push("Run `saaio clear` to tear down its worktree".to_string());
+        }
         State::Done => help.push("Run `saaio clear` after the MR is merged".to_string()),
         _ => {}
     }
@@ -533,6 +539,40 @@ mod tests {
                 "help[2]: Run `saaio report --flow shop-221 working` once the block is resolved,Run `saaio` for all flows",
             ]
             .join("\n")
+        );
+    }
+
+    #[test]
+    fn the_detail_says_a_merge_request_is_merged_and_can_be_cleared() {
+        let url = || "https://github.com/acme/shop/pull/42".to_string();
+        let open = flow(
+            "shop-221",
+            vec![EventKind::MergeRequest { url: url() }],
+            MIN,
+        );
+        let merged = flow("shop-221", vec![EventKind::Merged { url: url() }], MIN);
+
+        let open = detail(&open, MIN, false, None, Prefix::default())
+            .text()
+            .to_string();
+        let merged = detail(&merged, MIN, false, None, Prefix::default())
+            .text()
+            .to_string();
+
+        assert!(!open.contains("merged: true"), "{open}");
+        assert!(
+            open.contains("Run `saaio clear` after the MR is merged"),
+            "{open}"
+        );
+        assert!(
+            merged.contains(
+                "merge_request: \"https://github.com/acme/shop/pull/42\"\nmerged: true\n"
+            ),
+            "{merged}"
+        );
+        assert!(
+            merged.contains("Run `saaio clear` to tear down its worktree"),
+            "{merged}"
         );
     }
 

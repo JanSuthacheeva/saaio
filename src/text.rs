@@ -93,9 +93,32 @@ pub fn line_of(text: &str, offset: usize) -> usize {
     text[..offset.min(text.len())].matches('\n').count() + 1
 }
 
+/// !418 for a GitLab merge request, #12 for a GitHub pull request, else MR.
+pub fn merge_request(url: &str) -> String {
+    let number = url.trim_end_matches('/').rsplit('/').next().unwrap_or("");
+    let numeric = !number.is_empty() && number.chars().all(|c| c.is_ascii_digit());
+    if numeric && url.contains("merge_requests/") {
+        format!("MR !{number}")
+    } else if numeric && url.contains("/pull/") {
+        format!("PR #{number}")
+    } else {
+        "MR".to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_merge_requests_by_their_number() {
+        assert_eq!(
+            merge_request("https://gitlab.com/shop/-/merge_requests/418"),
+            "MR !418"
+        );
+        assert_eq!(merge_request("https://github.com/a/b/pull/12"), "PR #12");
+        assert_eq!(merge_request("somewhere"), "MR");
+    }
 
     #[test]
     fn places_an_offset_on_its_line_of_a_file() {

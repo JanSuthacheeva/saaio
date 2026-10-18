@@ -1,17 +1,18 @@
 use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-/// `left` and `right` on one line of `width`, the left clipped when both do not fit.
+/// `left` and `right` on one line of `width`, at least a column apart, the left clipped when both
+/// do not fit.
 pub fn split(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: usize) -> Line<'static> {
     let right_width = spans_width(&right);
-    let room = width.saturating_sub(right_width);
+    let room = width.saturating_sub(right_width + usize::from(right_width > 0));
     let mut spans = Vec::new();
     let mut used = 0;
     for span in left {
         let left_room = room.saturating_sub(used);
         if span.width() > left_room {
             let style = span.style;
-            let cut = clip(&span.content, left_room.saturating_sub(1));
+            let cut = clip(&span.content, left_room);
             used += columns(&cut);
             spans.push(Span::styled(cut, style));
             break;
@@ -19,7 +20,8 @@ pub fn split(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: usize) 
         used += span.width();
         spans.push(span);
     }
-    spans.push(Span::raw(" ".repeat(room.saturating_sub(used))));
+    let gap = width.saturating_sub(right_width).saturating_sub(used);
+    spans.push(Span::raw(" ".repeat(gap)));
     spans.extend(right);
     Line::from(spans)
 }
@@ -245,5 +247,20 @@ mod tests {
             .collect();
         assert_eq!(text, " a very long n… 29m ");
         assert_eq!(line.width(), 20);
+    }
+
+    #[test]
+    fn keeps_a_column_between_a_left_part_that_just_fits_and_the_right() {
+        let text = |left: &'static str, right: &'static str| -> String {
+            split(vec![Span::raw(left)], vec![Span::raw(right)], 12)
+                .spans
+                .iter()
+                .map(|span| span.content.to_string())
+                .collect()
+        };
+
+        assert_eq!(text("12345678", "abc"), "12345678 abc");
+        assert_eq!(text("123456789", "abc"), "1234567… abc");
+        assert_eq!(text("1234567890ab", ""), "1234567890ab");
     }
 }

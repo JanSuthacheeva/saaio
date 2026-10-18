@@ -252,8 +252,11 @@ impl BoardView<'_> {
             )
             .into(),
             State::Done => match flow.merge_request.as_deref() {
-                Some(url) if url.contains("/pull/") => "PR open".into(),
-                Some(_) => "MR open".into(),
+                Some(url) => {
+                    let kind = if url.contains("/pull/") { "PR" } else { "MR" };
+                    let stage = if flow.merged { "merged" } else { "open" };
+                    format!("{kind} {stage}").into()
+                }
                 None => "done".into(),
             },
             State::Ended => "ended".into(),
@@ -512,6 +515,25 @@ mod tests {
         });
 
         assert_eq!(labels, ["PR open", "MR open"]);
+    }
+
+    #[test]
+    fn says_a_merged_one_is_merged() {
+        let merged = |url: &str| {
+            flow(
+                "shop-240",
+                Mode::Auto,
+                vec![EventKind::Merged { url: url.into() }],
+            )
+        };
+        let pull = merged("https://github.com/acme/shop/pull/418");
+        let merge = merged("https://gitlab.com/shop/-/merge_requests/9");
+
+        let labels = with_view(vec![], |view| {
+            [&pull, &merge].map(|flow| view.state_label(Some(flow), false).content.to_string())
+        });
+
+        assert_eq!(labels, ["PR merged", "MR merged"]);
     }
 
     #[test]

@@ -54,7 +54,7 @@ Writes to `~/.config/saaio`:
 | Prompt | Answer |
 | --- | --- |
 | an agent opening in a new folder asks whether to trust it | answer in its pane |
-| the first Codex worker asks to review flow's hooks | "Trust all and continue". Asked again only when flow's hooks change. |
+| the first Codex worker asks to review saaio's hooks | "Trust all and continue". Asked again only when saaio's hooks change. |
 
 ## Updating
 

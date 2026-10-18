@@ -8,6 +8,7 @@ mod default_file;
 mod deliver;
 mod event;
 mod fold;
+mod forge;
 mod launch;
 mod proto;
 mod registry;

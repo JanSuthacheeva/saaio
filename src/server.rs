@@ -5,6 +5,7 @@ pub mod terminal;
 pub mod watch;
 
 mod conn;
+mod forge_watch;
 mod news;
 mod panes;
 mod typing;
@@ -37,6 +38,7 @@ use crate::store::Store;
 use crate::ui::theme_file;
 use crate::view::Board;
 use conn::{accept_in_background, bind};
+use forge_watch::{Answer, ForgeWatch};
 use host::{Host, HostEvent};
 use master::MasterRecord;
 use panes::forward_host_events;
@@ -86,6 +88,8 @@ enum Event {
     },
     /// A connection whose first message could not be read: a flow of an older protocol.
     Unreadable(ConnId),
+    /// What gh or glab said about a flow's merge request.
+    Forge(Answer),
 }
 
 /// Why the server stops.
@@ -153,6 +157,8 @@ struct Server {
     opened_at: HashMap<PaneKey, Instant>,
     /// When the server last typed into each pane, for a line that begins no turn.
     line_at: HashMap<PaneKey, Instant>,
+    /// When to ask gh and glab about the flows' merge requests.
+    forges: ForgeWatch,
 }
 
 /// Writes master.md and, when missing, the example config.toml and theme.toml; logs what fails.
@@ -225,6 +231,7 @@ pub fn run(
         typed_at: HashMap::new(),
         opened_at: HashMap::new(),
         line_at: HashMap::new(),
+        forges: ForgeWatch::default(),
     };
     server.open_master(start);
     server.refresh();
@@ -261,6 +268,7 @@ impl Server {
             if self.refreshed_at.elapsed() >= WATCH_EVERY {
                 self.deliver_news();
                 self.refresh();
+                self.ask_forges();
                 self.type_lines();
             }
             self.flush();
@@ -275,6 +283,7 @@ impl Server {
             Event::Gone(conn) => self.drop_conn(conn),
             Event::Unreadable(conn) => self.refuse_unreadable(conn),
             Event::Signal { name, from } => return ControlFlow::Break(Stop::Signal { name, from }),
+            Event::Forge(answer) => self.forge_answer(answer),
             Event::Host(HostEvent::Output(key, bytes)) => {
                 self.host.feed(&key, &bytes);
                 if key == self.focus {

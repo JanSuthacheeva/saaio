@@ -34,7 +34,7 @@ timeline.
 | `idle` | the worker's turn ended without a question | READY |
 | `blocked` | the flow cannot go on | NEEDS YOU |
 | `not-responding` | a worker that sent heartbeats has sent none for 90 seconds | NEEDS YOU |
-| `done` | the merge request is open | DONE |
+| `done` | the merge request is open or merged | DONE |
 | `ended` | the worker's session ended for good | DONE |
 
 | Session stops by | Result |
@@ -190,7 +190,7 @@ Or mode `plain` in the new-flow dialog.
 | Esc | `idle interrupted` |
 
 - First run: Codex asks to review the hooks. Answer "Trust all and continue". Asked again only when
-  flow's hooks change.
+  saaio's hooks change.
 - A repository trusted in Codex covers its flow worktrees.
 - No plan-progress tool: no task counts.
 - No `/exit` event: end the flow from saaio ui or with `saaio remove`.
@@ -201,11 +201,35 @@ Or mode `plain` in the new-flow dialog.
 - An agent without an adapter reports nothing. saaio ui shows only whether it runs.
 - Scripts and other tools report with `saaio report` ([cli.md](cli.md#saaio-report)).
 
+## Merge requests opened or merged elsewhere
+
+saaio ui asks GitHub or GitLab about each flow's branch, so a merge request counts whoever opened
+or merged it: the worker, the master or you.
+
+| Found on the flow's branch | Result |
+| --- | --- |
+| an open merge request the flow does not show | the flow is `done`. Sidebar `PR #42`, board `PR open`. |
+| a merged one | the flow is `done` and merged. Sidebar `merged`, board `PR merged`, its detail `PR #42 merged`. Not asked again. |
+| the flow's merge request, closed without a merge | the flow is `idle` in its last phase, timeline `PR #42 closed`. The master is woken. |
+| nothing, or a closed one the flow does not show | no change |
+
+- Asked: every flow with a branch that is not merged, ended ones included. Never a plain session.
+- Only merge requests opened after the flow started count. One from an earlier branch of the same
+  name, such as a cleared flow's, is ignored.
+- When: as the server starts, then every 2 minutes, one flow after another. About 30 requests per
+  flow an hour.
+- With `gh` for a remote on github.com, `glab` for a host with `gitlab` in its name. Every remote of
+  the worktree counts: origin, a fork's upstream, an SSH host alias. Other hosts are not asked.
+- Runs in the worktree, logged in as you are (`gh auth login`, `glab auth login`).
+- No `gh` or `glab`, not logged in, offline, or no answer within a minute: no change. The error goes
+  to `server.log` once.
+- Only while saaio ui (its server) runs. `saaio status` asks no one.
+
 ## Ending a flow
 
 | Action | Effect |
 | --- | --- |
-| merge request opened | the flow is `done`. It stays in the sidebar until cleared. |
+| merge request opened or merged, by anyone | the flow is `done`. It stays in the sidebar until cleared. |
 | `saaio clear` | forgets every finished flow and removes its worktree. Keeps a worktree with uncommitted work. |
 | `x` on the board | cleans up one finished flow |
 | `saaio remove <name>` | any state: closes the session, runs the teardown script, removes worktree and branch, forgets the flow. Refuses uncommitted work and commits on no other branch, unless `--force` or `--delete-unmerged`. |

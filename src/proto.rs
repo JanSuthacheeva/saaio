@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::view::{Board, MasterTurn};
 
-pub const PROTOCOL_VERSION: u32 = 5;
+pub const PROTOCOL_VERSION: u32 = 6;
 /// This binary: `0.1.0 2904734`, the commit from build.rs, `unknown` outside a git checkout.
 pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " ", env!("SAAIO_COMMIT"));
 pub const MAX_MESSAGE: usize = 8 << 20;

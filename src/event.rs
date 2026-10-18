@@ -64,6 +64,14 @@ pub enum EventKind {
     MergeRequest {
         url: String,
     },
+    /// The merge request at url was merged.
+    Merged {
+        url: String,
+    },
+    /// The merge request at url was closed without a merge.
+    MergeRequestClosed {
+        url: String,
+    },
     /// What the master told this flow's worker, through `saaio send`.
     Message {
         text: String,
@@ -151,7 +159,9 @@ impl EventKind {
             | EventKind::Idle { note: text }
             | EventKind::Blocked { reason: text }
             | EventKind::Decision { text }
-            | EventKind::MergeRequest { url: text } => cut_to(text, TEXT_LIMIT),
+            | EventKind::MergeRequest { url: text }
+            | EventKind::Merged { url: text }
+            | EventKind::MergeRequestClosed { url: text } => cut_to(text, TEXT_LIMIT),
             EventKind::Message { text }
             | EventKind::Typed { text }
             | EventKind::Answer { text } => {
@@ -291,6 +301,12 @@ mod tests {
             EventKind::Review { fixed: 3, open: 1 },
             EventKind::MergeRequest {
                 url: "https://gitlab.com/acme/shop/-/merge_requests/88".into(),
+            },
+            EventKind::Merged {
+                url: "https://github.com/acme/shop/pull/42".into(),
+            },
+            EventKind::MergeRequestClosed {
+                url: "https://github.com/acme/shop/pull/41".into(),
             },
             EventKind::Typed {
                 text: "/compact".into(),
