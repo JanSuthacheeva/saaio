@@ -4,18 +4,18 @@
                                                    ▌
     0   master                              you    ▌ 1 ● shop-221                        blocked      2 ● shop-230                waiting for you
       ~/projects/shop · main                       ▌   ●───●───○───○  implement                         ●───○───○───○  plan  · guided
-      4 workers                                    ▌   4/9 tasks                             29m                                              31m
+      4 workers                                    ▌   4/9 tasks                    claude · 29m                                     claude · 31m
                                                    ▌   migration needs a default value for orde…        Which approach: a channel column or a jo…
                                                    ▌
 
 
     3 ◓ export-csv               review · agent      4 ✓ shop-198                        MR open
       ●───●───●───○  review                            ●───●───●───●  MR !418
-      6/6 tasks                              1h        flow/shop-198                          2h
+      6/6 tasks                     claude · 1h        flow/shop-198                 claude · 2h
       agent: review changes                            shop-198
 
 
-  1 shop-221  shop-221 · auto · flow/shop-221 · slot 1 · started 29m ago
+  1 shop-221  shop-221 · auto · claude · flow/shop-221 · slot 1 · started 29m ago
               plan ✓ 0s   implement ● 29m   review ○   MR ○
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   TIMELINE                                                                                DECISIONS

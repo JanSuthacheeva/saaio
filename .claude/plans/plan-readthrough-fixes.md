@@ -136,7 +136,7 @@ changes.
 - [x] Replace "saaio ui" in user-visible strings (client, keys, draw, dialog, messages, start and status output, MASTER_OPENING) with tests and goldens updated
 - [x] master.md without `saaio ui`, old text kept as `master-v10.md` in the history list, with its upgrade test
 - [x] Remove the sidebar master agent marker (`Sidebar::master_agent`, `App::set_master_agent`, reload_config call), tests and goldens
-- [ ] Board: agent on the card's third row and in the detail facts, with card tests and goldens
+- [x] Board: agent on the card's third row and in the detail facts, with card tests and goldens
 - [ ] docs/cli.md reworked for the current command set
 - [ ] README (usage, how it works with what a flow is, CLI table, features, setup-saaio), docs/flows.md lead, docs/repository.md setup-saaio recommendation
 - [ ] Every other `saaio ui` in docs, examples, ROADMAP, CHANGELOG 0.1.0, CLAUDE.md (with the PTY E2E line); ROADMAP drops "Codex commits without asking"

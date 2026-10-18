@@ -4,7 +4,7 @@ Orchestrate coding agents from one terminal. You talk to a master agent. It star
 what it can, and asks you the rest.
 
 - One worker per feature, each in its own git worktree and branch
-- Sidebar shows every worker's state and agent name, plus the master's agent
+- Sidebar and board show every worker's state and agent
 - Phases and skills are configurable, works without any skills
 - Claude Code and Codex (experimental), state comes from their hooks
 - saaio CLI for agents (TOON) and scripts (--json)
