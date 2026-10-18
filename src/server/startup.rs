@@ -105,8 +105,8 @@ mod tests {
 
     #[test]
     fn stalls_only_a_running_codex_worker_that_never_began_a_turn() {
-        let now = Instant::now();
-        let opened = now - FIRST_TURN_GRACE;
+        let opened = Instant::now();
+        let now = opened + FIRST_TURN_GRACE;
         assert!(stalled(
             &flow(),
             Some(Adapter::Codex),
