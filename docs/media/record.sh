@@ -60,8 +60,8 @@ raise() {
 
 capture() {
     local id x y w h
+    raise "$(window | cut -d' ' -f1)"
     read -r id x y w h < <(window)
-    raise "$id"
     key() { "${tmux[@]}" send-keys -t demo "$@"; }
     prefixed() { key C-Space; key "$@"; }
 
@@ -84,6 +84,10 @@ capture() {
     key Escape; sleep 1
     prefixed 0                     # back to the master
     wait "$recording"
+    if [ "$(window)" != "$id $x $y $w $h" ]; then
+        echo "the window moved while recording; no GIF written, run capture again" >&2
+        exit 1
+    fi
     ffmpeg -loglevel error -y -i "$video" \
         -vf "fps=15,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" \
         "$media/saaio-ui.gif"

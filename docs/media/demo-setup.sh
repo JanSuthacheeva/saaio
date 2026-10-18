@@ -120,13 +120,15 @@ skill demo-ship "Ships the change. Use after demo-review." \
 "Commit the work with a short message. End your turn with one line saying the branch is ready."
 
 mkdir -p .claude
-# An empty status line keeps your own, with its account details, out of the recording.
+# An empty status line keeps your own, with its account details, out of the recording; the
+# fullscreen view folds tool calls, and with them the absolute paths saaio start prints.
 cat > .claude/settings.json <<'EOF'
 {
   "permissions": {
     "allow": ["Edit", "Write", "Bash(python3 -m unittest:*)", "Bash(git add:*)", "Bash(git commit:*)"]
   },
-  "statusLine": { "type": "command", "command": "true" }
+  "statusLine": { "type": "command", "command": "true" },
+  "tui": "fullscreen"
 }
 EOF
 
