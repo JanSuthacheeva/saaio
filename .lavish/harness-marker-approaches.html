@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en" data-lavish-annotate="on">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sidebar agent marker — choose a layout</title>
+<style>
+:root{color-scheme:dark;background:#11151c;color:#d7dde8;font:15px system-ui,-apple-system,sans-serif}*{box-sizing:border-box}body{max-width:1040px;margin:auto;padding:28px 18px 64px}h1{font-size:clamp(25px,4vw,38px);margin:0 0 8px}h2{font-size:19px;margin:0 0 8px}p{line-height:1.55;color:#aab4c3}header{margin-bottom:28px}.eyebrow{color:#8da9c8;text-transform:uppercase;letter-spacing:.13em;font-size:11px;font-weight:700}.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.card{min-width:0;border:1px solid #364252;background:#1b222d;border-radius:12px;padding:18px}.recommended{border-color:#6ca6c9}.tag{display:inline-block;color:#a9d9f3;background:#254052;border-radius:6px;padding:3px 7px;font-size:12px}.terminal{overflow:auto;background:#0b1017;border:1px solid #33404f;border-radius:7px;margin:14px 0;padding:12px 10px;color:#d2d8e0;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre}.dim{color:#87929e}.age{color:#a9a9a9}.trade{border-top:1px solid #344050;padding-top:12px;margin-top:14px;font-size:13px;line-height:1.5;color:#b8c2d0}.trade strong{color:#e2e8f0}.decision{margin-top:25px;border:1px solid #43536a;border-radius:12px;padding:20px;background:#18212d}label{display:block;margin:10px 0;cursor:pointer}input{accent-color:#8abde0}button{background:#85b6d4;color:#0b1720;border:0;border-radius:7px;padding:9px 14px;font-weight:700;cursor:pointer;margin-top:8px}small{color:#98a5b6}.sources{margin-top:26px;font-size:13px;color:#a8b4c2}.sources a{color:#a8cfed}@media(max-width:800px){.cards{grid-template-columns:1fr}.terminal{font-size:12px}}
+</style>
+<header><div class="eyebrow">saaio UI · design choice</div><h1>Which right edge should show the agent?</h1><p>The 40-column sidebar already puts elapsed time or a pane failure on each flow’s first row. The agent name is stored with each worker, including plain sessions. All three variants use faint plain text on that same row and add no rows.</p></header>
+<section class="cards">
+<article class="card"><span class="tag">Recommended</span><h2>A · Agent then age</h2><div class="terminal"> 1 ● shop-221          <span class="dim">claude</span> <span class="age">29m</span>
+ 2 ● shop-230           <span class="dim">codex</span> <span class="age">31m</span>
+ 3 ○ scratch            <span class="dim">claude</span> <span class="age">12m</span>
+ 0   master           <span class="dim">codex</span></div><p>Keep time at the right edge; place the agent immediately before it. Reserve room for failure text when a pane exits or fails.</p><div class="trade"><strong>Cost:</strong> less width for long flow names. Custom agent names need clipping. The agent is near the right edge, while time stays at the far edge.</div></article>
+<article class="card"><h2>B · Agent at edge</h2><div class="terminal"> 1 ● shop-221             <span class="dim">claude</span>
+     ●───●───○ implement   <span class="age">29m</span>
+ 2 ● shop-230              <span class="dim">codex</span>
+     ●───○───○ plan        <span class="age">31m</span>
+ 0   master              <span class="dim">codex</span></div><p>Give the first row’s right edge to the agent. Move elapsed time to the existing second row.</p><div class="trade"><strong>Cost:</strong> second row already shows phase, task count, and completion duration. Fitting all of them may require truncation or omission.</div></article>
+<article class="card"><h2>C · Agent only</h2><div class="terminal"> 1 ● shop-221             <span class="dim">claude</span>
+ 2 ● shop-230              <span class="dim">codex</span>
+ 3 ○ scratch              <span class="dim">claude</span>
+ 0   master              <span class="dim">codex</span></div><p>Use the first row’s right edge for the agent; drop the elapsed time from sidebar rows.</p><div class="trade"><strong>Cost:</strong> loses a useful freshness cue for every worker. Pane failure text would still need to take priority over the agent.</div></article>
+</section>
+<section class="decision" data-lavish-question="sidebar-agent-layout"><h2>Pick the layout</h2><p>A keeps the current time cue and is the smallest rendering change. Which should the detailed plan use?</p><label><input type="radio" name="layout" value="A" checked> A · agent then age</label><label><input type="radio" name="layout" value="B"> B · agent at edge, age on second row</label><label><input type="radio" name="layout" value="C"> C · agent only</label><button onclick="const value=document.querySelector('input[name=layout]:checked').value;window.lavish.queuePrompt({text:'Choose sidebar agent marker layout '+value+'. Continue the detailed implementation design for this choice.',queueKey:'sidebar-agent-layout',tag:'design-choice'});this.nextElementSibling.textContent='Choice queued. Send it to the agent with the Lavish toolbar.'">Queue choice</button><small role="status"></small></section>
+<p class="sources">Current rendering: <a href="../src/ui/sidebar/rows.rs">sidebar/rows.rs</a> · agent data: <a href="../src/view.rs">view.rs</a> · width and fitting: <a href="../src/ui/fit.rs">fit.rs</a>. The master name is available from configuration but is not currently carried into <code>Sidebar</code>.</p>
+</html>
