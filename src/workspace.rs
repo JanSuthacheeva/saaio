@@ -194,6 +194,19 @@ fn git(dir: impl AsRef<OsStr>, args: &[&str]) -> Result<String> {
     stdout_of(command, "git")
 }
 
+/// Runs an argv in `dir` with GH_PROMPT_DISABLED=1 and no stdin; its stdout, or an error with
+/// the last line it printed.
+#[allow(dead_code)] // until the server asks the forges
+pub fn output_in(dir: &Path, argv: &[String]) -> Result<String> {
+    let (program, args) = argv.split_first().context("empty command")?;
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .current_dir(dir)
+        .env("GH_PROMPT_DISABLED", "1");
+    stdout_of(command, program)
+}
+
 /// Runs an argv; its stdout, or an error with the last line it printed.
 fn run(argv: &[String]) -> Result<String> {
     let (program, args) = argv.split_first().context("empty command")?;
@@ -303,6 +316,27 @@ mod tests {
             ssh_hostname("saaio-test-unknown-alias").as_deref(),
             Some("saaio-test-unknown-alias")
         );
+    }
+
+    #[test]
+    fn runs_a_command_in_a_folder_without_prompts() {
+        let dir = TempDir::new().unwrap();
+        let script = dir.path().join("ask");
+        fs::write(
+            &script,
+            "#!/bin/sh\nread -r line\necho \"$(basename \"$PWD\") $GH_PROMPT_DISABLED $1 [$line]\"\n",
+        )
+        .unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        let folder = dir.path().join("csv");
+        fs::create_dir(&folder).unwrap();
+        let argv = [script.display().to_string(), "list".to_string()];
+
+        assert_eq!(output_in(&folder, &argv).unwrap(), "csv 1 list []\n");
+
+        let missing = ["saaio-test-no-such-program".to_string()];
+        let error = output_in(&folder, &missing).unwrap_err();
+        assert!(format!("{error:#}").starts_with("could not run saaio-test-no-such-program"));
     }
 
     #[test]
