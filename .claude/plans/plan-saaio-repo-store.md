@@ -172,6 +172,15 @@ A `saaio ui` started inside a worker sees the pinned SAAIO_HOME and its own flow
 - The name is used as the folder name unchanged; git dirs are folders, so it holds no `/`.
 - `saaio start --plain <folder>` keeps the store of the folder it is run in, not of `<folder>`.
 
+## Build notes
+
+- Tasks 2 and 3 are one commit: `project_store` is dead code, which clippy fails, until `Env::store` calls it.
+- `Registry::default_root` became private: only `Registry::locate` uses it once `Store::locate` is gone.
+- The E2E check (scratch XDG_STATE_HOME, two repos named `shop`, `saaio ui` in a pty from the
+  worktree): the worker's pane got `SAAIO_HOME=<state>/saaio/projects/shop`, its `saaio report`
+  run from `/` landed in that store, the twin repo got `projects/shop-2`, the shared store stayed
+  empty, and `saaio status --all` listed `shop` and `shop-2`.
+
 ## Tasks
 
 - [x] `workspace::git_common_dir` with tests for a repo, a subfolder, a worktree and no repo; `exclude_worktrees` uses it
@@ -179,5 +188,5 @@ A `saaio ui` started inside a worker sees the pinned SAAIO_HOME and its own flow
 - [x] `Env::store(cwd)` replaces `Store::locate`; `cli::run`, `hook` and `wait` pass the current folder; env tests for SAAIO_HOME, repo, no repo and empty values
 - [x] `LaunchEnv.store` and `pane_env` always set SAAIO_HOME; `saaio ui` passes its store to the server; pane and client tests
 - [x] `tests/cli.rs`: store per repository end to end without SAAIO_HOME (repo, worktree, outside, `--all`)
-- [ ] Docs: `docs/files.md` (store location, `projects/`, `repo` file), `docs/cli.md` (SAAIO_HOME default, every session gets SAAIO_HOME, "Several projects"), `docs/troubleshooting.md` (where server.log is, flows of another repository not shown), README, ROADMAP and CHANGELOG where they describe the store; CLAUDE.md architecture lines
-- [ ] E2E with a scratch XDG_STATE_HOME: two repos named alike, `saaio start` in one, its worktree's hook lands in the right store, `saaio ui` in a pty opens the worker with the pinned SAAIO_HOME, `saaio status --all`
+- [x] Docs: `docs/files.md` (store location, `projects/`, `repo` file), `docs/cli.md` (SAAIO_HOME default, every session gets SAAIO_HOME, "Several projects"), `docs/troubleshooting.md` (where server.log is, flows of another repository not shown), README, ROADMAP and CHANGELOG where they describe the store; CLAUDE.md architecture lines
+- [x] E2E with a scratch XDG_STATE_HOME: two repos named alike, `saaio start` in one, its worktree's hook lands in the right store, `saaio ui` in a pty opens the worker with the pinned SAAIO_HOME, `saaio status --all`
