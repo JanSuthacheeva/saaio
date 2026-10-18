@@ -217,7 +217,7 @@ Add `sha2 = "0.10"`.
 
 - [x] Add `sha2`, `Hook`, `HOOKS` (Interrupt at 3 s) and `codex::trust_hash` with unit tests
       pinning the three hashes Codex wrote
-- [ ] Make `codex::hooks()` pass `-c hooks.state={...}` with each hook's trusted hash; tests that
+- [x] Make `codex::hooks()` pass `-c hooks.state={...}` with each hook's trusted hash; tests that
       it parses as TOML with 8 keys whose hashes match, and that Interrupt's timeout is 3
 - [ ] Add `codex::trusted_folder(folder)`, and thread `folder` through `Adapter::wiring` and
       `Adapter::plain_wiring` and `worker_spec` (`space.path`); update the adapter, pane and

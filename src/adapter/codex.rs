@@ -65,6 +65,8 @@ const HOOKS: [Hook; 8] = [
 const HOOK_TIMEOUT_SECS: u64 = 10;
 /// The most seconds Codex permits for an Interrupt hook.
 const INTERRUPT_TIMEOUT_SECS: u64 = 3;
+/// Where Codex says hooks passed with `-c` come from, in their trust keys.
+const SESSION_FLAGS: &str = "/<session-flags>/config.toml";
 
 /// The hash Codex keeps in hooks.state for one command hook: sha256 of its identity as compact JSON
 /// with sorted keys.
@@ -111,6 +113,21 @@ pub fn hooks(flow_exe: &Path) -> Vec<String> {
         args.push("-c".to_string());
         args.push(format!("hooks.{}={handler}", hook.event));
     }
+    let state = HOOKS
+        .iter()
+        .map(|hook| {
+            let key = format!("{SESSION_FLAGS}:{}:0:0", hook.key);
+            let hash = trust_hash(hook, &command);
+            format!(
+                "{}={{trusted_hash={}}}",
+                toml_string(&key),
+                toml_string(&hash)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    args.push("-c".to_string());
+    args.push(format!("hooks.state={{{state}}}"));
     args
 }
 
@@ -444,8 +461,8 @@ mod tests {
         assert_eq!(args[..2], ["-c", "check_for_update_on_startup=false"]);
         let values: Vec<&String> = args.iter().skip(3).step_by(2).collect();
         assert!(args.iter().skip(2).step_by(2).all(|flag| flag == "-c"));
-        assert_eq!(values.len(), HOOKS.len());
-        for (hook, value) in HOOKS.iter().zip(values) {
+        assert_eq!(values.len(), HOOKS.len() + 1);
+        for (hook, value) in HOOKS.iter().zip(&values) {
             let (key, toml_value) = value.split_once('=').unwrap();
             assert_eq!(key, format!("hooks.{}", hook.event));
             let parsed: toml::Table = toml::from_str(&format!("v = {toml_value}")).unwrap();
@@ -458,6 +475,17 @@ mod tests {
                 hook.event
             );
             assert_eq!(handler["timeout"].as_integer(), Some(hook.timeout as i64));
+        }
+        let (_, toml_value) = values.last().unwrap().split_once('=').unwrap();
+        let parsed: toml::Table = toml::from_str(&format!("v = {toml_value}")).unwrap();
+        let state = parsed["v"].as_table().unwrap();
+        let command = "'/opt/my saaio/saaio' hook codex";
+
+        assert_eq!(state.len(), HOOKS.len());
+        for hook in HOOKS {
+            let key = format!("{SESSION_FLAGS}:{}:0:0", hook.key);
+            let hash = trust_hash(&hook, command);
+            assert_eq!(state[&key]["trusted_hash"].as_str(), Some(hash.as_str()));
         }
         assert!(hooks(Path::new("/b'in/saaio"))[3].contains(r"'/b'\\''in/saaio'"));
     }
