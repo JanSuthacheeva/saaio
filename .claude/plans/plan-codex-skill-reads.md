@@ -55,3 +55,10 @@ No new event or persistent data structure is needed.
 - [x] Add `read_skill_phase` to `codex.rs`, adapt recorded hook fixtures and tests, and reuse shell tokenization where needed.
 - [x] Update `docs/flows.md` and `docs/agents.md` for experimental instruction-dependent Codex phases.
 - [x] Run an end-to-end recorded hook check, full tests, formatting, and `cargo clippy --all-targets -- -D warnings`.
+
+## Review
+
+- **Fixed:** A `SKILL.md` path in a shell comment falsely started a phase or suppressed a real read of another phase. A failing regression test proved both cases; shell tokenization now ignores comments. Commit `b18dc63`.
+- **Open:** No proven findings remain. Phase tracking still relies on the worker obeying the documented read timing instruction. The fix was checked in a separate pass by the same reviewer, not an independent agent.
+- **Where to look:** Read `src/adapter/codex.rs` from `translate()` through `read_skill_phase()` for phase decisions, then `src/adapter/calls.rs` `simple_commands()` for shell word handling. The wiring assertion in `src/adapter.rs` and recorded CLI check in `tests/cli.rs` are routine and can be skimmed.
+- **Checks:** `cargo fmt --check`, `cargo test -q` (520 unit, 73 CLI), and `cargo clippy --all-targets -- -D warnings` passed on the code committed as `b18dc63`.
