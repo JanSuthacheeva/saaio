@@ -231,10 +231,17 @@ fn mentioned_skill(prompt: &str) -> Option<&str> {
     })
 }
 
-/// The phase of the first skill a shell command reads whose name is in the map: Codex reads
-/// ".../skills/<name>/SKILL.md", often several in one command.
+/// A phase only when all matching SKILL.md files in this command belong to the same phase.
+/// Codex often reads later skills ahead in the same command.
 fn read_phase(command: &str, workflow: &Workflow) -> Option<Phase> {
-    read_skills(command).find_map(|skill| workflow.phase_of(skill))
+    let mut found = None;
+    for phase in read_skills(command).filter_map(|skill| workflow.phase_of(skill)) {
+        if found.as_ref().is_some_and(|earlier| earlier != &phase) {
+            return None;
+        }
+        found = Some(phase);
+    }
+    found
 }
 
 /// The skills whose SKILL.md a shell command reads: ".../skills/<name>/SKILL.md" -> name.
@@ -370,6 +377,20 @@ mod tests {
 
         assert_eq!(read_phase(command, &phases()), Some(Phase::of("plan")));
         assert_eq!(read_phase("cat README.md", &phases()), None);
+        let ahead = "cat /skills/implement-plan/SKILL.md /skills/review-changes/SKILL.md \
+                     /skills/write-merge-request/SKILL.md";
+        assert_eq!(read_phase(ahead, &Workflow::builtin()), None);
+        assert_eq!(
+            translate(
+                &serde_json::json!({
+                    "hook_event_name": "PreToolUse",
+                    "tool_name": "Bash",
+                    "tool_input": {"command": ahead}
+                }),
+                &Workflow::builtin()
+            ),
+            vec![]
+        );
     }
 
     #[test]
