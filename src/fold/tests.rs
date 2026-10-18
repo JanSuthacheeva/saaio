@@ -809,18 +809,41 @@ fn closing_another_or_a_merged_one_changes_nothing() {
 }
 
 #[test]
-fn closing_brings_an_ended_flow_back_to_idle() {
+fn closing_a_pr_after_the_worker_ended_keeps_the_flow_ended() {
+    let events = [
+        started(0),
+        phase(0, Phase::of("implement")),
+        at(MIN, EventKind::Ended),
+        opened(2 * MIN, PR),
+        closed(3 * MIN, PR),
+    ];
+    let before_close = view(&events[..4], 10 * MIN);
+    let flow = view(&events, 10 * MIN);
+    assert_eq!(flow.state, State::Ended);
+    assert!(flow.is_finished());
+    assert_eq!(flow.merge_request, None);
+    assert_eq!(flow.changed_at, 3 * MIN);
+    assert_eq!(flow.timeline.last().unwrap().text, "PR #42 closed");
+    assert_eq!(flow.steps[1].duration_ms, before_close.steps[1].duration_ms);
+    assert_eq!(flow.steps[3].duration_ms, before_close.steps[3].duration_ms);
+}
+
+#[test]
+fn closing_a_pr_opened_before_the_worker_ended_keeps_the_flow_ended() {
     let flow = view(
         &[
             started(0),
-            at(MIN, EventKind::Ended),
-            opened(2 * MIN, PR),
+            opened(MIN, PR),
+            at(2 * MIN, EventKind::Ended),
             closed(3 * MIN, PR),
         ],
         4 * MIN,
     );
-    assert_eq!(flow.state, State::Idle);
+
+    assert_eq!(flow.state, State::Ended);
+    assert!(flow.is_finished());
     assert_eq!(flow.merge_request, None);
+    assert_eq!(flow.timeline.last().unwrap().text, "PR #42 closed");
 }
 
 #[test]

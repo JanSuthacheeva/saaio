@@ -227,12 +227,14 @@ or merged it: the worker, the master or you.
 | --- | --- |
 | an open merge request the flow does not show | the flow is `done`. Sidebar `PR #42`, board `PR open`. |
 | a merged one | the flow is `done` and merged. Sidebar `merged`, board `PR merged`, its detail `PR #42 merged`. Not asked again. |
-| the flow's merge request, closed without a merge | the flow is `idle` in its last phase, timeline `PR #42 closed`. The master is woken. |
+| the flow's merge request, closed without a merge, worker still unfinished | the flow is `idle` in its last phase, timeline `PR #42 closed`. The master is woken. |
+| the flow's merge request, closed without a merge, worker already ended | the flow stays `ended`, timeline `PR #42 closed`. Its worker does not restart or reclaim a slot. |
 | nothing, or a closed one the flow does not show | no change |
 
 - Asked: every flow with a branch that is not merged, ended ones included. Never a plain session.
 - An open or merged request keeps the workflow's last phase even if later worker hooks mention an
-  earlier skill. Closing an unmerged request returns the flow to `idle` in its last phase.
+  earlier skill. Closing an unmerged request returns an unfinished flow to `idle` in its last phase;
+  a flow whose worker ended stays `ended`.
 - Only merge requests opened after the flow started count. One from an earlier branch of the same
   name, such as a cleared flow's, is ignored.
 - When: as the server starts, then every 2 minutes, one flow after another. About 30 requests per

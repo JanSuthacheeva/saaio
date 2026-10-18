@@ -2,6 +2,8 @@ use std::fs;
 use std::sync::mpsc::{self, Sender};
 use std::time::Instant;
 
+use anyhow::{Context, Result};
+
 use super::host::HostEvent;
 use super::master::{Instructions, Start};
 use super::reconcile::{self, Wanted};
@@ -191,15 +193,27 @@ impl Server {
         }
     }
 
-    /// Resumes a worker whose pane exited or never opened, also one whose flow ended.
+    /// Resumes an unfinished worker whose pane exited or never opened.
     pub(super) fn reopen_worker(&mut self, id: &str) {
         let key = PaneKey::Flow(id.to_string());
         if self.host.status(&key) == Some(&PaneStatus::Running) {
             return;
         }
-        let Some(flow) = self.flow(id).cloned() else {
-            return;
+        let flow = match self.current_flow(id) {
+            Ok(flow) => flow,
+            Err(error) => {
+                self.host
+                    .fail(key, format!("could not check flow: {error:#}"));
+                return;
+            }
         };
+        if flow.is_finished() {
+            self.host.fail(
+                key,
+                "finished flow cannot reopen; start a new flow".to_string(),
+            );
+            return;
+        }
         let Some(space) = &flow.workspace else {
             return;
         };
@@ -217,17 +231,29 @@ impl Server {
     /// Opens a pane once more with the agent's first command: its resume failed before the agent
     /// ever saved the session.
     pub(super) fn open_fresh(&mut self, key: &PaneKey) {
+        let PaneKey::Flow(id) = key else {
+            server_log::write(
+                (self.clock)(),
+                &format!("resuming {key} failed, starting it fresh"),
+            );
+            self.open_master(Start::Fresh);
+            return;
+        };
+        let mut flow = match self.current_flow(id) {
+            Ok(flow) => flow,
+            Err(error) => {
+                self.host
+                    .fail(key.clone(), format!("could not check flow: {error:#}"));
+                return;
+            }
+        };
+        if flow.is_finished() {
+            return;
+        }
         server_log::write(
             (self.clock)(),
             &format!("resuming {key} failed, starting it fresh"),
         );
-        let PaneKey::Flow(id) = key else {
-            self.open_master(Start::Fresh);
-            return;
-        };
-        let Some(mut flow) = self.flow(id).cloned() else {
-            return;
-        };
         let Some(space) = flow.workspace.as_mut() else {
             return;
         };
@@ -301,6 +327,12 @@ impl Server {
 
     fn flow(&self, id: &str) -> Option<&FlowView> {
         self.board.flows.iter().find(|flow| flow.id == id)
+    }
+
+    /// Re-folds the current log before a launch, since the board refresh may not have run yet.
+    fn current_flow(&self, id: &str) -> Result<FlowView> {
+        let events = self.store.events(id)?;
+        fold::fold(id, &events, None, (self.clock)()).context("flow has no start event")
     }
 }
 

@@ -1759,6 +1759,57 @@ fn projects_never_share_a_slot_and_show_up_together() {
 }
 
 #[test]
+fn a_closed_pr_keeps_an_ended_flow_finished_after_its_slot_is_reclaimed() {
+    let lab = Lab::new();
+    let first = lab.start(&["SHOP-1 first"]);
+    assert!(first.status.success(), "{}", stdout(&first));
+    let first_id = id_in(&stdout(&first));
+    assert!(stdout(&first).contains("slot: 1"));
+
+    let ended = saaio_in(&lab.home, &first_id, &["report", "ended"]);
+    assert!(ended.status.success(), "{}", stdout(&ended));
+    let opened = saaio_in(
+        &lab.home,
+        &first_id,
+        &["report", "merge-request", "https://github.com/a/b/pull/45"],
+    );
+    assert!(opened.status.success(), "{}", stdout(&opened));
+
+    let second = lab.start(&["SHOP-2 second"]);
+    assert!(second.status.success(), "{}", stdout(&second));
+    assert!(stdout(&second).contains("slot: 1"), "{}", stdout(&second));
+    let second_id = id_in(&stdout(&second));
+
+    let mut log = fs::OpenOptions::new()
+        .append(true)
+        .open(lab.home.join("flows").join(format!("{first_id}.jsonl")))
+        .unwrap();
+    writeln!(
+        log,
+        r#"{{"v":1,"at":9999999999999,"kind":"merge-request-closed","url":"https://github.com/a/b/pull/45"}}"#
+    )
+    .unwrap();
+
+    let board: serde_json::Value =
+        serde_json::from_slice(&lab.run(&["status", "--json"]).stdout).unwrap();
+    let flows = board["flows"].as_array().unwrap();
+    let old = flows.iter().find(|flow| flow["id"] == first_id).unwrap();
+    let new = flows.iter().find(|flow| flow["id"] == second_id).unwrap();
+    assert_eq!(old["state"], "ended");
+    assert!(old["mergeRequest"].is_null());
+    assert_eq!(
+        old["timeline"].as_array().unwrap().last().unwrap()["text"],
+        "PR #45 closed"
+    );
+    assert_eq!(new["state"], "working");
+    assert_eq!(new["workspace"]["slot"], 1);
+    let claim: serde_json::Value =
+        serde_json::from_slice(&fs::read(shared(&lab.home).join("saaio/slots/1")).unwrap())
+            .unwrap();
+    assert_eq!(claim["flow"], second_id);
+}
+
+#[test]
 fn a_failed_start_gives_its_slot_back() {
     let lab = Lab::new();
     fs::create_dir_all(lab.repo.join(".saaio/worktrees/shop-1")).unwrap();

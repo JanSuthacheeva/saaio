@@ -143,6 +143,8 @@ struct Folding {
     entered: Vec<bool>,
     phase_since: u64,
     stopped_at: Option<u64>,
+    /// An Ended event occurred, even if an open PR currently shows Done.
+    ended: bool,
     pending_permission: Option<(u64, String)>,
 }
 
@@ -190,6 +192,7 @@ impl Folding {
             phases,
             phase_since: at,
             stopped_at: None,
+            ended: false,
             pending_permission: None,
         }
     }
@@ -315,8 +318,12 @@ impl Folding {
                 if self.view.merge_request.as_ref() == Some(url) && !self.view.merged {
                     self.view.merge_request = None;
                     if self.view.state == State::Done {
-                        self.view.state = State::Idle;
-                        self.stopped_at = None;
+                        self.view.state = if self.ended {
+                            State::Ended
+                        } else {
+                            self.stopped_at = None;
+                            State::Idle
+                        };
                     }
                     let text = format!("{} closed", text::merge_request(url));
                     self.note(at, text, Tone::Attention);
@@ -354,6 +361,7 @@ impl Folding {
             }
             EventKind::Ended => {
                 self.pending_permission = None;
+                self.ended = true;
                 if self.view.state != State::Done {
                     self.view.state = State::Ended;
                 }
