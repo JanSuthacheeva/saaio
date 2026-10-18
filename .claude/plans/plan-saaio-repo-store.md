@@ -59,12 +59,14 @@ impl Registry {
 /// name without .git; None for a root path.
 fn repo_name(git_dir: &Path) -> Option<String>;
 
-/// Who owns a candidate project store, read from its repo file.
+/// Who owns a candidate project store, read from its repo file: Free without one, else the git
+/// dir it names (empty when it names nothing or cannot be read: taken over like a gone owner).
 enum Owner { Free, Repo(PathBuf) }
 fn owner(store: &Path) -> Owner;
 
-/// Writes the repo file: create_new for a free store (Err AlreadyExists when another process won
-/// the race, and project_store looks at that name again), write_atomic over a gone owner.
+/// Writes the repo file: written aside and hard-linked into place for a free store, so it is never
+/// seen empty (Err AlreadyExists when another process won the race, and project_store looks at
+/// that name again), write_atomic over a gone owner.
 fn claim(store: &Path, git_dir: &Path, free: bool) -> io::Result<()>;
 ```
 

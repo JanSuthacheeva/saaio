@@ -1,6 +1,6 @@
 use std::ffi::OsStr;
-use std::fs::{self, OpenOptions};
-use std::io::{self, ErrorKind, Write};
+use std::fs;
+use std::io::{self, ErrorKind};
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
@@ -15,7 +15,10 @@ const PROJECTS_DIR: &str = "projects";
 
 /// Who owns a candidate project store, read from its repo file.
 enum Owner {
+    /// No repo file.
     Free,
+    /// The git dir the file names; empty when it names nothing or cannot be read, so it is taken
+    /// over like a repository that is gone.
     Repo(PathBuf),
 }
 
@@ -145,16 +148,17 @@ fn repo_name(git_dir: &Path) -> Option<String> {
 
 fn owner(store: &Path) -> Owner {
     match fs::read(store.join(OWNER_FILE)) {
-        Ok(line) => match line.strip_suffix(b"\n") {
-            Some(path) if !path.is_empty() => Owner::Repo(PathBuf::from(OsStr::from_bytes(path))),
-            _ => Owner::Free,
-        },
-        Err(_) => Owner::Free,
+        Err(error) if error.kind() == ErrorKind::NotFound => Owner::Free,
+        Err(_) => Owner::Repo(PathBuf::new()),
+        Ok(line) => {
+            let path = line.strip_suffix(b"\n").unwrap_or(&line);
+            Owner::Repo(PathBuf::from(OsStr::from_bytes(path)))
+        }
     }
 }
 
-/// Writes the repo file: create_new for a free store (Err AlreadyExists when another process won
-/// the race), write_atomic over a gone owner.
+/// Writes the repo file: linked into place whole for a free store (Err AlreadyExists when another
+/// process won the race), write_atomic over a gone owner.
 fn claim(store: &Path, git_dir: &Path, free: bool) -> io::Result<()> {
     fs::create_dir_all(store)?;
     let mut line = git_dir.as_os_str().as_bytes().to_vec();
@@ -163,11 +167,11 @@ fn claim(store: &Path, git_dir: &Path, free: bool) -> io::Result<()> {
     if !free {
         return write_atomic(&file, &line);
     }
-    let mut owner = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&file)?;
-    owner.write_all(&line)
+    let partial = store.join(format!(".{OWNER_FILE}.{}", std::process::id()));
+    fs::write(&partial, &line)?;
+    let linked = fs::hard_link(&partial, &file);
+    let _ = fs::remove_file(&partial);
+    linked
 }
 
 /// A store's project name: its folder's name (".../projects/shop" -> "shop"), "default" for the
@@ -387,6 +391,37 @@ mod tests {
         assert_eq!(project_store(&registry, &shop), existing.root());
         assert!(existing.root().join("flows").is_dir());
         assert!(existing.root().join("repo").is_file());
+    }
+
+    #[test]
+    fn takes_over_a_store_whose_repo_file_names_nothing() {
+        let dir = TempDir::new().unwrap();
+        let registry = registry(&dir);
+        let existing = store(&dir, "shop");
+        fs::write(existing.root().join("repo"), "").unwrap();
+        let shop = git_dir(&dir, "code/shop");
+
+        assert_eq!(project_store(&registry, &shop), existing.root());
+        assert_eq!(
+            fs::read(existing.root().join("repo")).unwrap(),
+            format!("{}\n", shop.display()).into_bytes()
+        );
+    }
+
+    #[test]
+    fn reads_a_repo_file_without_its_newline() {
+        let dir = TempDir::new().unwrap();
+        let registry = registry(&dir);
+        let first = git_dir(&dir, "code/shop");
+        let existing = store(&dir, "shop");
+        fs::write(existing.root().join("repo"), first.as_os_str().as_bytes()).unwrap();
+        let second = git_dir(&dir, "work/shop");
+
+        assert_eq!(project_store(&registry, &first), existing.root());
+        assert_eq!(
+            project_store(&registry, &second),
+            registry.root().join("projects/shop-2")
+        );
     }
 
     #[test]
