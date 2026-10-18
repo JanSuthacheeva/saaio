@@ -214,6 +214,8 @@ or merged it: the worker, the master or you.
 | nothing, or a closed one the flow does not show | no change |
 
 - Asked: every flow with a branch that is not merged, ended ones included. Never a plain session.
+- Only merge requests opened after the flow started count. One from an earlier branch of the same
+  name, such as a cleared flow's, is ignored.
 - When: as the server starts, then every 2 minutes, one flow after another. About 30 requests per
   flow an hour.
 - With `gh` for a remote on github.com, `glab` for a host with `gitlab` in its name. Every remote of

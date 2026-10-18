@@ -90,7 +90,8 @@ pub fn ask_in_background(asks: Vec<Ask>, events: Sender<Event>) {
 }
 
 /// One flow's question: its worktree's remotes -> Forge::of -> gh or glab -> parse -> pick.
-/// Ok(None) for a worktree that is gone, a remote of no known forge, or no merge request.
+/// Ok(None) for a worktree that is gone, a remote of no known forge, or no merge request opened
+/// since the flow started.
 fn ask(ask: &Ask) -> Result<Option<Found>> {
     if !ask.dir.is_dir() {
         return Ok(None);
@@ -101,7 +102,7 @@ fn ask(ask: &Ask) -> Result<Option<Found>> {
     };
     let json = workspace::output_in(&ask.dir, &forge.argv(&ask.branch))
         .with_context(|| format!("{} failed", forge.program()))?;
-    Ok(forge::pick(forge.parse(&json)?))
+    Ok(forge::pick(forge.parse(&json)?, ask.since))
 }
 
 impl Server {

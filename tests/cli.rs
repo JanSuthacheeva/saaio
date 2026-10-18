@@ -2557,7 +2557,10 @@ fn a_pull_request_merged_elsewhere_finishes_its_flow() {
     worktree_of(home.path(), &id, "csv", "https://github.com/acme/shop.git");
     let _server = server_with_gh(
         home.path(),
-        "#!/bin/sh\n[ \"$*\" = 'pr list --head flow/csv --state all --json url,state --limit 10' ] || exit 1\necho '[{\"state\":\"MERGED\",\"url\":\"https://github.com/acme/shop/pull/42\"}]'\n",
+        r#"#!/bin/sh
+[ "$*" = 'pr list --head flow/csv --state all --json url,state,createdAt --limit 10' ] || exit 1
+echo '[{"createdAt":"2020-05-04T10:00:00Z","state":"MERGED","url":"https://github.com/acme/shop/pull/7"},{"createdAt":"2099-01-01T00:00:00Z","state":"MERGED","url":"https://github.com/acme/shop/pull/42"}]'
+"#,
     );
     let log = home.path().join(format!("flows/{id}.jsonl"));
 

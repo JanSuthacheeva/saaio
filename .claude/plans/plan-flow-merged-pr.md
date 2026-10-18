@@ -26,16 +26,16 @@ below.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Forge { GitHub, GitLab }
 
-/// A flow to ask about: its id, its worktree and its branch.
+/// A flow to ask about: its id, its worktree, its branch and when it started.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Ask { pub id: String, pub dir: PathBuf, pub branch: String }
+pub struct Ask { pub id: String, pub dir: PathBuf, pub branch: String, pub since: u64 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status { Open, Merged, Closed }
 
-/// A merge request the forge lists for a branch.
+/// A merge request the forge lists for a branch, and when it was opened (Unix ms).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Found { pub url: String, pub status: Status }
+pub struct Found { pub url: String, pub status: Status, pub created_at: u64 }
 
 /// The flows worth asking about: not plain, with a branch, not merged.
 pub fn asks(flows: &[FlowView]) -> Vec<Ask>;
@@ -44,17 +44,19 @@ impl Forge {
     /// The forge of the first remote whose web host (an SSH alias resolved by `real_host`) is
     /// github.com or has "gitlab" in it; None for any other host.
     pub fn of(remotes: &[String], real_host: impl Fn(&str) -> Option<String>) -> Option<Forge>;
-    /// gh pr list --head <branch> --state all --json url,state --limit 10
+    /// gh pr list --head <branch> --state all --json url,state,createdAt --limit 10
     /// glab mr list --source-branch <branch> --all --output json --per-page 10
     pub fn argv(self, branch: &str) -> Vec<String>;
-    /// The merge requests in gh's or glab's JSON (gh: url, state OPEN|MERGED|CLOSED;
-    /// glab: web_url, state opened|merged|closed|locked); an error for JSON of another shape.
+    /// The merge requests in gh's or glab's JSON (gh: url, state OPEN|MERGED|CLOSED, createdAt;
+    /// glab: web_url, state opened|merged|closed|locked, created_at); an error for JSON of
+    /// another shape or an unreadable time.
     pub fn parse(self, json: &str) -> anyhow::Result<Vec<Found>>;
 }
 
 /// The one that speaks for the branch: the first open, else the first merged, else the first
-/// closed (both tools list newest first).
-pub fn pick(found: Vec<Found>) -> Option<Found>;
+/// closed (both tools list newest first); one opened before `since` (the flow's start) belongs
+/// to an earlier branch of the same name and is skipped.
+pub fn pick(found: Vec<Found>, since: u64) -> Option<Found>;
 
 /// What to append so `flow` shows `found`: merge-request for an open one it does not show yet,
 /// merged for a merged one, merge-request-closed for the closed one it shows; None otherwise.
@@ -198,7 +200,7 @@ right part (the E2E check showed "PR #42 mergedtook 1d").
    1. `ask.dir` not a dir -> `Ok(None)`
    2. `workspace::remote_urls(dir)` -> `Forge::of(&remotes, workspace::ssh_hostname)`; None ->
       `Ok(None)`
-   3. `workspace::output_in(dir, &forge.argv(&branch))?` -> `forge.parse(&json)?` -> `forge::pick`
+   3. `workspace::output_in(dir, &forge.argv(&branch))?` -> `forge.parse(&json)?` -> `forge::pick(found, ask.since)`
 5. thread -> `events.send(Event::Forge(Answer::Found { id, found }))`, or
    `Answer::Failed(format!("{forge}: {error:#}"))`; after the last ask `Answer::Done`
 6. `Server::handle(Event::Forge(answer))` -> `Server::forge_answer(answer)`:
@@ -262,6 +264,9 @@ closed" -> state change -> `wake::changed_flows` sees Idle -> the master is woke
   may open the PR after the worker ended). Never asked again once merged.
 - The forge from the remote's host: github.com (also behind an SSH alias) -> gh; a host with
   "gitlab" in it -> glab; GitHub Enterprise or other hosts: not asked.
+- A merge request opened before the flow started is skipped: `saaio start` always makes a new
+  branch, so one that old belongs to an earlier branch of that name (a cleared flow's, or one
+  still on the remote), which would otherwise mark a fresh flow merged.
 - gh/glab run in the worktree, so their own remote resolution (forks' upstream, SSH aliases)
   applies; `--head` / `--source-branch` match the branch name in any fork.
 - Becoming merged on a done flow does not wake the master (state stays done); a flow at review
