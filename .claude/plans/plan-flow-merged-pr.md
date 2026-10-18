@@ -302,6 +302,6 @@ closed" -> state change -> `wake::changed_flows` sees Idle -> the master is woke
 
 ### Check
 
-- [ ] E2E: `saaio ui` with a scratch SAAIO_HOME on a flow seeded on `flow/config-reload` in this
+- [x] E2E: `saaio ui` with a scratch SAAIO_HOME on a flow seeded on `flow/config-reload` in this
   repository (PR #42, merged): the sidebar shows "merged" and the board "PR merged" within the
   first round
