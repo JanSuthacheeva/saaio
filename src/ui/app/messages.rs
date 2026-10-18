@@ -63,7 +63,7 @@ impl App {
                 vec![Effect::Mirror(self.mirrored)]
             }
             ServerMsg::Detached { by } => vec![Effect::Quit(format!(
-                "another saaio ui took over: pid {} in {} (saaio {})",
+                "another terminal took over: pid {} in {} (saaio {})",
                 by.pid,
                 self.tilde(&by.folder()),
                 by.build

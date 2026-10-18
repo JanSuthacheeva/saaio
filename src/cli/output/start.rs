@@ -72,11 +72,11 @@ fn pane(flow: &FlowView, opening: Opening, what: &str) -> (&'static str, String)
     match opening {
         Opening::Running => (
             "opening",
-            format!("saaio ui opens {} in its sidebar", flow.name),
+            format!("saaio opens {} in its sidebar", flow.name),
         ),
         Opening::WhenUiRuns => (
-            "when saaio ui runs",
-            format!("Run `saaio ui` to open the {what}"),
+            "when saaio opens",
+            format!("Run `saaio` in a terminal to open the {what}"),
         ),
     }
 }

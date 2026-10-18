@@ -231,7 +231,7 @@ pub fn no_session(prefix: Prefix, theme: &Theme) -> Dialog<'_> {
         ..Dialog::new(
             "not open",
             vec![Line::styled(
-                "saaio ui has no session for this flow.",
+                "saaio has no session for this flow.",
                 theme.ui.text,
             )],
             theme,

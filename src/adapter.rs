@@ -29,7 +29,7 @@ const CODEX_PHASE_PROMPT: &str = "When you begin working on a workflow skill, ru
 Do not report a phase for skills merely read ahead, even in separate commands.";
 
 /// What a fresh Codex master is asked first, so its first turn runs at once.
-pub const MASTER_OPENING: &str = "saaio ui just started you. Run `saaio status` and say in one line \
+pub const MASTER_OPENING: &str = "saaio just started you. Run `saaio status` and say in one line \
 what needs the user, if anything.";
 
 /// Where a session's turn stands after a hook event.

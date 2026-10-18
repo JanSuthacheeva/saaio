@@ -15,7 +15,7 @@
                                                                                                                                               │
                                            ╭─ not open ────────────────────────────────────────────╮                                          │
                                            │                                                       │                                          │
-                                           │  saaio ui has no session for this flow.               │                                          │
+                                           │  saaio has no session for this flow.                  │                                          │
                                            │                                                       │                                          │
                                            ├───────────────────────────────────────────────────────┤                                          │
                                            │  C-space r resumes it   C-space 0 back to the master  │                                          │

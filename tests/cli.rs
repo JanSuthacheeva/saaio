@@ -291,7 +291,7 @@ fn bare_saaio_in_an_agents_or_a_flows_terminal_prints_the_overview() {
 }
 
 #[test]
-fn bare_saaio_in_a_persons_terminal_opens_saaio_ui() {
+fn bare_saaio_in_a_persons_terminal_opens_the_ui() {
     let lab = Lab::new();
     lab.agent(
         r#"command = ["cat"]
@@ -303,7 +303,7 @@ resume = ["cat"]"#,
     let terminal = Terminal::open(&lab.home, &lab.repo, &[], &[]);
 
     wait_for_socket(&lab.home.join("server.sock"));
-    wait_until(Duration::from_secs(5), "saaio ui never drew", || {
+    wait_until(Duration::from_secs(5), "the UI never drew", || {
         terminal.shows("\x1b[?1049h")
     });
     assert!(!terminal.shows("bin: "), "{}", terminal.text());
@@ -776,11 +776,14 @@ fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_saaio_ui() {
     );
     assert!(
         text.contains(
-            "branch: flow/shop-217\nslot: 1\nsetup: ran\nagent: claude\npane: when saaio ui runs"
+            "branch: flow/shop-217\nslot: 1\nsetup: ran\nagent: claude\npane: when saaio opens"
         ),
         "{text}"
     );
-    assert!(text.contains("Run `saaio ui` to open the worker"), "{text}");
+    assert!(
+        text.contains("Run `saaio` in a terminal to open the worker"),
+        "{text}"
+    );
     assert_eq!(
         fs::read_to_string(worktree.join("setup-ran"))
             .unwrap()
@@ -823,7 +826,7 @@ resume = ["cat"]"#,
     let text = stdout(&output);
     assert!(text.contains("pane: opening"), "{text}");
     assert!(
-        text.contains("saaio ui opens shop-217 in its sidebar"),
+        text.contains("saaio opens shop-217 in its sidebar"),
         "{text}"
     );
     let hosted = || {
@@ -860,21 +863,18 @@ fn status_says_where_a_flows_code_is_and_whether_its_worktree_is_left() {
         )),
         "{ended}"
     );
-    assert!(
-        ended.contains("C-space r in saaio ui resumes it"),
-        "{ended}"
-    );
+    assert!(ended.contains("C-space r in saaio resumes it"), "{ended}");
     let config = lab.home.join("no-config.toml");
     fs::write(&config, "[ui]\nprefix = \"C-b\"\n").unwrap();
     let ended = stdout(&lab.run(&["status", "shop-217"]));
-    assert!(ended.contains("C-b r in saaio ui resumes it"), "{ended}");
+    assert!(ended.contains("C-b r in saaio resumes it"), "{ended}");
     fs::write(&config, "[ui]\nprefix = \"C-c\"\n").unwrap();
     let broken = lab.run(&["status", "shop-217"]);
     assert!(
         broken.status.success(),
-        "a config saaio ui refuses leaves status working"
+        "a config the UI refuses leaves status working"
     );
-    assert!(stdout(&broken).contains("C-space r in saaio ui resumes it"));
+    assert!(stdout(&broken).contains("C-space r in saaio resumes it"));
     fs::remove_file(&config).unwrap();
     git(
         &lab.repo,
@@ -1473,7 +1473,7 @@ fn start_plain_opens_an_agent_in_any_folder_without_a_worktree_branch_or_slot() 
         text.contains(&format!(
             "folder: {}
 agent: claude
-pane: when saaio ui runs",
+pane: when saaio opens",
             scratch.display()
         )),
         "{text}"
@@ -1610,7 +1610,7 @@ fn a_failing_setup_marks_the_flow_blocked_but_still_records_the_worker() {
         text.contains("setup: \"failed: port 8001 is taken\""),
         "{text}"
     );
-    assert!(text.contains("pane: when saaio ui runs"), "{text}");
+    assert!(text.contains("pane: when saaio opens"), "{text}");
     let board: serde_json::Value =
         serde_json::from_slice(&saaio(&lab.home, &["status", "--json"]).stdout).unwrap();
     assert_eq!(board["flows"][0]["state"], "blocked");
@@ -1972,7 +1972,7 @@ fn remove_says_when_there_is_no_such_flow() {
 }
 
 #[test]
-fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
+fn stop_ends_a_running_server_and_says_when_none_runs() {
     let home = TempDir::new().unwrap();
     let config = home.path().join("config.toml");
     fs::write(
@@ -2025,7 +2025,7 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     let server_said = format!("[{server_pid}] ");
     assert!(said("started (saaio ").contains(&server_said));
     let stopper = said(&format!("sends SIGTERM to pid {server_pid}"));
-    assert!(stopper.contains("saaio ui --stop (saaio "), "{stopper}");
+    assert!(stopper.contains("saaio --stop (saaio "), "{stopper}");
     let stopping = said("stopping: SIGTERM from pid ");
     assert!(stopping.contains(&server_said), "{stopping}");
     assert!(
@@ -2089,7 +2089,7 @@ fn the_ui_refuses_a_prefix_the_panes_need_before_it_starts_anything() {
 }
 
 #[test]
-fn ui_stop_ends_a_server_that_speaks_another_protocol() {
+fn stop_ends_a_server_that_speaks_another_protocol() {
     let home = TempDir::new().unwrap();
     let socket = home.path().join("server.sock");
     let listen = "import socket, sys, time\n\

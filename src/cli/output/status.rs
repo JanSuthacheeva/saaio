@@ -319,7 +319,7 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>, prefix: Prefix) -
     if let Some(space) = &flow.workspace
         && flow.state == State::Ended
     {
-        help.push(format!("{} in saaio ui resumes it", prefix.then("r")));
+        help.push(format!("{} in saaio resumes it", prefix.then("r")));
         if let Some(branch) = &space.branch
             && worktree_exists == Some(false)
         {

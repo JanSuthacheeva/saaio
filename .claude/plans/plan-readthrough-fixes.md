@@ -133,7 +133,7 @@ changes.
 ## Tasks
 
 - [x] Remove `Command::Ui`: `ui::run` without Args, new `stop.rs` with the guard, dispatch in `cli.rs`, help texts; rework `tests/cli.rs` (bare `--stop`, PTY opens, `saaio ui` usage error, help) - `cargo test` green
-- [ ] Replace "saaio ui" in user-visible strings (client, keys, draw, dialog, messages, start and status output, MASTER_OPENING) with tests and goldens updated
+- [x] Replace "saaio ui" in user-visible strings (client, keys, draw, dialog, messages, start and status output, MASTER_OPENING) with tests and goldens updated
 - [ ] master.md without `saaio ui`, old text kept as `master-v10.md` in the history list, with its upgrade test
 - [ ] Remove the sidebar master agent marker (`Sidebar::master_agent`, `App::set_master_agent`, reload_config call), tests and goldens
 - [ ] Board: agent on the card's third row and in the detail facts, with card tests and goldens
