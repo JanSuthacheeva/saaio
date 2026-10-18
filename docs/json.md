@@ -32,6 +32,7 @@ saaio status shop-217 --json # a board with just that flow
       "tasks": { "done": 4, "total": 9 },
       "review": null,
       "mergeRequest": null,
+      "merged": false,
       "decisions": ["approach B: one exporter per format"],
       "steps": [
         { "phase": "plan", "status": "done", "durationMs": 5052 },
@@ -70,6 +71,7 @@ saaio status shop-217 --json # a board with just that flow
       "tasks": null,
       "review": null,
       "mergeRequest": null,
+      "merged": false,
       "decisions": [],
       "steps": [],
       "timeline": [{ "at": 1792214574828, "text": "started", "tone": "neutral" }],
@@ -114,6 +116,7 @@ All times are Unix milliseconds.
 | `tasks` | object or null | `{ "done", "total" }`, the plan's tasks |
 | `review` | object or null | `{ "fixed", "open" }`, the review's findings |
 | `mergeRequest` | string or null | the merge request's URL |
+| `merged` | boolean | the merge request was merged |
 | `decisions` | array of strings | decisions made on your behalf, oldest first |
 | `steps` | array | one per phase of the flow's workflow. Empty for a plain session. See [Steps](#steps). |
 | `timeline` | array | what happened, oldest first. See [Timeline](#timeline). |
@@ -133,7 +136,7 @@ All times are Unix milliseconds.
 | `idle` | the worker's turn ended without a question |
 | `blocked` | the flow cannot go on (`blocker` holds the reason) |
 | `not-responding` | the worker sent heartbeats and stopped for 90 seconds |
-| `done` | the merge request is open |
+| `done` | the merge request is open or merged |
 | `ended` | the worker's session ended for good |
 
 `waiting`, `blocked` and `not-responding` count as needing you.
@@ -153,7 +156,7 @@ A flow keeps the phases it started with. Two flows can have different steps.
 | Key | Type | Holds |
 | --- | --- | --- |
 | `at` | number | when it happened |
-| `text` | string | what happened: `started`, `phase: plan`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `master: ...` (a message from the master), `ended` |
+| `text` | string | what happened: `started`, `phase: plan`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `PR #42 merged`, `PR #42 closed`, `master: ...` (a message from the master), `ended` |
 | `tone` | string | `neutral`, `progress`, `attention`, `problem` or `success` |
 
 ### Workspace

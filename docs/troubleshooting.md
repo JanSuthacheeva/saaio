@@ -37,6 +37,7 @@ Each `server.log` line starts with a time and a process id:
 | a Codex flow shows no task counts and never ends | Codex has no task count tool and no `/exit` event | end it from saaio ui (`x` on its exited pane, or on the board when done) or with `saaio remove` |
 | a Codex flow jumps to a later phase | saaio reads a Codex worker's phase from the `SKILL.md` files it reads. Reading a later skill early starts its phase early. | add "read each skill only when you start it" to your skills |
 | a Codex worker asks permission for every `git commit` | the sandbox only allows writes in the worktree. A worktree's git data is in the main repository's `.git`. | approve in its pane, or allow it in Codex's sandbox settings |
+| a flow stays at `review` after its merge request was opened or merged | saaio ui is not running, `gh` or `glab` is missing or not logged in, or the remote's host is neither github.com nor a GitLab | read `server.log`, run `gh auth login` or `glab auth login`, keep saaio ui running. It asks every 2 minutes ([flows.md](flows.md#merge-requests-opened-or-merged-elsewhere)). |
 | a flow is `not-responding` | it reported heartbeats (`saaio report heartbeat`) and stopped for 90 seconds | check the worker. Claude Code and Codex send no heartbeats. Their stopped sessions show `exited`. |
 | a session shows `exited` | its process ended | jump to it: `r` resumes, `x` cleans up the flow |
 | a session shows `failed` | it could not start, for example its command is not installed | read the reason in `server.log`, then `r` or `x` |

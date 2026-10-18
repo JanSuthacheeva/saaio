@@ -189,6 +189,7 @@ help[2]: Run `saaio report --flow shop-217 working` once the block is resolved,R
 | `delegate` | while a subagent works (what the worker handed to it) |
 | `tasks` | with task counts |
 | `review`, `merge_request` | once reported |
+| `merged` | once the merge request is merged |
 | `branch`, `worktree`, `worktree_exists` | for a flow with a worktree. `worktree_exists` is false once the folder is gone. |
 | `folder` | for a plain session |
 | `answer` | the closing message of the worker's last turn |
