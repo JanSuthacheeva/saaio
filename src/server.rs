@@ -26,6 +26,7 @@ use signal_hook::iterator::SignalsInfo;
 use signal_hook::iterator::exfiltrator::WithOrigin;
 use signal_hook::low_level::signal_name;
 
+use crate::config::watch::ConfigWatch;
 use crate::config::{self, Config};
 use crate::fold;
 use crate::launch::pane::LaunchEnv;
@@ -123,6 +124,8 @@ struct Server {
     known: HashSet<String>,
     refreshed_at: Instant,
     config: Config,
+    /// config.toml, looked at before every refresh.
+    configs: ConfigWatch,
     env: LaunchEnv,
     record: MasterRecord,
     master_file: PathBuf,
@@ -181,6 +184,9 @@ pub fn run(
         &format!("started (saaio {BUILD}, protocol {PROTOCOL_VERSION})"),
     );
     write_defaults(paths, clock);
+    let mut configs = ConfigWatch::new(paths.config.clone());
+    // The server was handed this config; the watch only needs to know the file as it is.
+    let _ = configs.changed();
     let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;
     let (events, inbox) = mpsc::channel();
     stop_on_signals(events.clone())?;
@@ -195,6 +201,7 @@ pub fn run(
         known: HashSet::new(),
         refreshed_at: Instant::now(),
         config,
+        configs,
         env,
         record,
         master_file: paths.master.clone(),

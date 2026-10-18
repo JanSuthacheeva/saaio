@@ -15,6 +15,8 @@ use crate::text::{line_of, place};
 use crate::ui::prefix::Prefix;
 use crate::workflow::Workflow;
 
+pub mod watch;
+
 /// How to launch one agent: its command line, the first prompt it gets, and how to resume it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
