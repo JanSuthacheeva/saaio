@@ -412,7 +412,7 @@ Read by saaio:
 
 | Variable | Effect |
 | --- | --- |
-| `SAAIO_HOME` | the folder saaio keeps its flows in. Default: `$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`. |
+| `SAAIO_HOME` | the folder saaio keeps its flows in. Default: the store of the git repository saaio runs in, else the shared folder (`$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`). [files.md](files.md#the-store) |
 | `SAAIO_CONFIG` | the config file. Default: `$XDG_CONFIG_HOME/saaio/config.toml`, else `~/.config/saaio/config.toml`. |
 | `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `HOME` | base of the defaults above |
 | `SAAIO_FLOW_ID` | the flow `saaio report` and `saaio hook` report into. Set in every worker. |
@@ -430,19 +430,23 @@ Set by saaio in every worker's session and in the setup and teardown hooks:
 | `SAAIO_REPO` | the repository's path |
 
 - A plain session gets only `SAAIO_FLOW_ID`.
-- Every session also gets `SAAIO_HOME` when set, `TERM=xterm-256color` and `COLORTERM=truecolor`.
+- Every session also gets `SAAIO_HOME` (the store of the saaio ui that opened it), `TERM=xterm-256color`
+  and `COLORTERM=truecolor`.
 
 ## Several projects
 
-Default: one store, one server and one master for all projects. Separate projects with one
-`SAAIO_HOME` each, for example per tmux session:
+Default: one store per git repository, picked from the folder saaio runs in
+([files.md](files.md#the-store)). Each store has its own flows, server and master: run `saaio ui`
+in a repository for its sidebar and master. Outside a repository saaio uses the shared folder.
+
+`SAAIO_HOME` overrides the choice, for example to keep several repositories in one store:
 
 ```sh
-export SAAIO_HOME=~/.local/state/saaio/projects/shop
+export SAAIO_HOME=~/.local/state/saaio-work
 ```
 
-Each store has its own flows, server and master. Shared in the default folder
-(`$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`) regardless of `SAAIO_HOME`:
+Shared in the shared folder (`$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`) regardless of
+`SAAIO_HOME`:
 
 | Shared | Purpose |
 | --- | --- |
@@ -463,5 +467,5 @@ blockers[2]{project,name,blocker}:
 help[2]: "Run `saaio status <name>` in a flow's project for its phases, timeline and decisions",Run `saaio status --all --json` for every project's board
 ```
 
-- A project is named after its store's folder (`shop` above). The default store is `default`.
+- A project is named after its store's folder (`shop` above). The shared folder's store is `default`.
 - A store whose folder is gone is dropped.

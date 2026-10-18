@@ -19,6 +19,7 @@ The first public release. The date is added when it is tagged. Planned next:
 - Configurable workflow: 1 to 4 phases, the skills that start them, every agent's first prompt.
 - The master: starts and answers workers, woken by their news.
 - Guided and auto flows. Plain sessions.
+- One store, server and master per git repository, `SAAIO_HOME` to choose another.
 - Per-worktree setup and teardown scripts, `SAAIO_SLOT` for ports, branch conventions per
   repository.
 - Themes: the terminal's own colors, flow's dark and light themes, live reload, themes written by

@@ -19,7 +19,18 @@ Location: the folder of `$SAAIO_CONFIG` if set, else `$XDG_CONFIG_HOME/saaio`, e
 
 ## The store
 
-Location: `$SAAIO_HOME`, else `$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`.
+Location, the first that applies:
+
+1. `$SAAIO_HOME`
+2. in a git repository: `projects/<repository>` in the shared folder. A worktree or a subfolder uses
+   its main repository's store.
+3. the shared folder itself (`$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`)
+
+`<repository>` is the repository's folder name. A second repository with the same folder name gets
+`<repository>-2`, a third `-3`.
+
+saaio ui passes its store to every session it opens as `SAAIO_HOME`, so a worker reports into its
+flow's store from any folder.
 
 | File | Holds |
 | --- | --- |
@@ -29,16 +40,18 @@ Location: `$SAAIO_HOME`, else `$XDG_STATE_HOME/saaio`, else `~/.local/state/saai
 | `server.sock` | the socket between saaio ui and the server, owner-only. If its path would be 100 bytes or longer: `/tmp/saaio-<uid>/<hash>.sock`, with the log next to it as `<hash>.log`. |
 | `server.log` | what the server did and what failed. Rotated to `server.log.1` past 1 MiB. |
 | `master.json` | the master's session id and folder, for resuming after a restart |
+| `repo` | in a project store: the git folder of the repository it belongs to. A store without it is taken by the first repository of its name. |
 
 The event log is private. Read flows with `saaio status --json` ([json.md](json.md)).
 
 ## The shared folder
 
-Location: `$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`, regardless of `SAAIO_HOME`. The same
-folder as the default store.
+Location: `$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`, regardless of `SAAIO_HOME`. Also
+the store outside a repository.
 
 | File | Holds |
 | --- | --- |
+| `projects/<repository>/` | one repository's store |
 | `stores/<hash>` | one store's folder, so `saaio status --all` finds every project. Dropped when the folder is gone. |
 | `slots/<n>` | the flow holding slot `n`. Counts only while that flow is unfinished. |
 | `slots/.lock` | held while a slot is claimed, so two starts never get the same slot |
