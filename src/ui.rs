@@ -33,6 +33,7 @@ use signal_hook::iterator::Signals;
 use crate::branching::Branching;
 use crate::client::Client;
 use crate::proto::{Role, ServerMsg};
+use crate::server_log;
 use app::{App, Effect, Job, JobError};
 use input::Router;
 use outer::Outer;
@@ -73,6 +74,8 @@ pub struct UiEnv {
     pub theme_dir: PathBuf,
     /// config.toml, watched while the ui runs.
     pub config_file: Option<PathBuf>,
+    /// server.log, where the UI says what failed.
+    pub log: PathBuf,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
@@ -108,7 +111,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let mut ticks: u32 = 0;
     let mut themes = ThemeWatch::new(env.theme_dir);
     let mut theme = Theme::default();
-    reload_theme(&mut themes, &mut theme, &mut app);
+    reload_theme(&mut themes, &mut theme, &mut app, &env.log, clock);
     app.on_tick(clock());
     loop {
         let mut effects = Vec::new();
@@ -133,6 +136,13 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                     app.on_resize(size)
                 }
                 Event::Ran(job, result) => {
+                    if let Err(error) = &result
+                        && error.refusal.is_none()
+                        && job != Job::Overview
+                    {
+                        let text = format!("ui: {} failed: {}", job.summary(), error.message);
+                        log(&env.log, clock, &text);
+                    }
                     app.on_ran(job, result);
                     vec![]
                 }
@@ -143,7 +153,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                         redraw |= peek.refresh(app.peeked());
                     }
                     if ticks.is_multiple_of(TICKS_PER_THEME) {
-                        redraw |= reload_theme(&mut themes, &mut theme, &mut app);
+                        redraw |= reload_theme(&mut themes, &mut theme, &mut app, &env.log, clock);
                         redraw |= reload_config(&mut configs, &mut app, &mut router);
                     }
                     app.overview_due()
@@ -175,9 +185,15 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
 /// How a notice about the theme begins.
 const THEME_NOTICE: &str = "theme: ";
 
-/// Takes the theme again when its files changed; a broken one keeps the last and says why until it
-/// reads again. True when something changed on screen.
-fn reload_theme(themes: &mut ThemeWatch, theme: &mut Theme, app: &mut App) -> bool {
+/// Takes the theme again when its files changed; a broken one keeps the last, says why until it
+/// reads again and logs it once. True when something changed on screen.
+fn reload_theme(
+    themes: &mut ThemeWatch,
+    theme: &mut Theme,
+    app: &mut App,
+    log_file: &Path,
+    clock: fn() -> u64,
+) -> bool {
     match themes.changed() {
         None => false,
         Some(Ok(loaded)) => {
@@ -186,10 +202,16 @@ fn reload_theme(themes: &mut ThemeWatch, theme: &mut Theme, app: &mut App) -> bo
             true
         }
         Some(Err(error)) => {
+            log(log_file, clock, &format!("ui: {THEME_NOTICE}{error:#}"));
             app.say_about_file(format!("{THEME_NOTICE}{error:#}"));
             true
         }
     }
+}
+
+/// Appends a line to server.log; one that cannot be written is let go.
+fn log(file: &Path, clock: fn() -> u64, text: &str) {
+    let _ = server_log::append(file, clock(), text);
 }
 
 /// How a notice about the config begins.

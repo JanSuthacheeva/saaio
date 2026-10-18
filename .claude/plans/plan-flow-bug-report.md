@@ -148,10 +148,20 @@ before `ui::run` (Outer's restore hook, installed later, runs first and calls it
 ```rust
 pub struct UiEnv { ..., /// server.log, where the UI says what failed.
     pub log: PathBuf }
-// Event::Ran(job, Err(error)) for a job other than Job::Overview: append
-//   `ui: saaio <job.args() joined> failed: <error.message>`
+// Event::Ran(job, Err(error)) for a job other than Job::Overview and not a refusal the UI asks
+// about (uncommitted, unmerged): append `ui: <job.summary()> failed: <error.message>`
 // reload_theme Err: append `ui: theme: <error:#>` (ThemeWatch reports a change once).
 fn log(env_log: &Path, clock: fn() -> u64, text: &str);  // server_log::append, error let go
+```
+
+`src/ui/app/effect.rs` (modified)
+
+```rust
+impl Job {
+    /// How server.log names it: `saaio start in ~/projects/shop`, `saaio remove shop-230 --force`;
+    /// without the request, which can be long.
+    pub fn summary(&self) -> String;
+}
 ```
 
 `src/text.rs` (modified)
@@ -309,7 +319,7 @@ Server start
 - [x] `system.rs`: `System::probe`, `summary`, `Probe`, `run`, `version_of` with unit tests
 - [x] Server start line names the System: `server::run(.., system, ..)`, `commands::server` probes, server test for the line
 - [x] `client::log_path`, hook `Log` replacing every `eprintln!` in `hook.rs`, unit test for `Log::error` and tests/cli.rs for a silent hook that logs
-- [ ] UI logging: `server_log::append_on_panic`, `ui: failed:` in `commands::ui`, `UiEnv::log`, failed jobs and theme errors in `ui.rs`
+- [x] UI logging: `server_log::append_on_panic`, `ui: failed:` in `commands::ui`, `UiEnv::log`, failed jobs and theme errors in `ui.rs`
 - [ ] `text::date` and `bug_report.rs` (`Facts`, `text`, `tail`, `tilde`, `file_name`) with unit tests
 - [ ] `saaio bug-report`: `Command::BugReport`, `commands/bug_report.rs`, `output/bug_report.rs`, tests/cli.rs end to end
 - [ ] `.github/ISSUE_TEMPLATE/bug_report.yml`, `docs/troubleshooting.md` "Reporting a bug" and the new start line, `docs/cli.md` (glance row, section, `--version`), `docs/files.md` server.log row, CLAUDE.md modules and plan list

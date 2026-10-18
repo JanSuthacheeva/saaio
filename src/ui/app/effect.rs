@@ -84,6 +84,17 @@ impl Job {
         }
     }
 
+    /// How server.log names it: `saaio start in ~/projects/shop`, `saaio remove shop-230 --force`;
+    /// without the request, which can be long.
+    pub fn summary(&self) -> String {
+        match self {
+            Job::Start(form) if form.mode != Mode::Plain => {
+                format!("saaio start in {}", form.repo.display())
+            }
+            _ => format!("saaio {}", self.args().join(" ")),
+        }
+    }
+
     /// Where it runs: the repo a flow starts in.
     pub fn dir(&self) -> Option<&Path> {
         match self {

@@ -125,6 +125,10 @@ fn asks_before_a_clean_up_loses_work() {
         Job::Remove(then.clone()).args(),
         ["remove", "shop-230", "--force", "--delete-unmerged"]
     );
+    assert_eq!(
+        Job::Remove(then.clone()).summary(),
+        "saaio remove shop-230 --force --delete-unmerged"
+    );
 
     assert_eq!(app.on_input(Routed::View(vec![Key::Char('n')])), vec![]);
     assert!(!app.is_modal(), "any other key keeps the flow");
@@ -267,6 +271,7 @@ fn starts_a_flow_from_the_dialog_in_the_repo_in_view() {
         ]
     );
     assert_eq!(job.dir(), Some(Path::new("/Users/jan/projects/shop")));
+    assert_eq!(job.summary(), "saaio start in /Users/jan/projects/shop");
     assert!(!app.is_modal());
 
     app.on_ran(job.clone(), Err(JobError::other("all 20 slots are in use")));
@@ -304,6 +309,7 @@ fn opens_a_plain_session_from_the_dialog() {
         panic!("expected a job: {effects:?}");
     };
     assert_eq!(job.args(), ["start", "--plain", "~/projects/scratch"]);
+    assert_eq!(job.summary(), "saaio start --plain ~/projects/scratch");
     assert_eq!(job.dir(), Some(Path::new("/Users/jan/projects/shop")));
 }
 

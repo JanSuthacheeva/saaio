@@ -66,6 +66,19 @@ pub fn exit_on_panic(clock: fn() -> u64) {
     }));
 }
 
+/// From now on a panic appends `<source>: panic ...` and its backtrace to `log`, then runs the hook
+/// before it; for a process whose stderr is not server.log (the UI).
+pub fn append_on_panic(log: PathBuf, source: &'static str, clock: fn() -> u64) {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let message = info.payload_as_str().unwrap_or("a panic without a message");
+        let text = panic_text(thread::current().name(), info.location(), message);
+        let backtrace = Backtrace::force_capture();
+        let _ = append(&log, clock(), &format!("{source}: {text}\n{backtrace}"));
+        previous(info);
+    }));
+}
+
 /// `panic in thread 'accept' at src/server/conn.rs:212:9: message`.
 fn panic_text(thread: Option<&str>, location: Option<&Location>, message: &str) -> String {
     let thread = match thread {
