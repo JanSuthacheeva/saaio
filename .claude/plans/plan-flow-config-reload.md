@@ -239,3 +239,52 @@ fn reload_config(configs: &mut ConfigWatch, app: &mut App, router: &mut Router) 
 - [x] `Router::set_prefix`, `App::set_agents`/`set_prefix`, `UiEnv.config_file`, `ui::reload_config` with the `config: ` notice; unit tests
 - [x] Docs: docs/configuration.md (When a change applies, Use your own workflow, Errors), examples/config.toml header, ROADMAP.md drops "First prompt read at saaio start"; any other doc naming `saaio ui --stop` for config
 - [x] End to end with scratch SAAIO_HOME and SAAIO_CONFIG: saaio ui running, change the prefix, the worker prompt, break and fix the file, start a flow after a prompt change
+
+## Review
+
+Reviewed in isolation against this plan, CLAUDE.md and the diff `main...3a410b0`. Every changed
+line read; an end-to-end run of `saaio ui` on a scratch store, config and tmux socket confirmed: a
+saved `[ui] prefix` shows in the hints within a second, a broken file keeps the last prefix, shows
+`config: <file>:<line>: ...` in the title row and logs it in server.log, and a fixed file clears the
+notice and logs "config.toml read again".
+
+### Fixed
+
+- docs/configuration.md "Errors" showed the ui's `config: ...` notice as what every command prints;
+  `saaio start` prints `error: "<file>:<line>: ..."`. The section now shows both.
+
+### Open
+
+- `Server.adapters` keeps an entry after a pane closes (as `opened_at` already does). Harmless:
+  `deliver_news` and `takes_lines` only look at Running panes, and `open_pane` overwrites the
+  entry on reopen. Recommendation: leave it, or drop the key wherever the host forgets a pane, in a
+  later cleanup together with `opened_at`.
+- Every `saaio wait` (workers too) now stats config.toml on each poll and parses it once, though
+  only the master's uses `wake`. Cheap; recommendation: leave it, or build the `ConfigWatch` only
+  for `Waiter::Master` if it ever shows in a profile.
+- `saaio server` and `saaio ui` read the file once to refuse a broken one, then let the watch stamp
+  it. A save in the few milliseconds between is only picked up at the next save. Recommendation:
+  accept.
+- With `[master] wake = false`, a Claude Code master's waiter now runs and sleeps instead of not
+  being wired, and turning wake on brings every flow that stopped meanwhile (the plan's assumption).
+  Recommendation: confirm that is the wanted behaviour; it is what the test pins.
+
+### Where to look
+
+1. `src/server/panes.rs` `refresh -> reload_config` then `src/server/news.rs` `server_delivered`
+   and `src/server/typing.rs` `takes_lines`: the live config versus the adapter a pane started
+   with.
+2. `src/cli/commands/wait.rs` `wait`: the master's waiter now always runs and gates on `wake`
+   read through `ConfigWatch`; what it marks seen while wake is off.
+3. `src/config.rs` `parse`: the two legacy refusals found through `DeTable` spans, and every error
+   wrapped as `<file>:<line>`.
+
+Routine, skim: `Stamp::of`, `text::place`/`line_of` (moved from theme_file.rs), the setters in
+`ui/app.rs` and `ui/input.rs`, the `wake` parameter removed from the master wiring, docs and
+example header.
+
+### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` passed at
+3a410b0. The review changed only docs and this plan. Fixes were not reviewed independently: the
+only fix is the docs wording above.
