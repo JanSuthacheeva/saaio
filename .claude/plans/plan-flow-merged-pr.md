@@ -161,7 +161,14 @@ MergeRequestClosed { url: String },
 
 `src/proto.rs` (modified): `PROTOCOL_VERSION` 5 -> 6 (FlowView in the Board changed).
 
-`src/ui/sidebar/labels.rs` (modified): a merged flow's label is "PR #42 merged".
+`src/ui/sidebar/labels.rs` (modified): a merged flow's label is "merged" in the done color.
+Changed in the E2E check: "PR #42 merged" does not fit the 40-column row beside "took 1d".
+
+`src/ui/board/detail.rs` (modified): the header names the merge request, "PR #42 open" or
+"PR #42 merged".
+
+`src/ui/fit.rs` (modified): `split` keeps a column between a left part that just fits and the
+right part (the E2E check showed "PR #42 mergedtook 1d").
 
 `src/ui/board/cards.rs` (modified): `Done` with a merged one: "PR merged" / "MR merged".
 
@@ -289,12 +296,12 @@ closed" -> state change -> `wake::changed_flows` sees Idle -> the master is woke
 
 - [x] Sidebar label "PR #42 merged" and card "PR merged"/"MR merged", golden files updated
 - [x] `saaio status` detail `merged` and its help
-- [ ] Docs: `docs/flows.md` (states, a section on merge requests opened or merged elsewhere,
+- [x] Docs: `docs/flows.md` (states, a section on merge requests opened or merged elsewhere,
   ending a flow), `docs/json.md` (`merged`), `docs/troubleshooting.md` (a flow stays at review:
   gh/glab missing or not logged in, saaio ui not running), plain reference style
 
 ### Check
 
 - [ ] E2E: `saaio ui` with a scratch SAAIO_HOME on a flow seeded on `flow/config-reload` in this
-  repository (PR #42, merged): the sidebar shows "PR #42 merged" and the board "PR merged"
-  within the first round
+  repository (PR #42, merged): the sidebar shows "merged" and the board "PR merged" within the
+  first round

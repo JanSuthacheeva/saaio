@@ -54,8 +54,9 @@ impl Sidebar<'_> {
     pub fn label(&self, flow: &FlowView) -> Span<'static> {
         let theme = self.theme;
         match (flow.state, flow.merge_request.as_deref()) {
-            (State::Done | State::Ended, Some(url)) if flow.merged => {
-                Span::styled(format!("{} merged", merge_request(url)), theme.ui.faint)
+            // The row has no room for the number too; the board and the detail show it.
+            (State::Done | State::Ended, Some(_)) if flow.merged => {
+                Span::styled("merged", theme.state.done)
             }
             (State::Done | State::Ended, Some(url)) => {
                 Span::styled(merge_request(url), theme.ui.faint)
@@ -184,8 +185,8 @@ mod tests {
         let merged = sidebar.label(&flow(EventKind::Merged { url: url() }));
 
         assert_eq!(open.content, "PR #42");
-        assert_eq!(merged.content, "PR #42 merged");
-        assert_eq!(merged.style, theme.ui.faint);
+        assert_eq!(merged.content, "merged");
+        assert_eq!(merged.style, theme.state.done);
     }
 
     #[test]

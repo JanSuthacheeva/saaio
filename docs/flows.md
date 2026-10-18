@@ -209,7 +209,7 @@ or merged it: the worker, the master or you.
 | Found on the flow's branch | Result |
 | --- | --- |
 | an open merge request the flow does not show | the flow is `done`. Sidebar `PR #42`, board `PR open`. |
-| a merged one | the flow is `done` and merged. Sidebar `PR #42 merged`, board `PR merged`. Not asked again. |
+| a merged one | the flow is `done` and merged. Sidebar `merged`, board `PR merged`, its detail `PR #42 merged`. Not asked again. |
 | the flow's merge request, closed without a merge | the flow is `idle` in its last phase, timeline `PR #42 closed`. The master is woken. |
 | nothing, or a closed one the flow does not show | no change |
 

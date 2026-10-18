@@ -4,7 +4,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use super::{BoardView, every_flow};
-use crate::text::{clock, long_duration, plural, short_duration};
+use crate::text::{clock, long_duration, merge_request, plural, short_duration};
 use crate::ui::fit::{clip, clip_place, wrap};
 use crate::ui::sidebar;
 use crate::view::{FlowView, State, StepStatus, Tone};
@@ -51,6 +51,10 @@ impl BoardView<'_> {
         } else if let Some(space) = &flow.workspace {
             facts.extend(space.branch.clone());
             facts.extend(space.slot.map(|slot| format!("slot {slot}")));
+        }
+        if let Some(url) = &flow.merge_request {
+            let stage = if flow.merged { "merged" } else { "open" };
+            facts.push(format!("{} {stage}", merge_request(url)));
         }
         facts.push(format!(
             "started {} ago",
@@ -439,6 +443,28 @@ mod tests {
         );
         assert!(rows[2].starts_with("────"), "{rows:#?}");
         assert_eq!(rows[3], " TIMELINE");
+    }
+
+    #[test]
+    fn the_header_names_the_merge_request_and_whether_it_is_merged() {
+        let header = |kind: EventKind| {
+            let flow = flow("shop-221", Mode::Auto, vec![kind]);
+            let area = Rect::new(0, 0, 120, 6);
+            let mut buf = Buffer::empty(area);
+            let state = BoardState {
+                selected: 1,
+                all: false,
+            };
+            with_state(vec![flow], state, |view| view.render_detail(area, &mut buf));
+            rows(&buf)[0].clone()
+        };
+        let url = || "https://github.com/acme/shop/pull/42".to_string();
+
+        let open = header(EventKind::MergeRequest { url: url() });
+        let merged = header(EventKind::Merged { url: url() });
+
+        assert!(open.contains(" · PR #42 open · started "), "{open}");
+        assert!(merged.contains(" · PR #42 merged · started "), "{merged}");
     }
 
     #[test]
