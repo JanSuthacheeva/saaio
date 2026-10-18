@@ -35,3 +35,25 @@ and a Codex worker, and phases moving.
 - A Claude Code worker walks all four phases in about a minute, before a capture can follow: three
   flows first, then a fourth right before `capture`, so the GIF shows it move. The scripts' printed
   steps say so.
+
+## Review
+
+Reviewed `flow/media-reshoot` against `main` in a context that did not write it. No Rust changed,
+so there is no suite to run; both scripts pass `bash -n` and were read, not run.
+
+- **Fixed** - `demo-setup.sh`'s header comment ran one line to 130 columns after the CLAUDE.md
+  note was added; rewrapped at 100 like the rest (65154a3).
+- **Media** - the PNG and all 194 distinct GIF frames (`mpdecimate`) went through OCR and a few
+  were viewed: no home path but `~/projects/shop`, no username, no personal plugin, MCP call or
+  instruction, the product is saaio throughout, no `saaio ui`. `flow/shop-217` is saaio's own
+  default branch template, not an old name. The header shows the account's plan ("Claude Team"),
+  which is harmless.
+- **Open** - `record.sh open` unsets every `CLAUDE_CODE_*` variable to keep a parent session's
+  markers out; a recorder who logs in through one (`CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK`)
+  would get logged-out agents. Leave as is unless someone records that way; the failure is
+  visible at once. Not this branch: the worker peek and the board's last answer show Markdown
+  raw (`**plain text** or **HTML**`, `**CSV:**`), visible in the GIF; worth its own fix in the UI.
+- **Where to look** - `record.sh` `open_ui()`: which variables the tmux server starts without;
+  then the `env` file `demo-setup.sh` writes (`CLAUDE_CODE_DISABLE_CLAUDE_MDS`, present in Claude
+  Code 2.1.302, and `unset TMUX`). The rest, the printed steps and the media, can be skimmed.
+- **Checks** - no code changed since `main`; `bash -n` passes on both scripts at 65154a3.
