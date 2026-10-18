@@ -18,6 +18,7 @@ Nothing in progress.
 | Codex commits without asking | the sandbox cannot write to the main repository's `.git`, so every commit asks permission | commits in the worktree without a prompt |
 | First prompt read at saaio start | a `[worker] prompt` change needs a new `saaio ui`, while `[worker] agent` applies at once | the prompt applies at the next `saaio start` |
 | `saaio example config`, `saaio example theme` | the examples exist only as written on the first run | print every setting with its default |
+| Prebuilt binaries | install builds from source with `cargo install`, which needs Rust | binaries for macOS and Linux on every release, an install script at saaio.dev, a Homebrew tap and `cargo binstall saaio` |
 
 ## Planned future
 
@@ -26,3 +27,4 @@ Nothing in progress.
 | The master asks a worker | no command for it | `saaio ask` puts the master's question to a worker and returns the answer, without waiting on the user |
 | An interrupted Claude Code turn shown as idle | Claude Code runs no hook on Esc. The spinner stays until the next prompt. | the interrupted turn shows as idle |
 | Task counts and an end event for Codex | a Codex flow shows no task counts and is ended from saaio ui or with `saaio remove` | both, as for Claude Code |
+| Continuous integration | tests, clippy and fmt run locally before a merge | GitHub Actions run them on every pull request and build the release binaries |
