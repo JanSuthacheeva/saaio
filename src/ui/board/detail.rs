@@ -6,6 +6,7 @@ use ratatui::text::{Line, Span};
 use super::{BoardView, every_flow};
 use crate::text::{clock, long_duration, merge_request, plural, short_duration};
 use crate::ui::fit::{clip, clip_place, wrap};
+use crate::ui::markdown;
 use crate::ui::sidebar;
 use crate::view::{FlowView, State, StepStatus, Tone};
 
@@ -268,13 +269,13 @@ impl BoardView<'_> {
             }
             lines.push(Line::from(theme.heading("last answer")));
             let room = usize::from(area.height).saturating_sub(lines.len());
-            let mut rows = wrap(answer, width);
+            let mut rows = markdown::lines(answer, width, theme);
             if rows.len() > room && room > 0 {
                 // The end of an answer is what it asks or concludes.
                 rows = rows.split_off(rows.len() - (room - 1));
-                rows.insert(0, theme.glyphs.more.to_string());
+                rows.insert(0, Line::styled(theme.glyphs.more, theme.ui.text));
             }
-            lines.extend(rows.into_iter().map(|row| Line::styled(row, theme.ui.text)));
+            lines.extend(rows);
         }
         for (line, row) in lines.iter().zip(area.rows()) {
             buf.set_line(row.x, row.y, line, row.width);
@@ -398,6 +399,27 @@ mod tests {
             ],
             "the end is kept"
         );
+    }
+
+    #[test]
+    fn last_answer_renders_markdown_and_keeps_its_tail() {
+        let mut flow = flow("shop-221", Mode::Auto, vec![]);
+        flow.answer = Some("# Summary\n\n**ready** with `code`\n\n- first\n- second".into());
+        let area = Rect::new(0, 0, 30, 9);
+        let mut buf = Buffer::empty(area);
+
+        with_view(vec![flow.clone()], |view| {
+            view.render_answer(&flow, area, &mut buf);
+        });
+
+        let written = rows(&buf);
+        assert!(written.iter().any(|row| row == "Summary"), "{written:?}");
+        assert!(
+            written.iter().any(|row| row == "ready with code"),
+            "{written:?}"
+        );
+        assert!(written.iter().any(|row| row == "• first"), "{written:?}");
+        assert!(written.iter().all(|row| !row.contains("**")), "{written:?}");
     }
 
     #[test]
