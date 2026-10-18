@@ -27,25 +27,6 @@ the installed post-rename `saaio` (built after PR #39), under the names `saaio-u
 - [x] Record the picture and GIF on a scratch store and check every frame for the old name
 - [x] Clean up the scratch session, store and repo
 
-## Review
-
-Reviewed `flow/media-saaio` against `main` (commits 69dbde1..1225991). I viewed the PNG at full size and every distinct GIF frame (14 frames after `mpdecimate`, plus samples every 1.5 s).
-
-**Fixed** - nothing. The renames, `record.sh`, `README.md` and `docs/ui.md` are correct. Outside the old plans and design pages, which keep the old names on purpose, nothing still points to `flow-ui.png`/`flow-ui.gif`. The wordmark reads `saaio` in the sidebar and on the board in every frame, and the master's answer and the prompts never call the product `flow`.
-
-**Open**
-
-- The GIF shows Jan's own Claude Code setup and his home path. At about 17-19 s, the shop-198 pane shows a `plan-progress - report (MCP)` call with `plan: "/Users/jansuthacheeva/projects/shop/.saaio/worktrees/shop-198/PLAN.md"`. Everything else in the media shows `~/projects/shop`. This comes from `demo-setup.sh`, which isolates only `SAAIO_HOME`/`XDG_STATE_HOME`: the agents run with the recorder's own plugins and MCP servers. Recommendation: retake the GIF with `plan-progress` (and any other personal plugin) disabled for the recording before the README goes public. Have `demo-setup.sh`/`record.sh` say that the agents use your own config. The PNG is clean.
-- The title row and the board show `flow/shop-198`. That is the built-in branch prefix (`src/branching.rs`), a flow being saaio's word for a unit of work, not the old product name. It is acceptable under the plan's rule. Change it only if the default prefix itself changes.
-
-**Where to look**
-
-1. `docs/media/saaio-ui.gif` from about 17 s to 19 s: the personal MCP call and absolute path.
-2. `docs/media/saaio-ui.png`: the README's first impression. It looks clean.
-3. The rest (`record.sh` names, the three doc links, the plan) is routine and can be skimmed.
-
-**Checks** - no Rust changed on the branch. `cargo test` and `cargo clippy -- -D warnings` last passed on `main` at 763453d and were not rerun.
-
 ## Decided after review
 
 The user chose to retake both with the recorder's own plugins off and to say so in the scripts.
@@ -56,3 +37,45 @@ The user chose to retake both with the recorder's own plugins off and to say so 
   with your own config
 - [x] Retake the picture and GIF, check every frame for the old name and for personal setup
 - [x] Clean up the scratch session, store and repo again
+
+## Review
+
+Second review of `flow/media-saaio` against `main`: the commits after the first review
+(467a6c7..2f8d902) against "Decided after review", and the branch's media once more. I viewed the
+PNG at full size, the GIF at 1 s and 0.5 s steps, and ran OCR over every distinct GIF frame
+(`mpdecimate`) for the old name, home paths, MCP calls and plugin names.
+
+**Fixed**
+
+- The master still ran with the recorder's own plugins, hooks and MCP servers. It is the built-in
+  `master` agent, which `[agents.claude]` does not change; loading the demo config showed
+  `master_agent()` as `["claude", "-n", "{name}", "--session-id", "{id}"]`. `demo-setup.sh` now
+  sets `[agents.master]` with the same flags; the master is still kept out of the worker agents.
+  Nothing personal from the master is visible in this take. 3f0fd85.
+
+**Open**
+
+- The GIF still shows the home path. At about 5 s (frames 77-80 at 15 fps) the peek over shop-198
+  shows `Write(/Users/jansuthacheeva/proje...)`: Claude Code writes PLAN.md by its absolute path
+  and the peek prints a tool call's argument as given. No plugin is involved, so the flags cannot
+  stop it, and the next take can show it again. Recommendation: have the peek (`src/ui/peek/`)
+  write `$HOME` as `~`, as the sidebar already does for the master's folder, and retake the GIF on
+  that build before the README goes public. A quicker way is to keep the sample repository under
+  a folder that has no user name in it, such as `/tmp/shop`, but the sidebar would then show that
+  path. The PNG is clean.
+- `flow/shop-198` in the title row and on the board is the default branch prefix, not the old
+  name (as the first review found).
+
+The fix was checked by me in a separate pass, not by an independent agent: the demo config loads,
+the master's argv has the flags, `{prompt}` stays empty, the workers are still claude and codex.
+
+**Where to look**
+
+1. `docs/media/saaio-ui.gif` at about 5 s: the home path in the peek.
+2. `docs/media/demo-setup.sh` config.toml: `[agents.claude]` and `[agents.master]` both carry
+   `--setting-sources project,local --strict-mcp-config`; Codex still loads `~/.codex/config.toml`
+   (the header says so).
+3. `docs/media/record.sh` `raise()` and the comments: routine.
+
+**Checks** - no Rust changed on the branch. `cargo test` and `cargo clippy -- -D warnings` last
+passed on `main` at 763453d and were not rerun.
