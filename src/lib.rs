@@ -2,6 +2,7 @@ pub mod cli;
 
 mod adapter;
 mod branching;
+mod bug_report;
 mod client;
 mod config;
 mod default_file;

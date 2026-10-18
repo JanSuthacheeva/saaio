@@ -34,15 +34,22 @@ pub fn clock(ms: u64, offset_secs: i64) -> String {
     format!("{:02}:{:02}", minute_of_day / 60, minute_of_day % 60)
 }
 
+/// `2026-10-18` of a Unix ms time in a zone `offset_secs` east of UTC.
+pub fn date(ms: u64, offset_secs: i64) -> String {
+    let secs = (ms / 1_000) as i64 + offset_secs;
+    let (year, month, day) = civil_date(secs.div_euclid(86_400));
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
 /// `2026-10-16 13:39:54 +07:00` of a Unix ms time in a zone `offset_secs` east of UTC.
 pub fn stamp(ms: u64, offset_secs: i64) -> String {
     let secs = (ms / 1_000) as i64 + offset_secs;
-    let (year, month, day) = civil_date(secs.div_euclid(86_400));
     let second_of_day = secs.rem_euclid(86_400);
     let sign = if offset_secs < 0 { '-' } else { '+' };
     let offset_minutes = offset_secs.abs() / 60;
     format!(
-        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02} {sign}{:02}:{:02}",
+        "{} {:02}:{:02}:{:02} {sign}{:02}:{:02}",
+        date(ms, offset_secs),
         second_of_day / 3_600,
         second_of_day % 3_600 / 60,
         second_of_day % 60,
@@ -153,6 +160,13 @@ mod tests {
         assert_eq!(long_duration(30_000), "30s");
         assert_eq!(clock(12 * 3_600_000 + 4 * 60_000, 0), "12:04");
         assert_eq!(clock(23 * 3_600_000, 2 * 3_600), "01:00");
+    }
+
+    #[test]
+    fn writes_the_date_in_the_zone() {
+        let ms = 1_792_132_794_000;
+        assert_eq!(date(ms, 7 * 3_600), "2026-10-16");
+        assert_eq!(date(ms, -(7 * 3_600)), "2026-10-15");
     }
 
     #[test]
