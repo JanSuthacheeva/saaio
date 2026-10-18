@@ -11,11 +11,11 @@ pub const MASTER_ENV: &str = "SAAIO_MASTER";
 /// Workspace.window of a worker saaio ui has opened once; its next open resumes it.
 pub const HOSTED: &str = "saaio-ui";
 
-/// What the server passes on to every pane: SAAIO_HOME, when it was set for the server, and the
-/// saaio binary a worker's hooks run.
+/// What the server passes on to every pane: its store and the saaio binary a worker's hooks run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LaunchEnv {
-    pub saaio_home: Option<PathBuf>,
+    /// The server's store, passed to every pane as SAAIO_HOME.
+    pub store: PathBuf,
     pub flow_exe: PathBuf,
 }
 
@@ -119,15 +119,13 @@ fn worker_env(flow: &FlowView, space: &Workspace, env: &LaunchEnv) -> Vec<(Strin
     vars
 }
 
-/// SAAIO_HOME when set, TERM=xterm-256color, COLORTERM=truecolor.
+/// SAAIO_HOME (the server's store), TERM=xterm-256color, COLORTERM=truecolor.
 pub fn pane_env(env: &LaunchEnv) -> Vec<(String, String)> {
-    let mut vars = Vec::new();
-    if let Some(home) = &env.saaio_home {
-        vars.push(("SAAIO_HOME".to_string(), home.display().to_string()));
-    }
-    vars.push(("TERM".to_string(), "xterm-256color".to_string()));
-    vars.push(("COLORTERM".to_string(), "truecolor".to_string()));
-    vars
+    vec![
+        ("SAAIO_HOME".to_string(), env.store.display().to_string()),
+        ("TERM".to_string(), "xterm-256color".to_string()),
+        ("COLORTERM".to_string(), "truecolor".to_string()),
+    ]
 }
 
 fn fill(
@@ -215,9 +213,9 @@ mod tests {
     }
 
     #[test]
-    fn gives_every_pane_a_terminal_type_and_workers_their_flow() {
+    fn gives_every_pane_its_store_and_a_terminal_type() {
         let env = LaunchEnv {
-            saaio_home: Some(PathBuf::from("/state/saaio")),
+            store: PathBuf::from("/state/saaio"),
             ..LaunchEnv::default()
         };
         let pairs = |items: &[(&str, &str)]| -> Vec<(String, String)> {
@@ -234,10 +232,6 @@ mod tests {
                 ("TERM", "xterm-256color"),
                 ("COLORTERM", "truecolor"),
             ])
-        );
-        assert_eq!(
-            pane_env(&LaunchEnv::default()),
-            pairs(&[("TERM", "xterm-256color"), ("COLORTERM", "truecolor")])
         );
     }
 

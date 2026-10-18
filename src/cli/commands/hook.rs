@@ -32,9 +32,17 @@ enum Hooked {
 /// failing hook shows the user a notice); what goes wrong goes to stderr, the harness's debug log.
 /// A Stop that hands news over wakes the session with it (exit 2, the news on stderr).
 pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
-    let Some(store) = env.store() else {
-        eprintln!("saaio hook: cannot find a state directory");
-        return Document::Silent;
+    let cwd = std::env::current_dir().ok();
+    let store = match env.store(cwd.as_deref()) {
+        Ok(Some(store)) => store,
+        Ok(None) => {
+            eprintln!("saaio hook: cannot find a state directory");
+            return Document::Silent;
+        }
+        Err(error) => {
+            eprintln!("saaio hook: {error:#}");
+            return Document::Silent;
+        }
     };
     // A broken config must not stop running workers from reporting; start and ui say it loudly.
     let config = env.config().unwrap_or_else(|error| {

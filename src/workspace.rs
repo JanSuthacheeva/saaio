@@ -33,6 +33,13 @@ pub fn repo_root(cwd: &Path) -> Result<PathBuf> {
     ))
 }
 
+/// The git dir shared by every worktree of the repository `dir` is in (git rev-parse
+/// --git-common-dir), absolute and canonical; None outside a repository or without git.
+pub fn git_common_dir(dir: &Path) -> Option<PathBuf> {
+    let found = PathBuf::from(git(dir, &["rev-parse", "--git-common-dir"]).ok()?.trim());
+    dir.join(found).canonicalize().ok()
+}
+
 /// The branch checked out in `dir` or the repository above it, read from git's HEAD file so it is
 /// cheap to ask often; None when HEAD is detached or there is no repository.
 pub fn current_branch(dir: &Path) -> Option<String> {
@@ -216,12 +223,8 @@ fn last_line(stderr: &[u8], stdout: &[u8]) -> String {
 
 /// Adds .saaio/worktrees/ to .git/info/exclude once, so worktrees never show in git status.
 fn exclude_worktrees(repo: &Path) -> Result<()> {
-    let git_dir = PathBuf::from(git(repo, &["rev-parse", "--git-common-dir"])?.trim());
-    let git_dir = if git_dir.is_absolute() {
-        git_dir
-    } else {
-        repo.join(git_dir)
-    };
+    let git_dir = git_common_dir(repo)
+        .with_context(|| format!("not a git repository: {}", repo.display()))?;
     let exclude = git_dir.join("info/exclude");
     let line = format!("{WORKTREES_DIR}/");
     let current = fs::read_to_string(&exclude).unwrap_or_default();
@@ -309,6 +312,24 @@ mod tests {
 
         assert_eq!(repo_root(&repo.join("src/deep")).unwrap(), repo);
         assert!(repo_root(Path::new("/")).is_err());
+    }
+
+    #[test]
+    fn finds_the_main_git_dir_from_a_subfolder_and_a_worktree() {
+        let (_dir, repo) = repo();
+        fs::create_dir_all(repo.join("src/deep")).unwrap();
+        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        create_worktree(&repo, &workspace).unwrap();
+        let outside = TempDir::new().unwrap();
+        let git_dir = repo.join(".git");
+
+        assert_eq!(git_common_dir(&repo), Some(git_dir.clone()));
+        assert_eq!(
+            git_common_dir(&repo.join("src/deep")),
+            Some(git_dir.clone())
+        );
+        assert_eq!(git_common_dir(Path::new(&workspace.path)), Some(git_dir));
+        assert_eq!(git_common_dir(outside.path()), None);
     }
 
     #[test]

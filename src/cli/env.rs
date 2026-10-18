@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use crate::config::{self, Config};
 use crate::registry::Registry;
 use crate::store::Store;
+use crate::workspace;
 
 /// The environment saaio runs in: its variables and its terminal, read once by main so commands get
 /// them as values.
@@ -25,13 +26,23 @@ pub struct Env {
 }
 
 impl Env {
-    /// The store $SAAIO_HOME, $XDG_STATE_HOME or $HOME point to.
-    pub(crate) fn store(&self) -> Option<Store> {
-        Store::locate(
-            self.saaio_home.clone(),
-            self.xdg_state_home.clone(),
-            self.home.clone(),
-        )
+    /// The store: $SAAIO_HOME, else the project store of the repository `cwd` is in, else the
+    /// shared default store; Ok(None) when neither $SAAIO_HOME, $XDG_STATE_HOME nor $HOME is set.
+    pub(crate) fn store(&self, cwd: Option<&Path>) -> anyhow::Result<Option<Store>> {
+        if let Some(home) = self
+            .saaio_home
+            .as_ref()
+            .filter(|home| !home.as_os_str().is_empty())
+        {
+            return Ok(Some(Store::at(home.clone())));
+        }
+        let Some(registry) = self.registry() else {
+            return Ok(None);
+        };
+        match cwd.and_then(workspace::git_common_dir) {
+            Some(git_dir) => registry.project_store(&git_dir).map(Some),
+            None => Ok(Some(Store::at(registry.root().to_path_buf()))),
+        }
     }
 
     /// The shared folder every store registers in, from $XDG_STATE_HOME or $HOME.
@@ -107,18 +118,84 @@ impl Env {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::process::Command;
+
+    use tempfile::TempDir;
+
     use super::*;
+
+    fn repo(dir: &TempDir, name: &str) -> PathBuf {
+        let repo = dir.path().canonicalize().unwrap().join(name);
+        fs::create_dir_all(repo.join("src")).unwrap();
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["init", "-q"])
+            .status()
+            .unwrap();
+        assert!(status.success());
+        repo
+    }
+
+    fn root(env: &Env, cwd: &Path) -> PathBuf {
+        env.store(Some(cwd)).unwrap().unwrap().root().to_path_buf()
+    }
 
     #[test]
     fn finds_the_store_in_saaio_home_first() {
+        let dir = TempDir::new().unwrap();
+        let shop = repo(&dir, "shop");
         let env = Env {
             saaio_home: Some(PathBuf::from("/flows")),
             home: Some(PathBuf::from("/home/jan")),
             ..Env::default()
         };
 
-        assert_eq!(env.store().unwrap().root(), Path::new("/flows"));
-        assert!(Env::default().store().is_none());
+        assert_eq!(root(&env, &shop), Path::new("/flows"));
+        assert!(Env::default().store(Some(&shop)).unwrap().is_none());
+    }
+
+    #[test]
+    fn finds_the_project_store_of_the_repository() {
+        let dir = TempDir::new().unwrap();
+        let shop = repo(&dir, "shop");
+        let env = Env {
+            saaio_home: Some(PathBuf::new()),
+            xdg_state_home: Some(dir.path().join("state")),
+            ..Env::default()
+        };
+
+        assert_eq!(
+            root(&env, &shop.join("src")),
+            dir.path().join("state/saaio/projects/shop")
+        );
+    }
+
+    #[test]
+    fn finds_the_shared_store_outside_a_repository() {
+        let dir = TempDir::new().unwrap();
+        let outside = dir.path().join("notes");
+        fs::create_dir_all(&outside).unwrap();
+        let xdg = Env {
+            xdg_state_home: Some(PathBuf::from("/state")),
+            home: Some(PathBuf::from("/home/jan")),
+            ..Env::default()
+        };
+        let home = Env {
+            xdg_state_home: Some(PathBuf::new()),
+            ..xdg.clone()
+        };
+
+        assert_eq!(root(&xdg, &outside), Path::new("/state/saaio"));
+        assert_eq!(
+            root(&home, &outside),
+            Path::new("/home/jan/.local/state/saaio")
+        );
+        assert_eq!(
+            xdg.store(None).unwrap().unwrap().root(),
+            Path::new("/state/saaio")
+        );
     }
 
     #[test]

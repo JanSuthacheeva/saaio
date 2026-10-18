@@ -76,7 +76,14 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
         Some(Command::Wait(args)) => return Ok(wait::run(args, env, clock)),
         _ => {}
     }
-    let Some(store) = env.store() else {
+    let cwd = std::env::current_dir().ok();
+    let store = env.store(cwd.as_deref()).map_err(|error| {
+        Failure::error(
+            format!("could not open the store: {error:#}"),
+            vec!["Set SAAIO_HOME to a directory".to_string()],
+        )
+    })?;
+    let Some(store) = store else {
         return Err(Failure::error(
             "cannot find a state directory",
             vec!["Set SAAIO_HOME to a directory".to_string()],

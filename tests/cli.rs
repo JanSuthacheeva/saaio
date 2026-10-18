@@ -2444,3 +2444,37 @@ fn a_wait_with_nobody_to_wait_for_ends_quietly() {
         Some((0, String::new(), String::new()))
     );
 }
+
+#[test]
+fn every_repository_has_its_own_store_without_saaio_home() {
+    let shop = Lab::new();
+    let twin = Lab::new();
+    let state = shop.dir.path().canonicalize().unwrap().join("xdg");
+    let outside = shop.dir.path().join("notes");
+    fs::create_dir_all(&outside).unwrap();
+    let run_in = |dir: &Path, args: &[&str]| {
+        let output = saaio_command(&shop.home)
+            .env_remove("SAAIO_HOME")
+            .env("XDG_STATE_HOME", &state)
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        stdout(&output)
+    };
+
+    let started = run_in(&shop.repo, &["start", "SHOP-1 one"]);
+    let worktree = shop.repo.join(".saaio/worktrees/shop-1");
+    run_in(&twin.repo, &["new", "--name", "twin", "--request", "two"]);
+
+    assert!(started.contains("slot: 1"), "{started}");
+    assert!(state.join("saaio/projects/repo/repo").is_file());
+    assert!(run_in(&worktree, &["status"]).contains("shop-1"));
+    assert!(run_in(&shop.repo.join(".saaio"), &["status"]).contains("shop-1"));
+    assert!(state.join("saaio/projects/repo-2/flows").is_dir());
+    assert!(!run_in(&twin.repo, &["status"]).contains("shop-1"));
+    assert!(run_in(&outside, &["status"]).contains("count: 0"));
+    let all = run_in(&outside, &["status", "--all"]);
+    assert!(all.contains("  repo,shop-1,"), "{all}");
+    assert!(all.contains("  repo-2,twin,"), "{all}");
+}
