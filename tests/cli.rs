@@ -133,6 +133,10 @@ fn stdout(output: &Output) -> String {
     std::str::from_utf8(&output.stdout).unwrap().to_string()
 }
 
+fn stderr(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
 fn seed(home: &Path, id: &str, lines: &[&str]) {
     let flows = home.join("flows");
     fs::create_dir_all(&flows).unwrap();
@@ -1372,8 +1376,7 @@ fn a_hook_keeps_reporting_when_the_config_does_not_load() {
 
     assert!(output.status.success());
     assert!(output.stdout.is_empty(), "{}", stdout(&output));
-    let err = String::from_utf8_lossy(&output.stderr);
-    assert!(err.contains("no-config.toml:4: "), "{err}");
+    assert!(output.stderr.is_empty(), "{}", stderr(&output));
     let detail = stdout(&saaio(home.path(), &["status", "shop-221"]));
     assert!(detail.contains("phase: plan"), "{detail}");
 }
@@ -1398,9 +1401,19 @@ fn a_hook_never_fails_or_prints_whatever_it_gets() {
     for output in &cases {
         assert!(output.status.success());
         assert!(output.stdout.is_empty(), "{}", stdout(output));
+        assert!(output.stderr.is_empty(), "{}", stderr(output));
     }
-    assert!(String::from_utf8_lossy(&cases[1].stderr).contains("not JSON"));
-    assert!(String::from_utf8_lossy(&cases[2].stderr).contains("no flow no-such-flow"));
+    let log = fs::read_to_string(home.path().join("server.log")).unwrap();
+    assert!(
+        log.contains(&format!(
+            "] hook claude-code flow {id}: the event is not JSON: "
+        )),
+        "{log}"
+    );
+    assert!(
+        log.contains("] hook claude-code flow no-such-flow: no flow no-such-flow\n"),
+        "{log}"
+    );
     let list = stdout(&saaio(home.path(), &["status"]));
     assert!(!list.contains("waiting"), "{list}");
 }

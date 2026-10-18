@@ -308,7 +308,7 @@ Server start
 - [x] `proto::BUILD` as `0.1.0 (e035b96)`, clap `version = BUILD`, tests/cli.rs `--version` test updated
 - [x] `system.rs`: `System::probe`, `summary`, `Probe`, `run`, `version_of` with unit tests
 - [x] Server start line names the System: `server::run(.., system, ..)`, `commands::server` probes, server test for the line
-- [ ] `client::log_path`, hook `Log` replacing every `eprintln!` in `hook.rs`, unit test for `Log::error` and tests/cli.rs for a silent hook that logs
+- [x] `client::log_path`, hook `Log` replacing every `eprintln!` in `hook.rs`, unit test for `Log::error` and tests/cli.rs for a silent hook that logs
 - [ ] UI logging: `server_log::append_on_panic`, `ui: failed:` in `commands::ui`, `UiEnv::log`, failed jobs and theme errors in `ui.rs`
 - [ ] `text::date` and `bug_report.rs` (`Facts`, `text`, `tail`, `tilde`, `file_name`) with unit tests
 - [ ] `saaio bug-report`: `Command::BugReport`, `commands/bug_report.rs`, `output/bug_report.rs`, tests/cli.rs end to end
