@@ -310,3 +310,50 @@ closed" -> state change -> `wake::changed_flows` sees Idle -> the master is woke
 - [x] E2E: `saaio ui` with a scratch SAAIO_HOME on a flow seeded on `flow/config-reload` in this
   repository (PR #42, merged): the sidebar shows "merged" and the board "PR merged" within the
   first round
+
+## Review
+
+Reviewed in a fresh context against this plan, CLAUDE.md and the global rules. The fix commits
+were reviewed again by a separate agent.
+
+### Fixed
+
+- The two forge E2E tests started a real Claude Code as the master: `server_with_gh` gave only
+  `[agents.claude]` (shown by running `saaio server` with that config). Both agents run `cat` now
+  (bb802a6).
+- A new flow could be marked merged and done at once, at any phase: `saaio start` checks only
+  local branches, and `gh pr list --head` lists the old merge requests of a branch name a cleared
+  flow used, or one still on the remote (`flow/license` here lists PR #28, merged). Only merge
+  requests opened after the flow started count now: `createdAt` / `created_at` are read and
+  `pick(found, since)` skips older ones; gh fixtures re-recorded with `createdAt`; docs and plan
+  updated (97a188c, 50845de: a time outside 1970 to 9999 is refused, so no overflow panic ends the
+  server). Checked end to end with the real gh on a scratch store: a flow on `flow/license` stays
+  `working`.
+- A fold test named "keeps an ended flow ended" asserted it becomes idle; renamed (bf6c0c4).
+
+### Open
+
+- A closed merge request on a done flow whose session ended makes it idle, so the server resumes
+  its worker pane and the flow claims its slot again, though another flow may hold that slot by
+  now. Recommendation: accept for now (the worker can react to the close), and note the slot
+  case on the roadmap if it matters.
+- No timeout on gh/glab: a call that hangs keeps `asking` set, so no further round starts until it
+  returns, silently. Recommendation: a timeout (e.g. 60 s) in `output_in` in a follow-up.
+- A worker still working when its PR is merged elsewhere becomes `done` and merged; later worker
+  events can move the state back while `merged` stays true and it is never asked again. Rare;
+  recommendation: accept.
+
+### Where to look
+
+1. `src/forge.rs` `news()` and `pick()`, then `src/fold.rs` `Merged` / `MergeRequestClosed`: what
+   gets appended to the log for each forge answer. Appended events are permanent.
+2. `src/server/forge_watch.rs` `ForgeWatch::due` / `done` and `forge_answer`: one round at a time,
+   logging once.
+3. `src/ui/fit.rs` `split`: the gap change touches every split row (golden files pass).
+
+Routine, can be skimmed: `calls::web_host_of`, `text::merge_request` (moved), the sidebar, card,
+detail and status labels, docs, the saaio rename leftovers.
+
+### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 50845de.
