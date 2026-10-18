@@ -247,3 +247,15 @@ Add `sha2 = "0.10"`.
   The fake worker was an executable shell script that sleeps. Adapter wiring is inserted after
   argv[0], so `sh -c sleep 120` would interpret the hook arguments as its shell command instead
   of sleeping. The fake still exercised the same Codex adapter and stall path without Codex.
+
+## Review
+
+- **Fixed:** None.
+- **Open:** None found. The primary remaining compatibility risk is a future Codex change to
+  hook fingerprinting or project trust parsing; the pinned hashes and startup stall signal make
+  those regressions visible.
+- **Where to look:** `src/adapter/codex.rs` hook identity and trust arguments; then
+  `src/launch/pane.rs` worktree threading; then `src/server/startup.rs` stall detection and
+  `src/fold.rs` recovery through `Working`. The docs are routine.
+- **Checks:** Full tests, lint and type checks passed at `8615281`; later commits changed only
+  documentation and plan notes.
