@@ -35,3 +35,10 @@ Recorded hook fixtures cover Codex permission pending and completion and batched
 - [x] Keep opened and merged MRs in the workflow's final phase with fold tests for both adapters' common event path and custom phases.
 - [x] Ignore Codex multi-phase skill reads and tell workers to report the active phase, with adapter and prompt tests.
 - [x] Update plain reference docs and run the end-to-end check using scratch `SAAIO_HOME`; run the full suite and `cargo clippy --all-targets -- -D warnings`.
+
+## Review
+
+- Fixed: none. The branch review found no reproducible defect.
+- Open: none. The documented three-second grace period can briefly show `waiting` during a slow automatic Codex review; the subsequent tool completion clears it.
+- Where to look: `src/fold.rs` `changes()` and `Folding::finish()` for pending permission resolution; `Folding::apply()` and `open_merge_request()` for late events after an MR opens; `src/adapter/codex.rs` `read_phase()` for batched skill reads. The reference docs are routine to skim.
+- Checks: full `cargo test`, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings` passed at `bf270de455c334e96d2709020425b24c56f50efe`. Only this plan changed afterward, so the unchanged-code skip applies.
