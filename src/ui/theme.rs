@@ -651,6 +651,7 @@ mod tests {
             tasks: None,
             review: None,
             merge_request: None,
+            merged: false,
             decisions: Vec::new(),
             steps: ["plan", "implement", "review", "merge-request"]
                 .map(step)

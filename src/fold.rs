@@ -158,6 +158,7 @@ impl Folding {
             tasks: None,
             review: None,
             merge_request: None,
+            merged: false,
             decisions: Vec::new(),
             steps: Vec::new(),
             timeline: vec![entry(at, "started".to_string(), Tone::Neutral)],
@@ -270,6 +271,7 @@ impl Folding {
                 self.stopped_at.get_or_insert(at);
                 self.note(at, "MR opened".to_string(), Tone::Success);
             }
+            EventKind::Merged { .. } | EventKind::MergeRequestClosed { .. } => {}
             EventKind::Workspace {
                 path,
                 branch,

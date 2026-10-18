@@ -264,7 +264,7 @@ closed" -> state change -> `wake::changed_flows` sees Idle -> the master is woke
 
 ### Model
 
-- [ ] Add `EventKind::Merged` and `EventKind::MergeRequestClosed` with line round-trip tests, and
+- [x] Add `EventKind::Merged` and `EventKind::MergeRequestClosed` with line round-trip tests, and
   `FlowView::merged`; move `merge_request` label to `text::merge_request` with its tests
 - [ ] Fold `merged` and `merge-request-closed` (`open_merge_request`, `shown` with merged) with the
   fold tests listed under Test seams; bump `PROTOCOL_VERSION` to 6

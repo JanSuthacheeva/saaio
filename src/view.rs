@@ -30,6 +30,8 @@ pub struct FlowView {
     pub tasks: Option<Tasks>,
     pub review: Option<ReviewCount>,
     pub merge_request: Option<String>,
+    /// The merge request was merged.
+    pub merged: bool,
     pub decisions: Vec<String>,
     pub steps: Vec<Step>,
     pub timeline: Vec<TimelineEntry>,
@@ -303,6 +305,7 @@ mod tests {
             tasks: Some(Tasks { done: 4, total: 9 }),
             review: None,
             merge_request: None,
+            merged: false,
             decisions: vec![],
             steps: vec![Step {
                 phase: Phase::of("plan"),
@@ -350,6 +353,7 @@ mod tests {
         assert_eq!(flow["state"], "not-responding");
         assert_eq!(flow["phase"], "merge-request");
         assert_eq!(flow["mergeRequest"], serde_json::Value::Null);
+        assert_eq!(flow["merged"], false);
         assert_eq!(flow["startedAt"], 1);
         assert_eq!(flow["tasks"]["total"], 9);
         assert_eq!(flow["steps"][0]["durationMs"], 540_000);

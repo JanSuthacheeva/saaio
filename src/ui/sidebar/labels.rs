@@ -3,6 +3,7 @@ use ratatui::text::Span;
 
 use super::Sidebar;
 use crate::proto::PaneStatus;
+use crate::text::merge_request;
 use crate::view::{FlowView, State, StepStatus};
 
 impl Sidebar<'_> {
@@ -113,19 +114,6 @@ pub fn last_note(flow: &FlowView) -> Option<String> {
         .find(|text| !text.starts_with("phase: "))?;
     // An answered question is over; what came before it is no news.
     (text != "answered").then(|| text.strip_prefix("idle: ").unwrap_or(text).to_string())
-}
-
-/// !418 for a GitLab merge request, #12 for a GitHub pull request, else MR.
-fn merge_request(url: &str) -> String {
-    let number = url.trim_end_matches('/').rsplit('/').next().unwrap_or("");
-    let numeric = !number.is_empty() && number.chars().all(|c| c.is_ascii_digit());
-    if numeric && url.contains("merge_requests/") {
-        format!("MR !{number}")
-    } else if numeric && url.contains("/pull/") {
-        format!("PR #{number}")
-    } else {
-        "MR".to_string()
-    }
 }
 
 #[cfg(test)]
@@ -245,15 +233,5 @@ mod tests {
             EventKind::Working,
         ]);
         assert_eq!(last_note(&answered), None, "not the old question");
-    }
-
-    #[test]
-    fn names_merge_requests_by_their_number() {
-        assert_eq!(
-            merge_request("https://gitlab.com/shop/-/merge_requests/418"),
-            "MR !418"
-        );
-        assert_eq!(merge_request("https://github.com/a/b/pull/12"), "PR #12");
-        assert_eq!(merge_request("somewhere"), "MR");
     }
 }
