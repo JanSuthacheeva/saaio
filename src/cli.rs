@@ -7,7 +7,9 @@ pub use env::Env;
 
 use clap::{Parser, Subcommand};
 
-use commands::{clear, home, hook, new, remove, report, send, server, start, status, ui, wait};
+use commands::{
+    clear, home, hook, new, remove, report, send, server, start, status, stop, ui, wait,
+};
 use output::{Document, Failure};
 
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
@@ -15,7 +17,7 @@ use output::{Document, Failure};
 #[command(
     version,
     about,
-    after_help = "Run alone in a terminal, saaio opens saaio ui.\nRun by an agent or a script, it prints every flow and what needs you.\nRun saaio --stop to stop the server and every session.",
+    after_help = "Run alone in a terminal, saaio opens the terminal UI.\nRun by an agent or a script, it prints every flow and what needs you.\nRun saaio --stop to stop the server and every session.",
     args_conflicts_with_subcommands = true
 )]
 pub struct Cli {
@@ -47,7 +49,7 @@ enum Command {
     Report(report::Args),
     /// Every flow, or one flow with its phases, timeline and decisions
     Status(status::Args),
-    /// Start a worker: a flow, a worktree, the setup hook and an agent saaio ui opens
+    /// Start a worker: a flow, a worktree, the setup hook and an agent the UI opens
     Start(start::Args),
     /// Stop a flow's worker, tear down its worktree and forget it
     Remove(remove::Args),
@@ -55,12 +57,10 @@ enum Command {
     Send(send::Args),
     /// Forget flows that are done or ended
     Clear,
-    /// Open the terminal UI: the master, every worker and the board
-    Ui(ui::Args),
     /// What a session's asyncRewake hook runs: sleeps until there is news for it, prints it, exits 2
     #[command(hide = true)]
     Wait(wait::Args),
-    /// The session server saaio ui starts on its own
+    /// The session server saaio starts on its own
     #[command(hide = true)]
     Server,
     /// What a harness hook runs: reports the event on stdin into $SAAIO_FLOW_ID's flow
@@ -105,8 +105,8 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
     let store = &store;
     let registry = &registry;
     match cli.command {
-        None if cli.stop => ui::run(&ui::Args { stop: true }, store, env, clock),
-        None if env.is_person() => ui::run(&ui::Args::default(), store, env, clock),
+        None if cli.stop => stop::run(store, env, clock),
+        None if env.is_person() => ui::run(store, env, clock),
         None => home::run(store, &env.bin_path(), now),
         Some(Command::New(args)) => new::run(args, store, &env.config()?.workflow, now),
         Some(Command::Report(args)) => report::run(args, store, now),
@@ -119,7 +119,6 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
         Some(Command::Remove(args)) => remove::run(&args, store, now),
         Some(Command::Send(args)) => send::run(&args, store, env, now),
         Some(Command::Clear) => clear::run(store, now),
-        Some(Command::Ui(args)) => ui::run(&args, store, env, clock),
         Some(Command::Server) => server::run(store.clone(), env, clock),
         Some(Command::Hook(_) | Command::Wait(_)) => Ok(Document::Silent),
     }
