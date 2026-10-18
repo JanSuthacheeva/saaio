@@ -175,6 +175,7 @@ saaio detects it), desktop notifications, phone access. macOS and Linux only.
 - [Troubleshooting](docs/troubleshooting.md)
 - [Changelog](CHANGELOG.md)
 - [Roadmap](ROADMAP.md)
+- [Contributing](CONTRIBUTING.md)
 
 ## License
 
