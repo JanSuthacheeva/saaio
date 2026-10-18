@@ -291,12 +291,19 @@ impl<'a> Renderer<'a> {
         for part in text.split_inclusive('\n') {
             let line = part.trim_end_matches('\n');
             if !line.is_empty() {
-                self.line
-                    .push(Span::styled(clip(line, self.width), self.theme.ui.muted));
-                self.has_text = true;
+                let room = self.width.saturating_sub(self.used);
+                if room > 0 {
+                    let fitted = clip(line, room);
+                    self.used += columns(&fitted);
+                    self.line.push(Span::styled(fitted, self.theme.ui.muted));
+                    self.has_text = true;
+                }
             }
             if part.ends_with('\n') {
                 self.flush();
+                if line.is_empty() {
+                    self.rows.push(Line::raw(""));
+                }
             }
         }
     }
@@ -378,5 +385,15 @@ mod tests {
         assert!(rows.iter().all(|line| line.width() <= 7));
         assert!(text(&rows).iter().any(|row| row.ends_with('…')));
         assert!(lines("anything", 0, &Theme::default()).is_empty());
+    }
+
+    #[test]
+    fn preserves_blank_code_lines_and_hangs_numbered_list_continuations() {
+        let code = lines("```\na\n\nb\n```", 12, &Theme::default());
+        assert_eq!(text(&code), ["a", "", "b"]);
+
+        let list = lines("3. alpha beta gamma", 10, &Theme::default());
+        assert_eq!(text(&list), ["3. alpha", "   beta", "   gamma"]);
+        assert!(list.iter().all(|line| line.width() <= 10));
     }
 }

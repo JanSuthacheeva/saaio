@@ -49,9 +49,13 @@ Unit tests in `src/ui/markdown.rs` cover inline and block formatting, Unicode wi
 
 Only worker text in `PeekLine::Text` and `FlowView.answer` gets Markdown styling. Tool calls, tool results, decisions and timeline keep their current presentation. The agent display code stays unchanged because the requested reproduction shows it already works when a flow exists.
 
+## Verification
+
+`cargo test -q` passed with 552 unit tests and 78 integration tests. `cargo clippy --all-targets -- -D warnings` passed. In a scratch `SAAIO_HOME`, a real `--agent claude` flow opened in a PTY; `status --json` named `workspace.agent = claude` and the 80-column board showed `claude · age` on its card.
+
 ## Tasks
 
 - [x] Add `pulldown-cmark`, `ui::markdown::lines`, and focused tests for Markdown styling and width.
 - [x] Use `markdown::lines` in `Sidebar::peek_rows`; add peek behavior tests and refresh intended golden output with `SAAIO_UPDATE_GOLDEN=1`.
 - [x] Use `markdown::lines` in `BoardView::render_answer`; add answer behavior tests and refresh intended golden output with `SAAIO_UPDATE_GOLDEN=1`.
-- [ ] Update README and CHANGELOG, then run a scratch PTY worker flow to verify the agent label, full tests, formatting, and `cargo clippy --all-targets -- -D warnings`.
+- [x] Update README and CHANGELOG, then run a scratch PTY worker flow to verify the agent label, full tests, formatting, and `cargo clippy --all-targets -- -D warnings`.
