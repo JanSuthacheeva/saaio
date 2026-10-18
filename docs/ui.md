@@ -75,7 +75,7 @@ Press the prefix, release, press the key.
 | `C-space n` | [start a flow](#starting-a-flow) |
 | `C-space o` | open the [board](#the-board) |
 | `C-space b` | fold the sidebar to a rail, and back |
-| `C-space r` | resume a session that exited, or a flow that ended |
+| `C-space r` | resume a session that exited while its flow is unfinished |
 | `C-space [` | scroll back through the session's [history](#history) |
 | `C-space d` | detach: leave saaio ui, every session keeps running |
 | `C-space Q` | stop saaio ([Leaving and stopping](#leaving-and-stopping)) |
@@ -162,11 +162,12 @@ A worker's pane after `/exit` or a stopped process:
 | Key | Does |
 | --- | --- |
 | `x` | clean up: `saaio remove` for the flow (worktree, branch, flow) |
-| `r` | resume the session |
+| `r` | resume the session if its flow is unfinished |
 | `esc` | back to the master |
 
 `x` asks before discarding uncommitted changes or commits on no other branch. `y` confirms, any
-other key keeps the flow.
+other key keeps the flow. A finished flow (`done` or `ended`) cannot be reopened: its slot may
+already belong to another flow. Use a new flow to continue work.
 
 The master's session ended: `C-space r` resumes it, `C-space Q` stops saaio.
 

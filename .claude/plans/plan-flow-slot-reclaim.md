@@ -113,5 +113,5 @@ pub fn reconcile(
 
 - [x] Extend `Folding::new` and `Folding::apply` with private `ended` memory; first add fold tests for Ended-before-PR, PR-before-Ended, and no-Ended closure, then make them pass.
 - [x] Guard `Server::reopen_worker` and `Server::open_fresh` for finished flows; first update socket-level server tests for unfinished reopen and finished refusal, then make them pass.
-- [ ] Update `docs/flows.md` and any affected user help to explain closed PR behavior and finished Reopen refusal; verify docs against the changed tests.
+- [x] Update `docs/flows.md` and any affected user help to explain closed PR behavior and finished Reopen refusal; verify docs against the changed tests.
 - [ ] Run a scratch-`SAAIO_HOME` end-to-end reproduction with two flows and a reclaimed slot, then run `cargo test` and `cargo clippy --all-targets -- -D warnings` before review.
