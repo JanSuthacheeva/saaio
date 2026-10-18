@@ -123,6 +123,16 @@ pub(super) fn simple_commands(line: &str) -> Vec<Vec<String>> {
                 word.extend(chars.next());
                 started = true;
             }
+            (None, '#') if !started => {
+                for rest in chars.by_ref() {
+                    if rest == '\n' {
+                        if !words.is_empty() {
+                            commands.push(std::mem::take(&mut words));
+                        }
+                        break;
+                    }
+                }
+            }
             (None, c) if c.is_whitespace() || matches!(c, ';' | '&' | '|') => {
                 if started {
                     words.push(std::mem::take(&mut word));

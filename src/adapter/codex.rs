@@ -415,6 +415,22 @@ mod tests {
     }
 
     #[test]
+    fn a_skill_path_in_a_shell_comment_does_not_change_the_phase() {
+        let mut payload = fixture("pre_bash_skill");
+        payload["tool_input"]["command"] =
+            "cat notes.txt # /repo/.agents/skills/demo-skill/SKILL.md".into();
+        assert_eq!(translate(&payload, &phases()), after_session(vec![]));
+
+        payload["tool_input"]["command"] = "cat /repo/.agents/skills/demo-skill/SKILL.md # /repo/.agents/skills/implement-plan/SKILL.md".into();
+        assert_eq!(
+            translate(&payload, &phases()),
+            after_session(vec![EventKind::Phase {
+                phase: Phase::of("plan")
+            }])
+        );
+    }
+
+    #[test]
     fn a_subagent_is_delegated_until_the_main_agent_goes_on() {
         assert_eq!(
             events("pre_spawn_agent"),
