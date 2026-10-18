@@ -9,7 +9,10 @@
 #
 # It writes <state>/env for the tape to source. The workers run small stand-in skills that live in
 # the sample repository, so they walk through plan, implement, review and merge-request on a real
-# agent without opening merge requests or publishing anything.
+# agent without opening merge requests or publishing anything. The agents run on your own logins
+# and agent config; Claude Code starts without your user settings and MCP servers, so your plugins,
+# hooks and MCP servers stay out of the recording. Codex still loads ~/.codex/config.toml: turn off
+# anything in it you would not show.
 #
 # Then: docs/media/record.sh open <state> <repo>, ask the master to start the flows printed at the
 # end, answer the agents' first-run questions in their panes (folder trust, Codex's hooks review),
@@ -131,10 +134,11 @@ git add .
 git commit -q -m "shop: orders and refunds"
 
 cat > "$state/config/config.toml" <<'EOF'
+# Without your user settings and MCP servers: your plugins and their tool calls stay off screen.
 [agents.claude]
-command = ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
+command = ["claude", "--setting-sources", "project,local", "--strict-mcp-config", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
 prompt = "/demo-plan {request}"
-resume = ["claude", "-n", "{name}", "--resume", "{id}"]
+resume = ["claude", "--setting-sources", "project,local", "--strict-mcp-config", "-n", "{name}", "--resume", "{id}"]
 adapter = "claude-code"
 
 [agents.codex]

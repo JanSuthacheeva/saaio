@@ -6,7 +6,9 @@
 #
 # Prepare <state> and <repo> with docs/media/demo-setup.sh first. After `open`, ask the master to
 # start the flows demo-setup.sh printed and answer the agents' first-run questions in their panes.
-# Run `capture` once the workers stand in different places.
+# Run `capture` once the workers stand in different places. The agents run with your own logins;
+# demo-setup.sh keeps your Claude Code plugins and MCP servers out, but check every frame for
+# anything personal before you commit.
 #
 # saaio ui runs in a private tmux server (status line off), which the Alacritty window attaches to
 # and this script sends keys through. Needs Alacritty, tmux, ffmpeg, swift, FiraCode Nerd Font
@@ -46,9 +48,20 @@ open_ui() {
     fi
 }
 
+# The recording films the screen where the window is, so nothing may cover it.
+raise() {
+    if command -v aerospace >/dev/null; then
+        aerospace focus --window-id "$1"
+    else
+        osascript -e 'tell application "Alacritty" to activate'
+    fi
+    sleep 0.5
+}
+
 capture() {
     local id x y w h
     read -r id x y w h < <(window)
+    raise "$id"
     key() { "${tmux[@]}" send-keys -t demo "$@"; }
     prefixed() { key C-Space; key "$@"; }
 
