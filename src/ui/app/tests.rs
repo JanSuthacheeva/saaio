@@ -167,9 +167,12 @@ fn fleet() -> Board {
             "shop-198",
             Auto,
             120,
-            vec![EventKind::MergeRequest {
-                url: "https://gitlab.com/shop/-/merge_requests/418".into(),
-            }],
+            vec![
+                EventKind::MergeRequest {
+                    url: "https://gitlab.com/shop/-/merge_requests/418".into(),
+                },
+                EventKind::Ended,
+            ],
         ),
     ];
     fold::board(flows, NOW)

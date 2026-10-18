@@ -19,7 +19,7 @@
                │                                                                            │               │     agent: review changes
                │▌ agent   (•) claude   ( ) codex                                            │               │
                │  mode    ( ) auto   (•) guided   ( ) plain    guided stops at every phase  │               │ DONE 1
-               │  creates a branch, a worktree and a slot                                   │               │ 4 ✓ shop-198                 claude 2h
+               │  creates a branch, a worktree and a slot                                   │               │ 4 ○ shop-198                 claude 2h
                │                                                                            │               │     ●───●───●───● MR !418      took 0s
                ├────────────────────────────────────────────────────────────────────────────┤               │
                │  enter start   tab next field   esc cancel                                 │               │

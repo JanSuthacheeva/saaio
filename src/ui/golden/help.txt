@@ -19,7 +19,7 @@
                             │    b        fold the sidebar to a rail and back  │                            │     agent: review changes
                             │    r        resume a session that ended          │                            │
                             │    [        scroll back through the history      │                            │ DONE 1
-                            │    d        detach; every session keeps running  │                            │ 4 ✓ shop-198                 claude 2h
+                            │    d        detach; every session keeps running  │                            │ 4 ○ shop-198                 claude 2h
                             │    Q        stop saaio                           │                            │     ●───●───●───● MR !418      took 0s
                             │    C-space  send C-space itself                  │                            │
                             │    ?        these keys                           │                            │

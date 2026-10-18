@@ -213,12 +213,15 @@ mod tests {
             flow("asks", vec![(5, waiting("Which?"))]),
             flow(
                 "shipped",
-                vec![(
-                    2,
-                    EventKind::MergeRequest {
-                        url: "https://x/1".into(),
-                    },
-                )],
+                vec![
+                    (
+                        2,
+                        EventKind::MergeRequest {
+                            url: "https://x/1".into(),
+                        },
+                    ),
+                    (3, EventKind::Ended),
+                ],
             ),
             flow("gone", vec![(1, EventKind::Ended)]),
         ];

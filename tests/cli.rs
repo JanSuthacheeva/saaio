@@ -634,6 +634,9 @@ fn clear_forgets_finished_flows_only() {
         &done,
         &["report", "merge-request", "https://x/88"],
     );
+    let still_live = saaio(home.path(), &["clear"]);
+    assert!(stdout(&still_live).starts_with("cleared: 0"));
+    saaio_in(home.path(), &done, &["report", "ended"]);
 
     let cleared = saaio(home.path(), &["clear"]);
     let again = saaio(home.path(), &["clear"]);

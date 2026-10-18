@@ -1,5 +1,5 @@
 
-  ▚▄▞ saaio board                                                                 7 sessions · 2 need you · 1 ready · 1 delegated · 1 done · 1 ended
+  ▚▄▞ saaio board                                                                          7 sessions · 2 need you · 1 ready · 1 delegated · 2 ended
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
     0   master                              you      1 ● shop-221                        blocked      2 ● shop-230                waiting for you
@@ -9,7 +9,7 @@
 
 
   ▌
-  ▌ 3 ○ scratch                           ready      4 ◓ export-csv               review · agent      5 ✓ shop-198                        MR open
+  ▌ 3 ○ scratch                           ready      4 ◓ export-csv               review · agent      5 ○ shop-198                          ended
   ▌   idle  · plain                                    ●───●───●───○  review                            ●───●───●───●  MR !418
   ▌                                claude · 12m        6/6 tasks                     claude · 1h        flow/shop-198                 claude · 2h
   ▌   The tree has 14 files under src.                 agent: review changes                            shop-198

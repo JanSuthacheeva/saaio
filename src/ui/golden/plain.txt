@@ -24,7 +24,7 @@
                                                                                                             │     agent: review changes
                                                                                                             │
                                                                                                             │ DONE 2
-                                                                                                            │ 5 ✓ shop-198                 claude 2h
+                                                                                                            │ 5 ○ shop-198                 claude 2h
                                                                                                             │     ●───●───●───● MR !418      took 0s
                                                                                                             │
                                                                                                             │ 6 ○ notes                    claude 3h

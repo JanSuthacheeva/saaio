@@ -441,6 +441,9 @@ fn reopens_an_exited_worker_but_refuses_finished_flows() {
             ),
         )
         .unwrap();
+    store
+        .append(&done, &LogEvent::new(3, EventKind::Ended))
+        .unwrap();
     let (paths, handle) = start(dir.path());
     let mut ui = connect(
         &paths.socket,

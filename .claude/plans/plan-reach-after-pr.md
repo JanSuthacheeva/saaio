@@ -66,6 +66,6 @@ Existing `EventKind::MergeRequest`, `Waiting`, `Ended`, `Merged`, `MergeRequestC
 
 ## Tasks
 
-- [ ] Change `FlowView::is_finished` and `Folding::{apply,open_merge_request,finish}` with lifecycle tests in `src/fold/tests.rs`.
+- [x] Change `FlowView::is_finished` and `Folding::{apply,open_merge_request,finish}` with lifecycle tests in `src/fold/tests.rs`.
 - [ ] Add recorded-fixture CLI coverage for `send` and `send --type` after PR, and focused slot, pane and master-news regression coverage; update user-facing docs for the new lifecycle.
 - [ ] Run end-to-end checks using a scratch `SAAIO_HOME`, `cargo test`, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.
