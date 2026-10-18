@@ -368,3 +368,35 @@ detail and status labels, docs, the saaio rename leftovers.
 ### Checks
 
 `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 50845de.
+
+### Second review
+
+Reviewed in a fresh context: the commits after 1d2ea56 (c309c8c, 4bd1765) against "Review
+decisions". The timeout item is built as decided: `output_in(dir, argv, limit)` reads both pipes on
+their own threads, polls `try_wait` every 20 ms, kills and reaps the command past `limit` and fails
+with "<program> gave no answer within 1m"; `forge_watch::ASK_LIMIT` is 60 s; docs/flows.md says so.
+The two decisions to accept are recorded in the plan.
+
+Fixed: nothing; no finding could be shown.
+
+Checked:
+
+- A command that hangs in a child of its own (a script that runs `sleep` without `exec`, so the
+  grandchild keeps the pipes open after the kill) still fails at the limit: the timeout path bails
+  without joining the readers, which end with the grandchild.
+- No other caller of `output_in`; `run` and `stdout_of` are unchanged.
+
+Open:
+
+- server.log reads "could not ask about merge requests: gh failed: gh gave no answer within 1m",
+  the program named twice. Recommendation: accept; the "gh failed" context helps every other error.
+- On success, `output_in` still waits for both pipes to close, so a command that exits but leaves
+  a background child holding stdout would block the round, as `Command::output` did before. gh and
+  glab do not do that. Recommendation: accept.
+- A round asks its flows one after another, so with several flows and a forge that hangs, a round
+  takes up to a minute per flow before the next can start. Bounded now; recommendation: accept.
+
+Where to look: `src/workspace.rs` `output_in`, the wait loop and the kill. The rest is routine.
+
+Checks: `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at
+4bd1765; this review changed only the plan.
