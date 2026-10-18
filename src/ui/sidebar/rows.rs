@@ -32,17 +32,18 @@ impl Sidebar<'_> {
         } else {
             (theme.ui.faint, theme.ui.text, Mark::None)
         };
+        let first = vec![
+            Span::raw(" "),
+            Span::styled("0 ", digit),
+            self.master_glyph(),
+            Span::styled(" master", name),
+        ];
+        let right = self
+            .master_agent
+            .filter(|agent| fit::spans_width(&first) + fit::columns(agent) + 2 <= width)
+            .map(|agent| Span::styled(format!("{agent} "), theme.ui.faint));
         rows.push(Row {
-            line: split(
-                vec![
-                    Span::raw(" "),
-                    Span::styled("0 ", digit),
-                    self.master_glyph(),
-                    Span::styled(" master", name),
-                ],
-                vec![],
-                width,
-            ),
+            line: split(first, right.into_iter().collect(), width),
             key: Some(PaneKey::Master),
             mark,
         });

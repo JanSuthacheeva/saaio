@@ -101,6 +101,14 @@ fn fits_agent_and_age_by_display_width_and_moves_age_to_existing_second_row() {
 }
 
 #[test]
+fn shows_the_configured_master_agent_on_its_first_row() {
+    let mut app = board_app();
+    app.set_master_agent(Some("codex".into()));
+    let terminal = render_at(&app, FLEET);
+    assert!(side(&terminal, 2).trim_end().ends_with("codex"));
+}
+
+#[test]
 fn focuses_a_worker_by_digit_or_click_and_marks_it() {
     let mut app = with_fleet();
 

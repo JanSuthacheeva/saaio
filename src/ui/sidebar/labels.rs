@@ -153,6 +153,7 @@ mod tests {
             cursor: None,
             peek: &[],
             master: None,
+            master_agent: None,
             master_state: None,
             now: 0,
             spin: 0,

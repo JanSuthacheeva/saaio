@@ -38,6 +38,8 @@ pub struct Sidebar<'a> {
     pub peek: &'a [PeekLine],
     /// Where the master runs: ~/projects/shop · main.
     pub master: Option<&'a str>,
+    /// The configured harness running the master.
+    pub master_agent: Option<&'a str>,
     /// Row 0's glyph: App::master_state.
     pub master_state: Option<State>,
     pub now: u64,
@@ -284,6 +286,7 @@ mod tests {
             cursor: None,
             peek: &[],
             master: None,
+            master_agent: None,
             master_state: None,
             now: 0,
             spin: 0,
@@ -338,6 +341,7 @@ mod tests {
             cursor: Some("b"),
             peek: &[],
             master: None,
+            master_agent: None,
             master_state: None,
             now: 0,
             spin: 0,
@@ -387,6 +391,7 @@ mod tests {
             cursor: None,
             peek: &[],
             master: None,
+            master_agent: None,
             master_state: None,
             now: 0,
             spin: 0,
@@ -426,6 +431,7 @@ mod tests {
             cursor: None,
             peek: &[],
             master: None,
+            master_agent: None,
             master_state: None,
             now: 0,
             spin: 0,
