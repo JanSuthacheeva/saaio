@@ -22,7 +22,8 @@ pub fn run(args: &Args, store: &Store, env: &Env, clock: fn() -> u64) -> Result<
     }
     let config = env.config()?;
     let exe = std::env::current_exe()?;
-    client::ensure_server(&socket, &exe, &[])?;
+    let pinned = [("SAAIO_HOME".to_string(), store.root().display().to_string())];
+    client::ensure_server(&socket, &exe, &pinned)?;
     let ui_env = ui::UiEnv {
         agents: config
             .worker_agents()

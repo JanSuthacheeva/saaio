@@ -32,7 +32,7 @@ pub fn run(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Fail
         theme,
     };
     let launch_env = LaunchEnv {
-        saaio_home: env.saaio_home.clone(),
+        store: store.root().to_path_buf(),
         flow_exe: std::env::current_exe()?,
     };
     let cwd = std::env::current_dir().context("could not read the current directory")?;
