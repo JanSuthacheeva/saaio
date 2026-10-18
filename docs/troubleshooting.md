@@ -17,7 +17,7 @@ Each `server.log` line starts with a time and a process id:
 
 | Problem | Cause | Fix |
 | --- | --- | --- |
-| `saaio server runs protocol 4, this saaio ui speaks 5` | after an update, the old server still runs | `saaio ui --stop`, then `saaio ui`. Unfinished flows resume. |
+| `saaio server runs protocol 4, this saaio ui speaks 5` | after an update, the old server still runs | `saaio --stop`, then `saaio ui`. Unfinished flows resume. |
 | the prefix key does nothing | the terminal or a surrounding tmux keeps `C-space` | set another prefix, such as `prefix = "C-b"` under `[ui]` in `config.toml`. It applies on save ([configuration.md](configuration.md#ui)) |
 | saaio ui refuses to start inside a worker | it would take over the saaio ui the worker runs in | use a separate store: `SAAIO_HOME=$(mktemp -d) saaio ui` |
 | saaio ui or `saaio status` shows none of a project's flows | each git repository has its own store, picked from the folder saaio runs in | run it in that repository, or `saaio status --all` for every project ([cli.md](cli.md#several-projects)) |

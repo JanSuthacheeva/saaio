@@ -15,9 +15,13 @@ use output::{Document, Failure};
 #[command(
     version,
     about,
-    after_help = "Run alone in a terminal, saaio opens saaio ui.\nRun by an agent or a script, it prints every flow and what needs you."
+    after_help = "Run alone in a terminal, saaio opens saaio ui.\nRun by an agent or a script, it prints every flow and what needs you.\nRun saaio --stop to stop the server and every session.",
+    args_conflicts_with_subcommands = true
 )]
 pub struct Cli {
+    /// Stop the server and every session in it
+    #[arg(long)]
+    stop: bool,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -101,6 +105,7 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
     let store = &store;
     let registry = &registry;
     match cli.command {
+        None if cli.stop => ui::run(&ui::Args { stop: true }, store, env, clock),
         None if env.is_person() => ui::run(&ui::Args::default(), store, env, clock),
         None => home::run(store, &env.bin_path(), now),
         Some(Command::New(args)) => new::run(args, store, &env.config()?.workflow, now),

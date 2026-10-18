@@ -69,7 +69,7 @@ saaio       # the same, typed in a terminal
 | Start a flow | ask the master ("start a flow for SHOP-217 add CSV export"), or `C-space n` |
 | List every key | `C-space ?` |
 | Detach, sessions keep running | `C-space d` |
-| Stop saaio | `C-space Q` or `saaio ui --stop` |
+| Stop saaio | `C-space Q` or `saaio --stop` |
 
 ![Moving through saaio ui: the peek, a worker, the board](docs/media/saaio-ui.gif)
 
@@ -118,7 +118,8 @@ public interface. The logs are private.
 | Command | Does |
 | --- | --- |
 | `saaio` | saaio ui in your terminal; every flow and what needs you for an agent or a script |
-| `saaio ui [--stop]` | the terminal UI |
+| `saaio --stop` | stop the server and every session |
+| `saaio ui [--stop]` | the terminal UI; `--stop` also stops the server |
 | `saaio start <request>` | a worker in its own worktree |
 | `saaio start --plain <folder>` | an agent in a folder |
 | `saaio status [<flow>] [--json] [--all]` | where flows stand |

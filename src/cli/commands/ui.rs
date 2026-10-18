@@ -10,7 +10,7 @@ use crate::ui;
 pub struct Args {
     /// Stop the server and every session in it
     #[arg(long)]
-    stop: bool,
+    pub(crate) stop: bool,
 }
 
 /// Opens the terminal UI, starting the server first; --stop stops the server instead.

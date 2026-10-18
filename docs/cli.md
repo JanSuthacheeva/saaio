@@ -24,7 +24,8 @@
 | Command | Does |
 | --- | --- |
 | `saaio` | saaio ui in your terminal; every flow and what needs you for an agent or a script |
-| `saaio ui [--stop]` | open the terminal UI, or stop it and every session |
+| `saaio --stop` | stop the server and every session |
+| `saaio ui [--stop]` | open the terminal UI; `--stop` also stops the server |
 | `saaio start <request> [--name] [--mode] [--agent] [--type]` | start a worker in its own worktree |
 | `saaio start --plain <folder> [--name] [--agent]` | start an agent in a folder, without a flow |
 | `saaio status [<flow>] [--json] [--full] [--all]` | where flows stand |
@@ -42,6 +43,7 @@
 ## saaio
 
 - Typed in a terminal: opens saaio ui, as [`saaio ui`](#saaio-ui).
+- `saaio --stop` stops the server and every session, including when an agent or script runs it.
 - Run by an agent or a script: flow counts, one line per flow, and the question or reason of each
   waiting or blocked flow, as below.
 - An agent or a script: stdin or stdout is not a terminal, or `SAAIO_FLOW_ID`, `SAAIO_MASTER=1`,
@@ -71,13 +73,14 @@ help[2]: "Run `saaio status <name>` for one flow's phases, timeline and decision
 
 ```
 saaio ui
+saaio --stop
 saaio ui --stop
 ```
 
 - Opens the terminal UI. Starts the session server if none runs. Screen: [ui.md](ui.md).
 - On leaving, prints what happened, such as
   ``detached - the agents keep running; run `saaio ui` to attach again``.
-- `--stop`: stops the server and every session. Unfinished flows are kept and resume at the next
+- `saaio --stop` (or `saaio ui --stop`): stops the server and every session. Unfinished flows are kept and resume at the next
   `saaio ui`. Prints `stopped the saaio server and every session in it` or `no saaio server runs`.
 - Inside a worker, refused on the worker's own store (it would take over your saaio ui). Set
   `SAAIO_HOME` to another folder to run one there.
