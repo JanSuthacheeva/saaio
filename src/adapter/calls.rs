@@ -103,7 +103,7 @@ fn is_assignment(word: &str) -> bool {
 
 /// The words of each simple command in a shell line, split at ; & | and newlines outside quotes,
 /// with quotes and backslashes taken out as the shell would.
-fn simple_commands(line: &str) -> Vec<Vec<String>> {
+pub(super) fn simple_commands(line: &str) -> Vec<Vec<String>> {
     let mut commands = Vec::new();
     let mut words: Vec<String> = Vec::new();
     let mut word = String::new();

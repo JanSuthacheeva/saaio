@@ -1,0 +1,14 @@
+{
+ "session_id": "01a14000-0000-7000-8000-000000000000",
+ "turn_id": "01a143b2-8f3f-7fd2-93e5-8677781b3ca4",
+ "transcript_path": "/home/dev/.codex/sessions/2026/10/16/rollout-2026-10-16T14-51-43-01a14000-0000-7000-8000-000000000000.jsonl",
+ "cwd": "/repo",
+ "hook_event_name": "PreToolUse",
+ "model": "gpt-6-luna",
+ "permission_mode": "default",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "cat /repo/.agents/skills/demo-skill/SKILL.md /repo/.agents/skills/implement-plan/SKILL.md"
+ },
+ "tool_use_id": "exec-35c3f860-ce10-4fe9-b7c0-388355470819"
+}

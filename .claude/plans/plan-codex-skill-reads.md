@@ -52,6 +52,6 @@ No new event or persistent data structure is needed.
 ## Tasks
 
 - [x] Replace `CODEX_PHASE_PROMPT` and update `Adapter::Codex::wiring` instruction assertions.
-- [ ] Add `read_skill_phase` to `codex.rs`, adapt recorded hook fixtures and tests, and reuse shell tokenization where needed.
+- [x] Add `read_skill_phase` to `codex.rs`, adapt recorded hook fixtures and tests, and reuse shell tokenization where needed.
 - [ ] Update `docs/flows.md` and `docs/agents.md` for experimental instruction-dependent Codex phases.
 - [ ] Run an end-to-end recorded hook check, full tests, formatting, and `cargo clippy --all-targets -- -D warnings`.
