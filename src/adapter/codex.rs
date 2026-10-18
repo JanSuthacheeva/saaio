@@ -131,6 +131,18 @@ pub fn hooks(flow_exe: &Path) -> Vec<String> {
     args
 }
 
+/// The `-c` arguments that make Codex trust one folder without changing its config file.
+pub fn trusted_folder(folder: &Path) -> Vec<String> {
+    let folder = folder.display().to_string();
+    vec![
+        "-c".to_string(),
+        format!(
+            "projects={{{}={{trust_level=\"trusted\"}}}}",
+            toml_string(&folder)
+        ),
+    ]
+}
+
 /// The flow events one Codex hook payload means: first the session it runs in, then what it did.
 /// Of a subagent's events (agent_id set) only a phase skill it reads counts.
 pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
@@ -526,5 +538,18 @@ mod tests {
         let parsed: toml::Table = toml::from_str(&format!("v = {}", toml_string(text))).unwrap();
 
         assert_eq!(parsed["v"].as_str(), Some(text));
+    }
+
+    #[test]
+    fn trusts_a_folder_without_writing_config() {
+        let folder = Path::new("/worktrees/with.a-quote\"/");
+        let args = trusted_folder(folder);
+
+        assert_eq!(args[0], "-c");
+        let parsed: toml::Table = toml::from_str(&args[1]).unwrap();
+        assert_eq!(
+            parsed["projects"][folder.display().to_string()]["trust_level"].as_str(),
+            Some("trusted")
+        );
     }
 }

@@ -566,7 +566,7 @@ mod tests {
             );
         }
         assert_eq!(
-            Adapter::ClaudeCode.plain_wiring(Path::new("/bin/saaio")),
+            Adapter::ClaudeCode.plain_wiring(Path::new("/bin/saaio"), Path::new("/worktree")),
             [
                 "--settings".to_string(),
                 plain_settings(Path::new("/bin/saaio"))

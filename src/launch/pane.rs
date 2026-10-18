@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::adapter::Adapter;
 use crate::config::Agent;
@@ -87,9 +87,9 @@ pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<Pa
     };
     if let Some(adapter) = agent.adapter {
         let wiring = if flow.is_plain() {
-            adapter.plain_wiring(&env.flow_exe)
+            adapter.plain_wiring(&env.flow_exe, Path::new(&space.path))
         } else {
-            adapter.wiring(&env.flow_exe)
+            adapter.wiring(&env.flow_exe, Path::new(&space.path))
         };
         let at = 1.min(argv.len());
         argv.splice(at..at, wiring);
@@ -367,11 +367,17 @@ mod tests {
             ..LaunchEnv::default()
         };
 
+        let fresh = worker_spec(&codex_worker(None, None), codex, &env).unwrap();
         let resumed = worker_spec(&codex_worker(Some(HOSTED), Some("01a1")), codex, &env).unwrap();
 
-        let wiring = crate::adapter::Adapter::Codex.wiring(Path::new("/bin/saaio"));
-        assert_eq!(resumed.argv[0], "codex");
-        assert_eq!(resumed.argv[1..=wiring.len()], wiring[..]);
+        let wiring = crate::adapter::Adapter::Codex.wiring(
+            Path::new("/bin/saaio"),
+            Path::new("/repo/.saaio/worktrees/shop-217"),
+        );
+        for spec in [&fresh, &resumed] {
+            assert_eq!(spec.argv[0], "codex");
+            assert_eq!(spec.argv[1..=wiring.len()], wiring[..]);
+        }
         assert_eq!(resumed.argv[wiring.len() + 1..], ["resume", "01a1"]);
     }
 
@@ -408,7 +414,8 @@ mod tests {
             flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
-        let wiring = crate::adapter::Adapter::ClaudeCode.plain_wiring(Path::new("/bin/saaio"));
+        let wiring = crate::adapter::Adapter::ClaudeCode
+            .plain_wiring(Path::new("/bin/saaio"), Path::new("/Users/jan/scratch"));
 
         let fresh = worker_spec(&scratch(None), claude, &env).unwrap();
         let mut expected = vec![claude.command[0].clone()];
