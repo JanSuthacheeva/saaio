@@ -183,6 +183,8 @@ Or mode `plain` in the new-flow dialog.
 Experimental: Codex support works, but is less tested than Claude Code and has the gaps listed
 under Codex in [ROADMAP.md](../ROADMAP.md). Phase tracking depends on the worker following
 saaio's instruction to read each workflow skill's `SKILL.md` only when it begins that skill.
+The review phase may not show: Codex hands the review to a subagent without reading the review
+skill itself, so no hook names it. A merge request still moves the flow to its last phase.
 
 `adapter = "codex"`. Hooks, their per-launch trust state and the worker prompt pass as `-c`
 arguments. A worker also trusts its own worktree for that launch. Nothing is written to `~/.codex`.
