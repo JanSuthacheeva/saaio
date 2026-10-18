@@ -23,6 +23,6 @@ the installed post-rename `saaio` (built after PR #39), under the names `saaio-u
 
 ## Tasks
 
-- [ ] Rename the media files and update `record.sh`, `README.md`, `docs/ui.md`
-- [ ] Record the picture and GIF on a scratch store and check every frame for the old name
-- [ ] Clean up the scratch session, store and repo
+- [x] Rename the media files and update `record.sh`, `README.md`, `docs/ui.md`
+- [x] Record the picture and GIF on a scratch store and check every frame for the old name
+- [x] Clean up the scratch session, store and repo
