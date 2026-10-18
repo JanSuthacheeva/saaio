@@ -9,6 +9,9 @@ All notable changes to saaio are listed here. The format follows
 The first public release. The date is added when it is tagged. Planned next:
 [ROADMAP.md](ROADMAP.md).
 
+An early version: expect rough edges, especially with Codex, which is experimental and not yet
+well tested.
+
 ### Added
 
 - saaio ui: the master, every worker and every plain session in one terminal, with the sidebar, the

@@ -9,6 +9,9 @@ what it can, and asks you the rest.
 - Claude Code and Codex (experimental), state comes from their hooks
 - saaio CLI for agents (TOON) and scripts (--json)
 
+> saaio is young. Expect rough edges, especially with Codex, which is experimental and not yet
+> well tested. Bug reports are welcome.
+
 ![saaio ui with Claude Code and Codex workers](docs/media/saaio-ui.png)
 
 ## Install
