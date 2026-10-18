@@ -8,6 +8,7 @@ mod conn;
 mod forge_watch;
 mod news;
 mod panes;
+mod startup;
 mod typing;
 
 use std::collections::{HashMap, HashSet};

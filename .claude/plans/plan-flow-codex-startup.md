@@ -222,7 +222,7 @@ Add `sha2 = "0.10"`.
 - [x] Add `codex::trusted_folder(folder)`, and thread `folder` through `Adapter::wiring` and
       `Adapter::plain_wiring` and `worker_spec` (`space.path`); update the adapter, pane and
       claude_code tests
-- [ ] Add `server/startup.rs`: `FIRST_TURN_GRACE`, `STALLED_START` and `stalled` with unit tests
+- [x] Add `server/startup.rs`: `FIRST_TURN_GRACE`, `STALLED_START` and `stalled` with unit tests
       for each condition
 - [ ] Add `Server::notice_stalled_starts`, call it from `serve` after `refresh`, and add a
       `server/tests.rs` test with a fake Codex agent that never reports (Waiting appended once)
