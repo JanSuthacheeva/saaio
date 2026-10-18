@@ -20,6 +20,18 @@ and a Codex worker, and phases moving.
 
 ## Tasks
 
-- [ ] Record the picture and GIF on a scratch store
-- [ ] Check every frame for home paths, the username, personal setup and the product name
-- [ ] Clean up the scratch session, store and repo
+- [x] Record the picture and GIF on a scratch store
+- [x] Check every frame for home paths, the username, personal setup and the product name
+- [x] Clean up the scratch session, store and repo
+
+## Found in the take
+
+- The workers' answers quoted the recorder's own `~/.claude/CLAUDE.md` ("commit with the /commit
+  skill"): the demo env sets `CLAUDE_CODE_DISABLE_CLAUDE_MDS=1`. Claude Code's tmux scrolling hint
+  showed: the env unsets `TMUX`. The workers committed `__pycache__`: the sample repo ignores it.
+- Run from an agent session, `record.sh open` passed that session's markers
+  (`CLAUDE_CODE_CHILD_SESSION`, its messaging socket) to the demo's agents, and Claude Code turned
+  off transcript saving: the private tmux server now starts without them.
+- A Claude Code worker walks all four phases in about a minute, before a capture can follow: three
+  flows first, then a fourth right before `capture`, so the GIF shows it move. The scripts' printed
+  steps say so.
