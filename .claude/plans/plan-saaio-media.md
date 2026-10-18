@@ -38,48 +38,6 @@ The user chose to retake both with the recorder's own plugins off and to say so 
 - [x] Retake the picture and GIF, check every frame for the old name and for personal setup
 - [x] Clean up the scratch session, store and repo again
 
-## Review
-
-Second review of `flow/media-saaio` against `main`: the commits after the first review
-(467a6c7..2f8d902) against "Decided after review", and the branch's media once more. I viewed the
-PNG at full size, the GIF at 1 s and 0.5 s steps, and ran OCR over every distinct GIF frame
-(`mpdecimate`) for the old name, home paths, MCP calls and plugin names.
-
-**Fixed**
-
-- The master still ran with the recorder's own plugins, hooks and MCP servers. It is the built-in
-  `master` agent, which `[agents.claude]` does not change; loading the demo config showed
-  `master_agent()` as `["claude", "-n", "{name}", "--session-id", "{id}"]`. `demo-setup.sh` now
-  sets `[agents.master]` with the same flags; the master is still kept out of the worker agents.
-  Nothing personal from the master is visible in this take. 3f0fd85.
-
-**Open**
-
-- The GIF still shows the home path. At about 5 s (frames 77-80 at 15 fps) the peek over shop-198
-  shows `Write(/Users/jansuthacheeva/proje...)`: Claude Code writes PLAN.md by its absolute path
-  and the peek prints a tool call's argument as given. No plugin is involved, so the flags cannot
-  stop it, and the next take can show it again. Recommendation: have the peek (`src/ui/peek/`)
-  write `$HOME` as `~`, as the sidebar already does for the master's folder, and retake the GIF on
-  that build before the README goes public. A quicker way is to keep the sample repository under
-  a folder that has no user name in it, such as `/tmp/shop`, but the sidebar would then show that
-  path. The PNG is clean.
-- `flow/shop-198` in the title row and on the board is the default branch prefix, not the old
-  name (as the first review found).
-
-The fix was checked by me in a separate pass, not by an independent agent: the demo config loads,
-the master's argv has the flags, `{prompt}` stays empty, the workers are still claude and codex.
-
-**Where to look**
-
-1. `docs/media/saaio-ui.gif` at about 5 s: the home path in the peek.
-2. `docs/media/demo-setup.sh` config.toml: `[agents.claude]` and `[agents.master]` both carry
-   `--setting-sources project,local --strict-mcp-config`; Codex still loads `~/.codex/config.toml`
-   (the header says so).
-3. `docs/media/record.sh` `raise()` and the comments: routine.
-
-**Checks** - no Rust changed on the branch. `cargo test` and `cargo clippy -- -D warnings` last
-passed on `main` at 763453d and were not rerun.
-
 ## Decided after the second review
 
 The user chose to fix the peek in this PR, then retake the GIF.
@@ -94,3 +52,40 @@ The user chose to fix the peek in this PR, then retake the GIF.
 - [x] Retake the GIF (and picture) with that build first on `PATH` for the recording only, check
   every frame for the old name, home paths and personal setup
 - [x] Clean up the scratch session, store and repo
+
+## Review
+
+Third review of `flow/media-saaio` against `main`: the commits after the second review
+(2072872..830b15c) against "Decided after the second review", and the branch's media once more. I
+viewed the PNG at full size and the GIF at 1 s steps, and ran OCR over every distinct GIF frame
+(`mpdecimate`, 204 frames) and the PNG for the old name, home paths, temp paths, MCP calls and
+plugin names. Nothing matched: every `flow` is the concept or the `flow/` branch prefix, and every
+path is `~/...` or relative (`Edit(PLAN.md)`, `Bash(sed -n '1,260p' .agents/skil...)`).
+
+**Fixed**
+
+- `docs/ui.md` did not say the peek now writes paths short, a change a user sees (the project's
+  rule: user docs change in the same PR). One sentence under "The peek". 8ee5628.
+
+**Open**
+
+- The GIF shows Codex's footer `2 warnings · f2 to view`. Their text is not in any frame, so
+  nothing leaks, but they may come from the recorder's own `~/.codex/config.toml`.
+  Recommendation: leave it; look at `f2` in Codex once if you want a clean footer next take.
+- The Claude Code header shows the plan (`Opus 5.5 · Claude Team`), no name or email. Fine to keep.
+- A Codex `apply_patch` shows as `Edit(PLAN.md)` with the result `⎿ {}`, the script's empty
+  return value. Cosmetic; could be dropped in `peek/codex.rs` later.
+
+**Where to look**
+
+1. `src/ui/fit.rs` `shorten`: plain substring replace of `<worktree>/` then `<home>/`; a bare
+   worktree path (no trailing slash) shows as `~/...`. `$HOME` empty is filtered in `cli/env.rs`.
+2. `src/ui/peek/codex.rs` `patched`: the first `*** Add/Update/Delete File:` header, cut at `\`,
+   `"` or a newline, only when the script calls `tools.apply_patch(`.
+3. `src/ui/sidebar/rows.rs` `peek_rows`: Tool, Result, Text and Now lines all go through
+   `shorten`; routine. `record.sh` (raise first, refuse a GIF if the window moved) and
+   `demo-setup.sh` (`"tui": "fullscreen"`): routine.
+
+**Checks** - `cargo test` and `cargo clippy --all-targets -- -D warnings` last passed at 7b7d905,
+the last commit touching Rust; later commits change only docs, media and the plan, and were not
+rerun.
