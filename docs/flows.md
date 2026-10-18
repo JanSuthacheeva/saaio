@@ -185,7 +185,7 @@ arguments. A worker also trusts its own worktree for that launch. Nothing is wri
 | Codex event | Reported |
 | --- | --- |
 | a prompt | `working`, and the phase of a `$skill` in it |
-| a shell command reading `SKILL.md` files from one phase | that phase. A command reading skills from several phases reports no phase. |
+| a shell command reading any `SKILL.md` file | no phase. Codex may read future skills ahead in separate commands. |
 | a worker starting a phase skill | the worker runs `saaio report phase <phase>` with its configured phase name |
 | a subagent (`spawn_agent`) | `delegated <its task>`, until the main agent goes on |
 | a permission request | after three seconds without a tool completion, `waiting permission: Bash(touch notes.txt)` |
@@ -198,6 +198,8 @@ arguments. A worker also trusts its own worktree for that launch. Nothing is wri
 - Codex runs the permission hook before automatic review or a user prompt. A quick automatic
   approval finishes the tool and cancels the pending wait. A slow automatic review can still show
   `waiting` after three seconds; the completed tool returns the flow to `working`.
+- Codex has no Skill tool hook. A `$skill` named in a prompt starts its configured phase; while a
+  workflow runs, the worker reports each phase when it starts that skill.
 - A running Codex worker with no first turn after 30 seconds becomes `waiting`; answer the dialog
   in its pane, then its first prompt returns it to `working`.
 - No plan-progress tool: no task counts.

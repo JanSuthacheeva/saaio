@@ -23,10 +23,10 @@ hook feedback or as a prompt that starts with \"message from the saaio master:\"
 you asked or pass on what the user said, so act on them as you would on the user's own answer. To \
 ask the master or the user something, end your turn with the question.";
 
-/// Codex has no Skill tool event, and may read several future skills at once.
+/// Codex has no Skill tool event, and may read several future skills in separate commands.
 const CODEX_PHASE_PROMPT: &str = "When you begin working on a workflow skill, run \
 `saaio report phase <phase>` with that skill's configured phase name from [[phases]]. \
-Do not report a phase for skills merely read ahead.";
+Do not report a phase for skills merely read ahead, even in separate commands.";
 
 /// What a fresh Codex master is asked first, so its first turn runs at once.
 pub const MASTER_OPENING: &str = "saaio ui just started you. Run `saaio status` and say in one line \
