@@ -178,6 +178,6 @@ A `saaio ui` started inside a worker sees the pinned SAAIO_HOME and its own flow
 - [x] `registry::repo_name`, `Registry::project_store` (`owner`, `claim`) with tests for claim, reuse, suffix, adopt and reclaim
 - [x] `Env::store(cwd)` replaces `Store::locate`; `cli::run`, `hook` and `wait` pass the current folder; env tests for SAAIO_HOME, repo, no repo and empty values
 - [x] `LaunchEnv.store` and `pane_env` always set SAAIO_HOME; `saaio ui` passes its store to the server; pane and client tests
-- [ ] `tests/cli.rs`: store per repository end to end without SAAIO_HOME (repo, worktree, outside, `--all`)
+- [x] `tests/cli.rs`: store per repository end to end without SAAIO_HOME (repo, worktree, outside, `--all`)
 - [ ] Docs: `docs/files.md` (store location, `projects/`, `repo` file), `docs/cli.md` (SAAIO_HOME default, every session gets SAAIO_HOME, "Several projects"), `docs/troubleshooting.md` (where server.log is, flows of another repository not shown), README, ROADMAP and CHANGELOG where they describe the store; CLAUDE.md architecture lines
 - [ ] E2E with a scratch XDG_STATE_HOME: two repos named alike, `saaio start` in one, its worktree's hook lands in the right store, `saaio ui` in a pty opens the worker with the pinned SAAIO_HOME, `saaio status --all`
