@@ -35,3 +35,10 @@ Recorded hook fixtures cover Codex permission pending and completion. A regressi
 - [x] Ignore Codex multi-phase skill reads and tell workers to report the active phase, with adapter and prompt tests.
 - [x] Update plain reference docs and run the end-to-end check using scratch `SAAIO_HOME`; run the full suite and `cargo clippy --all-targets -- -D warnings`.
 - [x] Ignore all Codex skill file reads as phase evidence, including separate commands; add the observed-sequence fixture, update reference docs, and rerun the targeted and full checks.
+
+## Review
+
+- Fixed: none. The isolated review found no reproducible defect in the branch.
+- Open: none. The documented three-second grace period can briefly show `waiting` during a slow automatic Codex review; a subsequent tool completion clears it.
+- Where to look: `src/adapter/codex.rs` `translate()` for read-ahead and permission events; `src/fold.rs` `changes()` and `Folding::finish()` for permission resolution; `Folding::apply()` and `open_merge_request()` for late events after an MR opens. The reference docs are routine to skim.
+- Checks: full `cargo test` (514 unit and 71 integration), `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings` passed at `b47fcde`. The focused separate-command regression test also passed with scratch `SAAIO_HOME` during this review. Only this plan changed afterward.
