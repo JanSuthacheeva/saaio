@@ -43,8 +43,8 @@ skills = ["my-pr"]
 - The prompt starts the work. The phases only track it. Either can be set without the other.
 - Claude Code calls a skill `/name`, Codex `$name`. A `[worker] prompt` used by both names no
   skill, or each agent sets its own `prompt` ([The first prompt](#the-first-prompt)).
-- `[[phases]]` applies at the next `saaio start`. `[worker] prompt` applies after
-  `saaio ui --stop && saaio ui`.
+- `[[phases]]` applies at the next `saaio start`. `[worker] prompt` applies to the next worker
+  that starts.
 - A running flow keeps the phases it started with.
 
 ### Without matching skills
@@ -78,15 +78,19 @@ The first set path wins.
 
 ## When a change applies
 
+Commands read the file every time they run. saaio ui and its server read it again within a second
+of a save. No restart.
+
 | Setting | Applies |
 | --- | --- |
-| `[worker] agent` | at the next `saaio start` |
-| `[[phases]]` | at the next `saaio start` |
-| `[worker] prompt`, an agent's `prompt` | after `saaio ui --stop && saaio ui` (the server fills prompts in when it opens a worker) |
-| `[agents]` | after `saaio ui --stop && saaio ui` |
-| `[master]` | after `saaio ui --stop && saaio ui` |
-| `[ui]` | after `saaio ui --stop && saaio ui` |
-| the new-flow dialog's preselected agent | after `saaio ui --stop && saaio ui` |
+| `[worker] agent` | at once: the next `saaio start`, the new-flow dialog's preselected agent |
+| `[worker] prompt`, an agent's `prompt` | to the next worker that starts |
+| `[[phases]]` | at the next `saaio start`. A running flow keeps its phases. |
+| `[agents]` | to the next session opened or resumed with that agent. A running session keeps its command and adapter. |
+| `[master] wake` | at once |
+| `[master] agent` | the next time the master starts |
+| `[ui] prefix` | at once. The hints show the new prefix. |
+| an added or removed agent in the new-flow dialog | the next time the dialog opens |
 
 ## [worker]
 
@@ -265,13 +269,17 @@ A worker's first prompt is the first of:
 
 ## Errors
 
-A broken `config.toml` stops `saaio start`, `saaio new` and `saaio ui` with the file, line and key:
+Every error names the file, the line and the reason:
 
 ```
-error: "/Users/jan/.config/saaio/config.toml is not valid: TOML parse error at line 2, column 1\n  |\n2 | agnet = \"x\"\n  | ^^^^^\nunknown field `agnet`, expected `agent` or `prompt`"
+config: ~/.config/saaio/config.toml:2: unknown field `agnet`, expected `agent` or `prompt`
 ```
 
-Running workers keep reporting with the built-in settings until the file is fixed.
+| Where | A broken file |
+| --- | --- |
+| a running saaio ui and its server | keep the last working settings. The title row shows the error until the file reads again. The server writes it to `server.log`. |
+| `saaio start`, `saaio new`, a new `saaio ui` | stop with the error |
+| running workers | keep reporting with the built-in settings until the file is fixed |
 
 Settings from earlier versions are refused with a message naming the new form:
 

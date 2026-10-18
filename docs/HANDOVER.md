@@ -236,7 +236,8 @@ See README "The master and its workers" and `.claude/plans/plan-flow-talk.md`. D
   and the worker can tell the master's words from yours.
 - The flow's mode decides who answers: auto -> the master when the code, plan or earlier decisions
   settle it; guided -> you, the master relays. `[master] wake = false` turns the master's waking
-  off; its reporting hooks stay, for its row.
+  off; its reporting hooks stay, for its row. The waiter is always wired and reads `wake` itself,
+  so a change applies to a running master.
 - One waiter per session (`waits/<key>.pid`, last claim wins); the master's `waits/master.seen`
   keeps what it was woken for, so nothing wakes it twice.
 
