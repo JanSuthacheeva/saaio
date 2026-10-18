@@ -231,7 +231,7 @@ fn reload_config(configs: &mut ConfigWatch, app: &mut App, router: &mut Router) 
 
 ## Tasks
 
-- [ ] Add `Stamp::of` in store.rs and `text::place`/`text::line_of`; ThemeWatch and theme errors use them; tests for each
+- [x] Add `Stamp::of` in store.rs and `text::place`/`text::line_of`; ThemeWatch and theme errors use them; tests for each
 - [ ] Add `Config::read(file)` and `parse(path, text)` with `<file>:<line>: <message>` errors; `Env::config_file`; unit tests and tests/cli.rs error assertions updated
 - [ ] Add `config::watch::ConfigWatch` with unit tests (first call, unchanged, edited, broken then fixed, removed)
 - [ ] Add `PaneSpec.adapter` and `Server.adapters`; news.rs and typing.rs read the pane's adapter; tests
