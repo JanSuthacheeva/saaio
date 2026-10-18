@@ -61,7 +61,15 @@ fn every_view_looks_as_it_did() {
 
     let mut peek = board_app();
     peek.on_input(Routed::Command(Command::Cursor(Step::Next)));
-    golden("peek", &render_at(&peek, FLEET));
+    golden(
+        "peek",
+        &render_peek(
+            &peek,
+            &[PeekLine::Text(
+                "**Done** with `code`:\n\n- first item\n- second item".into(),
+            )],
+        ),
+    );
 
     let mut rail = board_app();
     rail.on_input(Routed::Command(Command::Rail));

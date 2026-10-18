@@ -52,6 +52,6 @@ Only worker text in `PeekLine::Text` and `FlowView.answer` gets Markdown styling
 ## Tasks
 
 - [x] Add `pulldown-cmark`, `ui::markdown::lines`, and focused tests for Markdown styling and width.
-- [ ] Use `markdown::lines` in `Sidebar::peek_rows`; add peek behavior tests and refresh intended golden output with `SAAIO_UPDATE_GOLDEN=1`.
+- [x] Use `markdown::lines` in `Sidebar::peek_rows`; add peek behavior tests and refresh intended golden output with `SAAIO_UPDATE_GOLDEN=1`.
 - [ ] Use `markdown::lines` in `BoardView::render_answer`; add answer behavior tests and refresh intended golden output with `SAAIO_UPDATE_GOLDEN=1`.
 - [ ] Update README and CHANGELOG, then run a scratch PTY worker flow to verify the agent label, full tests, formatting, and `cargo clippy --all-targets -- -D warnings`.

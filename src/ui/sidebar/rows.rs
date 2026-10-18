@@ -3,7 +3,8 @@ use ratatui::text::{Line, Span};
 use super::{Mark, Row, Sidebar, WIDTH, digit, plain};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::text::short_duration;
-use crate::ui::fit::{self, clip, clip_place, split, wrap};
+use crate::ui::fit::{self, clip, clip_place, split};
+use crate::ui::markdown;
 use crate::ui::peek::PeekLine;
 use crate::view::FlowView;
 
@@ -222,12 +223,14 @@ impl Sidebar<'_> {
                     theme.ui.faint,
                 )]),
                 PeekLine::Text(text) => {
-                    for (index, row) in wrap(&short(text), text_width).into_iter().enumerate() {
+                    for (index, row) in markdown::lines(&short(text), text_width, theme)
+                        .into_iter()
+                        .enumerate()
+                    {
                         let mark = if index == 0 { glyphs.tool } else { " " };
-                        body.push(vec![
-                            Span::styled(format!(" {mark} "), theme.ui.strong),
-                            Span::styled(row, theme.ui.text),
-                        ]);
+                        let mut spans = vec![Span::styled(format!(" {mark} "), theme.ui.strong)];
+                        spans.extend(row.spans);
+                        body.push(spans);
                     }
                 }
                 PeekLine::Now(call) => body.push(vec![
