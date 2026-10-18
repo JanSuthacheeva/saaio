@@ -10,13 +10,14 @@
 # It writes <state>/env for the tape to source. The workers run small stand-in skills that live in
 # the sample repository, so they walk through plan, implement, review and merge-request on a real
 # agent without opening merge requests or publishing anything. The agents run on your own logins
-# and agent config; Claude Code starts without your user settings and MCP servers, so your plugins,
-# hooks and MCP servers stay out of the recording. Codex still loads ~/.codex/config.toml: turn off
-# anything in it you would not show.
+# and agent config; Claude Code starts without your user settings, MCP servers and CLAUDE.md files,
+# so your plugins, hooks, MCP servers and instructions stay out of the recording. Codex still loads
+# ~/.codex/config.toml: turn off anything in it you would not show.
 #
 # Then: docs/media/record.sh open <state> <repo>, ask the master to start the flows printed at the
-# end, answer the agents' first-run questions in their panes (folder trust, Codex's hooks review),
-# and once the workers stand in different places: docs/media/record.sh capture.
+# end and answer the agents' first-run questions in their panes (folder trust, Codex's hooks review).
+# A Claude Code worker walks all four phases in about a minute: once the first ones are done, ask
+# for the last flow printed and run docs/media/record.sh capture while it moves.
 set -euo pipefail
 
 repo=${1:?usage: demo-setup.sh <repo> <state>}
@@ -88,6 +89,9 @@ class OrderTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+EOF
+cat > .gitignore <<'EOF'
+__pycache__/
 EOF
 cat > README.md <<'EOF'
 # shop
@@ -183,6 +187,10 @@ export SAAIO_HOME="$state/store"
 export XDG_STATE_HOME="$state/xdg-state"
 export SAAIO_CONFIG="$state/config/config.toml"
 unset SAAIO_FLOW_ID SAAIO_FLOW_NAME SAAIO_SLOT SAAIO_REPO SAAIO_WORKTREE SAAIO_MASTER
+# Your own instructions (~/.claude/CLAUDE.md) stay out of the agents' answers; without TMUX, Claude
+# Code leaves out its tmux scrolling hint.
+export CLAUDE_CODE_DISABLE_CLAUDE_MDS=1
+unset TMUX TMUX_PANE
 EOF
 
 cat <<EOF
@@ -192,8 +200,11 @@ Ready. Open the UI on the scratch store in an Alacritty window:
 
 and ask the master:
 
-  Start four flows: "SHOP-217 export orders as CSV and JSON" in auto mode; "SHOP-221 refund
-  totals: ask me first whether refunds count on the order's date or the refund's date" guided;
-  "SHOP-230 email a receipt when an order is placed, with a plain text and an HTML template"
-  with Codex; "SHOP-198 round order totals to cents" in auto mode.
+  Start three flows: "SHOP-217 export orders as CSV and JSON" in auto mode; "SHOP-198 round order
+  totals to cents" in auto mode; "SHOP-230 email a receipt when an order is placed: ask me first
+  whether it goes out in plain text or HTML" guided, with Codex.
+
+Once SHOP-217 and SHOP-198 are ready, ask for one more and capture while it moves:
+
+  Also start "SHOP-205 count the items in an order" in auto mode.
 EOF
