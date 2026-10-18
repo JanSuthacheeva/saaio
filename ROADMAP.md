@@ -18,6 +18,7 @@ Nothing in progress.
 | Codex commits without asking | the sandbox cannot write to the main repository's `.git`, so every commit asks permission | commits in the worktree without a prompt |
 | `saaio example config`, `saaio example theme` | the examples exist only as written on the first run | print every setting with its default |
 | Kinds of flows | every flow walks the same `[[phases]]` and gets the same first prompt, so a fix or a research task runs through the feature workflow | named workflows (feature, fix, research), each with its own phases, skills, first prompt and branch type. `saaio start --kind fix`, a field in the new-flow dialog, the master picks one from the request. Research needs no branch to merge. |
+| Shared memory for the master | each agent keeps its own memory (Claude Code per project, Codex none), so switching the master's agent loses what it knew | one memory per project in its store (`MEMORY.md` index, one file per note) that every master reads at the start and writes to, whatever its agent. Claude Code's memory folder is linked to it. Workers can read it too. |
 | Prebuilt binaries | install builds from source with `cargo install`, which needs Rust | binaries for macOS and Linux on every release, an install script at saaio.dev, a Homebrew tap and `cargo binstall saaio` |
 
 ## Planned future
