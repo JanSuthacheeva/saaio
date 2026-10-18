@@ -141,6 +141,7 @@ public interface. The logs are private.
 | `saaio send --type <flow> <line>` | type a line such as `/compact` into a worker's pane |
 | `saaio report <event>` | report into a flow by hand |
 | `saaio remove <flow>`, `saaio clear` | tear down and forget |
+| `saaio bug-report` | a file to attach to a bug report |
 
 All options: [docs/cli.md](docs/cli.md).
 

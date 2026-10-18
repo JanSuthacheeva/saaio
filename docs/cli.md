@@ -13,6 +13,7 @@
 - [saaio new](#saaio-new)
 - [saaio remove](#saaio-remove)
 - [saaio clear](#saaio-clear)
+- [saaio bug-report](#saaio-bug-report)
 - [Commands saaio runs itself](#commands-saaio-runs-itself)
 - [Output, errors and exit codes](#output-errors-and-exit-codes)
 - [Environment variables](#environment-variables)
@@ -33,10 +34,12 @@
 | `saaio new --name <name> --request <text> [--mode]` | track a flow without starting a worker |
 | `saaio remove <flow> [--force] [--delete-unmerged]` | end a flow and tear down its worktree |
 | `saaio clear` | forget finished flows and tear down their worktrees |
+| `saaio bug-report` | write a file to attach to a bug report |
 
 - `<flow>`: a flow's name or id. A name means the unfinished flow of that name, else the most recent
   finished one.
-- `saaio --version` prints the version. Every command takes `--help`.
+- `saaio --version` prints the version and commit: `saaio 0.1.0 (e035b96)`. Every command takes
+  `--help`.
 
 ## saaio
 
@@ -387,6 +390,25 @@ kept[1]{name,path}:
 help[2]: Run `saaio` to see what is left,"Commit or discard the work in a kept worktree, then remove it with `git worktree remove <path>`"
 ```
 
+## saaio bug-report
+
+```
+saaio bug-report
+```
+
+Writes `saaio-report-<date>.txt` in the current folder, replacing one of the same day: the
+versions of saaio, the OS, `claude`, `codex`, `gh` and `glab`, the store's path, whether
+`config.toml` and `theme.toml` load, and the last 300 lines of `server.log` and `server.log.1`.
+The home folder is written `~`. Works without a store, and then says why there is none.
+
+```
+$ saaio bug-report
+report: /Users/jan/projects/shop/saaio-report-2026-10-18.txt
+help[1]: "Check the file before uploading it: it can hold flow names, requests and paths"
+```
+
+How to report a bug: [troubleshooting.md](troubleshooting.md#reporting-a-bug).
+
 ## Commands saaio runs itself
 
 Not listed in `saaio --help`. Not for manual use.
@@ -394,7 +416,7 @@ Not listed in `saaio --help`. Not for manual use.
 | Command | Run by |
 | --- | --- |
 | `saaio server` | `saaio`, when it opens the UI and no server runs. Owns every session. Log: `server.log` ([files.md](files.md)). |
-| `saaio hook claude-code`, `saaio hook codex` | the hooks saaio adds to each worker. Reads the hook's event on stdin and reports what changes the flow. Never prints to stdout, never fails a worker's turn. For Codex, exits 2 at Stop to hand over news. |
+| `saaio hook claude-code`, `saaio hook codex` | the hooks saaio adds to each worker. Reads the hook's event on stdin and reports what changes the flow. Never prints to stdout, never fails a worker's turn. Its errors go to `server.log`. For Codex, exits 2 at Stop to hand over news. |
 | `saaio wait [--master]` | Claude Code sessions, as a background hook. Sleeps until there is news for the session, prints it to stderr and exits 2, which wakes the session. `--master` waits for the master's news. |
 
 ## Output, errors and exit codes

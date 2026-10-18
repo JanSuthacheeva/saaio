@@ -1,0 +1,38 @@
+name: Bug report
+description: Something in saaio does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Run `saaio bug-report` in the repository where the problem happened. It writes `saaio-report-<date>.txt` in the current folder with the versions, the settings and the end of `server.log`. Check the file before uploading it. It can hold flow names, requests and paths.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What saaio did, with any error message as printed.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What was expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The commands run and the keys pressed, in order.
+      placeholder: |
+        1. saaio start "SHOP-12 add a dark mode"
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Bug report file
+      description: Attach the file `saaio bug-report` wrote by dragging it here.
+    validations:
+      required: true
