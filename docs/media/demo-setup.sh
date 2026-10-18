@@ -141,6 +141,11 @@ prompt = "/demo-plan {request}"
 resume = ["claude", "--setting-sources", "project,local", "--strict-mcp-config", "-n", "{name}", "--resume", "{id}"]
 adapter = "claude-code"
 
+[agents.master]
+command = ["claude", "--setting-sources", "project,local", "--strict-mcp-config", "-n", "{name}", "--session-id", "{id}"]
+resume = ["claude", "--setting-sources", "project,local", "--strict-mcp-config", "-n", "{name}", "--resume", "{id}"]
+adapter = "claude-code"
+
 [agents.codex]
 command = ["codex", "{prompt}"]
 prompt = "$demo-plan {request}"
