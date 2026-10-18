@@ -174,7 +174,7 @@ A `saaio ui` started inside a worker sees the pinned SAAIO_HOME and its own flow
 
 ## Tasks
 
-- [ ] `workspace::git_common_dir` with tests for a repo, a subfolder, a worktree and no repo; `exclude_worktrees` uses it
+- [x] `workspace::git_common_dir` with tests for a repo, a subfolder, a worktree and no repo; `exclude_worktrees` uses it
 - [ ] `registry::repo_name`, `Registry::project_store` (`owner`, `claim`) with tests for claim, reuse, suffix, adopt and reclaim
 - [ ] `Env::store(cwd)` replaces `Store::locate`; `cli::run`, `hook` and `wait` pass the current folder; env tests for SAAIO_HOME, repo, no repo and empty values
 - [ ] `LaunchEnv.store` and `pane_env` always set SAAIO_HOME; `saaio ui` passes its store to the server; pane and client tests
