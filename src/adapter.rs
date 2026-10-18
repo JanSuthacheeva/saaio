@@ -67,7 +67,7 @@ impl Adapter {
 
     /// The arguments that make the harness report to `<flow_exe> hook <name>` and wait for the
     /// master's messages, inserted right after the program in the agent's argv, fresh and resumed.
-    pub fn wiring(self, flow_exe: &Path) -> Vec<String> {
+    pub fn wiring(self, flow_exe: &Path, folder: &Path) -> Vec<String> {
         match self {
             Adapter::ClaudeCode => vec!["--settings".to_string(), claude_code::settings(flow_exe)]
                 .into_iter()
@@ -75,6 +75,7 @@ impl Adapter {
                 .collect(),
             Adapter::Codex => codex::hooks(flow_exe)
                 .into_iter()
+                .chain(codex::trusted_folder(folder))
                 .chain(self.instruct(WORKER_PROMPT))
                 .collect(),
         }
@@ -82,13 +83,16 @@ impl Adapter {
 
     /// The arguments that make a plain session report to `<flow_exe> hook <name>`: no master
     /// waiter, no worker prompt, since it is the user's own.
-    pub fn plain_wiring(self, flow_exe: &Path) -> Vec<String> {
+    pub fn plain_wiring(self, flow_exe: &Path, folder: &Path) -> Vec<String> {
         match self {
             Adapter::ClaudeCode => vec![
                 "--settings".to_string(),
                 claude_code::plain_settings(flow_exe),
             ],
-            Adapter::Codex => codex::hooks(flow_exe),
+            Adapter::Codex => codex::hooks(flow_exe)
+                .into_iter()
+                .chain(codex::trusted_folder(folder))
+                .collect(),
         }
     }
 
@@ -192,7 +196,7 @@ mod tests {
             !WORKER_PROMPT.contains("Claude"),
             "the prompt names no harness"
         );
-        let wiring = Adapter::ClaudeCode.wiring(Path::new("/bin/saaio"));
+        let wiring = Adapter::ClaudeCode.wiring(Path::new("/bin/saaio"), Path::new("/worktree"));
         assert_eq!(wiring[0], "--settings");
         assert_eq!(wiring[2..], ["--append-system-prompt", WORKER_PROMPT]);
     }
@@ -216,13 +220,24 @@ mod tests {
             Some("be \"brief\"\nplease")
         );
 
-        let worker = Adapter::Codex.wiring(exe);
-        assert_eq!(worker[..worker.len() - 2], codex::hooks(exe));
+        let folder = Path::new("/worktree");
+        let worker = Adapter::Codex.wiring(exe, folder);
+        assert_eq!(worker[..worker.len() - 4], codex::hooks(exe));
+        assert_eq!(
+            worker[worker.len() - 4..worker.len() - 2],
+            codex::trusted_folder(folder)
+        );
         assert_eq!(
             worker[worker.len() - 2..],
             Adapter::Codex.instruct(WORKER_PROMPT)
         );
-        assert_eq!(Adapter::Codex.plain_wiring(exe), codex::hooks(exe));
+        assert_eq!(
+            Adapter::Codex.plain_wiring(exe, folder),
+            codex::hooks(exe)
+                .into_iter()
+                .chain(codex::trusted_folder(folder))
+                .collect::<Vec<_>>()
+        );
         assert!(!Adapter::Codex.wakes_itself());
         assert!(Adapter::ClaudeCode.wakes_itself());
     }

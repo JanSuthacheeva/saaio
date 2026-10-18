@@ -30,9 +30,8 @@ Each `server.log` line starts with a time and a process id:
 | --- | --- | --- |
 | `pane: when saaio ui runs` | the flow is recorded, saaio ui is not running | run `saaio ui`. It opens the worker within half a second. |
 | the row shows only whether it runs | the agent has no `adapter` | set `adapter = "claude-code"` or `"codex"` on a custom agent that runs one of them ([configuration.md](configuration.md#agents)) |
-| a Codex worker reports nothing | Codex waits for you to review saaio's hooks (first time, and after they change) | jump to the worker, pick "Trust all and continue" |
+| a Codex flow is waiting with "no turn began after launch" | its pane stopped at a Codex dialog before its first turn | jump to the worker and answer the dialog |
 | steps stay `○───○───○───○`, the sidebar shows the state instead of a phase | no skill the worker ran matches a phase. The flow still works. | list your skills under `[[phases]]` ([configuration.md](configuration.md#use-your-own-workflow)) |
-| the worker sits at a folder trust question | first time an agent opens in a new folder | jump to the worker and answer |
 | a Claude Code worker keeps its spinner after Esc | Claude Code runs no hook on interrupt | none. The state corrects at the worker's next prompt. |
 | a Codex flow shows no task counts and never ends | Codex has no task count tool and no `/exit` event | end it from saaio ui (`x` on its exited pane, or on the board when done) or with `saaio remove` |
 | a Codex flow jumps to a later phase | saaio reads a Codex worker's phase from the `SKILL.md` files it reads. Reading a later skill early starts its phase early. | add "read each skill only when you start it" to your skills |

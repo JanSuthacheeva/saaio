@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
 use std::thread;
@@ -6,6 +7,7 @@ use std::thread;
 use tempfile::TempDir;
 
 use super::*;
+use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
 use crate::launch::pane::HOSTED;
@@ -240,6 +242,44 @@ fn status_of(panes: &[crate::proto::PaneInfo], id: &str) -> Option<PaneStatus> {
         .iter()
         .find(|pane| pane.key == key)
         .map(|pane| pane.status.clone())
+}
+
+#[test]
+fn a_codex_worker_that_never_starts_a_turn_waits_once() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let id = started_flow(&store, dir.path(), "stalled", "codex");
+    let fake_codex = dir.path().join("fake-codex");
+    fs::write(&fake_codex, "#!/bin/sh\nsleep 30\n").unwrap();
+    let mut permissions = fs::metadata(&fake_codex).unwrap().permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&fake_codex, permissions).unwrap();
+    let codex = Agent {
+        command: vec![fake_codex.display().to_string()],
+        prompt: None,
+        adapter: Some(Adapter::Codex),
+        resume: None,
+    };
+    let (paths, handle) =
+        start_with_agents(dir.path(), BTreeMap::from([("codex".to_string(), codex)]));
+
+    thread::sleep(super::startup::FIRST_TURN_GRACE + WATCH_EVERY * 2);
+    let events = store.events(&id).unwrap();
+    let waiting: Vec<_> = events
+        .iter()
+        .filter(|event| {
+            matches!(
+                &event.kind,
+                EventKind::Waiting { question } if question == super::startup::STALLED_START
+            )
+        })
+        .collect();
+    assert_eq!(waiting.len(), 1, "{events:?}");
+
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
 }
 
 #[test]

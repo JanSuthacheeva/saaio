@@ -8,6 +8,7 @@ mod conn;
 mod forge_watch;
 mod news;
 mod panes;
+mod startup;
 mod typing;
 
 use std::collections::{HashMap, HashSet};
@@ -268,6 +269,7 @@ impl Server {
             if self.refreshed_at.elapsed() >= WATCH_EVERY {
                 self.deliver_news();
                 self.refresh();
+                self.notice_stalled_starts();
                 self.ask_forges();
                 self.type_lines();
             }

@@ -253,14 +253,20 @@ See README "Plain sessions" and `.claude/plans/plan-flow-plain-sessions.md`. Dec
 - `repo_of` is None without a branch, so `flow remove` never tears down or checks a folder flow did
   not create, even one inside `.flow/worktrees`.
 
-## Codex (built 2026-10-16)
+## Codex (built 2026-10-16, startup trust updated 2026-10-18)
 
 See README "Agents", "How a worker reports" and `.claude/plans/plan-flow-codex.md` (its "Verified
 Codex facts" list every source line). Decisions:
-- Hooks per launch as `-c hooks.<Event>=[...]` (approach A); Codex's own review trusts them once and
-  stores the hash in `~/.codex/config.toml`. Rejected: `--dangerously-bypass-hook-trust` (runs
-  every untrusted hook, a cloned repo's too), installing into `~/.codex/hooks.json`, copying
-  Codex's trust hash.
+- **H1:** Hooks per launch use `-c hooks.<Event>=[...]` and a matching `-c hooks.state={...}`.
+  saaio computes Codex's sha256 identity hash for its eight hooks, so Codex trusts only those hooks
+  without writing `~/.codex`. Rejected: `--dangerously-bypass-hook-trust`, which also runs a
+  cloned repository's unreviewed hooks, and installing into `~/.codex/hooks.json`.
+- **F1:** A worker or plain Codex session passes
+  `-c projects={"<worktree>"={trust_level="trusted"}}`. This applies to fresh and resumed starts;
+  the master folder is left alone.
+- **D1:** A running non-plain Codex worker with no session 30 seconds after launch becomes waiting
+  with `no turn began after launch: answer the dialog in its pane`. Its first UserPromptSubmit puts
+  it back to working.
 - Codex picks its own session id: a `session` event (`FlowView.session`, `PROTOCOL_VERSION` 4)
   records it and the rollout path; `{session}` resumes it. A Codex master keeps it in
   `waits/master.session`, forgotten when the master starts fresh. A session that never had a turn
@@ -279,8 +285,9 @@ Verified on Codex 0.163.0 (recorded in `src/adapter/fixtures/codex/`):
   delegated shows its `task_name`. It returns at once, `collaborationwait_agent` waits.
 - Bash's `tool_response` is the output string; PermissionRequest's input adds `description`.
 - SessionEnd's reason is always "other": no `/exit` event, so a Codex flow never ends from a hook.
-- `codex <-c hooks> resume <id>` keeps the id, fires SessionStart `source: "resume"`, and runs the
-  trusted hooks without a new review. Worktrees inherit the main repo's Codex trust.
+- `codex <-c hooks> resume <id>` keeps the id and fires SessionStart `source: "resume"`.
+- Codex's hook-state key is `/<session-flags>/config.toml:<event_key>:0:0`; the hash is sha256 of
+  compact sorted JSON naming the snake-case event, command, normalized timeout and `async: false`.
 - The rollout's shell calls are code-mode `exec` scripts (`tools.exec_command({cmd:"..."})`).
 
 Later: `codex queue --thread <id> --message` (0.163.0, experimental) starts a turn on an idle
@@ -340,11 +347,10 @@ the pane (payloads in `src/adapter/fixtures/*/pre_compact.json`, `post_compact.j
 - PreCompact begins a turn and PostCompact leaves the session idle (`Turn::Idle`, as an Esc in
   Codex). Codex runs no Stop after a compaction, so its hook hands no news over there.
 - Claude Code runs no hook on an Esc, so an interrupted Claude Code worker takes typed lines again
-  only after its next turn ends. Codex asks once to review saaio's hooks again (two new hooks).
-- Not checked: a Codex pane reopened after an upgrade that changed saaio's hooks shows the hooks
-  review, and a line queued for it is typed into that prompt once the pane has been open ten
-  seconds. Typed Codex news has the same exposure. Waiting for a turn after each reopen would hold
-  every line until someone types in the pane, which defeats typing from a phone.
+  only after its next turn ends. Codex's saaio hook trust is passed on each launch and resume.
+- A Codex pane that reaches no first turn in 30 seconds is shown as waiting; the user can answer
+  its dialog in the pane. After the first prompt, its hooks report the session and return the flow
+  to working.
 
 ## Future improvements
 

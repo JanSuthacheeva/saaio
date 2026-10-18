@@ -1,7 +1,9 @@
+use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::Path;
 
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use crate::adapter::answer::turn_end;
 use crate::adapter::calls::{created_merge_request, tool_call};
@@ -9,21 +11,85 @@ use crate::adapter::{Adapter, Turn, cut};
 use crate::event::{EventKind, Phase};
 use crate::workflow::Workflow;
 
-/// The hook events saaio listens to.
-const EVENTS: [&str; 8] = [
-    "UserPromptSubmit",
-    "PreToolUse",
-    "PostToolUse",
-    "PermissionRequest",
-    "Stop",
-    "Interrupt",
-    "PreCompact",
-    "PostCompact",
+/// One hook saaio listens to: Codex's event name, the key its trust state uses, its timeout.
+struct Hook {
+    event: &'static str,
+    key: &'static str,
+    timeout: u64,
+}
+
+/// The hook events saaio listens to; Interrupt at 3 s, the most Codex allows.
+const HOOKS: [Hook; 8] = [
+    Hook {
+        event: "UserPromptSubmit",
+        key: "user_prompt_submit",
+        timeout: HOOK_TIMEOUT_SECS,
+    },
+    Hook {
+        event: "PreToolUse",
+        key: "pre_tool_use",
+        timeout: HOOK_TIMEOUT_SECS,
+    },
+    Hook {
+        event: "PostToolUse",
+        key: "post_tool_use",
+        timeout: HOOK_TIMEOUT_SECS,
+    },
+    Hook {
+        event: "PermissionRequest",
+        key: "permission_request",
+        timeout: HOOK_TIMEOUT_SECS,
+    },
+    Hook {
+        event: "Stop",
+        key: "stop",
+        timeout: HOOK_TIMEOUT_SECS,
+    },
+    Hook {
+        event: "Interrupt",
+        key: "interrupt",
+        timeout: INTERRUPT_TIMEOUT_SECS,
+    },
+    Hook {
+        event: "PreCompact",
+        key: "pre_compact",
+        timeout: HOOK_TIMEOUT_SECS,
+    },
+    Hook {
+        event: "PostCompact",
+        key: "post_compact",
+        timeout: HOOK_TIMEOUT_SECS,
+    },
 ];
 /// Seconds Codex waits for `saaio hook` before it goes on without it.
 const HOOK_TIMEOUT_SECS: u64 = 10;
+/// The most seconds Codex permits for an Interrupt hook.
+const INTERRUPT_TIMEOUT_SECS: u64 = 3;
+/// Where Codex says hooks passed with `-c` come from, in their trust keys.
+const SESSION_FLAGS: &str = "/<session-flags>/config.toml";
 
-/// The `-c` arguments that run `'<flow_exe>' hook codex` on each event in EVENTS, synchronously so
+/// The hash Codex keeps in hooks.state for one command hook: sha256 of its identity as compact JSON
+/// with sorted keys.
+fn trust_hash(hook: &Hook, command: &str) -> String {
+    // `serde_toon_format` enables serde_json's `preserve_order`, so use BTreeMap explicitly.
+    let command_hook = BTreeMap::from([
+        ("async", Value::Bool(false)),
+        ("command", Value::String(command.to_string())),
+        ("timeout", Value::from(hook.timeout)),
+        ("type", Value::String("command".to_string())),
+    ]);
+    let json = BTreeMap::from([
+        ("event_name", Value::String(hook.key.to_string())),
+        (
+            "hooks",
+            Value::Array(vec![serde_json::to_value(command_hook).unwrap()]),
+        ),
+    ]);
+    let hash = Sha256::digest(serde_json::to_string(&json).unwrap());
+    format!("sha256:{hash:x}")
+}
+
+/// The `-c` arguments that run `'<flow_exe>' hook codex` on each event in HOOKS, synchronously so
 /// the events reach the log in order and a Stop can hand news over; and keep Codex from asking
 /// about updates in a pane saaio opened. The same for workers, plain sessions and the master (its
 /// pane's SAAIO_MASTER tells them apart): Codex keys hook trust by position, so different hooks
@@ -34,19 +100,47 @@ pub fn hooks(flow_exe: &Path) -> Vec<String> {
         shell_quoted(&flow_exe.display().to_string()),
         Adapter::Codex.name()
     );
-    let handler = format!(
-        "[{{hooks=[{{type=\"command\",command={},timeout={HOOK_TIMEOUT_SECS}}}]}}]",
-        toml_string(&command)
-    );
     let mut args = vec![
         "-c".to_string(),
         "check_for_update_on_startup=false".to_string(),
     ];
-    for event in EVENTS {
+    for hook in HOOKS {
+        let handler = format!(
+            "[{{hooks=[{{type=\"command\",command={},timeout={}}}]}}]",
+            toml_string(&command),
+            hook.timeout
+        );
         args.push("-c".to_string());
-        args.push(format!("hooks.{event}={handler}"));
+        args.push(format!("hooks.{}={handler}", hook.event));
     }
+    let state = HOOKS
+        .iter()
+        .map(|hook| {
+            let key = format!("{SESSION_FLAGS}:{}:0:0", hook.key);
+            let hash = trust_hash(hook, &command);
+            format!(
+                "{}={{trusted_hash={}}}",
+                toml_string(&key),
+                toml_string(&hash)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    args.push("-c".to_string());
+    args.push(format!("hooks.state={{{state}}}"));
     args
+}
+
+/// The `-c` arguments that make Codex trust one folder without changing its config file.
+pub fn trusted_folder(folder: &Path) -> Vec<String> {
+    let folder = folder.display().to_string();
+    vec![
+        "-c".to_string(),
+        format!(
+            "projects={{{}={{trust_level=\"trusted\"}}}}",
+            toml_string(&folder)
+        ),
+    ]
 }
 
 /// The flow events one Codex hook payload means: first the session it runs in, then what it did.
@@ -379,21 +473,63 @@ mod tests {
         assert_eq!(args[..2], ["-c", "check_for_update_on_startup=false"]);
         let values: Vec<&String> = args.iter().skip(3).step_by(2).collect();
         assert!(args.iter().skip(2).step_by(2).all(|flag| flag == "-c"));
-        assert_eq!(values.len(), EVENTS.len());
-        for (event, value) in EVENTS.iter().zip(values) {
+        assert_eq!(values.len(), HOOKS.len() + 1);
+        for (hook, value) in HOOKS.iter().zip(&values) {
             let (key, toml_value) = value.split_once('=').unwrap();
-            assert_eq!(key, format!("hooks.{event}"));
+            assert_eq!(key, format!("hooks.{}", hook.event));
             let parsed: toml::Table = toml::from_str(&format!("v = {toml_value}")).unwrap();
             let handler = &parsed["v"][0]["hooks"][0];
             assert_eq!(handler["type"].as_str(), Some("command"));
             assert_eq!(
                 handler["command"].as_str(),
                 Some("'/opt/my saaio/saaio' hook codex"),
-                "{event}"
+                "{}",
+                hook.event
             );
-            assert_eq!(handler["timeout"].as_integer(), Some(10));
+            assert_eq!(handler["timeout"].as_integer(), Some(hook.timeout as i64));
+        }
+        let (_, toml_value) = values.last().unwrap().split_once('=').unwrap();
+        let parsed: toml::Table = toml::from_str(&format!("v = {toml_value}")).unwrap();
+        let state = parsed["v"].as_table().unwrap();
+        let command = "'/opt/my saaio/saaio' hook codex";
+
+        assert_eq!(state.len(), HOOKS.len());
+        for hook in HOOKS {
+            let key = format!("{SESSION_FLAGS}:{}:0:0", hook.key);
+            let hash = trust_hash(&hook, command);
+            assert_eq!(state[&key]["trusted_hash"].as_str(), Some(hash.as_str()));
         }
         assert!(hooks(Path::new("/b'in/saaio"))[3].contains(r"'/b'\\''in/saaio'"));
+    }
+
+    #[test]
+    fn hashes_hooks_as_codex_trusts_them() {
+        let command = "'/Users/jansuthacheeva/.cargo/bin/saaio' hook codex";
+        let hashes: Vec<_> = HOOKS
+            .iter()
+            .map(|hook| (hook.key, trust_hash(hook, command)))
+            .collect();
+
+        assert_eq!(
+            hashes.iter().find(|(key, _)| *key == "stop").unwrap().1,
+            "sha256:7fdf0398b9d5ac50aee6888193db70211a1b5026483ffe30b99bfcf90fd0bf23"
+        );
+        assert_eq!(
+            hashes
+                .iter()
+                .find(|(key, _)| *key == "interrupt")
+                .unwrap()
+                .1,
+            "sha256:50f2e8b23093a3fc4e12bf9edb639b04b46adb4cbac23d59fcd894d300b9528c"
+        );
+        assert_eq!(
+            hashes
+                .iter()
+                .find(|(key, _)| *key == "pre_tool_use")
+                .unwrap()
+                .1,
+            "sha256:8968411b220f168aa89dfdd45fd451ce0922ab254c2fd229348cf39cc5f8656a"
+        );
     }
 
     #[test]
@@ -402,5 +538,18 @@ mod tests {
         let parsed: toml::Table = toml::from_str(&format!("v = {}", toml_string(text))).unwrap();
 
         assert_eq!(parsed["v"].as_str(), Some(text));
+    }
+
+    #[test]
+    fn trusts_a_folder_without_writing_config() {
+        let folder = Path::new("/worktrees/with.a-quote\"/");
+        let args = trusted_folder(folder);
+
+        assert_eq!(args[0], "-c");
+        let parsed: toml::Table = toml::from_str(&args[1]).unwrap();
+        assert_eq!(
+            parsed["projects"][folder.display().to_string()]["trust_level"].as_str(),
+            Some("trusted")
+        );
     }
 }
