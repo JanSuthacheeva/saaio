@@ -15,7 +15,7 @@ use output::{Document, Failure};
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 #[derive(Debug, Parser)]
 #[command(
-    version,
+    version = crate::proto::BUILD,
     about,
     after_help = "Run alone in a terminal, saaio opens the terminal UI.\nRun by an agent or a script, it prints every flow and what needs you.\nRun saaio --stop to stop the server and every session.",
     args_conflicts_with_subcommands = true

@@ -433,7 +433,15 @@ fn help_and_version_still_print_normally() {
         stdout(&help)
     );
     assert!(stdout(&help).contains("--stop"), "{}", stdout(&help));
-    assert_eq!(stdout(&version).trim(), "saaio 0.1.0");
+    let version = stdout(&version);
+    let commit = version
+        .trim()
+        .strip_prefix("saaio 0.1.0 (")
+        .and_then(|rest| rest.strip_suffix(')'));
+    assert!(
+        commit.is_some_and(|commit| !commit.is_empty() && !commit.contains(' ')),
+        "{version}"
+    );
 }
 
 #[test]
