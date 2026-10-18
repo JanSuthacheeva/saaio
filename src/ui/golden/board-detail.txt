@@ -23,10 +23,10 @@
   16:11  ● phase: plan
   16:11  ● phase: implement                                                               LAST ANSWER
   16:11  ● blocked: migration needs a default value for orders.exported_at                The migration adds orders.exported_at, but the column has
-                                                                                          no default and the table holds 2.1M rows. Which default
-                                                                                          should old orders get: their created_at, or null?
+                                                                                          no default. Which default should old orders get?
 
-
+                                                                                          • created_at
+                                                                                          • null
 
 
 

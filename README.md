@@ -84,6 +84,9 @@ saaio    # in a repository
 
 ![Moving through saaio: the peek, a worker, the board](docs/media/saaio-ui.gif)
 
+The sidebar peek and the board's last answer render worker Markdown with terminal text styles:
+headings, emphasis, code, lists, quotes and link text fit within their columns.
+
 The first run writes `config.toml`, `theme.toml` and `master.md` to `~/.config/saaio`, every setting
 commented out at its default.
 

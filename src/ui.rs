@@ -6,6 +6,7 @@ pub mod focus;
 pub mod hints;
 pub mod input;
 pub mod layout;
+pub mod markdown;
 pub mod newflow;
 pub mod outer;
 pub mod peek;

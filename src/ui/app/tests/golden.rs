@@ -61,7 +61,15 @@ fn every_view_looks_as_it_did() {
 
     let mut peek = board_app();
     peek.on_input(Routed::Command(Command::Cursor(Step::Next)));
-    golden("peek", &render_at(&peek, FLEET));
+    golden(
+        "peek",
+        &render_peek(
+            &peek,
+            &[PeekLine::Text(
+                "**Done** with `code`:\n\n- first item\n- second item".into(),
+            )],
+        ),
+    );
 
     let mut rail = board_app();
     rail.on_input(Routed::Command(Command::Rail));
@@ -89,8 +97,8 @@ fn every_view_looks_as_it_did() {
         .unwrap();
     blocked.decisions.push("exported_at stays nullable".into());
     blocked.answer = Some(
-        "The migration adds orders.exported_at, but the column has no default and the \
-         table holds 2.1M rows. Which default should old orders get: their created_at, or null?"
+        "**The migration** adds `orders.exported_at`, but the column has no default. \
+         Which default should old orders get?\n\n- `created_at`\n- `null`"
             .into(),
     );
     detail.on_server(ServerMsg::Board(fleet));

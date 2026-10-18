@@ -8,7 +8,10 @@
                                                                                                             │ 1 ● shop-221                claude 29m
                                                                                                             │     ●───●───○───○ implement        4/9
                                                                                                             │  ─────────────────────────────────────
-                                                                                                            │  no transcript yet
+                                                                                                            │  ⏺ Done with code:
+                                                                                                            │
+                                                                                                            │    • first item
+                                                                                                            │    • second item
                                                                                                             │  C-space enter jump in
                                                                                                             │
                                                                                                             │ 2 ● shop-230                claude 31m
@@ -23,9 +26,6 @@
                                                                                                             │ DONE 1
                                                                                                             │ 4 ○ shop-198                 claude 2h
                                                                                                             │     ●───●───●───● MR !418      took 0s
-                                                                                                            │
-                                                                                                            │
-                                                                                                            │
                                                                                                             │
                                                                                                             │
                                                                                                             │

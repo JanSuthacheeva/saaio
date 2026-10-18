@@ -283,6 +283,29 @@ fn peek_writes_paths_in_the_worktree_relative_and_home_with_a_tilde() {
 }
 
 #[test]
+fn peek_renders_worker_markdown_with_the_existing_glyph_and_width() {
+    let mut app = with_fleet();
+    for _ in 0..3 {
+        app.on_input(Routed::Command(Command::Cursor(Step::Next)));
+    }
+    let peek = vec![PeekLine::Text(
+        "**bold** and `code`\n\n- first item\n- second item".into(),
+    )];
+
+    let terminal = render_peek(&app, &peek);
+    let rows: Vec<_> = (0..FLEET.rows - 2).map(|y| side(&terminal, y)).collect();
+    assert!(
+        rows.iter().any(|row| row.contains("⏺ bold and code")),
+        "{rows:?}"
+    );
+    assert!(
+        rows.iter().any(|row| row.contains("• first item")),
+        "{rows:?}"
+    );
+    assert!(rows.iter().all(|row| !row.contains("**bold**")));
+}
+
+#[test]
 fn peeks_into_a_worker_under_the_cursor_and_jumps_in() {
     let mut app = with_fleet();
     app.on_input(Routed::Command(Command::Cursor(Step::Next)));
