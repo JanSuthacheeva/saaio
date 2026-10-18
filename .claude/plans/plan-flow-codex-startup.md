@@ -226,7 +226,7 @@ Add `sha2 = "0.10"`.
       for each condition
 - [x] Add `Server::notice_stalled_starts`, call it from `serve` after `refresh`, and add a
       `server/tests.rs` test with a fake Codex agent that never reports (Waiting appended once)
-- [ ] Docs:
+- [x] Docs:
   - `docs/troubleshooting.md`: replace the two dialog rows with one row: a Codex flow waiting
     with "no turn began after launch" means a dialog in its pane.
   - `docs/HANDOVER.md` Codex decisions: H1, F1, D1 and the facts above.

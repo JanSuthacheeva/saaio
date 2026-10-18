@@ -179,8 +179,8 @@ Or mode `plain` in the new-flow dialog.
 Experimental: Codex support works, but is less tested than Claude Code and has the gaps listed
 under Codex in [ROADMAP.md](../ROADMAP.md).
 
-`adapter = "codex"`. Hooks passed as `-c hooks.<event>=[...]`, the worker prompt as
-`-c developer_instructions=...`. Nothing written to `~/.codex`.
+`adapter = "codex"`. Hooks, their per-launch trust state and the worker prompt pass as `-c`
+arguments. A worker also trusts its own worktree for that launch. Nothing is written to `~/.codex`.
 
 | Codex event | Reported |
 | --- | --- |
@@ -192,9 +192,10 @@ under Codex in [ROADMAP.md](../ROADMAP.md).
 | the end of a turn | as for Claude Code |
 | Esc | `idle interrupted` |
 
-- First run: Codex asks to review the hooks. Answer "Trust all and continue". Asked again only when
-  saaio's hooks change.
-- A repository trusted in Codex covers its flow worktrees.
+- saaio trusts only its own hooks and the worker's own worktree. Your configured hooks and a
+  repository's hooks still receive Codex's review.
+- A running Codex worker with no first turn after 30 seconds becomes `waiting`; answer the dialog
+  in its pane, then its first prompt returns it to `working`.
 - No plan-progress tool: no task counts.
 - No `/exit` event: end the flow from saaio ui or with `saaio remove`.
 

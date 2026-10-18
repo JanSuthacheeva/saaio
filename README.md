@@ -82,7 +82,7 @@ commented out at its default.
 | --- | --- |
 | Master | starts workers, answers them with `saaio send`, is woken when one waits, is blocked or finishes. Guided flows bring every question to you. Auto flows let the master answer what the code and plan settle. |
 | Worktrees | one branch and worktree per flow. `.saaio/setup` and `.saaio/teardown` run in each. `SAAIO_SLOT` (1 to 20, unique across all projects) gives each worktree its own ports. The `setup-saaio` skill writes both scripts. |
-| Hooks | Claude Code and Codex (experimental) report through their own hooks, no screen reading. Any other command runs as a worker, shown as running or not. |
+| Hooks | Claude Code and Codex (experimental) report through their own hooks, no screen reading. Codex workers trust saaio's hooks and their own worktree for that launch; a startup dialog that prevents the first turn shows as waiting. Any other command runs as a worker, shown as running or not. |
 | Projects | one store, master and sidebar per git repository, picked from the folder saaio runs in. `saaio status --all` and the board show every project. |
 | Plain sessions | an agent in any folder, no worktree, no flow |
 | Themes | terminal colors by default, built-in dark and light themes, live reload, themes written by other tools (Noctalia template in the docs) |
