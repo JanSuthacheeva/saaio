@@ -144,3 +144,39 @@ changes.
 - [x] Every other `saaio ui` in docs, examples, ROADMAP, CHANGELOG 0.1.0, CLAUDE.md (with the PTY E2E line); ROADMAP drops "Codex commits without asking"
 - [x] CONTRIBUTING.md, .github/pull_request_template.md, .github/CODEOWNERS
 - [x] End to end: in a PTY with a scratch store run `saaio` (UI opens), `saaio --stop`, `saaio ui` (usage error), look at the board cards and the detail; `cargo test`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`
+
+## Review
+
+Isolated review of `flow/readthrough-fixes` against `main` (2026-10-18).
+
+**Fixed**
+
+- docs/configuration.md said a broken config.toml stops "a new `saaio`". Bare `saaio` run by an
+  agent or script prints the overview and ignores the file (shown with a broken `SAAIO_CONFIG`, exit
+  0); only `saaio` opening the UI stops. Now reads "`saaio` opening the UI". 19825c1
+
+**Open**
+
+- None blocking. The old worker-store guard on opening the UI is gone, now covered by
+  `Env::is_person` (false while `SAAIO_FLOW_ID` is set). A worker that unsets its markers as
+  CLAUDE.md shows but forgets `SAAIO_HOME` would take over the user's UI; the documented line sets
+  both, so no change recommended.
+- Example config.toml and theme.toml texts changed with `earlier: &[]`, so a user still on the old
+  default keeps the old comments. Same as every earlier example change before 0.1.0; fine.
+
+**Where to look**
+
+1. `src/cli.rs` `run` dispatch to `src/cli/commands/stop.rs`: `--stop` before `is_person`, the guard
+   only on stop.
+2. `src/ui/board/cards.rs` `agent_and_age`: the fit check against `fit::split`'s one-column gap;
+   goldens `board.txt`, `board-detail.txt`, `narrow-board.txt`.
+3. `src/server/master.rs` history: `master-v10.md` is byte-identical to main's `master.md`.
+
+Routine, skim: the string swaps in `src/ui/app/*`, `client.rs`, `output/*`, the sidebar
+`master_agent` removal, and the docs rewording.
+
+**Checks**
+
+`cargo test`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` passed at cfba3d0;
+every later commit changes only docs, `docs/media/*.sh` (`bash -n` clean) and this plan. Fixes
+touched no production code, so no second review round was needed.
