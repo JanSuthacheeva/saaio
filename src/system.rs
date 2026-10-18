@@ -35,12 +35,7 @@ impl System {
         let os = thread::spawn(move || run("uname", &["-srm"], deadline));
         let tools: Vec<_> = TOOLS
             .iter()
-            .map(|&tool| {
-                (
-                    tool,
-                    thread::spawn(move || run(tool, &["--version"], deadline)),
-                )
-            })
+            .map(|&tool| (tool, thread::spawn(move || version(tool, deadline))))
             .collect();
         let os = match os.join() {
             Ok(Probe::Version(os)) => Some(os),
@@ -85,7 +80,15 @@ impl Probe {
     }
 }
 
-/// Runs `program args`, killed at `deadline`; its Probe.
+/// `<tool> --version`, from the first word that starts with a digit.
+fn version(tool: &str, deadline: Instant) -> Probe {
+    match run(tool, &["--version"], deadline) {
+        Probe::Version(line) => Probe::Version(version_of(&line)),
+        other => other,
+    }
+}
+
+/// Runs `program args`, killed at `deadline`; the first line it prints as Probe::Version.
 fn run(program: &str, args: &[&str], deadline: Instant) -> Probe {
     let spawned = Command::new(program)
         .args(args)
@@ -118,7 +121,7 @@ fn run(program: &str, args: &[&str], deadline: Instant) -> Probe {
         let _ = stdout.read_to_string(&mut out);
     }
     match out.lines().map(str::trim).find(|line| !line.is_empty()) {
-        Some(line) => Probe::Version(version_of(line)),
+        Some(line) => Probe::Version(line.to_string()),
         None => Probe::Failed("printed nothing".to_string()),
     }
 }
@@ -198,6 +201,10 @@ mod tests {
         );
         assert_eq!(
             run(tool.to_str().unwrap(), &[], soon()),
+            Probe::Version("gh version 2.73.0".to_string())
+        );
+        assert_eq!(
+            version(tool.to_str().unwrap(), soon()),
             Probe::Version("2.73.0".to_string())
         );
     }

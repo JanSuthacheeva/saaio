@@ -85,7 +85,10 @@ impl System {
     pub fn summary(&self) -> String;
 }
 
-/// Runs `program args`, killed at `deadline`; its Probe.
+/// `<tool> --version`, from the first word that starts with a digit.
+fn version(tool: &str, deadline: Instant) -> Probe;
+/// Runs `program args`, killed at `deadline`; the first line it prints as Probe::Version
+/// (`uname -srm` keeps all of it).
 fn run(program: &str, args: &[&str], deadline: Instant) -> Probe;
 /// The version part of a `--version` line.
 fn version_of(line: &str) -> String;
