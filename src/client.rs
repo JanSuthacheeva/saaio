@@ -252,6 +252,11 @@ pub fn socket_path(store: &Store) -> PathBuf {
     socket_path_for(store.root(), Path::new("/tmp"))
 }
 
+/// server.log of `store`'s server, beside its socket.
+pub fn log_path(store: &Store) -> PathBuf {
+    server_log::path(&socket_path(store))
+}
+
 fn socket_path_for(root: &Path, tmp: &Path) -> PathBuf {
     let near = root.join("server.sock");
     if near.as_os_str().len() < SOCKET_PATH_LIMIT {

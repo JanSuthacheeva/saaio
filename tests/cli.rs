@@ -133,6 +133,10 @@ fn stdout(output: &Output) -> String {
     std::str::from_utf8(&output.stdout).unwrap().to_string()
 }
 
+fn stderr(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
 fn seed(home: &Path, id: &str, lines: &[&str]) {
     let flows = home.join("flows");
     fs::create_dir_all(&flows).unwrap();
@@ -433,7 +437,15 @@ fn help_and_version_still_print_normally() {
         stdout(&help)
     );
     assert!(stdout(&help).contains("--stop"), "{}", stdout(&help));
-    assert_eq!(stdout(&version).trim(), "saaio 0.1.0");
+    let version = stdout(&version);
+    let commit = version
+        .trim()
+        .strip_prefix("saaio 0.1.0 (")
+        .and_then(|rest| rest.strip_suffix(')'));
+    assert!(
+        commit.is_some_and(|commit| !commit.is_empty() && !commit.contains(' ')),
+        "{version}"
+    );
 }
 
 #[test]
@@ -1364,8 +1376,7 @@ fn a_hook_keeps_reporting_when_the_config_does_not_load() {
 
     assert!(output.status.success());
     assert!(output.stdout.is_empty(), "{}", stdout(&output));
-    let err = String::from_utf8_lossy(&output.stderr);
-    assert!(err.contains("no-config.toml:4: "), "{err}");
+    assert!(output.stderr.is_empty(), "{}", stderr(&output));
     let detail = stdout(&saaio(home.path(), &["status", "shop-221"]));
     assert!(detail.contains("phase: plan"), "{detail}");
 }
@@ -1390,9 +1401,19 @@ fn a_hook_never_fails_or_prints_whatever_it_gets() {
     for output in &cases {
         assert!(output.status.success());
         assert!(output.stdout.is_empty(), "{}", stdout(output));
+        assert!(output.stderr.is_empty(), "{}", stderr(output));
     }
-    assert!(String::from_utf8_lossy(&cases[1].stderr).contains("not JSON"));
-    assert!(String::from_utf8_lossy(&cases[2].stderr).contains("no flow no-such-flow"));
+    let log = fs::read_to_string(home.path().join("server.log")).unwrap();
+    assert!(
+        log.contains(&format!(
+            "] hook claude-code flow {id}: the event is not JSON: "
+        )),
+        "{log}"
+    );
+    assert!(
+        log.contains("] hook claude-code flow no-such-flow: no flow no-such-flow\n"),
+        "{log}"
+    );
     let list = stdout(&saaio(home.path(), &["status"]));
     assert!(!list.contains("waiting"), "{list}");
 }
@@ -2023,7 +2044,7 @@ fn stop_ends_a_running_server_and_says_when_none_runs() {
     };
     let pid_of = |line: &str| line.split(['[', ']']).nth(1).unwrap().to_string();
     let server_said = format!("[{server_pid}] ");
-    assert!(said("started (saaio ").contains(&server_said));
+    assert!(said("started: saaio ").contains(&server_said));
     let stopper = said(&format!("sends SIGTERM to pid {server_pid}"));
     assert!(stopper.contains("saaio --stop (saaio "), "{stopper}");
     let stopping = said("stopping: SIGTERM from pid ");
@@ -2668,4 +2689,98 @@ fn a_forge_that_cannot_answer_records_nothing_and_is_logged_once() {
     );
     let status = stdout(&saaio(home.path(), &["status", "--json"]));
     assert!(!status.contains("\"done\""), "{status}");
+}
+
+#[test]
+fn bug_report_writes_one_file_with_versions_settings_and_the_logs() {
+    let home = TempDir::new().unwrap();
+    let cwd = TempDir::new().unwrap();
+    fs::write(home.path().join("no-config.toml"), "[ui]\nprefix = 3\n").unwrap();
+    fs::write(home.path().join("theme.toml"), "not toml [\n").unwrap();
+    fs::write(home.path().join("server.log.1"), "an older line\n").unwrap();
+    let lines: Vec<String> = (1..=400).map(|n| format!("line {n}")).collect();
+    let lines = lines.join("\n") + "\n";
+    fs::write(home.path().join("server.log"), lines).unwrap();
+
+    let output = saaio_command(home.path())
+        .arg("bug-report")
+        .env("HOME", home.path())
+        .current_dir(cwd.path())
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", stdout(&output));
+    let written: Vec<_> = fs::read_dir(cwd.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    let [file] = &written[..] else {
+        panic!("one file expected: {written:?}");
+    };
+    let name = file.file_name().unwrap().to_string_lossy().into_owned();
+    assert!(
+        name.starts_with("saaio-report-20") && file.extension() == Some("txt".as_ref()),
+        "{name}"
+    );
+    let said = stdout(&output);
+    // The current folder as the process reads it: /private/var/... for /var/... on macOS.
+    let printed = said.lines().next().unwrap_or_default();
+    assert!(
+        printed.starts_with("report: /") && printed.ends_with(&format!("/{name}")),
+        "{said}"
+    );
+    assert!(
+        said.contains("Check the file before uploading it"),
+        "{said}"
+    );
+
+    let report = fs::read_to_string(file).unwrap();
+    assert!(report.starts_with("saaio bug report, 20"), "{report}");
+    assert!(report.contains("\nsaaio   0.1.0 ("), "{report}");
+    assert!(report.contains("\nstore        ~\n"), "{report}");
+    assert!(
+        report.contains("\nconfig.toml  ~/no-config.toml: does not load: ~/no-config.toml:2: "),
+        "{report}"
+    );
+    assert!(
+        report.contains("\ntheme.toml   ~/theme.toml: does not load: "),
+        "{report}"
+    );
+    assert!(report.contains("== ~/server.log.1 (last 300 lines) ==\nan older line\n"));
+    assert!(report.contains("== ~/server.log (last 300 lines) ==\nline 101\n"));
+    assert!(report.ends_with("line 400\n"), "{report}");
+    assert!(!report.contains("line 100\n"), "{report}");
+    assert!(
+        !report.contains(&*home.path().to_string_lossy()),
+        "{report}"
+    );
+}
+
+#[test]
+fn bug_report_says_when_there_is_no_store() {
+    let home = TempDir::new().unwrap();
+    let cwd = TempDir::new().unwrap();
+
+    let output = saaio_command(home.path())
+        .arg("bug-report")
+        .env_remove("SAAIO_HOME")
+        .env_remove("XDG_STATE_HOME")
+        .env_remove("HOME")
+        .current_dir(cwd.path())
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", stdout(&output));
+    let file = fs::read_dir(cwd.path())
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let report = fs::read_to_string(file).unwrap();
+    assert!(
+        report.contains("\nstore        cannot be opened: cannot find a state directory\n"),
+        "{report}"
+    );
+    assert!(!report.contains("== "), "{report}");
 }

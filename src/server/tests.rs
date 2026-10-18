@@ -57,6 +57,7 @@ fn start_with_agents(
             config,
             LaunchEnv::default(),
             &std::env::current_dir().unwrap(),
+            &System::default(),
             || 0,
         )
     });
@@ -989,4 +990,18 @@ fn a_running_worker_keeps_the_adapter_it_started_with() {
     }
 
     stop(&paths, handle);
+}
+
+#[test]
+fn the_start_line_names_the_build_and_the_system() {
+    let system = System {
+        os: Some("Darwin 25.6.0 arm64".to_string()),
+        tools: vec![("glab", crate::system::Probe::Missing)],
+    };
+    assert_eq!(
+        started(&system),
+        format!(
+            "started: saaio {BUILD}, protocol {PROTOCOL_VERSION}, Darwin 25.6.0 arm64, glab missing"
+        )
+    );
 }

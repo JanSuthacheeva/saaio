@@ -1,3 +1,4 @@
+pub(super) mod bug_report;
 pub(super) mod clear;
 pub(super) mod home;
 pub(super) mod hook;

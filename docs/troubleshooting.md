@@ -5,13 +5,37 @@
 | Source | Shows |
 | --- | --- |
 | `saaio status <name> --full` | everything saaio knows about a flow, nothing truncated |
-| `server.log` in the store (`~/.local/state/saaio/projects/<repository>/server.log`, `~/.local/state/saaio/server.log` outside a repository, or under `$SAAIO_HOME`) | sessions opened, resumed or failed to start, files that could not be written, why the server stopped |
+| `server.log` in the store (`~/.local/state/saaio/projects/<repository>/server.log`, `~/.local/state/saaio/server.log` outside a repository, or under `$SAAIO_HOME`) | sessions opened, resumed or failed to start, files that could not be written, why the server stopped. Also errors of the hooks in each worker (`hook ...`) and of the UI (`ui: ...`). |
 
-Each `server.log` line starts with a time and a process id:
+Each `server.log` line starts with a time and a process id. The start line names the saaio
+version and commit, the OS and the versions of `claude`, `codex`, `gh` and `glab`:
 
 ```
-2026-10-16 13:39:54 +07:00 [2739] started (saaio 0.1.0 1de3dc4, protocol 5)
+2026-10-18 13:39:54 +07:00 [2739] started: saaio 0.1.0 (e035b96), protocol 6, Darwin 25.6.0 arm64, claude 2.1.302 (Claude Code), codex 0.163.0, gh 2.73.0 (2025-05-19), glab missing
+2026-10-18 13:41:02 +07:00 [2811] hook claude-code flow 3f2a9c: no flow 3f2a9c
 ```
+
+## Reporting a bug
+
+1. Run `saaio bug-report` in the repository where the problem happened.
+2. Check the file it names before uploading it. It can hold flow names, requests and paths.
+3. Open an [issue](https://github.com/JanSuthacheeva/saaio/issues/new?template=bug_report.yml)
+   with what happened, what was expected and the steps, and attach the file.
+
+```
+$ saaio bug-report
+report: /Users/jan/projects/shop/saaio-report-2026-10-18.txt
+help[1]: "Check the file before uploading it: it can hold flow names, requests and paths"
+```
+
+The file holds:
+
+- the saaio version and commit, the OS and the versions of `claude`, `codex`, `gh` and `glab`
+- the store's path
+- whether `config.toml` and `theme.toml` load, with the error when one does not
+- the last 300 lines of `server.log` and `server.log.1`
+
+The home folder is written `~`. A second report on the same day replaces the first.
 
 ## The terminal UI
 

@@ -2,6 +2,7 @@ pub mod cli;
 
 mod adapter;
 mod branching;
+mod bug_report;
 mod client;
 mod config;
 mod default_file;
@@ -16,6 +17,7 @@ mod server;
 mod server_log;
 mod slots;
 mod store;
+mod system;
 mod text;
 mod ui;
 mod view;

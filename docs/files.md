@@ -38,7 +38,7 @@ flow's store from any folder.
 | `flows/<id>.alive` | modification time is the flow's last heartbeat |
 | `waits/` | wake-up state: each session's waiter, messages given to a worker, lines typed into a worker's pane, whether a session is busy, what the master last saw, the master's turn and its Codex session id |
 | `server.sock` | the socket between the UI and the server, owner-only. If its path would be 100 bytes or longer: `/tmp/saaio-<uid>/<hash>.sock`, with the log next to it as `<hash>.log`. |
-| `server.log` | what the server did and what failed. Rotated to `server.log.1` past 1 MiB. |
+| `server.log` | what the server did and what failed, with the errors of the hooks and the UI. The start line names the versions of saaio, the OS and the tools saaio calls. Rotated to `server.log.1` past 1 MiB when the server starts. |
 | `master.json` | the master's session id and folder, for resuming after a restart |
 | `repo` | in a project store: the git folder of the repository it belongs to. A store without it is taken by the first repository of its name. |
 

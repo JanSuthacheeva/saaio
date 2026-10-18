@@ -7,6 +7,7 @@ use crate::launch::pane::LaunchEnv;
 use crate::server::{self, ServerPaths};
 use crate::server_log;
 use crate::store::Store;
+use crate::system::System;
 use crate::ui::theme_file;
 
 /// The session server saaio ui starts on its own; runs until StopServer or SIGTERM. Its stderr is
@@ -31,7 +32,8 @@ pub fn run(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Fail
         flow_exe: std::env::current_exe()?,
     };
     let cwd = std::env::current_dir().context("could not read the current directory")?;
-    if let Err(error) = server::run(&paths, store, config, launch_env, &cwd, clock) {
+    let system = System::probe();
+    if let Err(error) = server::run(&paths, store, config, launch_env, &cwd, &system, clock) {
         server_log::write(clock(), &format!("failed: {error:#}"));
         return Err(error.into());
     }

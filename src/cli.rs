@@ -8,14 +8,14 @@ pub use env::Env;
 use clap::{Parser, Subcommand};
 
 use commands::{
-    clear, home, hook, new, remove, report, send, server, start, status, stop, ui, wait,
+    bug_report, clear, home, hook, new, remove, report, send, server, start, status, stop, ui, wait,
 };
 use output::{Document, Failure};
 
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 #[derive(Debug, Parser)]
 #[command(
-    version,
+    version = crate::proto::BUILD,
     about,
     after_help = "Run alone in a terminal, saaio opens the terminal UI.\nRun by an agent or a script, it prints every flow and what needs you.\nRun saaio --stop to stop the server and every session.",
     args_conflicts_with_subcommands = true
@@ -57,6 +57,8 @@ enum Command {
     Send(send::Args),
     /// Forget flows that are done or ended
     Clear,
+    /// Write a file for a bug report: versions, settings, the store and the end of server.log
+    BugReport,
     /// What a session's asyncRewake hook runs: sleeps until there is news for it, prints it, exits 2
     #[command(hide = true)]
     Wait(wait::Args),
@@ -72,12 +74,13 @@ enum Command {
 ///
 /// # Errors
 ///
-/// The command's failure, with its message, next steps and exit code. Hook and Wait run without
-/// a store; every other command fails without one.
+/// The command's failure, with its message, next steps and exit code. Hook, Wait and BugReport
+/// run without a store; every other command fails without one.
 pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
     match &cli.command {
         Some(Command::Hook(args)) => return Ok(hook::run(args, env, clock)),
         Some(Command::Wait(args)) => return Ok(wait::run(args, env, clock)),
+        Some(Command::BugReport) => return bug_report::run(env, clock),
         _ => {}
     }
     let cwd = std::env::current_dir().ok();
@@ -120,7 +123,7 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
         Some(Command::Send(args)) => send::run(&args, store, env, now),
         Some(Command::Clear) => clear::run(store, now),
         Some(Command::Server) => server::run(store.clone(), env, clock),
-        Some(Command::Hook(_) | Command::Wait(_)) => Ok(Document::Silent),
+        Some(Command::Hook(_) | Command::Wait(_) | Command::BugReport) => Ok(Document::Silent),
     }
 }
 

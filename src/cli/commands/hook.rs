@@ -1,5 +1,5 @@
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
@@ -7,10 +7,12 @@ use super::views;
 use crate::adapter::{Adapter, Turn, calls};
 use crate::cli::Env;
 use crate::cli::output::{Document, news};
+use crate::client;
 use crate::config::Config;
 use crate::deliver::{self, WorkerNews};
 use crate::event::{Event, EventKind};
 use crate::fold;
+use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
 use crate::view::{FlowView, MasterTurn, State};
 use crate::workspace;
@@ -29,50 +31,72 @@ enum Hooked {
 }
 
 /// `saaio hook`: never prints to stdout (a hook's stdout can reach the model) and never fails (a
-/// failing hook shows the user a notice); what goes wrong goes to stderr, the harness's debug log.
-/// A Stop that hands news over wakes the session with it (exit 2, the news on stderr).
+/// failing hook shows the user a notice); what goes wrong goes to the store's server.log. A Stop
+/// that hands news over wakes the session with it (exit 2, the news on stderr).
 pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
     let cwd = std::env::current_dir().ok();
-    let store = match env.store(cwd.as_deref()) {
-        Ok(Some(store)) => store,
-        Ok(None) => {
-            eprintln!("saaio hook: cannot find a state directory");
-            return Document::Silent;
-        }
-        Err(error) => {
-            eprintln!("saaio hook: {error:#}");
-            return Document::Silent;
-        }
+    // Without a store there is no server.log to say it in.
+    let Ok(Some(store)) = env.store(cwd.as_deref()) else {
+        return Document::Silent;
     };
-    // A broken config must not stop running workers from reporting; start and ui say it loudly.
-    let config = env.config().unwrap_or_else(|error| {
-        eprintln!("saaio hook: {error:#}; using the built-in config");
-        Config::builtin()
-    });
     let hooked = match env.flow_id() {
         _ if env.is_master() => Hooked::Master,
         Some(id) => Hooked::Flow(id.to_string()),
         None => Hooked::Nobody,
     };
+    let log = Log::new(&store, &args.adapter, &hooked, clock);
+    // A broken config must not stop running workers from reporting; the server logs it, start and
+    // ui say it loudly.
+    let config = env.config().unwrap_or_else(|_| Config::builtin());
     let Some(adapter) = Adapter::named(&args.adapter) else {
-        eprintln!("saaio hook: no adapter named {}", args.adapter);
+        log.error(&format!("no adapter named {}", args.adapter));
         return Document::Silent;
     };
     let mut text = String::new();
     if let Err(error) = std::io::stdin().read_to_string(&mut text) {
-        eprintln!("saaio hook: could not read the event: {error}");
+        log.error(&format!("could not read the event: {error}"));
         return Document::Silent;
     }
     let payload: Value = match serde_json::from_str(&text) {
         Ok(payload) => payload,
         Err(error) => {
-            eprintln!("saaio hook: the event is not JSON: {error}");
+            log.error(&format!("the event is not JSON: {error}"));
             return Document::Silent;
         }
     };
-    match hook(&store, &config, adapter, &hooked, &payload, clock()) {
+    match hook(&store, &config, adapter, &hooked, &payload, &log, clock()) {
         Some(news) => Document::Wake(news),
         None => Document::Silent,
+    }
+}
+
+/// Where `saaio hook` says what went wrong: the store's server.log, never stdout or stderr (a
+/// hook's output reaches the harness, and the model).
+struct Log {
+    path: PathBuf,
+    /// `hook claude-code flow 3f2a9c` or `hook codex master`.
+    source: String,
+    clock: fn() -> u64,
+}
+
+impl Log {
+    fn new(store: &Store, adapter: &str, hooked: &Hooked, clock: fn() -> u64) -> Log {
+        let source = match hooked {
+            Hooked::Flow(flow) => format!("hook {adapter} flow {flow}"),
+            Hooked::Master => format!("hook {adapter} master"),
+            Hooked::Nobody => format!("hook {adapter}"),
+        };
+        Log {
+            path: client::log_path(store),
+            source,
+            clock,
+        }
+    }
+
+    /// Appends `<source>: <text>`; a log that cannot be written is let go.
+    fn error(&self, text: &str) {
+        let line = format!("{}: {text}", self.source);
+        let _ = server_log::append(&self.path, (self.clock)(), &line);
     }
 }
 
@@ -84,34 +108,35 @@ fn hook(
     adapter: Adapter,
     hooked: &Hooked,
     payload: &Value,
+    log: &Log,
     now: u64,
 ) -> Option<String> {
     let kinds = adapter.translate(payload, &config.workflow);
     let waiter = match hooked {
         Hooked::Nobody => return None,
         Hooked::Master => {
-            record_master_session(store, &kinds);
-            record_master_turn(store, &kinds, now);
+            record_master_session(store, &kinds, log);
+            record_master_turn(store, &kinds, log, now);
             Waiter::Master
         }
         Hooked::Flow(flow) => {
-            let id = report(store, flow, kinds, now)?;
+            let id = report(store, flow, kinds, log, now)?;
             Waiter::Flow(id)
         }
     };
     match adapter.turn(payload)? {
-        Turn::Began => mark_busy(store, &waiter, Busy::Turn),
-        Turn::Idle => mark_busy(store, &waiter, Busy::Idle),
-        Turn::Ended if adapter.wakes_itself() => mark_busy(store, &waiter, Busy::Idle),
+        Turn::Began => mark_busy(store, &waiter, log, Busy::Turn),
+        Turn::Idle => mark_busy(store, &waiter, log, Busy::Idle),
+        Turn::Ended if adapter.wakes_itself() => mark_busy(store, &waiter, log, Busy::Idle),
         Turn::Ended => {
             let wakes = !matches!(waiter, Waiter::Master) || config.master.wake;
             let news = if wakes {
-                hand_over(store, &waiter, now)
+                hand_over(store, &waiter, log, now)
             } else {
                 None
             };
             if news.is_none() {
-                mark_busy(store, &waiter, Busy::Idle);
+                mark_busy(store, &waiter, log, Busy::Idle);
             }
             return news;
         }
@@ -121,13 +146,13 @@ fn hook(
 
 /// Appends the kinds that change flow `flow` (a name or id); its id, None when there is no such
 /// flow or its log cannot be read.
-fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, now: u64) -> Option<String> {
+fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, log: &Log, now: u64) -> Option<String> {
     let id = if store.events(flow).is_ok() {
         flow.to_string()
     } else {
         let (flows, _) = views(store, now);
         let Some(view) = fold::resolve(&flows, flow) else {
-            eprintln!("saaio hook: no flow {flow}");
+            log.error(&format!("no flow {flow}"));
             return None;
         };
         view.id.clone()
@@ -136,20 +161,22 @@ fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, now: u64) -> Option<
         if let EventKind::MergeRequest { url } = &kind
             && !of_own_repo(store, &id, url, now)
         {
-            eprintln!("saaio hook: {url} is not a merge request of this flow's repository");
+            log.error(&format!(
+                "{url} is not a merge request of this flow's repository"
+            ));
             continue;
         }
         let events = match store.events(&id) {
             Ok(events) => events,
             Err(error) => {
-                eprintln!("saaio hook: {error:#}");
+                log.error(&format!("{error:#}"));
                 return None;
             }
         };
         if fold::changes(&id, &events, &kind, now)
             && let Err(error) = store.append(&id, &Event::new(now, kind))
         {
-            eprintln!("saaio hook: {error:#}");
+            log.error(&format!("{error:#}"));
         }
     }
     Some(id)
@@ -169,14 +196,14 @@ fn of_own_repo(store: &Store, id: &str, url: &str, now: u64) -> bool {
 
 /// The news a session's Stop hands over: a worker's messages from the master (its flow working
 /// again, since the session goes on with them), the flows that stopped for the master.
-fn hand_over(store: &Store, waiter: &Waiter, now: u64) -> Option<String> {
+fn hand_over(store: &Store, waiter: &Waiter, log: &Log, now: u64) -> Option<String> {
     match waiter {
         Waiter::Flow(id) => {
             let WorkerNews::News(messages) = deliver::worker_news(store, id, now) else {
                 return None;
             };
             if let Err(error) = store.append(id, &Event::new(now, EventKind::Working)) {
-                eprintln!("saaio hook: {error:#}");
+                log.error(&format!("{error:#}"));
             }
             let messages: Vec<&str> = messages.iter().map(String::as_str).collect();
             Some(news::for_worker(&messages))
@@ -190,7 +217,7 @@ fn hand_over(store: &Store, waiter: &Waiter, now: u64) -> Option<String> {
 }
 
 /// Keeps the master's session id, which its harness picked, so the server can resume it.
-fn record_master_session(store: &Store, kinds: &[EventKind]) {
+fn record_master_session(store: &Store, kinds: &[EventKind], log: &Log) {
     let session = kinds.iter().find_map(|kind| match kind {
         EventKind::Session { id, .. } => Some(id),
         _ => None,
@@ -199,7 +226,7 @@ fn record_master_session(store: &Store, kinds: &[EventKind]) {
         && store.master_session().as_ref() != Some(id)
         && let Err(error) = store.set_master_session(id)
     {
-        eprintln!("saaio hook: {error:#}");
+        log.error(&format!("{error:#}"));
     }
 }
 
@@ -207,7 +234,7 @@ fn record_master_session(store: &Store, kinds: &[EventKind]) {
 /// turn woken by `saaio wait` runs no prompt hook, so Idle can follow Idle), else when it differs
 /// from the one kept: tool calls repeat Working, and an unchanged file keeps the server from
 /// resending.
-fn record_master_turn(store: &Store, kinds: &[EventKind], now: u64) {
+fn record_master_turn(store: &Store, kinds: &[EventKind], log: &Log, now: u64) {
     let Some(state) = fold::master_state(kinds) else {
         return;
     };
@@ -216,12 +243,44 @@ fn record_master_turn(store: &Store, kinds: &[EventKind], now: u64) {
         return;
     }
     if let Err(error) = store.set_master_turn(&MasterTurn { state, at: now }) {
-        eprintln!("saaio hook: {error:#}");
+        log.error(&format!("{error:#}"));
     }
 }
 
-fn mark_busy(store: &Store, waiter: &Waiter, busy: Busy) {
+fn mark_busy(store: &Store, waiter: &Waiter, log: &Log, busy: Busy) {
     if let Err(error) = store.set_busy(waiter, busy) {
-        eprintln!("saaio hook: {error:#}");
+        log.error(&format!("{error:#}"));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::TempDir;
+
+    use super::*;
+
+    #[test]
+    fn logs_an_error_with_its_source_beside_the_socket() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let log = Log::new(&store, "codex", &Hooked::Flow("3f2a9c".to_string()), || 0);
+
+        log.error("no flow 3f2a9c");
+        Log::new(&store, "codex", &Hooked::Master, || 0).error("broken");
+
+        let lines = fs::read_to_string(dir.path().join("server.log")).unwrap();
+        let ends: Vec<_> = lines
+            .lines()
+            .map(|line| line.split_once("] ").unwrap().1)
+            .collect();
+        assert_eq!(
+            ends,
+            [
+                "hook codex flow 3f2a9c: no flow 3f2a9c",
+                "hook codex master: broken"
+            ]
+        );
     }
 }
