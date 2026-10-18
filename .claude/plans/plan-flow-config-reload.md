@@ -269,6 +269,9 @@ notice and logs "config.toml read again".
   being wired, and turning wake on brings every flow that stopped meanwhile (the plan's assumption).
   Recommendation: confirm that is the wanted behaviour; it is what the test pins.
 
+Decided (the user, through the master: go with the recommendations): all four stay as they are.
+No new tasks.
+
 ### Where to look
 
 1. `src/server/panes.rs` `refresh -> reload_config` then `src/server/news.rs` `server_delivered`
