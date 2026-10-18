@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Records saaio ui in a real terminal for the README: flow-ui.png and flow-ui.gif (macOS).
+# Records saaio ui in a real terminal for the README: saaio-ui.png and saaio-ui.gif (macOS).
 #
 #   docs/media/record.sh open <state> <repo>   saaio ui on the scratch store, in an Alacritty window
 #   docs/media/record.sh capture               the picture, then a GIF of moving through saaio ui
@@ -52,12 +52,12 @@ capture() {
     key() { "${tmux[@]}" send-keys -t demo "$@"; }
     prefixed() { key C-Space; key "$@"; }
 
-    screencapture -x -o -l "$id" "$media/flow-ui.png"
+    screencapture -x -o -l "$id" "$media/saaio-ui.png"
     # ffmpeg records the mouse pointer anyway; park it in the corner, outside the window.
     swift - <<<'import CoreGraphics; CGWarpMouseCursorPosition(CGPoint(x: 0, y: 0))'
 
     local video
-    video=$(mktemp -d)/flow-ui.mp4
+    video=$(mktemp -d)/saaio-ui.mp4
     ffmpeg -loglevel error -y -f avfoundation -capture_cursor 0 -pixel_format nv12 -framerate 30 -i "Capture screen 0:none" \
         -vf "crop=$w:$h:$x:$y" -t 21 -pix_fmt yuv420p "$video" &
     local recording=$!
@@ -73,7 +73,7 @@ capture() {
     wait "$recording"
     ffmpeg -loglevel error -y -i "$video" \
         -vf "fps=15,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" \
-        "$media/flow-ui.gif"
+        "$media/saaio-ui.gif"
 }
 
 case ${1:-} in

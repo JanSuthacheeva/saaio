@@ -9,7 +9,7 @@ what it can, and asks you the rest.
 - Claude Code and Codex, state comes from their hooks
 - saaio CLI for agents (TOON) and scripts (--json)
 
-![saaio ui with Claude Code and Codex workers](docs/media/flow-ui.png)
+![saaio ui with Claude Code and Codex workers](docs/media/saaio-ui.png)
 
 ## Install
 
@@ -68,7 +68,7 @@ saaio       # the same, typed in a terminal
 | Detach, sessions keep running | `C-space d` |
 | Stop saaio | `C-space Q` or `saaio ui --stop` |
 
-![Moving through saaio ui: the peek, a worker, the board](docs/media/flow-ui.gif)
+![Moving through saaio ui: the peek, a worker, the board](docs/media/saaio-ui.gif)
 
 The first run writes `config.toml`, `theme.toml` and `master.md` to `~/.config/saaio`, every setting
 commented out at its default.

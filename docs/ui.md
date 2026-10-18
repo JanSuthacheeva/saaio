@@ -20,7 +20,7 @@ One terminal with the master, every worker and every plain session.
 
 ## The screen
 
-![saaio ui](media/flow-ui.png)
+![saaio ui](media/saaio-ui.png)
 
 | Area | Shows |
 | --- | --- |
