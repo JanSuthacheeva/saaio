@@ -198,11 +198,15 @@ impl Sidebar<'_> {
                     ),
                 ]),
                 PeekLine::Result(text) => body.push(vec![Span::styled(
-                    format!("     {}  {}", glyphs.result, clip(text, text_width - 6)),
+                    format!(
+                        "     {}  {}",
+                        glyphs.result,
+                        clip(&short(text), text_width - 6)
+                    ),
                     theme.ui.faint,
                 )]),
                 PeekLine::Text(text) => {
-                    for (index, row) in wrap(text, text_width).into_iter().enumerate() {
+                    for (index, row) in wrap(&short(text), text_width).into_iter().enumerate() {
                         let mark = if index == 0 { glyphs.tool } else { " " };
                         body.push(vec![
                             Span::styled(format!(" {mark} "), theme.ui.strong),

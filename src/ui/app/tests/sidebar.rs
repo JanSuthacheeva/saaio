@@ -223,13 +223,20 @@ fn peek_writes_paths_in_the_worktree_relative_and_home_with_a_tilde() {
             name: "Write".into(),
             target: "/shop/.saaio/worktrees/export-csv/PLAN.md".into(),
         },
+        PeekLine::Result("/Users/jan/shop".into()),
+        PeekLine::Text("The plan is in /shop/.saaio/worktrees/export-csv/PLAN.md.".into()),
         PeekLine::Now("Read(/Users/jan/notes.md)".into()),
     ];
 
     let terminal = render_peek(&app, &peek);
 
     assert_eq!(side(&terminal, 17).trim_end(), "  ⏺ Write(PLAN.md)");
-    assert_eq!(side(&terminal, 18).trim_end(), "  ◓ Read(~/notes.md)");
+    assert_eq!(side(&terminal, 18).trim_end(), "      ⎿  ~/shop");
+    assert_eq!(
+        side(&terminal, 19).trim_end(),
+        "  ⏺ The plan is in PLAN.md."
+    );
+    assert_eq!(side(&terminal, 20).trim_end(), "  ◓ Read(~/notes.md)");
 }
 
 #[test]
