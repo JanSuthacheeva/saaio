@@ -96,7 +96,8 @@ fn version_of(line: &str) -> String;
 ```rust
 pub fn run(paths: &ServerPaths, store: Store, config: Config, env: LaunchEnv, cwd: &Path,
            system: &System, clock: fn() -> u64) -> Result<()>;
-// start line: `started: saaio 0.1.0 (e035b96), protocol 5, Darwin 25.6.0 arm64, claude ..., glab missing`
+/// `started: saaio 0.1.0 (e035b96), protocol 6, Darwin 25.6.0 arm64, claude ..., glab missing`.
+fn started(system: &System) -> String;
 ```
 
 `src/cli/commands/server.rs` (modified): `System::probe()` before `server::run`, passed in. Server
@@ -290,7 +291,7 @@ Server start
   unknown flow and with non-JSON stdin prints nothing on stdout or stderr and appends to server.log;
   `bug-report` in a scratch cwd writes the file with the store under `~`, a broken config.toml's
   error, and the end of a seeded server.log and server.log.1, and prints its path and help.
-- Server tests: the start line holds the summary of the System passed in.
+- Server tests: `started` of a fixed System (the server's stderr is not captured in tests).
 
 ## Assumptions
 
@@ -305,8 +306,8 @@ Server start
 ## Tasks
 
 - [x] `proto::BUILD` as `0.1.0 (e035b96)`, clap `version = BUILD`, tests/cli.rs `--version` test updated
-- [ ] `system.rs`: `System::probe`, `summary`, `Probe`, `run`, `version_of` with unit tests
-- [ ] Server start line names the System: `server::run(.., system, ..)`, `commands::server` probes, server test for the line
+- [x] `system.rs`: `System::probe`, `summary`, `Probe`, `run`, `version_of` with unit tests
+- [x] Server start line names the System: `server::run(.., system, ..)`, `commands::server` probes, server test for the line
 - [ ] `client::log_path`, hook `Log` replacing every `eprintln!` in `hook.rs`, unit test for `Log::error` and tests/cli.rs for a silent hook that logs
 - [ ] UI logging: `server_log::append_on_panic`, `ui: failed:` in `commands::ui`, `UiEnv::log`, failed jobs and theme errors in `ui.rs`
 - [ ] `text::date` and `bug_report.rs` (`Facts`, `text`, `tail`, `tilde`, `file_name`) with unit tests

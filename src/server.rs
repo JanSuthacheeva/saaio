@@ -36,6 +36,7 @@ use crate::launch::pane::LaunchEnv;
 use crate::proto::{BUILD, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, ServerMsg, Size};
 use crate::server_log;
 use crate::store::Store;
+use crate::system::System;
 use crate::ui::theme_file;
 use crate::view::Board;
 use conn::{accept_in_background, bind};
@@ -178,6 +179,14 @@ fn write_defaults(paths: &ServerPaths, clock: fn() -> u64) {
     }
 }
 
+/// `started: saaio 0.1.0 (e035b96), protocol 6, Darwin 25.6.0 arm64, claude 2.1.302, ...`.
+fn started(system: &System) -> String {
+    format!(
+        "started: saaio {BUILD}, protocol {PROTOCOL_VERSION}, {}",
+        system.summary()
+    )
+}
+
 /// Binds the socket (removing a stale one), opens the master, then loops until StopServer or a
 /// stopping signal; logs the start, the reason and the end.
 pub fn run(
@@ -186,13 +195,11 @@ pub fn run(
     config: Config,
     env: LaunchEnv,
     cwd: &Path,
+    system: &System,
     clock: fn() -> u64,
 ) -> Result<()> {
     let listener = bind(&paths.socket)?;
-    server_log::write(
-        clock(),
-        &format!("started (saaio {BUILD}, protocol {PROTOCOL_VERSION})"),
-    );
+    server_log::write(clock(), &started(system));
     write_defaults(paths, clock);
     let mut configs = ConfigWatch::new(paths.config.clone());
     // The server was handed this config; the watch only needs to know the file as it is.
