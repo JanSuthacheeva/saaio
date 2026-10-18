@@ -328,3 +328,45 @@ Server start
 - [x] `.github/ISSUE_TEMPLATE/bug_report.yml`, `docs/troubleshooting.md` "Reporting a bug" and the new start line, `docs/cli.md` (glance row, section, `--version`), `docs/files.md` server.log row, CLAUDE.md modules and plan list
 - [x] `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test`
 - [x] End to end with a scratch SAAIO_HOME: open the UI in a PTY, check the start line, break theme.toml and see `ui: theme:`, run a hook with a bad payload, `saaio bug-report`, read the file
+
+## Review
+
+Reviewed 2026-10-18 against this plan, CLAUDE.md and the code the diff calls. The fix commit was
+reviewed again by a separate agent (no problems found).
+
+**Fixed**
+
+- `system::run` read the tool's output only after it exited, to its end: a tool that leaves a child
+  holding stdout open kept the probe, and with it the server start and `saaio bug-report`, waiting
+  past the 1 s deadline (a script `sleep 30 & echo 1.0` held it 30 s). The first line is now read on
+  its own thread and waited for until the deadline. `13db165`
+- `docs/troubleshooting.md` showed a hook log line naming the flow by name; hooks get the flow's
+  id. `773bfca`
+
+**Open**
+
+- server.log is rotated only when a server starts, but hooks and the UI now append to it too. A hook
+  error that repeats on every tool call (say `set_busy` failing) grows it without bound while one
+  server runs. Recommendation: rotate in `server_log::append` when past `CAP` (rename is atomic, a
+  lost race only skips one rotation), in a follow-up.
+- A broken config.toml is logged only by a running server; with none running a hook falls back to
+  the built-in config silently (plan decision). Recommendation: keep.
+- A reader thread left by a probe whose grandchild holds the pipe stays blocked until that
+  grandchild closes it (at most one per tool per probe, the server probes once). Recommendation:
+  keep.
+
+**Where to look**
+
+1. `src/cli/commands/hook.rs` `run` to `Log`: the hook is now silent on stdout and stderr except
+   Wake news; check that nothing a harness relies on went to stderr before.
+2. `src/system.rs` `run` and `read_first_line`: the only code on the server's start path that waits
+   on other programs.
+3. `src/cli/commands/bug_report.rs` with `src/bug_report.rs` `tilde`: what ends up in a file users
+   upload, home written `~`.
+
+Routine, skim: `proto::BUILD` and its test, `text::date`, `Job::summary`, docs, the issue form.
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at
+`13db165` (the docs commit after it changes no code).
