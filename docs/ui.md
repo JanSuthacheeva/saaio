@@ -195,7 +195,7 @@ The master's session ended: `C-space r` resumes it, `C-space Q` stops saaio.
 | --- | --- |
 | `C-space d`, or closing the terminal | detach. Sessions keep running. The next `saaio ui` attaches. |
 | `C-space Q` | stop. With unfinished flows it lists them and asks, see below. With every flow finished: `y` stops, any other key cancels. |
-| `saaio ui --stop` | stops the server and every session, keeps unfinished flows (like `k`) |
+| `saaio --stop` (or `saaio ui --stop`) | stops the server and every session, keeps unfinished flows (like `k`) |
 | a second `saaio ui` | takes over from the first. One saaio ui is attached at a time. |
 
 | Key at the stop prompt | Effect |

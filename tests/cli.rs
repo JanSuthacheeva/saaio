@@ -196,9 +196,10 @@ struct Terminal {
 }
 
 impl Terminal {
-    fn open(home: &Path, dir: &Path, env: &[(&str, &str)]) -> Terminal {
+    fn open(home: &Path, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Terminal {
         let template = saaio_command(home);
         let mut command = CommandBuilder::new(template.get_program());
+        command.args(args);
         for (key, value) in template.get_envs() {
             match value {
                 Some(value) => command.env(key, value),
@@ -274,7 +275,7 @@ fn bare_saaio_in_an_agents_or_a_flows_terminal_prints_the_overview() {
         "CLAUDECODE",
         "CODEX_THREAD_ID",
     ] {
-        let mut terminal = Terminal::open(home.path(), home.path(), &[(marker, "1")]);
+        let mut terminal = Terminal::open(home.path(), home.path(), &[], &[(marker, "1")]);
 
         let status = terminal.child.wait().unwrap();
 
@@ -299,7 +300,7 @@ resume = ["cat"]"#,
     );
 
     let _stops = StopsServer(&lab.home);
-    let terminal = Terminal::open(&lab.home, &lab.repo, &[]);
+    let terminal = Terminal::open(&lab.home, &lab.repo, &[], &[]);
 
     wait_for_socket(&lab.home.join("server.sock"));
     wait_until(Duration::from_secs(5), "saaio ui never drew", || {
@@ -307,6 +308,32 @@ resume = ["cat"]"#,
     });
     assert!(!terminal.shows("bin: "), "{}", terminal.text());
     assert!(lab.run(&["ui", "--stop"]).status.success());
+}
+
+#[test]
+fn bare_stop_in_a_terminal_never_opens_the_ui() {
+    let home = TempDir::new().unwrap();
+
+    for marker in [
+        None,
+        Some("SAAIO_FLOW_ID"),
+        Some("SAAIO_MASTER"),
+        Some("CLAUDECODE"),
+        Some("CODEX_THREAD_ID"),
+    ] {
+        let env = marker.map(|name| vec![(name, "1")]).unwrap_or_default();
+        let mut terminal = Terminal::open(home.path(), home.path(), &["--stop"], &env);
+        assert!(terminal.child.wait().unwrap().success(), "{marker:?}");
+        wait_until(Duration::from_secs(5), "stop did not print", || {
+            terminal.shows("no saaio server runs")
+        });
+        assert!(
+            !terminal.shows("\x1b[?1049h"),
+            "{marker:?}: {}",
+            terminal.text()
+        );
+    }
+    assert!(!home.path().join("server.sock").exists());
 }
 
 #[test]
@@ -405,6 +432,7 @@ fn help_and_version_still_print_normally() {
         "{}",
         stdout(&help)
     );
+    assert!(stdout(&help).contains("--stop"), "{}", stdout(&help));
     assert_eq!(stdout(&version).trim(), "saaio 0.1.0");
 }
 
@@ -1958,6 +1986,9 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     let none = saaio(home.path(), &["ui", "--stop"]);
     assert!(none.status.success());
     assert_eq!(stdout(&none).trim(), "no saaio server runs");
+    let bare_none = saaio(home.path(), &["--stop"]);
+    assert!(bare_none.status.success());
+    assert_eq!(stdout(&bare_none), stdout(&none));
 
     let server = saaio_command(home.path())
         .arg("server")
@@ -1976,7 +2007,7 @@ fn ui_stop_ends_a_running_server_and_says_when_none_runs() {
     let mut server = Running(server);
     wait_for_socket(&socket);
 
-    let stopped = saaio(home.path(), &["ui", "--stop"]);
+    let stopped = saaio(home.path(), &["--stop"]);
 
     assert_eq!(
         stdout(&stopped).trim(),
@@ -2012,7 +2043,7 @@ fn ui_refuses_inside_a_worker_on_its_own_store_and_points_to_a_scratch_home() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");
 
-    for args in [&["ui"][..], &["ui", "--stop"]] {
+    for args in [&["ui"][..], &["ui", "--stop"], &["--stop"]] {
         let refused = saaio_in(home.path(), &id, args);
         assert_eq!(refused.status.code(), Some(1), "{args:?}");
         let text = stdout(&refused);
@@ -2092,7 +2123,12 @@ fn the_server_command_stays_out_of_the_help() {
     let help = stdout(&saaio(home.path(), &["--help"]));
 
     assert!(help.contains("ui"), "{help}");
-    assert!(!help.contains("server"), "{help}");
+    assert!(
+        !help
+            .lines()
+            .any(|line| line.trim_start().starts_with("server ")),
+        "{help}"
+    );
 }
 
 fn seed_worker(home: &Path, id: &str, name: &str, last: &str) {
