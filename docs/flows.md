@@ -1,5 +1,9 @@
 # Flows, workers and the master
 
+A flow is one unit of work: one feature or ticket, from request to merge request. It has its own
+git worktree and branch, a worker (the agent session doing the work) and the phases the worker
+walks through. The master starts flows and answers their workers.
+
 ```sh
 saaio start "SHOP-217 add CSV export"
 saaio status shop-217
@@ -8,7 +12,7 @@ saaio status shop-217
 | Term | Definition |
 | --- | --- |
 | flow | one feature, from request to open merge request, with its own git worktree and branch |
-| worker | the agent session saaio ui runs in a flow's worktree |
+| worker | the agent session the UI runs in a flow's worktree |
 | master | the agent session that starts flows, answers workers and reports to you |
 | plain session | an agent in any folder, without a flow |
 

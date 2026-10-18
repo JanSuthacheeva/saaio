@@ -12,7 +12,7 @@ what it can, and asks you the rest.
 > saaio is young. Expect rough edges, especially with Codex, which is experimental and not yet
 > well tested. Bug reports are welcome.
 
-![saaio ui with Claude Code and Codex workers](docs/media/saaio-ui.png)
+![saaio with Claude Code and Codex workers](docs/media/saaio-ui.png)
 
 ## Install
 
@@ -57,11 +57,22 @@ Details: [Use your own workflow](docs/configuration.md#use-your-own-workflow).
 
 **Neither.** The flow still works. States show as usual. The steps stay `○───○───○───○`.
 
+## Set up each project
+
+Recommended once per project: the `setup-saaio` skill writes `.saaio/setup` and `.saaio/teardown`,
+so each worktree gets its own ports, `.env` and services and workers do not collide.
+
+```sh
+npx skills add JanSuthacheeva/agent-skills -g --skill setup-saaio   # included in the command above
+```
+
+Then ask the agent in the project: "set up saaio for this project". Details:
+[Repository setup](docs/repository.md#the-setup-saaio-skill).
+
 ## Usage
 
 ```sh
-saaio ui    # in a repository
-saaio       # the same, typed in a terminal
+saaio    # in a repository
 ```
 
 | Do | How |
@@ -71,7 +82,7 @@ saaio       # the same, typed in a terminal
 | Detach, sessions keep running | `C-space d` |
 | Stop saaio | `C-space Q` or `saaio --stop` |
 
-![Moving through saaio ui: the peek, a worker, the board](docs/media/saaio-ui.gif)
+![Moving through saaio: the peek, a worker, the board](docs/media/saaio-ui.gif)
 
 The first run writes `config.toml`, `theme.toml` and `master.md` to `~/.config/saaio`, every setting
 commented out at its default.
@@ -90,9 +101,13 @@ commented out at its default.
 
 ## How it works
 
+A flow is one unit of work: one feature or ticket, from request to merge request. It has its own
+git worktree and branch, a worker (the agent session doing the work) and the phases the worker
+walks through (plan, implement, review, merge request by default).
+
 Every flow is an append-only event log. The agents' hooks run `saaio hook`, which turns hook events
 into flow events (phase started, question waiting, merge request opened). saaio folds the logs into
-each flow's state. `saaio server` runs each agent in its own terminal. `saaio ui` attaches to it.
+each flow's state. `saaio server` runs each agent in its own terminal. `saaio` attaches to it.
 
 ## CLI
 
@@ -117,9 +132,8 @@ public interface. The logs are private.
 
 | Command | Does |
 | --- | --- |
-| `saaio` | saaio ui in your terminal; every flow and what needs you for an agent or a script |
+| `saaio` | the terminal UI in your terminal. Every flow and what needs you for an agent or a script. |
 | `saaio --stop` | stop the server and every session |
-| `saaio ui [--stop]` | the terminal UI; `--stop` also stops the server |
 | `saaio start <request>` | a worker in its own worktree |
 | `saaio start --plain <folder>` | an agent in a folder |
 | `saaio status [<flow>] [--json] [--all]` | where flows stand |
@@ -149,7 +163,7 @@ saaio detects it), desktop notifications, phone access. macOS and Linux only.
 ## Documentation
 
 - [Install](docs/install.md)
-- [saaio ui](docs/ui.md)
+- [The terminal UI](docs/ui.md)
 - [Flows and the master](docs/flows.md)
 - [Configuration](docs/configuration.md)
 - [Agent permissions](docs/agents.md)

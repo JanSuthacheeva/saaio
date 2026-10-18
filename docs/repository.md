@@ -3,6 +3,9 @@
 None of this is required. `saaio start` works in any git repository. These additions let several
 workers run side by side without collisions.
 
+Recommended for every project: run the [setup-saaio skill](#the-setup-saaio-skill) once. It writes
+`.saaio/setup` and `.saaio/teardown` for the project.
+
 | File | Purpose |
 | --- | --- |
 | `.saaio/config.toml` | branch name convention |
@@ -158,10 +161,10 @@ docker compose down -v --remove-orphans
 ## The setup-saaio skill
 
 [setup-saaio](https://github.com/JanSuthacheeva/agent-skills/tree/main/skills/setup-saaio) writes
-both scripts for a project.
+both scripts for a project. Install it once, globally, and run it in every project saaio works in.
 
 ```sh
-npx skills add JanSuthacheeva/agent-skills --skill setup-saaio
+npx skills add JanSuthacheeva/agent-skills -g --skill setup-saaio
 ```
 
 Then ask the agent in the repository: "set up saaio for this project".
