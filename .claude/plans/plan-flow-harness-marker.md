@@ -60,3 +60,10 @@ No stored or protocol data changes. `Workspace.agent` is already the name used t
 - [x] Render width-aware worker and plain-session markers in `Sidebar::flow_rows`, with first/second-row and golden tests.
 - [x] Pass the configured master agent through `reload_config`, `App::set_master_agent` and `Sidebar::master_rows`; cover it in tests and update user documentation.
 - [x] Run the UI golden test as an end-to-end rendering check, the full test suite and `cargo clippy --all-targets -- -D warnings`.
+
+## Review
+
+- **Fixed:** A long custom agent name clipped a short flow name (`shop-221` became `s…`). The marker now uses only the columns left after the flow name; the regression test failed before the fix and passes after it. Commit `9f9cf81`.
+- **Open:** None found.
+- **Where to look:** `src/ui/sidebar/rows.rs` `flow_rows` for first-row width and second-row status placement; `master_rows` and `src/ui.rs` `reload_config` for the configured master marker. Golden snapshots and README changes are routine.
+- **Checks:** At `9f9cf81`, `cargo test --quiet` (514 unit and 71 integration tests), `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check` passed. The production fix was re-read and exercised with the regression test, but was not reviewed independently.
