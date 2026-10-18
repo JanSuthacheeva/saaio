@@ -45,3 +45,14 @@ Reviewed `flow/media-saaio` against `main` (commits 69dbde1..1225991). I viewed 
 3. The rest (`record.sh` names, the three doc links, the plan) is routine and can be skimmed.
 
 **Checks** - no Rust changed on the branch. `cargo test` and `cargo clippy -- -D warnings` last passed on `main` at 763453d and were not rerun.
+
+## Decided after review
+
+The user chose to retake both with the recorder's own plugins off and to say so in the scripts.
+
+- [ ] `demo-setup.sh` starts the Claude Code agents without user-level settings and MCP servers
+  (`--setting-sources project,local --strict-mcp-config`), so personal plugins, MCP servers and
+  hooks stay out of the recording; `demo-setup.sh` and `record.sh` say the agents otherwise run
+  with your own config
+- [ ] Retake the picture and GIF, check every frame for the old name and for personal setup
+- [ ] Clean up the scratch session, store and repo again
