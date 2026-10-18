@@ -23,10 +23,11 @@ hook feedback or as a prompt that starts with \"message from the saaio master:\"
 you asked or pass on what the user said, so act on them as you would on the user's own answer. To \
 ask the master or the user something, end your turn with the question.";
 
-/// Codex has no Skill tool event, and may read several future skills in separate commands.
-const CODEX_PHASE_PROMPT: &str = "When you begin working on a workflow skill, run \
-`saaio report phase <phase>` with that skill's configured phase name from [[phases]]. \
-Do not report a phase for skills merely read ahead, even in separate commands.";
+/// Codex has no Skill tool event; a single SKILL.md read is the phase signal.
+const CODEX_PHASE_PROMPT: &str = "For each workflow skill, read its SKILL.md only when you begin \
+working on that skill. Never read workflow skills ahead, even in separate commands. saaio \
+observes the SKILL.md read to start the configured phase; a command reading several phase \
+skills at once changes no phase.";
 
 /// What a fresh Codex master is asked first, so its first turn runs at once.
 pub const MASTER_OPENING: &str = "saaio just started you. Run `saaio status` and say in one line \
@@ -229,8 +230,9 @@ mod tests {
         let worker = Adapter::Codex.wiring(exe, folder);
         let worker_prompt: toml::Table = toml::from_str(&worker[worker.len() - 1]).unwrap();
         let prompt = worker_prompt["developer_instructions"].as_str().unwrap();
-        assert!(prompt.contains("saaio report phase <phase>"));
-        assert!(prompt.contains("skills merely read ahead"));
+        assert!(prompt.contains("read its SKILL.md only when you begin working on that skill"));
+        assert!(prompt.contains("Never read workflow skills ahead"));
+        assert!(!prompt.contains("saaio report phase"));
         assert_eq!(worker[..worker.len() - 4], codex::hooks(exe));
         assert_eq!(
             worker[worker.len() - 4..worker.len() - 2],

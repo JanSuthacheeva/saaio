@@ -181,7 +181,8 @@ Or mode `plain` in the new-flow dialog.
 ### Codex
 
 Experimental: Codex support works, but is less tested than Claude Code and has the gaps listed
-under Codex in [ROADMAP.md](../ROADMAP.md).
+under Codex in [ROADMAP.md](../ROADMAP.md). Phase tracking depends on the worker following
+saaio's instruction to read each workflow skill's `SKILL.md` only when it begins that skill.
 
 `adapter = "codex"`. Hooks, their per-launch trust state and the worker prompt pass as `-c`
 arguments. A worker also trusts its own worktree for that launch. Nothing is written to `~/.codex`.
@@ -189,8 +190,8 @@ arguments. A worker also trusts its own worktree for that launch. Nothing is wri
 | Codex event | Reported |
 | --- | --- |
 | a prompt | `working`, and the phase of a `$skill` in it |
-| a shell command reading any `SKILL.md` file | no phase. Codex may read future skills ahead in separate commands. |
-| a worker starting a phase skill | the worker runs `saaio report phase <phase>` with its configured phase name |
+| a shell command reading one configured phase skill's `SKILL.md` | that skill's phase |
+| a shell command reading skills from several configured phases | no phase; it is treated as read-ahead |
 | a subagent (`spawn_agent`) | `delegated <its task>`, until the main agent goes on |
 | a permission request | after three seconds without a tool completion, `waiting permission: Bash(touch notes.txt)` |
 | a tool finishing | `working`. A merge request, as for Claude Code. |
@@ -202,8 +203,10 @@ arguments. A worker also trusts its own worktree for that launch. Nothing is wri
 - Codex runs the permission hook before automatic review or a user prompt. A quick automatic
   approval finishes the tool and cancels the pending wait. A slow automatic review can still show
   `waiting` after three seconds; the completed tool returns the flow to `working`.
-- Codex has no Skill tool hook. A `$skill` named in a prompt starts its configured phase; while a
-  workflow runs, the worker reports each phase when it starts that skill.
+- Codex has no Skill tool hook. A `$skill` named in a prompt starts its configured phase. For later
+  phases, saaio observes a single `SKILL.md` read. The worker instruction makes that read a phase
+  start by prohibiting skill reads ahead, including reads in separate commands. If a worker does
+  read ahead despite the instruction, a separate read can still advance the displayed phase.
 - A running Codex worker with no first turn after 30 seconds becomes `waiting`; answer the dialog
   in its pane, then its first prompt returns it to `working`.
 - No plan-progress tool: no task counts.

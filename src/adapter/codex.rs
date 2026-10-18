@@ -6,11 +6,9 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::adapter::answer::turn_end;
-use crate::adapter::calls::{created_merge_request, tool_call};
+use crate::adapter::calls::{created_merge_request, simple_commands, tool_call};
 use crate::adapter::{Adapter, Turn, cut};
-use crate::event::EventKind;
-#[cfg(test)]
-use crate::event::Phase;
+use crate::event::{EventKind, Phase};
 use crate::workflow::Workflow;
 
 /// One hook saaio listens to: Codex's event name, the key its trust state uses, its timeout.
@@ -163,6 +161,12 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
                 kinds.push(EventKind::Phase { phase });
             }
         }
+        "PreToolUse" if tool == "Bash" => {
+            let command = input["command"].as_str().unwrap_or("");
+            if let Some(phase) = read_skill_phase(command, workflow) {
+                kinds.push(EventKind::Phase { phase });
+            }
+        }
         "PreToolUse" if tool.ends_with(SPAWN_AGENT) => kinds.push(EventKind::Delegated {
             description: cut(&subagent(input)),
         }),
@@ -198,6 +202,43 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
         _ => {}
     }
     kinds
+}
+
+/// A phase skill read by this shell call, unless it reads skills from several phases.
+fn read_skill_phase(command: &str, workflow: &Workflow) -> Option<Phase> {
+    let mut found = None;
+    for words in simple_commands(command) {
+        let Some(program) = words
+            .first()
+            .map(|word| word.rsplit('/').next().unwrap_or(word))
+        else {
+            continue;
+        };
+        if !matches!(program, "cat" | "sed" | "head" | "tail" | "less" | "bat") {
+            continue;
+        }
+        for (index, word) in words.iter().enumerate().skip(1) {
+            if matches!(words[index - 1].as_str(), ">" | ">>" | "1>" | "1>>") {
+                continue;
+            }
+            let path = Path::new(word);
+            if path.file_name().is_none_or(|name| name != "SKILL.md") {
+                continue;
+            }
+            let skill = path
+                .parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str());
+            let phase = skill.and_then(|name| workflow.phase_of(name));
+            if let Some(phase) = phase {
+                if found.as_ref().is_some_and(|earlier| earlier != &phase) {
+                    return None;
+                }
+                found = Some(phase);
+            }
+        }
+    }
+    found
 }
 
 /// How the subagent tool's name ends: Codex puts its namespace in front (collaborationspawn_agent).
@@ -326,23 +367,67 @@ mod tests {
     }
 
     #[test]
-    fn reading_a_skill_file_does_not_start_its_phase() {
-        assert_eq!(events("pre_bash_skill"), after_session(vec![]));
+    fn reading_one_skill_file_starts_its_phase() {
+        assert_eq!(
+            events("pre_bash_skill"),
+            after_session(vec![EventKind::Phase {
+                phase: Phase::of("plan")
+            }])
+        );
     }
 
     #[test]
-    fn separate_read_ahead_commands_never_change_the_phase() {
+    fn separate_skill_reads_start_each_phase() {
         let sequence = fixture("read_ahead_separate_commands");
         let reads = sequence.as_array().unwrap();
         assert_eq!(reads.len(), 4);
-        for payload in reads {
+        for (payload, phase) in reads
+            .iter()
+            .zip(["plan", "merge-request", "implement", "review"])
+        {
             assert!(
-                !translate(payload, &Workflow::builtin())
-                    .iter()
-                    .any(|kind| matches!(kind, EventKind::Phase { .. })),
-                "read-ahead is not proof that a skill began: {payload}"
+                translate(payload, &Workflow::builtin()).contains(&EventKind::Phase {
+                    phase: Phase::of(phase)
+                }),
+                "each read now signals the phase: {payload}"
             );
         }
+    }
+
+    #[test]
+    fn reading_skills_from_multiple_phases_in_one_command_changes_none() {
+        assert_eq!(events("pre_bash_skills_together"), after_session(vec![]));
+        let mut payload = fixture("pre_bash_skills_together");
+        payload["tool_input"]["command"] = "cat /repo/.agents/skills/demo-skill/SKILL.md && cat /repo/.agents/skills/implement-plan/SKILL.md".into();
+        assert_eq!(translate(&payload, &phases()), after_session(vec![]));
+    }
+
+    #[test]
+    fn mentioning_or_writing_a_skill_file_is_not_a_read() {
+        let mut payload = fixture("pre_bash_skill");
+        for command in [
+            "echo .agents/skills/demo-skill/SKILL.md",
+            "cat > .agents/skills/demo-skill/SKILL.md",
+        ] {
+            payload["tool_input"]["command"] = command.into();
+            assert_eq!(translate(&payload, &phases()), after_session(vec![]));
+        }
+    }
+
+    #[test]
+    fn a_skill_path_in_a_shell_comment_does_not_change_the_phase() {
+        let mut payload = fixture("pre_bash_skill");
+        payload["tool_input"]["command"] =
+            "cat notes.txt # /repo/.agents/skills/demo-skill/SKILL.md".into();
+        assert_eq!(translate(&payload, &phases()), after_session(vec![]));
+
+        payload["tool_input"]["command"] = "cat /repo/.agents/skills/demo-skill/SKILL.md # /repo/.agents/skills/implement-plan/SKILL.md".into();
+        assert_eq!(
+            translate(&payload, &phases()),
+            after_session(vec![EventKind::Phase {
+                phase: Phase::of("plan")
+            }])
+        );
     }
 
     #[test]
