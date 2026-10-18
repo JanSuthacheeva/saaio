@@ -101,6 +101,21 @@ fn fits_agent_and_age_by_display_width_and_moves_age_to_existing_second_row() {
 }
 
 #[test]
+fn clips_a_long_agent_before_clipping_a_flow_name_that_fits() {
+    let mut app = with_fleet();
+    let mut board = fleet();
+    board.flows[0].workspace.as_mut().unwrap().agent =
+        "custom-agent-with-an-excessively-long-name".into();
+    app.on_server(ServerMsg::Board(board));
+
+    let terminal = render_at(&app, FLEET);
+    let first = side(&terminal, 5);
+    assert!(first.contains("shop-221"), "{first}");
+    assert!(first.trim_end().ends_with('…'), "{first}");
+    assert!(side(&terminal, 6).trim_end().ends_with("4/9 29m"));
+}
+
+#[test]
 fn shows_the_configured_master_agent_on_its_first_row() {
     let mut app = board_app();
     app.set_master_agent(Some("codex".into()));

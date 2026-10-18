@@ -101,10 +101,10 @@ impl Sidebar<'_> {
                 theme.ui.faint,
             ),
         };
-        let agent = flow
-            .workspace
-            .as_ref()
-            .map(|space| fit::clip(&space.agent, width.saturating_sub(9)));
+        let agent = flow.workspace.as_ref().map(|space| {
+            let room = width.saturating_sub(fit::spans_width(&first) + 2).max(1);
+            fit::clip(&space.agent, room)
+        });
         let marker = agent.as_ref().map(|agent| format!("{agent} "));
         let age_on_first = marker.as_ref().is_none_or(|marker| {
             fit::spans_width(&first) + fit::columns(marker) + fit::columns(&age) < width
