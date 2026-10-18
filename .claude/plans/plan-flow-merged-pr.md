@@ -287,7 +287,7 @@ closed" -> state change -> `wake::changed_flows` sees Idle -> the master is woke
 
 ### Show it
 
-- [ ] Sidebar label "PR #42 merged" and card "PR merged"/"MR merged", golden files updated
+- [x] Sidebar label "PR #42 merged" and card "PR merged"/"MR merged", golden files updated
 - [ ] `saaio status` detail `merged` and its help
 - [ ] Docs: `docs/flows.md` (states, a section on merge requests opened or merged elsewhere,
   ending a flow), `docs/json.md` (`merged`), `docs/troubleshooting.md` (a flow stays at review:
