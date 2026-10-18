@@ -192,3 +192,48 @@ A `saaio ui` started inside a worker sees the pinned SAAIO_HOME and its own flow
 - [x] `tests/cli.rs`: store per repository end to end without SAAIO_HOME (repo, worktree, outside, `--all`)
 - [x] Docs: `docs/files.md` (store location, `projects/`, `repo` file), `docs/cli.md` (SAAIO_HOME default, every session gets SAAIO_HOME, "Several projects"), `docs/troubleshooting.md` (where server.log is, flows of another repository not shown), README, ROADMAP and CHANGELOG where they describe the store; CLAUDE.md architecture lines
 - [x] E2E with a scratch XDG_STATE_HOME: two repos named alike, `saaio start` in one, its worktree's hook lands in the right store, `saaio ui` in a pty opens the worker with the pinned SAAIO_HOME, `saaio status --all`
+
+## Review
+
+Reviewed in an isolated context against this plan and CLAUDE.md. The one fix changed production
+code. Nobody else reviewed it: the reviewer re-read it as a separate pass.
+
+**Fixed**
+
+- A `repo` file that was empty or had no trailing newline made every saaio command in that
+  repository loop forever at 100% CPU. `owner` read the file as Free, and `claim`'s `create_new`
+  then failed with AlreadyExists, again and again. A crash between `create_new` and the write left
+  exactly such a file, and a racing reader could briefly see one. Shown by `saaio status` in a
+  scratch repo with `: > projects/shop/repo`, which hung. Now a free claim is written aside and
+  hard-linked into place, so the file is never seen empty. A file with no newline is read as it
+  is, and one that names nothing, or cannot be read, is taken over like a gone owner. Tests
+  `takes_over_a_store_whose_repo_file_names_nothing` and `reads_a_repo_file_without_its_newline`.
+  Commit 9e9296e.
+
+**Open**
+
+- Existing flows stay in the shared store (as the Assumptions say). After installing, `saaio ui` in
+  a repository opens an empty project store, and the old server, master and flows sit in the
+  shared folder, reachable only with `SAAIO_HOME=~/.local/state/saaio`. Recommendation: finish or
+  clear the running flows before installing, or say so in the release notes.
+- If two different repositories with the same name take over the same gone-owner store at the same
+  moment, `write_atomic` lets the last one win, and both use the store. This is very unlikely and
+  left as designed.
+- A repository whose git dir is on an unmounted volume counts as gone, so a same-named repository
+  takes over its store and flows. This is by design (Assumptions). It is worth knowing for
+  external drives.
+
+**Where to look**
+
+1. `src/registry.rs` `project_store` -> `owner` -> `claim`: the only new on-disk state and the
+   naming loop.
+2. `src/cli/env.rs` `Env::store`, then its three callers (`cli::run`, `hook.rs`, `wait.rs`): which
+   store each command picks, and that hook and wait stay silent on errors.
+3. `src/cli/commands/ui.rs` and `src/launch/pane.rs` `pane_env`: pinning SAAIO_HOME so panes never
+   resolve the store from their folder.
+
+`workspace::git_common_dir`, the docs, and the removal of `Store::locate` are routine.
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 9e9296e.
