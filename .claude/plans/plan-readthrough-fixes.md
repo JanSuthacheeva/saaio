@@ -141,4 +141,4 @@ changes.
 - [x] README (usage, how it works with what a flow is, CLI table, features, setup-saaio), docs/flows.md lead, docs/repository.md setup-saaio recommendation
 - [x] Every other `saaio ui` in docs, examples, ROADMAP, CHANGELOG 0.1.0, CLAUDE.md (with the PTY E2E line); ROADMAP drops "Codex commits without asking"
 - [x] CONTRIBUTING.md, .github/pull_request_template.md, .github/CODEOWNERS
-- [ ] End to end: in a PTY with a scratch store run `saaio` (UI opens), `saaio --stop`, `saaio ui` (usage error), look at the board cards and the detail; `cargo test`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`
+- [x] End to end: in a PTY with a scratch store run `saaio` (UI opens), `saaio --stop`, `saaio ui` (usage error), look at the board cards and the detail; `cargo test`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`

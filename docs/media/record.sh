@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Records saaio ui in a real terminal for the README: saaio-ui.png and saaio-ui.gif (macOS).
+# Records saaio in a real terminal for the README: saaio-ui.png and saaio-ui.gif (macOS).
 #
-#   docs/media/record.sh open <state> <repo>   saaio ui on the scratch store, in an Alacritty window
-#   docs/media/record.sh capture               the picture, then a GIF of moving through saaio ui
+#   docs/media/record.sh open <state> <repo>   the UI on the scratch store, in an Alacritty window
+#   docs/media/record.sh capture               the picture, then a GIF of moving through the UI
 #
 # Prepare <state> and <repo> with docs/media/demo-setup.sh first. After `open`, ask the master to
 # start the flows demo-setup.sh printed and answer the agents' first-run questions in their panes.
@@ -10,7 +10,7 @@
 # demo-setup.sh keeps your Claude Code plugins and MCP servers out, but check every frame for
 # anything personal before you commit.
 #
-# saaio ui runs in a private tmux server (status line off), which the Alacritty window attaches to
+# The UI runs in a private tmux server (status line off), which the Alacritty window attaches to
 # and this script sends keys through. Needs Alacritty, tmux, ffmpeg, swift, Menlo, and Screen
 # Recording permission for the terminal you run it from.
 set -euo pipefail
@@ -35,14 +35,15 @@ open_ui() {
     local state=$1 repo=$2
     "${tmux[@]}" -f /dev/null new-session -d -s demo -x 150 -y 42 \
         "env -u SAAIO_FLOW_ID -u SAAIO_FLOW_NAME -u SAAIO_SLOT -u SAAIO_REPO -u SAAIO_WORKTREE -u SAAIO_MASTER \
-         bash -c 'source \"$state/env\"; cd \"$repo\"; clear; saaio ui; exec bash'"
+         -u CLAUDECODE -u CODEX_THREAD_ID \
+         bash -c 'source \"$state/env\"; cd \"$repo\"; clear; saaio; exec bash'"
     "${tmux[@]}" set -g status off
     "${tmux[@]}" set -g escape-time 0
     "${tmux[@]}" set -as terminal-features ",alacritty*:RGB,xterm-256color:RGB"
     /Applications/Alacritty.app/Contents/MacOS/alacritty --config-file "$media/alacritty.toml" \
         -e tmux -L "$socket" attach -t demo >/dev/null 2>&1 &
     sleep 2
-    # A tiling window manager would resize the window while saaio ui draws; let it float.
+    # A tiling window manager would resize the window while the UI draws; let it float.
     if command -v aerospace >/dev/null; then
         aerospace layout floating --window-id "$(window | cut -d' ' -f1)"
     fi

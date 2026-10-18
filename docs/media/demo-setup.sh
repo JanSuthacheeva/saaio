@@ -186,7 +186,7 @@ unset SAAIO_FLOW_ID SAAIO_FLOW_NAME SAAIO_SLOT SAAIO_REPO SAAIO_WORKTREE SAAIO_M
 EOF
 
 cat <<EOF
-Ready. Open saaio ui on the scratch store in an Alacritty window:
+Ready. Open the UI on the scratch store in an Alacritty window:
 
   docs/media/record.sh open $state $repo
 
