@@ -235,7 +235,7 @@ Add `sha2 = "0.10"`.
   - `CLAUDE.md`: list `server/startup.rs` in the server module and this plan in the plan list.
 
   All in the plain reference style.
-- [ ] End to end, cheap: build, then use a scratch repo, a scratch `SAAIO_HOME` and a scratch
+- [x] End to end, cheap: build, then use a scratch repo, a scratch `SAAIO_HOME` and a scratch
       `CODEX_HOME` (only `auth.json` copied; repo untrusted, no hook trust):
   - Start one Codex flow with a single short request ("reply with ok"). Confirm that it reaches a
     session and goes idle with no dialog, and that the scratch `CODEX_HOME/config.toml` gained no
@@ -243,3 +243,7 @@ Add `sha2 = "0.10"`.
   - Then start a custom agent with `adapter = "codex"` and `command = ["sh", "-c", "sleep 120"]`,
     and confirm that `saaio status` shows it waiting with `STALLED_START` after 30 s. This step
     uses no Codex.
+
+  The fake worker was an executable shell script that sleeps. Adapter wiring is inserted after
+  argv[0], so `sh -c sleep 120` would interpret the hook arguments as its shell command instead
+  of sleeping. The fake still exercised the same Codex adapter and stall path without Codex.
