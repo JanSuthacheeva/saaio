@@ -20,7 +20,7 @@ One terminal with the master, every worker and every plain session.
 
 ## The screen
 
-![saaio ui](media/flow-ui.png)
+![saaio ui](media/saaio-ui.png)
 
 | Area | Shows |
 | --- | --- |
@@ -93,7 +93,7 @@ Sidebar numbers follow the sort order, so a flow's number changes with its state
 | past either end | close the peek |
 
 Under the selected worker: its latest tool calls and text, read from the harness's transcript, not
-its screen.
+its screen. Paths in the worker's worktree show relative to it, others in your home folder with ~.
 
 ## The board
 

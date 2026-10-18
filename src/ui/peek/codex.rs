@@ -28,9 +28,12 @@ pub(super) fn parse(text: &str, cut: bool) -> Vec<PeekLine> {
             "custom_tool_call" => {
                 let name = item["name"].as_str().unwrap_or("tool");
                 let input = item["input"].as_str().unwrap_or("");
-                match exec_command(input) {
-                    Some(command) if name == "exec" => {
+                match (exec_command(input), patched(input)) {
+                    (Some(command), _) if name == "exec" => {
                         peek.call(id, "Bash".to_string(), first(&command));
+                    }
+                    (None, Some(file)) if name == "exec" => {
+                        peek.call(id, "Edit".to_string(), file);
                     }
                     _ => peek.call(id, name.to_string(), String::new()),
                 }
@@ -57,10 +60,11 @@ pub(super) fn parse(text: &str, cut: bool) -> Vec<PeekLine> {
     peek.finish()
 }
 
-/// The command a code-mode script runs: `tools.exec_command({cmd:"..."})`.
+/// The command a code-mode script runs: `tools.exec_command({cmd:"..."})`, the key quoted or not.
 fn exec_command(script: &str) -> Option<String> {
-    let start = script.find("exec_command({cmd:")? + "exec_command({cmd:".len();
-    let quoted = &script[start..];
+    let quoted = ["exec_command({cmd:", "exec_command({\"cmd\":"]
+        .iter()
+        .find_map(|call| script.find(call).map(|at| &script[at + call.len()..]))?;
     let mut chars = quoted.char_indices();
     if chars.next()?.1 != '"' {
         return None;
@@ -72,6 +76,20 @@ fn exec_command(script: &str) -> Option<String> {
         closes.then_some(at)
     })?;
     serde_json::from_str(&quoted[..=end]).ok()
+}
+
+/// The first file a code-mode script's `tools.apply_patch` adds, changes or deletes.
+fn patched(script: &str) -> Option<String> {
+    if !script.contains("tools.apply_patch(") {
+        return None;
+    }
+    let (at, header) = ["*** Add File: ", "*** Update File: ", "*** Delete File: "]
+        .iter()
+        .filter_map(|header| script.find(header).map(|at| (at, header)))
+        .min()?;
+    let rest = &script[at + header.len()..];
+    let end = rest.find(['\\', '"', '\n']).unwrap_or(rest.len());
+    Some(rest[..end].to_string())
 }
 
 /// What a function call works on: its task, command or path.
@@ -171,6 +189,27 @@ mod tests {
         assert_eq!(
             parse(&call.to_string(), false),
             [PeekLine::Now("Bash(cargo test \"a b\")".into())]
+        );
+    }
+
+    #[test]
+    fn reads_a_command_whose_key_is_quoted() {
+        let script =
+            r#"const r = await tools.exec_command({"cmd":"python3 -m unittest","workdir":"/w"});"#;
+
+        assert_eq!(exec_command(script).as_deref(), Some("python3 -m unittest"));
+    }
+
+    #[test]
+    fn shows_a_patch_as_an_edit_of_its_first_file() {
+        let call = serde_json::json!({"type": "response_item", "payload": {
+            "type": "custom_tool_call", "name": "exec", "call_id": "c1",
+            "input": "const patch = \"*** Begin Patch\\n*** Update File: /w/shop/orders.py\\n@@\\n-a\\n+b\\n*** Add File: /w/shop/mailer.py\\n+c\\n*** End Patch\";\nconst r = await tools.apply_patch(patch);\ntext(r);\n"
+        }});
+
+        assert_eq!(
+            parse(&call.to_string(), false),
+            [PeekLine::Now("Edit(/w/shop/orders.py)".into())]
         );
     }
 }
