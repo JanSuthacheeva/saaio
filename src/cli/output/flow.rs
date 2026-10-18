@@ -49,7 +49,7 @@ pub(crate) fn reported(flow: &FlowView) -> Document {
     let next = match flow.state {
         State::Blocked => "Run `saaio report working` once the block is resolved".to_string(),
         State::Waiting => "Run `saaio report working` once answered".to_string(),
-        State::Done => "Run `saaio clear` after the MR is merged".to_string(),
+        State::Done => "Run `saaio clear` after the worker session ends".to_string(),
         _ => format!(
             "Run `saaio status {}` for its phases and timeline",
             flow.name
@@ -189,7 +189,7 @@ mod tests {
         assert!(
             reported(&done)
                 .text()
-                .ends_with("help[1]: Run `saaio clear` after the MR is merged")
+                .ends_with("help[1]: Run `saaio clear` after the worker session ends")
         );
 
         let working = flow("shop-221", vec![], MIN);

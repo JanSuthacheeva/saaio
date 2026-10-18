@@ -493,7 +493,7 @@ fn folds_the_sidebar_to_a_rail_and_back() {
     assert_eq!(rail(4), "▌1 ●  ");
     assert_eq!(rail(5), " 2 ●  ");
     assert_eq!(rail(7), " 3 ◓  ");
-    assert_eq!(rail(9), " 4 ✓  ");
+    assert_eq!(rail(9), " 4 ○  ");
     assert_eq!(rail(41), " C-␣  ");
     assert_eq!(
         app.on_input(Routed::Click { col: 146, row: 6 }),

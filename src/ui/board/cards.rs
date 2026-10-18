@@ -485,9 +485,12 @@ mod tests {
         let done = flow(
             "shop-240",
             Mode::Guided,
-            vec![EventKind::MergeRequest {
-                url: "https://x/88".into(),
-            }],
+            vec![
+                EventKind::MergeRequest {
+                    url: "https://x/88".into(),
+                },
+                EventKind::Ended,
+            ],
         );
         let ended = flow("shop-241", Mode::Guided, vec![EventKind::Ended]);
 

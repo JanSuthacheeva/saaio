@@ -662,6 +662,57 @@ fn a_merge_request_finishes_the_flow_and_every_step() {
 
 const PR: &str = "https://github.com/a/b/pull/42";
 
+#[test]
+fn a_question_after_pr_is_waiting() {
+    let events = [
+        started(0),
+        opened(MIN, PR),
+        at(
+            2 * MIN,
+            EventKind::Waiting {
+                question: "Ship with the race fix?".into(),
+            },
+        ),
+    ];
+    let flow = view(&events, 3 * MIN);
+    assert_eq!(flow.state, State::Waiting);
+    assert_eq!(flow.blocker.as_deref(), Some("Ship with the race fix?"));
+    assert_eq!(flow.merge_request.as_deref(), Some(PR));
+    assert!(!flow.is_finished());
+    assert!(
+        flow.steps
+            .iter()
+            .all(|step| step.status == StepStatus::Done)
+    );
+}
+
+#[test]
+fn ended_after_pr_is_finished() {
+    let flow = view(
+        &[started(0), opened(MIN, PR), at(2 * MIN, EventKind::Ended)],
+        3 * MIN,
+    );
+    assert_eq!(flow.state, State::Ended);
+    assert!(flow.is_finished());
+    assert_eq!(flow.merge_request.as_deref(), Some(PR));
+}
+
+#[test]
+fn forge_update_does_not_revive_ended_worker() {
+    let flow = view(
+        &[
+            started(0),
+            opened(MIN, PR),
+            at(2 * MIN, EventKind::Ended),
+            merged(3 * MIN, PR),
+        ],
+        4 * MIN,
+    );
+    assert_eq!(flow.state, State::Ended);
+    assert!(flow.merged);
+    assert!(flow.is_finished());
+}
+
 fn opened(at_ms: u64, url: &str) -> Event {
     at(at_ms, EventKind::MergeRequest { url: url.into() })
 }
@@ -714,7 +765,7 @@ fn an_open_or_merged_request_keeps_the_final_phase_after_worker_events() {
             ),
         ];
         let flow = view(&events, 6 * MIN);
-        assert_eq!(flow.state, State::Done);
+        assert_eq!(flow.state, State::Idle);
         assert_eq!(flow.phase, Some(Phase::of("merge-request")));
         assert_eq!(flow.merge_request.as_deref(), Some(PR));
         assert!(
@@ -847,7 +898,7 @@ fn closing_a_pr_opened_before_the_worker_ended_keeps_the_flow_ended() {
 }
 
 #[test]
-fn ended_stops_the_clock_but_keeps_a_done_flow_done() {
+fn ended_stops_the_clock_and_finishes_a_pr_open_flow() {
     let ended = view(
         &[
             started(0),
@@ -873,7 +924,7 @@ fn ended_stops_the_clock_but_keeps_a_done_flow_done() {
         ],
         3,
     );
-    assert_eq!(done.state, State::Done);
+    assert_eq!(done.state, State::Ended);
 }
 
 #[test]
@@ -963,7 +1014,7 @@ fn resolves_an_id_then_the_unfinished_flow_then_the_newest_finished_one() {
 
     assert_eq!(resolve(&flows, "shop-221-1").unwrap().changed_at, 1);
     assert_eq!(resolve(&flows, "shop-221").unwrap().changed_at, 5);
-    assert_eq!(resolve(&flows, "shop-230").unwrap().state, State::Working);
+    assert_eq!(resolve(&flows, "shop-230").unwrap().state, State::Done);
     assert_eq!(resolve(&flows, "shop-999"), None);
 }
 

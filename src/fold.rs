@@ -143,7 +143,7 @@ struct Folding {
     entered: Vec<bool>,
     phase_since: u64,
     stopped_at: Option<u64>,
-    /// An Ended event occurred, even if an open PR currently shows Done.
+    /// An Ended event occurred; later forge updates cannot revive the worker.
     ended: bool,
     pending_permission: Option<(u64, String)>,
 }
@@ -198,9 +198,12 @@ impl Folding {
     }
 
     fn apply(&mut self, event: &Event) {
-        // An open or merged MR finishes the flow. Later worker hooks can still arrive, but only
-        // closing that MR may make its phase and state active again.
-        if self.view.merge_request.is_some()
+        // A PR fixes the final workflow phase, though the worker can still ask or work.
+        if self.view.merge_request.is_some() && matches!(event.kind, EventKind::Phase { .. }) {
+            return;
+        }
+        // An ended worker cannot restart through a late hook. Forge metadata may still change.
+        if self.ended
             && matches!(
                 event.kind,
                 EventKind::Phase { .. }
@@ -305,7 +308,6 @@ impl Folding {
                 self.note(at, "MR opened".to_string(), Tone::Success);
             }
             EventKind::Merged { url } => {
-                self.pending_permission = None;
                 self.open_merge_request(url, at);
                 self.view.merged = true;
                 self.note(
@@ -317,6 +319,7 @@ impl Folding {
             EventKind::MergeRequestClosed { url } => {
                 if self.view.merge_request.as_ref() == Some(url) && !self.view.merged {
                     self.view.merge_request = None;
+                    self.view.changed_at = at;
                     if self.view.state == State::Done {
                         self.view.state = if self.ended {
                             State::Ended
@@ -362,9 +365,7 @@ impl Folding {
             EventKind::Ended => {
                 self.pending_permission = None;
                 self.ended = true;
-                if self.view.state != State::Done {
-                    self.view.state = State::Ended;
-                }
+                self.view.state = State::Ended;
                 self.view.delegate = None;
                 self.stopped_at.get_or_insert(at);
                 self.note(at, "ended".to_string(), Tone::Neutral);
@@ -381,16 +382,18 @@ impl Folding {
         }
     }
 
-    /// The flow is done at its last phase with the merge request at `url`.
+    /// Record the PR and finish the workflow; preserve a live question or ended session.
     fn open_merge_request(&mut self, url: &str, at: u64) {
         if let Some(last) = self.phases.len().checked_sub(1)
             && self.view.phase.as_ref() != self.phases.last()
         {
             self.enter(last, at);
         }
-        self.view.state = State::Done;
-        self.view.blocker = None;
-        self.view.delegate = None;
+        if self.view.merge_request.is_none() && !self.ended {
+            self.view.state = State::Done;
+            self.view.blocker = None;
+            self.view.delegate = None;
+        }
         self.view.merge_request = Some(url.to_string());
         self.stopped_at.get_or_insert(at);
     }
@@ -436,7 +439,7 @@ impl Folding {
     fn finish(mut self, now: u64) -> FlowView {
         if let Some((at, question)) = self.pending_permission.take()
             && now >= at.saturating_add(PERMISSION_GRACE_MS)
-            && self.view.state != State::Done
+            && !self.ended
         {
             let due = at.saturating_add(PERMISSION_GRACE_MS);
             self.stop_for(State::Waiting, &question, due, "waiting", Tone::Attention);
@@ -451,7 +454,7 @@ impl Folding {
             .phase
             .as_ref()
             .and_then(|phase| self.position(phase));
-        let is_done = self.view.state == State::Done;
+        let is_done = self.view.merge_request.is_some();
         self.view.steps = self
             .phases
             .iter()

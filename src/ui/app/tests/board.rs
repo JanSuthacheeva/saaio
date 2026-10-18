@@ -10,7 +10,7 @@ fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
 
     assert!(app.is_modal());
     assert!(row(&terminal, 0).starts_with(" ▚▄▞ saaio board "));
-    assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 done "));
+    assert!(row(&terminal, 0).ends_with("5 sessions · 2 need you · 1 delegated · 1 ended "));
     assert!(
         row(&terminal, 3).starts_with("   0   master                              you "),
         "only the selected card is marked"

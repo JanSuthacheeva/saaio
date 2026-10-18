@@ -228,7 +228,7 @@ help[2]: "saaio wakes its worker with it now, or once its session runs again",sa
 | Refused | Reason |
 | --- | --- |
 | inside a worker | `only the master sends`. Workers end their turn with the question. |
-| a finished flow, a flow without a worker, a plain session | no worker to receive it |
+| an ended flow, a flow without a worker, a plain session | no worker to receive it. An open PR alone does not stop sends. |
 | an empty text, a text over 4000 characters | |
 
 ### --type
@@ -299,7 +299,7 @@ help[1]: Set SAAIO_FLOW_ID or pass --flow <name>
 | `decision <text>` | a decision made on your behalf |
 | `tasks <done> <total>` | how many of the plan's tasks are done |
 | `review --fixed <n> --open <n>` | review findings fixed and still open |
-| `merge-request <url>` | the merge request is open. The flow is done. |
+| `merge-request <url>` | the merge request is open. The flow shows `done` until its worker reports more activity; the session remains reachable. |
 | `ended` | the worker's session ended. The UI does not reopen it. |
 | `heartbeat` | the worker is alive. Adds no event (see `not-responding` in [flows.md](flows.md#states)). |
 
@@ -374,7 +374,7 @@ A plain session: only the session is forgotten. The folder is never touched.
 saaio clear
 ```
 
-Forgets every finished flow (`done` or `ended`) and tears down its worktree like `saaio remove`,
+Forgets every ended flow and tears down its worktree like `saaio remove`,
 except:
 
 - a worktree with uncommitted work is kept and listed under `kept`

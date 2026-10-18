@@ -224,9 +224,9 @@ impl FlowView {
         )
     }
 
-    /// Done or ended.
+    /// The worker session ended; opening a PR alone leaves it reachable.
     pub fn is_finished(&self) -> bool {
-        matches!(self.state, State::Done | State::Ended)
+        self.state == State::Ended
     }
 
     /// Started with --plain: no phases, no master.
@@ -239,7 +239,7 @@ impl FlowView {
             Group::NeedsYou
         } else if self.state == State::Idle {
             Group::Ready
-        } else if self.is_finished() {
+        } else if matches!(self.state, State::Done | State::Ended) {
             Group::Done
         } else {
             Group::Running
@@ -385,8 +385,8 @@ mod tests {
     }
 
     #[test]
-    fn is_finished_when_done_or_ended() {
-        assert!(flow(State::Done).is_finished());
+    fn is_finished_only_when_ended() {
+        assert!(!flow(State::Done).is_finished());
         assert!(flow(State::Ended).is_finished());
         assert!(!flow(State::Blocked).is_finished());
         assert!(!flow(State::Working).is_finished());

@@ -156,6 +156,21 @@ mod tests {
     }
 
     #[test]
+    fn a_pr_open_worker_can_reopen_its_pane() {
+        let mut pr = flow("pr", "claude", Some(HOSTED), false);
+        pr.state = crate::view::State::Done;
+        pr.merge_request = Some("https://github.com/a/b/pull/7".into());
+        let wanted = reconcile(
+            &[pr],
+            &[],
+            &HashSet::new(),
+            &config(),
+            &LaunchEnv::default(),
+        );
+        assert_eq!(keys(&wanted), vec![worker("pr")]);
+    }
+
+    #[test]
     fn leaves_alone_what_is_known_or_already_open() {
         let flows = [
             flow("seen", "claude", Some(HOSTED), false),

@@ -19,7 +19,7 @@
                      │                                                                │                     │     agent: review changes
                      │  Kept, they resume the next time saaio starts.                 │                     │
                      │  Ended, branches and worktrees stay until saaio clear.         │                     │ DONE 1
-                     │                                                                │                     │ 4 ✓ shop-198                 claude 2h
+                     │                                                                │                     │ 4 ○ shop-198                 claude 2h
                      ├────────────────────────────────────────────────────────────────┤                     │     ●───●───●───● MR !418      took 0s
                      │  k keep them   e end them   esc keep saaio running             │                     │
                      ╰────────────────────────────────────────────────────────────────╯                     │

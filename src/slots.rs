@@ -165,6 +165,16 @@ mod tests {
         assert_eq!(taken_slots(&flows), vec![4]);
     }
 
+    #[test]
+    fn a_pr_open_worker_keeps_its_slot_until_it_ends() {
+        let mut live = flow_in_slot(4, false);
+        live.state = crate::view::State::Done;
+        live.merge_request = Some("https://github.com/a/b/pull/7".into());
+        assert_eq!(taken_slots(&[live.clone()]), vec![4]);
+        live.state = crate::view::State::Ended;
+        assert!(taken_slots(&[live]).is_empty());
+    }
+
     fn slots(dir: &TempDir) -> Slots {
         Slots::at(&Registry::at(dir.path().to_path_buf()))
     }
