@@ -79,3 +79,15 @@ the master's argv has the flags, `{prompt}` stays empty, the workers are still c
 
 **Checks** - no Rust changed on the branch. `cargo test` and `cargo clippy -- -D warnings` last
 passed on `main` at 763453d and were not rerun.
+
+## Decided after the second review
+
+The user chose to fix the peek in this PR, then retake the GIF.
+
+- [ ] The peek writes paths in its tool lines short: `<worktree>/` dropped, so `Write(PLAN.md)`,
+  and the home folder as `~` elsewhere. `fit::shorten(text, folder, home)` beside `fit::tilde`,
+  applied in `Sidebar::peek_rows` to `PeekLine::Tool` targets and `PeekLine::Now` calls with the
+  flow's `workspace.path`; tests in `fit` and the sidebar
+- [ ] Retake the GIF (and picture) with that build first on `PATH` for the recording only, check
+  every frame for the old name, home paths and personal setup
+- [ ] Clean up the scratch session, store and repo
