@@ -224,7 +224,7 @@ Add `sha2 = "0.10"`.
       claude_code tests
 - [x] Add `server/startup.rs`: `FIRST_TURN_GRACE`, `STALLED_START` and `stalled` with unit tests
       for each condition
-- [ ] Add `Server::notice_stalled_starts`, call it from `serve` after `refresh`, and add a
+- [x] Add `Server::notice_stalled_starts`, call it from `serve` after `refresh`, and add a
       `server/tests.rs` test with a fake Codex agent that never reports (Waiting appended once)
 - [ ] Docs:
   - `docs/troubleshooting.md`: replace the two dialog rows with one row: a Codex flow waiting

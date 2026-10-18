@@ -269,6 +269,7 @@ impl Server {
             if self.refreshed_at.elapsed() >= WATCH_EVERY {
                 self.deliver_news();
                 self.refresh();
+                self.notice_stalled_starts();
                 self.ask_forges();
                 self.type_lines();
             }
