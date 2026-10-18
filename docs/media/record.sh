@@ -6,9 +6,9 @@
 #
 # Prepare <state> and <repo> with docs/media/demo-setup.sh first. After `open`, ask the master to
 # start the flows demo-setup.sh printed and answer the agents' first-run questions in their panes.
-# Run `capture` once the workers stand in different places. The agents run with your own logins;
-# demo-setup.sh keeps your Claude Code plugins and MCP servers out, but check every frame for
-# anything personal before you commit.
+# Run `capture` while the last flow moves through its phases. The agents run with your own logins;
+# demo-setup.sh keeps your Claude Code plugins, MCP servers and CLAUDE.md out, but check every frame
+# for anything personal before you commit.
 #
 # The UI runs in a private tmux server (status line off), which the Alacritty window attaches to
 # and this script sends keys through. Needs Alacritty, tmux, ffmpeg, swift, Menlo, and Screen
@@ -33,10 +33,13 @@ EOF
 
 open_ui() {
     local state=$1 repo=$2
-    "${tmux[@]}" -f /dev/null new-session -d -s demo -x 150 -y 42 \
-        "env -u SAAIO_FLOW_ID -u SAAIO_FLOW_NAME -u SAAIO_SLOT -u SAAIO_REPO -u SAAIO_WORKTREE -u SAAIO_MASTER \
-         -u CLAUDECODE -u CODEX_THREAD_ID \
-         bash -c 'source \"$state/env\"; cd \"$repo\"; clear; saaio; exec bash'"
+    # Run from inside an agent or saaio, the markers of that session would reach the demo's agents.
+    local name markers=()
+    for name in $(env | grep -oE '^(CLAUDECODE|CLAUDE_CODE_[A-Z_]*|CLAUDE_PID|CLAUDE_EFFORT|CODEX_THREAD_ID|SAAIO_[A-Z_]*|TMUX[A-Z_]*)='); do
+        markers+=(-u "${name%=}")
+    done
+    env ${markers[@]+"${markers[@]}"} "${tmux[@]}" -f /dev/null new-session -d -s demo -x 150 -y 42 \
+        "bash -c 'source \"$state/env\"; cd \"$repo\"; clear; saaio; exec bash'"
     "${tmux[@]}" set -g status off
     "${tmux[@]}" set -g escape-time 0
     "${tmux[@]}" set -as terminal-features ",alacritty*:RGB,xterm-256color:RGB"
