@@ -21,8 +21,9 @@ and the worker's worktree. Other hooks still follow Codex's normal trust review.
 | `[sandbox_workspace_write] network_access = true` | `~/.codex/config.toml` | Allows outbound network access from the workspace-write sandbox for commands such as `gh`, `git push`, and `npx`. Other approval checks still apply. |
 | `model_reasoning_effort = "medium"` | `~/.codex/config.toml` | Uses less reasoning effort for routine work than higher settings. Available levels depend on the model. |
 
-To enable automatic approval review for saaio workers, define both launch commands. An agent with
-a built-in name replaces that definition, so retain its prompt and adapter:
+To enable automatic approval review for saaio workers, define both launch commands in
+`~/.config/saaio/config.toml` (or your [configured location](configuration.md#file-location)). An
+agent with a built-in name replaces that definition, so retain its prompt and adapter:
 
 ```toml
 [agents.codex]
