@@ -12,7 +12,7 @@ version and commit, the OS and the versions of `claude`, `codex`, `gh` and `glab
 
 ```
 2026-10-18 13:39:54 +07:00 [2739] started: saaio 0.1.0 (e035b96), protocol 6, Darwin 25.6.0 arm64, claude 2.1.302 (Claude Code), codex 0.163.0, gh 2.73.0 (2025-05-19), glab missing
-2026-10-18 13:41:02 +07:00 [2811] hook claude-code flow shop-221: no flow shop-221
+2026-10-18 13:41:02 +07:00 [2811] hook claude-code flow 3f2a9c: no flow 3f2a9c
 ```
 
 ## Reporting a bug
