@@ -115,3 +115,10 @@ pub fn reconcile(
 - [x] Guard `Server::reopen_worker` and `Server::open_fresh` for finished flows; first update socket-level server tests for unfinished reopen and finished refusal, then make them pass.
 - [x] Update `docs/flows.md` and any affected user help to explain closed PR behavior and finished Reopen refusal; verify docs against the changed tests.
 - [x] Run a scratch-`SAAIO_HOME` end-to-end reproduction with two flows and a reclaimed slot, then run `cargo test` and `cargo clippy --all-targets -- -D warnings` before review.
+
+## Review
+
+- **Fixed:** none.
+- **Open:** `Server::reopen_worker` and `Server::open_fresh` decide from `self.board`, which refreshes every 500 ms. An `Ended` event written after the last refresh can be followed by Reopen before the next refresh, launching the old worker even though its slot is available to another flow. A socket test proved this by appending `Ended` to an exited worker immediately before Reopen: the expected failed pane timed out, while a test expecting a running pane passed. Make both launch guards read the latest flow log (and handle read failure without launching), then add a regression test for this sequence. The temporary test change was removed.
+- **Where to look:** `src/server/panes.rs` `reopen_worker` and `open_fresh`, then `src/server.rs` `handle` and `serve`: the stale-board window around manual and fallback launches. `src/fold.rs` `MergeRequestClosed` and `Ended` is the state transition to check; the fold and CLI tests cover the normal path. Documentation changes are routine.
+- **Checks:** `cargo test`, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings` passed at `e71c798fd2b2171110dfaecfc369c13fb2d2e477`. The focused socket test with the temporary `Ended` event passed when expecting the incorrect reopen; all temporary code changes were removed before this review note.
