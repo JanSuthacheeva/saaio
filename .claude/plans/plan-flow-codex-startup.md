@@ -215,7 +215,7 @@ Add `sha2 = "0.10"`.
 
 ## Tasks
 
-- [ ] Add `sha2`, `Hook`, `HOOKS` (Interrupt at 3 s) and `codex::trust_hash` with unit tests
+- [x] Add `sha2`, `Hook`, `HOOKS` (Interrupt at 3 s) and `codex::trust_hash` with unit tests
       pinning the three hashes Codex wrote
 - [ ] Make `codex::hooks()` pass `-c hooks.state={...}` with each hook's trusted hash; tests that
       it parses as TOML with 8 keys whose hashes match, and that Interrupt's timeout is 3

@@ -1546,6 +1546,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_toon_format",
+ "sha2",
  "signal-hook 0.4.5",
  "tempfile",
  "toml",
