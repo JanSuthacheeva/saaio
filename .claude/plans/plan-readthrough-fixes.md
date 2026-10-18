@@ -73,6 +73,7 @@ impl BoardView<'_> {
 | `output/start.rs` | pane `when saaio ui runs`, `saaio ui opens X in its sidebar`, ``Run `saaio ui` to open the worker`` | `when saaio opens`, `saaio opens X in its sidebar`, ``Run `saaio` in a terminal to open the worker`` |
 | `output/status.rs:322` | C-space r in saaio ui resumes it | C-space r in saaio resumes it |
 | `adapter.rs` MASTER_OPENING | saaio ui just started you. | saaio just started you. |
+| `server/conn.rs` refusal | this saaio ui speaks {version} | this saaio speaks {version} |
 | `server/master.md` | You run inside `saaio ui`. ... a saaio ui key | You run inside saaio's terminal UI. ... a saaio key; old text kept as `master-v10.md` |
 
 Doc comments that name the client process stay as they are; only text a user or an agent reads
@@ -94,7 +95,8 @@ changes.
   docs/README.md, examples/*.toml, ROADMAP, CHANGELOG 0.1.0: no `saaio ui`.
 - ROADMAP: drop "Codex commits without asking".
 - CLAUDE.md: E2E line with the PTY workaround; `saaio ui` mentions replaced.
-- New: CONTRIBUTING.md, .github/pull_request_template.md, .github/CODEOWNERS (`* @JanSuthacheeva`).
+- docs/media/record.sh and demo-setup.sh open the UI with bare `saaio`, the agent markers unset.
+- New: CONTRIBUTING.md (linked from the README), .github/pull_request_template.md, .github/CODEOWNERS (`* @JanSuthacheeva`).
   Plain reference style, no semicolons, no first person.
 
 ## Call chains
