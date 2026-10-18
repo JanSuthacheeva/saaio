@@ -125,7 +125,7 @@ pub fn reconcile(
 - [x] Guard `Server::reopen_worker` and `Server::open_fresh` for finished flows; first update socket-level server tests for unfinished reopen and finished refusal, then make them pass.
 - [x] Update `docs/flows.md` and any affected user help to explain closed PR behavior and finished Reopen refusal; verify docs against the changed tests.
 - [x] Run a scratch-`SAAIO_HOME` end-to-end reproduction with two flows and a reclaimed slot, then run `cargo test` and `cargo clippy --all-targets -- -D warnings` before review.
-- [ ] Add `Server::current_flow` and use it in `Server::reopen_worker` and `Server::open_fresh`; first reproduce immediate Ended-before-Reopen in a socket test, then verify both paths refuse stale-board launches and read failures.
+- [x] Add `Server::current_flow` and use it in `Server::reopen_worker` and `Server::open_fresh`; first reproduce immediate Ended-before-Reopen in a socket test, then verify both paths refuse stale-board launches and read failures.
 
 ## Review
 

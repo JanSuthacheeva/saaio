@@ -2,6 +2,8 @@ use std::fs;
 use std::sync::mpsc::{self, Sender};
 use std::time::Instant;
 
+use anyhow::{Context, Result};
+
 use super::host::HostEvent;
 use super::master::{Instructions, Start};
 use super::reconcile::{self, Wanted};
@@ -197,8 +199,13 @@ impl Server {
         if self.host.status(&key) == Some(&PaneStatus::Running) {
             return;
         }
-        let Some(flow) = self.flow(id).cloned() else {
-            return;
+        let flow = match self.current_flow(id) {
+            Ok(flow) => flow,
+            Err(error) => {
+                self.host
+                    .fail(key, format!("could not check flow: {error:#}"));
+                return;
+            }
         };
         if flow.is_finished() {
             self.host.fail(
@@ -232,8 +239,13 @@ impl Server {
             self.open_master(Start::Fresh);
             return;
         };
-        let Some(mut flow) = self.flow(id).cloned() else {
-            return;
+        let mut flow = match self.current_flow(id) {
+            Ok(flow) => flow,
+            Err(error) => {
+                self.host
+                    .fail(key.clone(), format!("could not check flow: {error:#}"));
+                return;
+            }
         };
         if flow.is_finished() {
             return;
@@ -315,6 +327,12 @@ impl Server {
 
     fn flow(&self, id: &str) -> Option<&FlowView> {
         self.board.flows.iter().find(|flow| flow.id == id)
+    }
+
+    /// Re-folds the current log before a launch, since the board refresh may not have run yet.
+    fn current_flow(&self, id: &str) -> Result<FlowView> {
+        let events = self.store.events(id)?;
+        fold::fold(id, &events, None, (self.clock)()).context("flow has no start event")
     }
 }
 

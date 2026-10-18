@@ -478,6 +478,76 @@ fn reopens_an_exited_worker_but_refuses_finished_flows() {
 }
 
 #[test]
+fn reopen_reads_an_end_event_before_the_board_refreshes() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let id = started_flow(&store, dir.path(), "old", "claude");
+    let (paths, handle) = start(dir.path());
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    let mut panes = Vec::new();
+    wait_for(&mut ui, &mut panes, &id, Some(&PaneStatus::Running));
+    proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(id.clone()))).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::Input(b"\x04".to_vec())).unwrap();
+    wait_for(
+        &mut ui,
+        &mut panes,
+        &id,
+        Some(&PaneStatus::Exited { code: Some(0) }),
+    );
+
+    store
+        .append(&id, &LogEvent::new(2, EventKind::Ended))
+        .unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id.clone()))).unwrap();
+    let refused = PaneStatus::Failed {
+        reason: "finished flow cannot reopen; start a new flow".into(),
+    };
+    wait_for(&mut ui, &mut panes, &id, Some(&refused));
+
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
+fn reopen_refuses_to_launch_when_the_flow_log_is_unreadable() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let id = started_flow(&store, dir.path(), "gone", "claude");
+    let (paths, handle) = start(dir.path());
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    let mut panes = Vec::new();
+    wait_for(&mut ui, &mut panes, &id, Some(&PaneStatus::Running));
+    proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(id.clone()))).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::Input(b"\x04".to_vec())).unwrap();
+    wait_for(
+        &mut ui,
+        &mut panes,
+        &id,
+        Some(&PaneStatus::Exited { code: Some(0) }),
+    );
+
+    fs::remove_file(dir.path().join("flows").join(format!("{id}.jsonl"))).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id.clone()))).unwrap();
+    let refused = PaneStatus::Failed {
+        reason: format!("could not check flow: no flow {id}"),
+    };
+    wait_for(&mut ui, &mut panes, &id, Some(&refused));
+
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
 fn ends_every_unfinished_flow_before_a_stop_when_asked() {
     let dir = TempDir::new().unwrap();
     let store = Store::at(dir.path().to_path_buf());
