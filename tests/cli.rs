@@ -1019,6 +1019,37 @@ fn a_hook_event_reports_into_the_flow_silently_and_only_once() {
     );
 }
 
+#[test]
+fn a_recorded_codex_skill_read_advances_the_flow_once() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "codex-skill-read");
+    let reads: serde_json::Value = serde_json::from_str(include_str!(
+        "../src/adapter/fixtures/codex/read_ahead_separate_commands.json"
+    ))
+    .unwrap();
+    let single = reads[0].to_string();
+    let mut multi: serde_json::Value = serde_json::from_str(include_str!(
+        "../src/adapter/fixtures/codex/pre_bash_skills_together.json"
+    ))
+    .unwrap();
+    multi["tool_input"]["command"] = multi["tool_input"]["command"]
+        .as_str()
+        .unwrap()
+        .replace("demo-skill", "design-code")
+        .into();
+
+    for payload in [&single, &multi.to_string()] {
+        let output = hook_with(home.path(), &["codex"], Some(&id), payload);
+        assert!(output.status.success());
+        assert!(output.stdout.is_empty() && output.stderr.is_empty());
+    }
+    let board: serde_json::Value =
+        serde_json::from_slice(&saaio(home.path(), &["status", "--json"]).stdout).unwrap();
+    assert_eq!(board["flows"][0]["phase"], "plan");
+    let log = fs::read_to_string(home.path().join(format!("flows/{id}.jsonl"))).unwrap();
+    assert_eq!(log.matches("\"kind\":\"phase\"").count(), 1, "{log}");
+}
+
 /// What `saaio send` would append: the master's message to the flow's worker.
 fn message_for(home: &Path, id: &str, text: &str) {
     let line = format!("{{\"v\":1,\"at\":5,\"kind\":\"message\",\"text\":\"{text}\"}}\n");
