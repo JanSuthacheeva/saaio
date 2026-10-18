@@ -631,6 +631,120 @@ fn a_merge_request_finishes_the_flow_and_every_step() {
     assert_eq!(flow.timeline.last().unwrap().tone, Tone::Success);
 }
 
+const PR: &str = "https://github.com/a/b/pull/42";
+
+fn opened(at_ms: u64, url: &str) -> Event {
+    at(at_ms, EventKind::MergeRequest { url: url.into() })
+}
+
+fn merged(at_ms: u64, url: &str) -> Event {
+    at(at_ms, EventKind::Merged { url: url.into() })
+}
+
+fn closed(at_ms: u64, url: &str) -> Event {
+    at(at_ms, EventKind::MergeRequestClosed { url: url.into() })
+}
+
+#[test]
+fn a_merge_seen_at_review_finishes_the_flow_merged() {
+    let events = [
+        started(0),
+        phase(0, Phase::of("review")),
+        merged(6 * MIN, PR),
+    ];
+    let flow = view(&events, 60 * MIN);
+
+    assert_eq!(flow.state, State::Done);
+    assert!(flow.merged);
+    assert_eq!(flow.phase, Some(Phase::of("merge-request")));
+    assert_eq!(flow.merge_request.as_deref(), Some(PR));
+    assert_eq!(flow.changed_at, 6 * MIN);
+    assert!(
+        steps(&flow)
+            .iter()
+            .all(|(status, _)| *status == StepStatus::Done)
+    );
+    assert_eq!(flow.timeline.last().unwrap().text, "PR #42 merged");
+    assert_eq!(flow.timeline.last().unwrap().tone, Tone::Success);
+}
+
+#[test]
+fn a_merge_of_an_open_one_keeps_the_flow_done_and_its_change_time() {
+    let events = [started(0), opened(MIN, PR), merged(9 * MIN, PR)];
+    let flow = view(&events, 60 * MIN);
+
+    assert_eq!(flow.state, State::Done);
+    assert!(flow.merged);
+    assert_eq!(flow.changed_at, MIN, "the state did not change");
+    assert_eq!(texts(&flow), vec!["started", "MR opened", "PR #42 merged"]);
+    assert!(changes(
+        "x",
+        &events[..2],
+        &EventKind::Merged { url: PR.into() },
+        10 * MIN
+    ));
+    assert!(!changes(
+        "x",
+        &events,
+        &EventKind::Merged { url: PR.into() },
+        10 * MIN
+    ));
+}
+
+#[test]
+fn closing_the_open_one_takes_the_flow_back_to_idle_at_its_last_phase() {
+    let events = [
+        started(0),
+        phase(0, Phase::of("review")),
+        opened(5 * MIN, PR),
+        closed(8 * MIN, PR),
+    ];
+    let flow = view(&events, 10 * MIN);
+
+    assert_eq!(flow.state, State::Idle);
+    assert!(!flow.is_finished());
+    assert_eq!(flow.merge_request, None);
+    assert_eq!(flow.phase, Some(Phase::of("merge-request")));
+    assert_eq!(steps(&flow)[3], (StepStatus::Current, Some(5 * MIN)));
+    assert_eq!(flow.changed_at, 8 * MIN);
+    assert_eq!(flow.timeline.last().unwrap().text, "PR #42 closed");
+    assert_eq!(flow.timeline.last().unwrap().tone, Tone::Attention);
+}
+
+#[test]
+fn closing_another_or_a_merged_one_changes_nothing() {
+    let other = view(
+        &[
+            started(0),
+            opened(MIN, PR),
+            closed(2 * MIN, "https://github.com/a/b/pull/41"),
+        ],
+        3 * MIN,
+    );
+    assert_eq!(other.state, State::Done);
+    assert_eq!(other.merge_request.as_deref(), Some(PR));
+    assert_eq!(texts(&other), vec!["started", "MR opened"]);
+
+    let after_merge = view(&[started(0), merged(MIN, PR), closed(2 * MIN, PR)], 3 * MIN);
+    assert_eq!(after_merge.state, State::Done);
+    assert!(after_merge.merged);
+}
+
+#[test]
+fn closing_keeps_an_ended_flow_ended() {
+    let flow = view(
+        &[
+            started(0),
+            at(MIN, EventKind::Ended),
+            opened(2 * MIN, PR),
+            closed(3 * MIN, PR),
+        ],
+        4 * MIN,
+    );
+    assert_eq!(flow.state, State::Idle);
+    assert_eq!(flow.merge_request, None);
+}
+
 #[test]
 fn ended_stops_the_clock_but_keeps_a_done_flow_done() {
     let ended = view(

@@ -1,5 +1,6 @@
 use crate::event::{Event, EventKind, Mode, Phase};
 use crate::store::FlowLog;
+use crate::text;
 use crate::view::{
     Board, FlowView, ReviewCount, Session, State, Step, StepStatus, Tasks, TimelineEntry, Tone,
     VIEW_VERSION, Workspace,
@@ -40,7 +41,7 @@ pub fn fold<'a>(
 }
 
 /// True when appending `kind` changes what the flow shows: its state, phase, blocker, delegate,
-/// tasks, review, merge request, decisions, answer or session; every message and typed line
+/// tasks, review, merge request and its merge, decisions, answer or session; every message and typed line
 /// does. Adapters skip the rest, so a log does not grow by a line for every tool call.
 pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
     if matches!(kind, EventKind::Message { .. } | EventKind::Typed { .. }) {
@@ -66,6 +67,7 @@ fn shown(view: &FlowView) -> impl PartialEq + '_ {
         view.tasks,
         view.review,
         view.merge_request.as_deref(),
+        view.merged,
         &view.decisions,
         view.timeline.last().map(|entry| entry.text.as_str()),
         view.answer.as_deref(),
@@ -259,19 +261,29 @@ impl Folding {
                 self.note(at, format!("review: {review}"), tone);
             }
             EventKind::MergeRequest { url } => {
-                if let Some(last) = self.phases.len().checked_sub(1)
-                    && self.view.phase.as_ref() != self.phases.last()
-                {
-                    self.enter(last, at);
-                }
-                self.view.state = State::Done;
-                self.view.blocker = None;
-                self.view.delegate = None;
-                self.view.merge_request = Some(url.clone());
-                self.stopped_at.get_or_insert(at);
+                self.open_merge_request(url, at);
                 self.note(at, "MR opened".to_string(), Tone::Success);
             }
-            EventKind::Merged { .. } | EventKind::MergeRequestClosed { .. } => {}
+            EventKind::Merged { url } => {
+                self.open_merge_request(url, at);
+                self.view.merged = true;
+                self.note(
+                    at,
+                    format!("{} merged", text::merge_request(url)),
+                    Tone::Success,
+                );
+            }
+            EventKind::MergeRequestClosed { url } => {
+                if self.view.merge_request.as_ref() == Some(url) && !self.view.merged {
+                    self.view.merge_request = None;
+                    if self.view.state == State::Done {
+                        self.view.state = State::Idle;
+                        self.stopped_at = None;
+                    }
+                    let text = format!("{} closed", text::merge_request(url));
+                    self.note(at, text, Tone::Attention);
+                }
+            }
             EventKind::Workspace {
                 path,
                 branch,
@@ -320,6 +332,20 @@ impl Folding {
         {
             self.view.changed_at = at;
         }
+    }
+
+    /// The flow is done at its last phase with the merge request at `url`.
+    fn open_merge_request(&mut self, url: &str, at: u64) {
+        if let Some(last) = self.phases.len().checked_sub(1)
+            && self.view.phase.as_ref() != self.phases.last()
+        {
+            self.enter(last, at);
+        }
+        self.view.state = State::Done;
+        self.view.blocker = None;
+        self.view.delegate = None;
+        self.view.merge_request = Some(url.to_string());
+        self.stopped_at.get_or_insert(at);
     }
 
     /// Where `phase` stands in the flow's phases; None when it has none.
