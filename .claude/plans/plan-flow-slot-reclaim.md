@@ -43,6 +43,14 @@ impl Server {
 
 `reopen_worker` returns for an already running pane as today. For a finished flow whose pane is not running, it calls the existing `Host::fail` with `finished flow cannot reopen; start a new flow` before `pane::worker_spec` or `open_worker`. It appends no flow event. `open_fresh` returns without launching when its flow has become finished since the resume attempt. Unfinished flows retain their existing behavior.
 
+Review decision: both paths must fold the current log before launching. The server's cached board may be up to 500 ms old. Add a private `Server::current_flow` to read `Store::events` and fold at the current clock; a read or fold failure must never launch a worker.
+
+```rust
+impl Server {
+    fn current_flow(&self, id: &str) -> anyhow::Result<FlowView>;
+}
+```
+
 Existing units used unchanged:
 
 ```rust
@@ -93,6 +101,7 @@ pub fn reconcile(
 1. `Server::reopen_worker(id): ()` checks `FlowView::is_finished()` before building a worker spec.
 2. `Host::fail(key, reason): ()` shows `finished flow cannot reopen; start a new flow` in a failed pane. No process starts, no event is appended, and the slot claim is untouched.
 3. If a pending resumed process fails after its flow became finished, `Server::open_fresh(key): ()` returns before `open_pane`.
+4. Both paths use `Server::current_flow(id): anyhow::Result<FlowView>` for the decision, not `self.board`. A read or fold error fails the pane or logs the error and does not launch a worker.
 
 ## Test seams
 
@@ -103,6 +112,7 @@ pub fn reconcile(
 ## Assumptions and decisions
 
 - Jan chose approach B: keep a previously ended flow ended and show `PR closed`.
+- Jan approved the review recommendation: close the stale-board reopen window by reading the current flow log before either launch path.
 - Manual Reopen of any finished flow is refused because its slot may already have been reclaimed. The failed pane gives the user a concrete next step.
 - Closure after Ended changes the timeline and `changed_at`, but does not wake the master through an idle state.
 - Unfinished flows whose PR closes retain the existing idle behavior.
@@ -115,6 +125,7 @@ pub fn reconcile(
 - [x] Guard `Server::reopen_worker` and `Server::open_fresh` for finished flows; first update socket-level server tests for unfinished reopen and finished refusal, then make them pass.
 - [x] Update `docs/flows.md` and any affected user help to explain closed PR behavior and finished Reopen refusal; verify docs against the changed tests.
 - [x] Run a scratch-`SAAIO_HOME` end-to-end reproduction with two flows and a reclaimed slot, then run `cargo test` and `cargo clippy --all-targets -- -D warnings` before review.
+- [ ] Add `Server::current_flow` and use it in `Server::reopen_worker` and `Server::open_fresh`; first reproduce immediate Ended-before-Reopen in a socket test, then verify both paths refuse stale-board launches and read failures.
 
 ## Review
 
