@@ -326,5 +326,5 @@ Server start
 - [x] `text::date` and `bug_report.rs` (`Facts`, `text`, `tail`, `tilde`, `file_name`) with unit tests
 - [x] `saaio bug-report`: `Command::BugReport`, `commands/bug_report.rs`, `output/bug_report.rs`, tests/cli.rs end to end
 - [x] `.github/ISSUE_TEMPLATE/bug_report.yml`, `docs/troubleshooting.md` "Reporting a bug" and the new start line, `docs/cli.md` (glance row, section, `--version`), `docs/files.md` server.log row, CLAUDE.md modules and plan list
-- [ ] `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test`
-- [ ] End to end with a scratch SAAIO_HOME: open the UI in a PTY, check the start line, break theme.toml and see `ui: theme:`, run a hook with a bad payload, `saaio bug-report`, read the file
+- [x] `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test`
+- [x] End to end with a scratch SAAIO_HOME: open the UI in a PTY, check the start line, break theme.toml and see `ui: theme:`, run a hook with a bad payload, `saaio bug-report`, read the file
