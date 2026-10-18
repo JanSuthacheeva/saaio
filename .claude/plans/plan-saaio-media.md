@@ -84,10 +84,13 @@ passed on `main` at 763453d and were not rerun.
 
 The user chose to fix the peek in this PR, then retake the GIF.
 
-- [ ] The peek writes paths in its tool lines short: `<worktree>/` dropped, so `Write(PLAN.md)`,
+- [x] The peek writes paths in its tool lines short: `<worktree>/` dropped, so `Write(PLAN.md)`,
   and the home folder as `~` elsewhere. `fit::shorten(text, folder, home)` beside `fit::tilde`,
   applied in `Sidebar::peek_rows` to `PeekLine::Tool` targets and `PeekLine::Now` calls with the
   flow's `workspace.path`; tests in `fit` and the sidebar
+- [ ] Found in the retake: the peek shortens result lines and text too (a Codex `pwd` printed the
+  home path), and reads this Codex's code-mode calls: `exec_command({"cmd":...})` with a quoted key,
+  and `tools.apply_patch(...)` as `Edit(<first file>)` instead of an empty `exec()`
 - [ ] Retake the GIF (and picture) with that build first on `PATH` for the recording only, check
   every frame for the old name, home paths and personal setup
 - [ ] Clean up the scratch session, store and repo
