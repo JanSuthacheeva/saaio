@@ -337,10 +337,7 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>, prefix: Prefix) -
             "Run `saaio report --flow {} working` once answered",
             flow.name
         )),
-        State::Done if flow.merged => {
-            help.push("Run `saaio clear` to tear down its worktree".to_string());
-        }
-        State::Done => help.push("Run `saaio clear` after the MR is merged".to_string()),
+        State::Done => help.push("Run `saaio clear` after the worker session ends".to_string()),
         _ => {}
     }
     help.push("Run `saaio` for all flows".to_string());
@@ -543,7 +540,7 @@ mod tests {
     }
 
     #[test]
-    fn the_detail_says_a_merge_request_is_merged_and_can_be_cleared() {
+    fn the_detail_says_a_pr_open_worker_must_end_before_clear() {
         let url = || "https://github.com/acme/shop/pull/42".to_string();
         let open = flow(
             "shop-221",
@@ -561,7 +558,7 @@ mod tests {
 
         assert!(!open.contains("merged: true"), "{open}");
         assert!(
-            open.contains("Run `saaio clear` after the MR is merged"),
+            open.contains("Run `saaio clear` after the worker session ends"),
             "{open}"
         );
         assert!(
@@ -571,7 +568,7 @@ mod tests {
             "{merged}"
         );
         assert!(
-            merged.contains("Run `saaio clear` to tear down its worktree"),
+            merged.contains("Run `saaio clear` after the worker session ends"),
             "{merged}"
         );
     }

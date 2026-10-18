@@ -4,7 +4,7 @@ use crate::cli::output::remove::{self, Retired};
 use crate::cli::output::{Document, Failure};
 use crate::store::Store;
 
-/// Forgets the flows that are done or ended, with their panes, worktrees and merged branches.
+/// Forgets ended flows, with their panes, worktrees and merged branches.
 pub fn run(store: &Store, now: u64) -> Result<Document, Failure> {
     let (flows, _) = views(store, now);
     let mut names = Vec::new();

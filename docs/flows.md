@@ -253,8 +253,8 @@ or merged it: the worker, the master or you.
 | --- | --- |
 | merge request opened or merged, by anyone | a live flow can show `done` but still runs, keeps its slot, and can ask questions. |
 | worker session ended | the flow is `ended`; its slot is released and it can be cleared. |
-| `saaio clear` | forgets every finished flow and removes its worktree. Keeps a worktree with uncommitted work. |
-| `x` on the board | cleans up one finished flow |
+| `saaio clear` | forgets every ended flow and removes its worktree. Keeps a worktree with uncommitted work. |
+| `x` on the board | cleans up one ended flow |
 | `saaio remove <name>` | any state: closes the session, runs the teardown script, removes worktree and branch, forgets the flow. Refuses uncommitted work and commits on no other branch, unless `--force` or `--delete-unmerged`. |
 | `x` in an ended worker's pane | same as `saaio remove`, asks before discarding anything |
 
