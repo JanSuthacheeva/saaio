@@ -38,12 +38,8 @@ impl Sidebar<'_> {
             self.master_glyph(),
             Span::styled(" master", name),
         ];
-        let right = self
-            .master_agent
-            .filter(|agent| fit::spans_width(&first) + fit::columns(agent) + 2 <= width)
-            .map(|agent| Span::styled(format!("{agent} "), theme.ui.faint));
         rows.push(Row {
-            line: split(first, right.into_iter().collect(), width),
+            line: split(first, vec![], width),
             key: Some(PaneKey::Master),
             mark,
         });

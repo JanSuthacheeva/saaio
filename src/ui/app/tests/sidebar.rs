@@ -116,11 +116,9 @@ fn clips_a_long_agent_before_clipping_a_flow_name_that_fits() {
 }
 
 #[test]
-fn shows_the_configured_master_agent_on_its_first_row() {
-    let mut app = board_app();
-    app.set_master_agent(Some("codex".into()));
-    let terminal = render_at(&app, FLEET);
-    assert!(side(&terminal, 2).trim_end().ends_with("codex"));
+fn the_master_row_names_no_agent() {
+    let terminal = render_at(&board_app(), FLEET);
+    assert!(side(&terminal, 2).trim_end().ends_with("master"));
 }
 
 #[test]

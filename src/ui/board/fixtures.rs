@@ -69,7 +69,6 @@ pub(super) fn with_state<R>(
             cursor: None,
             peek: &[],
             master: Some("~/shop · main"),
-            master_agent: None,
             master_state: None,
             now: NOW,
             spin: 0,
