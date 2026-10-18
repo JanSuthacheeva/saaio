@@ -177,7 +177,8 @@ fn unix_ms(stamp: &str) -> Option<u64> {
             if sign == "-" { -minutes } else { minutes }
         }
     };
-    let valid = (1..=12).contains(&month)
+    let valid = (1970..=9999).contains(&year)
+        && (1..=12).contains(&month)
         && (1..=31).contains(&day)
         && hour < 24
         && minute < 60
@@ -543,6 +544,7 @@ mod tests {
             unix_ms("2024-03-01T00:30:00Z")
         );
         assert_eq!(unix_ms("2026-13-01T00:00:00Z"), None);
+        assert_eq!(unix_ms("9223372036854775807-01-01T00:00:00Z"), None);
         assert_eq!(unix_ms("2026-10-18"), None);
         assert_eq!(unix_ms(""), None);
     }
