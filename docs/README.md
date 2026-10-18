@@ -6,6 +6,7 @@
 | [ui.md](ui.md) | saaio ui: screen, keys, peek, board, new-flow dialog, stopping |
 | [flows.md](flows.md) | flows, states, phases, guided and auto, the master, plain sessions, hooks |
 | [configuration.md](configuration.md) | `config.toml`: your own workflow, every setting |
+| [agents.md](agents.md) | harness setup and recommended worker permissions |
 | [themes.md](themes.md) | `theme.toml`: built-in themes, every color, themes from other tools |
 | [repository.md](repository.md) | per repository: branch names, setup and teardown, slots and ports, Docker |
 | [cli.md](cli.md) | every command and option, exit codes, environment variables, several projects |

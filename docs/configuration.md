@@ -195,6 +195,8 @@ skills = ["finishing-a-development-branch"]
 
 An agent is a command saaio runs in a pane. Built in:
 
+For harness-specific setup and recommended worker permissions, see [Agent permissions](agents.md).
+
 ```toml
 [agents.claude]
 command = ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]

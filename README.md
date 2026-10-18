@@ -151,6 +151,7 @@ saaio detects it), desktop notifications, phone access. macOS and Linux only.
 - [saaio ui](docs/ui.md)
 - [Flows and the master](docs/flows.md)
 - [Configuration](docs/configuration.md)
+- [Agent permissions](docs/agents.md)
 - [Themes](docs/themes.md)
 - [Repository setup](docs/repository.md)
 - [Command line](docs/cli.md)
