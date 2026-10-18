@@ -15,7 +15,7 @@ use crate::store::Stamp;
 use crate::text::{line_of, place};
 #[cfg(test)]
 use crate::ui::theme::MARK;
-use crate::ui::theme::{ColorKey, KIWI, Palette, PaletteKey, PhaseColors, Section, Theme, hex};
+use crate::ui::theme::{ColorKey, Palette, PaletteKey, PhaseColors, Section, Theme, hex};
 
 pub const THEME_FILE: &str = "theme.toml";
 /// What saaio writes as theme.toml on its first run: the terminal theme, commented out.
@@ -29,14 +29,13 @@ const EXTENDS_LIMIT: usize = 4;
 /// What a theme extends when it names nothing.
 const DEFAULT_BASE: &str = "terminal";
 
-/// One theme file: what it extends, its colors from [ui], [state] and [phase], whether the
-/// terminal's font has Nerd Font icons, and how much of a working flow takes its phase's color.
+/// One theme file: what it extends, its colors from [ui], [state] and [phase], and how much of a
+/// working flow takes its phase's color.
 #[derive(Debug)]
 struct ThemeFile {
     path: PathBuf,
     extends: String,
     colors: Vec<Entry>,
-    nerd_font: Option<bool>,
     phase_colors: Option<PhaseColors>,
 }
 
@@ -61,19 +60,11 @@ pub fn load(dir: &Path) -> (Result<Theme>, Vec<PathBuf>) {
         for file in chain.iter().rev() {
             apply(file, &mut palette)?;
         }
-        // The nearest file that says wins: theme.toml over what it extends.
-        let nerd_font = chain
-            .iter()
-            .find_map(|file| file.nerd_font)
-            .unwrap_or(false);
         let mut theme = Theme::from_palette(palette);
         theme.phase_colors = chain
             .iter()
             .find_map(|file| file.phase_colors)
             .unwrap_or_default();
-        if nerd_font {
-            theme.glyphs.mark = KIWI;
-        }
         Ok(theme)
     });
     (theme, files)
@@ -130,7 +121,6 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
     keys.sort_by_key(|(key, _)| key.span().start);
     let mut extends = DEFAULT_BASE.to_string();
     let mut colors = Vec::new();
-    let mut nerd_font = None;
     let mut phase_colors = None;
     for (key, value) in keys {
         let line = line_of(text, key.span().start);
@@ -148,8 +138,9 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
             ("extends", _) => {
                 return Err(anyhow!("extends must be a theme's name")).context(here());
             }
-            ("nerd_font", Value::Boolean(on)) => nerd_font = Some(on),
-            ("nerd_font", _) => return Err(anyhow!("nerd_font is true or false")).context(here()),
+            ("nerd_font", _) => {
+                return Err(anyhow!("nerd_font was removed; remove this line")).context(here());
+            }
             ("phase_colors", Value::String(name))
                 if let Some(level) = PhaseColors::named(&name) =>
             {
@@ -171,7 +162,6 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
         path: path.to_path_buf(),
         extends,
         colors,
-        nerd_font,
         phase_colors,
     })
 }
@@ -389,35 +379,31 @@ mod tests {
     }
 
     #[test]
-    fn a_nerd_font_turns_the_mark_into_the_kiwi() {
+    fn retired_nerd_font_setting_explains_how_to_fix_the_file() {
         let dir = TempDir::new().unwrap();
-        write(&dir, "theme.toml", "extends = \"saaio\"\n");
-        assert_eq!(theme(&dir).glyphs.mark, MARK, "every font has it");
-
-        write(&dir, "theme.toml", "extends = \"mine\"\nnerd_font = true\n");
-        write(&dir, "themes/mine.toml", "extends = \"saaio\"\n");
-        assert_eq!(theme(&dir).glyphs.mark, KIWI);
+        for value in ["true", "false"] {
+            write(
+                &dir,
+                "theme.toml",
+                &format!("extends = \"saaio\"\nnerd_font = {value}\n"),
+            );
+            assert_eq!(
+                error(&dir),
+                format!(
+                    "{}:2: nerd_font was removed; remove this line",
+                    dir.path().join("theme.toml").display()
+                )
+            );
+        }
 
         write(&dir, "theme.toml", "extends = \"mine\"\n");
-        write(
-            &dir,
-            "themes/mine.toml",
-            "extends = \"saaio\"\nnerd_font = true\n",
-        );
-        assert_eq!(theme(&dir).glyphs.mark, KIWI, "from the theme it extends");
-
-        write(
-            &dir,
-            "theme.toml",
-            "extends = \"mine\"\nnerd_font = false\n",
-        );
-        assert_eq!(theme(&dir).glyphs.mark, MARK, "the nearer file wins");
-
-        write(&dir, "theme.toml", "nerd_font = \"yes\"\n");
-        let error = load(dir.path()).0.unwrap_err();
-        assert!(
-            format!("{error:#}").contains("nerd_font is true or false"),
-            "{error:#}"
+        write(&dir, "themes/mine.toml", "nerd_font = true\n");
+        assert_eq!(
+            error(&dir),
+            format!(
+                "{}:1: nerd_font was removed; remove this line",
+                dir.path().join("themes/mine.toml").display()
+            )
         );
     }
 
@@ -699,7 +685,7 @@ mod tests {
     #[test]
     fn the_example_lists_every_key_and_parses_as_it_is() {
         let lines: Vec<&str> = EXAMPLE.text.lines().collect();
-        let names = ["extends", "nerd_font", "phase_colors"]
+        let names = ["extends", "phase_colors"]
             .into_iter()
             .chain(PaletteKey::ALL.map(PaletteKey::name));
         for name in names {

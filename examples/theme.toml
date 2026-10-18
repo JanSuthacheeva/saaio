@@ -20,10 +20,6 @@
 # themes/ next to this one, without .toml.
 #extends = "terminal"
 
-# Set to true if your font has Nerd Font icons, and flow's mark becomes a kiwi bird. Otherwise the
-# mark is a goose in flight, drawn in block characters every font has.
-#nerd_font = false
-
 # How much of a working flow takes its phase's color: "off" (state colors only), "steps" (the
 # current step dot) or "full" (also the spinner, label, rail and title row).
 #phase_colors = "off"
@@ -45,7 +41,7 @@
 #muted = 7
 # The quietest text, such as key hints, headings and counts.
 #faint = 8
-# flow's mark and the bar beside the selected row.
+# saaio's mark and the bar beside the selected row.
 #accent = 173
 
 #[state]

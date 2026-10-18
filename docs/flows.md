@@ -12,7 +12,7 @@ saaio status shop-217
 | master | the agent session that starts flows, answers workers and reports to you |
 | plain session | an agent in any folder, without a flow |
 
-flow records each flow's state, phase, time per phase, task counts, decisions, questions and
+saaio records each flow's state, phase, time per phase, task counts, decisions, questions and
 timeline.
 
 - [States](#states)
@@ -110,7 +110,7 @@ The mode decides who answers a worker's question.
 saaio send shop-221 "Count them against the refund date."
 ```
 
-flow adds `master: <text>` to the flow's timeline and wakes the worker with it, or delivers it when
+saaio adds `master: <text>` to the flow's timeline and wakes the worker with it, or delivers it when
 the worker's session runs again.
 
 | Harness | How a session is woken |
@@ -128,7 +128,7 @@ saaio send --type shop-221 /compact
 saaio send --type shop-221 "continue shipping"
 ```
 
-flow's server types each line and Enter into the worker's pane, as if the user typed it there, so a
+saaio's server types each line and Enter into the worker's pane, as if the user typed it there, so a
 slash command or a skill runs. A message from `saaio send` reaches the model as words, so `/compact`
 sent that way does not compact. The lines are typed in order, each once the worker is idle again.
 The master uses it when the user asks to compact or continue a worker from their phone, away from

@@ -363,11 +363,8 @@ pub struct PhaseTokens {
     pub names: BTreeMap<String, Style>,
 }
 
-/// flow's mark: a goose in flight, in block characters every font has.
+/// saaio's mark: a goose in flight, in block characters every font has.
 pub const MARK: &str = "▚▄▞";
-/// flow's mark with a Nerd Font: Font Awesome's kiwi bird, in the theme's accent like any mark.
-/// Terminals draw Nerd Font icons wider than their one cell, so it brings a space of its own.
-pub const KIWI: &str = "\u{edff} ";
 
 #[derive(Debug, Clone)]
 pub struct Glyphs {

@@ -8,7 +8,7 @@ saaio status shop-217 --json # a board with just that flow
 
 - The whole board: every flow, nothing truncated.
 - camelCase keys, `version` first.
-- The command line and this JSON are flow's only public interface. The log files are private and
+- The command line and this JSON are saaio's only public interface. The log files are private and
   may change.
 
 ## The board
