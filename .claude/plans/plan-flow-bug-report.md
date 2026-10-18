@@ -321,7 +321,7 @@ Server start
 - [x] `client::log_path`, hook `Log` replacing every `eprintln!` in `hook.rs`, unit test for `Log::error` and tests/cli.rs for a silent hook that logs
 - [x] UI logging: `server_log::append_on_panic`, `ui: failed:` in `commands::ui`, `UiEnv::log`, failed jobs and theme errors in `ui.rs`
 - [x] `text::date` and `bug_report.rs` (`Facts`, `text`, `tail`, `tilde`, `file_name`) with unit tests
-- [ ] `saaio bug-report`: `Command::BugReport`, `commands/bug_report.rs`, `output/bug_report.rs`, tests/cli.rs end to end
+- [x] `saaio bug-report`: `Command::BugReport`, `commands/bug_report.rs`, `output/bug_report.rs`, tests/cli.rs end to end
 - [ ] `.github/ISSUE_TEMPLATE/bug_report.yml`, `docs/troubleshooting.md` "Reporting a bug" and the new start line, `docs/cli.md` (glance row, section, `--version`), `docs/files.md` server.log row, CLAUDE.md modules and plan list
 - [ ] `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test`
 - [ ] End to end with a scratch SAAIO_HOME: open the UI in a PTY, check the start line, break theme.toml and see `ui: theme:`, run a hook with a bad payload, `saaio bug-report`, read the file

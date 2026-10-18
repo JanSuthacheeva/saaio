@@ -1,3 +1,4 @@
+pub(crate) mod bug_report;
 pub(crate) mod flow;
 pub(crate) mod news;
 pub(crate) mod remove;
