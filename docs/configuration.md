@@ -168,6 +168,8 @@ skills = ["write-merge-request"]
 - 1 to 4 phases, in order. A custom list replaces all four.
 - saaio ui shows the phases as steps (`●───●───○───○`) with the time spent in each.
 - A phase starts when the worker runs one of its skills.
+- Codex workers also report a phase when they begin its skill. Reading `SKILL.md` files does not
+  start a phase, because Codex may read future skills ahead in separate commands.
 - A flow keeps the phases it started with. A change affects new flows only.
 - A skill of a phase the running flow does not have reports nothing.
 - An opened merge request finishes the flow in its last phase, whatever its name.

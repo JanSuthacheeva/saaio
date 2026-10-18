@@ -23,6 +23,11 @@ hook feedback or as a prompt that starts with \"message from the saaio master:\"
 you asked or pass on what the user said, so act on them as you would on the user's own answer. To \
 ask the master or the user something, end your turn with the question.";
 
+/// Codex has no Skill tool event, and may read several future skills in separate commands.
+const CODEX_PHASE_PROMPT: &str = "When you begin working on a workflow skill, run \
+`saaio report phase <phase>` with that skill's configured phase name from [[phases]]. \
+Do not report a phase for skills merely read ahead, even in separate commands.";
+
 /// What a fresh Codex master is asked first, so its first turn runs at once.
 pub const MASTER_OPENING: &str = "saaio ui just started you. Run `saaio status` and say in one line \
 what needs the user, if anything.";
@@ -76,7 +81,7 @@ impl Adapter {
             Adapter::Codex => codex::hooks(flow_exe)
                 .into_iter()
                 .chain(codex::trusted_folder(folder))
-                .chain(self.instruct(WORKER_PROMPT))
+                .chain(self.instruct(&format!("{WORKER_PROMPT} {CODEX_PHASE_PROMPT}")))
                 .collect(),
         }
     }
@@ -222,6 +227,10 @@ mod tests {
 
         let folder = Path::new("/worktree");
         let worker = Adapter::Codex.wiring(exe, folder);
+        let worker_prompt: toml::Table = toml::from_str(&worker[worker.len() - 1]).unwrap();
+        let prompt = worker_prompt["developer_instructions"].as_str().unwrap();
+        assert!(prompt.contains("saaio report phase <phase>"));
+        assert!(prompt.contains("skills merely read ahead"));
         assert_eq!(worker[..worker.len() - 4], codex::hooks(exe));
         assert_eq!(
             worker[worker.len() - 4..worker.len() - 2],
@@ -229,7 +238,7 @@ mod tests {
         );
         assert_eq!(
             worker[worker.len() - 2..],
-            Adapter::Codex.instruct(WORKER_PROMPT)
+            Adapter::Codex.instruct(&format!("{WORKER_PROMPT} {CODEX_PHASE_PROMPT}"))
         );
         assert_eq!(
             Adapter::Codex.plain_wiring(exe, folder),

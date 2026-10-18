@@ -3,6 +3,35 @@ use super::*;
 const MIN: u64 = 60_000;
 
 #[test]
+fn codex_permission_waits_after_a_grace_period_and_completion_cancels_it() {
+    let pending = at(
+        1_000,
+        EventKind::PermissionPending {
+            question: "permission: Bash(touch notes.txt)".into(),
+        },
+    );
+    let started = started(0);
+    let events = [started, pending];
+    assert!(changes("x", &events[..1], &events[1].kind, 1_000));
+    assert_eq!(view(&events, 3_999).state, State::Working);
+    let waiting = view(&events, 4_000);
+    assert_eq!(waiting.state, State::Waiting);
+    assert_eq!(
+        waiting.blocker.as_deref(),
+        Some("permission: Bash(touch notes.txt)")
+    );
+    assert_eq!(waiting.changed_at, 4_000);
+    assert!(changes("x", &events, &EventKind::Working, 2_000));
+    let completed = [
+        events[0].clone(),
+        events[1].clone(),
+        at(2_000, EventKind::Working),
+    ];
+    assert_eq!(view(&completed, 10_000).state, State::Working);
+    assert_eq!(texts(&view(&completed, 10_000)), vec!["started"]);
+}
+
+#[test]
 fn an_idle_worker_does_not_need_you_but_shows_its_last_line() {
     let idle = |note: &str| EventKind::Idle { note: note.into() };
     let events = vec![
@@ -666,6 +695,55 @@ fn a_merge_seen_at_review_finishes_the_flow_merged() {
     );
     assert_eq!(flow.timeline.last().unwrap().text, "PR #42 merged");
     assert_eq!(flow.timeline.last().unwrap().tone, Tone::Success);
+}
+
+#[test]
+fn an_open_or_merged_request_keeps_the_final_phase_after_worker_events() {
+    for mr in [opened(2 * MIN, PR), merged(2 * MIN, PR)] {
+        let events = [
+            started(0),
+            phase(MIN, Phase::of("review")),
+            mr,
+            phase(3 * MIN, Phase::of("review")),
+            at(4 * MIN, EventKind::Working),
+            at(
+                5 * MIN,
+                EventKind::Idle {
+                    note: "review finished".into(),
+                },
+            ),
+        ];
+        let flow = view(&events, 6 * MIN);
+        assert_eq!(flow.state, State::Done);
+        assert_eq!(flow.phase, Some(Phase::of("merge-request")));
+        assert_eq!(flow.merge_request.as_deref(), Some(PR));
+        assert!(
+            steps(&flow)
+                .iter()
+                .all(|(status, _)| *status == StepStatus::Done)
+        );
+    }
+}
+
+#[test]
+fn a_custom_workflow_mr_keeps_its_last_phase_after_a_late_skill() {
+    let events = [
+        at(
+            0,
+            EventKind::Started {
+                name: "csv".into(),
+                request: "add csv".into(),
+                mode: Mode::Auto,
+                phases: Some(vec![Phase::of("build"), Phase::of("release")]),
+            },
+        ),
+        phase(MIN, Phase::of("build")),
+        opened(2 * MIN, PR),
+        phase(3 * MIN, Phase::of("build")),
+    ];
+    let flow = view(&events, 4 * MIN);
+    assert_eq!(flow.phase, Some(Phase::of("release")));
+    assert_eq!(flow.state, State::Done);
 }
 
 #[test]

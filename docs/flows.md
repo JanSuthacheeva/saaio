@@ -185,15 +185,21 @@ arguments. A worker also trusts its own worktree for that launch. Nothing is wri
 | Codex event | Reported |
 | --- | --- |
 | a prompt | `working`, and the phase of a `$skill` in it |
-| a shell command reading a skill's `SKILL.md` | `phase`: the workflow's phase whose skills name the skill |
+| a shell command reading any `SKILL.md` file | no phase. Codex may read future skills ahead in separate commands. |
+| a worker starting a phase skill | the worker runs `saaio report phase <phase>` with its configured phase name |
 | a subagent (`spawn_agent`) | `delegated <its task>`, until the main agent goes on |
-| a permission prompt | `waiting permission: Bash(touch notes.txt)` |
+| a permission request | after three seconds without a tool completion, `waiting permission: Bash(touch notes.txt)` |
 | a tool finishing | `working`. A merge request, as for Claude Code. |
 | the end of a turn | as for Claude Code |
 | Esc | `idle interrupted` |
 
 - saaio trusts only its own hooks and the worker's own worktree. Your configured hooks and a
   repository's hooks still receive Codex's review.
+- Codex runs the permission hook before automatic review or a user prompt. A quick automatic
+  approval finishes the tool and cancels the pending wait. A slow automatic review can still show
+  `waiting` after three seconds; the completed tool returns the flow to `working`.
+- Codex has no Skill tool hook. A `$skill` named in a prompt starts its configured phase; while a
+  workflow runs, the worker reports each phase when it starts that skill.
 - A running Codex worker with no first turn after 30 seconds becomes `waiting`; answer the dialog
   in its pane, then its first prompt returns it to `working`.
 - No plan-progress tool: no task counts.
@@ -218,6 +224,8 @@ or merged it: the worker, the master or you.
 | nothing, or a closed one the flow does not show | no change |
 
 - Asked: every flow with a branch that is not merged, ended ones included. Never a plain session.
+- An open or merged request keeps the workflow's last phase even if later worker hooks mention an
+  earlier skill. Closing an unmerged request returns the flow to `idle` in its last phase.
 - Only merge requests opened after the flow started count. One from an earlier branch of the same
   name, such as a cleared flow's, is ignored.
 - When: as the server starts, then every 2 minutes, one flow after another. About 30 requests per

@@ -8,7 +8,9 @@ use sha2::{Digest, Sha256};
 use crate::adapter::answer::turn_end;
 use crate::adapter::calls::{created_merge_request, tool_call};
 use crate::adapter::{Adapter, Turn, cut};
-use crate::event::{EventKind, Phase};
+use crate::event::EventKind;
+#[cfg(test)]
+use crate::event::Phase;
 use crate::workflow::Workflow;
 
 /// One hook saaio listens to: Codex's event name, the key its trust state uses, its timeout.
@@ -144,19 +146,13 @@ pub fn trusted_folder(folder: &Path) -> Vec<String> {
 }
 
 /// The flow events one Codex hook payload means: first the session it runs in, then what it did.
-/// Of a subagent's events (agent_id set) only a phase skill it reads counts.
+/// Subagent hooks do not describe the main worker's state or phase.
 pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
     let tool = payload["tool_name"].as_str().unwrap_or("");
     let input = &payload["tool_input"];
     let event = payload["hook_event_name"].as_str().unwrap_or("");
     if payload.get("agent_id").is_some() {
-        let reads = event == "PreToolUse" && tool == "Bash";
-        return input["command"]
-            .as_str()
-            .filter(|_| reads)
-            .and_then(|command| read_phase(command, workflow))
-            .map(|phase| vec![EventKind::Phase { phase }])
-            .unwrap_or_default();
+        return Vec::new();
     }
     let mut kinds: Vec<EventKind> = session(payload).into_iter().collect();
     match event {
@@ -170,12 +166,6 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
         "PreToolUse" if tool.ends_with(SPAWN_AGENT) => kinds.push(EventKind::Delegated {
             description: cut(&subagent(input)),
         }),
-        "PreToolUse" if tool == "Bash" => {
-            let command = input["command"].as_str().unwrap_or("");
-            if let Some(phase) = read_phase(command, workflow) {
-                kinds.push(EventKind::Phase { phase });
-            }
-        }
         "PostToolUse" if tool.ends_with(SPAWN_AGENT) => {}
         "PostToolUse" => {
             kinds.push(EventKind::Working);
@@ -189,7 +179,7 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
         }
         "PermissionRequest" if !tool.is_empty() => {
             let cwd = payload["cwd"].as_str().unwrap_or("");
-            kinds.push(EventKind::Waiting {
+            kinds.push(EventKind::PermissionPending {
                 question: cut(&format!("permission: {}", tool_call(tool, input, cwd))),
             });
         }
@@ -229,24 +219,6 @@ fn mentioned_skill(prompt: &str) -> Option<&str> {
         let name = name.trim_end_matches(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_'));
         (!name.is_empty()).then_some(name)
     })
-}
-
-/// The phase of the first skill a shell command reads whose name is in the map: Codex reads
-/// ".../skills/<name>/SKILL.md", often several in one command.
-fn read_phase(command: &str, workflow: &Workflow) -> Option<Phase> {
-    read_skills(command).find_map(|skill| workflow.phase_of(skill))
-}
-
-/// The skills whose SKILL.md a shell command reads: ".../skills/<name>/SKILL.md" -> name.
-fn read_skills(command: &str) -> impl Iterator<Item = &str> {
-    command
-        .split(|c: char| c.is_whitespace() || c == '\'' || c == '"')
-        .filter_map(|word| {
-            let dir = word.strip_suffix("/SKILL.md")?;
-            let (parent, name) = dir.rsplit_once('/')?;
-            let in_skills = parent == "skills" || parent.ends_with("/skills");
-            (in_skills && !name.is_empty()).then_some(name)
-        })
 }
 
 /// What a subagent works on: its task name, else its type; its message is encrypted.
@@ -354,22 +326,23 @@ mod tests {
     }
 
     #[test]
-    fn reading_a_skill_file_starts_its_phase() {
-        assert_eq!(
-            events("pre_bash_skill"),
-            after_session(vec![EventKind::Phase {
-                phase: Phase::of("plan")
-            }])
-        );
+    fn reading_a_skill_file_does_not_start_its_phase() {
+        assert_eq!(events("pre_bash_skill"), after_session(vec![]));
     }
 
     #[test]
-    fn finds_the_phase_skill_among_several_read_at_once() {
-        let command = "cat /home/dev/.agents/skills/clickup-axi/SKILL.md && \
-                       sed -n 1,200p '/home/dev/.agents/skills/demo-skill/SKILL.md'";
-
-        assert_eq!(read_phase(command, &phases()), Some(Phase::of("plan")));
-        assert_eq!(read_phase("cat README.md", &phases()), None);
+    fn separate_read_ahead_commands_never_change_the_phase() {
+        let sequence = fixture("read_ahead_separate_commands");
+        let reads = sequence.as_array().unwrap();
+        assert_eq!(reads.len(), 4);
+        for payload in reads {
+            assert!(
+                !translate(payload, &Workflow::builtin())
+                    .iter()
+                    .any(|kind| matches!(kind, EventKind::Phase { .. })),
+                "read-ahead is not proof that a skill began: {payload}"
+            );
+        }
     }
 
     #[test]
@@ -404,10 +377,10 @@ mod tests {
     }
 
     #[test]
-    fn a_permission_or_a_question_waits_for_you() {
+    fn a_permission_is_pending_until_codex_decides_and_a_question_waits() {
         assert_eq!(
             events("permission_bash"),
-            after_session(vec![EventKind::Waiting {
+            after_session(vec![EventKind::PermissionPending {
                 question: "permission: Bash(touch notes.txt)".into()
             }])
         );

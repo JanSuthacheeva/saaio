@@ -1,0 +1,26 @@
+[
+  {
+    "session_id": "01a14000-0000-7000-8000-000000000000",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cat /repo/.agents/skills/design-code/SKILL.md"}
+  },
+  {
+    "session_id": "01a14000-0000-7000-8000-000000000000",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cat /repo/.agents/skills/write-merge-request/SKILL.md"}
+  },
+  {
+    "session_id": "01a14000-0000-7000-8000-000000000000",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cat /repo/.agents/skills/implement-plan/SKILL.md"}
+  },
+  {
+    "session_id": "01a14000-0000-7000-8000-000000000000",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cat /repo/.agents/skills/review-changes/SKILL.md"}
+  }
+]
