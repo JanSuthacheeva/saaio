@@ -17,6 +17,7 @@ Nothing in progress.
 | Codex phases from the skill it starts | a Codex worker that reads a later skill's `SKILL.md` early seems to start that phase early | the phase follows the skill actually started |
 | Codex commits without asking | the sandbox cannot write to the main repository's `.git`, so every commit asks permission | commits in the worktree without a prompt |
 | `saaio example config`, `saaio example theme` | the examples exist only as written on the first run | print every setting with its default |
+| Kinds of flows | every flow walks the same `[[phases]]` and gets the same first prompt, so a fix or a research task runs through the feature workflow | named workflows (feature, fix, research), each with its own phases, skills, first prompt and branch type. `saaio start --kind fix`, a field in the new-flow dialog, the master picks one from the request. Research needs no branch to merge. |
 | Prebuilt binaries | install builds from source with `cargo install`, which needs Rust | binaries for macOS and Linux on every release, an install script at saaio.dev, a Homebrew tap and `cargo binstall saaio` |
 
 ## Planned future
