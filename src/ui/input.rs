@@ -81,6 +81,14 @@ impl Router {
         }
     }
 
+    /// Takes `prefix` from now on; a half-pressed prefix is forgotten.
+    pub fn set_prefix(&mut self, prefix: Prefix) {
+        *self = Router {
+            pending: std::mem::take(&mut self.pending),
+            ..Router::new(prefix)
+        };
+    }
+
     /// Splits bytes at the prefix (its byte or its kitty form): the next key is a Command, the
     /// prefix twice sends one.
     /// In a modal view every key is decoded for the view instead. SGR mouse events inside `pane`
@@ -344,6 +352,21 @@ mod tests {
         );
         assert_eq!(route(&mut router, b"\x00\x00"), vec![Routed::Pane(vec![0])]);
         assert_eq!(route(&mut router, b"\x00x"), vec![]);
+    }
+
+    #[test]
+    fn takes_a_new_prefix_and_forgets_a_half_pressed_one() {
+        let mut router = Router::default();
+        assert_eq!(route(&mut router, b"\x00"), vec![]);
+
+        router.set_prefix(Prefix::try_from("C-b".to_string()).unwrap());
+
+        assert_eq!(route(&mut router, b"d"), vec![Routed::Pane(b"d".to_vec())]);
+        assert_eq!(
+            route(&mut router, b"\x02d"),
+            vec![Routed::Command(Command::Detach)]
+        );
+        assert_eq!(route(&mut router, b"\x00"), vec![Routed::Pane(vec![0])]);
     }
 
     #[test]

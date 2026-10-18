@@ -98,7 +98,8 @@ fn every_view_looks_as_it_did() {
     board.on_resize(narrow);
     golden("narrow-board", &render_at(&board, narrow));
 
-    let mut new_flow = board_app().with_agents(vec!["claude".into(), "codex".into()]);
+    let mut new_flow = board_app();
+    new_flow.set_agents(vec!["claude".into(), "codex".into()]);
     new_flow.on_input(Routed::Command(Command::NewFlow));
     golden("new-flow", &render_at(&new_flow, FLEET));
     new_flow.on_input(Routed::View(vec![Key::Tab]));
