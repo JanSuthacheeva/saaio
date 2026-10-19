@@ -27,8 +27,6 @@ impl Server {
                 Some((pane.key, flow.name.clone(), asked_at))
             })
             .collect();
-        self.dismissed
-            .retain(|key, _| answered.iter().any(|(answered, ..)| answered == key));
         for (key, name, dialog) in answered {
             let typed_at = self.typed_at.get(&key).copied();
             let opened_at = self.opened_at.get(&key).copied();

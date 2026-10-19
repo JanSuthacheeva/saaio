@@ -117,8 +117,8 @@ const ESC: &[u8] = b"\x1b";
 
 Field `dismissed: HashMap<PaneKey, u64>`: the dialog (its Waiting event's `at`; not the flow's
 `changed_at`, which a closed merge request moves while the dialog stays open) the server pressed
-Esc into, by pane; set only when the write succeeded, dropped once its flow no longer waits on an
-answered dialog. `serve` calls
+Esc into, by pane; set only when the write succeeded, never dropped, so a failed log read cannot
+cause a second Esc; the pane's next dialog replaces it. `serve` calls
 `self.dismiss_dialogs()` after `self.type_lines()`, both after `self.refresh()`. `mod dismiss;`.
 
 ### src/cli/output/status.rs (changed)
@@ -240,7 +240,7 @@ fence styles as they are.
 - [x] Press Esc once per dialog: `Server.dismissed: HashMap<PaneKey, u64>` (the dialog's
   `changed_at`) replaces `dismissed_at` and `AGAIN`; `due(typed_at, opened_at, now)`; set only when
   the write succeeded. Update the unit and server tests and docs/cli.md
-- [ ] Never forget a dismissed dialog: drop the `retain` in `dismiss_dialogs`, so `dismissed` keeps
+- [x] Never forget a dismissed dialog: drop the `retain` in `dismiss_dialogs`, so `dismissed` keeps
   each pane's last dialog (its Waiting `at`) and a failed log read cannot cause a second Esc; server
   test with the flow's log unreadable for a while
 
@@ -264,7 +264,8 @@ a second review covered the "After review" change (Esc once per dialog, 5afaa42.
 
 - A failed read of a flow's log in `answered_dialog` drops its `dismissed` entry for that refresh,
   so the next good read presses Esc again into the same dialog. Not shown; needs a log read to fail
-  between two refreshes. Recommendation: leave it, the error lands in server.log.
+  between two refreshes. Recommendation: leave it, the error lands in server.log. Decided: fix;
+  `dismissed` now keeps each pane's last dialog.
 - `saaio send --type` to a flow on a dialog types into the dialog, as before; nothing closes it.
   Recommendation: none for this bug, the master is told to use plain `saaio send` (decided: leave).
 - `turn_end` knows only backtick fences: a `~~~` block still reads as prose, and a four-backtick

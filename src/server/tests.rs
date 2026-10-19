@@ -1089,6 +1089,16 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
         "\x1b",
         "once, though the dialog still shows open and the flow changed"
     );
+    let log = dir.path().join(format!("flows/{asks}.jsonl"));
+    fs::set_permissions(&log, fs::Permissions::from_mode(0o000)).unwrap();
+    thread::sleep(WATCH_EVERY * 3);
+    fs::set_permissions(&log, fs::Permissions::from_mode(0o644)).unwrap();
+    thread::sleep(WATCH_EVERY * 3);
+    assert_eq!(
+        typed(dir.path(), "asks"),
+        "\x1b",
+        "once, though its log could not be read for a while"
+    );
 
     let idle = EventKind::Idle {
         note: "declined".into(),
