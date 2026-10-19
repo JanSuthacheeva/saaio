@@ -239,3 +239,43 @@ The master answers:
 - [x] master.md: answering a dialog, with master-v11.md kept in `INSTRUCTIONS.earlier`
 - [x] Docs: docs/cli.md, docs/json.md, docs/flows.md, README if it lists send's behaviour; ROADMAP Planned soon: send to a flow on a permission prompt
 - [x] E2E: the repro in a scratch store - a guided worker asks two questions (one multiSelect), the master answers only through `saaio status` and `saaio send`, the worker gets both answers
+
+## Review
+
+Reviewed on 2026-10-19 against this plan and CLAUDE.md, in a context that did not write the code.
+
+**Fixed**
+
+- `turn_end` read past a closing code fence into the block, so a turn ending in a code block whose
+  last line ends in "?" (SQL `WHERE id = ?`) became `waiting` and woke the master with a false
+  question. A line inside a code block is now the idle note as it stands and never asks. b96b818
+
+**Open**
+
+- Esc again after 30 s goes into the pane while the flow still shows the answered dialog. If the
+  first Esc closed it but no hook reported that (a Stop with a background task running reports
+  `delegated`, so that one is covered), a second Esc could interrupt a turn already running. Not
+  shown in any run; the plan's E2E saw the Stop hook fire at once. Recommendation: leave as is, watch
+  server.log for repeated `closed <name>'s question dialog` lines.
+- `saaio send --type` to a flow on a dialog types into the dialog, as before; nothing closes it.
+  Recommendation: none for this bug, the master is told to use plain `saaio send`.
+
+- `turn_end` knows only backtick fences: a `~~~` block still reads as prose, and a four-backtick
+  fence around a three-backtick one toggles wrongly. Rare in agent answers; recommendation: leave it.
+
+**Fixes reviewed** by a fresh agent against the finding: correct, no regression.
+
+**Where to look**
+
+1. `src/server/dismiss.rs` `dismiss_dialogs` -> `due`, and `src/wake.rs` `dialog_answered`: when Esc
+   goes into a person's pane and that it stops once the flow leaves the dialog.
+2. `src/fold.rs` `Folding::apply`: `questions` set on Waiting and cleared on any other state.
+3. `src/event.rs` `Waiting.questions`: the log format (serde default, skipped when empty, so old
+   lines read and write unchanged).
+
+Routine, skim: the `questions: Vec::new()` additions across tests and UI, the TOON tables in
+`cli/output/status.rs`, help lines, master.md (v11 kept), docs.
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt` pass at b96b818.
