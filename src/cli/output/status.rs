@@ -223,6 +223,10 @@ pub(crate) fn detail(
         phase: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         blocker: Option<String>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        questions: Vec<QuestionRow>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        options: Vec<OptionRow>,
         #[serde(skip_serializing_if = "Option::is_none")]
         delegate: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -264,6 +268,22 @@ pub(crate) fn detail(
         text: String,
     }
 
+    #[derive(Serialize)]
+    struct QuestionRow {
+        n: usize,
+        header: String,
+        question: String,
+        pick: &'static str,
+    }
+
+    #[derive(Serialize)]
+    struct OptionRow {
+        question: usize,
+        n: usize,
+        label: String,
+        description: String,
+    }
+
     let cut = |text: &str| truncated(text, LIST_TEXT_LIMIT, full);
     let (plain, worktree) = match &flow.workspace {
         Some(space) if flow.is_plain() => (Some(space), None),
@@ -277,6 +297,26 @@ pub(crate) fn detail(
         state: flow.state.name(),
         phase: flow.phase.as_ref().map(|phase| phase.name().to_string()),
         blocker: flow.blocker.as_deref().map(cut),
+        questions: (1..)
+            .zip(&flow.questions)
+            .map(|(n, asked)| QuestionRow {
+                n,
+                header: cut(&asked.header),
+                question: cut(&asked.question),
+                pick: if asked.multi_select { "several" } else { "one" },
+            })
+            .collect(),
+        options: (1..)
+            .zip(&flow.questions)
+            .flat_map(|(question, asked)| {
+                (1..).zip(&asked.options).map(move |(n, choice)| OptionRow {
+                    question,
+                    n,
+                    label: cut(&choice.label),
+                    description: cut(&choice.description),
+                })
+            })
+            .collect(),
         delegate: flow.delegate.as_deref().map(cut),
         tasks: flow.tasks.map(|tasks| tasks.to_string()),
         review: flow.review.map(|review| review.to_string()),
@@ -333,6 +373,10 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>, prefix: Prefix) -
             "Run `saaio report --flow {} working` once the block is resolved",
             flow.name
         )),
+        State::Waiting if !flow.questions.is_empty() => help.push(format!(
+            "Answer every question in one `saaio send {} \"<answer>\"`; saaio closes the dialog and the worker reads it",
+            flow.name
+        )),
         State::Waiting => help.push(format!(
             "Run `saaio report --flow {} working` once answered",
             flow.name
@@ -348,7 +392,7 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>, prefix: Prefix) -
 mod tests {
     use super::*;
     use crate::cli::output::fixtures::{MIN, flow, sample_board};
-    use crate::event::{EventKind, Phase};
+    use crate::event::{EventKind, Phase, Question};
     use crate::fold;
     use crate::view::VIEW_VERSION;
 
@@ -537,6 +581,56 @@ mod tests {
             ]
             .join("\n")
         );
+    }
+
+    #[test]
+    fn the_detail_lists_a_dialogs_questions_and_options() {
+        let mut toppings = Question::of("Which toppings?", &["Cheese", "Olives"], true);
+        toppings.options[1].description = format!("Black {}", "olives ".repeat(20));
+        let flow = flow(
+            "ask",
+            vec![EventKind::Waiting {
+                question: "Which color?".into(),
+                questions: vec![
+                    Question::of("Which color?", &["Red", "Blue"], false),
+                    toppings,
+                ],
+            }],
+            2 * MIN,
+        );
+
+        let text = detail(&flow, 2 * MIN, false, None, Prefix::default())
+            .text()
+            .to_string();
+
+        assert!(
+            text.contains(
+                &[
+                    "blocker: Which color?",
+                    "questions[2]{n,header,question,pick}:",
+                    "  1,Which,Which color?,one",
+                    "  2,Which,Which toppings?,several",
+                    "options[4]{question,n,label,description}:",
+                    "  1,1,Red,Red it is",
+                    "  1,2,Blue,Blue it is",
+                    "  2,1,Cheese,Cheese it is",
+                    "  2,2,Olives,\"Black olives olives",
+                ]
+                .join("\n")
+            ),
+            "{text}"
+        );
+        assert!(text.contains("use --full"), "{text}");
+        assert!(
+            text.ends_with(
+                "help[2]: \"Answer every question in one `saaio send ask \\\"<answer>\\\"`; saaio closes the dialog and the worker reads it\",Run `saaio` for all flows"
+            ),
+            "{text}"
+        );
+        let full = detail(&flow, 2 * MIN, true, None, Prefix::default())
+            .text()
+            .to_string();
+        assert!(!full.contains("use --full"), "{full}");
     }
 
     #[test]
