@@ -1,11 +1,15 @@
 use crate::adapter::cut;
 use crate::event::EventKind;
 
-/// Waiting with the last sentence of the answer's last non-empty line that asks (ends in "?", or
-/// starts "Let me know" or "Tell me"); else idle, with its last sentence: only a question needs
-/// the person.
+/// Waiting with the last sentence of the answer's last line with text (not a code fence) that asks
+/// (ends in "?", or starts "Let me know" or "Tell me"); else idle, with its last sentence: only a
+/// question needs the person.
 pub fn turn_end(answer: &str) -> EventKind {
-    let Some(last) = answer.lines().map(str::trim).rfind(|line| !line.is_empty()) else {
+    let Some(last) = answer
+        .lines()
+        .map(str::trim)
+        .rfind(|line| !line.is_empty() && !line.starts_with("```"))
+    else {
         return EventKind::Idle {
             note: "turn ended".to_string(),
         };
@@ -94,5 +98,21 @@ mod tests {
             idle("The review is still running.")
         );
         assert_eq!(turn_end("  \n"), idle("turn ended"));
+    }
+
+    #[test]
+    fn reads_past_a_closing_code_fence() {
+        assert_eq!(
+            turn_end("Wrote `answers.txt`:\n\n```\nColor: Green\n```\n"),
+            EventKind::Idle {
+                note: "Color: Green".into()
+            }
+        );
+        assert_eq!(
+            turn_end("```\n```"),
+            EventKind::Idle {
+                note: "turn ended".into()
+            }
+        );
     }
 }
