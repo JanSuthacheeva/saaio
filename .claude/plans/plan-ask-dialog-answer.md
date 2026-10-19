@@ -243,33 +243,38 @@ fence styles as they are.
 
 ## Review
 
-Reviewed on 2026-10-19 against this plan and CLAUDE.md, in a context that did not write the code.
+Reviewed on 2026-10-19 against this plan and CLAUDE.md, in a context that did not write the code;
+a second review covered the "After review" change (Esc once per dialog, 5afaa42..8de01fd).
 
 **Fixed**
 
 - `turn_end` read past a closing code fence into the block, so a turn ending in a code block whose
   last line ends in "?" (SQL `WHERE id = ?`) became `waiting` and woke the master with a false
   question. A line inside a code block is now the idle note as it stands and never asks. b96b818
+- Second review: `dismissed` keyed a dialog by its flow's `changed_at`, which a closed merge request
+  moves while the dialog stays open (the fold keeps Waiting and its questions), so the server pressed
+  Esc into the same dialog a second time. Shown by the server test with an MR opened before the
+  dialog and closed after the first Esc ("\x1b\x1b"). The key is now the dialog's Waiting event's
+  `at`; the test keeps the case. 2b23963
 
 **Open**
 
-- Esc again after 30 s goes into the pane while the flow still shows the answered dialog. If the
-  first Esc closed it but no hook reported that (a Stop with a background task running reports
-  `delegated`, so that one is covered), a second Esc could interrupt a turn already running. Not
-  shown in any run; the plan's E2E saw the Stop hook fire at once. Recommendation: leave as is, watch
-  server.log for repeated `closed <name>'s question dialog` lines.
+- A failed read of a flow's log in `answered_dialog` drops its `dismissed` entry for that refresh,
+  so the next good read presses Esc again into the same dialog. Not shown; needs a log read to fail
+  between two refreshes. Recommendation: leave it, the error lands in server.log.
 - `saaio send --type` to a flow on a dialog types into the dialog, as before; nothing closes it.
-  Recommendation: none for this bug, the master is told to use plain `saaio send`.
-
+  Recommendation: none for this bug, the master is told to use plain `saaio send` (decided: leave).
 - `turn_end` knows only backtick fences: a `~~~` block still reads as prose, and a four-backtick
-  fence around a three-backtick one toggles wrongly. Rare in agent answers; recommendation: leave it.
+  fence around a three-backtick one toggles wrongly. Decided: leave it.
 
-**Fixes reviewed** by a fresh agent against the finding: correct, no regression.
+**Fixes reviewed**: b96b818 by a fresh agent, correct. 2b23963 was not reviewed independently (the
+reviewer was itself a subagent told not to start another); re-read against the finding with the MR
+case and a new dialog after Idle, both covered by `presses_esc_once_into_each_dialog_the_master_answered`.
 
 **Where to look**
 
-1. `src/server/dismiss.rs` `dismiss_dialogs` -> `due`, and `src/wake.rs` `dialog_answered`: when Esc
-   goes into a person's pane and that it stops once the flow leaves the dialog.
+1. `src/server/dismiss.rs` `dismiss_dialogs` -> `answered_dialog` -> `due`, and `src/wake.rs`
+   `dialog_answered`: when Esc goes into a person's pane, and that it goes in once per dialog.
 2. `src/fold.rs` `Folding::apply`: `questions` set on Waiting and cleared on any other state.
 3. `src/event.rs` `Waiting.questions`: the log format (serde default, skipped when empty, so old
    lines read and write unchanged).
@@ -279,4 +284,4 @@ Routine, skim: the `questions: Vec::new()` additions across tests and UI, the TO
 
 **Checks**
 
-`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt` pass at b96b818.
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 2b23963.
