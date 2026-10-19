@@ -160,7 +160,7 @@ struct Server {
     opened_at: HashMap<PaneKey, Instant>,
     /// When the server last typed into each pane, for a line that begins no turn.
     line_at: HashMap<PaneKey, Instant>,
-    /// The question dialog (its flow's changed_at) the server pressed Esc into, by pane.
+    /// The question dialog (when its Waiting event was logged) the server pressed Esc into, by pane.
     dismissed: HashMap<PaneKey, u64>,
     /// When to ask gh and glab about the flows' merge requests.
     forges: ForgeWatch,

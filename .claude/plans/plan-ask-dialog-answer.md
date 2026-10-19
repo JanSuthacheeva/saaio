@@ -103,8 +103,8 @@ impl Server {
     /// one began.
     pub(super) fn dismiss_dialogs(&mut self);
 
-    /// The flow behind a running worker pane whose dialog the master answered.
-    fn answered_dialog(&self, key: &PaneKey) -> Option<&FlowView>;
+    /// The flow behind a running worker pane whose dialog the master answered, and when it asked.
+    fn answered_dialog(&self, key: &PaneKey) -> Option<(&FlowView, u64)>;
 }
 
 /// True when Esc may go into a pane: open and untouched by the person for QUIET.
@@ -115,7 +115,8 @@ const ESC: &[u8] = b"\x1b";
 
 ### src/server.rs (changed)
 
-Field `dismissed: HashMap<PaneKey, u64>`: the dialog (its flow's `changed_at`) the server pressed
+Field `dismissed: HashMap<PaneKey, u64>`: the dialog (its Waiting event's `at`; not the flow's
+`changed_at`, which a closed merge request moves while the dialog stays open) the server pressed
 Esc into, by pane; set only when the write succeeded, dropped once its flow no longer waits on an
 answered dialog. `serve` calls
 `self.dismiss_dialogs()` after `self.type_lines()`, both after `self.refresh()`. `mod dismiss;`.
@@ -174,8 +175,8 @@ The master answers:
 1. master -> `send::run(args, store, env, now)` -> `Store::append(id, Message)` -> `output::flow::sent(flow): Document` (dialog help)
 2. worker's `saaio wait` -> `deliver::worker_news`: marks it delivered, exits 2; Claude Code holds it
 3. `Server::serve` -> `refresh()` -> `dismiss_dialogs()`
-4. `dismiss_dialogs` -> `answered_dialog(key): Option<&FlowView>` -> `Store::events(id)` -> `wake::dialog_answered(flow, events): bool`
-5. `dismiss_dialogs`: skip a dialog in `dismissed` -> `due(typed_at, opened_at, now): bool` -> `Host::write(key, ESC)`; `dismissed.insert(key, changed_at)`; server.log `closed <name>'s question dialog for the master's message`
+4. `dismiss_dialogs` -> `answered_dialog(key): Option<(&FlowView, u64)>` -> `Store::events(id)` -> `wake::dialog_answered(flow, events): bool`
+5. `dismiss_dialogs`: skip a dialog in `dismissed` -> `due(typed_at, opened_at, now): bool` -> `Host::write(key, ESC)`; `dismissed.insert(key, asked_at)`; server.log `closed <name>'s question dialog for the master's message`
 6. Claude Code: tool declined, Stop hook, the held message begins a turn; the flow leaves Waiting, `questions` clear, the `dismissed` entry is dropped
 7. The person answers in the pane first: PostToolUse -> Working, no Esc.
 8. The person typed there within QUIET: wait.

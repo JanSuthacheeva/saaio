@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use super::Server;
 use super::news::QUIET;
+use crate::event::EventKind;
 use crate::proto::{PaneKey, PaneStatus};
 use crate::server_log;
 use crate::view::FlowView;
@@ -22,8 +23,8 @@ impl Server {
             .into_iter()
             .filter(|pane| pane.status == PaneStatus::Running)
             .filter_map(|pane| {
-                let flow = self.answered_dialog(&pane.key)?;
-                Some((pane.key, flow.name.clone(), flow.changed_at))
+                let (flow, asked_at) = self.answered_dialog(&pane.key)?;
+                Some((pane.key, flow.name.clone(), asked_at))
             })
             .collect();
         self.dismissed
@@ -50,8 +51,8 @@ impl Server {
         }
     }
 
-    /// The flow behind a running worker pane whose dialog the master answered.
-    fn answered_dialog(&self, key: &PaneKey) -> Option<&FlowView> {
+    /// The flow behind a running worker pane whose dialog the master answered, and when it asked.
+    fn answered_dialog(&self, key: &PaneKey) -> Option<(&FlowView, u64)> {
         let PaneKey::Flow(id) = key else {
             return None;
         };
@@ -66,7 +67,14 @@ impl Server {
                 return None;
             }
         };
-        wake::dialog_answered(flow, &events).then_some(flow)
+        if !wake::dialog_answered(flow, &events) {
+            return None;
+        }
+        let asked = events
+            .iter()
+            .rev()
+            .find(|event| matches!(event.kind, EventKind::Waiting { .. }))?;
+        Some((flow, asked.at))
     }
 }
 

@@ -1063,6 +1063,9 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
     let asks = started_flow(&store, dir.path(), "asks", "claude-keys");
     let unanswered = started_flow(&store, dir.path(), "unanswered", "claude-keys");
     let worded = started_flow(&store, dir.path(), "worded", "claude-keys");
+    let pr = "https://github.com/a/b/pull/42";
+    let opened = EventKind::MergeRequest { url: pr.into() };
+    store.append(&asks, &LogEvent::new(1, opened)).unwrap();
     ask(&store, &asks, color());
     ask(&store, &unanswered, color());
     ask(&store, &worded, Vec::new());
@@ -1078,11 +1081,13 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
         assert!(Instant::now() < deadline, "no Esc into the answered dialog");
         thread::sleep(Duration::from_millis(20));
     }
-    thread::sleep(Duration::from_secs(4));
+    let closed = EventKind::MergeRequestClosed { url: pr.into() };
+    store.append(&asks, &LogEvent::new(4, closed)).unwrap();
+    thread::sleep(WATCH_EVERY * 3);
     assert_eq!(
         typed(dir.path(), "asks"),
         "\x1b",
-        "once, though the dialog still shows open"
+        "once, though the dialog still shows open and the flow changed"
     );
 
     let idle = EventKind::Idle {
