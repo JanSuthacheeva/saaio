@@ -247,7 +247,10 @@ fence styles as they are.
 ## Review
 
 Reviewed on 2026-10-19 against this plan and CLAUDE.md, in a context that did not write the code;
-a second review covered the "After review" change (Esc once per dialog, 5afaa42..8de01fd).
+a second review covered the "After review" change (Esc once per dialog, 5afaa42..8de01fd); a
+third covered "Never forget a dismissed dialog" (05848a1..30650e1) and found nothing to fix: the
+new server test fails without the change ("\x1b\x1b" after the log is unreadable for a while), and
+keying by the Waiting event's `at` in milliseconds keeps a pane's next dialog distinct.
 
 **Fixed**
 
@@ -270,6 +273,8 @@ a second review covered the "After review" change (Esc once per dialog, 5afaa42.
   Recommendation: none for this bug, the master is told to use plain `saaio send` (decided: leave).
 - `turn_end` knows only backtick fences: a `~~~` block still reads as prose, and a four-backtick
   fence around a three-backtick one toggles wrongly. Decided: leave it.
+- `dismissed` now never shrinks: a flow removed during the server's life keeps its one entry
+  (a pane key and a u64). Recommendation: leave it, bounded by the flows a server ever dismissed.
 
 **Fixes reviewed**: b96b818 by a fresh agent, correct. 2b23963 was not reviewed independently (the
 reviewer was itself a subagent told not to start another); re-read against the finding with the MR
@@ -288,4 +293,4 @@ Routine, skim: the `questions: Vec::new()` additions across tests and UI, the TO
 
 **Checks**
 
-`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 2b23963.
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 30650e1.
