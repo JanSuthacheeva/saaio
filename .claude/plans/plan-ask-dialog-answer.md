@@ -240,6 +240,16 @@ The master answers:
 - [x] Docs: docs/cli.md, docs/json.md, docs/flows.md, README if it lists send's behaviour; ROADMAP Planned soon: send to a flow on a permission prompt
 - [x] E2E: the repro in a scratch store - a guided worker asks two questions (one multiSelect), the master answers only through `saaio status` and `saaio send`, the worker gets both answers
 
+### After review
+
+Decided 2026-10-19: Esc goes into a dialog once, never again (a second Esc could interrupt a turn
+already running; a dialog still open stays visible as waiting). Leave `send --type` and other
+fence styles as they are.
+
+- [ ] Press Esc once per dialog: `Server.dismissed: HashMap<PaneKey, u64>` (the dialog's
+  `changed_at`) replaces `dismissed_at` and `AGAIN`; `due(typed_at, opened_at, now)`; set only when
+  the write succeeded. Update the unit and server tests and docs/cli.md
+
 ## Review
 
 Reviewed on 2026-10-19 against this plan and CLAUDE.md, in a context that did not write the code.
