@@ -100,7 +100,7 @@ False when `flow.questions` is empty; else true when a `Message` follows the log
 #[cfg(not(test))]
 pub(super) const AGAIN: Duration = Duration::from_secs(30);
 #[cfg(test)]
-pub(super) const AGAIN: Duration = Duration::from_secs(1);
+pub(super) const AGAIN: Duration = Duration::from_secs(3);
 
 impl Server {
     /// Presses Esc into each running pane whose flow waits on a question dialog the master
@@ -112,8 +112,14 @@ impl Server {
     fn answered_dialog(&self, key: &PaneKey) -> Option<&FlowView>;
 }
 
-/// True when Esc may go into a pane: nobody typed there for QUIET, no Esc within AGAIN.
-fn due(typed_at: Option<Instant>, dismissed_at: Option<Instant>, now: Instant) -> bool;
+/// True when Esc may go into a pane: open and untouched by the person for QUIET, no Esc within
+/// AGAIN.
+fn due(
+    typed_at: Option<Instant>,
+    opened_at: Option<Instant>,
+    dismissed_at: Option<Instant>,
+    now: Instant,
+) -> bool;
 
 const ESC: &[u8] = b"\x1b";
 ```
@@ -122,7 +128,7 @@ const ESC: &[u8] = b"\x1b";
 
 Field `dismissed_at: HashMap<PaneKey, Instant>`: when the server last pressed Esc into each pane;
 an entry is dropped once its flow no longer waits on an answered dialog. `serve` calls
-`self.dismiss_dialogs()` after `self.refresh()`, beside `type_lines`. `mod dismiss;`.
+`self.dismiss_dialogs()` after `self.type_lines()`, both after `self.refresh()`. `mod dismiss;`.
 
 ### src/cli/output/status.rs (changed)
 
@@ -179,7 +185,7 @@ The master answers:
 2. worker's `saaio wait` -> `deliver::worker_news`: marks it delivered, exits 2; Claude Code holds it
 3. `Server::serve` -> `refresh()` -> `dismiss_dialogs()`
 4. `dismiss_dialogs` -> `answered_dialog(key): Option<&FlowView>` -> `Store::events(id)` -> `wake::dialog_answered(flow, events): bool`
-5. `dismiss_dialogs` -> `due(typed_at, dismissed_at, now): bool` -> `Host::write(key, ESC)`; `dismissed_at.insert`; server.log `closed <name>'s question dialog for the master's message`
+5. `dismiss_dialogs` -> `due(typed_at, opened_at, dismissed_at, now): bool` -> `Host::write(key, ESC)`; `dismissed_at.insert`; server.log `closed <name>'s question dialog for the master's message`
 6. Claude Code: tool declined, Stop hook, the held message begins a turn; the flow leaves Waiting, `questions` clear, the `dismissed_at` entry is dropped
 7. The person answers in the pane first: PostToolUse -> Working, no Esc.
 8. The person typed there within QUIET: wait.
@@ -194,8 +200,8 @@ The master answers:
 - `event`: round trip with questions; an old line without them parses; cut_texts cuts labels.
 - `fold`: questions set on a dialog, cleared by Working, Idle, Blocked, a worded Waiting; `changes` sees a new dialog.
 - `wake::dialog_answered`: message after the dialog yes, before it no, no dialog no.
-- `dismiss::due`: QUIET and AGAIN.
-- `server/tests.rs`: a raw-mode fake Claude records its bytes; a flow on a dialog plus a message gets one Esc; without a message, or a Codex flow, none.
+- `dismiss::due`: open for QUIET, QUIET since the last key, AGAIN.
+- `server/tests.rs`: a raw-mode fake Claude records its bytes; a flow on a dialog plus a message gets one Esc until it closes; without a message, or on a question asked in words (all a Codex flow has), none.
 - `output::status`, `output::flow`, `output::news`: exact TOON.
 - `tests/cli.rs`: `saaio status` lists the options; `saaio send` prints the dialog help.
 
@@ -209,15 +215,22 @@ The master answers:
 6. The UI's board and detail keep showing only the first question.
 7. No CHANGELOG entry before 0.1.0.
 
+## Changes during the build
+
+- `due` also takes `opened_at`, so no Esc goes into a harness still starting up (as `typing::ready`).
+- `AGAIN` is 3 s in tests, so the server test can see that Esc is pressed only once.
+- `wake::dialog_answered` (task 4) has no caller before the server task, which clippy refuses as
+  dead code; tasks 4 and 7 are one commit.
+
 ## Tasks
 
 - [x] Add `Question`, `Choice` and `Waiting.questions` in event.rs (cut_texts, serde default) and update every Waiting pattern; unit tests for the round trip, an old line and cutting
 - [x] Keep every question in `claude_code::translate` via `questions(input)`, with a recorded `pre_ask_two.json` fixture and its test
 - [x] Add `FlowView.questions`, set and cleared in `fold`, and in `shown`; fold tests for setting, clearing and `changes`
-- [ ] Add `wake::dialog_answered(flow, events)` with its unit tests
+- [x] Add `wake::dialog_answered(flow, events)` with its unit tests
 - [ ] List questions and options in `output::status::detail` with the dialog help in `detail_help`; TOON tests and a `tests/cli.rs` case
 - [ ] Change `output::flow::sent` and `output::news::for_master` help for a dialog; TOON tests and a `tests/cli.rs` case for send
-- [ ] Add `server/dismiss.rs` (`dismiss_dialogs`, `answered_dialog`, `due`, `AGAIN`, `ESC`), `Server.dismissed_at` and the call in `serve`; unit test for `due` and server tests with a raw-mode fake Claude (Esc once, none without a message, none for Codex)
+- [x] Add `server/dismiss.rs` (`dismiss_dialogs`, `answered_dialog`, `due`, `AGAIN`, `ESC`), `Server.dismissed_at` and the call in `serve`; unit test for `due` and server tests with a raw-mode fake Claude (Esc once, none without a message, none for Codex)
 - [ ] master.md: answering a dialog, with master-v11.md kept in `INSTRUCTIONS.earlier`
 - [ ] Docs: docs/cli.md, docs/json.md, docs/flows.md, README if it lists send's behaviour; ROADMAP Planned soon: send to a flow on a permission prompt
 - [ ] E2E: the repro in a scratch store - a guided worker asks two questions (one multiSelect), the master answers only through `saaio status` and `saaio send`, the worker gets both answers

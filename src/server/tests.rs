@@ -1028,6 +1028,66 @@ fn a_typed_line_that_begins_no_turn_lets_the_next_one_follow() {
     stop(&paths, handle);
 }
 
+/// A Claude Code stand-in that keeps every byte sent to it in `typed`, a key such as Esc included.
+fn fake_claude_keys(dir: &Path) -> Agent {
+    let script = dir.join("fake-claude-keys");
+    fs::write(&script, "#!/bin/sh\nstty raw -echo\nexec cat > typed\n").unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    Agent {
+        command: vec![script.display().to_string()],
+        prompt: None,
+        adapter: Some(crate::adapter::Adapter::ClaudeCode),
+        resume: Some(vec![script.display().to_string()]),
+    }
+}
+
+fn ask(store: &Store, id: &str, questions: Vec<crate::event::Question>) {
+    let waiting = EventKind::Waiting {
+        question: "Which color?".into(),
+        questions,
+    };
+    store.append(id, &LogEvent::new(2, waiting)).unwrap();
+}
+
+#[test]
+fn presses_esc_into_a_dialog_the_master_answered_until_it_closes() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let color = || {
+        vec![crate::event::Question::of(
+            "Which color?",
+            &["Red", "Blue"],
+            false,
+        )]
+    };
+    let asks = started_flow(&store, dir.path(), "asks", "claude");
+    let unanswered = started_flow(&store, dir.path(), "unanswered", "claude");
+    let worded = started_flow(&store, dir.path(), "worded", "claude");
+    ask(&store, &asks, color());
+    ask(&store, &unanswered, color());
+    ask(&store, &worded, Vec::new());
+    tell(&store, &asks, "The user says: Red");
+    tell(&store, &worded, "The user says: Red");
+    let (paths, handle) = start_with(dir.path(), fake_claude_keys(dir.path()));
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !typed(dir.path(), "asks").contains('\x1b') {
+        assert!(Instant::now() < deadline, "no Esc into the answered dialog");
+        thread::sleep(Duration::from_millis(20));
+    }
+    thread::sleep(dismiss::AGAIN / 2);
+    assert_eq!(typed(dir.path(), "asks"), "\x1b", "once until AGAIN");
+    store
+        .append(&asks, &LogEvent::new(4, EventKind::Working))
+        .unwrap();
+    thread::sleep(dismiss::AGAIN);
+
+    assert_eq!(typed(dir.path(), "asks"), "\x1b", "the dialog closed");
+    assert_eq!(typed(dir.path(), "unanswered"), "", "no message yet");
+    assert_eq!(typed(dir.path(), "worded"), "", "no dialog");
+    stop(&paths, handle);
+}
+
 #[test]
 fn opens_the_next_worker_with_the_config_saved_while_it_runs() {
     let dir = TempDir::new().unwrap();
