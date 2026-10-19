@@ -225,6 +225,14 @@ impl Host {
         self.panes.get(key).map(|pane| &pane.status)
     }
 
+    /// A bounded plain-text tail of one pane's visible output.
+    #[expect(dead_code, reason = "wired to the exit event in the next plan task")]
+    pub fn output_tail(&self, key: &PaneKey, max_lines: usize, max_chars: usize) -> Option<String> {
+        self.panes
+            .get(key)
+            .map(|pane| pane.term.output_tail(max_lines, max_chars))
+    }
+
     pub fn keys(&self) -> impl Iterator<Item = &PaneKey> {
         self.panes.keys()
     }
@@ -401,6 +409,18 @@ mod tests {
         assert!(screen(&mut host, &key).starts_with("hi there"));
         assert_eq!(host.panes()[0].status, PaneStatus::Exited { code: Some(3) });
         host.write(&key, b"ignored").unwrap();
+    }
+
+    #[test]
+    fn output_tail_reads_an_exited_pane() {
+        let (mut host, rx) = host();
+        let key = PaneKey::Flow("tail".into());
+        host.open(spec(key.clone(), "printf 'one\\ntwo\\n'; exit 23"))
+            .unwrap();
+
+        assert_eq!(pump(&mut host, &rx, Duration::from_secs(5)), Some(Some(23)));
+        assert_eq!(host.output_tail(&key, 2, 20).as_deref(), Some("one\ntwo"));
+        assert_eq!(host.output_tail(&PaneKey::Master, 2, 20), None);
     }
 
     #[test]
