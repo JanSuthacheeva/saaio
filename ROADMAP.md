@@ -19,6 +19,7 @@ Nothing in progress.
 | Kinds of flows | every flow walks the same `[[phases]]` and gets the same first prompt, so a fix or a research task runs through the feature workflow | named workflows (feature, fix, research), each with its own phases, skills, first prompt and branch type. `saaio start --kind fix`, a field in the new-flow dialog, the master picks one from the request. Research needs no branch to merge. |
 | Docs site at saaio.dev | the docs are Markdown files in the repository, read on GitHub | a searchable docs site at saaio.dev, built from `docs/` on every merge |
 | Shared memory for the master | each agent keeps its own memory (Claude Code per project, Codex none), so switching the master's agent loses what it knew | one memory per project in its store (`MEMORY.md` index, one file per note) that every master reads at the start and writes to, whatever its agent. Claude Code's memory folder is linked to it. Workers can read it too. |
+| `saaio start --base <branch>` | a flow's worktree branches from what the repository has checked out, so a stack of merge requests cannot run as one flow each | `saaio start --base <branch>` creates the worktree from the given branch, one flow per merge request in the stack |
 | Prebuilt binaries | install builds from source with `cargo install`, which needs Rust | binaries for macOS and Linux on every release, an install script at saaio.dev, a Homebrew tap and `cargo binstall saaio` |
 
 ## Planned future
@@ -28,4 +29,5 @@ Nothing in progress.
 | The master asks a worker | no command for it | `saaio ask` puts the master's question to a worker and returns the answer, without waiting on the user |
 | An interrupted Claude Code turn shown as idle | Claude Code runs no hook on Esc. The spinner stays until the next prompt. | the interrupted turn shows as idle |
 | Task counts and an end event for Codex | a Codex flow shows no task counts and is ended from the UI or with `saaio remove` | both, as for Claude Code |
+| Parts in a flow | a flow has one merge request and walks its phases once, so a ticket split into stacked merge requests shows every step done after the first | a plan declares its parts. Implement, review and merge request repeat for each, `saaio report merge-request` adds to a list of merge requests, and status shows `part 2 of 3`. |
 | Continuous integration | tests, clippy and fmt run locally before a merge | GitHub Actions run them on every pull request and build the release binaries |
