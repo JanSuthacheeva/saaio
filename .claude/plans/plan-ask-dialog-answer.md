@@ -96,38 +96,28 @@ False when `flow.questions` is empty; else true when a `Message` follows the log
 ### src/server/dismiss.rs (new)
 
 ```rust
-/// How long after an Esc the server may press it again into a dialog still open.
-#[cfg(not(test))]
-pub(super) const AGAIN: Duration = Duration::from_secs(30);
-#[cfg(test)]
-pub(super) const AGAIN: Duration = Duration::from_secs(3);
-
 impl Server {
-    /// Presses Esc into each running pane whose flow waits on a question dialog the master
+    /// Presses Esc once into each running pane whose flow waits on a question dialog the master
     /// answered, once nobody typed there for QUIET, so Claude Code closes it and hands the held
-    /// message over; again after AGAIN while it stays open.
+    /// message over. Never twice into one dialog: a second Esc could interrupt the turn the first
+    /// one began.
     pub(super) fn dismiss_dialogs(&mut self);
 
     /// The flow behind a running worker pane whose dialog the master answered.
     fn answered_dialog(&self, key: &PaneKey) -> Option<&FlowView>;
 }
 
-/// True when Esc may go into a pane: open and untouched by the person for QUIET, no Esc within
-/// AGAIN.
-fn due(
-    typed_at: Option<Instant>,
-    opened_at: Option<Instant>,
-    dismissed_at: Option<Instant>,
-    now: Instant,
-) -> bool;
+/// True when Esc may go into a pane: open and untouched by the person for QUIET.
+fn due(typed_at: Option<Instant>, opened_at: Option<Instant>, now: Instant) -> bool;
 
 const ESC: &[u8] = b"\x1b";
 ```
 
 ### src/server.rs (changed)
 
-Field `dismissed_at: HashMap<PaneKey, Instant>`: when the server last pressed Esc into each pane;
-an entry is dropped once its flow no longer waits on an answered dialog. `serve` calls
+Field `dismissed: HashMap<PaneKey, u64>`: the dialog (its flow's `changed_at`) the server pressed
+Esc into, by pane; set only when the write succeeded, dropped once its flow no longer waits on an
+answered dialog. `serve` calls
 `self.dismiss_dialogs()` after `self.type_lines()`, both after `self.refresh()`. `mod dismiss;`.
 
 ### src/cli/output/status.rs (changed)
@@ -185,12 +175,12 @@ The master answers:
 2. worker's `saaio wait` -> `deliver::worker_news`: marks it delivered, exits 2; Claude Code holds it
 3. `Server::serve` -> `refresh()` -> `dismiss_dialogs()`
 4. `dismiss_dialogs` -> `answered_dialog(key): Option<&FlowView>` -> `Store::events(id)` -> `wake::dialog_answered(flow, events): bool`
-5. `dismiss_dialogs` -> `due(typed_at, opened_at, dismissed_at, now): bool` -> `Host::write(key, ESC)`; `dismissed_at.insert`; server.log `closed <name>'s question dialog for the master's message`
-6. Claude Code: tool declined, Stop hook, the held message begins a turn; the flow leaves Waiting, `questions` clear, the `dismissed_at` entry is dropped
+5. `dismiss_dialogs`: skip a dialog in `dismissed` -> `due(typed_at, opened_at, now): bool` -> `Host::write(key, ESC)`; `dismissed.insert(key, changed_at)`; server.log `closed <name>'s question dialog for the master's message`
+6. Claude Code: tool declined, Stop hook, the held message begins a turn; the flow leaves Waiting, `questions` clear, the `dismissed` entry is dropped
 7. The person answers in the pane first: PostToolUse -> Working, no Esc.
 8. The person typed there within QUIET: wait.
-9. Esc did not close it: pressed again after AGAIN.
-10. `Host::write` fails: server.log; tried again after AGAIN.
+9. Esc did not close it: never pressed again; the flow stays waiting for an answer in the pane.
+10. `Host::write` fails: server.log; tried again at the next refresh.
 11. No server running: the message waits; Esc goes in once saaio opens the pane.
 12. A Codex flow never has questions: nothing pressed.
 
@@ -200,8 +190,8 @@ The master answers:
 - `event`: round trip with questions; an old line without them parses; cut_texts cuts labels.
 - `fold`: questions set on a dialog, cleared by Working, Idle, Blocked, a worded Waiting; `changes` sees a new dialog.
 - `wake::dialog_answered`: message after the dialog yes, before it no, no dialog no.
-- `dismiss::due`: open for QUIET, QUIET since the last key, AGAIN.
-- `server/tests.rs`: a raw-mode fake Claude records its bytes; a flow on a dialog plus a message gets one Esc until it closes; without a message, or on a question asked in words (all a Codex flow has), none.
+- `dismiss::due`: open for QUIET, QUIET since the last key.
+- `server/tests.rs`: a raw-mode fake Claude records its bytes; a flow on a dialog plus a message gets one Esc per dialog; without a message, or on a question asked in words (all a Codex flow has), none.
 - `output::status`, `output::flow`, `output::news`: exact TOON.
 - `tests/cli.rs`: `saaio status` lists the options; `saaio send` prints the dialog help.
 
@@ -210,7 +200,7 @@ The master answers:
 1. The tables show in `saaio status <name>` too; `--full` lifts the 80-char cut.
 2. The master answers in words; saaio does not check the answer against the options.
 3. Esc waits for 10 s without typing in that pane (QUIET).
-4. Esc again after 30 s while the dialog stays open; never more often.
+4. Esc once per dialog (decided in review; was: again after 30 s).
 5. Only a message sent after the dialog opened closes it.
 6. The UI's board and detail keep showing only the first question.
 7. No CHANGELOG entry before 0.1.0.
@@ -246,7 +236,7 @@ Decided 2026-10-19: Esc goes into a dialog once, never again (a second Esc could
 already running; a dialog still open stays visible as waiting). Leave `send --type` and other
 fence styles as they are.
 
-- [ ] Press Esc once per dialog: `Server.dismissed: HashMap<PaneKey, u64>` (the dialog's
+- [x] Press Esc once per dialog: `Server.dismissed: HashMap<PaneKey, u64>` (the dialog's
   `changed_at`) replaces `dismissed_at` and `AGAIN`; `due(typed_at, opened_at, now)`; set only when
   the write succeeded. Update the unit and server tests and docs/cli.md
 

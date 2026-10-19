@@ -247,8 +247,9 @@ help[2]: "saaio wakes its worker with it now, or once its session runs again",sa
 A worker waiting on a question dialog cannot read a message while the dialog is open. Answer
 every question in one message, by option label or in words. saaio's server then presses Esc in the
 worker's pane, after ten seconds without typing there, so the dialog closes and the worker reads
-the message as its answer. If it is still open 30 seconds later, saaio presses Esc again. Answered
-in the pane first, the dialog is left alone. The message waits while the UI is closed.
+the message as its answer. saaio presses Esc once per dialog: one still open after it waits for an
+answer in the worker's pane. Answered in the pane first, the dialog is left alone. The message
+waits while the UI is closed.
 
 ```
 $ saaio send shop-217 "The user says: Blue; Cheese and Olives"

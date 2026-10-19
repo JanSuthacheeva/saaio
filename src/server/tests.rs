@@ -1050,7 +1050,7 @@ fn ask(store: &Store, id: &str, questions: Vec<crate::event::Question>) {
 }
 
 #[test]
-fn presses_esc_into_a_dialog_the_master_answered_until_it_closes() {
+fn presses_esc_once_into_each_dialog_the_master_answered() {
     let dir = TempDir::new().unwrap();
     let store = Store::at(dir.path().to_path_buf());
     let color = || {
@@ -1078,14 +1078,33 @@ fn presses_esc_into_a_dialog_the_master_answered_until_it_closes() {
         assert!(Instant::now() < deadline, "no Esc into the answered dialog");
         thread::sleep(Duration::from_millis(20));
     }
-    thread::sleep(dismiss::AGAIN / 2);
-    assert_eq!(typed(dir.path(), "asks"), "\x1b", "once until AGAIN");
-    store
-        .append(&asks, &LogEvent::new(4, EventKind::Working))
-        .unwrap();
-    thread::sleep(dismiss::AGAIN);
+    thread::sleep(Duration::from_secs(4));
+    assert_eq!(
+        typed(dir.path(), "asks"),
+        "\x1b",
+        "once, though the dialog still shows open"
+    );
 
-    assert_eq!(typed(dir.path(), "asks"), "\x1b", "the dialog closed");
+    let idle = EventKind::Idle {
+        note: "declined".into(),
+    };
+    store.append(&asks, &LogEvent::new(5, idle)).unwrap();
+    thread::sleep(WATCH_EVERY * 3);
+    let again = EventKind::Waiting {
+        question: "Which color?".into(),
+        questions: color(),
+    };
+    store.append(&asks, &LogEvent::new(6, again)).unwrap();
+    tell(&store, &asks, "The user says: Blue");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while typed(dir.path(), "asks") != "\x1b\x1b" {
+        assert!(
+            Instant::now() < deadline,
+            "no Esc into the next dialog: {:?}",
+            typed(dir.path(), "asks")
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
     assert_eq!(typed(dir.path(), "unanswered"), "", "no message yet");
     assert_eq!(typed(dir.path(), "worded"), "", "no dialog");
     stop(&paths, handle);

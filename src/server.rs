@@ -160,8 +160,8 @@ struct Server {
     opened_at: HashMap<PaneKey, Instant>,
     /// When the server last typed into each pane, for a line that begins no turn.
     line_at: HashMap<PaneKey, Instant>,
-    /// When the server last pressed Esc into each pane whose question dialog the master answered.
-    dismissed_at: HashMap<PaneKey, Instant>,
+    /// The question dialog (its flow's changed_at) the server pressed Esc into, by pane.
+    dismissed: HashMap<PaneKey, u64>,
     /// When to ask gh and glab about the flows' merge requests.
     forges: ForgeWatch,
 }
@@ -242,7 +242,7 @@ pub fn run(
         typed_at: HashMap::new(),
         opened_at: HashMap::new(),
         line_at: HashMap::new(),
-        dismissed_at: HashMap::new(),
+        dismissed: HashMap::new(),
         forges: ForgeWatch::default(),
     };
     server.open_master(start);
