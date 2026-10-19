@@ -1060,15 +1060,18 @@ fn presses_esc_into_a_dialog_the_master_answered_until_it_closes() {
             false,
         )]
     };
-    let asks = started_flow(&store, dir.path(), "asks", "claude");
-    let unanswered = started_flow(&store, dir.path(), "unanswered", "claude");
-    let worded = started_flow(&store, dir.path(), "worded", "claude");
+    let asks = started_flow(&store, dir.path(), "asks", "claude-keys");
+    let unanswered = started_flow(&store, dir.path(), "unanswered", "claude-keys");
+    let worded = started_flow(&store, dir.path(), "worded", "claude-keys");
     ask(&store, &asks, color());
     ask(&store, &unanswered, color());
     ask(&store, &worded, Vec::new());
     tell(&store, &asks, "The user says: Red");
     tell(&store, &worded, "The user says: Red");
-    let (paths, handle) = start_with(dir.path(), fake_claude_keys(dir.path()));
+    let (paths, handle) = start_with_agents(
+        dir.path(),
+        BTreeMap::from([("claude-keys".to_string(), fake_claude_keys(dir.path()))]),
+    );
 
     let deadline = Instant::now() + Duration::from_secs(5);
     while !typed(dir.path(), "asks").contains('\x1b') {
