@@ -105,6 +105,7 @@ mod tests {
     fn waiting(question: &str) -> EventKind {
         EventKind::Waiting {
             question: question.into(),
+            questions: Vec::new(),
         }
     }
 

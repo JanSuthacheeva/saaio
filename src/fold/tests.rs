@@ -66,6 +66,7 @@ fn a_message_is_in_the_timeline_and_leaves_the_state() {
             1,
             EventKind::Waiting {
                 question: "Which delimiter?".into(),
+                questions: Vec::new(),
             },
         ),
         at(
@@ -283,6 +284,7 @@ fn says_whether_an_event_changes_what_the_flow_shows() {
         1,
         EventKind::Waiting {
             question: "Which?".into(),
+            questions: Vec::new(),
         },
     );
     let events = vec![started.clone(), waiting.clone()];
@@ -487,12 +489,14 @@ fn waiting_and_blocked_set_the_blocker_once_per_question() {
                 1,
                 EventKind::Waiting {
                     question: "Approve the plan?".into(),
+                    questions: Vec::new(),
                 },
             ),
             at(
                 2,
                 EventKind::Waiting {
                     question: "Approve the plan?".into(),
+                    questions: Vec::new(),
                 },
             ),
         ],
@@ -576,6 +580,7 @@ fn decisions_are_kept_once_and_do_not_change_the_state() {
                 1,
                 EventKind::Waiting {
                     question: "Which approach?".into(),
+                    questions: Vec::new(),
                 },
             ),
             at(
@@ -671,6 +676,7 @@ fn a_question_after_pr_is_waiting() {
             2 * MIN,
             EventKind::Waiting {
                 question: "Ship with the race fix?".into(),
+                questions: Vec::new(),
             },
         ),
     ];

@@ -170,6 +170,7 @@ mod tests {
             "shop-221",
             vec![EventKind::Waiting {
                 question: "ok?".into(),
+                questions: Vec::new(),
             }],
             MIN,
         );
@@ -213,6 +214,7 @@ mod tests {
             "shop-217",
             vec![EventKind::Waiting {
                 question: "Which delimiter?".into(),
+                questions: Vec::new(),
             }],
             10 * MIN,
         );

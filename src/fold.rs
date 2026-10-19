@@ -253,7 +253,7 @@ impl Folding {
                 self.view.state = State::Delegated;
                 self.view.delegate = Some(description.clone());
             }
-            EventKind::Waiting { question } => {
+            EventKind::Waiting { question, .. } => {
                 self.pending_permission = None;
                 self.stop_for(State::Waiting, question, at, "waiting", Tone::Attention);
             }

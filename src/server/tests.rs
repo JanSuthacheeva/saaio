@@ -271,7 +271,7 @@ fn a_codex_worker_that_never_starts_a_turn_waits_once() {
         .filter(|event| {
             matches!(
                 &event.kind,
-                EventKind::Waiting { question } if question == super::startup::STALLED_START
+                EventKind::Waiting { question, .. } if question == super::startup::STALLED_START
             )
         })
         .collect();

@@ -476,7 +476,8 @@ mod tests {
                     text: "Do you prefer tabs or spaces?".into()
                 },
                 EventKind::Waiting {
-                    question: "Do you prefer tabs or spaces?".into()
+                    question: "Do you prefer tabs or spaces?".into(),
+                    questions: Vec::new()
                 }
             ])
         );

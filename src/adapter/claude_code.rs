@@ -139,6 +139,7 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
                 .map(|question| {
                     vec![EventKind::Waiting {
                         question: cut(question),
+                        questions: Vec::new(),
                     }]
                 })
                 .unwrap_or_default(),
@@ -163,6 +164,7 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
             let cwd = payload["cwd"].as_str().unwrap_or("");
             vec![EventKind::Waiting {
                 question: cut(&format!("permission: {}", tool_call(tool, input, cwd))),
+                questions: Vec::new(),
             }]
         }
         "Stop" => {
@@ -305,6 +307,7 @@ mod tests {
     fn waiting(question: &str) -> EventKind {
         EventKind::Waiting {
             question: question.into(),
+            questions: Vec::new(),
         }
     }
 
@@ -472,7 +475,10 @@ mod tests {
 
     #[test]
     fn the_end_of_a_turn_waits_with_its_question_and_only_exit_ends_the_flow() {
-        let [EventKind::Answer { text }, EventKind::Waiting { question }] = &events("stop")[..]
+        let [
+            EventKind::Answer { text },
+            EventKind::Waiting { question, .. },
+        ] = &events("stop")[..]
         else {
             panic!("expected the answer, then waiting");
         };

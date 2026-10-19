@@ -41,6 +41,7 @@ impl Server {
                 (self.clock)(),
                 EventKind::Waiting {
                     question: STALLED_START.to_string(),
+                    questions: Vec::new(),
                 },
             );
             if let Err(error) = self.store.append(&id, &event) {

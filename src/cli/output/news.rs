@@ -94,6 +94,7 @@ mod tests {
             "shop-217",
             vec![EventKind::Waiting {
                 question: "Which delimiter?".into(),
+                questions: Vec::new(),
             }],
             now,
         );

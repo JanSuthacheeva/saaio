@@ -19,6 +19,7 @@ pub fn turn_end(answer: &str) -> EventKind {
     match sentences.iter().rev().find(asks) {
         Some(question) => EventKind::Waiting {
             question: cut(question),
+            questions: Vec::new(),
         },
         None => EventKind::Idle {
             note: cut(sentences.last().map_or(last, |sentence| sentence.as_str())),
@@ -74,6 +75,7 @@ mod tests {
     fn waits_for_the_person_only_when_the_last_line_asks() {
         let waiting = |question: &str| EventKind::Waiting {
             question: question.into(),
+            questions: Vec::new(),
         };
         let idle = |note: &str| EventKind::Idle { note: note.into() };
 
