@@ -221,6 +221,10 @@ The master answers:
 - `AGAIN` is 3 s in tests, so the server test can see that Esc is pressed only once.
 - `wake::dialog_answered` (task 4) has no caller before the server task, which clippy refuses as
   dead code; tasks 4 and 7 are one commit.
+- The E2E check showed an unrelated bug: a turn ending in a code block left the note "```".
+  `adapter::answer::turn_end` now reads past a closing code fence (its own commit).
+- The fixture `pre_ask_two.json` is the repro's questions in the shape of the recorded
+  `pre_ask.json`; the E2E run confirmed the real payload folds the same way.
 
 ## Tasks
 
@@ -233,4 +237,4 @@ The master answers:
 - [x] Add `server/dismiss.rs` (`dismiss_dialogs`, `answered_dialog`, `due`, `AGAIN`, `ESC`), `Server.dismissed_at` and the call in `serve`; unit test for `due` and server tests with a raw-mode fake Claude (Esc once, none without a message, none for Codex)
 - [x] master.md: answering a dialog, with master-v11.md kept in `INSTRUCTIONS.earlier`
 - [x] Docs: docs/cli.md, docs/json.md, docs/flows.md, README if it lists send's behaviour; ROADMAP Planned soon: send to a flow on a permission prompt
-- [ ] E2E: the repro in a scratch store - a guided worker asks two questions (one multiSelect), the master answers only through `saaio status` and `saaio send`, the worker gets both answers
+- [x] E2E: the repro in a scratch store - a guided worker asks two questions (one multiSelect), the master answers only through `saaio status` and `saaio send`, the worker gets both answers
