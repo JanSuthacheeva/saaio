@@ -177,7 +177,7 @@ The master answers:
 3. `Server::serve` -> `refresh()` -> `dismiss_dialogs()`
 4. `dismiss_dialogs` -> `answered_dialog(key): Option<(&FlowView, u64)>` -> `Store::events(id)` -> `wake::dialog_answered(flow, events): bool`
 5. `dismiss_dialogs`: skip a dialog in `dismissed` -> `due(typed_at, opened_at, now): bool` -> `Host::write(key, ESC)`; `dismissed.insert(key, asked_at)`; server.log `closed <name>'s question dialog for the master's message`
-6. Claude Code: tool declined, Stop hook, the held message begins a turn; the flow leaves Waiting, `questions` clear, the `dismissed` entry is dropped
+6. Claude Code: tool declined, Stop hook, the held message begins a turn; the flow leaves Waiting, `questions` clear; the `dismissed` entry stays until the pane's next dialog replaces it
 7. The person answers in the pane first: PostToolUse -> Working, no Esc.
 8. The person typed there within QUIET: wait.
 9. Esc did not close it: never pressed again; the flow stays waiting for an answer in the pane.
@@ -240,6 +240,9 @@ fence styles as they are.
 - [x] Press Esc once per dialog: `Server.dismissed: HashMap<PaneKey, u64>` (the dialog's
   `changed_at`) replaces `dismissed_at` and `AGAIN`; `due(typed_at, opened_at, now)`; set only when
   the write succeeded. Update the unit and server tests and docs/cli.md
+- [ ] Never forget a dismissed dialog: drop the `retain` in `dismiss_dialogs`, so `dismissed` keeps
+  each pane's last dialog (its Waiting `at`) and a failed log read cannot cause a second Esc; server
+  test with the flow's log unreadable for a while
 
 ## Review
 
