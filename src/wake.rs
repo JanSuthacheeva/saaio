@@ -39,6 +39,18 @@ pub fn untyped(events: &[Event], typed: usize) -> Vec<&str> {
         .collect()
 }
 
+/// True when the master sent a message after `flow` opened the question dialog it still waits on.
+pub fn dialog_answered(flow: &FlowView, events: &[Event]) -> bool {
+    if flow.questions.is_empty() {
+        return false;
+    }
+    events
+        .iter()
+        .rev()
+        .take_while(|event| !matches!(event.kind, EventKind::Waiting { .. }))
+        .any(|event| matches!(event.kind, EventKind::Message { .. }))
+}
+
 /// Flows whose state needs the master and that changed since it last saw them, oldest first; never
 /// a plain session, which is the user's own.
 pub fn changed_flows<'a>(flows: &'a [FlowView], seen: &Seen) -> Vec<&'a FlowView> {
@@ -85,7 +97,7 @@ fn mark(flow: &FlowView) -> Mark {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event::Mode;
+    use crate::event::{Mode, Question};
     use crate::fold;
 
     fn flow(id: &str, kinds: Vec<(u64, EventKind)>) -> FlowView {
@@ -105,11 +117,57 @@ mod tests {
     fn waiting(question: &str) -> EventKind {
         EventKind::Waiting {
             question: question.into(),
+            questions: Vec::new(),
         }
     }
 
     fn message(text: &str) -> EventKind {
         EventKind::Message { text: text.into() }
+    }
+
+    fn dialog() -> EventKind {
+        EventKind::Waiting {
+            question: "Which color?".into(),
+            questions: vec![Question::of("Which color?", &["Red", "Blue"], false)],
+        }
+    }
+
+    /// Whether the master answered the dialog of a flow whose log holds `kinds`.
+    fn answered(kinds: Vec<EventKind>) -> bool {
+        let mut events = vec![Event::new(
+            0,
+            EventKind::Started {
+                name: "ask".into(),
+                request: "ask".into(),
+                mode: Mode::Guided,
+                phases: None,
+            },
+        )];
+        events.extend(kinds.into_iter().map(|kind| Event::new(1, kind)));
+        let flow = fold::fold("ask", &events, None, 2).unwrap();
+        dialog_answered(&flow, &events)
+    }
+
+    #[test]
+    fn a_message_after_an_open_dialog_answers_it() {
+        assert!(answered(vec![dialog(), message("Red")]));
+        assert!(!answered(vec![dialog()]), "no message yet");
+        assert!(
+            !answered(vec![message("Red"), dialog()]),
+            "sent before the dialog opened"
+        );
+        assert!(
+            !answered(vec![dialog(), message("Red"), EventKind::Working]),
+            "the dialog closed"
+        );
+        assert!(
+            !answered(vec![waiting("Ship it?"), message("Yes")]),
+            "a question asked in words"
+        );
+        assert!(
+            answered(vec![message("old"), dialog(), message("Red")]),
+            "the message after it counts"
+        );
     }
 
     #[test]

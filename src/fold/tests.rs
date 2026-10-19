@@ -1,4 +1,5 @@
 use super::*;
+use crate::event::Question;
 
 const MIN: u64 = 60_000;
 
@@ -66,6 +67,7 @@ fn a_message_is_in_the_timeline_and_leaves_the_state() {
             1,
             EventKind::Waiting {
                 question: "Which delimiter?".into(),
+                questions: Vec::new(),
             },
         ),
         at(
@@ -283,6 +285,7 @@ fn says_whether_an_event_changes_what_the_flow_shows() {
         1,
         EventKind::Waiting {
             question: "Which?".into(),
+            questions: Vec::new(),
         },
     );
     let events = vec![started.clone(), waiting.clone()];
@@ -487,12 +490,14 @@ fn waiting_and_blocked_set_the_blocker_once_per_question() {
                 1,
                 EventKind::Waiting {
                     question: "Approve the plan?".into(),
+                    questions: Vec::new(),
                 },
             ),
             at(
                 2,
                 EventKind::Waiting {
                     question: "Approve the plan?".into(),
+                    questions: Vec::new(),
                 },
             ),
         ],
@@ -540,6 +545,77 @@ fn waiting_and_blocked_set_the_blocker_once_per_question() {
     assert_eq!(blocked.timeline[1].tone, Tone::Problem);
 }
 
+fn dialog(at_ms: u64, questions: Vec<Question>) -> Event {
+    let question = questions[0].question.clone();
+    at(
+        at_ms,
+        EventKind::Waiting {
+            question,
+            questions,
+        },
+    )
+}
+
+#[test]
+fn a_dialog_shows_its_questions_until_the_flow_leaves_waiting() {
+    let asked = vec![
+        Question::of("Which color?", &["Red", "Blue"], false),
+        Question::of("Which toppings?", &["Cheese", "Ham"], true),
+    ];
+    let events = vec![started(0), dialog(1, asked.clone())];
+
+    let flow = view(&events, 2);
+    assert_eq!(flow.state, State::Waiting);
+    assert_eq!(flow.blocker.as_deref(), Some("Which color?"));
+    assert_eq!(flow.questions, asked);
+
+    let worded = EventKind::Waiting {
+        question: "Ship it?".into(),
+        questions: Vec::new(),
+    };
+    for next in [
+        EventKind::Working,
+        EventKind::Idle {
+            note: "declined".into(),
+        },
+        EventKind::Blocked {
+            reason: "no answer".into(),
+        },
+        worded,
+        EventKind::Ended,
+    ] {
+        let mut after = events.clone();
+        after.push(at(3, next.clone()));
+        assert_eq!(view(&after, 4).questions, Vec::new(), "{next:?}");
+    }
+    let mut messaged = events.clone();
+    messaged.push(at(3, EventKind::Message { text: "Red".into() }));
+    assert_eq!(
+        view(&messaged, 4).questions,
+        asked,
+        "a message leaves it open"
+    );
+}
+
+#[test]
+fn a_new_dialog_with_the_same_first_question_is_a_change() {
+    let events = vec![
+        started(0),
+        dialog(
+            1,
+            vec![Question::of("Which color?", &["Red", "Blue"], false)],
+        ),
+    ];
+    let same = events[1].kind.clone();
+    let other = EventKind::Waiting {
+        question: "Which color?".into(),
+        questions: vec![Question::of("Which color?", &["Red", "Teal"], false)],
+    };
+
+    assert!(!changes("x", &events, &same, 2));
+    assert!(changes("x", &events, &other, 2));
+}
+
 #[test]
 fn working_after_a_stop_is_an_answer_and_clears_the_blocker() {
     let flow = view(
@@ -576,6 +652,7 @@ fn decisions_are_kept_once_and_do_not_change_the_state() {
                 1,
                 EventKind::Waiting {
                     question: "Which approach?".into(),
+                    questions: Vec::new(),
                 },
             ),
             at(
@@ -671,6 +748,7 @@ fn a_question_after_pr_is_waiting() {
             2 * MIN,
             EventKind::Waiting {
                 question: "Ship with the race fix?".into(),
+                questions: Vec::new(),
             },
         ),
     ];

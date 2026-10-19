@@ -659,6 +659,7 @@ mod tests {
             workspace: None,
             answer: None,
             session: None,
+            questions: Vec::new(),
         }
     }
 

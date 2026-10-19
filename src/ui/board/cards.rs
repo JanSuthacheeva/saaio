@@ -520,6 +520,7 @@ mod tests {
                 },
                 EventKind::Waiting {
                     question: "Which approach?".into(),
+                    questions: Vec::new(),
                 },
             ],
         );

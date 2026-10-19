@@ -2,7 +2,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::event::{EventKind, Mode, Phase};
+use crate::event::{EventKind, Mode, Phase, Question};
 
 pub const VIEW_VERSION: u32 = 3;
 
@@ -42,6 +42,8 @@ pub struct FlowView {
     pub answer: Option<String>,
     /// The harness's own session, when it picks its id itself.
     pub session: Option<Session>,
+    /// The questions of the dialog the flow waits on; empty when it waits on none.
+    pub questions: Vec<Question>,
 }
 
 /// A harness session: the id it resumes by and the transcript it writes.
@@ -328,6 +330,7 @@ mod tests {
             }),
             answer: None,
             session: None,
+            questions: Vec::new(),
         }
     }
 

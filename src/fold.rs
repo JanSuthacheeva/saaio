@@ -43,8 +43,8 @@ pub fn fold<'a>(
 }
 
 /// True when appending `kind` changes what the flow shows: its state, phase, blocker, delegate,
-/// tasks, review, merge request and its merge, decisions, answer or session; every message and typed line
-/// does. Adapters skip the rest, so a log does not grow by a line for every tool call.
+/// tasks, review, merge request and its merge, decisions, answer, session or dialog; every message
+/// and typed line does. Adapters skip the rest, so a log does not grow by a line for every tool call.
 pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
     if matches!(
         kind,
@@ -81,8 +81,11 @@ fn shown(view: &FlowView) -> impl PartialEq + '_ {
         view.merged,
         &view.decisions,
         view.timeline.last().map(|entry| entry.text.as_str()),
-        view.answer.as_deref(),
-        view.session.as_ref(),
+        (
+            view.answer.as_deref(),
+            view.session.as_ref(),
+            &view.questions,
+        ),
     )
 }
 
@@ -183,6 +186,7 @@ impl Folding {
             workspace: None,
             answer: None,
             session: None,
+            questions: Vec::new(),
         };
         let phases = phases.map_or_else(|| Workflow::builtin().phases(), <[Phase]>::to_vec);
         Folding {
@@ -253,8 +257,12 @@ impl Folding {
                 self.view.state = State::Delegated;
                 self.view.delegate = Some(description.clone());
             }
-            EventKind::Waiting { question } => {
+            EventKind::Waiting {
+                question,
+                questions,
+            } => {
                 self.pending_permission = None;
+                self.view.questions.clone_from(questions);
                 self.stop_for(State::Waiting, question, at, "waiting", Tone::Attention);
             }
             EventKind::PermissionPending { question } => {
@@ -370,6 +378,9 @@ impl Folding {
                 self.stopped_at.get_or_insert(at);
                 self.note(at, "ended".to_string(), Tone::Neutral);
             }
+        }
+        if self.view.state != State::Waiting {
+            self.view.questions.clear();
         }
         if before
             != (

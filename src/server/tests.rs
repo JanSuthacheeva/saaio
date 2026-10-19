@@ -271,7 +271,7 @@ fn a_codex_worker_that_never_starts_a_turn_waits_once() {
         .filter(|event| {
             matches!(
                 &event.kind,
-                EventKind::Waiting { question } if question == super::startup::STALLED_START
+                EventKind::Waiting { question, .. } if question == super::startup::STALLED_START
             )
         })
         .collect();
@@ -1025,6 +1025,103 @@ fn a_typed_line_that_begins_no_turn_lets_the_next_one_follow() {
         "",
         "a session that never ended a turn may still be starting up"
     );
+    stop(&paths, handle);
+}
+
+/// A Claude Code stand-in that keeps every byte sent to it in `typed`, a key such as Esc included.
+fn fake_claude_keys(dir: &Path) -> Agent {
+    let script = dir.join("fake-claude-keys");
+    fs::write(&script, "#!/bin/sh\nstty raw -echo\nexec cat > typed\n").unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    Agent {
+        command: vec![script.display().to_string()],
+        prompt: None,
+        adapter: Some(crate::adapter::Adapter::ClaudeCode),
+        resume: Some(vec![script.display().to_string()]),
+    }
+}
+
+fn ask(store: &Store, id: &str, questions: Vec<crate::event::Question>) {
+    let waiting = EventKind::Waiting {
+        question: "Which color?".into(),
+        questions,
+    };
+    store.append(id, &LogEvent::new(2, waiting)).unwrap();
+}
+
+#[test]
+fn presses_esc_once_into_each_dialog_the_master_answered() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let color = || {
+        vec![crate::event::Question::of(
+            "Which color?",
+            &["Red", "Blue"],
+            false,
+        )]
+    };
+    let asks = started_flow(&store, dir.path(), "asks", "claude-keys");
+    let unanswered = started_flow(&store, dir.path(), "unanswered", "claude-keys");
+    let worded = started_flow(&store, dir.path(), "worded", "claude-keys");
+    let pr = "https://github.com/a/b/pull/42";
+    let opened = EventKind::MergeRequest { url: pr.into() };
+    store.append(&asks, &LogEvent::new(1, opened)).unwrap();
+    ask(&store, &asks, color());
+    ask(&store, &unanswered, color());
+    ask(&store, &worded, Vec::new());
+    tell(&store, &asks, "The user says: Red");
+    tell(&store, &worded, "The user says: Red");
+    let (paths, handle) = start_with_agents(
+        dir.path(),
+        BTreeMap::from([("claude-keys".to_string(), fake_claude_keys(dir.path()))]),
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !typed(dir.path(), "asks").contains('\x1b') {
+        assert!(Instant::now() < deadline, "no Esc into the answered dialog");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let closed = EventKind::MergeRequestClosed { url: pr.into() };
+    store.append(&asks, &LogEvent::new(4, closed)).unwrap();
+    thread::sleep(WATCH_EVERY * 3);
+    assert_eq!(
+        typed(dir.path(), "asks"),
+        "\x1b",
+        "once, though the dialog still shows open and the flow changed"
+    );
+    let log = dir.path().join(format!("flows/{asks}.jsonl"));
+    fs::set_permissions(&log, fs::Permissions::from_mode(0o000)).unwrap();
+    thread::sleep(WATCH_EVERY * 3);
+    fs::set_permissions(&log, fs::Permissions::from_mode(0o644)).unwrap();
+    thread::sleep(WATCH_EVERY * 3);
+    assert_eq!(
+        typed(dir.path(), "asks"),
+        "\x1b",
+        "once, though its log could not be read for a while"
+    );
+
+    let idle = EventKind::Idle {
+        note: "declined".into(),
+    };
+    store.append(&asks, &LogEvent::new(5, idle)).unwrap();
+    thread::sleep(WATCH_EVERY * 3);
+    let again = EventKind::Waiting {
+        question: "Which color?".into(),
+        questions: color(),
+    };
+    store.append(&asks, &LogEvent::new(6, again)).unwrap();
+    tell(&store, &asks, "The user says: Blue");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while typed(dir.path(), "asks") != "\x1b\x1b" {
+        assert!(
+            Instant::now() < deadline,
+            "no Esc into the next dialog: {:?}",
+            typed(dir.path(), "asks")
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(typed(dir.path(), "unanswered"), "", "no message yet");
+    assert_eq!(typed(dir.path(), "worded"), "", "no dialog");
     stop(&paths, handle);
 }
 

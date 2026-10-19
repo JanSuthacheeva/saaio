@@ -5,6 +5,7 @@ pub mod terminal;
 pub mod watch;
 
 mod conn;
+mod dismiss;
 mod forge_watch;
 mod news;
 mod panes;
@@ -159,6 +160,9 @@ struct Server {
     opened_at: HashMap<PaneKey, Instant>,
     /// When the server last typed into each pane, for a line that begins no turn.
     line_at: HashMap<PaneKey, Instant>,
+    /// The last question dialog (when its Waiting event was logged) the server pressed Esc into,
+    /// by pane; kept, so no failed read of a log forgets it.
+    dismissed: HashMap<PaneKey, u64>,
     /// When to ask gh and glab about the flows' merge requests.
     forges: ForgeWatch,
 }
@@ -239,6 +243,7 @@ pub fn run(
         typed_at: HashMap::new(),
         opened_at: HashMap::new(),
         line_at: HashMap::new(),
+        dismissed: HashMap::new(),
         forges: ForgeWatch::default(),
     };
     server.open_master(start);
@@ -279,6 +284,7 @@ impl Server {
                 self.notice_stalled_starts();
                 self.ask_forges();
                 self.type_lines();
+                self.dismiss_dialogs();
             }
             self.flush();
         }

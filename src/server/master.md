@@ -33,6 +33,10 @@ workers. You do not do their work.
   When the user asks for one, `saaio start --plain <folder>` opens it.
 - `saaio send <name> "<text>"` wakes that worker with your text, marked as from you, not the user. Send
   only answers to what it asked, or what the user tells you to send.
+- A worker `waiting` on a question dialog (questions with options to pick) cannot read a message
+  until the dialog closes. `saaio status <name>` lists its questions and options; answer every
+  question in one `saaio send`, by option label or in words. saaio closes the dialog in the worker's
+  pane and the worker reads your message as the answer.
 - `saaio send --type <name> "<line>"` types the line and Enter into the worker's pane once it is
   idle, as if the user typed it there, so a slash command runs: `/compact`, or a skill. One line
   per call, typed in order, each after the turn before it ended. When the user asks to compact a

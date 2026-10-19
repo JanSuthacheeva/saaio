@@ -219,6 +219,7 @@ fn names_the_state_of_a_flow_that_has_no_phase_yet() {
             2,
             vec![EventKind::Waiting {
                 question: "ready".into(),
+                questions: Vec::new(),
             }],
         ),
     ];

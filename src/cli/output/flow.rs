@@ -63,7 +63,8 @@ pub(crate) fn reported(flow: &FlowView) -> Document {
     }))
 }
 
-/// sent, the flow's state, and who wakes whom now.
+/// sent, the flow's state, and who wakes whom now; for a flow on a question dialog, that saaio
+/// closes it.
 pub(crate) fn sent(flow: &FlowView) -> Document {
     #[derive(Serialize)]
     struct Sent<'a> {
@@ -75,7 +76,14 @@ pub(crate) fn sent(flow: &FlowView) -> Document {
         sent: &flow.name,
         state: flow.state.name(),
         help: [
-            "saaio wakes its worker with it now, or once its session runs again".to_string(),
+            if flow.questions.is_empty() {
+                "saaio wakes its worker with it now, or once its session runs again".to_string()
+            } else {
+                format!(
+                    "saaio closes {}'s question dialog and its worker reads this as the answer to every question in it",
+                    flow.name
+                )
+            },
             format!("saaio wakes you when {} changes again", flow.name),
         ],
     }))
@@ -124,7 +132,7 @@ pub(crate) fn skipped() -> Document {
 mod tests {
     use super::*;
     use crate::cli::output::fixtures::{MIN, flow};
-    use crate::event::{EventKind, Phase};
+    use crate::event::{EventKind, Phase, Question};
 
     #[test]
     fn created_names_the_flow_and_how_to_report_into_it() {
@@ -170,6 +178,7 @@ mod tests {
             "shop-221",
             vec![EventKind::Waiting {
                 question: "ok?".into(),
+                questions: Vec::new(),
             }],
             MIN,
         );
@@ -213,6 +222,7 @@ mod tests {
             "shop-217",
             vec![EventKind::Waiting {
                 question: "Which delimiter?".into(),
+                questions: Vec::new(),
             }],
             10 * MIN,
         );
@@ -223,6 +233,28 @@ mod tests {
                 "sent: shop-217",
                 "state: waiting",
                 "help[2]: \"saaio wakes its worker with it now, or once its session runs again\",saaio wakes you when shop-217 changes again",
+            ]
+            .join("\n")
+        );
+    }
+
+    #[test]
+    fn says_saaio_closes_an_open_dialog_for_the_message() {
+        let asked = flow(
+            "ask",
+            vec![EventKind::Waiting {
+                question: "Which color?".into(),
+                questions: vec![Question::of("Which color?", &["Red", "Blue"], false)],
+            }],
+            10 * MIN,
+        );
+
+        assert_eq!(
+            sent(&asked).text(),
+            [
+                "sent: ask",
+                "state: waiting",
+                "help[2]: saaio closes ask's question dialog and its worker reads this as the answer to every question in it,saaio wakes you when ask changes again",
             ]
             .join("\n")
         );

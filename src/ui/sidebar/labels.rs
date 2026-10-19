@@ -275,6 +275,7 @@ mod tests {
         let answered = flow(vec![
             EventKind::Waiting {
                 question: "Which?".into(),
+                questions: Vec::new(),
             },
             EventKind::Working,
         ]);

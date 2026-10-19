@@ -195,6 +195,7 @@ help[2]: Run `saaio report --flow shop-217 working` once the block is resolved,R
 | Field | Shown |
 | --- | --- |
 | `blocker` | while there is one |
+| `questions`, `options` | while the worker waits on a question dialog: each question with its header and whether it takes `one` option or `several`, then each option's label and description by question number |
 | `delegate` | while a subagent works (what the worker handed to it) |
 | `tasks` | with task counts |
 | `review`, `merge_request` | once reported |
@@ -202,6 +203,24 @@ help[2]: Run `saaio report --flow shop-217 working` once the block is resolved,R
 | `branch`, `worktree`, `worktree_exists` | for a flow with a worktree. `worktree_exists` is false once the folder is gone. |
 | `folder` | for a plain session |
 | `answer` | the closing message of the worker's last turn |
+
+A Claude Code worker that asks with a question dialog (AskUserQuestion) shows its questions and
+options:
+
+```
+state: waiting
+blocker: Which color?
+questions[2]{n,header,question,pick}:
+  1,Color,Which color?,one
+  2,Toppings,Which toppings?,several
+options[6]{question,n,label,description}:
+  1,1,Red,"A warm, bold color"
+  1,2,Green,"A calm, natural color"
+  1,3,Blue,"A cool, steady color"
+  2,1,Cheese,Melted cheese
+  2,2,Ham,Sliced ham
+  2,3,Olives,Black olives
+```
 
 | Option | Effect |
 | --- | --- |
@@ -223,6 +242,20 @@ $ saaio send shop-221 "Count them against the refund date."
 sent: shop-221
 state: waiting
 help[2]: "saaio wakes its worker with it now, or once its session runs again",saaio wakes you when shop-221 changes again
+```
+
+A worker waiting on a question dialog cannot read a message while the dialog is open. Answer
+every question in one message, by option label or in words. saaio's server then presses Esc in the
+worker's pane, after ten seconds without typing there, so the dialog closes and the worker reads
+the message as its answer. saaio presses Esc once per dialog: one still open after it waits for an
+answer in the worker's pane. Answered in the pane first, the dialog is left alone. The message
+waits while the UI is closed.
+
+```
+$ saaio send shop-217 "The user says: Blue; Cheese and Olives"
+sent: shop-217
+state: waiting
+help[2]: saaio closes shop-217's question dialog and its worker reads this as the answer to every question in it,saaio wakes you when shop-217 changes again
 ```
 
 | Refused | Reason |

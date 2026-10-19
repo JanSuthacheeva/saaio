@@ -2356,6 +2356,43 @@ fn send_puts_the_masters_message_into_the_flows_log() {
     assert!(detail.contains("master: Semicolons."), "{detail}");
 }
 
+const DIALOG: &str = r#"{"v":1,"at":2000,"kind":"waiting","question":"Which color?","questions":[{"header":"Color","question":"Which color?","options":[{"label":"Red","description":"A warm, bold color"},{"label":"Blue","description":"A cool, steady color"}],"multiSelect":false},{"header":"Toppings","question":"Which toppings?","options":[{"label":"Cheese","description":"Melted cheese"},{"label":"Olives","description":"Black olives"}],"multiSelect":true}]}"#;
+
+#[test]
+fn status_lists_the_questions_and_options_of_a_dialog() {
+    let home = TempDir::new().unwrap();
+    seed_worker(home.path(), "7f3c", "ask", DIALOG);
+
+    let detail = stdout(&saaio(home.path(), &["status", "ask", "--full"]));
+
+    assert!(
+        detail.contains(
+            "questions[2]{n,header,question,pick}:\n  1,Color,Which color?,one\n  2,Toppings,Which toppings?,several\noptions[4]{question,n,label,description}:\n  1,1,Red,\"A warm, bold color\"\n  1,2,Blue,\"A cool, steady color\"\n  2,1,Cheese,Melted cheese\n  2,2,Olives,Black olives\n"
+        ),
+        "{detail}"
+    );
+    let json = stdout(&saaio(home.path(), &["status", "ask", "--json"]));
+    assert!(json.contains(r#""multiSelect": true"#), "{json}");
+}
+
+#[test]
+fn send_to_a_flow_on_a_dialog_says_saaio_closes_it() {
+    let home = TempDir::new().unwrap();
+    seed_worker(home.path(), "7f3c", "ask", DIALOG);
+
+    let output = saaio(
+        home.path(),
+        &["send", "ask", "The user says: Red; Cheese and Olives"],
+    );
+
+    assert!(output.status.success(), "{}", stdout(&output));
+    assert!(
+        stdout(&output).contains("saaio closes ask's question dialog"),
+        "{}",
+        stdout(&output)
+    );
+}
+
 #[test]
 fn send_refuses_what_has_no_worker_to_read_it() {
     let home = TempDir::new().unwrap();

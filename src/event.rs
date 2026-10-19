@@ -42,6 +42,10 @@ pub enum EventKind {
     },
     Waiting {
         question: String,
+        /// The questions of the dialog the worker shows (Claude Code's AskUserQuestion); empty for
+        /// a question asked in words or a permission prompt.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        questions: Vec<Question>,
     },
     /// Codex may approve a PermissionRequest itself. It becomes waiting only after a grace period.
     PermissionPending {
@@ -104,6 +108,23 @@ pub enum EventKind {
     },
 }
 
+/// One question of a dialog: its header, text, options and whether several may be picked.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Question {
+    pub header: String,
+    pub question: String,
+    pub options: Vec<Choice>,
+    pub multi_select: bool,
+}
+
+/// An option of a question: what the dialog lists and the line below it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Choice {
+    pub label: String,
+    pub description: String,
+}
+
 /// A phase's name: plan, implement, ... as the workflow names it.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -159,7 +180,6 @@ impl EventKind {
         match self {
             EventKind::Started { name: text, .. }
             | EventKind::Delegated { description: text }
-            | EventKind::Waiting { question: text }
             | EventKind::PermissionPending { question: text }
             | EventKind::Idle { note: text }
             | EventKind::Blocked { reason: text }
@@ -172,7 +192,46 @@ impl EventKind {
             | EventKind::Answer { text } => {
                 cut_to(text, LONG_TEXT_LIMIT);
             }
+            EventKind::Waiting {
+                question,
+                questions,
+            } => {
+                cut_to(question, TEXT_LIMIT);
+                for asked in questions {
+                    asked.cut_texts();
+                }
+            }
             _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+impl Question {
+    /// A question headed by its first word, each option described as "<label> it is".
+    pub fn of(question: &str, labels: &[&str], multi_select: bool) -> Question {
+        Question {
+            header: question.split(' ').next().unwrap_or_default().to_string(),
+            question: question.to_string(),
+            options: labels
+                .iter()
+                .map(|label| Choice {
+                    label: (*label).to_string(),
+                    description: format!("{label} it is"),
+                })
+                .collect(),
+            multi_select,
+        }
+    }
+}
+
+impl Question {
+    fn cut_texts(&mut self) {
+        cut_to(&mut self.header, TEXT_LIMIT);
+        cut_to(&mut self.question, TEXT_LIMIT);
+        for choice in &mut self.options {
+            cut_to(&mut choice.label, TEXT_LIMIT);
+            cut_to(&mut choice.description, TEXT_LIMIT);
         }
     }
 }
@@ -295,6 +354,11 @@ mod tests {
             },
             EventKind::Waiting {
                 question: "Approve the plan?".into(),
+                questions: Vec::new(),
+            },
+            EventKind::Waiting {
+                question: "Which color?".into(),
+                questions: vec![color()],
             },
             EventKind::Blocked {
                 reason: "Task 5: migration needs a default".into(),
@@ -325,6 +389,24 @@ mod tests {
                 agent: "claude".into(),
             },
         ]
+    }
+
+    fn color() -> Question {
+        Question {
+            header: "Color".into(),
+            question: "Which color?".into(),
+            options: vec![
+                Choice {
+                    label: "Red".into(),
+                    description: "A warm, bold color".into(),
+                },
+                Choice {
+                    label: "Blue".into(),
+                    description: "A cool, steady color".into(),
+                },
+            ],
+            multi_select: false,
+        }
     }
 
     #[test]
@@ -410,13 +492,77 @@ mod tests {
             0,
             EventKind::Waiting {
                 question: "ok?".into(),
+                questions: Vec::new(),
             },
         );
         assert_eq!(
             short.kind,
             EventKind::Waiting {
-                question: "ok?".into()
+                question: "ok?".into(),
+                questions: Vec::new()
             }
+        );
+    }
+
+    #[test]
+    fn cuts_every_text_of_a_dialog_to_the_limit() {
+        let long = "x".repeat(TEXT_LIMIT + 5);
+        let mut asked = color();
+        asked.header = long.clone();
+        asked.question = long.clone();
+        asked.options[0].label = long.clone();
+        asked.options[1].description = long.clone();
+
+        let event = Event::new(
+            0,
+            EventKind::Waiting {
+                question: long,
+                questions: vec![asked],
+            },
+        );
+
+        let EventKind::Waiting {
+            question,
+            questions,
+        } = event.kind
+        else {
+            panic!("kind changed");
+        };
+        let asked = &questions[0];
+        for text in [
+            &question,
+            &asked.header,
+            &asked.question,
+            &asked.options[0].label,
+            &asked.options[1].description,
+        ] {
+            assert_eq!(text.chars().count(), TEXT_LIMIT);
+        }
+    }
+
+    #[test]
+    fn writes_a_dialog_in_camel_case_and_reads_a_waiting_line_without_one() {
+        let line = Event::new(
+            7,
+            EventKind::Waiting {
+                question: "Which color?".into(),
+                questions: vec![color()],
+            },
+        )
+        .to_line();
+        assert!(line.contains(r#""multiSelect":false"#), "{line}");
+
+        let old = r#"{"v":1,"at":7,"kind":"waiting","question":"ok?"}"#;
+        assert_eq!(
+            Event::from_line(old).map(|event| event.kind),
+            Some(EventKind::Waiting {
+                question: "ok?".into(),
+                questions: Vec::new(),
+            })
+        );
+        assert_eq!(
+            Event::new(7, Event::from_line(old).unwrap().kind).to_line(),
+            old
         );
     }
 
