@@ -84,4 +84,4 @@ Existing `PaneStatus::Exited { code: Option<u32> }`, `EventKind::Blocked { reaso
 - [x] Add `Terminal::output_tail` and `Host::output_tail` with focused terminal tests for bounded rendered output.
 - [x] Add `Server::notice_exited_worker` and `exited_while_working`, wire the exit event after resume fallback, and add server socket tests for state guards and reason text.
 - [x] Add the scratch-home CLI end-to-end regression and update `README.md` for exited working workers.
-- [ ] Run the end-to-end check with a configured agent that exits immediately and verify status and JSON show blocked with code and pane output.
+- [x] Run the end-to-end check with a configured agent that exits immediately and verify status and JSON show blocked with code and pane output.
