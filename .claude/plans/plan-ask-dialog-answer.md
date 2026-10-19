@@ -222,7 +222,8 @@ The master answers:
 - `wake::dialog_answered` (task 4) has no caller before the server task, which clippy refuses as
   dead code; tasks 4 and 7 are one commit.
 - The E2E check showed an unrelated bug: a turn ending in a code block left the note "```".
-  `adapter::answer::turn_end` now reads past a closing code fence (its own commit).
+  `adapter::answer::turn_end` now reads past a closing code fence (its own commit); a line inside
+  a code block is the note as it stands and never asks (review: SQL's `WHERE id = ?` waited).
 - The fixture `pre_ask_two.json` is the repro's questions in the shape of the recorded
   `pre_ask.json`; the E2E run confirmed the real payload folds the same way.
 

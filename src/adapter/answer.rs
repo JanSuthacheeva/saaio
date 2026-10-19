@@ -3,17 +3,16 @@ use crate::event::EventKind;
 
 /// Waiting with the last sentence of the answer's last line with text (not a code fence) that asks
 /// (ends in "?", or starts "Let me know" or "Tell me"); else idle, with its last sentence: only a
-/// question needs the person.
+/// question needs the person. A line of code never asks: it is the note as it stands.
 pub fn turn_end(answer: &str) -> EventKind {
-    let Some(last) = answer
-        .lines()
-        .map(str::trim)
-        .rfind(|line| !line.is_empty() && !line.starts_with("```"))
-    else {
+    let Some((last, code)) = last_line(answer) else {
         return EventKind::Idle {
             note: "turn ended".to_string(),
         };
     };
+    if code {
+        return EventKind::Idle { note: cut(last) };
+    }
     let plain = plain(last);
     let sentences = sentences(&plain);
     let asks = |sentence: &&String| {
@@ -29,6 +28,20 @@ pub fn turn_end(answer: &str) -> EventKind {
             note: cut(sentences.last().map_or(last, |sentence| sentence.as_str())),
         },
     }
+}
+
+/// The answer's last line with text, past code fences, and whether it is inside a code block.
+fn last_line(answer: &str) -> Option<(&str, bool)> {
+    let mut code = false;
+    let mut last = None;
+    for line in answer.lines().map(str::trim) {
+        if line.starts_with("```") {
+            code = !code;
+        } else if !line.is_empty() {
+            last = Some((line, code));
+        }
+    }
+    last
 }
 
 /// A Markdown line as plain text: no list marker, no emphasis or code ticks.
@@ -107,6 +120,13 @@ mod tests {
             EventKind::Idle {
                 note: "Color: Green".into()
             }
+        );
+        assert_eq!(
+            turn_end("Run this:\n\n```sql\nSELECT * FROM users WHERE id = ?\n```"),
+            EventKind::Idle {
+                note: "SELECT * FROM users WHERE id = ?".into()
+            },
+            "a line of code never asks"
         );
         assert_eq!(
             turn_end("```\n```"),
