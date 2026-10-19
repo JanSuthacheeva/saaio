@@ -85,3 +85,10 @@ Existing `PaneStatus::Exited { code: Option<u32> }`, `EventKind::Blocked { reaso
 - [x] Add `Server::notice_exited_worker` and `exited_while_working`, wire the exit event after resume fallback, and add server socket tests for state guards and reason text.
 - [x] Add the scratch-home CLI end-to-end regression and update `README.md` for exited working workers.
 - [x] Run the end-to-end check with a configured agent that exits immediately and verify status and JSON show blocked with code and pane output.
+
+## Review
+
+- **Fixed:** No findings.
+- **Open:** No proven findings or open questions.
+- **Where to look:** `src/server.rs` exit handling and `src/server/startup.rs` state check and event append carry the state transition. `src/server/terminal.rs` bounds the visible output saved in the blocker. The CLI and socket tests are routine to skim.
+- **Checks:** `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check` passed at `a35645f`. Only this plan changed afterward.
