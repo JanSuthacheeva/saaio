@@ -284,6 +284,137 @@ fn a_codex_worker_that_never_starts_a_turn_waits_once() {
 }
 
 #[test]
+fn an_exited_worker_blocks_once_with_its_code_and_final_output() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let id = started_flow(&store, dir.path(), "dead", "shell");
+    let shell = Agent {
+        command: vec![
+            "sh".into(),
+            "-c".into(),
+            "printf 'one\\ntwo\\n'; exit 23".into(),
+        ],
+        prompt: Some(String::new()),
+        adapter: None,
+        resume: None,
+    };
+    let (paths, handle) =
+        start_with_agents(dir.path(), BTreeMap::from([("shell".to_string(), shell)]));
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let reason = loop {
+        let events = store.events(&id).unwrap();
+        if let Some(reason) = events.iter().find_map(|event| match &event.kind {
+            EventKind::Blocked { reason } => Some(reason.clone()),
+            _ => None,
+        }) {
+            break reason;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "worker did not block: {events:?}"
+        );
+        thread::sleep(Duration::from_millis(20));
+    };
+    assert!(reason.contains("code 23"), "{reason}");
+    assert!(reason.contains("one\ntwo"), "{reason}");
+    thread::sleep(WATCH_EVERY * 2);
+    assert_eq!(
+        store
+            .events(&id)
+            .unwrap()
+            .iter()
+            .filter(|event| matches!(event.kind, EventKind::Blocked { .. }))
+            .count(),
+        1
+    );
+
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
+fn a_failed_resume_retries_fresh_before_blocking() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let id = started_flow(&store, dir.path(), "retry", "shell");
+    store
+        .append(
+            &id,
+            &LogEvent::new(
+                2,
+                EventKind::Workspace {
+                    path: dir.path().join("retry").display().to_string(),
+                    branch: Some("flow/retry".into()),
+                    slot: Some(1),
+                    window: Some(HOSTED.into()),
+                    agent: "shell".into(),
+                },
+            ),
+        )
+        .unwrap();
+    let shell = Agent {
+        command: vec!["cat".into()],
+        prompt: Some(String::new()),
+        adapter: None,
+        resume: Some(vec!["sh".into(), "-c".into(), "exit 23".into()]),
+    };
+    let (paths, handle) =
+        start_with_agents(dir.path(), BTreeMap::from([("shell".to_string(), shell)]));
+
+    thread::sleep(Duration::from_millis(600));
+    assert_eq!(
+        store
+            .events(&id)
+            .unwrap()
+            .iter()
+            .filter(|event| matches!(event.kind, EventKind::Blocked { .. }))
+            .count(),
+        0
+    );
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
+fn an_exited_idle_worker_keeps_its_state() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let id = started_flow(&store, dir.path(), "idle", "shell");
+    store
+        .append(
+            &id,
+            &LogEvent::new(
+                2,
+                EventKind::Idle {
+                    note: String::new(),
+                },
+            ),
+        )
+        .unwrap();
+    let shell = Agent {
+        command: vec!["sh".into(), "-c".into(), "exit 23".into()],
+        prompt: Some(String::new()),
+        adapter: None,
+        resume: None,
+    };
+    let (paths, handle) =
+        start_with_agents(dir.path(), BTreeMap::from([("shell".to_string(), shell)]));
+
+    thread::sleep(Duration::from_millis(600));
+    let flow = fold::fold(&id, &store.events(&id).unwrap(), None, 3).unwrap();
+    assert_eq!(flow.state, State::Idle);
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
 fn opens_a_pane_for_every_started_flow_and_marks_it_hosted() {
     let dir = TempDir::new().unwrap();
     let store = Store::at(dir.path().to_path_buf());
@@ -393,6 +524,14 @@ fn closes_a_flow_pane_on_request_and_says_when_there_is_none() {
             panes = update;
         }
     }
+    assert!(
+        store
+            .events(&csv)
+            .unwrap()
+            .iter()
+            .all(|event| !matches!(event.kind, EventKind::Blocked { .. })),
+        "deliberately closing a working pane must not block its flow"
+    );
     proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
     assert_eq!(

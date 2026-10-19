@@ -172,6 +172,42 @@ impl Terminal {
             .collect()
     }
 
+    /// A small plain-text tail of the visible screen; never reads scrollback.
+    pub fn output_tail(&self, max_lines: usize, max_chars: usize) -> String {
+        if max_lines == 0 || max_chars == 0 {
+            return String::new();
+        }
+        let mut lines = Vec::new();
+        for row in (0..self.term.screen_lines() as u16).rev() {
+            let line = self
+                .row(row, 0)
+                .into_iter()
+                .map(|cell| cell.text)
+                .collect::<String>();
+            let line = line.trim();
+            if !line.is_empty() {
+                lines.push(line.to_string());
+                if lines.len() == max_lines {
+                    break;
+                }
+            }
+        }
+        lines.reverse();
+        let tail = lines.join("\n");
+        if tail.chars().count() <= max_chars {
+            return tail;
+        }
+        tail.chars()
+            .rev()
+            .take(max_chars)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect::<String>()
+            .trim_start_matches('\n')
+            .to_string()
+    }
+
     /// Column and row of the cursor; None while the program hides it.
     pub fn cursor(&self) -> Option<(u16, u16)> {
         if !self.term.mode().contains(TermMode::SHOW_CURSOR) {
@@ -407,5 +443,23 @@ mod tests {
         assert_eq!(text(&term.row(0, 0)), "x".repeat(25));
         term.feed(b"\x1b[18t");
         assert_eq!(String::from_utf8(term.replies()).unwrap(), "\x1b[8;2;30t");
+    }
+
+    #[test]
+    fn output_tail_uses_rendered_nonempty_visible_rows() {
+        let mut term = term(30, 7);
+        term.feed(b"old\r\n\x1b[31mred\x1b[0m\r\n\r\nthird\r\nfourth\r\nfifth");
+
+        assert_eq!(term.output_tail(3, 100), "third\nfourth\nfifth");
+        assert_eq!(term.output_tail(0, 100), "");
+    }
+
+    #[test]
+    fn output_tail_bounds_unicode_characters_without_scrollback() {
+        let mut term = term(20, 3);
+        term.feed("gone\r\n界界\r\nlast".as_bytes());
+
+        assert_eq!(term.output_tail(2, 5), "last");
+        assert_eq!(term.output_tail(2, 0), "");
     }
 }

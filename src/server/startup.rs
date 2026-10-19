@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use super::Server;
 use crate::adapter::Adapter;
 use crate::event::{Event as LogEvent, EventKind};
+use crate::fold;
 use crate::proto::{PaneKey, PaneStatus};
 use crate::server_log;
 use crate::view::{FlowView, State};
@@ -17,6 +18,47 @@ pub(super) const FIRST_TURN_GRACE: Duration = Duration::from_millis(300);
 pub(super) const STALLED_START: &str = "no turn began after launch: answer the dialog in its pane";
 
 impl Server {
+    /// Blocks a flow whose worker process ended while the flow still says working.
+    pub(super) fn notice_exited_worker(&mut self, key: &PaneKey, code: Option<u32>) {
+        let PaneKey::Flow(id) = key else {
+            return;
+        };
+        let events = match self.store.events(id) {
+            Ok(events) => events,
+            Err(error) => {
+                server_log::write(
+                    (self.clock)(),
+                    &format!("could not check exited {key}: {error:#}"),
+                );
+                return;
+            }
+        };
+        let now = (self.clock)();
+        let Some(flow) = fold::fold(id, &events, None, now) else {
+            return;
+        };
+        if !exited_while_working(&flow, self.host.status(key)) {
+            return;
+        }
+        let status = code.map_or_else(
+            || "exit status unavailable".to_string(),
+            |code| format!("code {code}"),
+        );
+        let mut reason = format!("agent exited ({status})");
+        if let Some(tail) = self.host.output_tail(key, 4, 400)
+            && !tail.is_empty()
+        {
+            reason.push('\n');
+            reason.push_str(&tail);
+        }
+        if let Err(error) = self
+            .store
+            .append(id, &LogEvent::new(now, EventKind::Blocked { reason }))
+        {
+            server_log::write((self.clock)(), &format!("{error:#}"));
+        }
+    }
+
     /// Appends Waiting { question: STALLED_START } to each flow whose start stalled.
     pub(super) fn notice_stalled_starts(&mut self) {
         let now = Instant::now();
@@ -49,6 +91,13 @@ impl Server {
             }
         }
     }
+}
+
+/// A real worker pane ended while the latest flow state still says working.
+fn exited_while_working(flow: &FlowView, status: Option<&PaneStatus>) -> bool {
+    !flow.is_plain()
+        && flow.state == State::Working
+        && matches!(status, Some(PaneStatus::Exited { .. }))
 }
 
 /// True when a worker opened at `opened_at` began no turn by `now`.
@@ -173,5 +222,27 @@ mod tests {
             Some(now),
             now
         ));
+    }
+
+    #[test]
+    fn only_an_exited_working_flow_needs_an_exit_blocker() {
+        let exited = PaneStatus::Exited { code: Some(0) };
+        assert!(exited_while_working(&flow(), Some(&exited)));
+        assert!(!exited_while_working(&flow(), Some(&PaneStatus::Running)));
+        assert!(!exited_while_working(&flow(), None));
+        let mut plain = flow();
+        plain.mode = Mode::Plain;
+        assert!(!exited_while_working(&plain, Some(&exited)));
+        for state in [
+            State::Idle,
+            State::Waiting,
+            State::Blocked,
+            State::Done,
+            State::Ended,
+        ] {
+            let mut stopped = flow();
+            stopped.state = state;
+            assert!(!exited_while_working(&stopped, Some(&exited)), "{state:?}");
+        }
     }
 }

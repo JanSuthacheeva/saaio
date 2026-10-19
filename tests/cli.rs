@@ -859,6 +859,59 @@ resume = ["cat"]"#,
 }
 
 #[test]
+fn a_configured_agent_that_exits_at_launch_blocks_status_and_json() {
+    let lab = Lab::new();
+    fs::create_dir_all(&lab.home).unwrap();
+    fs::write(
+        lab.home.join("no-config.toml"),
+        r#"[worker]
+agent = "dead"
+[master]
+agent = "master"
+[agents.dead]
+command = ["sh", "-c", "printf 'first\\nlast\\n'; exit 23"]
+prompt = ""
+[agents.master]
+command = ["cat"]
+prompt = ""
+"#,
+    )
+    .unwrap();
+    let mut server = lab.server();
+    assert!(
+        lab.start(&["--name", "dead", "repro worker exit"])
+            .status
+            .success()
+    );
+
+    wait_until(
+        Duration::from_secs(5),
+        "exited worker stayed working",
+        || {
+            let output = lab.run(&["status", "dead", "--json"]);
+            let board: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            board["flows"][0]["state"] == "blocked"
+        },
+    );
+    let output = lab.run(&["status", "dead"]);
+    let shown = stdout(&output);
+    assert!(shown.contains("state: blocked"), "{shown}");
+    assert!(shown.contains("code 23"), "{shown}");
+    assert!(shown.contains("first"), "{shown}");
+    assert!(shown.contains("last"), "{shown}");
+    let board: serde_json::Value =
+        serde_json::from_slice(&lab.run(&["status", "dead", "--json"]).stdout).unwrap();
+    assert_eq!(board["flows"][0]["state"], "blocked");
+    assert_eq!(
+        board["flows"][0]["blocker"],
+        "agent exited (code 23)\nfirst\nlast"
+    );
+
+    assert!(lab.run(&["--stop"]).status.success());
+    assert!(server.wait().unwrap().success());
+}
+
+#[test]
 fn status_says_where_a_flows_code_is_and_whether_its_worktree_is_left() {
     let lab = Lab::new();
     assert!(lab.start(&["SHOP-217 add CSV export"]).status.success());
