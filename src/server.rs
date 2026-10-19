@@ -312,6 +312,8 @@ impl Server {
                     code != Some(0) && resumed_at.is_some_and(|at| at.elapsed() < RESUME_GRACE);
                 if resume_failed {
                     self.open_fresh(&key);
+                } else {
+                    self.notice_exited_worker(&key, code);
                 }
                 self.tell_closed(&key);
                 self.send_panes();

@@ -226,7 +226,6 @@ impl Host {
     }
 
     /// A bounded plain-text tail of one pane's visible output.
-    #[expect(dead_code, reason = "wired to the exit event in the next plan task")]
     pub fn output_tail(&self, key: &PaneKey, max_lines: usize, max_chars: usize) -> Option<String> {
         self.panes
             .get(key)
