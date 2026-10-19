@@ -206,6 +206,25 @@ impl EventKind {
     }
 }
 
+#[cfg(test)]
+impl Question {
+    /// A question headed by its first word, each option described as "<label> it is".
+    pub fn of(question: &str, labels: &[&str], multi_select: bool) -> Question {
+        Question {
+            header: question.split(' ').next().unwrap_or_default().to_string(),
+            question: question.to_string(),
+            options: labels
+                .iter()
+                .map(|label| Choice {
+                    label: (*label).to_string(),
+                    description: format!("{label} it is"),
+                })
+                .collect(),
+            multi_select,
+        }
+    }
+}
+
 impl Question {
     fn cut_texts(&mut self) {
         cut_to(&mut self.header, TEXT_LIMIT);

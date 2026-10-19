@@ -1,4 +1,5 @@
 use super::*;
+use crate::event::Question;
 
 const MIN: u64 = 60_000;
 
@@ -542,6 +543,77 @@ fn waiting_and_blocked_set_the_blocker_once_per_question() {
         vec!["started", "blocked: no default", "blocked: tests red"]
     );
     assert_eq!(blocked.timeline[1].tone, Tone::Problem);
+}
+
+fn dialog(at_ms: u64, questions: Vec<Question>) -> Event {
+    let question = questions[0].question.clone();
+    at(
+        at_ms,
+        EventKind::Waiting {
+            question,
+            questions,
+        },
+    )
+}
+
+#[test]
+fn a_dialog_shows_its_questions_until_the_flow_leaves_waiting() {
+    let asked = vec![
+        Question::of("Which color?", &["Red", "Blue"], false),
+        Question::of("Which toppings?", &["Cheese", "Ham"], true),
+    ];
+    let events = vec![started(0), dialog(1, asked.clone())];
+
+    let flow = view(&events, 2);
+    assert_eq!(flow.state, State::Waiting);
+    assert_eq!(flow.blocker.as_deref(), Some("Which color?"));
+    assert_eq!(flow.questions, asked);
+
+    let worded = EventKind::Waiting {
+        question: "Ship it?".into(),
+        questions: Vec::new(),
+    };
+    for next in [
+        EventKind::Working,
+        EventKind::Idle {
+            note: "declined".into(),
+        },
+        EventKind::Blocked {
+            reason: "no answer".into(),
+        },
+        worded,
+        EventKind::Ended,
+    ] {
+        let mut after = events.clone();
+        after.push(at(3, next.clone()));
+        assert_eq!(view(&after, 4).questions, Vec::new(), "{next:?}");
+    }
+    let mut messaged = events.clone();
+    messaged.push(at(3, EventKind::Message { text: "Red".into() }));
+    assert_eq!(
+        view(&messaged, 4).questions,
+        asked,
+        "a message leaves it open"
+    );
+}
+
+#[test]
+fn a_new_dialog_with_the_same_first_question_is_a_change() {
+    let events = vec![
+        started(0),
+        dialog(
+            1,
+            vec![Question::of("Which color?", &["Red", "Blue"], false)],
+        ),
+    ];
+    let same = events[1].kind.clone();
+    let other = EventKind::Waiting {
+        question: "Which color?".into(),
+        questions: vec![Question::of("Which color?", &["Red", "Teal"], false)],
+    };
+
+    assert!(!changes("x", &events, &same, 2));
+    assert!(changes("x", &events, &other, 2));
 }
 
 #[test]
