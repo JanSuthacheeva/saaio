@@ -125,6 +125,11 @@ the worker's session runs again.
 
 `saaio status <name> --full` shows a worker's whole last answer.
 
+A Claude Code worker can ask with a question dialog: one to four questions, each with options to
+pick. `saaio status <name>` lists them. The master answers every question in one `saaio send`; saaio's
+server closes the dialog in the worker's pane, and the worker reads the message as its answer
+([cli.md](cli.md#saaio-send)). Answered in the pane, the dialog needs nothing from the master.
+
 ### Typing into a worker
 
 ```sh

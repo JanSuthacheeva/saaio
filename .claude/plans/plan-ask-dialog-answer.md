@@ -232,5 +232,5 @@ The master answers:
 - [x] Change `output::flow::sent` and `output::news::for_master` help for a dialog; TOON tests and a `tests/cli.rs` case for send
 - [x] Add `server/dismiss.rs` (`dismiss_dialogs`, `answered_dialog`, `due`, `AGAIN`, `ESC`), `Server.dismissed_at` and the call in `serve`; unit test for `due` and server tests with a raw-mode fake Claude (Esc once, none without a message, none for Codex)
 - [x] master.md: answering a dialog, with master-v11.md kept in `INSTRUCTIONS.earlier`
-- [ ] Docs: docs/cli.md, docs/json.md, docs/flows.md, README if it lists send's behaviour; ROADMAP Planned soon: send to a flow on a permission prompt
+- [x] Docs: docs/cli.md, docs/json.md, docs/flows.md, README if it lists send's behaviour; ROADMAP Planned soon: send to a flow on a permission prompt
 - [ ] E2E: the repro in a scratch store - a guided worker asks two questions (one multiSelect), the master answers only through `saaio status` and `saaio send`, the worker gets both answers

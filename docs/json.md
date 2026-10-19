@@ -57,7 +57,8 @@ saaio status shop-217 --json # a board with just that flow
         "agent": "claude"
       },
       "answer": null,
-      "session": null
+      "session": null,
+      "questions": []
     },
     {
       "id": "5418e55e-581e-4117-a46c-0824b8e475d9",
@@ -85,7 +86,8 @@ saaio status shop-217 --json # a board with just that flow
         "agent": "claude"
       },
       "answer": null,
-      "session": null
+      "session": null,
+      "questions": []
     }
   ]
 }
@@ -125,6 +127,7 @@ All times are Unix milliseconds.
 | `workspace` | object or null | where its worker runs. Null for a flow made with `saaio new`. See [Workspace](#workspace). |
 | `answer` | string or null | the worker's last turn's whole closing message, as its harness reported it |
 | `session` | object or null | `{ "id", "transcript" }`: the session id the harness picked and the path of its transcript (`transcript` may be null). Set for Codex, which picks its own id. Null for Claude Code, which uses the flow's. |
+| `questions` | array | the questions of the dialog a `waiting` flow shows. Empty when it waits on none. See [Questions](#questions). |
 
 ### States
 
@@ -158,6 +161,18 @@ A flow keeps the phases it started with. Two flows can have different steps.
 | `at` | number | when it happened |
 | `text` | string | what happened: `started`, `phase: plan`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `PR #42 merged`, `PR #42 closed`, `master: ...` (a message from the master), `ended` |
 | `tone` | string | `neutral`, `progress`, `attention`, `problem` or `success` |
+
+### Questions
+
+A Claude Code worker that asks with a question dialog (AskUserQuestion). `blocker` holds the first
+question.
+
+| Key | Type | Holds |
+| --- | --- | --- |
+| `header` | string | the question's short label |
+| `question` | string | the question |
+| `options` | array | `{ "label", "description" }` per option, in the dialog's order |
+| `multiSelect` | boolean | several options may be picked |
 
 ### Workspace
 
