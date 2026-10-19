@@ -2376,6 +2376,24 @@ fn status_lists_the_questions_and_options_of_a_dialog() {
 }
 
 #[test]
+fn send_to_a_flow_on_a_dialog_says_saaio_closes_it() {
+    let home = TempDir::new().unwrap();
+    seed_worker(home.path(), "7f3c", "ask", DIALOG);
+
+    let output = saaio(
+        home.path(),
+        &["send", "ask", "The user says: Red; Cheese and Olives"],
+    );
+
+    assert!(output.status.success(), "{}", stdout(&output));
+    assert!(
+        stdout(&output).contains("saaio closes ask's question dialog"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
 fn send_refuses_what_has_no_worker_to_read_it() {
     let home = TempDir::new().unwrap();
     seed_worker(

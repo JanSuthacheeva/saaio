@@ -16,8 +16,8 @@ pub(crate) fn for_worker(messages: &[&str]) -> String {
         .join("\n")
 }
 
-/// What the master reads when saaio wakes it: changed[n]{name,state,mode,says}, and who answers
-/// by the flows' modes.
+/// What the master reads when saaio wakes it: changed[n]{name,state,mode,says}, who answers by the
+/// flows' modes, and where a question dialog's options are.
 pub(crate) fn for_master(flows: &[&FlowView]) -> String {
     #[derive(Serialize)]
     struct Changed {
@@ -40,6 +40,9 @@ pub(crate) fn for_master(flows: &[&FlowView]) -> String {
         help.push(
             "guided: tell the user what it says or asks; send their answer with `saaio send`",
         );
+    }
+    if flows.iter().any(|flow| !flow.questions.is_empty()) {
+        help.push("`saaio status <name>` lists a question dialog's options");
     }
     help.push("`saaio status <name> --full` shows its whole last answer");
     let says = |flow: &FlowView| {
@@ -67,7 +70,7 @@ pub(crate) fn for_master(flows: &[&FlowView]) -> String {
 mod tests {
     use super::*;
     use crate::cli::output::fixtures::{MIN, flow};
-    use crate::event::{EventKind, Mode};
+    use crate::event::{EventKind, Mode, Question};
 
     #[test]
     fn hands_a_worker_each_message_from_the_master() {
@@ -84,6 +87,26 @@ mod tests {
                 "  as in the old export.",
             ]
             .join("\n")
+        );
+    }
+
+    #[test]
+    fn points_the_master_to_a_dialogs_options() {
+        let asked = flow(
+            "ask",
+            vec![EventKind::Waiting {
+                question: "Which color?".into(),
+                questions: vec![Question::of("Which color?", &["Red", "Blue"], false)],
+            }],
+            10 * MIN,
+        );
+
+        let news = for_master(&[&asked]);
+
+        assert!(news.contains("  ask,waiting,auto,Which color?\n"), "{news}");
+        assert!(
+            news.contains("`saaio status <name>` lists a question dialog's options"),
+            "{news}"
         );
     }
 

@@ -229,7 +229,7 @@ The master answers:
 - [x] Add `FlowView.questions`, set and cleared in `fold`, and in `shown`; fold tests for setting, clearing and `changes`
 - [x] Add `wake::dialog_answered(flow, events)` with its unit tests
 - [x] List questions and options in `output::status::detail` with the dialog help in `detail_help`; TOON tests and a `tests/cli.rs` case
-- [ ] Change `output::flow::sent` and `output::news::for_master` help for a dialog; TOON tests and a `tests/cli.rs` case for send
+- [x] Change `output::flow::sent` and `output::news::for_master` help for a dialog; TOON tests and a `tests/cli.rs` case for send
 - [x] Add `server/dismiss.rs` (`dismiss_dialogs`, `answered_dialog`, `due`, `AGAIN`, `ESC`), `Server.dismissed_at` and the call in `serve`; unit test for `due` and server tests with a raw-mode fake Claude (Esc once, none without a message, none for Codex)
 - [ ] master.md: answering a dialog, with master-v11.md kept in `INSTRUCTIONS.earlier`
 - [ ] Docs: docs/cli.md, docs/json.md, docs/flows.md, README if it lists send's behaviour; ROADMAP Planned soon: send to a flow on a permission prompt
