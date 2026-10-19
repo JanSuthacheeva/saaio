@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use crate::adapter::answer::turn_end;
 use crate::adapter::calls::{created_merge_request, tool_call};
 use crate::adapter::{Adapter, Turn, cut};
-use crate::event::EventKind;
+use crate::event::{Choice, EventKind, Question};
 use crate::workflow::Workflow;
 
 /// The hook events saaio listens to.
@@ -139,7 +139,7 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
                 .map(|question| {
                     vec![EventKind::Waiting {
                         question: cut(question),
-                        questions: Vec::new(),
+                        questions: questions(input),
                     }]
                 })
                 .unwrap_or_default(),
@@ -186,6 +186,31 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
         "SessionEnd" if payload["reason"] == "prompt_input_exit" => vec![EventKind::Ended],
         _ => Vec::new(),
     }
+}
+
+/// The questions of an AskUserQuestion input; a malformed one is left out.
+fn questions(input: &Value) -> Vec<Question> {
+    let text = |value: &Value| value.as_str().unwrap_or_default().to_string();
+    input["questions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|asked| asked["question"].is_string())
+        .map(|asked| Question {
+            header: text(&asked["header"]),
+            question: text(&asked["question"]),
+            options: asked["options"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|option| Choice {
+                    label: text(&option["label"]),
+                    description: text(&option["description"]),
+                })
+                .collect(),
+            multi_select: asked["multiSelect"] == Value::Bool(true),
+        })
+        .collect()
 }
 
 /// A prompt or a compaction begins a turn, a Stop ends it, the compaction's end leaves it at its
@@ -414,9 +439,35 @@ mod tests {
         );
     }
 
+    fn question(header: &str, text: &str, options: &[(&str, &str)], multi: bool) -> Question {
+        Question {
+            header: header.into(),
+            question: text.into(),
+            options: options
+                .iter()
+                .map(|(label, description)| Choice {
+                    label: (*label).into(),
+                    description: (*description).into(),
+                })
+                .collect(),
+            multi_select: multi,
+        }
+    }
+
     #[test]
     fn a_question_or_a_permission_waits_for_you() {
-        assert_eq!(events("pre_ask"), vec![waiting("Red or blue?")]);
+        assert_eq!(
+            events("pre_ask"),
+            vec![EventKind::Waiting {
+                question: "Red or blue?".into(),
+                questions: vec![question(
+                    "Color",
+                    "Red or blue?",
+                    &[("Red", "Choose red"), ("Blue", "Choose blue")],
+                    false
+                )],
+            }]
+        );
         assert_eq!(
             events("permission_ask"),
             vec![],
@@ -426,6 +477,65 @@ mod tests {
             events("permission_bash"),
             vec![waiting("permission: Bash(rm -rf build)")]
         );
+    }
+
+    #[test]
+    fn a_dialog_keeps_every_question_with_its_options() {
+        let [
+            EventKind::Waiting {
+                question: first,
+                questions,
+            },
+        ] = &events("pre_ask_two")[..]
+        else {
+            panic!("one waiting event");
+        };
+
+        assert_eq!(first, "Which color?");
+        assert_eq!(
+            questions,
+            &vec![
+                question(
+                    "Color",
+                    "Which color?",
+                    &[
+                        ("Red", "A warm, bold color"),
+                        ("Green", "A calm, natural color"),
+                        ("Blue", "A cool, steady color"),
+                    ],
+                    false
+                ),
+                question(
+                    "Toppings",
+                    "Which toppings?",
+                    &[
+                        ("Cheese", "Melted cheese"),
+                        ("Ham", "Sliced ham"),
+                        ("Olives", "Black olives"),
+                    ],
+                    true
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn leaves_out_a_question_without_text_and_reads_missing_fields_as_empty() {
+        let mut payload = fixture("pre_ask_two");
+        payload["tool_input"]["questions"][1] = json!({"header": "Broken"});
+        payload["tool_input"]["questions"][0]["options"][0] = json!({"label": "Red"});
+        payload["tool_input"]["questions"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("multiSelect");
+
+        let [EventKind::Waiting { questions, .. }] = &translate(&payload, &phases())[..] else {
+            panic!("one waiting event");
+        };
+
+        assert_eq!(questions.len(), 1);
+        assert_eq!(questions[0].options[0].description, "");
+        assert!(!questions[0].multi_select);
     }
 
     #[test]

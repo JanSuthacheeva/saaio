@@ -212,7 +212,7 @@ The master answers:
 ## Tasks
 
 - [x] Add `Question`, `Choice` and `Waiting.questions` in event.rs (cut_texts, serde default) and update every Waiting pattern; unit tests for the round trip, an old line and cutting
-- [ ] Keep every question in `claude_code::translate` via `questions(input)`, with a recorded `pre_ask_two.json` fixture and its test
+- [x] Keep every question in `claude_code::translate` via `questions(input)`, with a recorded `pre_ask_two.json` fixture and its test
 - [ ] Add `FlowView.questions`, set and cleared in `fold`, and in `shown`; fold tests for setting, clearing and `changes`
 - [ ] Add `wake::dialog_answered(flow, events)` with its unit tests
 - [ ] List questions and options in `output::status::detail` with the dialog help in `detail_help`; TOON tests and a `tests/cli.rs` case
