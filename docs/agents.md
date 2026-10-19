@@ -24,6 +24,7 @@ when beginning it, never ahead. A command reading skills from several phases sta
 | `--approve-for-me` | Both `command` and `resume` under `[agents.codex]` | Routes approval requests to Codex's automatic review in the workspace-write sandbox. The reviewer can still reject a request. |
 | `prefix_rule` | `~/.codex/rules/default.rules` | Allows selected commands without an approval prompt. Match the executable and arguments, not a shell command containing them. |
 | `[sandbox_workspace_write] network_access = true` | `~/.codex/config.toml` | Allows outbound network access from the workspace-write sandbox for commands such as `gh`, `git push`, and `npx`. Other approval checks still apply. |
+| `[sandbox_workspace_write] writable_roots = ["/Users/you/.lavish-axi", "/Users/you/.npm"]` | `~/.codex/config.toml` | Lets [lavish-axi](https://www.npmjs.com/package/lavish-axi) review pages run in the workspace-write sandbox. lavish-axi keeps its state and log in `~/.lavish-axi`, and `npx` writes its cache in `~/.npm`. Use absolute paths. |
 | `model_reasoning_effort = "medium"` | `~/.codex/config.toml` | Uses less reasoning effort for routine work than higher settings. Available levels depend on the model. |
 
 To enable automatic approval review for saaio workers, define both launch commands in
@@ -45,7 +46,14 @@ model_reasoning_effort = "medium"
 
 [sandbox_workspace_write]
 network_access = true
+writable_roots = ["/Users/you/.lavish-axi", "/Users/you/.npm"]
 ```
+
+Without `~/.lavish-axi` in `writable_roots`, lavish-axi starts its server but opening a page fails
+with `Lavish Editor request failed: 500`, and nothing is written to its log. Without `~/.npm`,
+`npx -y lavish-axi` fails with `EPERM` in `~/.npm/_cacache`. lavish-axi serves pages on
+`127.0.0.1`, and the sandbox allows binding that port only with `network_access = true`. Without
+it, lavish-axi reports `Lavish Editor server did not start` (`listen EPERM` in its log).
 
 Example `~/.codex/rules/default.rules` entry:
 
