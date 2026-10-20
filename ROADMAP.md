@@ -23,6 +23,7 @@ Nothing in progress.
 | Messages to a worker at a permission prompt | `saaio send` to a worker waiting on a permission prompt says sent, but the worker reads it only once the prompt is answered in its pane | `saaio send` says the prompt is open, or the master answers the prompt itself |
 | Answers typed in a worker's pane | the master learns only that a flow stopped. When you answer in the worker's pane first, the master can still relay the question it already has. | what you type in a worker's pane shows in its timeline, and news for a flow that left `waiting` before the master woke says it was answered |
 | Prebuilt binaries | install builds from source with `cargo install`, which needs Rust | binaries for macOS and Linux on every release, an install script at saaio.dev, a Homebrew tap and `cargo binstall saaio` |
+| Windows | saaio runs on macOS and Linux | Windows support: the UI and `saaio server` talk over something other than a Unix socket, panes run in ConPTY, `saaio start` claims slots without `flock`, and the `.saaio/setup` and `.saaio/teardown` hooks run without a Unix shell |
 
 ## Planned future
 
