@@ -272,3 +272,35 @@ Each shared piece lands in the commit of its first user: alone it is dead code, 
 
 ### End to end
 - [x] Replay the audit's PoCs against a scratch store and scratch repos with the installed binary (forged session id via hook then server resume argv, fsmonitor worktree + `saaio remove`, bug-report beside a planted symlink, `SAAIO_FLOW_ID=../../x saaio hook`, `send --type` with ESC into a scratch Codex-like pane, fresh store modes, config type error in the bug report) and confirm each is closed
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and the code the diff calls.
+
+**Fixed**
+- `registered_git_dir` read a relative gitdir file (what `worktree.useRelativePaths` writes)
+  against the process's folder, so `saaio remove` refused every clean worktree of such a
+  repository as "uncommitted work". Shown by a real-git test; now read relative to
+  `<common>/worktrees/<n>` (919a2bc).
+- `docs/troubleshooting.md` still said a second report of a day replaces the first (10bf125).
+- Two doc comments past 100 columns in `pane.rs` and `forge_watch.rs` (a8c3242).
+
+**Open**
+- `saaio remove` now fails closed when git cannot answer, with the "uncommitted work" text even
+  when the real cause is an unregistered worktree. Recommendation: accept for 0.1.0 (`--force`
+  is the way out, as the plan says); a distinct message can follow.
+- The fixes were not reviewed by a second agent; they were re-read in a separate pass.
+
+**Where to look**
+1. `src/workspace.rs` `registered_git_dir` -> `worktree_git`, then `cli/commands/retire.rs`
+   `refuse_uncommitted_work`: which git dir and config a remove trusts, and when it fails closed.
+2. `src/launch/pane.rs` `worker_spec` and `server/master.rs` `Master::spec`: a stored session
+   that is no UUID must start fresh, never reach the argv.
+3. `src/private.rs` and `src/server.rs` `run`: modes, `write_new`'s refusal of links, the store
+   root closed at start.
+4. `src/text.rs` `printable` / `without_value`: what is stripped before typing or printing.
+Routine, skim: the fixture ids moved to UUIDs in `tests/cli.rs`, the create sites switched to
+`private`, `forge::Ask.repo`, `bug_report::file_name`.
+
+**Checks**: `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`
+passed at 10bf125.
