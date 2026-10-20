@@ -13,11 +13,16 @@ use crate::launch::worktree::{WORKTREES_DIR, worktree_add_argv, worktree_remove_
 use crate::text::short_duration;
 use crate::view::Workspace;
 
-/// The repo's own hooks: .saaio/setup after the worktree exists, .saaio/teardown before it goes.
+/// The repo's own hooks: .saaio/setup after the worktree exists, .saaio/teardown before it goes,
+/// .saaio/pause and .saaio/resume around a flow's rest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hook {
     Setup,
     Teardown,
+    #[cfg_attr(not(test), expect(dead_code, reason = "PauseWatch runs them"))]
+    Pause,
+    #[cfg_attr(not(test), expect(dead_code, reason = "PauseWatch runs them"))]
+    Resume,
 }
 
 /// git rev-parse --show-toplevel in cwd.
@@ -80,13 +85,8 @@ pub fn run_hook(
     workspace: &Workspace,
     env: &[(String, String)],
 ) -> Result<bool> {
-    let file = repo.join(".saaio").join(match hook {
-        Hook::Setup => "setup",
-        Hook::Teardown => "teardown",
-    });
-    let is_executable = fs::metadata(&file)
-        .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0);
-    if !is_executable {
+    let file = hook_file(repo, hook);
+    if !is_executable(&file) {
         return Ok(false);
     }
     let output = Command::new(&file)
@@ -98,6 +98,46 @@ pub fn run_hook(
         bail!("{}", last_line(&output.stderr, &output.stdout));
     }
     Ok(true)
+}
+
+/// run_hook with no stdin, killed and failed past `limit` ("no answer within 5m").
+#[cfg_attr(not(test), expect(dead_code, reason = "PauseWatch runs them"))]
+pub fn run_hook_within(
+    repo: &Path,
+    hook: Hook,
+    workspace: &Workspace,
+    env: &[(String, String)],
+    limit: Duration,
+) -> Result<bool> {
+    let file = hook_file(repo, hook);
+    if !is_executable(&file) {
+        return Ok(false);
+    }
+    let mut command = Command::new(&file);
+    command
+        .current_dir(&workspace.path)
+        .envs(env.iter().map(|(key, value)| (key, value)));
+    finish_within(command, &file.display().to_string(), limit)?;
+    Ok(true)
+}
+
+/// Whether <repo>/.saaio/<hook> exists and is executable.
+#[cfg_attr(not(test), expect(dead_code, reason = "PauseWatch runs them"))]
+pub fn has_hook(repo: &Path, hook: Hook) -> bool {
+    is_executable(&hook_file(repo, hook))
+}
+
+fn hook_file(repo: &Path, hook: Hook) -> PathBuf {
+    repo.join(".saaio").join(match hook {
+        Hook::Setup => "setup",
+        Hook::Teardown => "teardown",
+        Hook::Pause => "pause",
+        Hook::Resume => "resume",
+    })
+}
+
+fn is_executable(file: &Path) -> bool {
+    fs::metadata(file).is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
 }
 
 /// Removes a worktree; without force Ok(false) when git refuses (uncommitted work).
@@ -246,10 +286,19 @@ fn registered_git_dir(repo: &Path, worktree: &Path) -> Result<PathBuf> {
 /// the last line it printed. Past `limit` it is killed and fails.
 pub fn output_in(dir: &Path, argv: &[String], limit: Duration) -> Result<String> {
     let (program, args) = argv.split_first().context("empty command")?;
-    let mut child = Command::new(program)
+    let mut command = Command::new(program);
+    command
         .args(args)
         .current_dir(dir)
-        .env("GH_PROMPT_DISABLED", "1")
+        .env("GH_PROMPT_DISABLED", "1");
+    let stdout = finish_within(command, program, limit)?;
+    Ok(String::from_utf8_lossy(&stdout).into_owned())
+}
+
+/// Runs `command` with no stdin; its stdout, or an error with the last line it printed. Past
+/// `limit` it is killed and fails.
+fn finish_within(mut command: Command, program: &str, limit: Duration) -> Result<Vec<u8>> {
+    let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -276,10 +325,10 @@ pub fn output_in(dir: &Path, argv: &[String], limit: Duration) -> Result<String>
     if !status.success() {
         bail!("{}", last_line(&stderr, &stdout));
     }
-    Ok(String::from_utf8_lossy(&stdout).into_owned())
+    Ok(stdout)
 }
 
-/// How often output_in looks whether its command ended.
+/// How often finish_within looks whether its command ended.
 const WAIT_STEP: Duration = Duration::from_millis(20);
 
 /// All a pipe gives until it closes, read on a thread of its own.
@@ -541,6 +590,39 @@ mod tests {
         let error = run_hook(&repo, Hook::Setup, &workspace, &[]).unwrap_err();
 
         assert_eq!(error.to_string(), "port 8001 is taken");
+    }
+
+    #[test]
+    fn runs_pause_and_resume_within_a_limit_with_the_flow_environment() {
+        let (_dir, repo) = repo();
+        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 3, "claude");
+        create_worktree(&repo, &workspace).unwrap();
+        let env = [("SAAIO_SLOT".to_string(), "3".to_string())];
+
+        assert!(!has_hook(&repo, Hook::Pause));
+        assert!(!run_hook_within(&repo, Hook::Pause, &workspace, &env, LIMIT).unwrap());
+        hook(
+            &repo,
+            "pause",
+            "#!/bin/sh\necho \"paused $SAAIO_SLOT $(pwd)\" > ran.txt\n",
+        );
+        hook(&repo, "resume", "#!/bin/sh\nexec sleep 30\n");
+
+        assert!(has_hook(&repo, Hook::Pause));
+        assert!(run_hook_within(&repo, Hook::Pause, &workspace, &env, LIMIT).unwrap());
+        let written = fs::read_to_string(Path::new(&workspace.path).join("ran.txt")).unwrap();
+        assert_eq!(written.trim(), format!("paused 3 {}", workspace.path));
+        let started = Instant::now();
+        let limit = Duration::from_millis(200);
+        let error = run_hook_within(&repo, Hook::Resume, &workspace, &env, limit).unwrap_err();
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert_eq!(format!("{error:#}"), "no answer within 0s");
+        fs::set_permissions(
+            repo.join(".saaio/resume"),
+            fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        assert!(!has_hook(&repo, Hook::Resume), "not executable is none");
     }
 
     #[test]
