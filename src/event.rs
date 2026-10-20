@@ -286,6 +286,20 @@ impl Mode {
     }
 }
 
+impl ServiceStatus {
+    /// The name the JSON and TOON output use: paused, resume-failed, ...
+    pub fn name(self) -> &'static str {
+        match self {
+            ServiceStatus::Pausing => "pausing",
+            ServiceStatus::Paused => "paused",
+            ServiceStatus::Resuming => "resuming",
+            ServiceStatus::Running => "running",
+            ServiceStatus::PauseFailed => "pause-failed",
+            ServiceStatus::ResumeFailed => "resume-failed",
+        }
+    }
+}
+
 impl TryFrom<String> for Phase {
     type Error = String;
 
@@ -534,6 +548,16 @@ mod tests {
             services(ServiceStatus::ResumeFailed, Some("port 8003 is taken")),
             r#"{"v":1,"at":7,"kind":"services","status":"resume-failed","reason":"port 8003 is taken"}"#
         );
+        for status in [
+            ServiceStatus::Pausing,
+            ServiceStatus::Paused,
+            ServiceStatus::Resuming,
+            ServiceStatus::Running,
+            ServiceStatus::PauseFailed,
+            ServiceStatus::ResumeFailed,
+        ] {
+            assert_eq!(serde_json::to_value(status).unwrap(), status.name());
+        }
     }
 
     #[test]

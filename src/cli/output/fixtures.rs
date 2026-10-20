@@ -1,4 +1,4 @@
-use crate::event::{Event, EventKind, Mode, Phase};
+use crate::event::{Event, EventKind, Mode, Phase, ServiceStatus};
 use crate::fold;
 use crate::view::{Board, FlowView};
 
@@ -50,9 +50,15 @@ pub(super) fn sample_board(now: u64) -> Board {
             ),
             flow(
                 "export-csv",
-                vec![EventKind::MergeRequest {
-                    url: "https://x/88".into(),
-                }],
+                vec![
+                    EventKind::MergeRequest {
+                        url: "https://x/88".into(),
+                    },
+                    EventKind::Services {
+                        status: ServiceStatus::Paused,
+                        reason: None,
+                    },
+                ],
                 now,
             ),
         ],
