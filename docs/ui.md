@@ -199,7 +199,7 @@ sidebar or the rail. It stays highlighted until the next key or click.
 
 A session that uses the mouse itself, such as Claude Code or Codex, gets the clicks, drags and
 wheel in its pane and selects and copies on its own. What it copies with OSC 52, as Claude Code
-does over SSH, reaches your clipboard while its pane is in view.
+does over SSH, reaches your clipboard while it is the focused session.
 
 ### Copying
 

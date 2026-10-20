@@ -290,7 +290,7 @@ Clipboard (`c`) and primary (`p`) stores both pass on; OSC 52 reads stay refused
 - [x] End to end in tmux with a scratch store: drag on sidebar, rail, title, board, a dialog, history and a shell pane, checked with pbpaste and a tmux buffer; sidebar click and wheel; Claude Code pane with `SSH_CONNECTION` set passes its OSC 52 on
 
 - [x] Wheel over a pane on the alternate screen without the mouse sends arrow keys, as tmux does: `Modes.alt_screen` from `TermMode::ALT_SCREEN`; `on_wheel` in `View::Panes` sends 3 up or down arrows (`ESC O A` with app_cursor, else `ESC [ A`) instead of opening history; tests in terminal.rs and app/tests/pointer.rs
-- [ ] docs/ui.md: a pane's OSC 52 passes on "while it is the focused session"
+- [x] docs/ui.md: a pane's OSC 52 passes on "while it is the focused session"
 
 ## Review
 
