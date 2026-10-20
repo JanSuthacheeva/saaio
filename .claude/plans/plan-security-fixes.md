@@ -270,4 +270,4 @@ Each shared piece lands in the commit of its first user: alone it is dead code, 
 - [x] L2: `text::without_value` with unit tests, used in `config.rs` and `theme_file.rs`; config error test
 
 ### End to end
-- [ ] Replay the audit's PoCs against a scratch store and scratch repos with the installed binary (forged session id via hook then server resume argv, fsmonitor worktree + `saaio remove`, bug-report beside a planted symlink, `SAAIO_FLOW_ID=../../x saaio hook`, `send --type` with ESC into a scratch Codex-like pane, fresh store modes, config type error in the bug report) and confirm each is closed
+- [x] Replay the audit's PoCs against a scratch store and scratch repos with the installed binary (forged session id via hook then server resume argv, fsmonitor worktree + `saaio remove`, bug-report beside a planted symlink, `SAAIO_FLOW_ID=../../x saaio hook`, `send --type` with ESC into a scratch Codex-like pane, fresh store modes, config type error in the bug report) and confirm each is closed
