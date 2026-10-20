@@ -39,7 +39,7 @@ pub struct Found {
 }
 
 /// One pull request in `gh pr list --json url,state,createdAt`.
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct GhPull {
     url: String,
     state: String,
@@ -48,7 +48,7 @@ struct GhPull {
 }
 
 /// One merge request in `glab mr list --output json`.
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct GlabRequest {
     web_url: String,
     state: String,

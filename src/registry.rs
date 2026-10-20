@@ -14,6 +14,7 @@ const OWNER_FILE: &str = "repo";
 const PROJECTS_DIR: &str = "projects";
 
 /// Who owns a candidate project store, read from its repo file.
+#[derive(Debug)]
 enum Owner {
     /// No repo file.
     Free,

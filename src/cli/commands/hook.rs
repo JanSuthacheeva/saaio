@@ -24,6 +24,7 @@ pub struct Args {
 }
 
 /// Whose hook ran: the master's ($SAAIO_MASTER), a flow's session ($SAAIO_FLOW_ID), or neither.
+#[derive(Debug)]
 enum Hooked {
     Flow(String),
     Master,
@@ -72,6 +73,7 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
 
 /// Where `saaio hook` says what went wrong: the store's server.log, never stdout or stderr (a
 /// hook's output reaches the harness, and the model).
+#[derive(Debug)]
 struct Log {
     path: PathBuf,
     /// `hook claude-code flow 3f2a9c` or `hook codex master`.

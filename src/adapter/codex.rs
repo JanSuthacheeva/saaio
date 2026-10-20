@@ -12,6 +12,7 @@ use crate::event::{EventKind, Phase};
 use crate::workflow::Workflow;
 
 /// One hook saaio listens to: Codex's event name, the key its trust state uses, its timeout.
+#[derive(Debug)]
 struct Hook {
     event: &'static str,
     key: &'static str,

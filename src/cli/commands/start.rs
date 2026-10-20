@@ -216,6 +216,7 @@ fn free_branch(repo: &Path, base: &str) -> String {
 }
 
 /// Undoes a start that failed before its worktree existed: forgets the flow and gives its slot back.
+#[derive(Debug)]
 struct Rollback<'a> {
     store: &'a Store,
     slots: Slots,
