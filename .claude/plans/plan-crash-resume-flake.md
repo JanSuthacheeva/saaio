@@ -40,3 +40,46 @@ with no resume template would otherwise be refused for good.
       behave as before.
 - [x] `server::tests::a_worker_whose_agent_could_not_start_starts_fresh_when_reopened`: an agent
       without a resume template that failed to spawn opens when reopened (review finding).
+
+## Review
+
+Reviewed in an isolated agent against this plan, CLAUDE.md and the callers of `open_worker`
+(`apply`, `reopen_worker`, `open_fresh`, `worker_spec`, `reconcile`).
+
+**Fixed**
+
+- A spawn that failed after the new up-front HOSTED record left the worker marked as hosted
+  though its agent never ran. For an agent without a resume template (a custom agent) a reopen
+  after fixing the command was then refused for good with "agent X cannot resume a session";
+  on main it started fresh. Proven by
+  `server::tests::a_worker_whose_agent_could_not_start_starts_fresh_when_reopened` (passes on
+  main, failed on 3975dc0). `open_worker` now appends the workspace event as it was before the
+  Blocked event. f506e54.
+
+**Open**
+
+- A server that dies in the short window between the HOSTED record and the spawn leaves an
+  agent without a resume template unopenable ("cannot resume a session") instead of starting
+  it fresh. Resumable agents are fine (Claude Code's failed resume falls back to `open_fresh`
+  within `RESUME_GRACE`; Codex with no session id starts fresh). Recommendation: accept - the
+  window is microseconds and the flow can be restarted; not worth special-casing.
+- `a_worker_whose_start_cannot_be_recorded_never_starts` relies on a 0444 log refusing writes,
+  which root ignores. GitHub runners are not root, so CI is fine; a root container would fail it.
+- `server::tests::a_typed_line_that_begins_no_turn_lets_the_next_one_follow` failed once of four
+  runs under load average ~12 (asserts `Busy::Typed` right after the line appears, against a
+  300 ms `unstarted`). Not touched by this branch; worth its own flake fix.
+- The fix was reviewed by the same agent in a second pass, not independently.
+
+**Where to look**
+
+1. `src/server/panes.rs` `open_worker`: record, spawn, and on spawn failure the record taken
+   back - the order is the whole change.
+2. `src/server.rs` around `RESUME_GRACE` with `open_fresh`: what the next server does with a
+   HOSTED worker that never ran.
+3. The two new tests in `src/server/tests.rs` can be skimmed.
+
+**Checks**
+
+At f506e54: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, the server unit
+tests (3 clean runs) and `tests/cli.rs` `after_a_crash_the_server_resumes_the_master_and_every_worker`
+pass. The full suite last ran at 3975dc0 (Linux, green apart from two container-setup failures).
