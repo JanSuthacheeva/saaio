@@ -505,6 +505,8 @@ mod tests {
     }
 
     const LIMIT: Duration = Duration::from_secs(10);
+    /// Under the 30 s the scripts' sleep takes, which only a command waited out reaches.
+    const SOON: Duration = Duration::from_secs(20);
 
     #[test]
     fn a_command_that_gives_no_answer_in_time_is_killed() {
@@ -516,7 +518,7 @@ mod tests {
 
         let error = output_in(dir.path(), &argv, Duration::from_millis(200)).unwrap_err();
 
-        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(started.elapsed() < SOON);
         assert!(
             format!("{error:#}").ends_with("no answer within 0s"),
             "{error:#}"
@@ -643,7 +645,7 @@ mod tests {
         let started = Instant::now();
         let limit = Duration::from_millis(200);
         let error = run_hook_within(&repo, Hook::Resume, &workspace, &env, limit).unwrap_err();
-        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(started.elapsed() < SOON);
         assert_eq!(format!("{error:#}"), "no answer within 0s");
         fs::set_permissions(
             repo.join(".saaio/resume"),
@@ -675,13 +677,7 @@ mod tests {
             Command::new("kill").arg(pid).status().unwrap();
         }
 
-        // Well short of the 30 s the left process holds the pipes for, and loose enough for a
-        // loaded machine.
-        assert!(
-            started.elapsed() < Duration::from_secs(20),
-            "{:?}",
-            started.elapsed()
-        );
+        assert!(started.elapsed() < SOON, "{:?}", started.elapsed());
         assert_eq!(format!("{error:#}"), "docker is not running");
     }
 

@@ -48,6 +48,13 @@ mkdir -p ~/.local/bin && mv saaio ~/.local/bin/
 
 The tarball also holds the [completion scripts](#shell-completions) in `complete/`.
 
+Each tarball has a build provenance attestation: proof that the release workflow built it from
+the tagged commit. With the [GitHub CLI](https://cli.github.com):
+
+```sh
+gh attestation verify saaio-aarch64-apple-darwin.tar.gz --repo JanSuthacheeva/saaio
+```
+
 The binaries are not signed. macOS refuses to open one downloaded with a browser until its
 quarantine flag is removed: `xattr -d com.apple.quarantine ~/.local/bin/saaio`. curl sets no such
 flag.
@@ -61,7 +68,9 @@ For other platforms, or to build it yourself. Requires Rust 1.95+, installed wit
 cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.1.0
 ```
 
-Installs `saaio` to `~/.cargo/bin`.
+Installs `saaio` to `~/.cargo/bin`. `saaio --version` names the commit it was built from, or
+`unknown` when the source is not a git checkout of saaio. To name one anyway, set `SAAIO_COMMIT`
+when building.
 
 ## Shell completions
 

@@ -1,6 +1,6 @@
-# A v* tag builds saaio for every target, tests and checks each build, and publishes a GitHub
-# release with the tarballs, SHA256SUMS and install.sh. A tag with a "-" (v0.1.0-rc.1) publishes
-# a pre-release. Nothing is published when any step fails.
+# A v* tag builds saaio for every target, tests and checks each build, attests where the tarballs
+# were built, and publishes a GitHub release with the tarballs, SHA256SUMS and install.sh. A tag
+# with a "-" (v0.1.0-rc.1) publishes a pre-release. Nothing is published when any step fails.
 name: release
 
 on:
@@ -131,6 +131,10 @@ jobs:
   package:
     needs: build
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -146,6 +150,10 @@ jobs:
           cd release
           sha256sum saaio-* > SHA256SUMS
           cat SHA256SUMS
+      # gh attestation verify <tarball> --repo JanSuthacheeva/saaio
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: release/saaio-*.tar.gz
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release

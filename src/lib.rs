@@ -4,6 +4,9 @@ mod adapter;
 mod branching;
 mod bug_report;
 mod client;
+#[cfg(test)]
+#[path = "../build/commit.rs"]
+mod commit;
 mod config;
 mod default_file;
 mod deliver;

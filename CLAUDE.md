@@ -19,14 +19,14 @@ cargo fmt                      # format
 cargo install --path .         # install the saaio binary
 ```
 
-CI (`.github/workflows/ci.yml`) runs fmt, clippy and test on Linux and macOS, and deny, on the toolchain `rust-toolchain.toml` pins; CONTRIBUTING.md names the checks. A test waits for what happens soon with a limit only a failure reaches (30 s), never a sleep that guesses how long it takes.
+CI (`.github/workflows/ci.yml`) runs fmt, clippy and test on Linux and macOS, and deny, on the toolchain `rust-toolchain.toml` pins; CONTRIBUTING.md names the checks. `.github/workflows/stable.yml` runs clippy and test on the latest stable weekly and on demand, not as a required check. A test waits for what happens soon with a limit only a failure reaches (30 s), never a sleep that guesses how long it takes.
 
 E2E runs of the UI, `saaio server` or `saaio --stop` use a scratch store: `SAAIO_HOME=$(mktemp -d)`. On the project's real store a second UI takes over the user's, and `--stop` ends every session in it; inside a worker, `saaio --stop` refuses its own store. Bare `saaio` opens the UI only in a person's terminal, so an agent runs it in a PTY with its markers unset: `SAAIO_HOME=$(mktemp -d) env -u CLAUDECODE -u CODEX_THREAD_ID -u SAAIO_FLOW_ID -u SAAIO_MASTER saaio`.
 
 ## Structure
 
-- One crate: a library (`lib.rs`) with a thin binary. `main.rs` parses, reads the environment variables and the clock, prints, and maps exit codes; nothing else. `build.rs` only sets `SAAIO_COMMIT`, the commit `proto::BUILD` names.
-- Releases: a `v*` tag runs `.github/workflows/release.yml` (native builds for macOS and Linux, tests, `SHA256SUMS`, the GitHub release); `install.sh` installs a release's binary (`tests/install.rs`). Steps: CONTRIBUTING.md, Releasing.
+- One crate: a library (`lib.rs`) with a thin binary. `main.rs` parses, reads the environment variables and the clock, prints, and maps exit codes; nothing else. `build.rs` only sets `SAAIO_COMMIT`, the commit `proto::BUILD` names: `build/commit.rs` (pure, its tests run through `lib.rs` under `cfg(test)`) takes it from the environment, else from git only when git's toplevel is the manifest folder, else `unknown`.
+- Releases: a `v*` tag runs `.github/workflows/release.yml` (native builds for macOS and Linux, tests, `SHA256SUMS`, the GitHub release); `install.sh` installs a release's binary (`tests/install.rs`); the tarballs carry a build provenance attestation. `[profile.release]`: thin LTO, one codegen unit, debug info stripped but symbols kept (a panic's backtrace in server.log names functions), `panic` left at unwind. Steps: CONTRIBUTING.md, Releasing.
 - One responsibility per file, nameable without "and". Past about 400 production lines a file splits along a real seam; a uniform file (a table of documents, one match of key bindings) may run longer.
 - Unit tests stay inline in `mod tests`. Past about 400 lines of tests they move to a sibling `tests.rs` (`#[cfg(test)] mod tests;`), split further into `tests/*.rs` by subject when large; fixtures several test modules share go in a `#[cfg(test)] mod fixtures;`. CLI behaviour is tested end to end in `tests/cli.rs`.
 - Module files are `foo.rs` beside `foo/`, never `foo/mod.rs` (`clippy::mod_module_files`). An `impl` may span the files of its module's children: they see its private fields.

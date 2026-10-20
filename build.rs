@@ -1,12 +1,31 @@
 //! SAAIO_COMMIT: the commit this binary is built from, so server.log can say which saaio ran.
 
-use std::path::Path;
+#[path = "build/commit.rs"]
+mod commit;
+
+use std::env;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    let commit = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "unknown".to_string());
-    println!("cargo:rustc-env=SAAIO_COMMIT={commit}");
+    println!("cargo:rerun-if-changed=build/commit.rs");
+    println!("cargo:rerun-if-env-changed=SAAIO_COMMIT");
+    let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets it"));
+    let own = git(&["rev-parse", "--show-toplevel"])
+        .is_some_and(|toplevel| commit::is_own(Path::new(&toplevel), &manifest));
+    let head = own
+        .then(|| git(&["rev-parse", "--short", "HEAD"]))
+        .flatten();
+    let stamp = commit::stamp(env::var("SAAIO_COMMIT").ok(), head);
+    println!("cargo:rustc-env=SAAIO_COMMIT={stamp}");
+    if own {
+        watch_head();
+    }
+}
+
+/// Reruns the build script once HEAD moves to a new commit.
+fn watch_head() {
     if let Some(dir) = git(&["rev-parse", "--git-dir"]) {
         let dir = Path::new(&dir);
         watch(&dir.join("HEAD"));
