@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
+use std::path::Path;
 use std::thread;
 
 use tempfile::TempDir;
@@ -10,6 +11,7 @@ use super::*;
 use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
+use crate::fixtures::executable;
 use crate::launch::pane::HOSTED;
 use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
 use crate::store::{Busy, Waiter};
@@ -32,6 +34,35 @@ fn start_with(dir: &Path, agent: Agent) -> (ServerPaths, thread::JoinHandle<Resu
     start_with_agents(dir, BTreeMap::from([("claude".to_string(), agent)]))
 }
 
+/// How long a test waits for what should happen soon; only a failing test waits this long.
+const PATIENCE: Duration = Duration::from_secs(30);
+
+/// Quick to type and to call a start stalled, never quick to give up on a typed line.
+fn quick() -> Timing {
+    Timing {
+        quiet: Duration::from_millis(200),
+        first_turn_grace: Duration::from_millis(300),
+        unstarted: Duration::from_secs(30),
+    }
+}
+
+/// Polls `done` until it holds; fails with `what` after PATIENCE.
+fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
+    let deadline = Instant::now() + PATIENCE;
+    while !done() {
+        assert!(Instant::now() < deadline, "{what}");
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// Reads messages until `done` holds for one; fails with `what` after PATIENCE.
+fn recv_until(stream: &mut UnixStream, what: &str, mut done: impl FnMut(ServerMsg) -> bool) {
+    let deadline = Instant::now() + PATIENCE;
+    while !done(recv(stream)) {
+        assert!(Instant::now() < deadline, "{what}");
+    }
+}
+
 fn start_with_agents(
     dir: &Path,
     agents: BTreeMap<String, Agent>,
@@ -45,12 +76,22 @@ fn start_at(
     agents: BTreeMap<String, Agent>,
     clock: fn() -> u64,
 ) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
+    start_timed(dir, agents, quick(), clock)
+}
+
+fn start_timed(
+    dir: &Path,
+    agents: BTreeMap<String, Agent>,
+    timing: Timing,
+    clock: fn() -> u64,
+) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
     let paths = ServerPaths {
         socket: dir.join("server.sock"),
         master: dir.join("master.json"),
         instructions: dir.join("master.md"),
         config: Some(dir.join("config/config.toml")),
         theme: Some(dir.join("config/theme.toml")),
+        cwd: std::env::current_dir().unwrap(),
     };
     let thread_paths = paths.clone();
     let store = Store::at(dir.to_path_buf());
@@ -65,16 +106,17 @@ fn start_at(
             store,
             config,
             LaunchEnv::default(),
-            &std::env::current_dir().unwrap(),
             &System::default(),
+            timing,
             clock,
         )
     });
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while UnixStream::connect(&paths.socket).is_err() {
-        assert!(Instant::now() < deadline, "the server did not start");
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_until("the server did not start", || {
+        UnixStream::connect(&paths.socket).is_ok()
+    });
+    // It listens before it has written its files and read config.toml; it answers after.
+    let mut ready = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut ready), ServerMsg::Welcome { .. }));
     (paths, handle)
 }
 
@@ -92,9 +134,7 @@ fn connect(socket: &Path, role: Role) -> UnixStream {
 
 fn connect_as(socket: &Path, role: Role, peer: Peer) -> UnixStream {
     let mut stream = UnixStream::connect(socket).unwrap();
-    stream
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .unwrap();
+    stream.set_read_timeout(Some(PATIENCE)).unwrap();
     proto::write_msg(
         &mut stream,
         &ClientMsg::Hello {
@@ -162,14 +202,11 @@ fn a_ui_attaches_types_into_the_master_and_sees_it() {
     assert_eq!(first.rows[0].1.len(), 30);
 
     proto::write_msg(&mut ui, &ClientMsg::Input(b"hello\r".to_vec())).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(5);
-    let mut seen = String::new();
-    while !seen.contains("hello") {
-        assert!(Instant::now() < deadline, "never saw the echo: {seen:?}");
-        if let ServerMsg::Frame(frame) = recv(&mut ui) {
-            seen = text(&frame, 0);
-        }
-    }
+    recv_until(
+        &mut ui,
+        "never saw the echo",
+        |message| matches!(message, ServerMsg::Frame(frame) if text(&frame, 0).contains("hello")),
+    );
 
     let mut control = connect(&paths.socket, Role::Control);
     assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
@@ -207,14 +244,13 @@ fn tells_the_ui_where_the_masters_turn_stands_from_its_start() {
         at: 2,
     };
     store.set_master_turn(&working).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        assert!(Instant::now() < deadline, "the turn never reached the ui");
-        if let ServerMsg::Master { turn, .. } = recv(&mut ui) {
-            assert_eq!(turn, Some(working));
-            break;
-        }
-    }
+    recv_until(&mut ui, "the turn never reached the ui", |message| {
+        let ServerMsg::Master { turn, .. } = message else {
+            return false;
+        };
+        assert_eq!(turn, Some(working));
+        true
+    });
 
     proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
@@ -260,10 +296,7 @@ fn a_codex_worker_that_never_starts_a_turn_waits_once() {
     let store = Store::at(dir.path().to_path_buf());
     let id = started_flow(&store, dir.path(), "stalled", "codex");
     let fake_codex = dir.path().join("fake-codex");
-    fs::write(&fake_codex, "#!/bin/sh\nsleep 30\n").unwrap();
-    let mut permissions = fs::metadata(&fake_codex).unwrap().permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(&fake_codex, permissions).unwrap();
+    executable(&fake_codex, "#!/bin/sh\nsleep 30\n");
     let codex = Agent {
         command: vec![fake_codex.display().to_string()],
         prompt: None,
@@ -273,18 +306,22 @@ fn a_codex_worker_that_never_starts_a_turn_waits_once() {
     let (paths, handle) =
         start_with_agents(dir.path(), BTreeMap::from([("codex".to_string(), codex)]));
 
-    thread::sleep(super::startup::FIRST_TURN_GRACE + WATCH_EVERY * 2);
-    let events = store.events(&id).unwrap();
-    let waiting: Vec<_> = events
-        .iter()
-        .filter(|event| {
-            matches!(
-                &event.kind,
-                EventKind::Waiting { question, .. } if question == super::startup::STALLED_START
-            )
-        })
-        .collect();
-    assert_eq!(waiting.len(), 1, "{events:?}");
+    let stalls = || {
+        store
+            .events(&id)
+            .unwrap()
+            .iter()
+            .filter(|event| {
+                matches!(
+                    &event.kind,
+                    EventKind::Waiting { question, .. } if question == super::startup::STALLED_START
+                )
+            })
+            .count()
+    };
+    wait_until("the start never stalled", || stalls() > 0);
+    thread::sleep(WATCH_EVERY * 2);
+    assert_eq!(stalls(), 1, "once");
 
     let mut control = connect(&paths.socket, Role::Control);
     assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
@@ -310,21 +347,18 @@ fn an_exited_worker_blocks_once_with_its_code_and_final_output() {
     let (paths, handle) =
         start_with_agents(dir.path(), BTreeMap::from([("shell".to_string(), shell)]));
 
-    let deadline = Instant::now() + Duration::from_secs(5);
-    let reason = loop {
-        let events = store.events(&id).unwrap();
-        if let Some(reason) = events.iter().find_map(|event| match &event.kind {
-            EventKind::Blocked { reason } => Some(reason.clone()),
-            _ => None,
-        }) {
-            break reason;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "worker did not block: {events:?}"
-        );
-        thread::sleep(Duration::from_millis(20));
+    let blocked = || {
+        store
+            .events(&id)
+            .unwrap()
+            .into_iter()
+            .find_map(|event| match event.kind {
+                EventKind::Blocked { reason } => Some(reason),
+                _ => None,
+            })
     };
+    wait_until("the worker did not block", || blocked().is_some());
+    let reason = blocked().unwrap();
     assert!(reason.contains("code 23"), "{reason}");
     assert!(reason.contains("one\ntwo"), "{reason}");
     thread::sleep(WATCH_EVERY * 2);
@@ -453,17 +487,16 @@ fn opens_a_pane_for_every_started_flow_and_marks_it_hosted() {
     );
     let later = started_flow(&store, dir.path(), "later", "broken");
 
-    let deadline = Instant::now() + Duration::from_secs(5);
     let mut flows = 0;
     let mut panes = Vec::new();
-    while !(flows == 3 && status_of(&panes, &later).is_some()) {
-        assert!(Instant::now() < deadline, "flows {flows}, panes {panes:?}");
-        match recv(&mut ui) {
+    recv_until(&mut ui, "not every flow got a pane", |message| {
+        match message {
             ServerMsg::Board(board) => flows = board.count,
             ServerMsg::Panes(update) => panes = update,
             _ => {}
         }
-    }
+        flows == 3 && status_of(&panes, &later).is_some()
+    });
 
     assert_eq!(status_of(&panes, &csv), Some(PaneStatus::Running));
     assert_eq!(
@@ -489,13 +522,10 @@ fn opens_a_pane_for_every_started_flow_and_marks_it_hosted() {
 
     proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(csv))).unwrap();
     proto::write_msg(&mut ui, &ClientMsg::Input(b"csv here\r".to_vec())).unwrap();
-    let mut echoed = false;
-    while !echoed {
-        assert!(Instant::now() < deadline, "the worker never echoed");
-        if let ServerMsg::Frame(frame) = recv(&mut ui) {
-            echoed = (0..4).any(|row| text(&frame, row).contains("csv here"));
-        }
-    }
+    recv_until(&mut ui, "the worker never echoed", |message| {
+        matches!(message, ServerMsg::Frame(frame)
+            if (0..4).any(|row| text(&frame, row).contains("csv here")))
+    });
 
     proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
@@ -513,26 +543,15 @@ fn closes_a_flow_pane_on_request_and_says_when_there_is_none() {
             size: Size { cols: 30, rows: 4 },
         },
     );
-    let deadline = Instant::now() + Duration::from_secs(5);
     let mut panes = Vec::new();
-    while status_of(&panes, &csv) != Some(PaneStatus::Running) {
-        assert!(Instant::now() < deadline, "the worker never opened");
-        if let ServerMsg::Panes(update) = recv(&mut ui) {
-            panes = update;
-        }
-    }
+    wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
 
-    let closed = crate::client::close_flow(&paths.socket, &csv, Duration::from_secs(5));
-    let none = crate::client::close_flow(&paths.socket, "nope", Duration::from_secs(5));
+    let closed = crate::client::close_flow(&paths.socket, &csv, PATIENCE);
+    let none = crate::client::close_flow(&paths.socket, "nope", PATIENCE);
 
     assert_eq!(closed.unwrap(), crate::client::Closing::Closed);
     assert_eq!(none.unwrap(), crate::client::Closing::NoPane);
-    while status_of(&panes, &csv).is_some() {
-        assert!(Instant::now() < deadline, "the ui still lists the pane");
-        if let ServerMsg::Panes(update) = recv(&mut ui) {
-            panes = update;
-        }
-    }
+    wait_for(&mut ui, &mut panes, &csv, None);
     assert!(
         store
             .events(&csv)
@@ -556,16 +575,15 @@ fn wait_for(
     id: &str,
     want: Option<&PaneStatus>,
 ) {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while status_of(panes, id).as_ref() != want {
-        assert!(
-            Instant::now() < deadline,
-            "{id} never became {want:?}: {panes:?}"
-        );
-        if let ServerMsg::Panes(update) = recv(ui) {
+    if status_of(panes, id).as_ref() == want {
+        return;
+    }
+    recv_until(ui, &format!("{id} never became {want:?}"), |message| {
+        if let ServerMsg::Panes(update) = message {
             *panes = update;
         }
-    }
+        status_of(panes, id).as_ref() == want
+    });
 }
 
 #[test]
@@ -779,7 +797,7 @@ fn a_second_ui_takes_over_and_an_old_protocol_is_refused() {
     assert!(told);
 
     let mut old = UnixStream::connect(&paths.socket).unwrap();
-    old.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    old.set_read_timeout(Some(PATIENCE)).unwrap();
     proto::write_msg(
         &mut old,
         &ClientMsg::Hello {
@@ -792,9 +810,7 @@ fn a_second_ui_takes_over_and_an_old_protocol_is_refused() {
     assert!(matches!(recv(&mut old), ServerMsg::Refused { .. }));
 
     let mut unreadable = UnixStream::connect(&paths.socket).unwrap();
-    unreadable
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .unwrap();
+    unreadable.set_read_timeout(Some(PATIENCE)).unwrap();
     let mut garbage = 3u32.to_le_bytes().to_vec();
     garbage.extend([0xff, 0xff, 0xff]);
     std::io::Write::write_all(&mut unreadable, &garbage).unwrap();
@@ -838,7 +854,7 @@ fn starts_the_master_fresh_when_its_session_cannot_be_resumed() {
 
     proto::write_msg(&mut ui, &ClientMsg::Input(b"again\r".to_vec())).unwrap();
 
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + PATIENCE;
     let mut running = false;
     let mut echoed = false;
     while !(running && echoed) {
@@ -867,10 +883,9 @@ fn replaces_a_stale_socket_but_not_a_live_one() {
     let socket = dir.path().join("server.sock");
     drop(UnixListener::bind(&socket).unwrap());
     // A process another test forks right now holds the listener until it execs.
-    let deadline = std::time::Instant::now() + Duration::from_secs(2);
-    while UnixStream::connect(&socket).is_ok() && std::time::Instant::now() < deadline {
-        thread::sleep(Duration::from_millis(5));
-    }
+    wait_until("a forked process kept the stale socket", || {
+        UnixStream::connect(&socket).is_err()
+    });
 
     let listener = bind(&socket).unwrap();
 
@@ -931,8 +946,7 @@ fn says_why_it_stops() {
 /// A Codex stand-in: ignores flow's wiring and keeps what is typed into it in `typed`.
 fn fake_codex(dir: &Path) -> Agent {
     let script = dir.join("fake-codex");
-    fs::write(&script, "#!/bin/sh\nexec cat > typed\n").unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    executable(&script, "#!/bin/sh\nexec cat > typed\n");
     Agent {
         command: vec![script.display().to_string()],
         prompt: None,
@@ -974,25 +988,16 @@ fn types_the_masters_message_into_an_idle_codex_worker_once() {
         dir.path(),
         BTreeMap::from([("codex".to_string(), fake_codex(dir.path()))]),
     );
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !dir.path().join("busy/typed").exists() {
-        assert!(Instant::now() < deadline, "the busy worker never started");
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_until("the busy worker never started", || {
+        dir.path().join("busy/typed").exists()
+    });
     store
         .set_busy(&Waiter::Flow(busy.clone()), Busy::Turn)
         .unwrap();
 
     tell(&store, &csv, "Tabs.");
     tell(&store, &busy, "Spaces.");
-    while !typed(dir.path(), "csv").contains("Tabs.") {
-        assert!(
-            Instant::now() < deadline,
-            "never typed: {:?}",
-            typed(dir.path(), "csv")
-        );
-        thread::sleep(Duration::from_millis(50));
-    }
+    wait_until_typed(dir.path(), "csv", "Tabs.");
     thread::sleep(WATCH_EVERY * 3);
 
     let text = typed(dir.path(), "csv");
@@ -1068,8 +1073,7 @@ fn fake_claude(dir: &Path, id: &str) -> Agent {
         "#!/bin/sh\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> typed; printf turn > '{}'; done\n",
         busy.display()
     );
-    fs::write(&script, body).unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    executable(&script, &body);
     Agent {
         command: vec![script.display().to_string()],
         prompt: None,
@@ -1084,15 +1088,9 @@ fn queue(store: &Store, id: &str, line: &str) {
 }
 
 fn wait_until_typed(dir: &Path, name: &str, want: &str) {
-    let deadline = Instant::now() + typing::UNSTARTED + Duration::from_secs(5);
-    while !typed(dir, name).contains(want) {
-        assert!(
-            Instant::now() < deadline,
-            "{want} never typed: {:?}",
-            typed(dir, name)
-        );
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_until(&format!("{want} never typed into {name}"), || {
+        typed(dir, name).contains(want)
+    });
 }
 
 #[test]
@@ -1124,11 +1122,7 @@ fn types_queued_lines_after_pr_once_the_turn_before_it_ended() {
     let waiter = Waiter::Flow(id.clone());
 
     wait_until_typed(dir.path(), "csv", "/compact");
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while store.busy(&waiter) != Busy::Turn {
-        assert!(Instant::now() < deadline, "its turn never began");
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_until("its turn never began", || store.busy(&waiter) == Busy::Turn);
     thread::sleep(WATCH_EVERY * 3);
     assert_eq!(
         typed(dir.path(), "csv"),
@@ -1161,9 +1155,14 @@ fn a_typed_line_that_begins_no_turn_lets_the_next_one_follow() {
     queue(&store, &id, "/cost");
     queue(&store, &id, "go on");
     queue(&store, &fresh, "/compact");
-    let (paths, handle) = start_with_agents(
+    let (paths, handle) = start_timed(
         dir.path(),
         BTreeMap::from([("codex".to_string(), fake_codex(dir.path()))]),
+        Timing {
+            unstarted: Duration::from_millis(300),
+            ..quick()
+        },
+        || 0,
     );
 
     wait_until_typed(dir.path(), "csv", "go on");
@@ -1179,8 +1178,7 @@ fn a_typed_line_that_begins_no_turn_lets_the_next_one_follow() {
 /// A Claude Code stand-in that keeps every byte sent to it in `typed`, a key such as Esc included.
 fn fake_claude_keys(dir: &Path) -> Agent {
     let script = dir.join("fake-claude-keys");
-    fs::write(&script, "#!/bin/sh\nstty raw -echo\nexec cat > typed\n").unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    executable(&script, "#!/bin/sh\nstty raw -echo\nexec cat > typed\n");
     Agent {
         command: vec![script.display().to_string()],
         prompt: None,
@@ -1224,11 +1222,9 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
         BTreeMap::from([("claude-keys".to_string(), fake_claude_keys(dir.path()))]),
     );
 
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !typed(dir.path(), "asks").contains('\x1b') {
-        assert!(Instant::now() < deadline, "no Esc into the answered dialog");
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_until("no Esc into the answered dialog", || {
+        typed(dir.path(), "asks").contains('\x1b')
+    });
     let closed = EventKind::MergeRequestClosed { url: pr.into() };
     store.append(&asks, &LogEvent::new(4, closed)).unwrap();
     thread::sleep(WATCH_EVERY * 3);
@@ -1259,15 +1255,9 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
     };
     store.append(&asks, &LogEvent::new(6, again)).unwrap();
     tell(&store, &asks, "The user says: Blue");
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while typed(dir.path(), "asks") != "\x1b\x1b" {
-        assert!(
-            Instant::now() < deadline,
-            "no Esc into the next dialog: {:?}",
-            typed(dir.path(), "asks")
-        );
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_until("no Esc into the next dialog", || {
+        typed(dir.path(), "asks") == "\x1b\x1b"
+    });
     assert_eq!(typed(dir.path(), "unanswered"), "", "no message yet");
     assert_eq!(typed(dir.path(), "worded"), "", "no dialog");
     stop(&paths, handle);
@@ -1282,25 +1272,16 @@ fn opens_the_next_worker_with_the_config_saved_while_it_runs() {
     let saves_its_prompt = "[agents.claude]\ncommand = [\"sh\", \"-c\", \"echo \\\"$0\\\" > typed; exec cat\", \"{prompt}\"]\nprompt = \"/mine {request}\"\n";
     fs::write(&config, saves_its_prompt).unwrap();
     started_flow(&store, dir.path(), "csv", "claude");
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while typed(dir.path(), "csv").is_empty() {
-        assert!(
-            Instant::now() < deadline,
-            "the worker never saved its prompt"
-        );
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_until("the worker never saved its prompt", || {
+        !typed(dir.path(), "csv").is_empty()
+    });
     assert_eq!(typed(dir.path(), "csv"), "/mine x\n");
 
     fs::write(&config, "[agents.claude]\ncommand = [\n").unwrap();
     started_flow(&store, dir.path(), "odd", "claude");
-    while typed(dir.path(), "odd").is_empty() {
-        assert!(
-            Instant::now() < deadline,
-            "a broken file dropped the last config"
-        );
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_until("a broken file dropped the last config", || {
+        !typed(dir.path(), "odd").is_empty()
+    });
     assert_eq!(typed(dir.path(), "odd"), "/mine x\n");
 
     stop(&paths, handle);
@@ -1317,23 +1298,17 @@ fn a_running_worker_keeps_the_adapter_it_started_with() {
         dir.path(),
         BTreeMap::from([("codex".to_string(), codex.clone())]),
     );
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !dir.path().join("csv/typed").exists() {
-        assert!(Instant::now() < deadline, "the worker never started");
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_until("the worker never started", || {
+        dir.path().join("csv/typed").exists()
+    });
     let without_adapter = format!("[agents.codex]\ncommand = [\"{}\"]\n", codex.command[0]);
     fs::write(paths.config.as_ref().unwrap(), without_adapter).unwrap();
     thread::sleep(WATCH_EVERY * 2);
 
     tell(&store, &csv, "Tabs.");
-    while !typed(dir.path(), "csv").contains("Tabs.") {
-        assert!(
-            Instant::now() < deadline,
-            "an edited agent took the running worker's adapter"
-        );
-        thread::sleep(Duration::from_millis(50));
-    }
+    wait_until("an edited agent took the running worker's adapter", || {
+        typed(dir.path(), "csv").contains("Tabs.")
+    });
 
     stop(&paths, handle);
 }
@@ -1403,15 +1378,9 @@ fn services(store: &Store, id: &str) -> Vec<crate::event::ServiceStatus> {
 }
 
 fn wait_for_services(store: &Store, id: &str, last: crate::event::ServiceStatus) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while services(store, id).last() != Some(&last) {
-        assert!(
-            Instant::now() < deadline,
-            "never {last:?}: {:?}",
-            services(store, id)
-        );
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_until(&format!("never {last:?}"), || {
+        services(store, id).last() == Some(&last)
+    });
 }
 
 #[test]
@@ -1428,8 +1397,7 @@ fn pauses_an_idle_flows_services_and_resumes_them_when_it_works() {
             "#!/bin/sh\necho \"{name} $SAAIO_SLOT $(basename \"$PWD\")\" >> '{}'\n",
             ran.display()
         );
-        fs::write(&script, body).unwrap();
-        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        executable(&script, &body);
     }
     let id = idle_flow(&store, &repo, "csv");
     let bare = idle_flow(&store, &dir.path().join("plain-repo"), "pdf");

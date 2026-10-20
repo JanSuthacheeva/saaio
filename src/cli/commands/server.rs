@@ -4,7 +4,7 @@ use crate::cli::Env;
 use crate::cli::output::{Document, Failure};
 use crate::client;
 use crate::launch::pane::LaunchEnv;
-use crate::server::{self, ServerPaths};
+use crate::server::{self, ServerPaths, Timing};
 use crate::server_log;
 use crate::store::Store;
 use crate::system::System;
@@ -26,14 +26,22 @@ pub fn run(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Fail
         instructions: config_dir.join("master.md"),
         config: config_file,
         theme,
+        cwd: std::env::current_dir().context("could not read the current directory")?,
     };
     let launch_env = LaunchEnv {
         store: store.root().to_path_buf(),
         flow_exe: std::env::current_exe()?,
     };
-    let cwd = std::env::current_dir().context("could not read the current directory")?;
     let system = System::probe();
-    if let Err(error) = server::run(&paths, store, config, launch_env, &cwd, &system, clock) {
+    if let Err(error) = server::run(
+        &paths,
+        store,
+        config,
+        launch_env,
+        &system,
+        Timing::default(),
+        clock,
+    ) {
         server_log::write(clock(), &format!("failed: {error:#}"));
         return Err(error.into());
     }

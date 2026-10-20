@@ -168,18 +168,16 @@ fn version_of(line: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
 
     use tempfile::TempDir;
 
     use super::*;
+    use crate::fixtures::executable;
 
     fn script(dir: &Path, name: &str, body: &str) -> PathBuf {
         let path = dir.join(name);
-        fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        executable(&path, &format!("#!/bin/sh\n{body}\n"));
         path
     }
 

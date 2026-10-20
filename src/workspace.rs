@@ -431,6 +431,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::fixtures::executable;
     use crate::launch::worktree::workspace_for;
 
     fn git(dir: &Path, args: &[&str]) {
@@ -468,8 +469,7 @@ mod tests {
         let dir = repo.join(".saaio");
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join(name);
-        fs::write(&file, script).unwrap();
-        fs::set_permissions(&file, fs::Permissions::from_mode(0o755)).unwrap();
+        executable(&file, script);
     }
 
     #[test]
@@ -489,12 +489,10 @@ mod tests {
     fn runs_a_command_in_a_folder_without_prompts() {
         let dir = TempDir::new().unwrap();
         let script = dir.path().join("ask");
-        fs::write(
+        executable(
             &script,
             "#!/bin/sh\nread -r line\necho \"$(basename \"$PWD\") $GH_PROMPT_DISABLED $1 [$line]\"\n",
-        )
-        .unwrap();
-        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        );
         let folder = dir.path().join("csv");
         fs::create_dir(&folder).unwrap();
         let argv = [script.display().to_string(), "list".to_string()];
@@ -512,8 +510,7 @@ mod tests {
     fn a_command_that_gives_no_answer_in_time_is_killed() {
         let dir = TempDir::new().unwrap();
         let script = dir.path().join("hang");
-        fs::write(&script, "#!/bin/sh\necho started\nexec sleep 30\n").unwrap();
-        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        executable(&script, "#!/bin/sh\necho started\nexec sleep 30\n");
         let argv = [script.display().to_string()];
         let started = Instant::now();
 
@@ -525,8 +522,7 @@ mod tests {
             "{error:#}"
         );
         let failing = dir.path().join("fail");
-        fs::write(&failing, "#!/bin/sh\necho 'not logged in' >&2\nexit 4\n").unwrap();
-        fs::set_permissions(&failing, fs::Permissions::from_mode(0o755)).unwrap();
+        executable(&failing, "#!/bin/sh\necho 'not logged in' >&2\nexit 4\n");
         let error = output_in(dir.path(), &[failing.display().to_string()], LIMIT).unwrap_err();
         assert_eq!(format!("{error:#}"), "not logged in");
     }
@@ -727,12 +723,10 @@ mod tests {
         let path = Path::new(&space.path);
         let marker = dir.path().join("marker");
         let monitor = dir.path().join("monitor");
-        fs::write(
+        executable(
             &monitor,
-            format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
-        )
-        .unwrap();
-        fs::set_permissions(&monitor, fs::Permissions::from_mode(0o755)).unwrap();
+            &format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+        );
         let planted = dir.path().join("planted");
         git(dir.path(), &["init", "-q", "planted"]);
         git(
