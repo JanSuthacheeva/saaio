@@ -102,6 +102,7 @@ Other files:
 - [x] Ship the scripts in `complete/` from release.yml's Pack step
 - [x] Document it: docs/cli.md, docs/install.md, README.md, CHANGELOG.md 0.1.0, ROADMAP.md Planned future, CLAUDE.md Architecture
 - [x] End to end: install the build, source the bash and zsh scripts in real shells and complete `saaio st<Tab>` and `saaio completions <Tab>`
+- [x] main.rs: end quietly when stdout's reader went away, fail on any other write error, with a tests/cli.rs test (decided after review: Open item 2)
 
 ## Review
 
@@ -138,3 +139,6 @@ Routine, skim: the docs, README, CHANGELOG, ROADMAP, CLAUDE.md lines and the wor
 Checks: `cargo test` passed at 9043cf6 (only a comment and docs changed since); `cargo fmt --check`
 and `cargo clippy --all-targets -- -D warnings` passed at 9cca5d7; `cargo deny check` passed
 before the docs commits, with no dependency change since.
+
+Decided (the worker, under the master's go-ahead through to the PR): leave `listed()` as it is;
+fix the broken pipe in this branch, since the user's rule is to fix such bugs when found.

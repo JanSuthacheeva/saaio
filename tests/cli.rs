@@ -3559,3 +3559,19 @@ fn completions_for_an_unknown_shell_name_the_shells() {
         "{text}"
     );
 }
+
+#[test]
+fn a_reader_that_went_away_ends_saaio_quietly() {
+    let home = TempDir::new().unwrap();
+    let (reader, writer) = std::io::pipe().unwrap();
+    drop(reader);
+
+    let output = saaio_command(home.path())
+        .args(["completions", "bash"])
+        .stdout(writer)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{:?}", output.status);
+    assert!(output.stderr.is_empty(), "{}", stderr(&output));
+}
