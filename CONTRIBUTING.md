@@ -142,10 +142,12 @@ git push origin v0.2.0
 ```
 
 Nothing is published when the tag does not match `Cargo.toml`, `CHANGELOG.md` has no dated entry
-for the version, a test fails, or `saaio --version` names another commit than the tag's.
+for the version, a test fails, a Linux build is not static, `saaio --version` names another commit
+than the tag's, or `install.sh` fails to install from the built assets. The release notes are the
+version's `CHANGELOG.md` section.
 
 A tag with a `-`, such as `v0.2.0-rc.1`, publishes a pre-release, which the install script skips:
-a trial run. Delete it after the check:
+a trial run. Its `CHANGELOG.md` entry may still read `not released yet`. Delete it after the check:
 
 ```sh
 gh release delete v0.2.0-rc.1 --cleanup-tag --yes

@@ -83,7 +83,7 @@ help[1]: "Name the types in .saaio/config.toml: [branch] types = [\"feature\", \
 | Script | Runs |
 | --- | --- |
 | `.saaio/setup` | after `saaio start` creates the worktree, before the worker starts |
-| `.saaio/teardown` | when `saaio remove` or `saaio clear` removes the worktree |
+| `.saaio/teardown` | before `saaio remove` or `saaio clear` removes the worktree. `saaio clear` runs it even on a worktree it then keeps for its uncommitted work. |
 
 Both must be executable. They run from the main checkout with the worktree as working directory.
 
@@ -143,7 +143,7 @@ minutes. The model's thinking before its first tool call hides most of a resume.
 
 ## Slots and ports
 
-- Every unfinished flow holds a slot, 1 to 20, unique across all projects.
+- Every unfinished flow except a plain session holds a slot, 1 to 20, unique across all projects.
 - `saaio start` claims the lowest free slot before the setup runs.
 - An ended or removed flow releases its slot. A done flow (its merge request open) keeps it until
   its session ends.
