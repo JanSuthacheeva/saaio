@@ -115,9 +115,14 @@ jobs:
         env:
           COPYFILE_DISABLE: 1
         run: |
-          mkdir pack
+          mkdir -p pack/complete
           cp "target/$TARGET/release/saaio" LICENSE-MIT LICENSE-APACHE README.md pack/
-          tar czf "saaio-$TARGET.${{ matrix.archive }}" -C pack saaio LICENSE-MIT LICENSE-APACHE README.md
+          pack/saaio completions bash > pack/complete/saaio.bash
+          pack/saaio completions zsh > pack/complete/_saaio
+          pack/saaio completions fish > pack/complete/saaio.fish
+          pack/saaio completions elvish > pack/complete/saaio.elv
+          pack/saaio completions powershell > pack/complete/_saaio.ps1
+          tar czf "saaio-$TARGET.${{ matrix.archive }}" -C pack saaio LICENSE-MIT LICENSE-APACHE README.md complete
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: saaio-${{ matrix.target }}
