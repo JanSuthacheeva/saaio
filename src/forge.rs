@@ -262,17 +262,19 @@ pub fn news(flow: &FlowView, found: Option<&Found>) -> Option<EventKind> {
 }
 
 /// The one that speaks for the branch: the first open, else the first merged, else the first
-/// closed (both tools list newest first); one opened before `since`, the flow's start, belongs to
-/// an earlier branch of the same name and never speaks for it.
+/// closed (both tools list newest first); one opened before the second containing `since`, the
+/// flow's start, belongs to an earlier branch of the same name. The second itself is included
+/// because a forge may omit fractional seconds from a later PR's creation time.
 pub fn pick(found: Vec<Found>, since: u64) -> Option<Found> {
     let rank = |status| match status {
         Status::Open => 0,
         Status::Merged => 1,
         Status::Closed => 2,
     };
+    let first_second = since - since % 1000;
     found
         .into_iter()
-        .filter(|one| one.created_at >= since)
+        .filter(|one| one.created_at >= first_second)
         .enumerate()
         .min_by_key(|(at, one)| (rank(one.status), *at))
         .map(|(_, one)| one)
@@ -574,6 +576,19 @@ mod tests {
         assert_eq!(pick(vec![old.clone()], since), None);
         assert_eq!(pick(vec![new.clone(), old.clone()], since), Some(new));
         assert_eq!(pick(vec![old.clone()], old.created_at), Some(old));
+    }
+
+    #[test]
+    fn keeps_a_pr_opened_during_the_flows_first_second() {
+        let opened_at = unix_ms("2026-10-18T12:00:00Z").unwrap();
+        let same_second = found_at("same", Status::Open, "2026-10-18T12:00:00Z");
+        let earlier = found_at("earlier", Status::Open, "2026-10-18T11:59:59Z");
+
+        assert_eq!(
+            pick(vec![same_second.clone()], opened_at + 500),
+            Some(same_second)
+        );
+        assert_eq!(pick(vec![earlier], opened_at + 500), None);
     }
 
     #[test]
