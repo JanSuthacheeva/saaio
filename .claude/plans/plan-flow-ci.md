@@ -281,7 +281,8 @@ Docs:
 
 ### End to end
 
-- [ ] Push the branch and open the PR as a draft (on the user's OK) so the workflow runs on GitHub's runners; all six checks green on ubuntu-24.04 and macos-15; rerun once to see the cache hit
+- [x] Push the branch and open the PR as a draft (on the user's OK) so the workflow runs on GitHub's runners; all six checks green on ubuntu-24.04 and macos-15; rerun once to see the cache hit
+  - #79, run 39433210959: all six green, cold (fmt 16 s, deny 18 s, clippy 30 s / 66 s, test 55 s macOS / 2m06 Linux). Every job says "No cache found": the cache is saved from `main` only, so the first hit comes on the first run after this merges, not on a rerun of the PR.
 
 ## Review
 
