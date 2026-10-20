@@ -5,6 +5,7 @@ use serde::Deserialize;
 
 use crate::adapter::calls;
 use crate::event::EventKind;
+use crate::launch::worktree::repo_of;
 use crate::view::FlowView;
 
 /// Who hosts a repository's merge requests, as its remote says.
@@ -14,11 +15,13 @@ pub enum Forge {
     GitLab,
 }
 
-/// A flow to ask about: its id, its worktree, its branch and when it started.
+/// A flow to ask about: its id, its worktree, the main checkout gh and glab run in (never the
+/// worktree, whose .git the worker controls), its branch and when it started.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ask {
     pub id: String,
     pub dir: PathBuf,
+    pub repo: PathBuf,
     pub branch: String,
     pub since: u64,
     pub shown: Option<String>,
@@ -258,7 +261,8 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + day_of_era - 719_468
 }
 
-/// The flows worth asking about: not plain, with a branch, not merged.
+/// The flows worth asking about: not plain, with a branch in a worktree of a repository, not
+/// merged.
 pub fn asks(flows: &[FlowView]) -> Vec<Ask> {
     flows
         .iter()
@@ -268,6 +272,7 @@ pub fn asks(flows: &[FlowView]) -> Vec<Ask> {
             Some(Ask {
                 id: flow.id.clone(),
                 dir: PathBuf::from(&space.path),
+                repo: repo_of(space)?,
                 branch: space.branch.clone()?,
                 since: flow.started_at,
                 shown: flow.merge_request.clone(),
@@ -340,8 +345,9 @@ mod tests {
             mode,
             phases: None,
         };
+        let path = "/work/shop/.saaio/worktrees/csv";
         let workspace = EventKind::Workspace {
-            path: "/work/csv".into(),
+            path: path.into(),
             branch: branch.map(String::from),
             slot: None,
             window: None,
@@ -381,7 +387,8 @@ mod tests {
             asks(&[flow(vec![])]),
             [Ask {
                 id: "csv-1".into(),
-                dir: PathBuf::from("/work/csv"),
+                dir: PathBuf::from("/work/shop/.saaio/worktrees/csv"),
+                repo: PathBuf::from("/work/shop"),
                 branch: "flow/csv".into(),
                 since: 1,
                 shown: None,
@@ -399,6 +406,9 @@ mod tests {
             ids(&[flow_of(Mode::Plain, Some("main"), vec![])]).is_empty(),
             "plain"
         );
+        let mut elsewhere = flow(vec![]);
+        elsewhere.workspace.as_mut().unwrap().path = "/work/csv".into();
+        assert!(ids(&[elsewhere]).is_empty(), "no repository it belongs to");
     }
 
     #[test]

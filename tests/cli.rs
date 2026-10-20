@@ -3045,16 +3045,17 @@ fn every_repository_has_its_own_store_without_saaio_home() {
     assert!(all.contains("  repo-2,twin,"), "{all}");
 }
 
-/// A git repository at `home/<name>` whose origin is `origin`, as a flow's worktree on
-/// flow/<name>, appended to that flow's log.
+/// A git repository at `home/<name>` whose origin is `origin`, and its folder
+/// .saaio/worktrees/<name> as a flow's worktree on flow/<name>, appended to that flow's log.
 fn worktree_of(home: &Path, id: &str, name: &str, origin: &str) {
     let repo = home.join(name);
-    fs::create_dir_all(&repo).unwrap();
+    let worktree = repo.join(".saaio/worktrees").join(name);
+    fs::create_dir_all(&worktree).unwrap();
     git(&repo, &["init", "-q"]);
     git(&repo, &["remote", "add", "origin", origin]);
     let workspace = format!(
         "{{\"v\":1,\"at\":2,\"kind\":\"workspace\",\"path\":\"{}\",\"branch\":\"flow/{name}\",\"slot\":1,\"window\":null,\"agent\":\"claude\"}}\n",
-        repo.display()
+        worktree.display()
     );
     fs::OpenOptions::new()
         .append(true)
