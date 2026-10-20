@@ -76,6 +76,13 @@ source fix, or test change was made.
 - [x] Add `Debug` to the listed new types.
 - [x] Split `ui/theme.rs` at the palette/style seam and adjust imports without behavior change.
 - [x] Rename `launch::name::flow_name` to `launch::name::choose` and update its call sites.
-- [ ] Run `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check`; review the resulting diff against this plan.
+- [x] Run `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check`; review the resulting diff against this plan.
 
 Implementation approved; keep this checklist current while building.
+
+## Build validation
+
+All six tasks are complete. `cargo test` passed (576 library and 81 CLI tests),
+`cargo clippy --all-targets -- -D warnings` passed, and `cargo fmt --check` passed.
+An isolated `SAAIO_HOME` CLI smoke check created a flow with `saaio new` and read it back
+with `saaio status --json`. The UI was not launched. `git diff --check` is clean.
