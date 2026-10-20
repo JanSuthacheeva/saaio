@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::private::write_atomic;
+use crate::private::{self, write_atomic};
 use crate::store::Store;
 
 /// The file in a project store that names the git dir of the repository owning it.
@@ -61,7 +61,7 @@ impl Registry {
             return Ok(());
         }
         let stores = self.root.join("stores");
-        fs::create_dir_all(&stores)
+        private::create_dir(&stores)
             .with_context(|| format!("could not create {}", stores.display()))?;
         let mut line = store.root().as_os_str().as_bytes().to_vec();
         line.push(b'\n');
@@ -162,7 +162,7 @@ fn owner(store: &Path) -> Owner {
 /// Writes the repo file: linked into place whole for a free store (Err AlreadyExists when another
 /// process won the race), write_atomic over a gone owner.
 fn claim(store: &Path, git_dir: &Path, free: bool) -> io::Result<()> {
-    fs::create_dir_all(store)?;
+    private::create_dir(store)?;
     let mut line = git_dir.as_os_str().as_bytes().to_vec();
     line.push(b'\n');
     let file = store.join(OWNER_FILE);
@@ -170,7 +170,8 @@ fn claim(store: &Path, git_dir: &Path, free: bool) -> io::Result<()> {
         return write_atomic(&file, &line);
     }
     let partial = store.join(format!(".{OWNER_FILE}.{}", std::process::id()));
-    fs::write(&partial, &line)?;
+    let _ = fs::remove_file(&partial);
+    private::write_new(&partial, &line)?;
     let linked = fs::hard_link(&partial, &file);
     let _ = fs::remove_file(&partial);
     linked

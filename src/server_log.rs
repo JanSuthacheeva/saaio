@@ -1,11 +1,11 @@
 use std::backtrace::Backtrace;
 use std::fs;
-use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::panic::Location;
 use std::path::{Path, PathBuf};
 use std::{process, thread};
 
+use crate::private;
 use crate::text;
 
 /// The size past which ensure_server moves server.log to server.log.1.
@@ -45,7 +45,7 @@ pub fn write(now: u64, text: &str) {
 /// Appends a line to `log`, for a process that is not the server (saaio ui --stop).
 pub fn append(log: &Path, now: u64, text: &str) -> io::Result<()> {
     let line = line(now, text::local_offset_secs(), process::id(), text) + "\n";
-    OpenOptions::new()
+    private::options()
         .create(true)
         .append(true)
         .open(log)?

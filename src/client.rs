@@ -1,7 +1,5 @@
-use std::fs::OpenOptions;
 use std::io::{self, ErrorKind};
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -12,6 +10,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 
 use crate::launch::{pane, worktree};
+use crate::private;
 use crate::proto::{self, BUILD, ClientMsg, PROTOCOL_VERSION, Peer, Role, ServerMsg};
 use crate::registry;
 use crate::server_log;
@@ -290,14 +289,11 @@ pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Res
     }
     let log_path = server_log::path(socket);
     if let Some(dir) = socket.parent() {
-        std::fs::create_dir_all(dir)
-            .with_context(|| format!("could not create {}", dir.display()))?;
-        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
-            .with_context(|| format!("could not restrict {}", dir.display()))?;
+        private::create_dir(dir).with_context(|| format!("could not create {}", dir.display()))?;
     }
     // A log that cannot be moved aside is only longer; it never keeps the server from starting.
     let _ = server_log::rotate(&log_path, server_log::CAP);
-    let log = OpenOptions::new()
+    let log = private::options()
         .create(true)
         .append(true)
         .open(&log_path)
@@ -333,6 +329,7 @@ pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Res
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::fs::PermissionsExt;
     use std::os::unix::net::UnixListener;
 
     use tempfile::TempDir;

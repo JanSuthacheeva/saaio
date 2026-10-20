@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use uuid::Uuid;
 
 use crate::event::{Event, unix_ms};
-use crate::private::write_atomic;
+use crate::private::{self, write_atomic};
 use crate::view::MasterTurn;
 use crate::wake::Seen;
 
@@ -91,10 +91,10 @@ impl Store {
     /// A new flow with a fresh UUID v4 and its first event; returns the id.
     pub fn create(&self, first: &Event) -> Result<String> {
         let flows = self.root.join("flows");
-        fs::create_dir_all(&flows)
+        private::create_dir(&flows)
             .with_context(|| format!("could not create flow in {}", flows.display()))?;
         let id = Uuid::new_v4().to_string();
-        let mut log = OpenOptions::new()
+        let mut log = private::options()
             .write(true)
             .create_new(true)
             .open(self.log(&id))
@@ -203,7 +203,7 @@ impl Store {
         if !self.log(id).exists() {
             bail!("no flow {id}");
         }
-        let alive = OpenOptions::new()
+        let alive = private::options()
             .create(true)
             .truncate(false)
             .write(true)
@@ -360,7 +360,7 @@ impl Store {
 
     fn write_wait(&self, name: &str, text: &str) -> Result<()> {
         let waits = self.root.join(WAITS_DIR);
-        fs::create_dir_all(&waits)
+        private::create_dir(&waits)
             .with_context(|| format!("could not create {}", waits.display()))?;
         let file = waits.join(name);
         write_atomic(&file, text.as_bytes())

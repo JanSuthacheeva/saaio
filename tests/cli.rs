@@ -3094,6 +3094,24 @@ fn server_with_gh(home: &Path, script: &str) -> Running {
 }
 
 #[test]
+fn a_store_is_for_its_user_alone() {
+    let outer = TempDir::new().unwrap();
+    let home = outer.path().join("store");
+    let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+
+    let id = new_flow(&home, "csv");
+
+    assert_eq!(mode(&home), 0o700);
+    assert_eq!(mode(&home.join("flows")), 0o700);
+    assert_eq!(mode(&home.join(format!("flows/{id}.jsonl"))), 0o600);
+    fs::set_permissions(&home, fs::Permissions::from_mode(0o755)).unwrap();
+    let _server = server_with_gh(&home, "#!/bin/sh\nexit 1\n");
+    assert_eq!(mode(&home), 0o700, "the server closes a store left open");
+    assert_eq!(mode(&home.join("master.json")), 0o600);
+    assert!(saaio(&home, &["--stop"]).status.success());
+}
+
+#[test]
 fn a_pull_request_merged_elsewhere_finishes_its_flow() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "csv");

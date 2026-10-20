@@ -1,11 +1,11 @@
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::ErrorKind;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::private::write_atomic;
+use crate::private::{self, write_atomic};
 use crate::registry::Registry;
 use crate::view::FlowView;
 
@@ -69,9 +69,9 @@ impl Slots {
 
     /// An exclusive lock on slots/.lock, released when the file closes.
     fn lock(&self) -> Result<File> {
-        fs::create_dir_all(&self.dir)
+        private::create_dir(&self.dir)
             .with_context(|| format!("could not create {}", self.dir.display()))?;
-        let file = OpenOptions::new()
+        let file = private::options()
             .create(true)
             .truncate(false)
             .write(true)

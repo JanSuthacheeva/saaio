@@ -1,18 +1,36 @@
-use std::fs::{self, OpenOptions};
+use std::fs::{self, DirBuilder, OpenOptions, Permissions};
 use std::io::{self, Write};
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
+
+/// What every folder saaio creates for the user alone is made with.
+const DIR_MODE: u32 = 0o700;
 
 /// What every file saaio creates for the user alone is made with.
 const FILE_MODE: u32 = 0o600;
 
+/// Creates `dir` and its missing parents 0700; makes `dir` itself 0700 when it was already there.
+pub fn create_dir(dir: &Path) -> io::Result<()> {
+    DirBuilder::new()
+        .recursive(true)
+        .mode(DIR_MODE)
+        .create(dir)?;
+    fs::set_permissions(dir, Permissions::from_mode(DIR_MODE))
+}
+
+/// OpenOptions whose create makes the file 0600.
+pub fn options() -> OpenOptions {
+    let mut options = OpenOptions::new();
+    options.mode(FILE_MODE);
+    options
+}
+
 /// `contents` in a new file 0600 at `path`; Err(AlreadyExists) when anything, a symlink too, is
 /// there, so it never writes through one.
 pub fn write_new(path: &Path, contents: &[u8]) -> io::Result<()> {
-    OpenOptions::new()
+    options()
         .write(true)
         .create_new(true)
-        .mode(FILE_MODE)
         .open(path)?
         .write_all(contents)
 }
@@ -38,6 +56,33 @@ mod tests {
 
     fn mode(path: &Path) -> u32 {
         fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[test]
+    fn creates_folders_for_the_user_alone_and_closes_one_already_there() {
+        let dir = TempDir::new().unwrap();
+        let nested = dir.path().join("state/saaio/flows");
+        let open = dir.path().join("open");
+        fs::create_dir(&open).unwrap();
+        fs::set_permissions(&open, fs::Permissions::from_mode(0o755)).unwrap();
+
+        create_dir(&nested).unwrap();
+        create_dir(&nested).unwrap();
+        create_dir(&open).unwrap();
+
+        for folder in ["state", "state/saaio", "state/saaio/flows", "open"] {
+            assert_eq!(mode(&dir.path().join(folder)), 0o700, "{folder}");
+        }
+    }
+
+    #[test]
+    fn opens_a_new_file_for_the_user_alone() {
+        let dir = TempDir::new().unwrap();
+        let log = dir.path().join("server.log");
+
+        options().create(true).append(true).open(&log).unwrap();
+
+        assert_eq!(mode(&log), 0o600);
     }
 
     #[test]

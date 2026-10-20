@@ -10,6 +10,7 @@ use crate::config::Agent;
 use crate::default_file::DefaultFile;
 use crate::event::is_uuid;
 use crate::launch::pane::{self, LaunchEnv, PaneSpec};
+use crate::private;
 use crate::proto::PaneKey;
 
 /// The name the master session gets.
@@ -69,11 +70,11 @@ impl MasterRecord {
                     cwd: cwd.to_path_buf(),
                 };
                 if let Some(dir) = file.parent() {
-                    fs::create_dir_all(dir)
+                    private::create_dir(dir)
                         .with_context(|| format!("could not create {}", dir.display()))?;
                 }
                 let text = serde_json::to_string_pretty(&record).expect("a record serialises");
-                fs::write(file, text)
+                private::write_atomic(file, text.as_bytes())
                     .with_context(|| format!("could not write {}", file.display()))?;
                 Ok((record, Start::Fresh))
             }

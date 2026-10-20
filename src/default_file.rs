@@ -4,6 +4,8 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+use crate::private;
+
 /// A file saaio writes with its default text: when it is missing, or still holds an earlier default
 /// nobody edited. An edited file is never overwritten.
 #[derive(Debug, Clone, Copy)]
@@ -27,10 +29,11 @@ impl DefaultFile {
             }
         }
         if let Some(dir) = path.parent() {
-            fs::create_dir_all(dir)
+            private::create_dir(dir)
                 .with_context(|| format!("could not create {}", dir.display()))?;
         }
-        fs::write(path, self.text).with_context(|| format!("could not write {}", path.display()))
+        private::write_atomic(path, self.text.as_bytes())
+            .with_context(|| format!("could not write {}", path.display()))
     }
 }
 
