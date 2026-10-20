@@ -2,6 +2,7 @@ use std::path::Path;
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::layout::Position;
 use ratatui::style::Modifier;
 
 use super::*;
@@ -11,7 +12,7 @@ use crate::cli::output::remove::{self, Refusal};
 use crate::event::{Event, EventKind};
 use crate::fold;
 use crate::proto::{Cell, ClientMsg, Color, Flags, Frame, Mouse, ServerMsg};
-use crate::ui::input::{Command, Key, Routed, Step};
+use crate::ui::input::{Command, Key, Pointer, PointerKind, Routed, Step};
 use crate::ui::theme::PhaseColors;
 use crate::view::{MasterTurn, State, VIEW_VERSION};
 

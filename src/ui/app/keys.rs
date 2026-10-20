@@ -7,7 +7,7 @@ use super::{App, Effect, Job, Removal, View};
 use crate::proto::{ClientMsg, PaneKey};
 use crate::text::plural;
 use crate::ui::board::BoardState;
-use crate::ui::input::{Command, Key, Routed, Step};
+use crate::ui::input::{Command, Key, Pointer, PointerKind, Routed, Step};
 use crate::ui::newflow::{FormAction, NewFlowForm};
 use crate::ui::rail::Rail;
 use crate::ui::screen::Screen;
@@ -23,8 +23,11 @@ impl App {
                 Some(name) => self.on_ended_key(name, &bytes),
                 None => vec![Effect::Send(ClientMsg::Input(bytes))],
             },
-            Routed::Click { col, row } if self.view == View::Panes => self.on_click(col, row),
-            Routed::Pane(_) | Routed::Click { .. } => vec![],
+            Routed::Pointer(Pointer {
+                kind: PointerKind::Press,
+                at,
+            }) if self.view == View::Panes => self.on_click(at.x, at.y),
+            Routed::Pane(_) | Routed::Pointer(_) => vec![],
             Routed::View(keys) => self.on_keys(keys),
             Routed::Command(command) => self.on_command(command),
         }

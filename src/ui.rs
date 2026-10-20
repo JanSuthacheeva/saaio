@@ -46,7 +46,7 @@ use crate::client::Client;
 use crate::proto::{Role, ServerMsg};
 use crate::server_log;
 use app::{App, Effect, Job, JobError};
-use input::Router;
+use input::{Router, Target};
 use outer::Outer;
 use peek::PeekCache;
 use prefix::Prefix;
@@ -131,10 +131,15 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
             redraw |= !matches!(event, Event::Tick);
             effects.extend(match event {
                 Event::Input(bytes) => {
-                    let pane = app.areas().pane;
-                    let modal = app.is_modal();
+                    let modes = app.pane_modes();
+                    let target = Target {
+                        pane: app.areas().pane,
+                        modal: app.is_modal(),
+                        mouse: modes.mouse,
+                        sgr: modes.sgr_mouse,
+                    };
                     let mut effects = Vec::new();
-                    for routed in router.route(&bytes, modal, pane) {
+                    for routed in router.route(&bytes, target) {
                         effects.extend(app.on_input(routed));
                     }
                     effects

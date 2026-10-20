@@ -197,6 +197,11 @@ impl App {
         self.rail.unwrap_or(self.size.cols < layout::RAIL_BELOW)
     }
 
+    /// The focused pane's modes, for the router's Target.
+    pub fn pane_modes(&self) -> Modes {
+        self.screen.modes
+    }
+
     /// True while a dialog takes the keys instead of the pane.
     pub fn is_modal(&self) -> bool {
         self.view != View::Panes
