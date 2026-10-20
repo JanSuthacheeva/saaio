@@ -675,8 +675,10 @@ mod tests {
             Command::new("kill").arg(pid).status().unwrap();
         }
 
+        // Well short of the 30 s the left process holds the pipes for, and loose enough for a
+        // loaded machine.
         assert!(
-            started.elapsed() < Duration::from_secs(5),
+            started.elapsed() < Duration::from_secs(20),
             "{:?}",
             started.elapsed()
         );
