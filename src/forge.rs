@@ -149,7 +149,7 @@ impl Forge {
         .with_context(|| format!("{} printed no list of merge requests", self.program()))?;
         listed
             .into_iter()
-            .map(|(url, state, created)| self.found(url, state, created))
+            .map(|(url, state, created)| self.found(url, &state, &created))
             .collect()
     }
 
@@ -162,17 +162,17 @@ impl Forge {
                 .map(|request| (request.web_url, request.state, request.created_at)),
         }
         .with_context(|| format!("{} printed no merge request", self.program()))?;
-        self.found(url, state, created)
+        self.found(url, &state, &created)
     }
 
-    fn found(self, url: String, state: String, created: String) -> Result<Found> {
+    fn found(self, url: String, state: &str, created: &str) -> Result<Found> {
         let status = match state.to_lowercase().as_str() {
             "open" | "opened" | "locked" => Status::Open,
             "merged" => Status::Merged,
             "closed" => Status::Closed,
             other => anyhow::bail!("{} named an unknown state {other}", self.program()),
         };
-        let created_at = unix_ms(&created)
+        let created_at = unix_ms(created)
             .with_context(|| format!("{} named an unreadable time {created}", self.program()))?;
         Ok(Found {
             url,
