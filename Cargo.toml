@@ -32,11 +32,12 @@ uuid = { version = "1.28.0", features = ["v4"] }
 tempfile = "3.27.0"
 
 # release.yml and cargo install both build this profile. panic stays unwind: the panic hooks
-# log a thread's panic before the process ends.
+# log a thread's panic before the process ends. strip keeps the symbols, so the backtrace they
+# write to server.log names its functions.
 [profile.release]
 lto = "thin"
 codegen-units = 1
-strip = true
+strip = "debuginfo"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

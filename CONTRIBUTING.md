@@ -135,8 +135,8 @@ The full rules and the architecture: [CLAUDE.md](CLAUDE.md). In short:
 A `v*` tag runs `.github/workflows/release.yml`. It builds saaio natively for macOS and Linux,
 runs the tests on each build, attests the tarballs' build provenance and publishes a GitHub
 release with the tarballs, `SHA256SUMS` and `install.sh`. The release profile builds with thin
-LTO, one codegen unit and stripped symbols, so a release build takes about twice as long as a
-plain one. `saaio --version` names the commit `build.rs` takes from git, only from saaio's own
+LTO, one codegen unit and no debug info, so a release build takes about twice as long as a
+plain one. It keeps the symbols: a panic's backtrace in server.log names its functions. `saaio --version` names the commit `build.rs` takes from git, only from saaio's own
 checkout; `SAAIO_COMMIT` set while building overrides it.
 
 1. Set `version` in `Cargo.toml`. In `CHANGELOG.md`, rename `## [Unreleased]` to the version and

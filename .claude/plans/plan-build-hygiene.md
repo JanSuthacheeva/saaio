@@ -9,7 +9,8 @@ release.yml publishes no attestation.
 ## Decisions
 
 - **Release profile** on `release` itself (release.yml and `cargo install` both use it):
-  `lto = "thin"`, `codegen-units = 1`, `strip = true`. `panic` stays `unwind`: the server's panic
+  `lto = "thin"`, `codegen-units = 1`, `strip = "debuginfo"` (`true` strips the symbols too and leaves the panic hooks' backtraces as
+  bare addresses). `panic` stays `unwind`: the server's panic
   hook logs a panic, and a UI thread's panic must reach its hook. Size before: 5164672 bytes
   (macOS arm64, 1.95.0, `cargo build --release`).
 - **Commit stamp**: `build/commit.rs` holds the pure choice, `stamp(env, toplevel, manifest, head)`:
