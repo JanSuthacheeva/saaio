@@ -72,7 +72,7 @@ source fix, or test change was made.
 - [x] Reject impossible forge timestamps in `forge::unix_ms` with focused tests.
 - [x] Preserve PRs opened in the flow's first second in `forge::pick` with a boundary test.
 - [x] Add `Debug` to the listed new types.
-- [ ] Split `ui/theme.rs` at the palette/style seam and adjust imports without behavior change.
+- [x] Split `ui/theme.rs` at the palette/style seam and adjust imports without behavior change.
 - [ ] Rename `launch::name::flow_name` and its call sites.
 - [ ] Run `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check`; review the resulting diff against this plan.
 
