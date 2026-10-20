@@ -68,7 +68,8 @@ pub fn without_value(message: &str) -> String;
 
 ```rust
 /// The git dir the repository registered for `worktree`: the <common>/worktrees/<n> whose
-/// gitdir file names <worktree>/.git; Err when none does.
+/// gitdir file names a .git in that folder (folders compared canonicalised, so a replaced or
+/// symlinked .git does not matter); Err when none does.
 fn registered_git_dir(repo: &Path, worktree: &Path) -> Result<PathBuf>;
 
 /// git --git-dir=<registered> --work-tree=<worktree> -c core.fsmonitor=false
@@ -180,10 +181,12 @@ c. `saaio remove` (H2)
 2. `-> worktree::repo_of(space)`; None (plain): Ok
 3. `-> workspace::has_uncommitted_work(&repo, space): Result<bool>`
 4. `-> registered_git_dir(repo, path)`: `git_common_dir(repo)`, each `worktrees/*/gitdir`
-   compared canonicalised with `<path>/.git`
+   whose folder, canonicalised, is `path`
 5. `-> worktree_git(repo, path, ["status", "--porcelain"])`
 6. error (none registered, git fails): `unwrap_or(true)` -> Failure "has uncommitted work";
    `--force` goes through
+7. `remove_worktree` (git worktree remove, through the repo) refuses a worktree whose `.git`
+   points elsewhere: remove says `worktree: "kept: <path>"`
 
 d. Forge watch (H2)
 1. `ForgeWatch::due -> forge::asks(flows)`, `repo` from `repo_of`
@@ -255,7 +258,7 @@ Each shared piece lands in the commit of its first user: alone it is dead code, 
 - [x] Add `event::is_uuid` with unit tests (v4, v7, option-like, traversal, short, empty)
 - [x] H1: `codex::session` and the resume specs (`pane::worker_spec`, `Master::spec`) accept only UUID sessions; fixtures to UUIDs; tests for a forged session
 - [x] M5: hook and wait refuse a set `SAAIO_FLOW_ID` that is no UUID; `tests/cli.rs` traversal test
-- [ ] H2: `workspace::registered_git_dir`, `worktree_git`, `has_uncommitted_work(repo, workspace)`, retire fails closed; fsmonitor test with real git; `tests/cli.rs` remove test
+- [x] H2: `workspace::registered_git_dir`, `worktree_git`, `has_uncommitted_work(repo, workspace)`, retire fails closed; fsmonitor test with real git; `tests/cli.rs` remove test
 - [ ] H2: `Ask.repo`, forge watch runs remote_urls and gh/glab in the main checkout; forge tests updated
 - [ ] Add `src/private.rs` (`create_dir`, `options`, `write_new`, `write_atomic` moved from store.rs) with mode and symlink tests; CLAUDE.md Architecture line
 - [ ] H3: `bug_report::file_name(at, offset, n)` and `private::write_new` in the command; `tests/cli.rs` symlink test

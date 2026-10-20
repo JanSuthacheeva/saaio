@@ -2244,6 +2244,43 @@ fn remove_refuses_uncommitted_work_unless_forced() {
 }
 
 #[test]
+fn remove_runs_nothing_the_worktree_configures() {
+    let lab = Lab::new();
+    assert!(lab.start(&["SHOP-1 planted"]).status.success());
+    let worktree = lab.repo.join(".saaio/worktrees/shop-1");
+    let scratch = TempDir::new().unwrap();
+    let marker = scratch.path().join("marker");
+    let monitor = scratch.path().join("monitor");
+    fs::write(
+        &monitor,
+        format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+    )
+    .unwrap();
+    fs::set_permissions(&monitor, fs::Permissions::from_mode(0o755)).unwrap();
+    let planted = scratch.path().join("planted");
+    git(scratch.path(), &["init", "-q", "planted"]);
+    git(
+        &planted,
+        &["config", "core.fsmonitor", monitor.to_str().unwrap()],
+    );
+    fs::write(
+        worktree.join(".git"),
+        format!("gitdir: {}\n", planted.join(".git").display()),
+    )
+    .unwrap();
+
+    let output = lab.run(&["remove", "shop-1"]);
+
+    assert!(output.status.success(), "{}", stdout(&output));
+    assert!(!marker.exists(), "git ran the worktree's fsmonitor");
+    assert!(
+        stdout(&output).contains("worktree: \"kept: "),
+        "git refuses a worktree whose .git points elsewhere: {}",
+        stdout(&output)
+    );
+}
+
+#[test]
 fn remove_says_when_there_is_no_such_flow() {
     let lab = Lab::new();
 
