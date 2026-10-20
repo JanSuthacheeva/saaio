@@ -60,8 +60,9 @@ impl Failure {
     }
 
     /// Exit code 2: clap's message, with what it lists below a closing colon (the missing
-    /// arguments) or the possible values of an invalid one, and where to read the usage: the command of clap's usage line, else
-    /// `subcommand` (clap prints none for a flag missing its value).
+    /// arguments) or the possible values of an invalid one, and where to read the usage: the
+    /// command of clap's usage line, else `subcommand` (clap prints none for a flag missing its
+    /// value).
     #[must_use]
     pub fn usage(clap_error: &clap::Error, subcommand: Option<&str>) -> Failure {
         let rendered = clap_error.to_string();
