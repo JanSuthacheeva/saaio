@@ -142,3 +142,25 @@ before the docs commits, with no dependency change since.
 
 Decided (the worker, under the master's go-ahead through to the PR): leave `listed()` as it is;
 fix the broken pipe in this branch, since the user's rule is to fix such bugs when found.
+
+### Second review (c2c73f0..c7ae846)
+
+Covers only c7ae846, the broken-pipe fix in `main.rs` `print()`. No finding in data, boundaries,
+behaviour or errors: a broken pipe ends with the command's own code and nothing on stderr, any
+other write error prints `saaio: could not write to stdout: ...` and exits 1, and the failure
+TOON goes through the same path. `main.rs` still only prints and maps exit codes, as CLAUDE.md
+gives it. The new tests/cli.rs test fails without the fix (checked against c2c73f0's main.rs:
+exit 101).
+
+Fixed:
+- `completions.rs` still said `println!` adds the script's line break: 0101ca1.
+
+The fix is a comment, reviewed by the reviewer who made it.
+
+Open: none. The "any other write error" branch has no test; macOS has no /dev/full to provoke
+one, and the branch is three lines. Recommendation: leave it.
+
+Where to look: `src/main.rs` `print()`. Routine, skim: the test and the plan line.
+
+Checks: `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` passed
+at 0101ca1.
