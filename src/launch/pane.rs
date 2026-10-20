@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::adapter::Adapter;
 use crate::config::Agent;
+use crate::event::is_uuid;
 use crate::launch::worktree::{hook_env, repo_of};
 use crate::proto::PaneKey;
 use crate::view::{FlowView, Workspace};
@@ -73,10 +74,14 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str, session: &str) -> Option
 /// either way with the agent's adapter wired in right after the program. A plain session starts
 /// without a prompt and gets the adapter's plain wiring. A harness that picks its own session
 /// resumes by the one its hooks reported, and starts again when it never reported one (it had no
-/// turn). None when the flow has no workspace, or must resume and the agent has no resume template.
+/// turn) or reported one that is no UUID, which must never become an argument. None when the flow has no workspace, or must resume and the agent has no resume template.
 pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec> {
     let space = flow.workspace.as_ref()?;
-    let session = flow.session.as_ref().map(|session| session.id.as_str());
+    let session = flow
+        .session
+        .as_ref()
+        .map(|session| session.id.as_str())
+        .filter(|id| is_uuid(id));
     let resumes = space.window.is_some() && (session.is_some() || !names_session(agent));
     let mut argv = if resumes {
         resume_argv(agent, &flow.id, &flow.name, session.unwrap_or(&flow.id))?
@@ -323,6 +328,8 @@ mod tests {
         assert_eq!(&resumed.argv[7..], ["--resume", "7f3c"]);
     }
 
+    const SESSION: &str = "01a14000-0000-7000-8000-000000000001";
+
     fn codex_worker(window: Option<&str>, session: Option<&str>) -> FlowView {
         let mut flow = worker(window);
         flow.workspace.as_mut().unwrap().agent = "codex".into();
@@ -342,8 +349,17 @@ mod tests {
         };
         let env = LaunchEnv::default();
 
-        let resumed = worker_spec(&codex_worker(Some(HOSTED), Some("01a1")), &codex, &env);
-        assert_eq!(resumed.unwrap().argv, strings(&["codex", "resume", "01a1"]));
+        let resumed = worker_spec(&codex_worker(Some(HOSTED), Some(SESSION)), &codex, &env);
+        assert_eq!(
+            resumed.unwrap().argv,
+            strings(&["codex", "resume", SESSION])
+        );
+        let forged = codex_worker(Some(HOSTED), Some("-cnotify=[\"sh\",\"-c\",\"id\"]"));
+        assert_eq!(
+            worker_spec(&forged, &codex, &env).unwrap().argv,
+            strings(&["codex", "$ship-feature SHOP-217 add CSV export"]),
+            "a session that is no UUID starts again, never in the argv"
+        );
         let never_ran = worker_spec(&codex_worker(Some(HOSTED), None), &codex, &env).unwrap();
         assert_eq!(
             never_ran.argv,
@@ -368,7 +384,7 @@ mod tests {
         };
 
         let fresh = worker_spec(&codex_worker(None, None), codex, &env).unwrap();
-        let resumed = worker_spec(&codex_worker(Some(HOSTED), Some("01a1")), codex, &env).unwrap();
+        let resumed = worker_spec(&codex_worker(Some(HOSTED), Some(SESSION)), codex, &env).unwrap();
 
         let wiring = crate::adapter::Adapter::Codex.wiring(
             Path::new("/bin/saaio"),
@@ -378,7 +394,7 @@ mod tests {
             assert_eq!(spec.argv[0], "codex");
             assert_eq!(spec.argv[1..=wiring.len()], wiring[..]);
         }
-        assert_eq!(resumed.argv[wiring.len() + 1..], ["resume", "01a1"]);
+        assert_eq!(resumed.argv[wiring.len() + 1..], ["resume", SESSION]);
     }
 
     fn scratch(window: Option<&str>) -> FlowView {

@@ -1181,8 +1181,8 @@ fn message_for(home: &Path, id: &str, text: &str) {
 fn a_codex_stop_hands_the_masters_message_over_and_goes_on_working() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");
-    let prompt = r#"{"session_id":"01a1","hook_event_name":"UserPromptSubmit","prompt":"go"}"#;
-    let stop = r#"{"session_id":"01a1","hook_event_name":"Stop","last_assistant_message":"Tabs or spaces?"}"#;
+    let prompt = r#"{"session_id":"01a14000-0000-7000-8000-000000000001","hook_event_name":"UserPromptSubmit","prompt":"go"}"#;
+    let stop = r#"{"session_id":"01a14000-0000-7000-8000-000000000001","hook_event_name":"Stop","last_assistant_message":"Tabs or spaces?"}"#;
     let busy = home.path().join(format!("waits/{id}.busy"));
 
     let started = hook_with(home.path(), &["codex"], Some(&id), prompt);
@@ -1204,7 +1204,7 @@ fn a_codex_stop_hands_the_masters_message_over_and_goes_on_working() {
     let detail = stdout(&saaio(home.path(), &["status", "shop-221", "--json"]));
     assert!(detail.contains(r#""state": "working""#), "{detail}");
     assert!(
-        detail.contains(r#""id": "01a1""#),
+        detail.contains(r#""id": "01a14000-0000-7000-8000-000000000001""#),
         "the session it picked: {detail}"
     );
     let again = hook_with(home.path(), &["codex"], Some(&id), stop);
@@ -1279,7 +1279,7 @@ fn a_claude_code_turn_that_asks_beside_a_background_task_waits_for_the_person() 
 fn a_codex_master_records_its_session_and_reports_nothing() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");
-    let prompt = r#"{"session_id":"02b2","hook_event_name":"UserPromptSubmit","prompt":"status?"}"#;
+    let prompt = r#"{"session_id":"02b24000-0000-7000-8000-000000000002","hook_event_name":"UserPromptSubmit","prompt":"status?"}"#;
 
     let mut command = saaio_command(home.path());
     command
@@ -1302,7 +1302,7 @@ fn a_codex_master_records_its_session_and_reports_nothing() {
     assert!(output.stdout.is_empty() && output.stderr.is_empty());
     assert_eq!(
         fs::read_to_string(home.path().join("waits/master.session")).unwrap(),
-        "02b2"
+        "02b24000-0000-7000-8000-000000000002"
     );
     assert!(home.path().join("waits/master.busy").exists());
     let turn = fs::read_to_string(home.path().join("waits/master.turn")).unwrap();

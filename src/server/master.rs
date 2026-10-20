@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::config::Agent;
 use crate::default_file::DefaultFile;
+use crate::event::is_uuid;
 use crate::launch::pane::{self, LaunchEnv, PaneSpec};
 use crate::proto::PaneKey;
 
@@ -94,6 +95,7 @@ impl MasterRecord {
         instructions: &Instructions,
         session: Option<&str>,
     ) -> Option<PaneSpec> {
+        let session = session.filter(|id| is_uuid(id));
         let start = match start {
             Start::Resume if session.is_none() && pane::names_session(agent) => Start::Fresh,
             start => start,
@@ -272,6 +274,8 @@ mod tests {
         }
     }
 
+    const SESSION: &str = "01a14000-0000-7000-8000-000000000001";
+
     #[test]
     fn a_codex_master_resumes_by_its_own_session_or_starts_again() {
         let agents = builtin_agents();
@@ -287,7 +291,10 @@ mod tests {
 
         let fresh = record().spec(Start::Fresh, codex, &env, &md, None).unwrap();
         let resumed = record()
-            .spec(Start::Resume, codex, &env, &md, Some("01a1"))
+            .spec(Start::Resume, codex, &env, &md, Some(SESSION))
+            .unwrap();
+        let forged = record()
+            .spec(Start::Resume, codex, &env, &md, Some("-cnotify=x"))
             .unwrap();
         let never_ran = record()
             .spec(Start::Resume, codex, &env, &md, None)
@@ -302,8 +309,9 @@ mod tests {
             "a first turn at once, so it gets news from the start"
         );
         assert_eq!(resumed.argv[1..=wired.len()], wired[..]);
-        assert_eq!(resumed.argv[wired.len() + 1..], ["resume", "01a1"]);
+        assert_eq!(resumed.argv[wired.len() + 1..], ["resume", SESSION]);
         assert_eq!(never_ran.argv, fresh.argv, "no session yet: a new one");
+        assert_eq!(forged.argv, fresh.argv, "no UUID: a new one");
     }
 
     #[test]

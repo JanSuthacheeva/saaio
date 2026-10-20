@@ -149,6 +149,13 @@ pub fn unix_ms(time: SystemTime) -> u64 {
     })
 }
 
+/// Whether `text` is a UUID: what saaio's flow and master ids and Codex's session ids are, and
+/// what alone may become a file name or a resume argument.
+#[must_use]
+pub fn is_uuid(text: &str) -> bool {
+    text.len() == 36 && uuid::Uuid::try_parse(text).is_ok()
+}
+
 impl Event {
     /// An event of the current version at `at` (Unix ms), each text cut to its limit, except a
     /// Started request: it is the worker's prompt, kept whole (its command checks REQUEST_LIMIT).
@@ -316,6 +323,27 @@ mod tests {
 
     fn phase(name: &str) -> Phase {
         name.parse().unwrap()
+    }
+
+    #[test]
+    fn a_uuid_is_only_the_hyphenated_form() {
+        for good in [
+            "3b91bb6e-9457-4f37-9278-46e3a5e2ade4",
+            "01a14000-0000-7000-8000-000000000001",
+        ] {
+            assert!(is_uuid(good), "{good}");
+        }
+        for bad in [
+            "-cnotify=[\"sh\",\"-c\",\"id\"]",
+            "../../x",
+            "7f3c",
+            "",
+            "3b91bb6e94574f37927846e3a5e2ade4",
+            "{3b91bb6e-9457-4f37-9278-46e3a5e2ade4}",
+            "3b91bb6e-9457-4f37-9278-46e3a5e2ade4 ",
+        ] {
+            assert!(!is_uuid(bad), "{bad}");
+        }
     }
 
     #[test]
