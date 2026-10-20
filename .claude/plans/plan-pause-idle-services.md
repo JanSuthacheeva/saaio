@@ -441,3 +441,42 @@ and detail labels, the golden, the adapter timeouts and the docs.
   (ec7a06a), the roadmap row (9d5c01b). Also f2a5b20: both pipes of an ended hook share one
   500 ms grace, and the left-behind test kills its `sleep 30`s, which failed other tests under
   load.
+
+### Second review
+
+Isolated review of the commits after 2d05a33 (92698a2..9d5c01b): the master-wake fix, the shared
+pipe grace, the docs and the roadmap row. The grace, docs and roadmap row are as decided.
+
+#### Fixed
+
+- A flow waiting on a question from its closing message ("Shall I go on?"), which the master
+  answers by waking the worker, stayed `waiting` at its first tool call: `wakes_at_tool_call`
+  left out `Waiting`, so the services were not resumed and the call ran against them after 2 s.
+  This is the master's most common wake. And an ended flow with paused services got a `Working`
+  line every 200 ms (11 per call), which fold drops after `Ended`. Both shown by tests/cli.rs
+  tests that failed before. Now `Waiting` wakes and `Ended` does not; only a call that itself
+  asks (`Adapter::asks`: Claude Code's AskUserQuestion) keeps the flow waiting (7e1fe7d). A fresh
+  agent reviewed 7e1fe7d and found no problem.
+- docs/flows.md: the paused services paragraph rewrapped to the file's width (3b00fd1).
+
+#### Open
+
+- With `Waiting` waking, a background subagent's tool call while the main agent's
+  AskUserQuestion dialog is open (and services paused) would mark the flow `working` while the
+  question is still pending. Not reproduced; it needs all three at once, and an idle flow had the
+  same exposure before. Recommendation: leave it.
+- Unchanged from the first review: at `HOOK_LIMIT` only the script's own process is killed;
+  now on ROADMAP.md.
+
+#### Where to look
+
+1. `src/cli/commands/hook.rs` `run` to `wait_for_services`: `works` (`!adapter.asks`) and the
+   one `Working` append.
+2. `src/pause.rs` `wakes_at_tool_call`: which states a tool call wakes.
+
+Routine: the docs lines, the roadmap row, the `Pipe::collect` deadline and its test.
+
+#### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 7e1fe7d
+(3b00fd1 changes only docs).
