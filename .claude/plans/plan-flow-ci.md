@@ -187,7 +187,14 @@ fn start_timed(dir: &Path, agents: BTreeMap<String, Agent>, timing: Timing)
     -> (ServerPaths, thread::JoinHandle<Result<()>>);
 /// Polls `done` until it holds; fails with `what` after 30 s, which only a failing test waits for.
 fn wait_until(what: &str, done: impl FnMut() -> bool);
+/// Reads messages until `done` holds for one; fails with `what` after 30 s. Built in place of
+/// `wait_until` for the loops that read the socket: a 20 ms sleep between reads would fall behind
+/// 60 frames a second.
+fn recv_until(stream: &mut UnixStream, what: &str, done: impl FnMut(ServerMsg) -> bool);
 ```
+
+- `PATIENCE` (30 s) is that limit, also the read timeout of a test's connection and of
+  `close_flow`. The master-resume test keeps its own loop, since it types while it reads.
 
 - `start_with_agents` calls `start_timed(dir, agents, quick())`.
 - `a_typed_line_that_begins_no_turn_lets_the_next_one_follow` runs with `unstarted: 300 ms`.
@@ -253,7 +260,7 @@ Docs:
 - [x] `server::run` installs `stop_on_signals` before `bind`; new `tests/cli.rs` test sends SIGTERM as soon as the socket file appears and expects a clean exit with no socket left
 - [x] Add `server::Timing` (`timing.rs`) with `Default` and its unit test; `ServerPaths.cwd`; `run(.., system, timing, clock)`; `Server.timing`; `commands::server` passes `Timing::default()`
 - [x] Replace `QUIET`, `FIRST_TURN_GRACE`, `UNSTARTED` with `self.timing.*` in news, typing, dismiss and startup; their pure checks take a duration; unit tests use `Timing::default()` values
-- [ ] `server/tests.rs`: `quick()`, `start_timed`, `wait_until` (30 s); the let-go test on `unstarted: 300 ms`; the stalled-start test polls; every hand-written deadline loop and `wait_until_typed` through `wait_until`
+- [x] `server/tests.rs`: `quick()`, `start_timed`, `wait_until` (30 s); the let-go test on `unstarted: 300 ms`; the stalled-start test polls; every hand-written deadline loop and `wait_until_typed` through `wait_until`
 
 ### Flaky tests
 
