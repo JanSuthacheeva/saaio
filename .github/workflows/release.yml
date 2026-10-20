@@ -86,8 +86,8 @@ jobs:
           persist-credentials: false
       - name: Install Rust
         run: |
-          rustup toolchain install stable --profile minimal --target "$TARGET"
-          rustup default stable
+          rustup toolchain install
+          rustup target add "$TARGET"
       - name: Install musl
         if: runner.os == 'Linux'
         run: |

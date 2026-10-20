@@ -33,7 +33,7 @@ jobs:
                   #     pre-release, whose heading still says "not released yet" fails too);
                   #   upload-artifact notes
   build:          # needs check; matrix below; per row:
-                  #   checkout, rustup stable + target, (linux) apt musl-tools, CC_<target>=musl-gcc
+                  #   checkout, the toolchain rust-toolchain.toml pins + target, (linux) apt musl-tools, CC_<target>=musl-gcc
                   #   cargo test --release --locked --target $T
                   #   cargo build --release --locked --target $T
                   #   target/$T/release/saaio --version must equal
@@ -178,7 +178,7 @@ A user installs:
 - Release notes are the CHANGELOG section of the version; a pre-release uses the same section.
 - install.sh never edits shell rc files; it needs curl (no wget fallback).
 - `SAAIO_DOWNLOAD_URL` is documented in the script header only.
-- Rust stable on the runners; `rust-version = 1.95` guards older ones.
+- The runners build with the toolchain `rust-toolchain.toml` pins (merged from main with CI).
 - macOS binaries are not signed or notarised; curl sets no quarantine flag.
 
 ## Decisions during review
