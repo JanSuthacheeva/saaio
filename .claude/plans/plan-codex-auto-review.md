@@ -117,5 +117,5 @@ Any other event: `User` without reading; translate as today.
 
 - [x] Add `Approver`, the `approver` argument of `Adapter::translate` and `codex::translate` (PermissionPending only for `User`), `codex::approver`, `approvals_reviewer`, `REVIEWERS`, `Adapter::approver`, and wire `hook()` to it with `read_rollout` logging failed reads; fixtures `permission_bash_reviewed.json` and `rollout_auto_review.jsonl`; unit tests for `permission_bash` with `Reviewer`, reviewer, user, missing turn, failed read and a non-permission event (one task: `Reviewer` is dead code, which clippy rejects, until `hook()` produces it)
 - [x] `tests/cli.rs` test that an auto-review PermissionRequest appends no `permission-pending` and a user one does
-- [ ] Update `docs/flows.md` (Codex table row and the automatic review bullet) and `docs/troubleshooting.md` (the auto-review row)
+- [x] Update `docs/flows.md` (Codex table row and the automatic review bullet) and `docs/troubleshooting.md` (the auto-review row)
 - [ ] End to end: one small Codex run with `--approve-for-me` on a scratch `SAAIO_HOME` and scratch `CODEX_HOME`; an escalated `git commit` leaves no `permission-pending` in the log and the flow never shows waiting
