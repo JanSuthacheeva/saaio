@@ -34,6 +34,6 @@ release.yml publishes no attestation.
 - [x] Release profile, size measured after
 - [x] Cargo.toml metadata
 - [x] build/commit.rs with tests, build.rs uses it, checked E2E inside a foreign repository
-- [ ] stable.yml
+- [x] stable.yml
 - [ ] Attestation in release.yml
 - [ ] Docs: install.md, CONTRIBUTING.md, CLAUDE.md
