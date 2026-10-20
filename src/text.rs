@@ -113,9 +113,23 @@ pub fn merge_request(url: &str) -> String {
     }
 }
 
+/// `text` without control characters (C0, DEL, C1, ESC above all), safe to print or type.
+pub fn printable(text: &str) -> String {
+    text.chars().filter(|c| !c.is_control()).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn printable_text_has_no_control_characters() {
+        assert_eq!(
+            printable("a\x1b]52;c;aGk=\x07b\x1b[2J\r\n\t\u{9b}31m\x7f"),
+            "a]52;c;aGk=b[2J31m"
+        );
+        assert_eq!(printable("über 日本 ✓"), "über 日本 ✓");
+    }
 
     #[test]
     fn names_merge_requests_by_their_number() {

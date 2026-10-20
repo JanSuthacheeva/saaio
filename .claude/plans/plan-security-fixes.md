@@ -264,10 +264,10 @@ Each shared piece lands in the commit of its first user: alone it is dead code, 
 - [x] Add `src/private.rs` (`write_new`, `write_atomic` moved from store.rs) with mode and symlink tests; CLAUDE.md Architecture line
 - [x] H3: `bug_report::file_name(at, offset, n)` and `private::write_new` in the command; `tests/cli.rs` symlink test
 - [x] M3: `private::create_dir` and `private::options` with mode tests; every store, registry, slots, server_log, client, master, conn and default_file create site through `private`; server start closes the store root; `tests/cli.rs` mode test
-- [ ] Add `text::printable` and `text::without_value` with unit tests
-- [ ] M2: `news::paste` through `text::printable`; paste test
+- [x] Add `text::printable` with unit tests
+- [x] M2: `news::paste` through `text::printable`; paste test
 - [ ] L1: `Peer::printable` in `Server::hello`, `text::printable` on Refused and Detached quit texts; tests
-- [ ] L2: `text::without_value` in `config.rs` and `theme_file.rs`; config error test
+- [ ] L2: `text::without_value` with unit tests, used in `config.rs` and `theme_file.rs`; config error test
 
 ### End to end
 - [ ] Replay the audit's PoCs against a scratch store and scratch repos with the installed binary (forged session id via hook then server resume argv, fsmonitor worktree + `saaio remove`, bug-report beside a planted symlink, `SAAIO_FLOW_ID=../../x saaio hook`, `send --type` with ESC into a scratch Codex-like pane, fresh store modes, config type error in the bug report) and confirm each is closed
