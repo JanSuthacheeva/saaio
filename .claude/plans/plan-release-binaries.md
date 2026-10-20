@@ -196,7 +196,7 @@ A user installs:
 - [x] Add `.github/workflows/release.yml` (check, build x4 with test and `--version` check, package, install-check x2, publish)
 - [x] Docs: README Install, docs/install.md (install, manual download, from source, updating), docs/files.md, docs/cli.md, ROADMAP (binaries row), CHANGELOG 0.1.0, CONTRIBUTING Releasing, CLAUDE.md Structure
 - [x] End to end: push the branch and `v0.1.0-rc.1`, all jobs green, download the pre-release, `sha256sum -c`, install from it on this Mac and check `saaio --version` names the branch head, then delete the pre-release and tag
-- [ ] After review (Jan: fix all three): install.sh removes its temp folder on Ctrl-C and TERM too, `place` removes its `.saaio.<pid>` file when copying fails, and `SAAIO_INSTALL_DIR` loses a trailing slash; test `takes_the_folder_with_a_trailing_slash`
+- [x] After review (Jan: fix all three): install.sh removes its temp folder on Ctrl-C and TERM too, `place` removes its `.saaio.<pid>` file when copying fails, and `SAAIO_INSTALL_DIR` loses a trailing slash; test `takes_the_folder_with_a_trailing_slash`
 
 ## Review
 

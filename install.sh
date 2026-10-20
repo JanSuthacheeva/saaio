@@ -74,9 +74,11 @@ verify() {
 # Copies beside the old binary and renames over it, so a running saaio server keeps its own.
 place() {
     mkdir -p "$2"
-    cp "$1" "$2/.saaio.$$"
-    chmod 755 "$2/.saaio.$$"
-    mv -f "$2/.saaio.$$" "$2/saaio"
+    part="$2/.saaio.$$"
+    if ! { cp "$1" "$part" && chmod 755 "$part" && mv -f "$part" "$2/saaio"; }; then
+        rm -f "$part"
+        fail "could not install to $(shown "$2")"
+    fi
 }
 
 # The path with the home folder as ~.
@@ -103,11 +105,16 @@ path_hint() {
 main() {
     command -v curl >/dev/null 2>&1 || fail "install.sh needs curl"
     dir=${SAAIO_INSTALL_DIR:-$HOME/.local/bin}
+    while [ "$dir" != / ] && [ "${dir%/}" != "$dir" ]; do
+        dir=${dir%/}
+    done
     tarball="saaio-$(target).tar.gz"
     base=$(base_url)
 
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' EXIT
+    # dash runs no EXIT trap on a signal; exiting from the signal's trap runs it.
+    trap 'exit 1' HUP INT TERM
     fetch "$base/$tarball" "$tmp/$tarball"
     fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS"
     verify "$tmp/$tarball" "$tmp/SHA256SUMS"

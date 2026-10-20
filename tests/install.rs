@@ -136,6 +136,28 @@ fn installs_the_binary_for_this_machine() {
 }
 
 #[test]
+fn takes_the_folder_with_a_trailing_slash() {
+    let home = TempDir::new().unwrap();
+    let dir = home.path().join("tools");
+    let release = Release::new(VERSION);
+
+    let output = install(
+        home.path(),
+        &path_with(&dir),
+        &[
+            ("SAAIO_DOWNLOAD_URL", &release.url()),
+            ("SAAIO_INSTALL_DIR", &format!("{}/", dir.display())),
+        ],
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        format!("installed {VERSION} to ~/tools/saaio\n")
+    );
+}
+
+#[test]
 fn replaces_an_installed_binary() {
     let home = TempDir::new().unwrap();
     let dir = home.path().join("tools");
