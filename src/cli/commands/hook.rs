@@ -78,7 +78,7 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
     if let Hooked::Flow(id) = &hooked
         && adapter.before_tool(&payload)
     {
-        wait_for_services(&store, id, &log, clock);
+        wait_for_services(&store, id, !adapter.asks(&payload), &log, clock);
     }
     match news {
         Some(news) => Document::Wake(news),
@@ -94,10 +94,11 @@ const PICKUP_WAIT: Duration = Duration::from_secs(2);
 const WAIT_STEP: Duration = Duration::from_millis(200);
 
 /// Before a tool call of a flow whose services pause::holds_tools: waits until they run again,
-/// fail, or the wait is over; logs a wait that ran out. A resting flow is marked working first
-/// (a worker the master woke reports no prompt), so the server begins the resume. Paused with no
-/// resume begun, it waits only PICKUP_WAIT, so a store without a server never stalls tools.
-fn wait_for_services(store: &Store, id: &str, log: &Log, clock: fn() -> u64) {
+/// fail, or the wait is over; logs a wait that ran out. A call that `works` (does not ask the user)
+/// marks a resting flow working first (a worker the master woke reports no prompt), so the server
+/// begins the resume. Paused with no resume begun, it waits only PICKUP_WAIT, so a store without a
+/// server never stalls tools.
+fn wait_for_services(store: &Store, id: &str, works: bool, log: &Log, clock: fn() -> u64) {
     let deadline = Instant::now() + RESUME_WAIT;
     let mut paused_since = None;
     loop {
@@ -110,7 +111,8 @@ fn wait_for_services(store: &Store, id: &str, log: &Log, clock: fn() -> u64) {
         if !pause::holds_tools(&flow) {
             return;
         }
-        if pause::wakes_at_tool_call(&flow)
+        if works
+            && pause::wakes_at_tool_call(&flow)
             && let Err(error) = store.append(id, &Event::new(clock(), EventKind::Working))
         {
             log.error(&format!("{error:#}"));

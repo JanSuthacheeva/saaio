@@ -381,7 +381,7 @@ resume: the hook waits `PICKUP_WAIT` and lets the tool run.
 - [x] Update docs/repository.md (pause and resume section, Compose example, the slot line fix), docs/configuration.md, docs/flows.md, docs/json.md, docs/ui.md, docs/cli.md
 - [x] Update the setup-saaio skill in ~/projects/agent-skills to write and prove `.saaio/pause` and `.saaio/resume`, as a separate PR there
 - [x] End-to-end check: scratch `SAAIO_HOME`, a repo whose pause and resume write timestamps and sleep, `pause_after_minutes = 1`, a Claude worker in the UI: it pauses after a minute idle, the card says `ready · paused`, a new prompt resumes it and the first tool call waits for it; status and `--json` agree
-- [x] Count a tool call of a resting flow whose services are held as work: `pause::wakes_at_tool_call(flow)` (held, resting, not waiting on a question) and `wait_for_services` appending `Working`, so the server resumes at once; pause table test and a tests/cli.rs test that the flow is working after the call
+- [x] Count a tool call of a resting flow whose services are held as work: `pause::wakes_at_tool_call(flow)` (held, resting, not ended; a call that asks the user, `Adapter::asks`, does not wake) and `wait_for_services` appending `Working`, so the server resumes at once; pause table test and a tests/cli.rs test that the flow is working after the call
 - [x] Add "a hook that runs too long is killed with everything it started (process group), for setup, teardown, pause and resume" to ROADMAP.md under Planned soon
 
 ## Review

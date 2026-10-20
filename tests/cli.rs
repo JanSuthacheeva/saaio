@@ -1156,16 +1156,59 @@ fn a_tool_call_of_a_resting_flow_with_paused_services_marks_it_working() {
     let stop = r#"{"hook_event_name":"Stop","last_assistant_message":"All green."}"#;
     assert!(hook(home.path(), Some(&id), stop).status.success());
     services(home.path(), &id, "paused");
-    let state = |home: &Path| {
-        let output = saaio(home, &["status", "--json"]);
-        let board: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        board["flows"][0]["state"].as_str().unwrap().to_string()
-    };
-    assert_eq!(state(home.path()), "idle");
+    assert_eq!(only_state(home.path()), "idle");
 
     assert!(hook(home.path(), Some(&id), BASH).status.success());
 
-    assert_eq!(state(home.path()), "working");
+    assert_eq!(only_state(home.path()), "working");
+}
+
+/// The state `saaio status --json` gives the store's only flow.
+fn only_state(home: &Path) -> String {
+    let output = saaio(home, &["status", "--json"]);
+    let board: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    board["flows"][0]["state"].as_str().unwrap().to_string()
+}
+
+#[test]
+fn a_tool_call_after_a_question_the_master_answered_marks_the_flow_working() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let stop = r#"{"hook_event_name":"Stop","last_assistant_message":"Shall I go on?"}"#;
+    assert!(hook(home.path(), Some(&id), stop).status.success());
+    services(home.path(), &id, "paused");
+    assert_eq!(only_state(home.path()), "waiting");
+
+    assert!(hook(home.path(), Some(&id), BASH).status.success());
+
+    assert_eq!(only_state(home.path()), "working");
+}
+
+#[test]
+fn a_tool_call_that_asks_keeps_a_flow_with_paused_services_waiting() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    services(home.path(), &id, "paused");
+    let question = r#"{"hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"Red or blue?"}]}}"#;
+
+    assert!(hook(home.path(), Some(&id), question).status.success());
+
+    assert_eq!(only_state(home.path()), "waiting");
+}
+
+#[test]
+fn a_tool_call_of_an_ended_flow_with_paused_services_appends_no_work() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let end = r#"{"hook_event_name":"SessionEnd","reason":"prompt_input_exit"}"#;
+    assert!(hook(home.path(), Some(&id), end).status.success());
+    services(home.path(), &id, "paused");
+    let log = home.path().join(format!("flows/{id}.jsonl"));
+    let before = fs::read_to_string(&log).unwrap().lines().count();
+
+    assert!(hook(home.path(), Some(&id), BASH).status.success());
+
+    assert_eq!(fs::read_to_string(&log).unwrap().lines().count(), before);
 }
 
 #[test]

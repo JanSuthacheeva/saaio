@@ -55,10 +55,10 @@ pub fn holds_tools(flow: &FlowView) -> bool {
     })
 }
 
-/// A tool call of the flow is work it has not reported yet: its services are held and it rests,
-/// but not on a question (the tool call may be the one that asks it).
+/// A tool call of the flow that does not ask the user is work it has not reported yet: its
+/// services are held and it rests, but has not ended (fold never revives an ended flow).
 pub fn wakes_at_tool_call(flow: &FlowView) -> bool {
-    holds_tools(flow) && rests(flow.state) && flow.state != State::Waiting
+    holds_tools(flow) && rests(flow.state) && flow.state != State::Ended
 }
 
 #[cfg(test)]
@@ -244,7 +244,7 @@ mod tests {
 
         assert_eq!(
             waking,
-            vec![State::Idle, State::Blocked, State::Done, State::Ended]
+            vec![State::Waiting, State::Idle, State::Blocked, State::Done]
         );
         assert!(wakes_at_tool_call(&flow(
             State::Idle,

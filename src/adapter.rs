@@ -179,6 +179,17 @@ impl Adapter {
         }
     }
 
+    /// The payload is a tool call that asks the user (Claude Code's AskUserQuestion), so the
+    /// flow waits on it rather than works.
+    pub fn asks(self, payload: &Value) -> bool {
+        match self {
+            Adapter::ClaudeCode => {
+                self.before_tool(payload) && payload["tool_name"] == "AskUserQuestion"
+            }
+            Adapter::Codex => false,
+        }
+    }
+
     /// Who answers this payload's permission request: Codex's automatic reviewer when the
     /// rollout's turn routes approvals to it, else the user. `last_line` reads the last line that
     /// matches in a file the payload names; it is called only for a Codex PermissionRequest.
@@ -361,6 +372,19 @@ mod tests {
                 assert!(!adapter.before_tool(&event(other)), "{other}");
             }
         }
+    }
+
+    #[test]
+    fn only_a_tool_call_that_asks_the_user_asks() {
+        let ask =
+            serde_json::json!({"hook_event_name": "PreToolUse", "tool_name": "AskUserQuestion"});
+        let bash = serde_json::json!({"hook_event_name": "PreToolUse", "tool_name": "Bash"});
+        let permission = serde_json::json!({"hook_event_name": "PermissionRequest", "tool_name": "AskUserQuestion"});
+
+        assert!(Adapter::ClaudeCode.asks(&ask));
+        assert!(!Adapter::ClaudeCode.asks(&bash));
+        assert!(!Adapter::ClaudeCode.asks(&permission));
+        assert!(!Adapter::Codex.asks(&ask));
     }
 
     #[test]
