@@ -77,6 +77,7 @@ mkdir -p ~/.local/share/bash-completion/completions
 saaio completions bash > ~/.local/share/bash-completion/completions/saaio
 
 # fish
+mkdir -p ~/.config/fish/completions
 saaio completions fish > ~/.config/fish/completions/saaio.fish
 ```
 
