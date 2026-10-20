@@ -373,7 +373,7 @@ resume: the hook waits `PICKUP_WAIT` and lets the tool run.
 - [x] Add `server/pause_watch.rs` (`PauseWatch::due`/`done`, `Server::pause_idle`, `Server::pause_finished`, `run_in_background`, `Event::Paused`) and wire it into `Server::serve` and `handle`; unit tests and a server test that pauses and resumes over a real socket
 - [x] Add `Adapter::before_tool`, the 150 s PreToolUse timeouts in both adapters, and `wait_for_services` in hook.rs; adapter tests and tests/cli.rs for waiting on resuming and not stalling without a server
 - [x] Show services in `saaio status`: the list's `services` column (and `--all`), the detail's `services` and `services_error`; TOON tests
-- [ ] Show services on the board card label and in the board detail header; UI tests and goldens
+- [x] Show services on the board card label and in the board detail header; UI tests and goldens
 - [ ] Update docs/repository.md (pause and resume section, Compose example, the slot line fix), docs/configuration.md, docs/flows.md, docs/json.md, docs/ui.md, docs/cli.md
 - [ ] Update the setup-saaio skill in ~/projects/agent-skills to write and prove `.saaio/pause` and `.saaio/resume`, as a separate PR there
 - [ ] End-to-end check: scratch `SAAIO_HOME`, a repo whose pause and resume write timestamps and sleep, `pause_after_minutes = 1`, a Claude worker in the UI: it pauses after a minute idle, the card says `ready · paused`, a new prompt resumes it and the first tool call waits for it; status and `--json` agree

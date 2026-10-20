@@ -1,0 +1,44 @@
+
+  ▚▄▞ saaio board                                                                                    5 sessions · 2 need you · 1 delegated · 1 ended
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    ▌
+    0   master                              you      1 ● shop-221                        blocked    ▌ 2 ● shop-230       waiting for you · paused
+      ~/projects/shop · main                           ●───●───○───○  implement                     ▌   ●───○───○───○  plan  · guided
+      4 workers                                        4/9 tasks                    claude · 29m    ▌                                claude · 31m
+                                                       migration needs a default value for orde…    ▌   Which approach: a channel column or a jo…
+                                                                                                    ▌
+
+
+    3 ◓ export-csv               review · agent      4 ○ shop-198                          ended
+      ●───●───●───○  review                            ●───●───●───●  MR !418
+      6/6 tasks                     claude · 1h        flow/shop-198                 claude · 2h
+      agent: review changes                            shop-198
+
+
+  2 shop-230  shop-230 · guided · claude · flow/shop-230 · slot 1 · services paused 16:14 · started 31m ago
+              plan ● 31m   implement ○   review ○   MR ○
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  TIMELINE
+  16:09  ● started
+  16:09  ● phase: plan
+  16:09  ● waiting: Which approach: a channel column or a join table?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   a every project   esc back to master
+
