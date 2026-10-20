@@ -1,11 +1,11 @@
 # The terminal UI
 
 ```sh
-saaio    # in a repository
-saaio       # the same, typed in a terminal
+saaio    # in a repository, typed in a terminal
 ```
 
-One terminal with the master, every worker and every plain session.
+One terminal with the master, every worker and every plain session. Run by an agent or a script,
+`saaio` prints every flow instead ([cli.md](cli.md#run-by-an-agent-or-a-script)).
 
 - [The screen](#the-screen)
 - [Keys](#keys)
@@ -25,14 +25,15 @@ One terminal with the master, every worker and every plain session.
 | Area | Shows |
 | --- | --- |
 | pane (left) | the session in view. The master when the UI opens. Receives all typing except the [prefix key](#keys). |
-| title row (above the pane) | worker: state, name, steps, phase, branch, slot. Plain session: state, folder. Master: branch, plus folder while the sidebar is folded. Notices on the right, such as a theme error or "starting the flow…". |
+| title row (above the pane) | worker: state, name, steps, phase, branch, slot. Plain session: state, name, folder. Master: branch, plus folder while the sidebar is folded. Notices on the right, such as a theme error or "starting the flow…". |
 | sidebar (right) | every session, see below |
 | rail | the folded sidebar: numbers and marks only. Below 110 columns, or `C-space b`. The title row then names the first flow that needs you and is not in view. |
 
 ### Sidebar
 
 Row `0` is the master, with its folder and branch. Spinner while it works. Waiting dot when it ends
-a turn, asks something or wants permission while another session is in view, until you look at it.
+a turn, asks something or wants permission while another session is in view, until you look at it;
+a dot in the blocked color when its turn failed.
 
 Workers and plain sessions follow, grouped:
 
@@ -45,8 +46,8 @@ Workers and plain sessions follow, grouped:
 
 | Row line | Content |
 | --- | --- |
-| 1 | number (`1` is the top), state, name, age |
-| 2 | steps (`●───●───○───○`), phase, task count. Once finished: duration. Plain session: its state, such as `idle`. |
+| 1 | number (`1` is the top), state, name, agent, age |
+| 2 | steps (`●───●───○───○`), phase, task count. Once finished: its merge request (`PR #42`, `merged`) or its state, and how long it took. Plain session: its state, such as `idle`. |
 | 3 | what it asks or does |
 
 Rows that do not fit end in `… N more`.
@@ -59,8 +60,8 @@ Rows that do not fit end in `… N more`.
 | `●` in the blocked color | blocked or not responding |
 | `✓` | done |
 | `○` faint | ended |
-| `exited` | the session's process ended |
-| `failed` | the session could not start |
+| `exited`, in place of the age | the session's process ended |
+| `failed`, in place of the age | the session could not start. Line 3 says why. |
 
 ## Keys
 
@@ -75,7 +76,7 @@ Press the prefix, release, press the key.
 | `C-space n` | [start a flow](#starting-a-flow) |
 | `C-space o` | open the [board](#the-board) |
 | `C-space b` | fold the sidebar to a rail, and back |
-| `C-space r` | resume a session that exited while its flow is unfinished |
+| `C-space r` | resume the session in view when it is not running: the master, or a worker whose flow is unfinished |
 | `C-space [` | scroll back through the session's [history](#history) |
 | `C-space d` | detach: leave the UI, every session keeps running |
 | `C-space Q` | stop saaio ([Leaving and stopping](#leaving-and-stopping)) |
@@ -94,14 +95,16 @@ Sidebar numbers follow the sort order, so a flow's number changes with its state
 
 Under the selected worker: its latest tool calls and text, read from the harness's transcript, not
 its screen. Paths in the worker's worktree show relative to it, others in your home folder with ~.
+For a finished flow: its branch and worktree. The peek shows in the sidebar only, not on the rail.
 
 ## The board
 
-`C-space o`. A card per session. Below the cards: the selected flow's timeline, decisions and steps.
+`C-space o`. A card per session. Below the cards: the selected flow's phases and how long each took,
+its timeline, decisions and last answer.
 
 | Key | Does |
 | --- | --- |
-| `0` to `9` | select a card |
+| `0` to `9` | select a card, on this project's board |
 | `h` `j` `k` `l`, arrows | move between cards |
 | `enter` | jump into the selected session |
 | `n` | start a flow |
@@ -113,8 +116,8 @@ Other projects' flows are read-only. `enter` and `x` work on this project's flow
 
 A flow whose services saaio paused ([repository.md](repository.md#pause-and-resume)) says so
 beside its state on its card: `ready · paused`, `working · resuming`, or `working · services down`
-when the resume failed. The selected flow's header says since when (`services paused 14:02`) or
-why the resume failed. The sidebar does not show it.
+when the resume failed. The selected flow's header says since when (`services paused 14:02`),
+`services resuming`, or why the resume failed (`services down: port 8003 is taken`). The sidebar does not show it.
 
 ## Starting a flow
 
@@ -143,7 +146,7 @@ why the resume failed. The sidebar does not show it.
 | type | the branch type, when the repository has a [branch convention](repository.md#branch-names) with types |
 | agent | the agent to run, when there is more than one |
 | mode | `auto`, `guided` or `plain` ([flows.md](flows.md#guided-and-auto)) |
-| creates | the branch, worktree and slot the start creates |
+| creates | the branch, worktree and slot the start creates, filled in once you type, or `every slot is taken`. Plain mode: where the session opens. |
 
 | Key | Does |
 | --- | --- |
@@ -152,17 +155,20 @@ why the resume failed. The sidebar does not show it.
 | `C-w` | deletes the last word, in plain mode the last folder |
 | `C-u` | clears the text |
 | `tab` | next row |
-| `space`, `l`, right arrow | next option in a row |
-| `h`, left arrow | previous option |
+| `space`, `l`, right arrow | next option in a row, wrapping around |
+| `h`, left arrow | previous option, wrapping around |
 | `enter` | start, once the text is not empty |
 | `esc` | cancel |
+
+In plain mode the dialog is titled `new session`, the text row is `folder`, prefilled with the
+folder in view, and the type row is hidden.
 
 `enter` runs `saaio start`. The new session appears in the sidebar. A failed start shows its reason
 under the request.
 
 ## A session that ended
 
-A worker's pane after `/exit` or a stopped process:
+A worker's pane after `/exit`, a stopped process, or a start that failed (`could not start`):
 
 | Key | Does |
 | --- | --- |
@@ -175,6 +181,9 @@ other key keeps the flow. A finished flow (`done` or `ended`) cannot be reopened
 already belong to another flow. Use a new flow to continue work.
 
 The master's session ended: `C-space r` resumes it, `C-space Q` stops saaio.
+
+A flow saaio has no session for shows `not open`: `C-space r` resumes it, `C-space 0` goes back to
+the master.
 
 ## History
 
