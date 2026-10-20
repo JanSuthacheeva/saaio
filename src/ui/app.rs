@@ -50,6 +50,17 @@ pub enum View {
     },
 }
 
+/// The master as the UI shows it.
+#[derive(Debug, Default)]
+struct Master {
+    /// Where it runs, as shown: ~/projects/shop · main.
+    place: Option<String>,
+    cwd: Option<String>,
+    turn: Option<MasterTurn>,
+    /// A turn ended, asked or wants permission while its pane was not in view.
+    unseen: bool,
+}
+
 /// What saaio ui shows and what it does with input; no I/O of its own.
 #[derive(Debug)]
 pub struct App {
@@ -70,12 +81,7 @@ pub struct App {
     home: Option<String>,
     /// The local time zone's offset from UTC, for clock times.
     offset_secs: i64,
-    /// Where the master runs, as shown: ~/projects/shop · main.
-    master: Option<String>,
-    master_cwd: Option<String>,
-    master_turn: Option<MasterTurn>,
-    /// A turn of the master ended, asked or wants permission while its pane was not in view.
-    master_unseen: bool,
+    master: Master,
     /// A one-line message, such as why a flow command failed, until the next key.
     notice: Option<String>,
     /// The sidebar folded to a rail: Some once the prefix and b chose, None follows the width (RAIL_BELOW).
@@ -113,10 +119,7 @@ impl App {
             ticks: 0,
             home: None,
             offset_secs: 0,
-            master: None,
-            master_cwd: None,
-            master_turn: None,
-            master_unseen: false,
+            master: Master::default(),
             notice: None,
             rail: None,
             here: None,
@@ -253,7 +256,7 @@ impl App {
             path.find(&marker).map(|at| path[..at].to_string())
         });
         PathBuf::from(
-            repo.or_else(|| self.master_cwd.clone())
+            repo.or_else(|| self.master.cwd.clone())
                 .unwrap_or_else(|| ".".to_string()),
         )
     }
@@ -274,10 +277,10 @@ impl App {
     /// What row 0's glyph shows: Working or Delegated as they are; Waiting for an unseen Idle or
     /// Waiting, Blocked for an unseen Blocked; None once seen.
     fn master_state(&self) -> Option<State> {
-        match self.master_turn?.state {
+        match self.master.turn?.state {
             state @ (State::Working | State::Delegated) => Some(state),
-            State::Idle | State::Waiting if self.master_unseen => Some(State::Waiting),
-            State::Blocked if self.master_unseen => Some(State::Blocked),
+            State::Idle | State::Waiting if self.master.unseen => Some(State::Waiting),
+            State::Blocked if self.master.unseen => Some(State::Blocked),
             _ => None,
         }
     }
@@ -303,7 +306,7 @@ impl App {
             focus: &self.focus,
             cursor: self.cursor.as_deref(),
             peek,
-            master: self.master.as_deref(),
+            master: self.master.place.as_deref(),
             master_state: self.master_state(),
             now: self.now,
             spin: self.spin,

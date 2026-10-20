@@ -169,6 +169,6 @@ Unchanged: every step moves or regroups code. Error paths stay where they are.
 - [x] 3. Split `workspace.rs` into `workspace.rs`, `git.rs`, `hooks.rs`, `process.rs`
 - [x] 4. Rename `config::path`, `slots::taken`, `pane::shared_env`, `worktree::add_argv`/`remove_argv`
 - [x] 5. Group `Server`'s pane maps into `PaneState` and `conns`/`peers` into `Conn`
-- [ ] 6. Group `App`'s master fields into `App.master`
+- [x] 6. Group `App`'s master fields into `App.master`
 - [ ] 7. Replace libc with rustix for kill, killpg, getuid and Linux peer creds
 - [ ] End to end: bare `saaio` on a scratch store in a PTY, start a flow, close it, `saaio --stop`

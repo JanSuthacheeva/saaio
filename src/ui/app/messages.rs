@@ -18,8 +18,8 @@ impl App {
             ServerMsg::Master { cwd, branch, turn } => {
                 self.on_master_turn(turn);
                 let place = self.tilde(&cwd);
-                self.master_cwd = Some(cwd);
-                self.master = Some(match branch {
+                self.master.cwd = Some(cwd);
+                self.master.place = Some(match branch {
                     Some(branch) => format!("{place} · {branch}"),
                     None => place,
                 });
@@ -132,17 +132,17 @@ impl App {
     /// Takes the master's turn: lights row 0 when its state changed, and marks it unseen when it
     /// came to rest (Waiting, Idle, Blocked) while the master is not focused.
     fn on_master_turn(&mut self, turn: Option<MasterTurn>) {
-        if turn == self.master_turn {
+        if turn == self.master.turn {
             return;
         }
-        let was = self.master_turn.map(|turn| turn.state);
+        let was = self.master.turn.map(|turn| turn.state);
         let state = turn.map(|turn| turn.state);
         if was.is_some() && state.is_some() && was != state {
             self.changed.insert(PaneKey::Master, self.now);
         }
-        self.master_unseen = matches!(state, Some(State::Waiting | State::Idle | State::Blocked))
+        self.master.unseen = matches!(state, Some(State::Waiting | State::Idle | State::Blocked))
             && self.focus != PaneKey::Master;
-        self.master_turn = turn;
+        self.master.turn = turn;
     }
 
     /// The time (Unix ms) ages count to; true when the screen should be drawn again for it:
