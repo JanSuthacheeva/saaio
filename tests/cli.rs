@@ -146,7 +146,7 @@ fn seed(home: &Path, id: &str, lines: &[&str]) {
 fn seed_blocked(home: &Path) {
     seed(
         home,
-        "7f3c",
+        "7f3c0000-0000-4000-8000-000000000000",
         &[
             r#"{"v":1,"at":1000,"kind":"started","name":"shop-221","request":"SHOP-221 add CSV export","mode":"auto"}"#,
             r#"{"v":1,"at":2000,"kind":"phase","phase":"implement"}"#,
@@ -355,7 +355,10 @@ fn status_lists_flows_and_shows_one_in_detail() {
     );
 
     let detail = stdout(&saaio(home.path(), &["status", "shop-221"]));
-    assert!(detail.starts_with("name: shop-221\nid: 7f3c\n"), "{detail}");
+    assert!(
+        detail.starts_with("name: shop-221\nid: 7f3c0000-0000-4000-8000-000000000000\n"),
+        "{detail}"
+    );
 }
 
 #[test]
@@ -1218,10 +1221,12 @@ fn a_claude_code_turn_marks_the_session_busy_and_its_stop_hands_nothing_over() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");
     let busy = home.path().join(format!("waits/{id}.busy"));
-    let prompt = r#"{"session_id":"7f3c","hook_event_name":"UserPromptSubmit","prompt":"go"}"#;
-    let stop = r#"{"session_id":"7f3c","hook_event_name":"Stop","last_assistant_message":"Tabs or spaces?","background_tasks":[]}"#;
+    let prompt = r#"{"session_id":"7f3c0000-0000-4000-8000-000000000000","hook_event_name":"UserPromptSubmit","prompt":"go"}"#;
+    let stop = r#"{"session_id":"7f3c0000-0000-4000-8000-000000000000","hook_event_name":"Stop","last_assistant_message":"Tabs or spaces?","background_tasks":[]}"#;
     let compact = |event: &str| {
-        format!(r#"{{"session_id":"7f3c","hook_event_name":"{event}","trigger":"manual"}}"#)
+        format!(
+            r#"{{"session_id":"7f3c0000-0000-4000-8000-000000000000","hook_event_name":"{event}","trigger":"manual"}}"#
+        )
     };
 
     assert!(hook(home.path(), Some(&id), prompt).status.success());
@@ -1259,8 +1264,8 @@ fn a_claude_code_turn_that_asks_beside_a_background_task_waits_for_the_person() 
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");
     let busy = home.path().join(format!("waits/{id}.busy"));
-    let prompt = r#"{"session_id":"7f3c","hook_event_name":"UserPromptSubmit","prompt":"go"}"#;
-    let stop = r#"{"session_id":"7f3c","hook_event_name":"Stop","last_assistant_message":"The server runs.\n\nWhich color do you prefer, red or blue?","background_tasks":[{"id":"b1","type":"shell","status":"running","description":"Run the dev server"}]}"#;
+    let prompt = r#"{"session_id":"7f3c0000-0000-4000-8000-000000000000","hook_event_name":"UserPromptSubmit","prompt":"go"}"#;
+    let stop = r#"{"session_id":"7f3c0000-0000-4000-8000-000000000000","hook_event_name":"Stop","last_assistant_message":"The server runs.\n\nWhich color do you prefer, red or blue?","background_tasks":[{"id":"b1","type":"shell","status":"running","description":"Run the dev server"}]}"#;
 
     hook(home.path(), Some(&id), prompt);
     assert!(hook(home.path(), Some(&id), stop).status.success());
@@ -1563,7 +1568,7 @@ fn a_hook_never_fails_or_prints_whatever_it_gets() {
     let cases = [
         hook(home.path(), None, stop),
         hook(home.path(), Some(&id), "not json"),
-        hook(home.path(), Some("no-such-flow"), stop),
+        hook(home.path(), Some(MISSING), stop),
         hook(
             home.path(),
             Some(&id),
@@ -1584,11 +1589,47 @@ fn a_hook_never_fails_or_prints_whatever_it_gets() {
         "{log}"
     );
     assert!(
-        log.contains("] hook claude-code flow no-such-flow: no flow no-such-flow\n"),
+        log.contains(&format!(
+            "] hook claude-code flow {MISSING}: no flow {MISSING}\n"
+        )),
         "{log}"
     );
     let list = stdout(&saaio(home.path(), &["status"]));
     assert!(!list.contains("waiting"), "{list}");
+}
+
+const MISSING: &str = "0b5e4000-0000-4000-8000-000000000000";
+
+#[test]
+fn a_flow_id_that_is_no_uuid_never_becomes_a_path() {
+    let outer = TempDir::new().unwrap();
+    let home = outer.path().join("store");
+    new_flow(&home, "shop-221");
+    let forged = "../../escaped";
+    let prompt = r#"{"hook_event_name":"UserPromptSubmit","prompt":"go"}"#;
+    let stop = r#"{"hook_event_name":"Stop","last_assistant_message":"Done?"}"#;
+
+    for adapter in ["claude-code", "codex"] {
+        for payload in [prompt, stop] {
+            let output = hook_with(&home, &[adapter], Some(forged), payload);
+            assert!(output.status.success());
+            assert!(output.stdout.is_empty() && output.stderr.is_empty());
+        }
+    }
+    let wait = saaio_in(&home, forged, &["wait"]);
+
+    assert!(wait.status.success());
+    assert!(wait.stdout.is_empty() && wait.stderr.is_empty());
+    let outside: Vec<_> = fs::read_dir(outer.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(outside, ["store"]);
+    let log = fs::read_to_string(home.join("server.log")).unwrap();
+    assert!(
+        log.contains(r#"] hook codex: SAAIO_FLOW_ID "../../escaped" is no flow id"#),
+        "{log}"
+    );
 }
 
 #[test]
@@ -2423,7 +2464,7 @@ fn sends_after_pr_until_worker_ends() {
     );
     seed(
         home.path(),
-        "7f3c",
+        "7f3c0000-0000-4000-8000-000000000000",
         &[
             r#"{"v":1,"at":1000,"kind":"started","name":"slot-reclaim","request":"fix a race","mode":"auto"}"#,
             &workspace,
@@ -2433,7 +2474,12 @@ fn sends_after_pr_until_worker_ends() {
         include_str!("../src/adapter/fixtures/codex/post_bash_merge_request.json"),
         include_str!("../src/adapter/fixtures/codex/stop_question.json"),
     ] {
-        let output = hook_with(home.path(), &["codex"], Some("7f3c"), payload);
+        let output = hook_with(
+            home.path(),
+            &["codex"],
+            Some("7f3c0000-0000-4000-8000-000000000000"),
+            payload,
+        );
         assert!(output.status.success(), "{}", stderr(&output));
     }
     let status: serde_json::Value =
@@ -2449,11 +2495,19 @@ fn sends_after_pr_until_worker_ends() {
     let typed = saaio(home.path(), &["send", "--type", "slot-reclaim", "/review"]);
     assert!(sent.status.success(), "{}", stdout(&sent));
     assert!(typed.status.success(), "{}", stdout(&typed));
-    let log = fs::read_to_string(home.path().join("flows/7f3c.jsonl")).unwrap();
+    let log = fs::read_to_string(
+        home.path()
+            .join("flows/7f3c0000-0000-4000-8000-000000000000.jsonl"),
+    )
+    .unwrap();
     assert!(log.contains(r#""kind":"message","text":"Fix the race first.""#));
     assert!(log.contains(r#""kind":"typed","text":"/review""#));
 
-    let ended = saaio_in(home.path(), "7f3c", &["report", "ended"]);
+    let ended = saaio_in(
+        home.path(),
+        "7f3c0000-0000-4000-8000-000000000000",
+        &["report", "ended"],
+    );
     assert!(ended.status.success(), "{}", stderr(&ended));
     for args in [
         vec!["send", "slot-reclaim", "late"],
@@ -2463,10 +2517,17 @@ fn sends_after_pr_until_worker_ends() {
         assert_eq!(output.status.code(), Some(1));
         assert!(stdout(&output).contains("slot-reclaim is finished"));
     }
-    fs::remove_file(home.path().join("flows/7f3c.jsonl")).unwrap();
-    let removed = saaio(home.path(), &["send", "7f3c", "late"]);
+    fs::remove_file(
+        home.path()
+            .join("flows/7f3c0000-0000-4000-8000-000000000000.jsonl"),
+    )
+    .unwrap();
+    let removed = saaio(
+        home.path(),
+        &["send", "7f3c0000-0000-4000-8000-000000000000", "late"],
+    );
     assert_eq!(removed.status.code(), Some(1));
-    assert!(stdout(&removed).contains("no flow named 7f3c"));
+    assert!(stdout(&removed).contains("no flow named 7f3c0000-0000-4000-8000-000000000000"));
 }
 
 #[test]
@@ -2474,7 +2535,7 @@ fn send_puts_the_masters_message_into_the_flows_log() {
     let home = TempDir::new().unwrap();
     seed_worker(
         home.path(),
-        "7f3c",
+        "7f3c0000-0000-4000-8000-000000000000",
         "shop-217",
         r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
     );
@@ -2483,7 +2544,11 @@ fn send_puts_the_masters_message_into_the_flows_log() {
 
     assert!(output.status.success(), "{}", stdout(&output));
     assert!(stdout(&output).starts_with("sent: shop-217\nstate: waiting\n"));
-    let log = fs::read_to_string(home.path().join("flows/7f3c.jsonl")).unwrap();
+    let log = fs::read_to_string(
+        home.path()
+            .join("flows/7f3c0000-0000-4000-8000-000000000000.jsonl"),
+    )
+    .unwrap();
     assert!(
         log.lines()
             .last()
@@ -2500,7 +2565,12 @@ const DIALOG: &str = r#"{"v":1,"at":2000,"kind":"waiting","question":"Which colo
 #[test]
 fn status_lists_the_questions_and_options_of_a_dialog() {
     let home = TempDir::new().unwrap();
-    seed_worker(home.path(), "7f3c", "ask", DIALOG);
+    seed_worker(
+        home.path(),
+        "7f3c0000-0000-4000-8000-000000000000",
+        "ask",
+        DIALOG,
+    );
 
     let detail = stdout(&saaio(home.path(), &["status", "ask", "--full"]));
 
@@ -2517,7 +2587,12 @@ fn status_lists_the_questions_and_options_of_a_dialog() {
 #[test]
 fn send_to_a_flow_on_a_dialog_says_saaio_closes_it() {
     let home = TempDir::new().unwrap();
-    seed_worker(home.path(), "7f3c", "ask", DIALOG);
+    seed_worker(
+        home.path(),
+        "7f3c0000-0000-4000-8000-000000000000",
+        "ask",
+        DIALOG,
+    );
 
     let output = saaio(
         home.path(),
@@ -2597,7 +2672,7 @@ fn send_takes_a_message_while_config_toml_is_broken() {
     let home = TempDir::new().unwrap();
     seed_worker(
         home.path(),
-        "7f3c",
+        "7f3c0000-0000-4000-8000-000000000000",
         "shop-217",
         r#"{"v":1,"at":2000,"kind":"idle","note":"plan done"}"#,
     );
@@ -2620,7 +2695,7 @@ fn send_type_queues_lines_in_order_in_the_flows_log() {
     let home = TempDir::new().unwrap();
     seed_worker(
         home.path(),
-        "7f3c",
+        "7f3c0000-0000-4000-8000-000000000000",
         "shop-217",
         r#"{"v":1,"at":2000,"kind":"idle","note":"plan done"}"#,
     );
@@ -2638,7 +2713,11 @@ fn send_type_queues_lines_in_order_in_the_flows_log() {
         stdout(&first)
     );
     assert!(stdout(&second).contains("ahead: 1"), "{}", stdout(&second));
-    let log = fs::read_to_string(home.path().join("flows/7f3c.jsonl")).unwrap();
+    let log = fs::read_to_string(
+        home.path()
+            .join("flows/7f3c0000-0000-4000-8000-000000000000.jsonl"),
+    )
+    .unwrap();
     let typed: Vec<&str> = log
         .lines()
         .filter(|line| line.contains(r#""kind":"typed""#))
@@ -2650,7 +2729,12 @@ fn send_type_queues_lines_in_order_in_the_flows_log() {
     assert!(detail.contains("master typed: /compact"), "{detail}");
 
     fs::create_dir_all(home.path().join("waits")).unwrap();
-    fs::write(home.path().join("waits/7f3c.typed"), "2").unwrap();
+    fs::write(
+        home.path()
+            .join("waits/7f3c0000-0000-4000-8000-000000000000.typed"),
+        "2",
+    )
+    .unwrap();
     let after = saaio(home.path(), &["send", "--type", "shop-217", "/review"]);
     assert!(stdout(&after).contains("ahead: 0"), "{}", stdout(&after));
 }
@@ -2660,7 +2744,7 @@ fn send_type_refuses_more_than_one_line_and_an_agent_without_turns() {
     let home = TempDir::new().unwrap();
     seed_worker(
         home.path(),
-        "7f3c",
+        "7f3c0000-0000-4000-8000-000000000000",
         "shop-217",
         r#"{"v":1,"at":2000,"kind":"working"}"#,
     );
@@ -2706,7 +2790,11 @@ fn send_type_refuses_more_than_one_line_and_an_agent_without_turns() {
         "{aider}"
     );
     assert!(refused(&["send", "--type", "shop-217", "  "]).contains("nothing to send"));
-    let log = fs::read_to_string(home.path().join("flows/7f3c.jsonl")).unwrap();
+    let log = fs::read_to_string(
+        home.path()
+            .join("flows/7f3c0000-0000-4000-8000-000000000000.jsonl"),
+    )
+    .unwrap();
     assert!(!log.contains("typed"), "{log}");
 }
 
@@ -2755,12 +2843,16 @@ fn a_workers_wait_ends_with_the_masters_message_once() {
     let home = TempDir::new().unwrap();
     seed_worker(
         home.path(),
-        "7f3c",
+        "7f3c0000-0000-4000-8000-000000000000",
         "shop-217",
         r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
     );
     let short = Duration::from_millis(1200);
-    let mut first = waiter(home.path(), Some("7f3c"), &[]);
+    let mut first = waiter(
+        home.path(),
+        Some("7f3c0000-0000-4000-8000-000000000000"),
+        &[],
+    );
     assert!(ended(&mut first, short).is_none(), "nothing to deliver yet");
 
     saaio(home.path(), &["send", "shop-217", "Semicolons."]);
@@ -2773,14 +2865,26 @@ fn a_workers_wait_ends_with_the_masters_message_once() {
         "message from the saaio master:\n  Semicolons."
     );
     assert_eq!(
-        fs::read_to_string(home.path().join("waits/7f3c.busy")).unwrap(),
+        fs::read_to_string(
+            home.path()
+                .join("waits/7f3c0000-0000-4000-8000-000000000000.busy")
+        )
+        .unwrap(),
         "turn",
         "the turn it wakes runs no prompt hook"
     );
 
-    let mut again = waiter(home.path(), Some("7f3c"), &[]);
+    let mut again = waiter(
+        home.path(),
+        Some("7f3c0000-0000-4000-8000-000000000000"),
+        &[],
+    );
     assert!(ended(&mut again, short).is_none(), "delivered once only");
-    let replacing = waiter(home.path(), Some("7f3c"), &[]);
+    let replacing = waiter(
+        home.path(),
+        Some("7f3c0000-0000-4000-8000-000000000000"),
+        &[],
+    );
     let (code, _, err) = ended(&mut again, Duration::from_secs(5)).expect("replaced");
     assert_eq!((code, err.as_str()), (0, ""));
     drop(replacing);
@@ -2791,7 +2895,7 @@ fn the_masters_wait_ends_with_the_flows_that_stopped() {
     let home = TempDir::new().unwrap();
     seed_worker(
         home.path(),
-        "7f3c",
+        "7f3c0000-0000-4000-8000-000000000000",
         "shop-217",
         r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
     );
@@ -2838,7 +2942,7 @@ fn the_masters_wait_brings_no_news_while_it_does_not_wake() {
     fs::write(&config, "[master]\nwake = false\n").unwrap();
     seed_worker(
         home.path(),
-        "7f3c",
+        "7f3c0000-0000-4000-8000-000000000000",
         "shop-217",
         r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
     );

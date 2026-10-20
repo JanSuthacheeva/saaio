@@ -254,7 +254,7 @@ Each shared piece lands in the commit of its first user: alone it is dead code, 
 
 - [x] Add `event::is_uuid` with unit tests (v4, v7, option-like, traversal, short, empty)
 - [x] H1: `codex::session` and the resume specs (`pane::worker_spec`, `Master::spec`) accept only UUID sessions; fixtures to UUIDs; tests for a forged session
-- [ ] M5: hook and wait refuse a set `SAAIO_FLOW_ID` that is no UUID; `tests/cli.rs` traversal test
+- [x] M5: hook and wait refuse a set `SAAIO_FLOW_ID` that is no UUID; `tests/cli.rs` traversal test
 - [ ] H2: `workspace::registered_git_dir`, `worktree_git`, `has_uncommitted_work(repo, workspace)`, retire fails closed; fsmonitor test with real git; `tests/cli.rs` remove test
 - [ ] H2: `Ask.repo`, forge watch runs remote_urls and gh/glab in the main checkout; forge tests updated
 - [ ] Add `src/private.rs` (`create_dir`, `options`, `write_new`, `write_atomic` moved from store.rs) with mode and symlink tests; CLAUDE.md Architecture line
