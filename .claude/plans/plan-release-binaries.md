@@ -196,6 +196,7 @@ A user installs:
 - [x] Add `.github/workflows/release.yml` (check, build x4 with test and `--version` check, package, install-check x2, publish)
 - [x] Docs: README Install, docs/install.md (install, manual download, from source, updating), docs/files.md, docs/cli.md, ROADMAP (binaries row), CHANGELOG 0.1.0, CONTRIBUTING Releasing, CLAUDE.md Structure
 - [x] End to end: push the branch and `v0.1.0-rc.1`, all jobs green, download the pre-release, `sha256sum -c`, install from it on this Mac and check `saaio --version` names the branch head, then delete the pre-release and tag
+- [ ] After review (Jan: fix all three): install.sh removes its temp folder on Ctrl-C and TERM too, `place` removes its `.saaio.<pid>` file when copying fails, and `SAAIO_INSTALL_DIR` loses a trailing slash; test `takes_the_folder_with_a_trailing_slash`
 
 ## Review
 
@@ -206,7 +207,7 @@ Fixed
   `fails_when_the_installed_binary_does_not_run` (b0f65cb). Reviewed again by the same agent in a
   separate pass, not independently.
 
-Open
+Open (decided: fix all three, task under Tasks)
 - install.sh leaves its temp folder when interrupted with Ctrl-C under dash (the EXIT trap does not
   run on a signal) and a `.saaio.<pid>` file beside saaio when `cp` fails half way. Both are
   harmless leftovers; recommend leaving them.
