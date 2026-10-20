@@ -175,3 +175,41 @@ The test call-site churn of `translate(..., Approver::User)` is routine and can 
 
 Checks: `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check` pass at
 the review commits.
+
+### Second review (fd05243..7da7243)
+
+Isolated review of 7da7243 (read the rollout back to its newest turn_context) in the context of
+the branch. The code matches the updated plan: `Adapter::approver` / `codex::approver` take
+`last_line`, `codex::turn_context` and `approvals_reviewer` per line, `hook::rollout_line` and
+`hook::last_line` with `ROLLOUT_CHUNK`. Nothing stored changes. The first review's open item
+"the whole rollout is read" is resolved by this commit.
+
+Checked, no finding:
+- `last_line` chunk joining: a line cut by a chunk start is carried in `rest` and searched once,
+  whole; a multi-byte character split by a chunk is never decoded half; no final newline works.
+  Unit tests cover chunk sizes 1, 7, 64 and 1 MiB.
+- "Turns do not interleave": in all 93 local rollouts no turn_id's turn_context lines are split by
+  another turn's, and the automatic reviewer writes its own rollout files, not into the worker's.
+- A later line that only mentions `"turn_context"` is parsed and rejected (test
+  `the_newest_turn_context_is_the_one_that_counts`); the `contains` pre-filter only skips parsing.
+
+Fixed: nothing.
+
+Open:
+- `last_line` copies `rest` into every new chunk while one line has no newline, so a single very
+  long line costs quadratic copying: a 20 MB line took 1.3 s (release build, probe test, not
+  committed). Real rollouts are far from it (longest line in 93 local rollouts: 70 KB), and a
+  line that long would have to sit between the turn_context and the escalation. Recommendation:
+  leave for 0.1.0; if it is touched later, collect chunks without a newline in a list and join
+  them once a newline is found.
+- `last_line` would return the empty segment after the final newline for a matcher that accepts
+  `""`. The only production matcher (`turn_context`) never does. Leave.
+
+Where to look:
+1. `src/cli/commands/hook.rs` `last_line`: the `whole` / `rest` bookkeeping across chunks.
+2. `src/adapter/codex.rs` `approver` -> `turn_context` -> `approvals_reviewer`: the newest
+   turn_context must be the payload's turn, anything else is the user.
+The test call-site changes from `|_| Some(..)` to `last_line_of(..)` are routine.
+
+Checks: `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check` passed at
+7da7243 (not rerun; only the plan changed since).
