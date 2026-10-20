@@ -222,5 +222,5 @@ Then ask the agent in the repository: "set up saaio for this project".
 - Plans a port per service and slot.
 - Makes the compose ports configurable.
 - Writes `.saaio/setup` and `.saaio/teardown` (`.env`, dependencies, migrations, ports).
-- Writes `.saaio/pause` and `.saaio/resume` when the setup starts services or dev servers.
+- Writes `.saaio/pause` and `.saaio/resume` when the setup starts services.
 - Tests them in a scratch worktree.
