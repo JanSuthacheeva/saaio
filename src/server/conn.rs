@@ -214,7 +214,7 @@ impl Server {
         };
         let master = ServerMsg::Master {
             cwd: self.record.cwd.display().to_string(),
-            branch: crate::workspace::current_branch(&self.record.cwd),
+            branch: crate::workspace::git::current_branch(&self.record.cwd),
             turn: self.store.master_turn(),
         };
         if self.sent_master.as_ref() == Some(&master) {

@@ -81,7 +81,7 @@ fn cycle(graph: &BTreeMap<String, BTreeSet<String>>) -> Option<Vec<String>>;
   `has_uncommitted_work`, `commits_only_on`, `branch_exists`, `remote_urls`, `ssh_hostname`,
   `delete_branch`; private `git`, `worktree_git`, `registered_git_dir`.
 - `workspace/hooks.rs`: `Hook`, `run`, `run_within`, `exists` (were `run_hook`, `run_hook_within`,
-  `has_hook`), `file`, `is_executable`.
+  `has_hook`), `path` (was `hook_file`), `is_executable`.
 - `workspace/process.rs`: `output_in`, `finish_within`, `Pipe`, `read_in_background`, `run`,
   `stdout_of`, `last_line`, `WAIT_STEP`, `READ_GRACE`.
 - Tests with what they test; shared `git`, `repo`, `hook` helpers in `workspace/fixtures.rs`.
@@ -158,7 +158,7 @@ Unchanged: every step moves or regroups code. Error paths stay where they are.
 - [x] 1d. Move `Refusal` to `refusal.rs` with `Refusal::phrase`
 - [x] 1e. Add `layering.rs` with `the_top_level_modules_form_no_cycle`
 - [x] 2. Split `ui/input.rs` into `input.rs`, `input/keys.rs`, `input/mouse.rs`
-- [ ] 3. Split `workspace.rs` into `workspace.rs`, `git.rs`, `hooks.rs`, `process.rs`
+- [x] 3. Split `workspace.rs` into `workspace.rs`, `git.rs`, `hooks.rs`, `process.rs`
 - [ ] 4. Rename `config::path`, `slots::taken`, `pane::env`, `worktree::add_argv`/`remove_argv`
 - [ ] 5. Group `Server`'s pane maps into `PaneState` and `conns`/`peers` into `Conn`
 - [ ] 6. Group `App`'s master fields into `App.master`

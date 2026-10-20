@@ -7,7 +7,8 @@ use crate::client::{self, Closing};
 use crate::launch::worktree;
 use crate::store::Store;
 use crate::view::FlowView;
-use crate::workspace::{self, Hook};
+use crate::workspace::hooks::{self, Hook};
+use crate::workspace::{self, git};
 
 /// How long `saaio remove` and `saaio clear` wait for a flow's session to end (SIGKILL comes after 3 s).
 const CLOSE_WAIT: Duration = Duration::from_secs(5);
@@ -40,7 +41,7 @@ pub fn refuse_uncommitted_work(flow: &FlowView) -> Result<(), Failure> {
         return Ok(());
     }
     // Fails closed: a worktree git cannot answer for is refused too; --force still removes it.
-    match workspace::has_uncommitted_work(&repo, space) {
+    match git::has_uncommitted_work(&repo, space) {
         Ok(false) => Ok(()),
         Ok(true) => Err(remove::uncommitted(&flow.name, &space.path)),
         Err(error) => Err(remove::unchecked(&flow.name, &space.path, &error)),
@@ -52,7 +53,7 @@ pub fn refuse_unmerged_commits(flow: &FlowView) -> Result<(), Failure> {
     let Some((repo, branch)) = branch_of(flow) else {
         return Ok(());
     };
-    match workspace::commits_only_on(&repo, branch) {
+    match git::commits_only_on(&repo, branch) {
         Ok(Some(count)) if count > 0 => Err(remove::unmerged(&flow.name, branch, count)),
         _ => Ok(()),
     }
@@ -75,7 +76,7 @@ pub fn retire_worktree(flow: &FlowView, uncommitted: Uncommitted) -> Retired {
         return Retired::NoWorktree;
     }
     let env = worktree::hook_env(&flow.id, &flow.name, &repo, space);
-    let _ = workspace::run_hook(&repo, Hook::Teardown, space, &env);
+    let _ = hooks::run(&repo, Hook::Teardown, space, &env);
     let force = uncommitted == Uncommitted::Discard;
     if workspace::remove_worktree(&repo, space, force).unwrap_or(false) {
         Retired::Removed
@@ -90,10 +91,10 @@ pub fn drop_branch(flow: &FlowView, unmerged: Unmerged) -> BranchFate {
     let Some((repo, branch)) = branch_of(flow) else {
         return BranchFate::NoBranch;
     };
-    match workspace::commits_only_on(&repo, branch) {
+    match git::commits_only_on(&repo, branch) {
         Ok(None) => BranchFate::NoBranch,
         Ok(Some(count)) if count == 0 || unmerged == Unmerged::Delete => {
-            match workspace::delete_branch(&repo, branch) {
+            match git::delete_branch(&repo, branch) {
                 Ok(()) => BranchFate::Deleted,
                 Err(_) => BranchFate::Kept,
             }

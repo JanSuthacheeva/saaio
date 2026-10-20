@@ -309,11 +309,11 @@ fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, log: &Log, now: u64)
 fn of_own_repo(store: &Store, id: &str, url: &str, now: u64) -> bool {
     let events = store.events(id).unwrap_or_default();
     let worktree = fold::fold(id, &events, None, now).and_then(|flow| flow.workspace);
-    let remotes = worktree.map(|space| workspace::remote_urls(Path::new(&space.path)));
+    let remotes = worktree.map(|space| workspace::git::remote_urls(Path::new(&space.path)));
     remotes
         .unwrap_or_default()
         .iter()
-        .any(|remote| calls::in_repo(url, remote, workspace::ssh_hostname))
+        .any(|remote| calls::in_repo(url, remote, workspace::git::ssh_hostname))
 }
 
 /// The news a session's Stop hands over: a worker's messages from the master (its flow working
