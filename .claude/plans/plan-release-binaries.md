@@ -200,30 +200,46 @@ A user installs:
 
 ## Review
 
+Two rounds. The first covered everything up to b0f65cb; the second the fixes for its open items
+(f5a2916).
+
 Fixed
 - install.sh reported a binary that does not run as installed: a tarball whose saaio exits 126
   printed "installed  to ..." and exited 0 (on a noexec folder, say). It now fails with
   "saaio: <path> does not run on this machine", exit 1; test
-  `fails_when_the_installed_binary_does_not_run` (b0f65cb). Reviewed again by the same agent in a
-  separate pass, not independently.
+  `fails_when_the_installed_binary_does_not_run` (b0f65cb).
+- Round one's open items, all three fixed at Jan's call (f5a2916): the temp folder is removed on
+  INT, TERM and HUP, `place` removes its `.saaio.<pid>` file when copying fails, and a trailing
+  slash in `SAAIO_INSTALL_DIR` no longer prints the PATH hint or `~/tools//saaio`; test
+  `takes_the_folder_with_a_trailing_slash`.
+  Round two found nothing new. Proved by hand: install.sh killed mid-download (a FIFO served
+  as the tarball over `file://`) with INT, TERM and HUP sent to its process group exits 1 and
+  leaves no temp folder under /bin/sh (bash 3.2), bash and dash. The trailing-slash loop stops
+  at `/` for `/` and `///`.
 
-Open (decided: fix all three, task under Tasks)
-- install.sh leaves its temp folder when interrupted with Ctrl-C under dash (the EXIT trap does not
-  run on a signal) and a `.saaio.<pid>` file beside saaio when `cp` fails half way. Both are
-  harmless leftovers; recommend leaving them.
-- `SAAIO_INSTALL_DIR` with a trailing slash prints the PATH hint even when the folder is on PATH.
-  Cosmetic; leave.
+Open
+- The signal cleanup and the failed-copy cleanup have no test in the suite: the first needs a
+  blocking download and signals, the second a `mv` that fails after `cp` succeeded, which a
+  normal user cannot set up reliably (a read-only folder fails `cp` first; root ignores modes).
+  Recommend leaving them proved by hand.
+- Under zsh (`zsh install.sh`), a trap set inside `main` runs when `main` returns, so the signal
+  cleanup does not hold. The install line pipes to `sh`, so this is not a supported way to run
+  it; leave.
 
 Where to look
 1. `.github/workflows/release.yml` `check`: the tag-to-Cargo.toml match and the CHANGELOG
    extraction (a release whose heading says "not released yet" fails; a pre-release does not).
 2. `publish`: `--verify-tag`, `--prerelease` only for tags with "-", `contents: write` on this job
    alone.
-3. `install.sh` `target`, `verify` and `place`: the Rosetta case, the checksum line match, the
-   rename over a running binary.
+3. `install.sh` `main` and `place`: the EXIT trap with `trap 'exit 1' HUP INT TERM` beside it, the
+   `cp && chmod && mv` group inside `if !` (where `set -e` is off, so the cleanup runs), the
+   Rosetta case in `target` and the checksum line match in `verify`.
 Routine, skim: the docs, ROADMAP and CHANGELOG lines, the two `tests/cli.rs` test robustness fixes,
 the `config::watch` test length change.
 
 Checks
-- `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at b0f65cb.
-  The release workflow last ran green at ac92772; install.sh changed since, only its last step.
+- `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at
+  f5a2916; `tests/install.rs` also passed on Linux under busybox sh and dash there. The release
+  workflow last ran green at ac92772; install.sh changed since, only its last step and cleanup.
+- b0f65cb was reviewed again by the agent that wrote it, in a separate pass, not independently.
+  f5a2916 was reviewed by round two, which did not write it and made no fixes of its own.
