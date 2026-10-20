@@ -125,3 +125,37 @@ committed `b.txt` after an escalation the automatic reviewer allowed in 2.5 s
 (`approvals_reviewer: "auto_review"`); its log has no `permission-pending` (the probe before the
 fix logged one per escalation), and `saaio status --json` polled every 0.3 s showed only
 `working`, then `idle`.
+
+## Review
+
+Isolated review of `main..flow/codex-auto-approve-waiting`. The diff matches the plan: units,
+signatures, call chains, error paths, fixtures and docs. Nothing stored changes.
+
+Fixed:
+- No test pinned `REVIEWERS`: dropping `"guardian_subagent"` (or accepting any value) passed the
+  suite. Added `only_the_known_reviewer_values_mean_the_reviewer`; it fails with the value removed.
+  (`adapter: codex: test which reviewer values mean the reviewer`)
+- `fold::PERMISSION_GRACE_MS` still said it exists for slow automatic review; auto-review requests
+  no longer reach it. Comment only. (`fold: permission grace no longer about automatic review`)
+  Not reviewed independently; a one-line doc comment.
+
+Open:
+- The 3 s grace now only delays a Codex permission the user answers (and the unreadable-rollout
+  fallback). Keeping it is harmless and still hides requests whose tool completes at once;
+  dropping it would show user prompts sooner. Recommendation: keep for 0.1.0 (release-day, bug
+  fixes only), revisit after.
+- `hook()` asks for the approver before it returns for `Hooked::Nobody`, so a Codex hook with no
+  flow or master would still read the rollout. Codex hooks exist only in saaio's launch
+  arguments, so this does not happen in practice. Recommendation: leave.
+- The whole rollout is read on each Codex permission request; long sessions mean a few MB.
+  Acceptable; noted in the plan's assumptions.
+
+Where to look:
+1. `src/adapter/codex.rs` `approver` -> `approvals_reviewer`: the turn match and the
+   fall-back to the user on anything unknown.
+2. `src/cli/commands/hook.rs` `hook` and `read_rollout`: the only I/O, and what server.log says.
+3. `docs/flows.md` Codex table and bullet: the user-facing promise.
+The test call-site churn of `translate(..., Approver::User)` is routine and can be skimmed.
+
+Checks: `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check` pass at
+the review commits.
