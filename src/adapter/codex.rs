@@ -588,6 +588,21 @@ mod tests {
     }
 
     #[test]
+    fn only_the_known_reviewer_values_mean_the_reviewer() {
+        let payload = fixture("permission_bash_reviewed");
+
+        for (value, expected) in [
+            ("auto_review", Approver::Reviewer),
+            ("guardian_subagent", Approver::Reviewer),
+            ("user", Approver::User),
+            ("someone_new", Approver::User),
+        ] {
+            let rollout = rollout().replace("\"auto_review\"", &format!("\"{value}\""));
+            assert_eq!(approver(&payload, |_| Some(rollout)), expected, "{value}");
+        }
+    }
+
+    #[test]
     fn only_a_permission_request_reads_the_rollout() {
         let read = |_: &Path| -> Option<String> { panic!("read the rollout") };
 
