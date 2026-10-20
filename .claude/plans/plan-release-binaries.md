@@ -33,7 +33,7 @@ jobs:
                   #     pre-release, whose heading still says "not released yet" fails too);
                   #   upload-artifact notes
   build:          # needs check; matrix below; per row:
-                  #   checkout, rustup stable + target
+                  #   checkout, rustup stable + target, (linux) apt musl-tools, CC_<target>=musl-gcc
                   #   cargo test --release --locked --target $T
                   #   cargo build --release --locked --target $T
                   #   target/$T/release/saaio --version must equal
@@ -52,8 +52,7 @@ jobs:
 ```
 
 Changed during the build: the notes are taken in `check`, so a missing CHANGELOG entry fails
-before the builds; no musl-tools (no dependency builds C, so Rust's self-contained musl links);
-the title names the tag, so a pre-release reads "saaio 0.1.0-rc.1".
+before the builds; signal-hook builds C, so cc-rs is pointed at musl-gcc for the target; the title names the tag, so a pre-release reads "saaio 0.1.0-rc.1".
 
 ```yaml
 matrix.include:

@@ -69,6 +69,7 @@ jobs:
   build:
     needs: check
     strategy:
+      fail-fast: false
       matrix:
         include:
           - { target: aarch64-apple-darwin, runner: macos-15, archive: tar.gz }
@@ -87,6 +88,12 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal --target "$TARGET"
           rustup default stable
+      - name: Install musl
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          echo "CC_$(echo "$TARGET" | tr - _)=musl-gcc" >> "$GITHUB_ENV"
       - name: Test
         run: cargo test --release --locked --target "$TARGET"
       - name: Build
