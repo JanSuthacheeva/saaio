@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT OR Apache-2.0"
+description = "Orchestrate coding agents from one terminal: a master agent and one worker per feature, each in its own git worktree"
+repository = "https://github.com/JanSuthacheeva/saaio"
+# Installed from GitHub releases or with cargo install --git, never from crates.io.
+publish = false
 
 [dependencies]
 alacritty_terminal = "0.26"
@@ -26,6 +30,14 @@ uuid = { version = "1.28.0", features = ["v4"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
+
+# release.yml and cargo install both build this profile. panic stays unwind: the panic hooks
+# log a thread's panic before the process ends. strip keeps the symbols, so the backtrace they
+# write to server.log names its functions.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

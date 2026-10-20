@@ -38,8 +38,9 @@
 
 - `<flow>`: a flow's name or id. A name means the unfinished flow of that name, else the most recent
   finished one.
-- `saaio --version` prints the version and commit: `saaio 0.1.0 (e035b96)`. Every command takes
-  `--help`.
+- `saaio --version` prints the version and commit: `saaio 0.1.0 (e035b96)`, or `unknown` for a
+  build from source outside a git checkout of saaio ([install.md](install.md#from-source)). Every
+  command takes `--help`.
 
 ## saaio
 
