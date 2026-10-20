@@ -129,7 +129,7 @@ fn with_shown(
     if let Some(shown) = shown
         && !found.iter().any(|one| one.url == shown)
     {
-        let json = query(&forge.view_argv(shown))
+        let json = query(&forge.view_argv(shown)?)
             .with_context(|| format!("{} could not look up {shown}", forge.program()))?;
         let one = forge.parse_view(&json)?;
         anyhow::ensure!(
@@ -206,7 +206,7 @@ mod tests {
             let listed = forge.parse(&format!("[{listed}]")).unwrap();
             assert_eq!(listed.len(), 10);
             let found = with_shown(forge, listed, Some(shown), |argv| {
-                assert_eq!(argv, &forge.view_argv(shown));
+                assert_eq!(argv, &forge.view_argv(shown).unwrap());
                 Ok(viewed.to_string())
             })
             .unwrap();

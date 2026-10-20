@@ -114,15 +114,24 @@ impl Forge {
     }
 
     /// Query one already shown request by URL when the limited branch list omits it.
-    pub fn view_argv(self, url: &str) -> Vec<String> {
-        let args: &[&str] = match self {
-            Forge::GitHub => &["pr", "view", url, "--json", "url,state,createdAt"],
-            Forge::GitLab => &["mr", "view", url, "--output", "json"],
+    pub fn view_argv(self, url: &str) -> Result<Vec<String>> {
+        let args: Vec<&str> = match self {
+            Forge::GitHub => vec!["pr", "view", url, "--json", "url,state,createdAt"],
+            Forge::GitLab => {
+                let (repo, id) = url
+                    .rsplit_once("/-/merge_requests/")
+                    .context("shown GitLab merge request has no request number")?;
+                anyhow::ensure!(
+                    !repo.is_empty() && id.parse::<u64>().is_ok_and(|number| number > 0),
+                    "shown GitLab merge request has an invalid request number"
+                );
+                vec!["mr", "view", id, "--repo", repo, "--output", "json"]
+            }
         };
-        std::iter::once(self.program())
+        Ok(std::iter::once(self.program())
             .chain(args.iter().copied())
             .map(String::from)
-            .collect()
+            .collect())
     }
 
     /// The merge requests in gh's or glab's JSON (gh: url, state OPEN|MERGED|CLOSED, createdAt;
@@ -507,13 +516,18 @@ mod tests {
             "glab mr list --source-branch flow/csv --all --output json --per-page 10"
         );
         assert_eq!(
-            Forge::GitHub.view_argv(A).join(" "),
+            Forge::GitHub.view_argv(A).unwrap().join(" "),
             format!("gh pr view {A} --json url,state,createdAt")
         );
         let glab_url = "https://gitlab.com/acme/shop/-/merge_requests/7";
         assert_eq!(
-            Forge::GitLab.view_argv(glab_url).join(" "),
-            format!("glab mr view {glab_url} --output json")
+            Forge::GitLab.view_argv(glab_url).unwrap().join(" "),
+            "glab mr view 7 --repo https://gitlab.com/acme/shop --output json"
+        );
+        assert!(
+            Forge::GitLab
+                .view_argv("https://gitlab.com/acme/shop/-/merge_requests/nope")
+                .is_err()
         );
     }
 
