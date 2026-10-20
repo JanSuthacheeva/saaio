@@ -77,8 +77,8 @@ source fix, or test change was made.
 - [x] Split `ui/theme.rs` at the palette/style seam and adjust imports without behavior change.
 - [x] Rename `launch::name::flow_name` to `launch::name::choose` and update its call sites.
 - [x] Run `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check`; review the resulting diff against this plan.
-- [ ] On a limited forge list that omits the shown PR, query that PR by URL before `forge::pick` and `forge::news`; test an older open PR behind ten closed results and both forge command shapes.
-- [ ] Re-run the full test, Clippy, and format gates, plus an isolated CLI check; review the follow-up diff.
+- [x] On a limited forge list that omits the shown PR, query that PR by URL before `forge::pick` and `forge::news`; test an older open PR behind ten closed results and both forge command shapes.
+- [x] Re-run the full test, Clippy, and format gates, plus an isolated CLI check; review the follow-up diff.
 
 Implementation approved; keep this checklist current while building.
 
@@ -89,16 +89,22 @@ All six tasks are complete. `cargo test` passed (576 library and 81 CLI tests),
 An isolated `SAAIO_HOME` CLI smoke check created a flow with `saaio new` and read it back
 with `saaio status --json`. The UI was not launched. `git diff --check` is clean.
 
+After the direct lookup, `cargo test` passed (579 library and 81 CLI tests).
+At final code commit `c768f2d`, `cargo test --lib` passed (579 tests), as did
+`cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and
+`git diff --check`. An isolated `SAAIO_HOME` `new`/`status --json` CLI smoke
+check passed. The final GitLab command correction was covered by focused and
+library tests; the CLI integration suite was not rerun after it because its
+server harness starts a UI session.
+
 ## Review
 
 **Fixed**
 
 - The new forge query outcome lacked `Debug`, contrary to this audit's rule for internal types; derived it in `0ff54bd`.
 - A timestamp with both `Z` and an offset was accepted as valid. A regression test failed on `2026-10-18T02:00:35Z+00:00`; `f9ff6c4` rejects it.
-
-**Open**
-
-- A branch with 10 newer closed PRs can have its shown open PR omitted by the `--limit 10`/`--per-page 10` query. `pick` then selects a closed PR and `news` clears the shown URL. A temporary regression probe failed with `MergeRequestClosed` for the shown URL. The user chose a direct URL lookup for the shown PR when the limited list omits it. The follow-up task above records this decision; leave an uncertain state unchanged if that lookup fails.
+- A branch with 10 newer closed PRs could have its shown open PR omitted by the `--limit 10`/`--per-page 10` query. The direct URL lookup in `b5e9733` completes the list before selection, and a lookup failure now leaves the shown state unchanged. Focused tests cover both forges and the failure path.
+- The follow-up initially passed a full URL to `glab mr view`, which accepts an MR ID or branch. `c768f2d` extracts the ID and passes the repository URL with `--repo`. A focused command test covers the GitLab shape and malformed IDs.
 
 **Where to look**
 
@@ -108,4 +114,4 @@ with `saaio status --json`. The UI was not launched. `git diff --check` is clean
 
 **Checks**
 
-At `f9ff6c4`, `cargo test` (576 library and 81 CLI tests), `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check` passed. The two review fixes were checked in a separate pass by the same reviewer; they were not reviewed independently. No UI was launched or driven, and no terminal capture was taken.
+At `f9ff6c4`, `cargo test` (576 library and 81 CLI tests), `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check` passed. At `c768f2d`, 579 library tests, Clippy, format, and diff checks passed. The GitLab command fix was checked in a separate pass by the same reviewer; it was not reviewed independently. No interactive UI was driven or terminal capture taken.
