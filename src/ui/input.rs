@@ -3,6 +3,13 @@ use ratatui::layout::{Position, Rect};
 use crate::config::prefix::Prefix;
 use crate::proto::Mouse;
 
+mod keys;
+mod mouse;
+
+pub use keys::Key;
+use keys::{csi_len, decode, utf8_len};
+use mouse::{MouseEvent, encode, mouse, wanted};
+
 /// What raw keyboard and mouse bytes from the real terminal turn into.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Routed {
@@ -61,21 +68,6 @@ pub enum Command {
     Help,
     Detach,
     StopServer,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Key {
-    Char(char),
-    Enter,
-    Esc,
-    Backspace,
-    Tab,
-    Up,
-    Down,
-    Left,
-    Right,
-    Ctrl(char),
-    Other,
 }
 
 /// Splits raw input at the prefix; remembers a prefix whose key has not arrived yet.
@@ -283,38 +275,6 @@ impl Router {
     }
 }
 
-/// Decodes raw bytes into keys for a modal view.
-pub fn decode(bytes: &[u8]) -> Vec<Key> {
-    let text = String::from_utf8_lossy(bytes);
-    let mut chars = text.chars().peekable();
-    let mut keys = Vec::new();
-    while let Some(c) = chars.next() {
-        let key = match c {
-            '\r' | '\n' => Key::Enter,
-            '\t' => Key::Tab,
-            '\x7f' | '\x08' => Key::Backspace,
-            '\x1b' => match chars.peek() {
-                Some('[' | 'O') => {
-                    chars.next();
-                    let last = chars.find(|next| next.is_ascii_alphabetic() || *next == '~');
-                    match last {
-                        Some('A') => Key::Up,
-                        Some('B') => Key::Down,
-                        Some('C') => Key::Right,
-                        Some('D') => Key::Left,
-                        _ => Key::Other,
-                    }
-                }
-                _ => Key::Esc,
-            },
-            c if (c as u32) < 0x20 => Key::Ctrl((b'a' + c as u8 - 1) as char),
-            c => Key::Char(c),
-        };
-        keys.push(key);
-    }
-    keys
-}
-
 #[derive(Debug)]
 enum AfterPrefix {
     Command(Command),
@@ -332,133 +292,6 @@ fn flush(plain: &mut Vec<u8>, modal: bool, routed: &mut Vec<Routed>) {
     } else {
         Routed::Pane(bytes)
     });
-}
-
-/// The length of the CSI sequence at the start of `bytes`; None when it is cut off.
-fn csi_len(bytes: &[u8]) -> Option<usize> {
-    if !bytes.starts_with(b"\x1b[") {
-        return Some(1);
-    }
-    bytes[2..]
-        .iter()
-        .position(|byte| (0x40..=0x7e).contains(byte))
-        .map(|end| end + 3)
-}
-
-#[derive(Debug, Clone, Copy)]
-struct MouseEvent {
-    /// The SGR button code: the button in the low two bits (3 none), 4 shift, 8 alt, 16 control.
-    button: u16,
-    col: u16,
-    row: u16,
-    press: bool,
-    /// The pointer moved (bit 32), with a button held or, in any-motion mode, without one.
-    motion: bool,
-}
-
-impl MouseEvent {
-    const WHEEL: u16 = 64;
-
-    fn at(self) -> Position {
-        Position::new(self.col, self.row)
-    }
-
-    fn is_wheel(self) -> bool {
-        self.button & Self::WHEEL != 0
-    }
-
-    /// Which button, without modifiers: 0 left, 1 middle, 2 right, 3 none.
-    fn base(self) -> u16 {
-        self.button & 0b11
-    }
-
-    /// A button went down: not motion, not the wheel.
-    fn is_press(self) -> bool {
-        self.press && !self.motion && !self.is_wheel()
-    }
-
-    /// What the event means to saaio: the left button and the wheel; None for the rest.
-    fn pointer(self) -> Option<PointerKind> {
-        if self.is_wheel() {
-            return Some(if self.base() & 1 == 0 {
-                PointerKind::WheelUp
-            } else {
-                PointerKind::WheelDown
-            });
-        }
-        if self.base() != 0 {
-            return None;
-        }
-        Some(match (self.press, self.motion) {
-            (false, _) => PointerKind::Release,
-            (true, true) => PointerKind::Drag,
-            (true, false) => PointerKind::Press,
-        })
-    }
-}
-
-/// An SGR mouse report, ESC [ < button ; col ; row M|m, with 1-based coordinates.
-fn mouse(sequence: &[u8]) -> Option<MouseEvent> {
-    let body = sequence.strip_prefix(b"\x1b[<")?;
-    let (last, params) = body.split_last()?;
-    if *last != b'M' && *last != b'm' {
-        return None;
-    }
-    let params = std::str::from_utf8(params).ok()?;
-    let mut parts = params.split(';').map(|part| part.parse::<u16>().ok());
-    let (button, col, row) = (parts.next()??, parts.next()??, parts.next()??);
-    Some(MouseEvent {
-        button: button & !32,
-        col: col.saturating_sub(1),
-        row: row.saturating_sub(1),
-        press: *last == b'M',
-        motion: button & 32 != 0,
-    })
-}
-
-/// The report in pane coordinates, SGR or X10 as the pane asked; None past X10's 223 columns.
-fn encode(event: MouseEvent, pane: Rect, sgr: bool) -> Option<Vec<u8>> {
-    let col = event.col.clamp(pane.x, pane.right().saturating_sub(1)) - pane.x + 1;
-    let row = event.row.clamp(pane.y, pane.bottom().saturating_sub(1)) - pane.y + 1;
-    let button = event.button | if event.motion { 32 } else { 0 };
-    if sgr {
-        let end = if event.press { 'M' } else { 'm' };
-        return Some(format!("\x1b[<{button};{col};{row}{end}").into_bytes());
-    }
-    let button = if event.press || event.is_wheel() {
-        button
-    } else {
-        button | 3
-    };
-    let byte = |value: u16| u8::try_from(value + 32).ok();
-    Some(vec![
-        0x1b,
-        b'[',
-        b'M',
-        byte(button)?,
-        byte(col)?,
-        byte(row)?,
-    ])
-}
-
-/// Whether a program in `mouse` mode asked for `event`: Press press/release/wheel, Drag also
-/// motion with a button, Motion all motion.
-fn wanted(mouse: Mouse, event: MouseEvent) -> bool {
-    match mouse {
-        Mouse::Off => false,
-        Mouse::Press => !event.motion,
-        Mouse::Drag => !event.motion || event.base() != 3,
-        Mouse::Motion => true,
-    }
-}
-
-fn utf8_len(first: u8) -> usize {
-    match first {
-        0xf0..=0xff => 4,
-        0xe0..=0xef => 3,
-        0xc0..=0xdf => 2,
-        _ => 1,
-    }
 }
 
 #[cfg(test)]

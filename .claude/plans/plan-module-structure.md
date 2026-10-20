@@ -70,7 +70,8 @@ fn cycle(graph: &BTreeMap<String, BTreeSet<String>>) -> Option<Vec<String>>;
 ### 2. `ui/input.rs` split
 
 - `ui/input.rs`: `Router`, `Routed`, `Pointer`, `PointerKind`, `Target`, `Step`, `Command`, `flush`; Router tests.
-- `ui/input/keys.rs`: `Key`, `decode`, `csi_len`, `utf8_len`, decode tests; `pub use keys::{Key, decode}` in input.rs.
+- `ui/input/keys.rs`: `Key`, `decode`, `csi_len`, `utf8_len`; `pub use keys::Key` in input.rs (`decode` is used only by `Router`).
+- Every input test goes through `Router::route`, so all of them stay in input.rs.
 - `ui/input/mouse.rs`: `MouseEvent`, `mouse`, `encode`, `wanted` as `pub(super)`.
 
 ### 3. `workspace.rs` split
@@ -156,7 +157,7 @@ Unchanged: every step moves or regroups code. Error paths stay where they are.
 - [x] 1c. Move the news text to `wake::for_worker`/`for_master`, `truncated` to `text`
 - [x] 1d. Move `Refusal` to `refusal.rs` with `Refusal::phrase`
 - [x] 1e. Add `layering.rs` with `the_top_level_modules_form_no_cycle`
-- [ ] 2. Split `ui/input.rs` into `input.rs`, `input/keys.rs`, `input/mouse.rs`
+- [x] 2. Split `ui/input.rs` into `input.rs`, `input/keys.rs`, `input/mouse.rs`
 - [ ] 3. Split `workspace.rs` into `workspace.rs`, `git.rs`, `hooks.rs`, `process.rs`
 - [ ] 4. Rename `config::path`, `slots::taken`, `pane::env`, `worktree::add_argv`/`remove_argv`
 - [ ] 5. Group `Server`'s pane maps into `PaneState` and `conns`/`peers` into `Conn`
