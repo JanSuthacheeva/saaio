@@ -36,4 +36,4 @@ release.yml publishes no attestation.
 - [x] build/commit.rs with tests, build.rs uses it, checked E2E inside a foreign repository
 - [x] stable.yml
 - [x] Attestation in release.yml
-- [ ] Docs: install.md, CONTRIBUTING.md, CLAUDE.md
+- [x] Docs: install.md, CONTRIBUTING.md, CLAUDE.md
