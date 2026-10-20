@@ -1,5 +1,6 @@
 use super::*;
-use crate::event::Question;
+use crate::event::{Question, ServiceStatus};
+use crate::view::Services;
 
 const MIN: u64 = 60_000;
 
@@ -1283,4 +1284,95 @@ fn a_log_with_an_empty_phase_list_folds_without_steps() {
     assert_eq!(flow.state, State::Done);
     assert_eq!(flow.phase, None);
     assert!(flow.steps.is_empty());
+}
+
+fn services(at_ms: u64, status: ServiceStatus, reason: Option<&str>) -> Event {
+    at(
+        at_ms,
+        EventKind::Services {
+            status,
+            reason: reason.map(str::to_string),
+        },
+    )
+}
+
+#[test]
+fn services_show_where_they_stand_without_moving_the_flow() {
+    let idle = at(
+        MIN,
+        EventKind::Idle {
+            note: "Plan ready.".into(),
+        },
+    );
+    let events = [
+        started(0),
+        idle,
+        services(6 * MIN, ServiceStatus::Pausing, None),
+        services(6 * MIN + 1, ServiceStatus::Paused, None),
+    ];
+
+    let flow = view(&events, 7 * MIN);
+
+    assert_eq!(flow.state, State::Idle);
+    assert_eq!(flow.changed_at, MIN, "a pause is no change of the flow");
+    assert_eq!(
+        flow.services,
+        Some(Services {
+            status: ServiceStatus::Paused,
+            since: 6 * MIN + 1,
+            reason: None,
+        })
+    );
+    assert_eq!(texts(&flow), vec!["started", "idle: Plan ready."]);
+    assert_eq!(view(&events[..2], 7 * MIN).services, None);
+}
+
+#[test]
+fn a_failed_pause_or_resume_is_a_problem_in_the_timeline() {
+    let events = [
+        started(0),
+        services(
+            MIN,
+            ServiceStatus::PauseFailed,
+            Some("docker is not running"),
+        ),
+        services(
+            2 * MIN,
+            ServiceStatus::ResumeFailed,
+            Some("port 8003 is taken"),
+        ),
+    ];
+
+    let flow = view(&events, 3 * MIN);
+
+    let failures: Vec<_> = flow.timeline[1..]
+        .iter()
+        .map(|entry| (entry.text.as_str(), entry.tone))
+        .collect();
+    assert_eq!(
+        failures,
+        vec![
+            ("pause failed: docker is not running", Tone::Problem),
+            ("resume failed: port 8003 is taken", Tone::Problem),
+        ]
+    );
+    let services = flow.services.unwrap();
+    assert_eq!(services.status, ServiceStatus::ResumeFailed);
+    assert_eq!(services.reason.as_deref(), Some("port 8003 is taken"));
+    assert_eq!(flow.changed_at, 0);
+}
+
+#[test]
+fn services_still_fold_after_the_worker_ended() {
+    let events = [
+        started(0),
+        at(MIN, EventKind::Ended),
+        services(7 * MIN, ServiceStatus::Paused, None),
+    ];
+
+    let flow = view(&events, 8 * MIN);
+
+    assert_eq!(flow.state, State::Ended);
+    assert_eq!(flow.changed_at, MIN);
+    assert_eq!(flow.services.unwrap().status, ServiceStatus::Paused);
 }

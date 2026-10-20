@@ -120,10 +120,10 @@ Every command answers in [TOON](https://toonformat.dev) with suggested next comm
 $ saaio status
 count: 3
 needs_you: 2
-flows[3]{name,state,phase,tasks,age}:
-  shop-221,waiting,plan,"",2s
-  shop-217,blocked,implement,4/9,2s
-  scratch,idle,"","",11s
+flows[3]{name,state,phase,tasks,age,services}:
+  shop-221,waiting,plan,"",2s,""
+  shop-217,blocked,implement,4/9,2s,""
+  scratch,idle,"","",11s,""
 blockers[2]{name,blocker}:
   shop-221,Should refunds count against the original order's totals or the refund date's?
   shop-217,"Task 5: the migration needs a default value"
