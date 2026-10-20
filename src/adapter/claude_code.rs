@@ -21,6 +21,9 @@ const EVENTS: [&str; 8] = [
 ];
 /// Seconds Claude Code waits for `saaio hook` before it goes on without it.
 const HOOK_TIMEOUT_SECS: u64 = 10;
+/// Seconds Claude Code waits for `saaio hook` before a tool call: long enough for paused services
+/// to come back (hook::RESUME_WAIT).
+const TOOL_HOOK_TIMEOUT_SECS: u64 = 150;
 /// Seconds Claude Code lets an asyncRewake waiter sleep before it ends it: a week.
 const WAIT_TIMEOUT_SECS: u64 = 604_800;
 /// The events that arm a session's waiter: its start (the master starts without a prompt) and
@@ -44,19 +47,27 @@ pub fn plain_settings(flow_exe: &Path) -> String {
 /// Each event in EVENTS runs `<flow_exe> hook claude-code`, synchronously so the events reach the
 /// log in order.
 fn report_hooks(flow_exe: &Path) -> serde_json::Map<String, Value> {
-    let handler = json!({
-        "type": "command",
-        "command": flow_exe.display().to_string(),
-        "args": ["hook", Adapter::ClaudeCode.name()],
-        "timeout": HOOK_TIMEOUT_SECS,
-    });
+    let handler = |timeout: u64| {
+        json!({
+            "type": "command",
+            "command": flow_exe.display().to_string(),
+            "args": ["hook", Adapter::ClaudeCode.name()],
+            "timeout": timeout,
+        })
+    };
     EVENTS
         .iter()
         .map(|event| {
-            let entry = if event.ends_with("ToolUse") || *event == "PermissionRequest" {
-                json!({ "matcher": "*", "hooks": [handler] })
+            let timeout = if *event == "PreToolUse" {
+                TOOL_HOOK_TIMEOUT_SECS
             } else {
-                json!({ "hooks": [handler] })
+                HOOK_TIMEOUT_SECS
+            };
+            let hooks = json!([handler(timeout)]);
+            let entry = if event.ends_with("ToolUse") || *event == "PermissionRequest" {
+                json!({ "matcher": "*", "hooks": hooks })
+            } else {
+                json!({ "hooks": hooks })
             };
             (event.to_string(), json!([entry]))
         })
@@ -617,6 +628,9 @@ mod tests {
         }
         assert_eq!(settings["hooks"]["PreToolUse"][0]["matcher"], "*");
         assert_eq!(settings["hooks"]["Stop"][0].get("matcher"), None);
+        let timeout = |event: &str| settings["hooks"][event][0]["hooks"][0]["timeout"].clone();
+        assert_eq!(timeout("PreToolUse"), TOOL_HOOK_TIMEOUT_SECS);
+        assert_eq!(timeout("PostToolUse"), HOOK_TIMEOUT_SECS);
     }
 
     #[test]

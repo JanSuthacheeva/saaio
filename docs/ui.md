@@ -111,6 +111,11 @@ its screen. Paths in the worker's worktree show relative to it, others in your h
 
 Other projects' flows are read-only. `enter` and `x` work on this project's flows.
 
+A flow whose services saaio paused ([repository.md](repository.md#pause-and-resume)) says so
+beside its state on its card: `ready · paused`, `working · resuming`, or `working · services down`
+when the resume failed. The selected flow's header says since when (`services paused 14:02`) or
+why the resume failed. The sidebar does not show it.
+
 ## Starting a flow
 
 `C-space n` opens the new-flow dialog for the repository of the session in view:

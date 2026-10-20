@@ -29,6 +29,11 @@
 # C-i, C-j, C-m, C-q, C-s and C-z aren't allowed, because a pane needs them.
 #prefix = "C-space"
 
+#[services]
+# Minutes a flow rests (idle, waiting, blocked, done or ended) before saaio runs the repo's
+# .saaio/pause. Its .saaio/resume runs when the worker works again. 0 never pauses.
+#pause_after_minutes = 5
+
 # The workflow: one to four phases in order, each with the skills that start it. The UI shows them
 # as a flow's steps. Your own list replaces all four. A flow whose skills match no phase still
 # works. Its steps stay empty.

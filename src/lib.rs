@@ -11,6 +11,7 @@ mod event;
 mod fold;
 mod forge;
 mod launch;
+mod pause;
 mod private;
 mod proto;
 mod registry;

@@ -1,6 +1,8 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
@@ -11,8 +13,9 @@ use crate::cli::output::{Document, news};
 use crate::client;
 use crate::config::Config;
 use crate::deliver::{self, WorkerNews};
-use crate::event::{Event, EventKind, is_uuid};
+use crate::event::{Event, EventKind, ServiceStatus, is_uuid};
 use crate::fold;
+use crate::pause;
 use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
 use crate::view::{FlowView, MasterTurn, State};
@@ -71,9 +74,67 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
             return Document::Silent;
         }
     };
-    match hook(&store, &config, adapter, &hooked, &payload, &log, clock()) {
+    let news = hook(&store, &config, adapter, &hooked, &payload, &log, clock());
+    if let Hooked::Flow(id) = &hooked
+        && adapter.before_tool(&payload)
+    {
+        wait_for_services(&store, id, !adapter.asks(&payload), &log, clock);
+    }
+    match news {
         Some(news) => Document::Wake(news),
         None => Document::Silent,
+    }
+}
+
+/// How long a tool call waits for services to come back.
+const RESUME_WAIT: Duration = Duration::from_mins(2);
+/// How long a tool call waits for the server to start a resume of paused services.
+const PICKUP_WAIT: Duration = Duration::from_secs(2);
+/// How often the wait reads the flow's log.
+const WAIT_STEP: Duration = Duration::from_millis(200);
+
+/// Before a tool call of a flow whose services pause::holds_tools: waits until they run again,
+/// fail, or the wait is over; logs a wait that ran out. A call that `works` (does not ask the user)
+/// marks a resting flow working first (a worker the master woke reports no prompt), so the server
+/// begins the resume. Paused with no resume begun, it waits only PICKUP_WAIT, so a store without a
+/// server never stalls tools.
+fn wait_for_services(store: &Store, id: &str, works: bool, log: &Log, clock: fn() -> u64) {
+    let deadline = Instant::now() + RESUME_WAIT;
+    let mut paused_since = None;
+    loop {
+        let Ok(events) = store.events(id) else {
+            return;
+        };
+        let Some(flow) = fold::fold(id, &events, None, clock()) else {
+            return;
+        };
+        if !pause::holds_tools(&flow) {
+            return;
+        }
+        if works
+            && pause::wakes_at_tool_call(&flow)
+            && let Err(error) = store.append(id, &Event::new(clock(), EventKind::Working))
+        {
+            log.error(&format!("{error:#}"));
+            return;
+        }
+        let paused = flow
+            .services
+            .is_some_and(|services| services.status == ServiceStatus::Paused);
+        if paused {
+            let since = *paused_since.get_or_insert_with(Instant::now);
+            if since.elapsed() >= PICKUP_WAIT {
+                log.error("services paused and no resume began; the tool runs");
+                return;
+            }
+        } else {
+            paused_since = None;
+        }
+        if Instant::now() >= deadline {
+            log.error("services not back within 2m; the tool runs");
+            return;
+        }
+        thread::sleep(WAIT_STEP);
     }
 }
 

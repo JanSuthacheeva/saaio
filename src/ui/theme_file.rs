@@ -138,9 +138,6 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
             ("extends", _) => {
                 return Err(anyhow!("extends must be a theme's name")).context(here());
             }
-            ("nerd_font", _) => {
-                return Err(anyhow!("nerd_font was removed; remove this line")).context(here());
-            }
             ("phase_colors", Value::String(name))
                 if let Some(level) = PhaseColors::named(&name) =>
             {
@@ -376,35 +373,6 @@ mod tests {
         assert_eq!(palette.rule, Color::DarkGray);
         assert_eq!(palette.ended, Color::Reset);
         assert_eq!(palette.text, flow.text);
-    }
-
-    #[test]
-    fn retired_nerd_font_setting_explains_how_to_fix_the_file() {
-        let dir = TempDir::new().unwrap();
-        for value in ["true", "false"] {
-            write(
-                &dir,
-                "theme.toml",
-                &format!("extends = \"saaio\"\nnerd_font = {value}\n"),
-            );
-            assert_eq!(
-                error(&dir),
-                format!(
-                    "{}:2: nerd_font was removed; remove this line",
-                    dir.path().join("theme.toml").display()
-                )
-            );
-        }
-
-        write(&dir, "theme.toml", "extends = \"mine\"\n");
-        write(&dir, "themes/mine.toml", "nerd_font = true\n");
-        assert_eq!(
-            error(&dir),
-            format!(
-                "{}:1: nerd_font was removed; remove this line",
-                dir.path().join("themes/mine.toml").display()
-            )
-        );
     }
 
     #[test]

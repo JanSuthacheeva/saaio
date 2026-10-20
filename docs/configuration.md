@@ -8,6 +8,7 @@ File: `~/.config/saaio/config.toml`. Optional. Every key has a default.
 - [\[worker\]](#worker)
 - [\[master\]](#master)
 - [\[ui\]](#ui)
+- [\[services\]](#services)
 - [\[\[phases\]\]: the workflow](#phases-the-workflow)
 - [Agents](#agents)
 - [The first prompt](#the-first-prompt)
@@ -90,6 +91,7 @@ of a save. No restart.
 | `[master] wake` | at once |
 | `[master] agent` | the next time the master starts |
 | `[ui] prefix` | at once. The hints show the new prefix. |
+| `[services] pause_after_minutes` | at once, for every resting flow |
 | an added or removed agent in the new-flow dialog | the next time the dialog opens |
 
 ## [worker]
@@ -137,6 +139,19 @@ prefix = "C-b"
 - The UI's hints and help show the configured prefix.
 - The prefix pressed twice is sent to the pane. A prefix that is also a UI key (`C-b`, page back
   in history) still works there.
+
+## [services]
+
+```toml
+[services]
+pause_after_minutes = 15
+```
+
+| Key | Default | Effect |
+| --- | --- | --- |
+| `pause_after_minutes` | `5` | minutes a flow rests (idle, waiting, blocked, done or ended) before `saaio server` runs the repo's `.saaio/pause`. `.saaio/resume` runs when its worker works again. `0` never pauses. |
+
+Only repos with both scripts are paused: [repository.md](repository.md#pause-and-resume).
 
 ## [[phases]]: the workflow
 

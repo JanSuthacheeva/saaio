@@ -2,7 +2,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::event::{EventKind, Mode, Phase, Question};
+use crate::event::{EventKind, Mode, Phase, Question, ServiceStatus};
 
 pub const VIEW_VERSION: u32 = 3;
 
@@ -44,6 +44,18 @@ pub struct FlowView {
     pub session: Option<Session>,
     /// The questions of the dialog the flow waits on; empty when it waits on none.
     pub questions: Vec<Question>,
+    /// Where its services stand; None until saaio first pauses them.
+    pub services: Option<Services>,
+}
+
+/// Where a flow's services stand since saaio first paused them, since when, and why a pause or
+/// resume failed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Services {
+    pub status: ServiceStatus,
+    pub since: u64,
+    pub reason: Option<String>,
 }
 
 /// A harness session: the id it resumes by and the transcript it writes.
@@ -331,6 +343,7 @@ mod tests {
             answer: None,
             session: None,
             questions: Vec::new(),
+            services: None,
         }
     }
 
@@ -364,6 +377,7 @@ mod tests {
         assert_eq!(flow["timeline"][0]["tone"], "neutral");
         assert_eq!(flow["workspace"]["branch"], "flow/shop-221");
         assert_eq!(flow["workspace"]["window"], "@14");
+        assert_eq!(flow["services"], serde_json::Value::Null);
     }
 
     #[test]

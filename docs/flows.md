@@ -26,6 +26,7 @@ timeline.
 - [The master](#the-master)
 - [Plain sessions](#plain-sessions)
 - [How a worker reports](#how-a-worker-reports)
+- [Paused services](#paused-services)
 - [Ending a flow](#ending-a-flow)
 
 ## States
@@ -256,6 +257,22 @@ or merged it: the worker, the master or you.
 - No `gh` or `glab`, not logged in, offline, or no answer within a minute: no change. The error goes
   to `server.log` once.
 - Only while the UI (its server) runs. `saaio status` asks no one.
+
+## Paused services
+
+A flow that rests, `idle`, `waiting`, `blocked`, `done` or `ended`, for 5 minutes
+(`[services] pause_after_minutes`) gets its services paused: `saaio server` runs the repo's
+`.saaio/pause`. When its worker works again (a new prompt, or a tool call once the master woke
+it), `.saaio/resume` runs, and the worker's tool calls wait until the services are back, up to 2
+minutes.
+
+- Only in repos with both scripts. Others are never paused.
+- Pausing changes neither the flow's state nor its age, and wakes no one.
+- A failed pause or resume shows in the timeline (`resume failed: port 8003 is taken`). The worker
+  is not told. Its commands meet stopped services.
+- Plain sessions and flows that are `not-responding` are never paused or resumed.
+
+How to write the scripts: [repository.md](repository.md#pause-and-resume).
 
 ## Ending a flow
 
