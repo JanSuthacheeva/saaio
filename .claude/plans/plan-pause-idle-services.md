@@ -381,3 +381,52 @@ resume: the hook waits `PICKUP_WAIT` and lets the tool run.
 - [x] Update docs/repository.md (pause and resume section, Compose example, the slot line fix), docs/configuration.md, docs/flows.md, docs/json.md, docs/ui.md, docs/cli.md
 - [x] Update the setup-saaio skill in ~/projects/agent-skills to write and prove `.saaio/pause` and `.saaio/resume`, as a separate PR there
 - [x] End-to-end check: scratch `SAAIO_HOME`, a repo whose pause and resume write timestamps and sleep, `pause_after_minutes = 1`, a Claude worker in the UI: it pauses after a minute idle, the card says `ready · paused`, a new prompt resumes it and the first tool call waits for it; status and `--json` agree
+
+## Review
+
+Isolated review of `flow/pause-idle-services` against `main` and this plan. The data format, fold,
+`pause::next`, the server wiring, the status columns, the UI labels and the docs match the plan.
+
+### Fixed
+
+- A pause or resume script that leaves a process holding its stdout or stderr (`sleep 30 &`, a
+  dev server started without redirects) never finished: `finish_within` joined its pipe readers,
+  so the flow stayed `resuming` and every tool call waited the full 2 minutes. A test took 61 s
+  where it should take under a second. The output is now read for at most 500 ms after the script
+  ends (15e82a2), and what a left-behind process writes afterwards is drained and dropped
+  (734fc08). A fresh agent reviewed 15e82a2 and confirmed the test fails without it; 734fc08 came from its note and was reviewed only by me.
+- docs/repository.md said setup-saaio writes pause and resume for dev servers too; the plan and the
+  skill say services only (c7c1c27).
+- `tests/cli.rs` `a_store_is_for_its_user_alone` was flaky: the server listens before it writes
+  master.json, so the mode check could find no file (e8281a6).
+
+### Open
+
+- A Claude worker woken by the master (asyncRewake `saaio wait`) records no `working` until its
+  first PostToolUse. PreToolUse of an ordinary tool appends nothing, so the flow still rests,
+  the server does not resume, and that first tool call waits `PICKUP_WAIT` (2 s), then runs
+  against stopped services. From then on the flow is working and later calls wait for the resume.
+  Recommendation: treat a tool call of a resting flow with held services as work, e.g. append
+  `Working` in `wait_for_services` when the flow rests. Codex is not affected: its Stop hand-over
+  appends `Working`.
+- At `HOOK_LIMIT` only the script's own process is killed. A `docker compose up` it started goes
+  on. Recommendation: run the hook in its own process group and kill the group, also for setup and
+  teardown, as a follow-up.
+
+### Where to look
+
+1. `src/pause.rs` `next`: the table of when a job runs, especially the failed cases
+   (`changed_since`) and `Pausing`/`Resuming` rerunning after a server restart.
+2. `src/server/pause_watch.rs` `pause_idle` to `pause_finished`: the `running` set and the
+   append before the thread starts. The board is refolded before `pause_idle` in the same tick,
+   because an append changes the log's size.
+3. `src/cli/commands/hook.rs` `wait_for_services`: the 2 minute and 2 second limits, and that
+   it runs only for a flow's PreToolUse.
+4. `src/workspace.rs` `finish_within` and `Pipe`: the fix above.
+
+Routine and skimmable: the event and view types, the config section, the status columns, the card
+and detail labels, the golden, the adapter timeouts and the docs.
+
+### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at e8281a6.
