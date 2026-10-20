@@ -294,6 +294,8 @@ Clipboard (`c`) and primary (`p`) stores both pass on; OSC 52 reads stay refused
 
 ## Review
 
+### Round 1 (main..0e1745e)
+
 Reviewed in isolation against this plan, CLAUDE.md and the code around the diff (main..0e1745e).
 The fix commits were checked by a second, fresh agent.
 
@@ -343,3 +345,38 @@ Routine, skim: `selection.rs` (pure, well tested), `clipboard.rs`, the Env plumb
 ### Checks
 
 `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 0e1745e.
+
+### Round 2 (0d6f886..d5168a8)
+
+Reviewed in isolation: the two tasks from round 1's decisions (wheel in a pager, OSC 52 wording).
+
+#### Fixed
+
+- docs/ui.md "History" still said the wheel over a pane that leaves the mouse to saaio opens the
+  history; on the alternate screen it now sends arrow keys. Reworded (088f65c).
+
+#### Open
+
+- None. Checked and let go: `Modes.alt_screen` changes the postcard layout of `Frame`, but protocol
+  7 is new on this branch, so no released UI or server speaks it; `mode_changes` ignores the new
+  field, so the real terminal sees nothing new; in History or Board view the wheel keeps its old
+  behaviour; a pane that uses the mouse still gets the wheel itself (the router never hands it to
+  App).
+
+#### End to end
+
+Scratch store, master agent set to `less` on 500 numbered lines, in tmux: two wheel-down notches
+moved the top line from 1 to 7, one wheel-up back to 4, no history view opened.
+
+#### Where to look
+
+1. `src/ui/app/pointer.rs` `on_wheel`: the alt-screen branch before the history branch, only in
+   `View::Panes`.
+2. `src/server/terminal.rs` `modes`: `alt_screen` from `TermMode::ALT_SCREEN`.
+
+Routine, skim: the test-fixture updates in proto.rs and outer.rs, docs/ui.md.
+
+#### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 9d56d06;
+only docs and this plan changed after it.
