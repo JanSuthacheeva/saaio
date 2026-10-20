@@ -3191,6 +3191,10 @@ fn a_store_is_for_its_user_alone() {
     fs::set_permissions(&home, fs::Permissions::from_mode(0o755)).unwrap();
     let _server = server_with_gh(&home, "#!/bin/sh\nexit 1\n");
     assert_eq!(mode(&home), 0o700, "the server closes a store left open");
+    // The socket listens before the master is set up.
+    wait_until(Duration::from_secs(5), "no master.json", || {
+        home.join("master.json").exists()
+    });
     assert_eq!(mode(&home.join("master.json")), 0o600);
     assert!(saaio(&home, &["--stop"]).status.success());
 }
