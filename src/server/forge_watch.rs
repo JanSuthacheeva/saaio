@@ -113,7 +113,33 @@ fn ask(ask: &Ask) -> Result<Lookup> {
     };
     let json = workspace::output_in(&ask.dir, &forge.argv(&ask.branch), ASK_LIMIT)
         .with_context(|| format!("{} failed", forge.program()))?;
-    Ok(Lookup::Listed(forge::pick(forge.parse(&json)?, ask.since)))
+    let found = with_shown(forge, forge.parse(&json)?, ask.shown.as_deref(), |argv| {
+        workspace::output_in(&ask.dir, argv, ASK_LIMIT)
+    })?;
+    Ok(Lookup::Listed(forge::pick(found, ask.since)))
+}
+
+/// Complete a limited list with the request already shown for this flow.
+fn with_shown(
+    forge: Forge,
+    mut found: Vec<Found>,
+    shown: Option<&str>,
+    query: impl FnOnce(&[String]) -> Result<String>,
+) -> Result<Vec<Found>> {
+    if let Some(shown) = shown
+        && !found.iter().any(|one| one.url == shown)
+    {
+        let json = query(&forge.view_argv(shown))
+            .with_context(|| format!("{} could not look up {shown}", forge.program()))?;
+        let one = forge.parse_view(&json)?;
+        anyhow::ensure!(
+            one.url == shown,
+            "{} returned a different merge request for {shown}",
+            forge.program()
+        );
+        found.push(one);
+    }
+    Ok(found)
 }
 
 impl Server {
@@ -154,6 +180,56 @@ impl Server {
 mod tests {
     use super::*;
     use crate::event::{EventKind, Mode};
+
+    #[test]
+    fn looks_up_a_shown_open_request_beyond_ten_closed_results() {
+        for (forge, shown, listed, viewed) in [
+            (
+                Forge::GitHub,
+                "https://github.com/acme/shop/pull/7",
+                (8..=17)
+                    .map(|i| format!(r#"{{"url":"https://github.com/acme/shop/pull/{i}","state":"CLOSED","createdAt":"2099-01-01T00:00:00Z"}}"#))
+                    .collect::<Vec<_>>()
+                    .join(","),
+                r#"{"url":"https://github.com/acme/shop/pull/7","state":"OPEN","createdAt":"2099-01-01T00:00:00Z"}"#,
+            ),
+            (
+                Forge::GitLab,
+                "https://gitlab.com/acme/shop/-/merge_requests/7",
+                (8..=17)
+                    .map(|i| format!(r#"{{"web_url":"https://gitlab.com/acme/shop/-/merge_requests/{i}","state":"closed","created_at":"2099-01-01T00:00:00Z"}}"#))
+                    .collect::<Vec<_>>()
+                    .join(","),
+                r#"{"web_url":"https://gitlab.com/acme/shop/-/merge_requests/7","state":"opened","created_at":"2099-01-01T00:00:00Z"}"#,
+            ),
+        ] {
+            let listed = forge.parse(&format!("[{listed}]")).unwrap();
+            assert_eq!(listed.len(), 10);
+            let found = with_shown(forge, listed, Some(shown), |argv| {
+                assert_eq!(argv, &forge.view_argv(shown));
+                Ok(viewed.to_string())
+            })
+            .unwrap();
+            let picked = forge::pick(found, 0).unwrap();
+            assert_eq!(picked.url, shown);
+            assert_eq!(picked.status, forge::Status::Open);
+        }
+    }
+
+    #[test]
+    fn a_failed_direct_lookup_preserves_the_shown_request() {
+        let found = Forge::GitHub
+            .parse(r#"[{"url":"https://github.com/acme/shop/pull/8","state":"CLOSED","createdAt":"2099-01-01T00:00:00Z"}]"#)
+            .unwrap();
+        let error = with_shown(
+            Forge::GitHub,
+            found,
+            Some("https://github.com/acme/shop/pull/7"),
+            |_| anyhow::bail!("offline"),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("could not look up"));
+    }
 
     fn flows(merged: bool) -> Vec<FlowView> {
         let mut kinds = vec![

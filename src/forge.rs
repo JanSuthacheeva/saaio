@@ -21,6 +21,7 @@ pub struct Ask {
     pub dir: PathBuf,
     pub branch: String,
     pub since: u64,
+    pub shown: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,6 +113,18 @@ impl Forge {
             .collect()
     }
 
+    /// Query one already shown request by URL when the limited branch list omits it.
+    pub fn view_argv(self, url: &str) -> Vec<String> {
+        let args: &[&str] = match self {
+            Forge::GitHub => &["pr", "view", url, "--json", "url,state,createdAt"],
+            Forge::GitLab => &["mr", "view", url, "--output", "json"],
+        };
+        std::iter::once(self.program())
+            .chain(args.iter().copied())
+            .map(String::from)
+            .collect()
+    }
+
     /// The merge requests in gh's or glab's JSON (gh: url, state OPEN|MERGED|CLOSED, createdAt;
     /// glab: web_url, state opened|locked|merged|closed, created_at); none for empty output; an
     /// error for JSON of another shape, an unknown state or an unreadable time.
@@ -136,24 +149,37 @@ impl Forge {
         .with_context(|| format!("{} printed no list of merge requests", self.program()))?;
         listed
             .into_iter()
-            .map(|(url, state, created)| {
-                let status = match state.to_lowercase().as_str() {
-                    "open" | "opened" | "locked" => Status::Open,
-                    "merged" => Status::Merged,
-                    "closed" => Status::Closed,
-                    other => anyhow::bail!("{} named an unknown state {other}", self.program()),
-                };
-                let created_at = unix_ms(&created).with_context(|| {
-                    format!("{} named an unreadable time {created}", self.program())
-                })?;
-                Ok(Found {
-                    url,
-                    status,
-                    created_at,
-                    precise_time: created.contains('.'),
-                })
-            })
+            .map(|(url, state, created)| self.found(url, state, created))
             .collect()
+    }
+
+    /// One request returned by `gh pr view` or `glab mr view`.
+    pub fn parse_view(self, json: &str) -> Result<Found> {
+        let (url, state, created) = match self {
+            Forge::GitHub => serde_json::from_str::<GhPull>(json)
+                .map(|pull| (pull.url, pull.state, pull.created_at)),
+            Forge::GitLab => serde_json::from_str::<GlabRequest>(json)
+                .map(|request| (request.web_url, request.state, request.created_at)),
+        }
+        .with_context(|| format!("{} printed no merge request", self.program()))?;
+        self.found(url, state, created)
+    }
+
+    fn found(self, url: String, state: String, created: String) -> Result<Found> {
+        let status = match state.to_lowercase().as_str() {
+            "open" | "opened" | "locked" => Status::Open,
+            "merged" => Status::Merged,
+            "closed" => Status::Closed,
+            other => anyhow::bail!("{} named an unknown state {other}", self.program()),
+        };
+        let created_at = unix_ms(&created)
+            .with_context(|| format!("{} named an unreadable time {created}", self.program()))?;
+        Ok(Found {
+            url,
+            status,
+            created_at,
+            precise_time: created.contains('.'),
+        })
     }
 }
 
@@ -235,6 +261,7 @@ pub fn asks(flows: &[FlowView]) -> Vec<Ask> {
                 dir: PathBuf::from(&space.path),
                 branch: space.branch.clone()?,
                 since: flow.started_at,
+                shown: flow.merge_request.clone(),
             })
         })
         .collect()
@@ -348,8 +375,10 @@ mod tests {
                 dir: PathBuf::from("/work/csv"),
                 branch: "flow/csv".into(),
                 since: 1,
+                shown: None,
             }]
         );
+        assert_eq!(asks(&[flow(vec![opened(A)])])[0].shown.as_deref(), Some(A));
         assert_eq!(ids(&[flow(vec![opened(A)])]), ["csv-1"], "done, not merged");
         assert_eq!(ids(&[flow(vec![EventKind::Ended])]), ["csv-1"], "ended");
         assert!(ids(&[flow(vec![merged(A)])]).is_empty(), "merged");
@@ -476,6 +505,35 @@ mod tests {
         assert_eq!(
             Forge::GitLab.argv("flow/csv").join(" "),
             "glab mr list --source-branch flow/csv --all --output json --per-page 10"
+        );
+        assert_eq!(
+            Forge::GitHub.view_argv(A).join(" "),
+            format!("gh pr view {A} --json url,state,createdAt")
+        );
+        let glab_url = "https://gitlab.com/acme/shop/-/merge_requests/7";
+        assert_eq!(
+            Forge::GitLab.view_argv(glab_url).join(" "),
+            format!("glab mr view {glab_url} --output json")
+        );
+    }
+
+    #[test]
+    fn reads_one_request_looked_up_by_url() {
+        assert_eq!(
+            Forge::GitHub
+                .parse_view(r#"{"url":"https://github.com/acme/shop/pull/7","state":"OPEN","createdAt":"2026-10-18T02:22:32Z"}"#)
+                .unwrap(),
+            found_at(A, Status::Open, "2026-10-18T02:22:32Z")
+        );
+        assert_eq!(
+            Forge::GitLab
+                .parse_view(r#"{"web_url":"https://gitlab.com/acme/shop/-/merge_requests/7","state":"opened","created_at":"2026-10-18T02:22:32Z"}"#)
+                .unwrap(),
+            found_at(
+                "https://gitlab.com/acme/shop/-/merge_requests/7",
+                Status::Open,
+                "2026-10-18T02:22:32Z"
+            )
         );
     }
 
