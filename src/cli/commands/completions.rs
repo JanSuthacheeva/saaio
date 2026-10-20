@@ -15,7 +15,7 @@ pub struct Args {
 pub fn run(args: &Args) -> Document {
     let mut script = Vec::new();
     clap_complete::generate(args.shell, &mut listed(), "saaio", &mut script);
-    // println! adds the line break the script ends in.
+    // main adds the line break the script ends in.
     Document::Text(String::from_utf8_lossy(&script).trim_end().to_string())
 }
 
