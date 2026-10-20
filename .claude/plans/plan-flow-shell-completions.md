@@ -100,5 +100,5 @@ Other files:
 
 - [x] Add `clap_complete`, `cli/commands/completions.rs` (`Args`, `run`) and `Command::Completions` dispatched before the store, with the tests/cli.rs tests for every shell, `bash -n`, no store and an unknown shell
 - [x] Ship the scripts in `complete/` from release.yml's Pack step
-- [ ] Document it: docs/cli.md, docs/install.md, README.md, CHANGELOG.md 0.1.0, ROADMAP.md Planned future, CLAUDE.md Architecture
+- [x] Document it: docs/cli.md, docs/install.md, README.md, CHANGELOG.md 0.1.0, ROADMAP.md Planned future, CLAUDE.md Architecture
 - [ ] End to end: install the build, source the bash and zsh scripts in real shells and complete `saaio st<Tab>` and `saaio completions <Tab>`

@@ -37,6 +37,8 @@ well tested.
   by other tools.
 - The command line for agents (TOON) and `saaio status --json` for programs.
 - `saaio bug-report`: a file to attach to a bug report.
+- Shell completions for bash, zsh, fish, elvish and PowerShell: `saaio completions <shell>`, and
+  in `complete/` in every release tarball.
 - Commented example `config.toml` and `theme.toml`, written on the first run.
 - Prebuilt binaries for macOS (Apple silicon, Intel) and Linux (x86_64, aarch64, static) on every
   release, with checksums, and `install.sh`, which checks the binary for the machine against them

@@ -14,6 +14,7 @@
 - [saaio remove](#saaio-remove)
 - [saaio clear](#saaio-clear)
 - [saaio bug-report](#saaio-bug-report)
+- [saaio completions](#saaio-completions)
 - [Commands saaio runs itself](#commands-saaio-runs-itself)
 - [Output, errors and exit codes](#output-errors-and-exit-codes)
 - [Environment variables](#environment-variables)
@@ -35,6 +36,7 @@
 | `saaio remove <flow> [--force] [--delete-unmerged]` | end a flow and tear down its worktree |
 | `saaio clear` | forget finished flows and tear down their worktrees |
 | `saaio bug-report` | write a file to attach to a bug report |
+| `saaio completions <shell>` | print the completion script for a shell |
 
 - `<flow>`: a flow's name or id. A name means the unfinished flow of that name, else the most recent
   finished one.
@@ -454,6 +456,22 @@ help[1]: "Check the file before uploading it: it can hold flow names, requests a
 ```
 
 How to report a bug: [troubleshooting.md](troubleshooting.md#reporting-a-bug).
+
+## saaio completions
+
+```
+saaio completions <shell>
+```
+
+Prints the completion script for `bash`, `zsh`, `fish`, `elvish` or `powershell` on stdout, as
+the shell reads it, not as TOON. It covers every command `saaio --help` lists, with their options
+and values. Works without a store. Where each shell keeps it: [install.md](install.md#shell-completions).
+
+```
+$ saaio completions tcsh
+error: invalid value 'tcsh' for '<SHELL>'; one of bash | elvish | fish | powershell | zsh
+help[1]: Run `saaio completions --help` for the usage
+```
 
 ## Commands saaio runs itself
 

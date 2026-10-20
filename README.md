@@ -153,6 +153,7 @@ public interface. The logs are private.
 | `saaio report <event>` | report into a flow by hand |
 | `saaio remove <flow>`, `saaio clear` | tear down and forget |
 | `saaio bug-report` | a file to attach to a bug report |
+| `saaio completions <shell>` | the completion script for bash, zsh, fish, elvish or PowerShell |
 
 All options: [docs/cli.md](docs/cli.md).
 
