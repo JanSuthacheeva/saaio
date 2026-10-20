@@ -8,6 +8,7 @@ approach is agreed before the code.
 - [CI](#ci)
 - [Project rules](#project-rules)
 - [Pull requests](#pull-requests)
+- [Releasing](#releasing)
 
 ## Build and test
 
@@ -123,3 +124,30 @@ The full rules and the architecture: [CLAUDE.md](CLAUDE.md). In short:
 - CI passes before review. Run `cargo test`, `cargo fmt --check` and
   `cargo clippy --all-targets -- -D warnings` locally first; they are quicker than a round trip.
 - `.github/pull_request_template.md` lists what CI cannot check.
+
+## Releasing
+
+A `v*` tag runs `.github/workflows/release.yml`. It builds saaio natively for macOS and Linux,
+runs the tests on each build and publishes a GitHub release with the tarballs, `SHA256SUMS` and
+`install.sh`.
+
+1. Set `version` in `Cargo.toml`. In `CHANGELOG.md`, rename `## [Unreleased]` to the version and
+   its date, such as `## [0.2.0] - 2026-11-03`.
+2. Merge that to `main`.
+3. Tag `main` and push the tag:
+
+```sh
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Nothing is published when the tag does not match `Cargo.toml`, `CHANGELOG.md` has no dated entry
+for the version, a test fails, or `saaio --version` names another commit than the tag's.
+
+A tag with a `-`, such as `v0.2.0-rc.1`, publishes a pre-release, which the install script skips:
+a trial run. Delete it after the check:
+
+```sh
+gh release delete v0.2.0-rc.1 --cleanup-tag --yes
+git tag -d v0.2.0-rc.1
+```

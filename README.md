@@ -16,11 +16,19 @@ what it can, and asks you the rest.
 
 ## Install
 
-Requires macOS or Linux, git, Rust 1.95+, and Claude Code or Codex.
+Requires macOS or Linux, git, and Claude Code or Codex.
+
+```sh
+curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | sh
+```
+
+Installs the prebuilt binary to `~/.local/bin`. From source, with Rust 1.95+:
 
 ```sh
 cargo install --git https://github.com/JanSuthacheeva/saaio --tag v0.1.0
 ```
+
+More: [docs/install.md](docs/install.md).
 
 ## Workflow
 

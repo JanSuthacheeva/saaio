@@ -23,7 +23,7 @@ Nothing in progress.
 | Messages to a worker at a permission prompt | `saaio send` to a worker waiting on a permission prompt says sent, but the worker reads it only once the prompt is answered in its pane | `saaio send` says the prompt is open, or the master answers the prompt itself |
 | Answers typed in a worker's pane | the master learns only that a flow stopped. When you answer in the worker's pane first, the master can still relay the question it already has. | what you type in a worker's pane shows in its timeline, and news for a flow that left `waiting` before the master woke says it was answered |
 | Hooks killed with what they started | a setup, teardown, pause or resume script that runs too long is killed, but what it started (a `docker compose up`) goes on | the script runs in its own process group, and the whole group is killed |
-| Prebuilt binaries | install builds from source with `cargo install`, which needs Rust | binaries for macOS and Linux on every release, an install script at saaio.dev, a Homebrew tap and `cargo binstall saaio` |
+| Package managers | the install script fetches the binary from the GitHub release | a Homebrew tap, `cargo binstall saaio`, and the install script at saaio.dev |
 | Windows | saaio runs on macOS and Linux | Windows support: the UI and `saaio server` talk over something other than a Unix socket, panes run in ConPTY, `saaio start` claims slots without `flock`, and the `.saaio/setup` and `.saaio/teardown` hooks run without a Unix shell |
 
 ## Planned future
@@ -34,5 +34,4 @@ Nothing in progress.
 | An interrupted Claude Code turn shown as idle | Claude Code runs no hook on Esc. The spinner stays until the next prompt. | the interrupted turn shows as idle |
 | Task counts and an end event for Codex | a Codex flow shows no task counts and is ended from the UI or with `saaio remove` | both, as for Claude Code |
 | Parts in a flow | a flow has one merge request and walks its phases once, so a ticket split into stacked merge requests shows every step done after the first | a plan declares its parts. Implement, review and merge request repeat for each, `saaio report merge-request` adds to a list of merge requests, and status shows `part 2 of 3`. |
-| Continuous integration | tests, clippy and fmt run locally before a merge | GitHub Actions run them on every pull request and build the release binaries |
 | Screen reading as a fallback to hooks | saaio learns a worker's state only from its harness's hooks, so what they do not report goes unseen: a dialog or permission prompt open right now, a Codex worker held at a startup dialog before its first turn | the pane's screen, which saaio already emulates, fills those gaps and nothing more. Hooks stay the source of truth, since a screen pattern breaks silently when a harness changes its look. |
