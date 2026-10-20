@@ -183,8 +183,9 @@ skills = ["write-merge-request"]
 - 1 to 4 phases, in order. A custom list replaces all four.
 - The UI shows the phases as steps (`●───●───○───○`) with the time spent in each.
 - A phase starts when the worker runs one of its skills.
-- Codex workers also report a phase when they begin its skill. Reading `SKILL.md` files does not
-  start a phase, because Codex may read future skills ahead in separate commands.
+- Codex has no skill event. A Codex worker's phase starts when a prompt names `$skill`, or when it
+  reads that skill's `SKILL.md`. saaio tells Codex to read each `SKILL.md` only when it begins that
+  skill. One command that reads the skills of several phases starts none.
 - A flow keeps the phases it started with. A change affects new flows only.
 - A skill of a phase the running flow does not have reports nothing.
 - An opened merge request finishes the flow in its last phase, whatever its name.
@@ -236,7 +237,8 @@ adapter = "claude-code"
 - `claude` and `codex` run workers. `master` runs the master.
 - An added agent appears in `saaio start --agent` and the new-flow dialog.
 - An agent with a built-in name replaces the built-in one whole. Repeat every key to keep. Only a
-  missing `prompt` falls back to the built-in one.
+  missing `prompt` falls back: to `[worker] prompt`, else the built-in one
+  ([The first prompt](#the-first-prompt)).
 
 | Key | Required | Effect |
 | --- | --- | --- |
@@ -251,10 +253,11 @@ adapter = "claude-code"
 | `{name}` | the flow's name |
 | `{request}` | the request |
 | `{prompt}` | the agent's first prompt, its placeholders filled |
-| `{session}` | the session id the harness picked, for a harness that picks its own (Codex) |
-| `{instructions}` | path of `master.md`, for a master that reads its instructions from a file |
+| `{session}` | the session id the harness picked, for a harness that picks its own (Codex). In `resume` only. |
+| `{instructions}` | path of `master.md`, for a master that reads its instructions from a file. For the master only. |
 
-Filled into `command`, `prompt` and `resume`. An argument that fills to an empty string is dropped.
+`{id}` and `{name}` are filled in `command`, `prompt` and `resume`, `{request}` in `command` and
+`prompt`, `{prompt}` in `command`. An argument that fills to an empty string is dropped.
 
 Custom agent, [aider](https://aider.chat):
 
@@ -266,8 +269,9 @@ prompt = "{request}"
 
 - No `adapter`: its row shows only whether it runs.
 - A custom agent that runs Claude Code or Codex sets `adapter` to be followed like the built-in ones.
-- With an adapter, saaio adds to the command line: its hooks, and for workers a system prompt naming
-  the saaio master. Nothing is installed. Nothing is written to `~/.claude` or `~/.codex`
+- With an adapter, saaio adds to the command line: its hooks, for workers a system prompt naming
+  the saaio master, for the master `master.md`, and for Codex trust of the worktree. Nothing is
+  installed. Nothing is written to `~/.claude` or `~/.codex`
   ([flows.md](flows.md#how-a-worker-reports)).
 
 ## The first prompt
@@ -284,6 +288,8 @@ A worker's first prompt is the first of:
 - Claude Code calls a skill `/name`, Codex `$name`. A `[worker] prompt` shared by both names no
   skill, or each agent sets its own `prompt`.
 - A plain session gets no first prompt.
+- The master never gets one: its agent's `prompt` is ignored. A new Codex master is told to run
+  `saaio status`.
 
 ## Errors
 
@@ -299,7 +305,7 @@ A running UI shows the same in its title row, as
 | Where | A broken file |
 | --- | --- |
 | a running UI and its server | keep the last working settings. The title row shows the error until the file reads again. The server writes it to `server.log`. |
-| `saaio start`, `saaio new`, `saaio` opening the UI | stop with the error |
+| `saaio start`, `saaio new`, `saaio send`, `saaio` opening the UI | stop with the error |
 | running workers | keep reporting with the built-in settings until the file is fixed |
 
 Settings from earlier versions are refused with a message naming the new form:

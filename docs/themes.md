@@ -61,7 +61,8 @@ A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase co
 | `"steps"` | the current step dot. Spinner, label, rail and title row keep the state color. |
 | `"full"` | the current step dot, spinner, label, rail and title row |
 
-- At every level: finished steps are plain. A waiting, blocked or done flow keeps its state color.
+- At every level: finished steps are plain in the sidebar, a `✓` in the `done` color in the
+  board's detail. A waiting, blocked or done flow keeps its state color.
 - Before its first phase, a flow takes the `working` color.
 - `phase_colors` comes from the nearest file that sets it. `theme.toml` wins over
   the themes it extends.
@@ -155,20 +156,23 @@ Set `extends = "noctalia"` in `theme.toml`.
 
 ## Errors
 
-A broken theme keeps the last working colors. The title row shows the file, line and reason until
-the file reads again:
+A broken theme keeps the last working colors. The title row shows the file, the line where there
+is one, and the reason until the file reads again. The error also goes to `server.log`:
 
 ```
 theme: ~/.config/saaio/theme.toml:3: accent belongs in [ui], not [state]
 ```
 
-Other messages:
+Other messages, after the file, line and key (`theme.toml:3: accent: #d9825 is no #rrggbb color`):
 
 - `#d9825 is no #rrggbb color`
 - `300 is no ANSI index (0-255)`
 - `clay is no color and no key`
 - `[ui] has no key acent`
+- `unknown key acent`
+- `extends must be a theme's name`
 - `Build is no phase name`
 - `~/.config/saaio/themes/gone.toml does not exist`
+- `~/.config/saaio/theme.toml extends more than 4 themes deep`
 - `phase_colors is off, steps or full`
 - `accent, muted name each other`
