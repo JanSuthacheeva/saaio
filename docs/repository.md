@@ -4,17 +4,21 @@ None of this is required. `saaio start` works in any git repository. These addit
 workers run side by side without collisions.
 
 Recommended for every project: run the [setup-saaio skill](#the-setup-saaio-skill) once. It writes
-`.saaio/setup` and `.saaio/teardown` for the project.
+`.saaio/setup` and `.saaio/teardown` for the project, and `.saaio/pause` and `.saaio/resume` when
+the setup starts services.
 
 | File | Purpose |
 | --- | --- |
 | `.saaio/config.toml` | branch name convention |
 | `.saaio/setup` | runs in each new worktree |
 | `.saaio/teardown` | runs when a worktree is removed |
+| `.saaio/pause` | stops a resting flow's services |
+| `.saaio/resume` | starts them again when the worker works |
 
 - [Worktrees](#worktrees)
 - [Branch names](#branch-names)
 - [Setup and teardown](#setup-and-teardown)
+- [Pause and resume](#pause-and-resume)
 - [Slots and ports](#slots-and-ports)
 - [A Docker Compose example](#a-docker-compose-example)
 - [The setup-saaio skill](#the-setup-saaio-skill)
@@ -108,11 +112,41 @@ flow: shop-240
 setup: "failed: composer: lock file out of date"
 ```
 
+## Pause and resume
+
+Many flows with a Docker stack each use a lot of CPU and memory, though most of them wait for you.
+`saaio server` pauses the services of a flow that rests and starts them again before its worker
+needs them.
+
+| Script | Runs |
+| --- | --- |
+| `.saaio/pause` | the flow rested (idle, waiting, blocked, done or ended) for `pause_after_minutes`, 5 by default ([configuration.md](configuration.md#services)) |
+| `.saaio/resume` | the paused flow's worker works again |
+
+They run like setup: from the main checkout, in the worktree, with the same variables. A repo
+needs both, executable; with one or neither nothing is paused and nothing shows.
+
+While services pause, are paused or resume, every tool call of the worker waits for them, up to 2
+minutes. The model's thinking before its first tool call hides most of a resume.
+
+| Case | Result |
+| --- | --- |
+| a script runs | on a thread of `saaio server`; at most 5 minutes, then it is killed and fails |
+| pause fails | the flow's timeline says `pause failed: <last error line>`. It is tried again once the flow's state changed. |
+| resume fails | the tool runs anyway. The board card says `working · services down`, `saaio status` says `resume-failed` with the error. It is tried again at the next turn. |
+| resume takes longer than 2 minutes | the tool runs. The script goes on. |
+| the worker works while a pause runs | tool calls wait for the pause, then for the resume |
+| paused, and no `saaio server` runs | a tool call waits 2 seconds, then runs |
+| the server stops during a script | the next server runs it again, so both scripts must be idempotent |
+| `saaio remove` or `saaio clear` | teardown runs as always, on the paused services |
+| a plain session, or not responding | never paused |
+
 ## Slots and ports
 
 - Every unfinished flow holds a slot, 1 to 20, unique across all projects.
 - `saaio start` claims the lowest free slot before the setup runs.
-- A done, ended or removed flow releases its slot.
+- An ended or removed flow releases its slot. A done flow (its merge request open) keeps it until
+  its session ends.
 - Use it for ports: slot 3 serves on `$((8000 + SAAIO_SLOT))`, port 8003.
 
 All 20 in use:
@@ -151,9 +185,24 @@ docker compose exec -T app php artisan migrate --seed --force
 docker compose down -v --remove-orphans
 ```
 
+```sh
+#!/bin/sh
+# .saaio/pause
+docker compose stop
+```
+
+```sh
+#!/bin/sh
+# .saaio/resume
+export HTTP_PORT=$((18080 + SAAIO_SLOT)) DB_PORT=$((13306 + SAAIO_SLOT))
+docker compose up -d --no-recreate --wait
+```
+
 - `docker compose up` without saaio uses the default ports.
 - Compose names the project after its folder, so each worktree has its own stack.
   `docker compose exec` in a worktree reaches that worktree's stack.
+- Pause keeps the containers and their data; resume starts the same ones and returns once they
+  are healthy.
 - Remove fixed `container_name` entries. They clash between worktrees.
 - Two repositories with same-named flows: set `COMPOSE_PROJECT_NAME` to the repository and flow
   name.
@@ -161,7 +210,7 @@ docker compose down -v --remove-orphans
 ## The setup-saaio skill
 
 [setup-saaio](https://github.com/JanSuthacheeva/agent-skills/tree/main/skills/setup-saaio) writes
-both scripts for a project. Install it once, globally, and run it in every project saaio works in.
+the scripts for a project. Install it once, globally, and run it in every project saaio works in.
 
 ```sh
 npx skills add JanSuthacheeva/agent-skills -g --skill setup-saaio
@@ -173,4 +222,5 @@ Then ask the agent in the repository: "set up saaio for this project".
 - Plans a port per service and slot.
 - Makes the compose ports configurable.
 - Writes `.saaio/setup` and `.saaio/teardown` (`.env`, dependencies, migrations, ports).
+- Writes `.saaio/pause` and `.saaio/resume` when the setup starts services or dev servers.
 - Tests them in a scratch worktree.
