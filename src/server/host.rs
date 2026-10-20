@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
+use rustix::process::{Pid, Signal, kill_process_group};
 
 use crate::launch::pane::PaneSpec;
 use crate::proto::{Frame, PaneInfo, PaneKey, PaneStatus, Size};
@@ -48,7 +49,7 @@ struct Pane {
 struct Process {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
-    pid: libc::pid_t,
+    pid: Pid,
     exited: Arc<AtomicBool>,
 }
 
@@ -182,11 +183,11 @@ impl Host {
         pane.closing = true;
         let pid = process.pid;
         let exited = process.exited.clone();
-        signal_group(pid, libc::SIGHUP);
+        signal_group(pid, Signal::HUP);
         spawn_named(format!("pane {key} close"), move || {
             thread::sleep(CLOSE_GRACE);
             if !exited.load(Ordering::SeqCst) {
-                signal_group(pid, libc::SIGKILL);
+                signal_group(pid, Signal::KILL);
             }
         });
     }
@@ -278,7 +279,10 @@ impl Host {
         let id = child
             .process_id()
             .context("the started process has no id")?;
-        let pid = libc::pid_t::try_from(id).with_context(|| format!("pid {id} is out of range"))?;
+        let pid = i32::try_from(id)
+            .ok()
+            .and_then(Pid::from_raw)
+            .with_context(|| format!("pid {id} is out of range"))?;
         let mut reader = pair.master.try_clone_reader()?;
         let writer = pair.master.take_writer()?;
         let exited = Arc::new(AtomicBool::new(false));
@@ -334,11 +338,9 @@ fn pty_size(size: Size) -> PtySize {
 }
 
 /// The child leads its own session (portable-pty calls setsid), so its group id is its pid.
-fn signal_group(pid: libc::pid_t, signal: libc::c_int) {
-    // SAFETY: kill only sends a signal; a stale group id fails with ESRCH and changes nothing.
-    unsafe {
-        libc::kill(-pid, signal);
-    }
+fn signal_group(pid: Pid, signal: Signal) {
+    // A stale group id fails with ESRCH and changes nothing.
+    let _ = kill_process_group(pid, signal);
 }
 
 #[cfg(test)]
