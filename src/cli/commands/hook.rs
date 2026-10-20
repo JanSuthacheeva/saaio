@@ -9,7 +9,7 @@ use serde_json::Value;
 use super::views;
 use crate::adapter::{Adapter, LineMatch, Turn, calls};
 use crate::cli::Env;
-use crate::cli::output::{Document, news};
+use crate::cli::output::Document;
 use crate::client;
 use crate::config::Config;
 use crate::deliver::{self, WorkerNews};
@@ -19,6 +19,7 @@ use crate::pause;
 use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
 use crate::view::{FlowView, MasterTurn, State};
+use crate::wake;
 use crate::workspace;
 
 #[derive(Debug, clap::Args)]
@@ -327,12 +328,12 @@ fn hand_over(store: &Store, waiter: &Waiter, log: &Log, now: u64) -> Option<Stri
                 log.error(&format!("{error:#}"));
             }
             let messages: Vec<&str> = messages.iter().map(String::as_str).collect();
-            Some(news::for_worker(&messages))
+            Some(wake::for_worker(&messages))
         }
         Waiter::Master => {
             let changed = deliver::master_news_now(store, &views(store, now).0);
             let changed: Vec<&FlowView> = changed.iter().collect();
-            (!changed.is_empty()).then(|| news::for_master(&changed))
+            (!changed.is_empty()).then(|| wake::for_master(&changed))
         }
     }
 }

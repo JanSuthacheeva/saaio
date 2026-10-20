@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::event::{Event, EventKind};
+use crate::event::{Event, EventKind, Mode};
+use crate::text::{LIST_TEXT_LIMIT, truncated};
 use crate::view::{FlowView, State};
 
 /// What the master was last woken for, by flow id.
@@ -94,10 +95,73 @@ fn mark(flow: &FlowView) -> Mark {
     }
 }
 
+/// What a worker reads when saaio wakes it: each of the master's messages, indented.
+pub fn for_worker(messages: &[&str]) -> String {
+    messages
+        .iter()
+        .flat_map(|message| {
+            std::iter::once("message from the saaio master:".to_string())
+                .chain(message.lines().map(|line| format!("  {line}")))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// What the master reads when saaio wakes it: changed[n]{name,state,mode,says}, who answers by the
+/// flows' modes, and where a question dialog's options are.
+pub fn for_master(flows: &[&FlowView]) -> String {
+    #[derive(Serialize)]
+    struct Changed {
+        name: String,
+        state: &'static str,
+        mode: &'static str,
+        says: String,
+    }
+    #[derive(Serialize)]
+    struct News {
+        changed: Vec<Changed>,
+        help: Vec<&'static str>,
+    }
+    let has = |mode: Mode| flows.iter().any(|flow| flow.mode == mode);
+    let mut help = Vec::new();
+    if has(Mode::Auto) {
+        help.push("auto: answer what the code, the plan or the user's decisions settle with `saaio send <name> \"<answer>\"`, then tell the user what you answered; else ask the user");
+    }
+    if has(Mode::Guided) {
+        help.push(
+            "guided: tell the user what it says or asks; send their answer with `saaio send`",
+        );
+    }
+    if flows.iter().any(|flow| !flow.questions.is_empty()) {
+        help.push("`saaio status <name>` lists a question dialog's options");
+    }
+    help.push("`saaio status <name> --full` shows its whole last answer");
+    let says = |flow: &FlowView| {
+        let text = flow.blocker.as_deref().unwrap_or_else(|| {
+            let last = flow.timeline.last().map_or("", |entry| entry.text.as_str());
+            last.strip_prefix("idle: ").unwrap_or(last)
+        });
+        truncated(text, LIST_TEXT_LIMIT, false)
+    };
+    serde_toon::to_string(&News {
+        changed: flows
+            .iter()
+            .map(|flow| Changed {
+                name: flow.name.clone(),
+                state: flow.state.name(),
+                mode: flow.mode.name(),
+                says: says(flow),
+            })
+            .collect(),
+        help,
+    })
+    .expect("news always encodes")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event::{Mode, Question};
+    use crate::event::Question;
     use crate::fold;
 
     fn flow(id: &str, kinds: Vec<(u64, EventKind)>) -> FlowView {
@@ -321,5 +385,62 @@ mod tests {
         let changed = changed_flows(&flows, &seen);
         assert_eq!(changed.len(), 1);
         assert_eq!(changed[0].state, State::Waiting);
+    }
+
+    #[test]
+    fn hands_a_worker_each_message_from_the_master() {
+        assert_eq!(
+            for_worker(&[
+                "Use semicolons.",
+                "Keep the header row,\nas in the old export."
+            ]),
+            [
+                "message from the saaio master:",
+                "  Use semicolons.",
+                "message from the saaio master:",
+                "  Keep the header row,",
+                "  as in the old export.",
+            ]
+            .join("\n")
+        );
+    }
+
+    #[test]
+    fn points_the_master_to_a_dialogs_options() {
+        let asked = flow("ask", vec![(1, dialog())]);
+
+        let news = for_master(&[&asked]);
+
+        assert!(news.contains("  ask,waiting,auto,Which color?\n"), "{news}");
+        assert!(
+            news.contains("`saaio status <name>` lists a question dialog's options"),
+            "{news}"
+        );
+    }
+
+    #[test]
+    fn tells_the_master_what_changed_and_who_answers_by_mode() {
+        let asked = flow("shop-217", vec![(1, waiting("Which delimiter?"))]);
+        let mut ready = flow(
+            "shop-220",
+            vec![(
+                1,
+                EventKind::Idle {
+                    note: "The design is ready for review.".into(),
+                },
+            )],
+        );
+        ready.mode = Mode::Guided;
+
+        assert_eq!(
+            for_master(&[&asked, &ready]),
+            [
+                "changed[2]{name,state,mode,says}:",
+                "  shop-217,waiting,auto,Which delimiter?",
+                "  shop-220,idle,guided,The design is ready for review.",
+                "help[3]: \"auto: answer what the code, the plan or the user's decisions settle with `saaio send <name> \\\"<answer>\\\"`, then tell the user what you answered; else ask the user\",\"guided: tell the user what it says or asks; send their answer with `saaio send`\",`saaio status <name> --full` shows its whole last answer",
+            ]
+            .join("\n")
+        );
     }
 }

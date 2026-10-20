@@ -1,13 +1,13 @@
 use std::time::{Duration, Instant};
 
 use super::Server;
-use crate::cli::output::news;
 use crate::deliver::{self, WorkerNews};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::server_log;
 use crate::store::{Busy, Waiter};
 use crate::text::printable;
 use crate::view::FlowView;
+use crate::wake;
 
 impl Server {
     /// Types the news of each session that cannot wake itself into its pane, when it sits idle at
@@ -76,14 +76,14 @@ impl Server {
             Waiter::Flow(id) => match deliver::worker_news(&self.store, id, (self.clock)()) {
                 WorkerNews::News(messages) => {
                     let messages: Vec<&str> = messages.iter().map(String::as_str).collect();
-                    Some(news::for_worker(&messages))
+                    Some(wake::for_worker(&messages))
                 }
                 WorkerNews::Nothing | WorkerNews::Gone => None,
             },
             Waiter::Master => {
                 let changed = deliver::master_news_now(&self.store, &self.board.flows);
                 let changed: Vec<&FlowView> = changed.iter().collect();
-                (!changed.is_empty()).then(|| news::for_master(&changed))
+                (!changed.is_empty()).then(|| wake::for_master(&changed))
             }
         }
     }

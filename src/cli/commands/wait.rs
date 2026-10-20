@@ -2,12 +2,13 @@ use std::thread;
 use std::time::Duration;
 
 use crate::cli::Env;
-use crate::cli::output::{Document, news};
+use crate::cli::output::Document;
 use crate::config::watch::ConfigWatch;
 use crate::deliver::{self, WorkerNews};
 use crate::event::is_uuid;
 use crate::store::{Busy, Store, Waiter};
 use crate::view::FlowView;
+use crate::wake;
 
 /// How often `saaio wait` looks for news, as often as the server looks at the store.
 const WAIT_EVERY: Duration = Duration::from_millis(500);
@@ -63,14 +64,14 @@ fn wait(
                 WorkerNews::Nothing => None,
                 WorkerNews::News(messages) => {
                     let messages: Vec<&str> = messages.iter().map(String::as_str).collect();
-                    Some(news::for_worker(&messages))
+                    Some(wake::for_worker(&messages))
                 }
             },
             Waiter::Master if !wakes => None,
             Waiter::Master => {
                 let changed = deliver::master_news(store, clock, &is_mine);
                 let changed: Vec<&FlowView> = changed.iter().collect();
-                (!changed.is_empty()).then(|| news::for_master(&changed))
+                (!changed.is_empty()).then(|| wake::for_master(&changed))
             }
         };
         if news.is_some() {

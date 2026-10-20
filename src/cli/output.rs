@@ -1,6 +1,5 @@
 pub(crate) mod bug_report;
 pub(crate) mod flow;
-pub(crate) mod news;
 pub(crate) mod remove;
 pub(crate) mod start;
 pub(crate) mod status;
@@ -12,9 +11,6 @@ use serde::Serialize;
 
 pub(crate) const DESCRIPTION: &str =
     "Tracks parallel feature flows: what each is doing, where it is blocked, how far it got";
-
-/// List views cut long texts to this many chars, with a hint; --full lifts it.
-pub(crate) const LIST_TEXT_LIMIT: usize = 80;
 
 /// What a successful command prints: TOON for agents, JSON for programs, a line for people (saaio ui).
 #[derive(Debug, PartialEq, Eq)]
@@ -128,16 +124,6 @@ impl From<std::io::Error> for Failure {
     }
 }
 
-/// Text cut to `limit` chars with " (truncated, N chars - use --full)" unless `full`.
-pub(crate) fn truncated(text: &str, limit: usize, full: bool) -> String {
-    let length = text.chars().count();
-    if full || length <= limit {
-        return text.to_string();
-    }
-    let kept: String = text.chars().take(limit).collect();
-    format!("{kept} (truncated, {length} chars - use --full)")
-}
-
 fn toon<T: Serialize>(document: &T) -> String {
     serde_toon::to_string(document).expect("a document always encodes")
 }
@@ -249,20 +235,5 @@ mod tests {
             failure.to_toon(),
             "error: \"could not create flow in /x: Permission denied\""
         );
-    }
-
-    #[test]
-    fn truncates_long_texts_with_a_hint_unless_full() {
-        let long = "x".repeat(LIST_TEXT_LIMIT + 5);
-
-        assert_eq!(
-            truncated(&long, LIST_TEXT_LIMIT, false),
-            format!(
-                "{} (truncated, 85 chars - use --full)",
-                "x".repeat(LIST_TEXT_LIMIT)
-            )
-        );
-        assert_eq!(truncated(&long, LIST_TEXT_LIMIT, true), long);
-        assert_eq!(truncated("short", LIST_TEXT_LIMIT, false), "short");
     }
 }
