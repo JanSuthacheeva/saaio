@@ -102,3 +102,39 @@ Other files:
 - [x] Ship the scripts in `complete/` from release.yml's Pack step
 - [x] Document it: docs/cli.md, docs/install.md, README.md, CHANGELOG.md 0.1.0, ROADMAP.md Planned future, CLAUDE.md Architecture
 - [x] End to end: install the build, source the bash and zsh scripts in real shells and complete `saaio st<Tab>` and `saaio completions <Tab>`
+
+## Review
+
+Reviewed in isolation against this plan and CLAUDE.md. No finding in data, boundaries, behaviour
+or errors: the command runs before the store, an unknown shell exits 2 with the shells named, the
+hidden `wait`, `server` and `hook` are left out (clap_complete 4.6.11 does offer hidden subcommands
+in every shell, checked in its source), and every release runner is native, so Pack can run the
+built binary.
+
+Fixed:
+- The `Failure::usage` doc comment ran to 128 columns: 6cc8241.
+- docs/install.md wrote the fish script into a folder it did not create, unlike the zsh and bash
+  lines: 9cca5d7.
+
+Both fixes are a comment and a doc line, reviewed by the reviewer who made them.
+
+Open:
+- `listed()` rebuilds the root command with only its version, arguments and visible subcommands;
+  `about`, `after_help` and `args_conflicts_with_subcommands` are dropped. clap_complete reads none
+  of them today, so the scripts are the same. Recommendation: leave it; the unit test catches a
+  changed command list.
+- Not from this branch: `main` prints with `println!`, so a reader that closes stdout early panics
+  ("failed printing to stdout: Broken pipe"). The scripts (10-38 KB) fit in a pipe buffer, so
+  `saaio completions bash | head` does not hit it in practice. Recommendation: a separate small
+  fix in main.rs that ends quietly on a broken pipe.
+
+Where to look:
+1. `src/cli/commands/completions.rs` `listed()`: how the command clap_complete sees is built.
+2. `src/cli/output.rs` `Failure::usage`: the new possible-values branch, which also changes the
+   message of every other invalid enum value (`--mode`, report's event kinds).
+3. `.github/workflows/release.yml` Pack: runs only on a tag, so it is untested until the first one.
+Routine, skim: the docs, README, CHANGELOG, ROADMAP, CLAUDE.md lines and the workspace test bound.
+
+Checks: `cargo test` passed at 9043cf6 (only a comment and docs changed since); `cargo fmt --check`
+and `cargo clippy --all-targets -- -D warnings` passed at 9cca5d7; `cargo deny check` passed
+before the docs commits, with no dependency change since.
