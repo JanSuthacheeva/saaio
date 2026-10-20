@@ -767,13 +767,27 @@ impl Lab {
     fn hook(&self, name: &str, script: &str) {
         let dir = self.repo.join(".saaio");
         fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join(name), script).unwrap();
-        set_executable(&dir.join(name));
+        executable(&dir.join(name), script);
     }
 }
 
-fn set_executable(file: &Path) {
-    fs::set_permissions(file, fs::Permissions::from_mode(0o755)).unwrap();
+/// Writes an executable script through a child process, so this process never holds it open for
+/// writing while another test thread forks: exec of such a file fails with ETXTBSY on Linux.
+fn executable(path: &Path, body: &str) {
+    let mut writer = Command::new("sh")
+        .args(["-c", "cat > \"$1\" && chmod 755 \"$1\"", "sh"])
+        .arg(path)
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
+    writer
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(body.as_bytes())
+        .unwrap();
+    let status = writer.wait().unwrap();
+    assert!(status.success(), "could not write {}", path.display());
 }
 
 #[test]
@@ -1516,12 +1530,10 @@ fn a_merge_request_counts_through_an_ssh_host_alias() {
     log.write_all(workspace.as_bytes()).unwrap();
     let bin = home.path().join("bin");
     fs::create_dir_all(&bin).unwrap();
-    fs::write(
-        bin.join("ssh"),
+    executable(
+        &bin.join("ssh"),
         "#!/bin/sh\nfor host; do :; done\nif [ \"$host\" = github-work ]; then echo 'hostname github.com'; else echo \"hostname $host\"; fi\n",
-    )
-    .unwrap();
-    set_executable(&bin.join("ssh"));
+    );
     let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
 
     let mut command = hook_command(home.path(), &["claude-code"], Some(&id));
@@ -2274,12 +2286,10 @@ fn remove_runs_nothing_the_worktree_configures() {
     let scratch = TempDir::new().unwrap();
     let marker = scratch.path().join("marker");
     let monitor = scratch.path().join("monitor");
-    fs::write(
+    executable(
         &monitor,
-        format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
-    )
-    .unwrap();
-    fs::set_permissions(&monitor, fs::Permissions::from_mode(0o755)).unwrap();
+        &format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+    );
     let planted = scratch.path().join("planted");
     git(scratch.path(), &["init", "-q", "planted"]);
     git(
@@ -3136,8 +3146,7 @@ fn server_with_gh(home: &Path, script: &str) -> Running {
     .unwrap();
     let bin = home.join("bin");
     fs::create_dir_all(&bin).unwrap();
-    fs::write(bin.join("gh"), script).unwrap();
-    set_executable(&bin.join("gh"));
+    executable(&bin.join("gh"), script);
     let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
     let log = fs::File::create(home.join("server.log")).unwrap();
     let server = saaio_command(home)

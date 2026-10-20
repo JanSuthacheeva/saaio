@@ -11,6 +11,7 @@ use super::*;
 use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
+use crate::fixtures::executable;
 use crate::launch::pane::HOSTED;
 use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
 use crate::store::{Busy, Waiter};
@@ -282,10 +283,7 @@ fn a_codex_worker_that_never_starts_a_turn_waits_once() {
     let store = Store::at(dir.path().to_path_buf());
     let id = started_flow(&store, dir.path(), "stalled", "codex");
     let fake_codex = dir.path().join("fake-codex");
-    fs::write(&fake_codex, "#!/bin/sh\nsleep 30\n").unwrap();
-    let mut permissions = fs::metadata(&fake_codex).unwrap().permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(&fake_codex, permissions).unwrap();
+    executable(&fake_codex, "#!/bin/sh\nsleep 30\n");
     let codex = Agent {
         command: vec![fake_codex.display().to_string()],
         prompt: None,
@@ -935,8 +933,7 @@ fn says_why_it_stops() {
 /// A Codex stand-in: ignores flow's wiring and keeps what is typed into it in `typed`.
 fn fake_codex(dir: &Path) -> Agent {
     let script = dir.join("fake-codex");
-    fs::write(&script, "#!/bin/sh\nexec cat > typed\n").unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    executable(&script, "#!/bin/sh\nexec cat > typed\n");
     Agent {
         command: vec![script.display().to_string()],
         prompt: None,
@@ -1063,8 +1060,7 @@ fn fake_claude(dir: &Path, id: &str) -> Agent {
         "#!/bin/sh\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> typed; printf turn > '{}'; done\n",
         busy.display()
     );
-    fs::write(&script, body).unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    executable(&script, &body);
     Agent {
         command: vec![script.display().to_string()],
         prompt: None,
@@ -1168,8 +1164,7 @@ fn a_typed_line_that_begins_no_turn_lets_the_next_one_follow() {
 /// A Claude Code stand-in that keeps every byte sent to it in `typed`, a key such as Esc included.
 fn fake_claude_keys(dir: &Path) -> Agent {
     let script = dir.join("fake-claude-keys");
-    fs::write(&script, "#!/bin/sh\nstty raw -echo\nexec cat > typed\n").unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    executable(&script, "#!/bin/sh\nstty raw -echo\nexec cat > typed\n");
     Agent {
         command: vec![script.display().to_string()],
         prompt: None,
