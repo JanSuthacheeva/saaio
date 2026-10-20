@@ -11,7 +11,7 @@ use crate::ui::screen::Screen;
 
 impl App {
     pub fn on_input(&mut self, routed: Routed) -> Vec<Effect> {
-        if !matches!(routed, Routed::Pane(_)) {
+        if !matches!(routed, Routed::Pane(_) | Routed::Pointer(_)) {
             self.notice = None;
         }
         if !matches!(routed, Routed::Pointer(_)) {

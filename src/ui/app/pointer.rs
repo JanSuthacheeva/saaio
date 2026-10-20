@@ -52,6 +52,7 @@ impl App {
                 selection.extend(at);
                 if selection.is_click() {
                     self.selection = None;
+                    self.notice = None;
                     return self.on_click(at);
                 }
                 vec![Effect::CopySelection(*selection)]

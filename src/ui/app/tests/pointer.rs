@@ -194,3 +194,21 @@ fn copies_what_a_pane_put_on_the_clipboard() {
         vec![Effect::Copy("hi".into())]
     );
 }
+
+#[test]
+fn a_notice_can_be_selected_and_a_click_dismisses_it() {
+    let mut app = with_fleet();
+    app.say("theme: bad colour".into());
+    let title = app.areas().title;
+    let text = row(&render_at(&app, FLEET), 0);
+    let start = text.find("theme").unwrap();
+    let x = title.x + u16::try_from(text[..start].chars().count()).unwrap();
+
+    mouse(&mut app, PointerKind::Press, x, title.y);
+    let effects = mouse(&mut app, PointerKind::Release, x + 16, title.y);
+
+    assert_eq!(copied(&app, &effects), "theme: bad colour");
+    app.on_tick(NOW + 600);
+    click(&mut app, x, title.y);
+    assert!(!row(&render_at(&app, FLEET), 0).contains("theme"));
+}
