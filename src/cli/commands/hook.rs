@@ -111,7 +111,8 @@ fn hook(
     log: &Log,
     now: u64,
 ) -> Option<String> {
-    let kinds = adapter.translate(payload, &config.workflow);
+    let approver = adapter.approver(payload, |file| read_rollout(file, log));
+    let kinds = adapter.translate(payload, &config.workflow, approver);
     let waiter = match hooked {
         Hooked::Nobody => return None,
         Hooked::Master => {
@@ -142,6 +143,20 @@ fn hook(
         }
     }
     None
+}
+
+/// A rollout's text; a read that fails goes to server.log and counts as none.
+fn read_rollout(file: &Path, log: &Log) -> Option<String> {
+    match std::fs::read_to_string(file) {
+        Ok(text) => Some(text),
+        Err(error) => {
+            log.error(&format!(
+                "could not read the rollout {}: {error}",
+                file.display()
+            ));
+            None
+        }
+    }
 }
 
 /// Appends the kinds that change flow `flow` (a name or id); its id, None when there is no such

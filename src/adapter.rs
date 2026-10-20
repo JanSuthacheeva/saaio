@@ -45,6 +45,15 @@ pub enum Turn {
     Idle,
 }
 
+/// Who answers a permission request a hook reports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Approver {
+    /// The user, in the pane.
+    User,
+    /// A reviewer the harness runs, which answers without the user.
+    Reviewer,
+}
+
 /// A harness saaio observes through its own hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[cfg_attr(test, derive(serde::Serialize))]
@@ -160,11 +169,27 @@ impl Adapter {
         }
     }
 
-    /// The flow events one hook payload means; empty for one that means nothing.
-    pub fn translate(self, payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
+    /// Who answers this payload's permission request: Codex's automatic reviewer when the
+    /// rollout's turn routes approvals to it, else the user. `read` reads a file the payload
+    /// names; it is called only for a Codex PermissionRequest.
+    pub fn approver(self, payload: &Value, read: impl FnOnce(&Path) -> Option<String>) -> Approver {
+        match self {
+            Adapter::ClaudeCode => Approver::User,
+            Adapter::Codex => codex::approver(payload, read),
+        }
+    }
+
+    /// The flow events one hook payload means; empty for one that means nothing. A permission
+    /// request the reviewer answers waits for no one.
+    pub fn translate(
+        self,
+        payload: &Value,
+        workflow: &Workflow,
+        approver: Approver,
+    ) -> Vec<EventKind> {
         match self {
             Adapter::ClaudeCode => claude_code::translate(payload, workflow),
-            Adapter::Codex => codex::translate(payload, workflow),
+            Adapter::Codex => codex::translate(payload, workflow, approver),
         }
     }
 }
