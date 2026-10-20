@@ -282,3 +282,47 @@ Docs:
 ### End to end
 
 - [ ] Push the branch and open the PR as a draft (on the user's OK) so the workflow runs on GitHub's runners; all six checks green on ubuntu-24.04 and macos-15; rerun once to see the cache hit
+
+## Review
+
+Reviewed 0d6dfd9..9b5a278 against this plan in an isolated context.
+
+**Fixed**
+
+- Two doc comments (`dismiss_dialogs`, `deliver_news`) ran past 100 columns after `QUIET` became
+  `timing.quiet`; rewrapped (110f4b3). Comment only, so no second review was needed.
+
+**Open**
+
+- The last task: push, draft PR, six checks green on GitHub, a rerun for the cache hit. Needs the
+  user's OK to push. Recommendation: do it; `actionlint` passes locally.
+- `concurrency` on main: GitHub cancels a run still pending in the group when a newer one queues,
+  whatever `cancel-in-progress` says. A daily `deny` queued behind a push can be dropped, but the
+  push runs `deny` too. Recommendation: keep.
+- `stop_on_signals` now runs before `bind`, so a second `saaio server` that fails to bind has its
+  signal thread for the moment before it exits. Harmless. Recommendation: keep.
+- `a_server_stopped_while_it_starts_still_stops_cleanly` catches the old order only some of the
+  time (the window is small); the stress runs are what showed it. Recommendation: accept.
+- `tests/cli.rs` repeats `fixtures::executable`: integration tests cannot see a `cfg(test)` module
+  of the lib. Recommendation: keep.
+
+**Where to look**
+
+1. `src/server.rs` `run`: the channel and signals before `bind`, `cwd` in `ServerPaths`.
+2. `.github/workflows/ci.yml`: job names (the required checks), `save-if`, the schedule skipping
+   all but `deny`, the porcelain check after the tests.
+3. `src/server/tests.rs` `quick`, `start_timed` (waits for a Welcome) and the let-go test on
+   `unstarted: 300 ms`.
+4. `deny.toml`: the licence list and the target graph.
+
+Routine, can be skimmed: the deadline loops turned into `wait_until`/`recv_until`, the
+`fs::write` + chmod sites turned into `executable`, the docs.
+
+Also checked: the CONTRIBUTING Linux stress recipe runs as written in `rust:1.95` as a non-root
+user (toolchain picked up from `rust-toolchain.toml`).
+
+**Checks**
+
+fmt, clippy, the full test suite and `cargo deny --locked check` passed at 3e1e0c9; 110f4b3
+changes only comments, and `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings`
+pass on it.
