@@ -51,7 +51,7 @@ mod tests {
         assert!(watch.changed().is_none());
 
         // A new length, so the change shows on filesystems whose mtimes are a second coarse.
-        fs::write(&file, "[worker]\nagnet = \"codex\"\n").unwrap();
+        fs::write(&file, "[worker]\nagnet = \"claude\"\n").unwrap();
         let broken = format!("{:#}", watch.changed().unwrap().unwrap_err());
         assert!(
             broken.contains("config.toml:2: unknown field `agnet`"),
