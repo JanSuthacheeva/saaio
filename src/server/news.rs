@@ -11,8 +11,8 @@ use crate::view::FlowView;
 
 impl Server {
     /// Types the news of each session that cannot wake itself into its pane, when it sits idle at
-    /// its prompt and nobody typed there for `timing.quiet`: a Codex worker's messages from the master, a
-    /// Codex master's stopped flows. A busy session gets them from its Stop hook instead.
+    /// its prompt and nobody typed there for `timing.quiet`: a Codex worker's messages from the
+    /// master, a Codex master's stopped flows. A busy session gets them from its Stop hook instead.
     pub(super) fn deliver_news(&mut self) {
         let now = Instant::now();
         let running = self

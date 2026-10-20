@@ -11,9 +11,9 @@ const ESC: &[u8] = b"\x1b";
 
 impl Server {
     /// Presses Esc once into each running pane whose flow waits on a question dialog the master
-    /// answered, once nobody typed there for `timing.quiet`, so Claude Code closes it and hands the held
-    /// message over. Never twice into one dialog: a second Esc could interrupt the turn the first
-    /// one began.
+    /// answered, once nobody typed there for `timing.quiet`, so Claude Code closes it and hands the
+    /// held message over. Never twice into one dialog: a second Esc could interrupt the turn the
+    /// first one began.
     pub(super) fn dismiss_dialogs(&mut self) {
         let now = Instant::now();
         let answered: Vec<(PaneKey, String, u64)> = self
