@@ -114,7 +114,8 @@ main() {
     tar xzf "$tmp/$tarball" -C "$tmp" saaio
     place "$tmp/saaio" "$dir"
 
-    echo "installed $("$dir/saaio" --version) to $(shown "$dir/saaio")"
+    version=$("$dir/saaio" --version) || fail "$(shown "$dir/saaio") does not run on this machine"
+    echo "installed $version to $(shown "$dir/saaio")"
     path_hint "$dir"
 }
 

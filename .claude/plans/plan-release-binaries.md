@@ -103,6 +103,7 @@ fn installs_the_binary_for_this_machine()      // into SAAIO_INSTALL_DIR, execut
 fn replaces_an_installed_binary()
 fn refuses_a_tarball_whose_checksum_differs()  // exit 1, nothing installed
 fn names_the_folder_when_it_is_not_on_path()
+fn fails_when_the_installed_binary_does_not_run() // exit 1 naming the path (added during review)
 fn installs_the_version_asked_for()            // SAAIO_VERSION without SAAIO_DOWNLOAD_URL: the url it names is .../download/<tag>
 ```
 
@@ -160,7 +161,8 @@ A user installs:
    not download <url>" exit 1.
 3. `main` -> `verify`; mismatch -> "saaio: checksum mismatch for saaio-T.tar.gz" exit 1, nothing installed.
 4. `main` -> `tar xzf` in a temp dir (removed by `trap`) -> `place(saaio, $SAAIO_INSTALL_DIR)`.
-5. `main` -> prints "installed saaio 0.1.0 (abc1234) to ~/.local/bin/saaio" -> `path_hint`.
+5. `main` -> runs `saaio --version`; fails -> "saaio: ~/.local/bin/saaio does not run on this machine"
+   exit 1 (added during review) -> prints "installed saaio 0.1.0 (abc1234) to ~/.local/bin/saaio" -> `path_hint`.
 
 ## Test seams
 

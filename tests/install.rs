@@ -27,21 +27,22 @@ fn executable(path: &Path, text: &str) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
 }
 
-/// A temp folder with the assets of a release: a tarball whose saaio prints `version`, and
-/// SHA256SUMS naming it.
+/// A temp folder with the assets of a release: a tarball whose saaio prints `version` (or runs
+/// `script`), and SHA256SUMS naming it.
 struct Release {
     dir: TempDir,
 }
 
 impl Release {
     fn new(version: &str) -> Release {
+        Release::with_script(&format!("#!/bin/sh\necho '{version}'\n"))
+    }
+
+    fn with_script(script: &str) -> Release {
         let dir = TempDir::new().unwrap();
         let build = dir.path().join("build");
         fs::create_dir(&build).unwrap();
-        executable(
-            &build.join("saaio"),
-            &format!("#!/bin/sh\necho '{version}'\n"),
-        );
+        executable(&build.join("saaio"), script);
         fs::write(build.join("README.md"), "saaio\n").unwrap();
         let status = Command::new("tar")
             .arg("czf")
@@ -183,6 +184,25 @@ fn refuses_a_tarball_whose_checksum_differs() {
         format!("saaio: checksum mismatch for {}\n", tarball())
     );
     assert!(!bin(home.path()).join("saaio").exists());
+}
+
+#[test]
+fn fails_when_the_installed_binary_does_not_run() {
+    let home = TempDir::new().unwrap();
+    let release = Release::with_script("#!/bin/sh\nexit 126\n");
+
+    let output = install(
+        home.path(),
+        &path_with(&bin(home.path())),
+        &[("SAAIO_DOWNLOAD_URL", &release.url())],
+    );
+
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(stdout(&output), "");
+    assert_eq!(
+        stderr(&output),
+        "saaio: ~/.local/bin/saaio does not run on this machine\n"
+    );
 }
 
 #[test]
