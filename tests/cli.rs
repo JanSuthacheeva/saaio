@@ -1204,6 +1204,29 @@ fn a_claude_code_turn_marks_the_session_busy_and_its_stop_hands_nothing_over() {
 }
 
 #[test]
+fn a_claude_code_turn_that_asks_beside_a_background_task_waits_for_the_person() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let busy = home.path().join(format!("waits/{id}.busy"));
+    let prompt = r#"{"session_id":"7f3c","hook_event_name":"UserPromptSubmit","prompt":"go"}"#;
+    let stop = r#"{"session_id":"7f3c","hook_event_name":"Stop","last_assistant_message":"The server runs.\n\nWhich color do you prefer, red or blue?","background_tasks":[{"id":"b1","type":"shell","status":"running","description":"Run the dev server"}]}"#;
+
+    hook(home.path(), Some(&id), prompt);
+    assert!(hook(home.path(), Some(&id), stop).status.success());
+
+    assert!(!busy.exists(), "idle after its Stop");
+    let log = fs::read_to_string(home.path().join(format!("flows/{id}.jsonl"))).unwrap();
+    assert!(log.contains(r#""kind":"answer""#), "{log}");
+    assert!(!log.contains("delegated"), "{log}");
+    let detail = stdout(&saaio(home.path(), &["status", "shop-221", "--json"]));
+    assert!(detail.contains(r#""state": "waiting""#), "{detail}");
+    assert!(
+        detail.contains("Which color do you prefer, red or blue?"),
+        "{detail}"
+    );
+}
+
+#[test]
 fn a_codex_master_records_its_session_and_reports_nothing() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");
@@ -1275,6 +1298,18 @@ fn a_claude_code_master_keeps_where_its_turn_stands() {
             || fs::read_dir(home.path().join("flows")).unwrap().count() == 0,
         "the master reports into no flow"
     );
+}
+
+#[test]
+fn a_claude_code_master_turn_ends_beside_a_background_task() {
+    let home = TempDir::new().unwrap();
+    let turn = home.path().join("waits/master.turn");
+    let stop = r#"{"hook_event_name":"Stop","last_assistant_message":"Watching the workers.","background_tasks":[{"id":"b1","type":"subagent","status":"running","description":"background sleeper"}]}"#;
+
+    master_hook(home.path(), stop);
+
+    let idle = fs::read_to_string(&turn).unwrap();
+    assert!(idle.contains(r#""state":"idle""#), "{idle}");
 }
 
 #[test]

@@ -81,6 +81,6 @@ server.log.
 ## Tasks
 
 - [x] `translate` "Stop" and `turn` end every main-agent Stop; remove `running_background_task`, `artifact_watch` and the `ARTIFACT_WATCH_*` constants; unit test `a_turn_ends_whatever_runs_in_the_background` and the turn test expecting `Ended` for `stop_background`
-- [ ] `tests/cli.rs`: a worker that asks beside a background task is waiting with its answer and not busy; a master Stop beside one leaves `master.turn` idle
+- [x] `tests/cli.rs`: a worker that asks beside a background task is waiting with its answer and not busy; a master Stop beside one leaves `master.turn` idle
 - [ ] Docs: `docs/flows.md` end-of-turn row, `docs/HANDOVER.md` `background_tasks` fact
 - [ ] End-to-end check: the scratch-store reproduction (UI in a PTY, a real Claude Code worker starting `sleep 900` in the background and asking a question) shows the flow waiting with its answer, and the master woken
