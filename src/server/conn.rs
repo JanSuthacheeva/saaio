@@ -22,7 +22,7 @@ impl Server {
                 version,
                 role,
                 peer,
-            } => self.hello(conn, version, role, peer),
+            } => self.hello(conn, version, role, peer.printable()),
             ClientMsg::Focus(key) => {
                 self.focus = key;
                 self.history = None;

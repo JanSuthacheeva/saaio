@@ -116,6 +116,29 @@ fn lets_go_when_another_ui_attaches_and_says_which() {
 }
 
 #[test]
+fn quits_with_text_a_terminal_cannot_take_as_commands() {
+    let mut app = App::new(SIZE);
+    let by = Peer {
+        pid: 4321,
+        cwd: "/tmp/\x1b]52;c;aGk=\x07x".into(),
+        build: "0.1.0\x1b[2J".into(),
+    };
+
+    assert_eq!(
+        app.on_server(ServerMsg::Detached { by }),
+        vec![Effect::Quit(
+            "another terminal took over: pid 4321 in /tmp/]52;c;aGk=x (saaio 0.1.0[2J)".to_string()
+        )]
+    );
+    assert_eq!(
+        app.on_server(ServerMsg::Refused {
+            reason: "old\x1b]0;title\x07".into()
+        }),
+        vec![Effect::Quit("old]0;title".to_string())]
+    );
+}
+
+#[test]
 fn draws_the_master_with_its_title_its_cursor_and_the_rail() {
     let mut app = App::new(SIZE);
     app.on_server(ServerMsg::Frame(frame_with("hello", Modes::default())));

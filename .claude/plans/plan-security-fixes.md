@@ -266,7 +266,7 @@ Each shared piece lands in the commit of its first user: alone it is dead code, 
 - [x] M3: `private::create_dir` and `private::options` with mode tests; every store, registry, slots, server_log, client, master, conn and default_file create site through `private`; server start closes the store root; `tests/cli.rs` mode test
 - [x] Add `text::printable` with unit tests
 - [x] M2: `news::paste` through `text::printable`; paste test
-- [ ] L1: `Peer::printable` in `Server::hello`, `text::printable` on Refused and Detached quit texts; tests
+- [x] L1: `Peer::printable` in `Server::hello`, `text::printable` on Refused and Detached quit texts; tests
 - [ ] L2: `text::without_value` with unit tests, used in `config.rs` and `theme_file.rs`; config error test
 
 ### End to end

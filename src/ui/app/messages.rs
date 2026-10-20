@@ -6,6 +6,7 @@ use super::{
 use crate::branching::Branching;
 use crate::cli::output::remove::Refusal;
 use crate::proto::{ClientMsg, PaneKey, ServerMsg, Size};
+use crate::text;
 use crate::ui::board::BoardState;
 use crate::view::{MasterTurn, Projects, State};
 
@@ -43,7 +44,7 @@ impl App {
                 }
                 effects
             }
-            ServerMsg::Refused { reason } => vec![Effect::Quit(reason)],
+            ServerMsg::Refused { reason } => vec![Effect::Quit(text::printable(&reason))],
             ServerMsg::Panes(panes) => {
                 self.panes = panes;
                 vec![]
@@ -62,12 +63,12 @@ impl App {
                 self.mirrored = self.screen.modes;
                 vec![Effect::Mirror(self.mirrored)]
             }
-            ServerMsg::Detached { by } => vec![Effect::Quit(format!(
+            ServerMsg::Detached { by } => vec![Effect::Quit(text::printable(&format!(
                 "another terminal took over: pid {} in {} (saaio {})",
                 by.pid,
                 self.tilde(&by.folder()),
                 by.build
-            ))],
+            )))],
         }
     }
 
