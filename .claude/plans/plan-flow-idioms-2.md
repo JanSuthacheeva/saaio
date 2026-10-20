@@ -77,6 +77,8 @@ source fix, or test change was made.
 - [x] Split `ui/theme.rs` at the palette/style seam and adjust imports without behavior change.
 - [x] Rename `launch::name::flow_name` to `launch::name::choose` and update its call sites.
 - [x] Run `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check`; review the resulting diff against this plan.
+- [ ] On a limited forge list that omits the shown PR, query that PR by URL before `forge::pick` and `forge::news`; test an older open PR behind ten closed results and both forge command shapes.
+- [ ] Re-run the full test, Clippy, and format gates, plus an isolated CLI check; review the follow-up diff.
 
 Implementation approved; keep this checklist current while building.
 
@@ -96,7 +98,7 @@ with `saaio status --json`. The UI was not launched. `git diff --check` is clean
 
 **Open**
 
-- A branch with 10 newer closed PRs can have its shown open PR omitted by the `--limit 10`/`--per-page 10` query. `pick` then selects a closed PR and `news` clears the shown URL. A temporary regression probe failed with `MergeRequestClosed` for the shown URL. Check the shown PR directly or paginate before treating a limited result as evidence that no open PR remains. This changes user-visible forge behavior, so the review leaves the design decision open.
+- A branch with 10 newer closed PRs can have its shown open PR omitted by the `--limit 10`/`--per-page 10` query. `pick` then selects a closed PR and `news` clears the shown URL. A temporary regression probe failed with `MergeRequestClosed` for the shown URL. The user chose a direct URL lookup for the shown PR when the limited list omits it. The follow-up task above records this decision; leave an uncertain state unchanged if that lookup fails.
 
 **Where to look**
 
