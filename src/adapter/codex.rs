@@ -19,7 +19,8 @@ struct Hook {
     timeout: u64,
 }
 
-/// The hook events saaio listens to; Interrupt at 3 s, the most Codex allows.
+/// The hook events saaio listens to; PreToolUse at 150 s, so a tool call can wait for paused
+/// services, Interrupt at 3 s, the most Codex allows.
 const HOOKS: [Hook; 8] = [
     Hook {
         event: "UserPromptSubmit",
@@ -29,7 +30,7 @@ const HOOKS: [Hook; 8] = [
     Hook {
         event: "PreToolUse",
         key: "pre_tool_use",
-        timeout: HOOK_TIMEOUT_SECS,
+        timeout: TOOL_HOOK_TIMEOUT_SECS,
     },
     Hook {
         event: "PostToolUse",
@@ -64,6 +65,9 @@ const HOOKS: [Hook; 8] = [
 ];
 /// Seconds Codex waits for `saaio hook` before it goes on without it.
 const HOOK_TIMEOUT_SECS: u64 = 10;
+/// Seconds Codex waits for `saaio hook` before a tool call: long enough for paused services to
+/// come back (hook::RESUME_WAIT).
+const TOOL_HOOK_TIMEOUT_SECS: u64 = 150;
 /// The most seconds Codex permits for an Interrupt hook.
 const INTERRUPT_TIMEOUT_SECS: u64 = 3;
 /// Where Codex says hooks passed with `-c` come from, in their trust keys.
@@ -728,6 +732,11 @@ mod tests {
             );
             assert_eq!(handler["timeout"].as_integer(), Some(hook.timeout as i64));
         }
+        let tool = HOOKS
+            .iter()
+            .find(|hook| hook.event == "PreToolUse")
+            .unwrap();
+        assert_eq!(tool.timeout, TOOL_HOOK_TIMEOUT_SECS);
         let (_, toml_value) = values.last().unwrap().split_once('=').unwrap();
         let parsed: toml::Table = toml::from_str(&format!("v = {toml_value}")).unwrap();
         let state = parsed["v"].as_table().unwrap();
@@ -762,13 +771,15 @@ mod tests {
                 .1,
             "sha256:50f2e8b23093a3fc4e12bf9edb639b04b46adb4cbac23d59fcd894d300b9528c"
         );
+        let recorded = Hook {
+            event: "PreToolUse",
+            key: "pre_tool_use",
+            timeout: HOOK_TIMEOUT_SECS,
+        };
         assert_eq!(
-            hashes
-                .iter()
-                .find(|(key, _)| *key == "pre_tool_use")
-                .unwrap()
-                .1,
-            "sha256:8968411b220f168aa89dfdd45fd451ce0922ab254c2fd229348cf39cc5f8656a"
+            trust_hash(&recorded, command),
+            "sha256:8968411b220f168aa89dfdd45fd451ce0922ab254c2fd229348cf39cc5f8656a",
+            "recorded from Codex at the 10 s timeout"
         );
     }
 

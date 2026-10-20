@@ -371,7 +371,7 @@ resume: the hook waits `PICKUP_WAIT` and lets the tool run.
 - [x] Add `pause::next`, `rests` and `holds_tools` in src/pause.rs with table tests over every status and state
 - [x] Add `Hook::Pause`/`Hook::Resume`, `workspace::has_hook` and `workspace::run_hook_within` (shared `hook_file`, deadline loop shared with `output_in`); tests for env, missing script and the limit
 - [x] Add `server/pause_watch.rs` (`PauseWatch::due`/`done`, `Server::pause_idle`, `Server::pause_finished`, `run_in_background`, `Event::Paused`) and wire it into `Server::serve` and `handle`; unit tests and a server test that pauses and resumes over a real socket
-- [ ] Add `Adapter::before_tool`, the 150 s PreToolUse timeouts in both adapters, and `wait_for_services` in hook.rs; adapter tests and tests/cli.rs for waiting on resuming and not stalling without a server
+- [x] Add `Adapter::before_tool`, the 150 s PreToolUse timeouts in both adapters, and `wait_for_services` in hook.rs; adapter tests and tests/cli.rs for waiting on resuming and not stalling without a server
 - [ ] Show services in `saaio status`: the list's `services` column (and `--all`), the detail's `services` and `services_error`; TOON tests
 - [ ] Show services on the board card label and in the board detail header; UI tests and goldens
 - [ ] Update docs/repository.md (pause and resume section, Compose example, the slot line fix), docs/configuration.md, docs/flows.md, docs/json.md, docs/ui.md, docs/cli.md

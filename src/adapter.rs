@@ -172,6 +172,13 @@ impl Adapter {
         }
     }
 
+    /// The payload is the hook before a tool call (PreToolUse in both harnesses).
+    pub fn before_tool(self, payload: &Value) -> bool {
+        match self {
+            Adapter::ClaudeCode | Adapter::Codex => payload["hook_event_name"] == "PreToolUse",
+        }
+    }
+
     /// Who answers this payload's permission request: Codex's automatic reviewer when the
     /// rollout's turn routes approvals to it, else the user. `last_line` reads the last line that
     /// matches in a file the payload names; it is called only for a Codex PermissionRequest.
@@ -336,6 +343,24 @@ mod tests {
             "a subagent's turn is not the session's"
         );
         assert_eq!(Adapter::ClaudeCode.turn(&event("Stop")), Some(Turn::Ended));
+    }
+
+    #[test]
+    fn knows_the_hook_before_a_tool_call() {
+        let event =
+            |name: &str| serde_json::json!({ "hook_event_name": name, "tool_name": "Bash" });
+
+        for adapter in [Adapter::ClaudeCode, Adapter::Codex] {
+            assert!(adapter.before_tool(&event("PreToolUse")));
+            for other in [
+                "PostToolUse",
+                "UserPromptSubmit",
+                "PermissionRequest",
+                "Stop",
+            ] {
+                assert!(!adapter.before_tool(&event(other)), "{other}");
+            }
+        }
     }
 
     #[test]
