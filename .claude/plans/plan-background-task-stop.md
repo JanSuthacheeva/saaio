@@ -76,7 +76,7 @@ server.log.
 1. The pending-watch and subagent-beside-watch tests are deleted: their case no longer exists.
 2. No CHANGELOG line: only the 0.1.0 entry until it is tagged.
 3. `master.md` stays: "delegated (a subagent ... runs for it)" still describes foreground subagents.
-4. ROADMAP "Subagents in the sidebar" stays as written.
+4. ROADMAP "Every subagent in the sidebar" keeps its plan; its "Today" now says background subagents do not show (it said the first showed once the turn ended).
 
 ## Tasks
 
@@ -84,3 +84,27 @@ server.log.
 - [x] `tests/cli.rs`: a worker that asks beside a background task is waiting with its answer and not busy; a master Stop beside one leaves `master.turn` idle
 - [x] Docs: `docs/flows.md` end-of-turn row, `docs/HANDOVER.md` `background_tasks` fact
 - [x] End-to-end check: the scratch-store reproduction (UI in a PTY, a real Claude Code worker starting `sleep 900` in the background and asking a question) shows the flow waiting with its answer, and the master woken
+
+## Review
+
+Isolated review of `main..HEAD` against this plan.
+
+**Fixed**
+- ROADMAP "Every subagent in the sidebar" still said the first background subagent shows once the
+  turn ends; after this change none shows. Its "Today" column now says so (docs commit).
+
+**Open**
+- After a Stop beside a background task the session is marked idle (`Busy::Idle`). When the task
+  finishes and Claude Code resumes on its own, no `UserPromptSubmit` fires, so the busy mark stays
+  idle through that resumed turn and the server may type a queued line into it (`server/typing.rs`).
+  Claude Code queues input typed while it works, so this looks harmless; not proven either way.
+  Recommendation: leave it, watch for it in use.
+
+**Where to look**
+1. `src/adapter/claude_code.rs` `translate` "Stop" arm and `turn`: the only behaviour change.
+2. `src/cli/commands/hook.rs` `hook`: `Turn::Ended` -> `Busy::Idle` now also beside background work.
+3. `tests/cli.rs` the two new end-to-end hook tests. The docs changes are routine.
+
+**Checks**
+`cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check` passed at 74c26fd;
+later commits change only docs and this plan.
