@@ -18,6 +18,11 @@ pub mod peek;
 pub mod prefix;
 pub mod rail;
 pub mod screen;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the app selects once the pointer is wired")
+)]
+pub mod selection;
 pub mod sidebar;
 pub mod theme;
 pub mod theme_file;
