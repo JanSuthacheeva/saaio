@@ -55,6 +55,12 @@ pub fn holds_tools(flow: &FlowView) -> bool {
     })
 }
 
+/// A tool call of the flow is work it has not reported yet: its services are held and it rests,
+/// but not on a question (the tool call may be the one that asks it).
+pub fn wakes_at_tool_call(flow: &FlowView) -> bool {
+    holds_tools(flow) && rests(flow.state) && flow.state != State::Waiting
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,5 +233,27 @@ mod tests {
                 Some(ServiceStatus::Resuming)
             ]
         );
+    }
+
+    #[test]
+    fn a_tool_call_wakes_a_resting_flow_whose_services_are_held() {
+        let waking: Vec<State> = STATES
+            .into_iter()
+            .filter(|&state| wakes_at_tool_call(&flow(state, Some((ServiceStatus::Paused, 0)))))
+            .collect();
+
+        assert_eq!(
+            waking,
+            vec![State::Idle, State::Blocked, State::Done, State::Ended]
+        );
+        assert!(wakes_at_tool_call(&flow(
+            State::Idle,
+            Some((ServiceStatus::Pausing, 0))
+        )));
+        assert!(!wakes_at_tool_call(&flow(
+            State::Idle,
+            Some((ServiceStatus::Running, 0))
+        )));
+        assert!(!wakes_at_tool_call(&flow(State::Idle, None)));
     }
 }

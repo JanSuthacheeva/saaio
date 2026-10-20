@@ -1150,6 +1150,25 @@ fn a_tool_call_of_paused_services_without_a_server_waits_only_a_moment() {
 }
 
 #[test]
+fn a_tool_call_of_a_resting_flow_with_paused_services_marks_it_working() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let stop = r#"{"hook_event_name":"Stop","last_assistant_message":"All green."}"#;
+    assert!(hook(home.path(), Some(&id), stop).status.success());
+    services(home.path(), &id, "paused");
+    let state = |home: &Path| {
+        let output = saaio(home, &["status", "--json"]);
+        let board: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        board["flows"][0]["state"].as_str().unwrap().to_string()
+    };
+    assert_eq!(state(home.path()), "idle");
+
+    assert!(hook(home.path(), Some(&id), BASH).status.success());
+
+    assert_eq!(state(home.path()), "working");
+}
+
+#[test]
 fn a_recorded_codex_skill_read_advances_the_flow_once() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "codex-skill-read");

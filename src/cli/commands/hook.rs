@@ -94,8 +94,9 @@ const PICKUP_WAIT: Duration = Duration::from_secs(2);
 const WAIT_STEP: Duration = Duration::from_millis(200);
 
 /// Before a tool call of a flow whose services pause::holds_tools: waits until they run again,
-/// fail, or the wait is over; logs a wait that ran out. Paused with no resume begun, it waits only
-/// PICKUP_WAIT, so a store without a server never stalls tools.
+/// fail, or the wait is over; logs a wait that ran out. A resting flow is marked working first
+/// (a worker the master woke reports no prompt), so the server begins the resume. Paused with no
+/// resume begun, it waits only PICKUP_WAIT, so a store without a server never stalls tools.
 fn wait_for_services(store: &Store, id: &str, log: &Log, clock: fn() -> u64) {
     let deadline = Instant::now() + RESUME_WAIT;
     let mut paused_since = None;
@@ -107,6 +108,12 @@ fn wait_for_services(store: &Store, id: &str, log: &Log, clock: fn() -> u64) {
             return;
         };
         if !pause::holds_tools(&flow) {
+            return;
+        }
+        if pause::wakes_at_tool_call(&flow)
+            && let Err(error) = store.append(id, &Event::new(clock(), EventKind::Working))
+        {
+            log.error(&format!("{error:#}"));
             return;
         }
         let paused = flow
