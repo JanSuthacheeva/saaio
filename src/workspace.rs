@@ -317,8 +317,9 @@ fn finish_within(mut command: Command, program: &str, limit: Duration) -> Result
         }
         thread::sleep(WAIT_STEP);
     };
-    let stdout = stdout.collect();
-    let stderr = stderr.collect();
+    let read_until = Instant::now() + READ_GRACE;
+    let stdout = stdout.collect(read_until);
+    let stderr = stderr.collect(read_until);
     if !status.success() {
         bail!("{}", last_line(&stderr, &stdout));
     }
@@ -339,9 +340,8 @@ struct Pipe {
 }
 
 impl Pipe {
-    /// All the pipe gives until it closes, or what it gave within READ_GRACE.
-    fn collect(self) -> Vec<u8> {
-        let deadline = Instant::now() + READ_GRACE;
+    /// All the pipe gives until it closes, or what it gave by `deadline`.
+    fn collect(self, deadline: Instant) -> Vec<u8> {
         while !self.reader.is_finished() && Instant::now() < deadline {
             thread::sleep(WAIT_STEP);
         }
@@ -662,16 +662,22 @@ mod tests {
         let (_dir, repo) = repo();
         let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 3, "claude");
         create_worktree(&repo, &workspace).unwrap();
-        hook(&repo, "resume", "#!/bin/sh\necho up\nsleep 30 &\n");
+        let pids = repo.join("pids");
+        let leave = format!("sleep 30 &\necho $! >> {}", pids.display());
+        hook(&repo, "resume", &format!("#!/bin/sh\necho up\n{leave}\n"));
         hook(
             &repo,
             "pause",
-            "#!/bin/sh\nsleep 30 &\necho 'docker is not running' >&2\nexit 1\n",
+            &format!("#!/bin/sh\n{leave}\necho 'docker is not running' >&2\nexit 1\n"),
         );
         let started = Instant::now();
 
         assert!(run_hook_within(&repo, Hook::Resume, &workspace, &[], LIMIT).unwrap());
         let error = run_hook_within(&repo, Hook::Pause, &workspace, &[], LIMIT).unwrap_err();
+        // A process left behind can hold the pipes of other tests' commands it inherited.
+        for pid in fs::read_to_string(&pids).unwrap().split_whitespace() {
+            Command::new("kill").arg(pid).status().unwrap();
+        }
 
         assert!(
             started.elapsed() < Duration::from_secs(5),
