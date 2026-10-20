@@ -161,6 +161,8 @@ impl Server {
         Ok(())
     }
 
+    /// Marks the worker HOSTED in its log before its agent starts, so a server that dies right
+    /// after the start leaves a worker the next one resumes, not one it starts again fresh.
     fn open_worker(&mut self, spec: PaneSpec) {
         let key = spec.key.clone();
         let PaneKey::Flow(id) = &key else {
@@ -170,26 +172,39 @@ impl Server {
         let Some(space) = self.flow(id).and_then(|flow| flow.workspace.clone()) else {
             return;
         };
-        let now = (self.clock)();
-        let event = match self.open_pane(spec) {
-            Ok(()) => {
-                if space.window.is_some() {
-                    self.resumed.insert(key.clone(), Instant::now());
-                }
-                if space.window.as_deref() == Some(HOSTED) {
-                    return;
-                }
-                EventKind::from(Workspace {
-                    window: Some(HOSTED.to_string()),
-                    ..space
-                })
+        let resumes = space.window.is_some();
+        if space.window.as_deref() != Some(HOSTED) {
+            let hosted = EventKind::from(Workspace {
+                window: Some(HOSTED.to_string()),
+                ..space
+            });
+            if let Err(error) = self
+                .store
+                .append(id, &LogEvent::new((self.clock)(), hosted))
+            {
+                self.host.fail(
+                    key.clone(),
+                    format!("could not record its start: {error:#}"),
+                );
+                return;
             }
-            Err(error) => EventKind::Blocked {
-                reason: format!("could not start the agent: {error:#}"),
-            },
-        };
-        if let Err(error) = self.store.append(id, &LogEvent::new(now, event)) {
-            server_log::write((self.clock)(), &format!("{error:#}"));
+        }
+        match self.open_pane(spec) {
+            Ok(()) if resumes => {
+                self.resumed.insert(key.clone(), Instant::now());
+            }
+            Ok(()) => {}
+            Err(error) => {
+                let blocked = EventKind::Blocked {
+                    reason: format!("could not start the agent: {error:#}"),
+                };
+                if let Err(error) = self
+                    .store
+                    .append(id, &LogEvent::new((self.clock)(), blocked))
+                {
+                    server_log::write((self.clock)(), &format!("{error:#}"));
+                }
+            }
         }
     }
 

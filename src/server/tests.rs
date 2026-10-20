@@ -532,6 +532,65 @@ fn opens_a_pane_for_every_started_flow_and_marks_it_hosted() {
 }
 
 #[test]
+fn a_worker_whose_start_cannot_be_recorded_never_starts() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let ran = dir.path().join("ran");
+    let marking = Agent {
+        command: vec![
+            "sh".into(),
+            "-c".into(),
+            format!("touch {}; exec cat", ran.display()),
+        ],
+        prompt: Some(String::new()),
+        adapter: None,
+        resume: Some(vec!["cat".into()]),
+    };
+    let cat = Agent {
+        command: vec!["cat".into()],
+        prompt: None,
+        adapter: None,
+        resume: Some(vec!["cat".into()]),
+    };
+    let id = started_flow(&store, dir.path(), "unrecorded", "marking");
+    let log = dir.path().join(format!("flows/{id}.jsonl"));
+    fs::set_permissions(&log, fs::Permissions::from_mode(0o444)).unwrap();
+    let (paths, handle) = start_with_agents(
+        dir.path(),
+        BTreeMap::from([
+            ("claude".to_string(), cat),
+            ("marking".to_string(), marking),
+        ]),
+    );
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+
+    let mut panes = Vec::new();
+    recv_until(&mut ui, "the worker never got a pane", |message| {
+        if let ServerMsg::Panes(update) = message {
+            panes = update;
+        }
+        status_of(&panes, &id).is_some()
+    });
+
+    let status = status_of(&panes, &id);
+    assert!(
+        matches!(&status, Some(PaneStatus::Failed { reason }) if reason.starts_with("could not record")),
+        "{status:?}"
+    );
+    assert!(
+        !ran.exists(),
+        "an agent the next server could not resume ran"
+    );
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
 fn closes_a_flow_pane_on_request_and_says_when_there_is_none() {
     let dir = TempDir::new().unwrap();
     let store = Store::at(dir.path().to_path_buf());
