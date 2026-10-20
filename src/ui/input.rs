@@ -1,7 +1,7 @@
 use ratatui::layout::{Position, Rect};
 
+use crate::config::prefix::Prefix;
 use crate::proto::Mouse;
-use crate::ui::prefix::Prefix;
 
 /// What raw keyboard and mouse bytes from the real terminal turn into.
 #[derive(Debug, Clone, PartialEq, Eq)]

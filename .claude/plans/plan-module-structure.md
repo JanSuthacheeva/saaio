@@ -151,7 +151,7 @@ Unchanged: every step moves or regroups code. Error paths stay where they are.
 
 ## Tasks
 
-- [ ] 1a. Move `Prefix` to `config/prefix.rs`
+- [x] 1a. Move `Prefix` to `config/prefix.rs`
 - [ ] 1b. Move the theme example to `default_file::THEME_EXAMPLE`
 - [ ] 1c. Move the news text to `wake::for_worker`/`for_master`, `truncated` to `text`
 - [ ] 1d. Move `Refusal` to `refusal.rs` with `Refusal::phrase`

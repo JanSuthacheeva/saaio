@@ -11,11 +11,12 @@ use serde::Serialize;
 use toml::de::{DeTable, DeValue};
 
 use crate::adapter::Adapter;
+use crate::config::prefix::Prefix;
 use crate::default_file::DefaultFile;
 use crate::text::{line_of, place, without_value};
-use crate::ui::prefix::Prefix;
 use crate::workflow::Workflow;
 
+pub mod prefix;
 pub mod watch;
 
 /// How to launch one agent: its command line, the first prompt it gets, and how to resume it.

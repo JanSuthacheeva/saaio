@@ -4,10 +4,10 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Widget};
 
+use crate::config::prefix::Prefix;
 use crate::proto::PaneStatus;
 use crate::ui::fit::columns;
 use crate::ui::hints::{self, Hint};
-use crate::ui::prefix::Prefix;
 use crate::ui::theme::Theme;
 
 /// Rows between the border and the body, above and below it.

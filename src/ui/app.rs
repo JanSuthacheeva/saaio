@@ -11,6 +11,7 @@ pub use effect::{Effect, Job, JobError, Removal, outcome};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::config::prefix::Prefix;
 use crate::launch::worktree::WORKTREES_DIR;
 use crate::proto::{Modes, PaneInfo, PaneKey, PaneStatus, Size};
 use crate::ui::board::BoardState;
@@ -18,7 +19,6 @@ use crate::ui::fit;
 use crate::ui::layout::{self, Areas, Chrome};
 use crate::ui::newflow::NewFlowForm;
 use crate::ui::peek::PeekLine;
-use crate::ui::prefix::Prefix;
 use crate::ui::screen::Screen;
 use crate::ui::selection::Selection;
 use crate::ui::sidebar::{self, Sidebar};

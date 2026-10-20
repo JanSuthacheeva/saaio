@@ -4,10 +4,10 @@ use ratatui::buffer::Buffer;
 use ratatui::text::Line;
 
 use super::{BoardState, BoardView};
+use crate::config::prefix::Prefix;
 use crate::event::{Event, EventKind, Mode};
 use crate::fold;
 use crate::proto::PaneKey;
-use crate::ui::prefix::Prefix;
 use crate::ui::sidebar::Sidebar;
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView};
