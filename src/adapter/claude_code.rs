@@ -28,9 +28,6 @@ const WAIT_TIMEOUT_SECS: u64 = 604_800;
 const WAIT_EVENTS: [&str; 2] = ["SessionStart", "Stop"];
 /// plan-progress's report tool, whose answers carry the plan's task counts.
 const PLAN_PROGRESS_TOOL: &str = "mcp__plan-progress__report";
-/// How a Stop's background tasks list the watch Claude Code keeps on a published artifact.
-const ARTIFACT_WATCH_TYPE: &str = "monitor";
-const ARTIFACT_WATCH_PREFIX: &str = "live updates for artifact ";
 
 /// The --settings JSON: report_hooks, and each event in WAIT_EVENTS also arms `<flow_exe> wait`.
 pub fn settings(flow_exe: &Path) -> String {
@@ -168,11 +165,6 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
             }]
         }
         "Stop" => {
-            if let Some(task) = running_background_task(&payload["background_tasks"]) {
-                return vec![EventKind::Delegated {
-                    description: cut(task),
-                }];
-            }
             let answer = payload["last_assistant_message"].as_str().unwrap_or("");
             let mut kinds = Vec::new();
             if !answer.trim().is_empty() {
@@ -213,16 +205,16 @@ fn questions(input: &Value) -> Vec<Question> {
         .collect()
 }
 
-/// A prompt or a compaction begins a turn, a Stop ends it, the compaction's end leaves it at its
-/// prompt with no Stop; a Stop with a background task running is no end (the agent resumes on its
-/// own); a subagent's (agent_id set) are not the session's. Claude Code runs no hook on an Esc.
+/// A prompt or a compaction begins a turn, a Stop ends it whatever runs in the background (a
+/// long-lived task never finishes, a question waits for the person), the compaction's end leaves
+/// it at its prompt with no Stop; a subagent's (agent_id set) are not the session's. Claude Code
+/// runs no hook on an Esc.
 pub fn turn(payload: &Value) -> Option<Turn> {
     if payload.get("agent_id").is_some() {
         return None;
     }
     match payload["hook_event_name"].as_str()? {
         "UserPromptSubmit" | "PreCompact" => Some(Turn::Began),
-        "Stop" if running_background_task(&payload["background_tasks"]).is_some() => None,
         "Stop" => Some(Turn::Ended),
         "PostCompact" => Some(Turn::Idle),
         _ => None,
@@ -261,24 +253,6 @@ fn text_of(response: &Value) -> String {
             .join("\n"),
         other => other.to_string(),
     }
-}
-
-/// What a turn ending with background work in flight waits for: the first running or pending
-/// task's description, artifact watches aside.
-fn running_background_task(tasks: &Value) -> Option<&str> {
-    tasks.as_array()?.iter().find_map(|task| {
-        let busy = matches!(task["status"].as_str(), Some("running" | "pending"));
-        (busy && !artifact_watch(task))
-            .then(|| task["description"].as_str().unwrap_or("background work"))
-    })
-}
-
-/// A live subscription Claude Code keeps for a published artifact: it never finishes.
-fn artifact_watch(task: &Value) -> bool {
-    task["type"] == ARTIFACT_WATCH_TYPE
-        && task["description"]
-            .as_str()
-            .is_some_and(|description| description.starts_with(ARTIFACT_WATCH_PREFIX))
 }
 
 /// "ok, 4/9 done" -> (4, 9); "ok, all 9 done" -> (9, 9).
@@ -387,17 +361,31 @@ mod tests {
     }
 
     #[test]
-    fn a_turn_that_ends_with_background_work_running_is_delegated() {
+    fn a_turn_ends_whatever_runs_in_the_background() {
+        let sleeping = "The sleeper is still running.";
         assert_eq!(
             events("stop_background"),
-            vec![EventKind::Delegated {
-                description: "background sleeper".into()
-            }]
+            vec![
+                EventKind::Answer {
+                    text: sleeping.into()
+                },
+                EventKind::Idle {
+                    note: sleeping.into()
+                }
+            ]
         );
-    }
-
-    #[test]
-    fn an_artifact_watch_is_not_work_the_turn_waits_on() {
+        let mut asking = fixture("stop_background");
+        let question = "Which color do you prefer, red or blue?";
+        asking["last_assistant_message"] = json!(question);
+        assert_eq!(
+            translate(&asking, &phases()),
+            vec![
+                EventKind::Answer {
+                    text: question.into()
+                },
+                waiting(question)
+            ]
+        );
         let link = "https://claude.ai/artifact/CUmbqod2Bv8mGRtioXWRH7";
         assert_eq!(
             events("stop_artifact_watch"),
@@ -405,37 +393,6 @@ mod tests {
                 EventKind::Answer { text: link.into() },
                 EventKind::Idle { note: link.into() }
             ]
-        );
-    }
-
-    #[test]
-    fn a_pending_artifact_watch_is_not_work_either() {
-        let mut stop = fixture("stop_artifact_watch");
-        stop["background_tasks"][0]["status"] = json!("pending");
-        assert!(matches!(
-            translate(&stop, &phases()).last(),
-            Some(EventKind::Idle { .. })
-        ));
-    }
-
-    #[test]
-    fn a_subagent_running_beside_an_artifact_watch_is_delegated() {
-        let mut stop = fixture("stop_artifact_watch");
-        stop["background_tasks"]
-            .as_array_mut()
-            .unwrap()
-            .push(json!({
-                "id": "adfb26396b14a6b82",
-                "type": "subagent",
-                "status": "running",
-                "description": "background sleeper",
-                "agent_type": "general-purpose"
-            }));
-        assert_eq!(
-            translate(&stop, &phases()),
-            vec![EventKind::Delegated {
-                description: "background sleeper".into()
-            }]
         );
     }
 
@@ -614,11 +571,7 @@ mod tests {
         assert_eq!(turn(&fixture("post_compact")), Some(Turn::Idle));
         assert_eq!(turn(&fixture("stop")), Some(Turn::Ended));
         assert_eq!(turn(&fixture("stop_artifact_watch")), Some(Turn::Ended));
-        assert_eq!(
-            turn(&fixture("stop_background")),
-            None,
-            "it resumes on its own"
-        );
+        assert_eq!(turn(&fixture("stop_background")), Some(Turn::Ended));
         assert_eq!(turn(&fixture("subagent_bash")), None);
         assert_eq!(turn(&fixture("pre_write")), None);
         assert_eq!(events("pre_compact"), vec![]);
