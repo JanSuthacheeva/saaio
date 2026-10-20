@@ -270,13 +270,13 @@ Docs:
 
 ### CI
 
-- [ ] `rust-toolchain.toml` (1.95.0, rustfmt, clippy)
-- [ ] `deny.toml` with the licence list the graph needs; `cargo deny check` passes locally; the atomic-polyfill advisory is out of the target graph or ignored with its reason
-- [ ] `.github/workflows/ci.yml` with the six named jobs, the daily deny-only schedule, rust-cache saved from main, actions pinned by SHA; checked with `actionlint` if available
+- [x] `rust-toolchain.toml` (1.95.0, rustfmt, clippy)
+- [x] `deny.toml` with the licence list the graph needs; `cargo deny check` passes locally; the atomic-polyfill advisory is out of the target graph or ignored with its reason
+- [x] `.github/workflows/ci.yml` with the six named jobs, the daily deny-only schedule, rust-cache saved from main, actions pinned by SHA; checked with `actionlint` if available
 
 ### Docs
 
-- [ ] `CONTRIBUTING.md` CI section; `CLAUDE.md` build commands and Architecture lines; PR template check list
+- [x] `CONTRIBUTING.md` CI section; `CLAUDE.md` build commands and Architecture lines; PR template check list
 
 ### End to end
 
