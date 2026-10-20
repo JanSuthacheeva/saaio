@@ -288,3 +288,49 @@ Clipboard (`c`) and primary (`p`) stores both pass on; OSC 52 reads stay refused
 - [x] Pass a pane's OSC 52 on: `Terminal::copied`, `Host::feed -> Option<String>`, `Server::send_clipboard`, `ServerMsg::Clipboard`, protocol 7, `Effect::Copy`; tests in terminal.rs and server/tests.rs
 - [x] Rewrite docs/ui.md "Mouse": drag, double and triple click, wheel, Shift or Option for the terminal's own selection, terminal table, iTerm2 setting, tmux `set-clipboard on`
 - [x] End to end in tmux with a scratch store: drag on sidebar, rail, title, board, a dialog, history and a shell pane, checked with pbpaste and a tmux buffer; sidebar click and wheel; Claude Code pane with `SSH_CONNECTION` set passes its OSC 52 on
+
+## Review
+
+Reviewed in isolation against this plan, CLAUDE.md and the code around the diff (main..0e1745e).
+The fix commits were checked by a second, fresh agent.
+
+### Fixed
+
+- A notice in the title row could not be copied: the press that starts a drag cleared it, so the
+  copy read blanks. Pointer input no longer clears it; a plain click does. Test
+  `a_notice_can_be_selected_and_a_click_dismisses_it` (03b3259).
+- A double-click on a blank (or any selection of blanks) wrote an empty OSC 52 and piped nothing to
+  pbcopy, wiping the clipboard, against "an empty word copies nothing". `Clipboard::copy` now does
+  nothing for empty text. Test `nothing_to_copy_leaves_the_clipboard_alone` (0e1745e).
+
+### Open
+
+- The wheel over a pane whose program is on the alternate screen without the mouse (`less`, `man`,
+  a pager in a shell pane) now opens saaio's history instead of scrolling the program: with the
+  mouse always captured, the terminal's alternate-scroll (wheel as arrow keys) no longer applies,
+  and the UI does not know the pane is on the alternate screen. Claude Code and Codex use the mouse,
+  so agent panes are unaffected. Not shown end to end (needs a shell pane). Recommendation: ship;
+  add to ROADMAP "Planned soon": send arrow keys for the wheel when the pane is on the alternate
+  screen with the mouse off, as tmux does.
+- A pane's OSC 52 passes on while its pane is focused, also while the board covers it; docs/ui.md
+  says "while its pane is in view". Recommendation: accept, it is harmless; or reword the docs to
+  "while it is the focused session".
+- The highlight stays on screen cells while the pane under it scrolls, and toggling REVERSED
+  un-reverses cells that were already reversed. Both follow the plan's assumptions; recommendation:
+  accept.
+
+### Where to look
+
+1. `src/ui/input.rs` `Router::route_mouse`: who holds a drag (`held`), modal routing, `wanted` and
+   `encode` (X10 vs SGR, clamping). The most stateful part.
+2. `src/ui/outer.rs` `captured` and `mirror`: saaio now always turns on `?1002h` + `?1006h`, which
+   changes what every pane sees from the terminal.
+3. `src/ui/app/pointer.rs` `on_pointer` and `surface_at`: click vs selection, multi-click counting
+   on the 100 ms tick clock, dialog bounds.
+4. `src/server.rs` / `conn.rs` `send_clipboard`: OSC 52 from the focused pane only, size cap.
+
+Routine, skim: `selection.rs` (pure, well tested), `clipboard.rs`, the Env plumbing, docs.
+
+### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 0e1745e.
