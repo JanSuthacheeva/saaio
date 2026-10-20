@@ -27,7 +27,9 @@ Record first, then start: `open_worker` appends HOSTED before `open_pane`. A cra
 leaves a HOSTED worker that never ran; the next server resumes it, the resume fails within
 `RESUME_GRACE` and `open_fresh` starts it fresh, which is already handled. A record that cannot
 be written fails the pane ("could not record its start: ...") and starts no agent, since that
-agent could never be resumed. A spawn that fails after the record blocks the flow as before.
+agent could never be resumed. A spawn that fails after the record takes the record back (the
+workspace event as it was) and blocks the flow as before, so a reopen starts it fresh: an agent
+with no resume template would otherwise be refused for good.
 
 ## Tasks
 
@@ -36,3 +38,5 @@ agent could never be resumed. A spawn that fails after the record blocks the flo
       Running).
 - [x] `Server::open_worker` appends HOSTED before it opens the pane; resumes and spawn failures
       behave as before.
+- [x] `server::tests::a_worker_whose_agent_could_not_start_starts_fresh_when_reopened`: an agent
+      without a resume template that failed to spawn opens when reopened (review finding).

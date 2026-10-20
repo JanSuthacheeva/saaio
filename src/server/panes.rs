@@ -162,7 +162,8 @@ impl Server {
     }
 
     /// Marks the worker HOSTED in its log before its agent starts, so a server that dies right
-    /// after the start leaves a worker the next one resumes, not one it starts again fresh.
+    /// after the start leaves a worker the next one resumes, not one it starts again fresh; takes
+    /// the mark back when the agent could not start, since there is no session to resume.
     fn open_worker(&mut self, spec: PaneSpec) {
         let key = spec.key.clone();
         let PaneKey::Flow(id) = &key else {
@@ -173,10 +174,11 @@ impl Server {
             return;
         };
         let resumes = space.window.is_some();
-        if space.window.as_deref() != Some(HOSTED) {
+        let recorded = space.window.as_deref() != Some(HOSTED);
+        if recorded {
             let hosted = EventKind::from(Workspace {
                 window: Some(HOSTED.to_string()),
-                ..space
+                ..space.clone()
             });
             if let Err(error) = self
                 .store
@@ -198,11 +200,12 @@ impl Server {
                 let blocked = EventKind::Blocked {
                     reason: format!("could not start the agent: {error:#}"),
                 };
-                if let Err(error) = self
-                    .store
-                    .append(id, &LogEvent::new((self.clock)(), blocked))
-                {
-                    server_log::write((self.clock)(), &format!("{error:#}"));
+                let unhosted = recorded.then(|| EventKind::from(space));
+                for event in unhosted.into_iter().chain([blocked]) {
+                    if let Err(error) = self.store.append(id, &LogEvent::new((self.clock)(), event))
+                    {
+                        server_log::write((self.clock)(), &format!("{error:#}"));
+                    }
                 }
             }
         }

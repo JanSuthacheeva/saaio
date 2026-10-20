@@ -591,6 +591,63 @@ fn a_worker_whose_start_cannot_be_recorded_never_starts() {
 }
 
 #[test]
+fn a_worker_whose_agent_could_not_start_starts_fresh_when_reopened() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let late = dir.path().join("late-agent");
+    let unresumable = Agent {
+        command: vec![late.display().to_string()],
+        prompt: None,
+        adapter: None,
+        resume: None,
+    };
+    let cat = Agent {
+        command: vec!["cat".into()],
+        prompt: None,
+        adapter: None,
+        resume: Some(vec!["cat".into()]),
+    };
+    let id = started_flow(&store, dir.path(), "late", "late");
+    let (paths, handle) = start_with_agents(
+        dir.path(),
+        BTreeMap::from([
+            ("claude".to_string(), cat),
+            ("late".to_string(), unresumable),
+        ]),
+    );
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    let mut panes = Vec::new();
+    recv_until(&mut ui, "the worker never failed to start", |message| {
+        if let ServerMsg::Panes(update) = message {
+            panes = update;
+        }
+        matches!(status_of(&panes, &id), Some(PaneStatus::Failed { .. }))
+    });
+
+    executable(&late, "#!/bin/sh\nexec cat\n");
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id.clone()))).unwrap();
+    recv_until(
+        &mut ui,
+        "the worker never left its failed start",
+        |message| {
+            if let ServerMsg::Panes(update) = message {
+                panes = update;
+            }
+            !matches!(status_of(&panes, &id), Some(PaneStatus::Failed { reason }) if reason.starts_with("could not start"))
+        },
+    );
+    assert_eq!(status_of(&panes, &id), Some(PaneStatus::Running));
+
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
+#[test]
 fn closes_a_flow_pane_on_request_and_says_when_there_is_none() {
     let dir = TempDir::new().unwrap();
     let store = Store::at(dir.path().to_path_buf());
