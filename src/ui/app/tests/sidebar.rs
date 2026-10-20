@@ -152,21 +152,12 @@ fn focuses_a_worker_by_digit_or_click_and_marks_it() {
     assert_ne!(buffer[(119, 9)].bg, selection);
 
     assert_eq!(
-        app.on_input(Routed::Pointer(Pointer {
-            kind: PointerKind::Press,
-            at: Position::new(120, 7)
-        })),
+        click(&mut app, 120, 7),
         vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
             "shop-221".into()
         )))]
     );
-    assert_eq!(
-        app.on_input(Routed::Pointer(Pointer {
-            kind: PointerKind::Press,
-            at: Position::new(120, 30)
-        })),
-        vec![]
-    );
+    assert_eq!(click(&mut app, 120, 30), vec![]);
     assert_eq!(app.on_input(Routed::Command(Command::Focus(9))), vec![]);
     assert_eq!(
         app.on_input(Routed::Command(Command::Focus(0))),
@@ -529,10 +520,7 @@ fn folds_the_sidebar_to_a_rail_and_back() {
     assert_eq!(rail(9), " 4 ○  ");
     assert_eq!(rail(41), " C-␣  ");
     assert_eq!(
-        app.on_input(Routed::Pointer(Pointer {
-            kind: PointerKind::Press,
-            at: Position::new(146, 6)
-        })),
+        click(&mut app, 146, 6),
         vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
             "shop-230".into()
         )))]

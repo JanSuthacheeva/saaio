@@ -185,6 +185,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                     app.on_branching(&repo, branching);
                 }
                 Effect::Run(job) => run_job(&env.exe, job, jobs.clone()),
+                Effect::CopySelection(_) => {}
                 Effect::Quit(message) => return Ok(message),
             }
         }

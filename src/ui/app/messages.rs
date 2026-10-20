@@ -173,6 +173,7 @@ impl App {
 
     pub fn on_resize(&mut self, size: Size) -> Vec<Effect> {
         self.size = size;
+        self.selection = None;
         vec![Effect::Send(ClientMsg::Resize(self.areas().pane_size()))]
     }
 

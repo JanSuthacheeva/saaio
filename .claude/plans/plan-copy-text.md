@@ -122,14 +122,13 @@ fn captured(modes: Modes) -> Modes;
 ```rust
 // app.rs
 selection: Option<Selection>,
-clicks: Option<Clicks>,
-struct Clicks { at: Position, time: u64, count: u8 }
+clicks: Option<pointer::Clicks>,  // Clicks { at: Position, time: u64, count: u8 } lives in app/pointer.rs
 
 impl App {
     /// The open dialog, the board (whole screen), the title row, the pane, the sidebar or rail.
     fn surface_at(&self, at: Position) -> Option<Rect>;
     /// The dialog the view shows over the session, shared by draw_view and surface_at.
-    fn dialog(&self, theme: &Theme) -> Option<Dialog<'_>>;
+    fn dialog<'a>(&'a self, theme: &'a Theme) -> Option<Dialog<'a>>;  // in app/draw.rs
     /// The focused pane's modes, for the router's Target.
     pub fn pane_modes(&self) -> Modes;
 }
@@ -139,7 +138,8 @@ const WHEEL_LINES: u32 = 3;
 const MULTI_CLICK_MS: u64 = 500;
 impl App {
     pub(super) fn on_pointer(&mut self, pointer: Pointer) -> Vec<Effect>;
-    fn on_wheel(&mut self, kind: PointerKind) -> Vec<Effect>;
+    /// Only over the pane.
+    fn on_wheel(&mut self, kind: PointerKind, at: Position) -> Vec<Effect>;
     /// Moved from keys.rs.
     fn on_click(&mut self, at: Position) -> Vec<Effect>;
 }
@@ -281,7 +281,7 @@ Clipboard (`c`) and primary (`p`) stores both pass on; OSC 52 reads stay refused
 - [x] Add `ui/selection.rs`: `Selection`, `Unit`, `new`, `extend`, `is_click`, `text`, `render`, with unit tests on a hand-built Buffer (rows, trimming, clamping, wide chars, word, line, render)
 - [x] Make `Mouse` ordered and add `outer::captured`; `Outer::enter` turns capture on and `mirror` writes captured modes, with tests for Off, Press and Motion panes
 - [x] Router: `Target`, `Pointer`, `PointerKind`, `held`, `encode`, `wanted`; `Routed::Pointer` replaces `Click`; tests for ownership of drags, mode filtering, X10/SGR encoding and modal routing (callers adapted, clicks still focus)
-- [ ] App: `selection`, `clicks`, `surface_at`, `dialog`, `pane_modes`, `app/pointer.rs` (`on_pointer`, `on_wheel`, `on_click` moved), `Effect::CopySelection`, selection drawn and cleared; tests in `app/tests/pointer.rs`
+- [x] App: `selection`, `clicks`, `surface_at`, `dialog`, `pane_modes`, `app/pointer.rs` (`on_pointer`, `on_wheel`, `on_click` moved), `Effect::CopySelection`, selection drawn and cleared; tests in `app/tests/pointer.rs`
 - [ ] Env `ssh`, `wayland`, `x11` and `Env::clipboard`; `UiEnv.clipboard`; ui.rs builds `Target`, keeps `drawn`, runs `Effect::CopySelection` and logs a failed copy
 - [ ] Pass a pane's OSC 52 on: `Terminal::copied`, `Host::feed -> Option<String>`, `Server::send_clipboard`, `ServerMsg::Clipboard`, protocol 7, `Effect::Copy`; tests in terminal.rs and server/tests.rs
 - [ ] Rewrite docs/ui.md "Mouse": drag, double and triple click, wheel, Shift or Option for the terminal's own selection, terminal table, iTerm2 setting, tmux `set-clipboard on`
