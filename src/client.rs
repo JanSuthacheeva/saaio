@@ -1,5 +1,4 @@
 use std::io::{self, ErrorKind};
-#[cfg(target_os = "macos")]
 use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
@@ -184,13 +183,43 @@ fn peer_pid(stream: &UnixStream) -> io::Result<Pid> {
     if result == -1 {
         return Err(io::Error::last_os_error());
     }
-    Pid::from_raw(pid).ok_or_else(|| io::Error::other("the socket has no peer pid"))
+    seen_pid(pid)
 }
 
 /// The pid of the process at the other end of a Unix socket.
 #[cfg(target_os = "linux")]
 fn peer_pid(stream: &UnixStream) -> io::Result<Pid> {
-    Ok(rustix::net::sockopt::socket_peercred(stream)?.pid)
+    let mut cred = libc::ucred {
+        pid: 0,
+        uid: 0,
+        gid: 0,
+    };
+    let mut len = libc::socklen_t::try_from(size_of::<libc::ucred>()).expect("a ucred fits");
+    // SAFETY: getsockopt writes at most len bytes into cred, which is that big. Read through libc,
+    // not rustix: rustix's UCred cannot hold the pid 0 Linux gives for a peer in a pid namespace
+    // this process cannot see.
+    let result = unsafe {
+        libc::getsockopt(
+            stream.as_raw_fd(),
+            libc::SOL_SOCKET,
+            libc::SO_PEERCRED,
+            (&raw mut cred).cast(),
+            &raw mut len,
+        )
+    };
+    if result == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    seen_pid(cred.pid)
+}
+
+/// The peer pid the kernel gave, refused when it is 0: a process outside this pid namespace, which
+/// a signal to 0 would never reach (it goes to this process group instead).
+fn seen_pid(raw: libc::pid_t) -> io::Result<Pid> {
+    (raw > 0)
+        .then(|| Pid::from_raw(raw))
+        .flatten()
+        .ok_or_else(|| io::Error::other("the process at the other end is not visible from here"))
 }
 
 /// Asks a running server to end a flow's pane and waits for it; the outcome when there is no server or no pane.
@@ -357,6 +386,15 @@ mod tests {
             pid,
             Pid::from_raw(i32::try_from(std::process::id()).unwrap()).unwrap()
         );
+    }
+
+    #[test]
+    fn refuses_a_peer_pid_of_0_from_another_pid_namespace() {
+        assert_eq!(
+            seen_pid(0).unwrap_err().to_string(),
+            "the process at the other end is not visible from here"
+        );
+        assert_eq!(seen_pid(42).unwrap(), Pid::from_raw(42).unwrap());
     }
 
     /// Answers one hello with `reply`, then keeps the connection open until dropped.

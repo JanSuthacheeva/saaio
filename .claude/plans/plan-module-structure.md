@@ -138,7 +138,7 @@ pub struct App { master: Master, .. }
 ### 7. rustix
 
 `rustix = { version = "1.1.5", features = ["process", "net"] }`. `client.rs`: `kill_process`,
-`getuid`, Linux `socket_peercred`. `server/host.rs`: `Pid`, `kill_process_group`. libc stays for
+`getuid`. Linux peer creds stay on libc after review: rustix's `UCred` cannot hold the pid 0 a peer in another pid namespace has (undefined behaviour); `seen_pid` refuses 0 on both platforms. `server/host.rs`: `Pid`, `kill_process_group`. libc stays for
 `setsid` in `pre_exec`, `localtime_r`, macOS `LOCAL_PEERPID`.
 
 ## Call chains
