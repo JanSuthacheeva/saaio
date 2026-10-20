@@ -29,8 +29,12 @@ impl Clipboard {
         Clipboard { command }
     }
 
-    /// Writes osc52(text) to `out`, then pipes `text` to the command (waits for it); Err names what failed.
+    /// Writes osc52(text) to `out`, then pipes `text` to the command (waits for it); Err names what
+    /// failed. Empty text, such as a double-click on a blank, copies nothing.
     pub fn copy(&self, out: &mut impl Write, text: &str) -> Result<()> {
+        if text.is_empty() {
+            return Ok(());
+        }
         out.write_all(osc52(text).as_bytes())
             .and_then(|()| out.flush())
             .context("could not write OSC 52 to the terminal")?;
@@ -109,6 +113,19 @@ mod tests {
         Clipboard { command: None }.copy(&mut out, "hi").unwrap();
 
         assert_eq!(out, b"\x1b]52;c;aGk=\x07");
+    }
+
+    #[test]
+    fn nothing_to_copy_leaves_the_clipboard_alone() {
+        let mut out = Vec::new();
+
+        Clipboard {
+            command: Some(&["false"]),
+        }
+        .copy(&mut out, "")
+        .unwrap();
+
+        assert!(out.is_empty());
     }
 
     #[test]

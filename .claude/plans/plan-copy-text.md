@@ -59,7 +59,8 @@ pub struct Clipboard { command: Option<&'static [&'static str]> }
 impl Clipboard {
     /// pbcopy on macOS; wl-copy under Wayland, else xclip -selection clipboard under X11; none over SSH.
     pub fn new(ssh: bool, wayland: bool, x11: bool) -> Clipboard;
-    /// Writes osc52(text) to `out`, then pipes `text` to the command (waits for it); Err names what failed.
+    /// Writes osc52(text) to `out`, then pipes `text` to the command (waits for it); Err names what
+    /// failed. Empty text copies nothing.
     pub fn copy(&self, out: &mut impl Write, text: &str) -> Result<()>;
 }
 
