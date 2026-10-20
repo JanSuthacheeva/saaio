@@ -108,17 +108,18 @@ way from the home view and hints, created a flow, reported phase and tasks, and 
 
 Claude Code hooks (2.1.300, recorded):
 - `Stop` carries `background_tasks`: `[{"id", "type": "subagent", "status": "running",
-  "description", "agent_type"}]` while background work is in flight, `[]` otherwise. flow reads a
-  running or pending task as `delegated` (fixture `stop_background.json`). Publishing a claude.ai
-  Artifact arms a live subscription that stays there as `{"type": "monitor", "status": "running",
-  "description": "live updates for artifact <url> (auto-armed on publish)"}` (2.1.301) and never
-  finishes, so flow skips it and the turn ends idle or waiting (fixture `stop_artifact_watch.json`).
-  The skip matches that wording, so re-record the fixture with the others on a Claude Code upgrade.
+  "description", "agent_type"}]` while background work is in flight, `[]` otherwise (fixture
+  `stop_background.json`). Publishing a claude.ai Artifact arms a live subscription that stays
+  there as `{"type": "monitor", "status": "running", "description": "live updates for artifact
+  <url> (auto-armed on publish)"}` (2.1.301; fixture `stop_artifact_watch.json`). saaio ignores the
+  list: every main-agent `Stop` records its answer and ends the turn idle or waiting. A long-lived
+  task (a dev server, a PTY, an Artifact watch) never finishes, and a turn that asks waits for the
+  person whatever runs; reading a running task as `delegated` hid such questions from the master.
 - A subagent's hooks fire with `agent_id` set; a phase skill it starts (`review-changes` in a
   fresh agent) reaches PreToolUse Skill only when the skill exists (an unknown skill is refused
   before any hook).
 - When the background agent finishes, the main agent resumes on its own and its next `Stop`
-  follows.
+  follows; its tool calls in between record `working` again.
 - A command hook with `"asyncRewake": true` runs in the background; when it exits 2, its stderr
   wakes the session as a new turn, shown as "Stop hook feedback". Probed on 2.1.300: on `Stop`
   it woke an idle session at its prompt and is armed again at each turn end; on `SessionStart`

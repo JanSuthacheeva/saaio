@@ -180,7 +180,7 @@ Or mode `plain` in the new-flow dialog.
 | AskUserQuestion | `waiting <the question>` |
 | a permission prompt | `waiting permission: Bash(rm -rf build)` |
 | a tool finishing | `working`. Task counts and blocks from a plan-progress tool (`mcp__plan-progress__report`), when the worker has one. A merge request printed by `gh pr create` or `glab mr create`, when it belongs to a remote of the worktree (origin, or a fork's upstream). |
-| the end of a turn | `delegated <the task>` while a background task runs, else `waiting <the question>` when the last line asks one, else `idle <the last sentence>`. The whole closing message becomes the flow's `answer`. |
+| the end of a turn | `waiting <the question>` when the last line asks one, else `idle <the last sentence>`, even while a background task runs. The whole closing message becomes the flow's `answer`. |
 | `/exit` | `ended` |
 
 ### Codex
