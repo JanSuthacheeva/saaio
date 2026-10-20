@@ -4,8 +4,8 @@ use super::{
     App, CHANGE_SHOWN_MS, Effect, Job, JobError, OVERVIEW_EVERY_MS, Removal, TICKS_PER_AGE, View,
 };
 use crate::branching::Branching;
-use crate::cli::output::remove::Refusal;
 use crate::proto::{ClientMsg, PaneKey, ServerMsg, Size};
+use crate::refusal::Refusal;
 use crate::text;
 use crate::ui::board::BoardState;
 use crate::view::{MasterTurn, Projects, State};

@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::cli::output::remove::Refusal;
 use crate::event::Mode;
 use crate::proto::{ClientMsg, Modes};
+use crate::refusal::Refusal;
 use crate::ui::newflow::NewFlowForm;
 use crate::ui::selection::Selection;
 

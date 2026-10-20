@@ -16,6 +16,7 @@ mod launch;
 mod pause;
 mod private;
 mod proto;
+mod refusal;
 mod registry;
 mod server;
 mod server_log;
