@@ -171,5 +171,4 @@ Other messages:
 - `Build is no phase name`
 - `~/.config/saaio/themes/gone.toml does not exist`
 - `phase_colors is off, steps or full`
-- `nerd_font was removed; remove this line` (remove the old setting from `theme.toml` or an extended theme)
 - `accent, muted name each other`

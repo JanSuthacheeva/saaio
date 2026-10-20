@@ -1,9 +1,9 @@
-use crate::event::{Event, EventKind, Mode, Phase};
+use crate::event::{Event, EventKind, Mode, Phase, ServiceStatus};
 use crate::store::FlowLog;
 use crate::text;
 use crate::view::{
-    Board, FlowView, ReviewCount, Session, State, Step, StepStatus, Tasks, TimelineEntry, Tone,
-    VIEW_VERSION, Workspace,
+    Board, FlowView, ReviewCount, Services, Session, State, Step, StepStatus, Tasks, TimelineEntry,
+    Tone, VIEW_VERSION, Workspace,
 };
 use crate::workflow::Workflow;
 
@@ -187,6 +187,7 @@ impl Folding {
             answer: None,
             session: None,
             questions: Vec::new(),
+            services: None,
         };
         let phases = phases.map_or_else(|| Workflow::builtin().phases(), <[Phase]>::to_vec);
         Folding {
@@ -368,6 +369,22 @@ impl Folding {
                 self.view.session = Some(Session {
                     id: id.clone(),
                     transcript: transcript.clone(),
+                });
+            }
+            EventKind::Services { status, reason } => {
+                let failed = match status {
+                    ServiceStatus::PauseFailed => Some("pause failed"),
+                    ServiceStatus::ResumeFailed => Some("resume failed"),
+                    _ => None,
+                };
+                if let Some(label) = failed {
+                    let why = reason.as_deref().unwrap_or("no reason given");
+                    self.note(at, format!("{label}: {why}"), Tone::Problem);
+                }
+                self.view.services = Some(Services {
+                    status: *status,
+                    since: at,
+                    reason: reason.clone(),
                 });
             }
             EventKind::Ended => {

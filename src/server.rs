@@ -9,6 +9,7 @@ mod dismiss;
 mod forge_watch;
 mod news;
 mod panes;
+mod pause_watch;
 mod startup;
 mod timing;
 mod typing;
@@ -47,6 +48,7 @@ use forge_watch::{Answer, ForgeWatch};
 use host::{Host, HostEvent};
 use master::MasterRecord;
 use panes::forward_host_events;
+use pause_watch::PauseWatch;
 use watch::StoreWatch;
 
 pub use timing::Timing;
@@ -99,6 +101,8 @@ enum Event {
     Unreadable(ConnId),
     /// What gh or glab said about a flow's merge request.
     Forge(Answer),
+    /// A flow's .saaio/pause or .saaio/resume ended.
+    Paused(pause_watch::Finished),
 }
 
 /// Why the server stops.
@@ -172,6 +176,8 @@ struct Server {
     dismissed: HashMap<PaneKey, u64>,
     /// When to ask gh and glab about the flows' merge requests.
     forges: ForgeWatch,
+    /// The flows whose services a pause or resume runs for.
+    pauses: PauseWatch,
 }
 
 /// Writes master.md and, when missing, the example config.toml and theme.toml; logs what fails.
@@ -256,6 +262,7 @@ pub fn run(
         line_at: HashMap::new(),
         dismissed: HashMap::new(),
         forges: ForgeWatch::default(),
+        pauses: PauseWatch::default(),
     };
     server.open_master(start);
     server.refresh();
@@ -294,6 +301,7 @@ impl Server {
                 self.refresh();
                 self.notice_stalled_starts();
                 self.ask_forges();
+                self.pause_idle();
                 self.type_lines();
                 self.dismiss_dialogs();
             }
@@ -310,6 +318,7 @@ impl Server {
             Event::Unreadable(conn) => self.refuse_unreadable(conn),
             Event::Signal { name, from } => return ControlFlow::Break(Stop::Signal { name, from }),
             Event::Forge(answer) => self.forge_answer(answer),
+            Event::Paused(finished) => self.pause_finished(finished),
             Event::Host(HostEvent::Output(key, bytes)) => {
                 self.host.feed(&key, &bytes);
                 if key == self.focus {
