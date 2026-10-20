@@ -68,7 +68,8 @@ pub fn without_value(message: &str) -> String;
 
 ```rust
 /// The git dir the repository registered for `worktree`: the <common>/worktrees/<n> whose
-/// gitdir file names a .git in that folder (folders compared canonicalised, so a replaced or
+/// gitdir file names a .git in that folder (a relative one read from <n>, as
+/// worktree.useRelativePaths writes it; folders compared canonicalised, so a replaced or
 /// symlinked .git does not matter); Err when none does.
 fn registered_git_dir(repo: &Path, worktree: &Path) -> Result<PathBuf>;
 

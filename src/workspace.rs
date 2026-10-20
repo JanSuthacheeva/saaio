@@ -220,7 +220,8 @@ fn worktree_git(repo: &Path, worktree: &Path, args: &[&str]) -> Result<String> {
 }
 
 /// The git dir the repository registered for `worktree`: the <common>/worktrees/<n> whose gitdir
-/// file names a .git in that folder; Err when none does.
+/// file names a .git in that folder (relative to <n> under worktree.useRelativePaths); Err when
+/// none does.
 fn registered_git_dir(repo: &Path, worktree: &Path) -> Result<PathBuf> {
     let common = git_common_dir(repo).context("not a git repository")?;
     let wanted = worktree.canonicalize()?;
@@ -229,7 +230,7 @@ fn registered_git_dir(repo: &Path, worktree: &Path) -> Result<PathBuf> {
         let Ok(gitdir) = fs::read_to_string(dir.join("gitdir")) else {
             continue;
         };
-        let folder = Path::new(gitdir.trim()).parent().map(Path::canonicalize);
+        let folder = dir.join(gitdir.trim()).parent().map(Path::canonicalize);
         if matches!(folder, Some(Ok(folder)) if folder == wanted) {
             return Ok(dir);
         }
@@ -608,5 +609,17 @@ mod tests {
             has_uncommitted_work(&repo, &elsewhere).is_err(),
             "no registered worktree"
         );
+    }
+
+    #[test]
+    fn reads_uncommitted_work_in_a_repository_that_records_relative_paths() {
+        let (_dir, repo) = repo();
+        git(&repo, &["config", "worktree.useRelativePaths", "true"]);
+        let space = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        create_worktree(&repo, &space).unwrap();
+
+        assert!(!has_uncommitted_work(&repo, &space).unwrap());
+        fs::write(Path::new(&space.path).join("work.txt"), "unsaved").unwrap();
+        assert!(has_uncommitted_work(&repo, &space).unwrap());
     }
 }
