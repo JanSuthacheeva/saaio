@@ -86,3 +86,24 @@ All six tasks are complete. `cargo test` passed (576 library and 81 CLI tests),
 `cargo clippy --all-targets -- -D warnings` passed, and `cargo fmt --check` passed.
 An isolated `SAAIO_HOME` CLI smoke check created a flow with `saaio new` and read it back
 with `saaio status --json`. The UI was not launched. `git diff --check` is clean.
+
+## Review
+
+**Fixed**
+
+- The new forge query outcome lacked `Debug`, contrary to this audit's rule for internal types; derived it in `0ff54bd`.
+- A timestamp with both `Z` and an offset was accepted as valid. A regression test failed on `2026-10-18T02:00:35Z+00:00`; `f9ff6c4` rejects it.
+
+**Open**
+
+- A branch with 10 newer closed PRs can have its shown open PR omitted by the `--limit 10`/`--per-page 10` query. `pick` then selects a closed PR and `news` clears the shown URL. A temporary regression probe failed with `MergeRequestClosed` for the shown URL. Check the shown PR directly or paginate before treating a limited result as evidence that no open PR remains. This changes user-visible forge behavior, so the review leaves the design decision open.
+
+**Where to look**
+
+1. `src/server/forge_watch.rs` `ask` through `src/forge.rs` `pick` and `news`: whether a limited forge result can safely clear a shown PR.
+2. `src/forge.rs` `unix_ms`: timestamp acceptance and the starting-second cutoff.
+3. `src/ui/theme.rs` and `src/ui/theme/palette.rs`: the palette extraction is routine and can be skimmed.
+
+**Checks**
+
+At `f9ff6c4`, `cargo test` (576 library and 81 CLI tests), `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check` passed. The two review fixes were checked in a separate pass by the same reviewer; they were not reviewed independently. No UI was launched or driven, and no terminal capture was taken.
