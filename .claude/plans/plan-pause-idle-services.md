@@ -206,7 +206,8 @@ flows[2]{name,state,phase,tasks,age,services}:
 
 - `ui/board/cards.rs` `state_label`: `ready · paused`, `working · resuming`, `working · services
   down` (resume-failed), the way delegated appends `· agent`. Pausing reads as paused.
-- `ui/board/detail.rs` header: `services paused 14:02`; resume-failed with its reason.
+- `ui/board/detail.rs` header: `services paused 14:02`, first among the facts (a long request
+  cut it off at the end, found in the E2E check); resume-failed with its reason.
 - Sidebar: unchanged.
 
 ### Docs

@@ -44,6 +44,8 @@ impl BoardView<'_> {
             return;
         };
         let mut facts: Vec<String> = project.into_iter().cloned().collect();
+        // First: it changes, and a long request would cut it off.
+        facts.extend(self.services(flow));
         if !flow.request.is_empty() {
             facts.push(flow.request.clone());
         }
@@ -59,7 +61,6 @@ impl BoardView<'_> {
             let stage = if flow.merged { "merged" } else { "open" };
             facts.push(format!("{} {stage}", merge_request(url)));
         }
-        facts.extend(self.services(flow));
         facts.push(format!(
             "started {} ago",
             long_duration(self.sidebar.now.saturating_sub(flow.started_at))
@@ -520,12 +521,12 @@ mod tests {
         };
         let paused = services(ServiceStatus::Paused, None);
         assert!(
-            paused.contains(" · slot 1 · services paused 00:01 · started "),
+            paused.contains(" 1 shop-221  services paused 00:01 · "),
             "{paused}"
         );
         let down = services(ServiceStatus::ResumeFailed, Some("port 8003 is taken"));
         assert!(
-            down.contains(" · services down: port 8003 is taken · "),
+            down.contains("  services down: port 8003 is taken · "),
             "{down}"
         );
         let running = services(ServiceStatus::Running, None);
