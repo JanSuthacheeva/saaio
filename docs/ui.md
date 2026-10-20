@@ -173,7 +173,8 @@ The master's session ended: `C-space r` resumes it, `C-space Q` stops saaio.
 
 ## History
 
-`C-space [`, or the wheel over a pane whose session leaves the mouse to saaio.
+`C-space [`, or the wheel over a pane whose session leaves the mouse to saaio and is not on the
+alternate screen.
 
 | Key | Does |
 | --- | --- |
