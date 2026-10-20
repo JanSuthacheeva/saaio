@@ -114,6 +114,8 @@ pub enum Effect {
     Run(Job),
     /// Copy the selected text as drawn.
     CopySelection(Selection),
+    /// Copy text a pane's program put on the clipboard.
+    Copy(String),
     Quit(String),
 }
 

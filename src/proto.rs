@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::text;
 use crate::view::{Board, MasterTurn};
 
-pub const PROTOCOL_VERSION: u32 = 6;
+pub const PROTOCOL_VERSION: u32 = 7;
 /// This binary: `0.1.0 (2904734)`, the commit from build.rs, `unknown` outside a git checkout.
 pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("SAAIO_COMMIT"), ")");
 pub const MAX_MESSAGE: usize = 8 << 20;
@@ -134,6 +134,8 @@ pub enum ServerMsg {
         branch: Option<String>,
         turn: Option<MasterTurn>,
     },
+    /// Text the focused pane's program put on the clipboard (OSC 52).
+    Clipboard(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -434,6 +436,7 @@ mod tests {
                     at: 7,
                 }),
             },
+            ServerMsg::Clipboard("copied".into()),
         ]
     }
 

@@ -1342,3 +1342,62 @@ fn the_start_line_names_the_build_and_the_system() {
         )
     );
 }
+
+#[test]
+fn passes_on_what_the_pane_in_view_copies_and_nothing_else() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let script = |name: &str, body: &str| {
+        let path = dir.path().join(name);
+        fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        let command = vec![path.display().to_string()];
+        Agent {
+            command: command.clone(),
+            prompt: None,
+            adapter: None,
+            resume: Some(command),
+        }
+    };
+    let printed = dir.path().join("printed");
+    let worker = script(
+        "worker",
+        &format!(
+            "printf '\\033]52;c;Ynll\\007'; touch '{}'; cat",
+            printed.display()
+        ),
+    );
+    let master = script("master", "read line; printf '\\033]52;c;aGk=\\007'; cat");
+    started_flow(&store, dir.path(), "csv", "worker");
+    let (paths, handle) = start_with_agents(
+        dir.path(),
+        BTreeMap::from([
+            ("claude".to_string(), master),
+            ("worker".to_string(), worker),
+        ]),
+    );
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !printed.exists() {
+        assert!(Instant::now() < deadline, "the worker never copied");
+        thread::sleep(Duration::from_millis(20));
+    }
+    thread::sleep(WATCH_EVERY);
+
+    proto::write_msg(&mut ui, &ClientMsg::Input(b"go\r".to_vec())).unwrap();
+
+    let copied = loop {
+        assert!(Instant::now() < deadline, "nothing was passed on");
+        if let ServerMsg::Clipboard(text) = recv(&mut ui) {
+            break text;
+        }
+    };
+    assert_eq!(copied, "hi", "the worker is not in view");
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}

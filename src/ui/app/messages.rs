@@ -14,6 +14,7 @@ impl App {
     pub fn on_server(&mut self, message: ServerMsg) -> Vec<Effect> {
         match message {
             ServerMsg::Welcome { .. } | ServerMsg::Closed(_) | ServerMsg::NotOpen(_) => vec![],
+            ServerMsg::Clipboard(text) => vec![Effect::Copy(text)],
             ServerMsg::Master { cwd, branch, turn } => {
                 self.on_master_turn(turn);
                 let place = self.tilde(&cwd);

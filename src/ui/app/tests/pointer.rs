@@ -183,3 +183,13 @@ fn a_drag_on_the_board_selects_inside_the_board() {
         row(&render_at(&app, FLEET), 0).trim_end()
     );
 }
+
+#[test]
+fn copies_what_a_pane_put_on_the_clipboard() {
+    let mut app = with_fleet();
+
+    assert_eq!(
+        app.on_server(ServerMsg::Clipboard("hi".into())),
+        vec![Effect::Copy("hi".into())]
+    );
+}

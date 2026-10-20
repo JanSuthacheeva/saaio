@@ -185,11 +185,9 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                 }
                 Effect::Run(job) => run_job(&env.exe, job, jobs.clone()),
                 Effect::CopySelection(selection) => {
-                    let text = selection.text(&drawn);
-                    if let Err(error) = env.clipboard.copy(&mut io::stdout(), &text) {
-                        log(&env.log, clock, &format!("ui: copy failed: {error:#}"));
-                    }
+                    copy(&env.clipboard, &env.log, &selection.text(&drawn), clock);
                 }
+                Effect::Copy(text) => copy(&env.clipboard, &env.log, &text, clock),
                 Effect::Quit(message) => return Ok(message),
             }
         }
@@ -201,6 +199,13 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
             drawn = frame.buffer.clone();
             execute!(terminal.backend_mut(), EndSynchronizedUpdate)?;
         }
+    }
+}
+
+/// Puts `text` on the clipboard; a failure goes to server.log, since nothing on screen asked.
+fn copy(clipboard: &Clipboard, log_file: &Path, text: &str, clock: fn() -> u64) {
+    if let Err(error) = clipboard.copy(&mut io::stdout(), text) {
+        log(log_file, clock, &format!("ui: copy failed: {error:#}"));
     }
 }
 

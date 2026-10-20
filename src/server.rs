@@ -303,9 +303,12 @@ impl Server {
             Event::Signal { name, from } => return ControlFlow::Break(Stop::Signal { name, from }),
             Event::Forge(answer) => self.forge_answer(answer),
             Event::Host(HostEvent::Output(key, bytes)) => {
-                self.host.feed(&key, &bytes);
+                let copied = self.host.feed(&key, &bytes);
                 if key == self.focus {
                     self.dirty = true;
+                    if let Some(text) = copied {
+                        self.send_clipboard(text);
+                    }
                 }
             }
             Event::Host(HostEvent::Exited(key, code)) => {
