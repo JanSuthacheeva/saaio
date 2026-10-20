@@ -5,7 +5,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 
-use crate::launch::worktree::{WORKTREES_DIR, worktree_add_argv, worktree_remove_argv};
+use crate::launch::worktree::{WORKTREES_DIR, add_argv, remove_argv};
 use crate::view::Workspace;
 use git::common_dir;
 use process::run;
@@ -18,13 +18,13 @@ pub mod process;
 
 /// Creates the worktree and branch; adds .saaio/worktrees/ to .git/info/exclude once.
 pub fn create_worktree(repo: &Path, workspace: &Workspace) -> Result<()> {
-    run(&worktree_add_argv(repo, workspace))?;
+    run(&add_argv(repo, workspace))?;
     exclude_worktrees(repo)
 }
 
 /// Removes a worktree; without force Ok(false) when git refuses (uncommitted work).
 pub fn remove_worktree(repo: &Path, workspace: &Workspace, force: bool) -> Result<bool> {
-    let argv = worktree_remove_argv(repo, workspace, force);
+    let argv = remove_argv(repo, workspace, force);
     let (program, args) = argv.split_first().context("empty command")?;
     let output = Command::new(program)
         .args(args)

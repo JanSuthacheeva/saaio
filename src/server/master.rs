@@ -131,7 +131,7 @@ impl MasterRecord {
             cwd: self.cwd.clone(),
             env: [(pane::MASTER_ENV.to_string(), "1".to_string())]
                 .into_iter()
-                .chain(pane::pane_env(env))
+                .chain(pane::shared_env(env))
                 .collect(),
             adapter: agent.adapter,
         })

@@ -90,7 +90,7 @@ fn cycle(graph: &BTreeMap<String, BTreeSet<String>>) -> Option<Vec<String>>;
 ### 4. Renames
 
 `config::config_file` -> `config::path`, `slots::taken_slots` -> `slots::taken`,
-`pane::pane_env` -> `pane::env`, `worktree::worktree_add_argv` -> `worktree::add_argv`,
+`pane::pane_env` -> `pane::shared_env` (`pane::env(env)` would clash with the `env: &LaunchEnv` its callers pass), `worktree::worktree_add_argv` -> `worktree::add_argv`,
 `worktree::worktree_remove_argv` -> `worktree::remove_argv`. `Env::config_file` stays.
 
 ### 5. `src/server.rs`
@@ -159,7 +159,7 @@ Unchanged: every step moves or regroups code. Error paths stay where they are.
 - [x] 1e. Add `layering.rs` with `the_top_level_modules_form_no_cycle`
 - [x] 2. Split `ui/input.rs` into `input.rs`, `input/keys.rs`, `input/mouse.rs`
 - [x] 3. Split `workspace.rs` into `workspace.rs`, `git.rs`, `hooks.rs`, `process.rs`
-- [ ] 4. Rename `config::path`, `slots::taken`, `pane::env`, `worktree::add_argv`/`remove_argv`
+- [x] 4. Rename `config::path`, `slots::taken`, `pane::shared_env`, `worktree::add_argv`/`remove_argv`
 - [ ] 5. Group `Server`'s pane maps into `PaneState` and `conns`/`peers` into `Conn`
 - [ ] 6. Group `App`'s master fields into `App.master`
 - [ ] 7. Replace libc with rustix for kill, killpg, getuid and Linux peer creds

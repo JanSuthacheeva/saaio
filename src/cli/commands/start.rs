@@ -175,7 +175,7 @@ fn claim_slot(
     now: u64,
 ) -> Result<u8, Failure> {
     let mut held = held_slots(registry, now);
-    held.extend(slots::taken_slots(flows));
+    held.extend(slots::taken(flows));
     Slots::at(registry)
         .claim(claim, &held, |claim| claim_is_live(claim, now))?
         .ok_or_else(|| {
@@ -195,7 +195,7 @@ fn held_slots(registry: &Registry, now: u64) -> Vec<u8> {
     registry
         .stores()
         .iter()
-        .flat_map(|store| slots::taken_slots(&views(store, now).0))
+        .flat_map(|store| slots::taken(&views(store, now).0))
         .collect()
 }
 

@@ -93,7 +93,7 @@ impl Slots {
 }
 
 /// The slots unfinished flows hold.
-pub fn taken_slots(flows: &[FlowView]) -> Vec<u8> {
+pub fn taken(flows: &[FlowView]) -> Vec<u8> {
     flows
         .iter()
         .filter(|flow| !flow.is_finished())
@@ -104,7 +104,7 @@ pub fn taken_slots(flows: &[FlowView]) -> Vec<u8> {
 /// The lowest slot 1..=MAX_SLOTS no unfinished flow of this project holds; saaio start decides across
 /// projects.
 pub fn free_slot(flows: &[FlowView]) -> Option<u8> {
-    let held = taken_slots(flows);
+    let held = taken(flows);
     (1..=MAX_SLOTS).find(|slot| !held.contains(slot))
 }
 
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn lists_the_slots_of_unfinished_flows() {
         let flows = [flow_in_slot(4, false), flow_in_slot(2, true)];
-        assert_eq!(taken_slots(&flows), vec![4]);
+        assert_eq!(taken(&flows), vec![4]);
     }
 
     #[test]
@@ -170,9 +170,9 @@ mod tests {
         let mut live = flow_in_slot(4, false);
         live.state = crate::view::State::Done;
         live.merge_request = Some("https://github.com/a/b/pull/7".into());
-        assert_eq!(taken_slots(&[live.clone()]), vec![4]);
+        assert_eq!(taken(&[live.clone()]), vec![4]);
         live.state = crate::view::State::Ended;
-        assert!(taken_slots(&[live]).is_empty());
+        assert!(taken(&[live]).is_empty());
     }
 
     fn slots(dir: &TempDir) -> Slots {

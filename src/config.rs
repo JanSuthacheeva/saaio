@@ -239,7 +239,7 @@ impl Config {
 }
 
 /// $SAAIO_CONFIG, else $XDG_CONFIG_HOME/saaio/config.toml, else ~/.config/saaio/config.toml.
-pub fn config_file(
+pub fn path(
     saaio_config: Option<PathBuf>,
     xdg_config: Option<PathBuf>,
     home: Option<PathBuf>,
@@ -536,14 +536,14 @@ command = ["pi", "{prompt}"]
         .unwrap();
 
         assert_eq!(
-            Config::read(config_file(None, Some(xdg), Some(home.clone())).as_deref())
+            Config::read(path(None, Some(xdg), Some(home.clone())).as_deref())
                 .unwrap()
                 .worker
                 .agent,
             "from-xdg"
         );
         assert_eq!(
-            Config::read(config_file(None, None, Some(home)).as_deref())
+            Config::read(path(None, None, Some(home)).as_deref())
                 .unwrap()
                 .worker
                 .agent,

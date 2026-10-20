@@ -68,7 +68,7 @@ impl Env {
 
     /// The config file $SAAIO_CONFIG, $XDG_CONFIG_HOME or $HOME point to.
     pub(crate) fn config_file(&self) -> Option<PathBuf> {
-        config::config_file(
+        config::path(
             self.saaio_config.clone(),
             self.xdg_config_home.clone(),
             self.home.clone(),

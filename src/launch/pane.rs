@@ -119,18 +119,18 @@ pub fn names_session(agent: &Agent) -> bool {
 }
 
 /// What a worker's session knows of its flow: the hooks' variables, so it can find its own ports
-/// from SAAIO_SLOT, then pane_env's.
+/// from SAAIO_SLOT, then shared_env's.
 fn worker_env(flow: &FlowView, space: &Workspace, env: &LaunchEnv) -> Vec<(String, String)> {
     let mut vars = match repo_of(space) {
         Some(repo) => hook_env(&flow.id, &flow.name, &repo, space),
         None => vec![("SAAIO_FLOW_ID".to_string(), flow.id.clone())],
     };
-    vars.extend(pane_env(env));
+    vars.extend(shared_env(env));
     vars
 }
 
 /// SAAIO_HOME (the server's store), TERM=xterm-256color, COLORTERM=truecolor.
-pub fn pane_env(env: &LaunchEnv) -> Vec<(String, String)> {
+pub fn shared_env(env: &LaunchEnv) -> Vec<(String, String)> {
     vec![
         ("SAAIO_HOME".to_string(), env.store.display().to_string()),
         ("TERM".to_string(), "xterm-256color".to_string()),
@@ -236,7 +236,7 @@ mod tests {
         };
 
         assert_eq!(
-            pane_env(&env),
+            shared_env(&env),
             pairs(&[
                 ("SAAIO_HOME", "/state/saaio"),
                 ("TERM", "xterm-256color"),
@@ -288,7 +288,7 @@ mod tests {
             agent_argv(claude, "7f3c", "shop-217", "SHOP-217 add CSV export")
         );
         let mut expected = hook_env("7f3c", "shop-217", Path::new("/repo"), &shop());
-        expected.extend(pane_env(&env));
+        expected.extend(shared_env(&env));
         assert_eq!(
             fresh.env, expected,
             "SAAIO_SLOT and the rest, as the hooks get them"
@@ -446,7 +446,7 @@ mod tests {
         );
         assert_eq!(fresh.cwd, PathBuf::from("/Users/jan/scratch"));
         let mut env_expected = vec![("SAAIO_FLOW_ID".to_string(), "9b1d".to_string())];
-        env_expected.extend(pane_env(&env));
+        env_expected.extend(shared_env(&env));
         assert_eq!(
             fresh.env, env_expected,
             "no SAAIO_SLOT, SAAIO_WORKTREE or SAAIO_REPO"
