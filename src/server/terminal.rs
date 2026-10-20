@@ -37,11 +37,12 @@ impl fmt::Debug for Terminal {
     }
 }
 
-/// Collects what the emulator wants written back to the program.
+/// Collects what the emulator wants written back to the program, and what it copied.
 #[derive(Debug, Clone)]
 struct Listener {
     replies: Arc<Mutex<Vec<u8>>>,
     size: Arc<Mutex<Size>>,
+    copied: Arc<Mutex<Option<String>>>,
 }
 
 impl EventListener for Listener {
@@ -57,6 +58,10 @@ impl EventListener for Listener {
                     cell_width: 8,
                     cell_height: 16,
                 })
+            }
+            Event::ClipboardStore(_, text) => {
+                *self.copied.lock().expect("copied lock") = Some(text);
+                return;
             }
             _ => return,
         };
@@ -92,6 +97,7 @@ impl Terminal {
         let listener = Listener {
             replies: Arc::default(),
             size: Arc::new(Mutex::new(size)),
+            copied: Arc::default(),
         };
         let config = Config {
             scrolling_history: history,
@@ -125,6 +131,11 @@ impl Terminal {
     /// Answers the program asked for (device attributes, cursor position), drained.
     pub fn replies(&mut self) -> Vec<u8> {
         std::mem::take(&mut *self.listener.replies.lock().expect("replies lock"))
+    }
+
+    /// The text the program last put on the clipboard (OSC 52), drained.
+    pub fn copied(&mut self) -> Option<String> {
+        self.listener.copied.lock().expect("copied lock").take()
     }
 
     pub fn resize(&mut self, size: Size) {
@@ -234,6 +245,7 @@ impl Terminal {
             sgr_mouse: mode.contains(TermMode::SGR_MOUSE),
             app_cursor: mode.contains(TermMode::APP_CURSOR),
             focus: mode.contains(TermMode::FOCUS_IN_OUT),
+            alt_screen: mode.contains(TermMode::ALT_SCREEN),
         }
     }
 
@@ -380,11 +392,26 @@ mod tests {
     }
 
     #[test]
+    fn keeps_what_the_program_copied_and_never_gives_the_clipboard_away() {
+        let mut term = term(20, 2);
+
+        term.feed(b"\x1b]52;c;aGk=\x07");
+
+        assert_eq!(term.copied(), Some("hi".to_string()));
+        assert_eq!(term.copied(), None);
+        term.feed(b"\x1b]52;p;Ynll\x1b\\");
+        assert_eq!(term.copied(), Some("bye".to_string()));
+        term.feed(b"\x1b]52;c;?\x07");
+        assert!(term.replies().is_empty());
+        assert_eq!(term.copied(), None);
+    }
+
+    #[test]
     fn reports_the_modes_the_program_turned_on() {
         let mut term = term(20, 2);
         assert_eq!(term.modes(), Modes::default());
 
-        term.feed(b"\x1b[?2004h\x1b[?1002h\x1b[?1006h\x1b[?1h\x1b[?1004h");
+        term.feed(b"\x1b[?2004h\x1b[?1002h\x1b[?1006h\x1b[?1h\x1b[?1004h\x1b[?1049h");
 
         assert_eq!(
             term.modes(),
@@ -394,6 +421,7 @@ mod tests {
                 sgr_mouse: true,
                 app_cursor: true,
                 focus: true,
+                alt_screen: true,
             }
         );
         term.feed(b"\x1b[?1003h");

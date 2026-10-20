@@ -113,11 +113,10 @@ impl Host {
         );
     }
 
-    /// Feeds output into the pane's Terminal and writes the Terminal's replies (DA, DSR) back to the PTY.
-    pub fn feed(&mut self, key: &PaneKey, bytes: &[u8]) {
-        let Some(pane) = self.panes.get_mut(key) else {
-            return;
-        };
+    /// Feeds output into the pane's Terminal and writes the Terminal's replies (DA, DSR) back to
+    /// the PTY; the text the program copied (OSC 52), if it did.
+    pub fn feed(&mut self, key: &PaneKey, bytes: &[u8]) -> Option<String> {
+        let pane = self.panes.get_mut(key)?;
         pane.term.feed(bytes);
         let replies = pane.term.replies();
         if let Some(process) = pane.process.as_mut()
@@ -125,6 +124,7 @@ impl Host {
         {
             let _ = process.writer.write_all(&replies);
         }
+        pane.term.copied()
     }
 
     /// Writes input to a running pane; Ok without writing to an exited one.
@@ -368,7 +368,9 @@ mod tests {
         let deadline = Instant::now() + limit;
         while let Some(left) = deadline.checked_duration_since(Instant::now()) {
             match rx.recv_timeout(left) {
-                Ok(HostEvent::Output(key, bytes)) => host.feed(&key, &bytes),
+                Ok(HostEvent::Output(key, bytes)) => {
+                    host.feed(&key, &bytes);
+                }
                 Ok(HostEvent::Exited(key, code)) => {
                     host.exited(&key, code);
                     return Some(code);

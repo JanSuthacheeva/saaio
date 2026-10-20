@@ -2,6 +2,7 @@ use std::path::Path;
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::layout::Position;
 use ratatui::style::Modifier;
 
 use super::*;
@@ -11,7 +12,7 @@ use crate::cli::output::remove::{self, Refusal};
 use crate::event::{Event, EventKind};
 use crate::fold;
 use crate::proto::{Cell, ClientMsg, Color, Flags, Frame, Mouse, ServerMsg};
-use crate::ui::input::{Command, Key, Routed, Step};
+use crate::ui::input::{Command, Key, Pointer, PointerKind, Routed, Step};
 use crate::ui::theme::PhaseColors;
 use crate::view::{MasterTurn, State, VIEW_VERSION};
 
@@ -218,6 +219,19 @@ fn theme_at(level: PhaseColors) -> Theme {
     }
 }
 
+fn mouse(app: &mut App, kind: PointerKind, x: u16, y: u16) -> Vec<Effect> {
+    app.on_input(Routed::Pointer(Pointer {
+        kind,
+        at: Position::new(x, y),
+    }))
+}
+
+/// A press and a release on one cell: what the release does.
+fn click(app: &mut App, x: u16, y: u16) -> Vec<Effect> {
+    assert_eq!(mouse(app, PointerKind::Press, x, y), vec![]);
+    mouse(app, PointerKind::Release, x, y)
+}
+
 /// Row `y` of the sidebar.
 fn side(terminal: &Terminal<TestBackend>, y: u16) -> String {
     let side = layout::areas(FLEET, layout::Chrome::Sidebar).side;
@@ -268,5 +282,6 @@ mod board;
 mod dialogs;
 mod golden;
 mod panes;
+mod pointer;
 mod prefix;
 mod sidebar;

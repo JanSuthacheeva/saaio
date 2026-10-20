@@ -320,9 +320,12 @@ impl Server {
             Event::Forge(answer) => self.forge_answer(answer),
             Event::Paused(finished) => self.pause_finished(finished),
             Event::Host(HostEvent::Output(key, bytes)) => {
-                self.host.feed(&key, &bytes);
+                let copied = self.host.feed(&key, &bytes);
                 if key == self.focus {
                     self.dirty = true;
+                    if let Some(text) = copied {
+                        self.send_clipboard(text);
+                    }
                 }
             }
             Event::Host(HostEvent::Exited(key, code)) => {

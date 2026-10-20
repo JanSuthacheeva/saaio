@@ -163,6 +163,20 @@ impl Server {
         }
     }
 
+    /// Sends the text to the attached UI; over MAX_MESSAGE it is logged and not sent.
+    pub(super) fn send_clipboard(&mut self, text: String) {
+        let Some(conn) = self.attached else {
+            return;
+        };
+        // Room for the message's tag and the text's length.
+        if text.len() > proto::MAX_MESSAGE - 16 {
+            let line = format!("a pane copied {} bytes, too many to pass on", text.len());
+            server_log::write((self.clock)(), &line);
+            return;
+        }
+        self.send_to(conn, &ServerMsg::Clipboard(text));
+    }
+
     /// Sends the focused pane's changed rows, at most 60 times a second.
     pub(super) fn flush(&mut self) {
         if !self.dirty || self.flushed_at.elapsed() < FRAME_EVERY {

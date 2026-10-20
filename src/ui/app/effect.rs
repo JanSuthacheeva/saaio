@@ -6,6 +6,7 @@ use crate::cli::output::remove::Refusal;
 use crate::event::Mode;
 use crate::proto::{ClientMsg, Modes};
 use crate::ui::newflow::NewFlowForm;
+use crate::ui::selection::Selection;
 
 /// A `saaio remove`, with what the person agreed to lose.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,6 +112,10 @@ pub enum Effect {
     LoadBranching(PathBuf),
     Mirror(Modes),
     Run(Job),
+    /// Copy the selected text as drawn.
+    CopySelection(Selection),
+    /// Copy text a pane's program put on the clipboard.
+    Copy(String),
     Quit(String),
 }
 

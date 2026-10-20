@@ -3464,12 +3464,20 @@ fn bug_report_says_when_there_is_no_store() {
         .unwrap();
 
     assert!(output.status.success(), "{}", stdout(&output));
-    let file = fs::read_dir(cwd.path())
+    // On the Linux runner a folder lands here too once HOME is unset.
+    let written: Vec<_> = fs::read_dir(cwd.path())
         .unwrap()
-        .next()
-        .unwrap()
-        .unwrap()
-        .path();
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    let file = written
+        .iter()
+        .find(|path| {
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("saaio-report-")
+        })
+        .unwrap_or_else(|| panic!("no report among {written:?}"));
     let report = fs::read_to_string(file).unwrap();
     assert!(
         report.contains("\nstore        cannot be opened: cannot find a state directory\n"),

@@ -4,6 +4,7 @@ mod draw;
 mod effect;
 mod keys;
 mod messages;
+mod pointer;
 
 pub use effect::{Effect, Job, JobError, Removal, outcome};
 
@@ -19,6 +20,7 @@ use crate::ui::newflow::NewFlowForm;
 use crate::ui::peek::PeekLine;
 use crate::ui::prefix::Prefix;
 use crate::ui::screen::Screen;
+use crate::ui::selection::Selection;
 use crate::ui::sidebar::{self, Sidebar};
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, MasterTurn, Projects, State};
@@ -89,6 +91,9 @@ pub struct App {
     agents: Vec<String>,
     /// The key before every command, for the hints that name it.
     prefix: Prefix,
+    /// Text selected with the mouse, highlighted until the next input.
+    selection: Option<Selection>,
+    clicks: Option<pointer::Clicks>,
 }
 
 impl App {
@@ -120,6 +125,8 @@ impl App {
             overview_running: false,
             agents: Vec::new(),
             prefix: Prefix::default(),
+            selection: None,
+            clicks: None,
         }
     }
 
@@ -195,6 +202,11 @@ impl App {
     /// Whether the rail shows instead of the sidebar: the user's choice, else a narrow terminal.
     fn folded(&self) -> bool {
         self.rail.unwrap_or(self.size.cols < layout::RAIL_BELOW)
+    }
+
+    /// The focused pane's modes, for the router's Target.
+    pub fn pane_modes(&self) -> Modes {
+        self.screen.modes
     }
 
     /// True while a dialog takes the keys instead of the pane.

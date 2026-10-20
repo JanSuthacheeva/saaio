@@ -36,6 +36,7 @@ fn attach(store: &Store, env: &Env, log: PathBuf, clock: fn() -> u64) -> anyhow:
         theme_dir: env.config_dir().unwrap_or_else(|| PathBuf::from(".")),
         config_file: env.config_file(),
         log,
+        clipboard: env.clipboard(),
     };
     ui::run(&socket, ui_env, clock)
 }

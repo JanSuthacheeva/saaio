@@ -134,6 +134,8 @@ pub enum ServerMsg {
         branch: Option<String>,
         turn: Option<MasterTurn>,
     },
+    /// Text the focused pane's program put on the clipboard (OSC 52).
+    Clipboard(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -211,9 +213,11 @@ pub struct Modes {
     pub sgr_mouse: bool,
     pub app_cursor: bool,
     pub focus: bool,
+    /// The program is on the alternate screen, where the wheel scrolls it with arrow keys.
+    pub alt_screen: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Mouse {
     #[default]
     Off,
@@ -420,6 +424,7 @@ mod tests {
                     sgr_mouse: true,
                     app_cursor: false,
                     focus: true,
+                    alt_screen: true,
                 },
                 history: None,
             }),
@@ -434,6 +439,7 @@ mod tests {
                     at: 7,
                 }),
             },
+            ServerMsg::Clipboard("copied".into()),
         ]
     }
 
