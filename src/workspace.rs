@@ -360,6 +360,8 @@ fn read_in_background(pipe: Option<impl Read + Send + 'static>) -> Pipe {
         loop {
             match pipe.read(&mut chunk) {
                 Ok(0) => break,
+                // Taken already: drained, never closed, so the process left behind can write on.
+                Ok(_) if Arc::strong_count(&shared) == 1 => {}
                 Ok(read) => shared
                     .lock()
                     .unwrap_or_else(PoisonError::into_inner)
