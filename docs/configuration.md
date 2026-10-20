@@ -305,7 +305,7 @@ A running UI shows the same in its title row, as
 | Where | A broken file |
 | --- | --- |
 | a running UI and its server | keep the last working settings. The title row shows the error until the file reads again. The server writes it to `server.log`. |
-| `saaio start`, `saaio new`, `saaio send`, `saaio` opening the UI | stop with the error |
+| `saaio start`, `saaio new`, `saaio send --type`, `saaio` opening the UI | stop with the error |
 | running workers | keep reporting with the built-in settings until the file is fixed |
 
 Settings from earlier versions are refused with a message naming the new form:

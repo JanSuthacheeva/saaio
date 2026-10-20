@@ -106,7 +106,7 @@ Writes to `~/.config/saaio`:
 
 | Prompt | Answer |
 | --- | --- |
-| a Claude Code worker opening in a new worktree asks whether to trust the folder | answer in its pane |
+| an agent opening in a folder it does not trust yet (a Claude Code worker's new worktree, the master's or a plain session's folder) asks whether to trust it | answer in its pane |
 
 Codex workers trust saaio's hooks and their own worktree without asking.
 

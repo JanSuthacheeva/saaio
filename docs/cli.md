@@ -545,6 +545,7 @@ help[2]: "Run `saaio status <name>` in a flow's project for its phases, timeline
 ```
 
 - A project is named after its store's folder (`shop` above). The shared folder's store is `default`.
-  A second project of the same name shows as `<name> (2)`.
+  A second repository of the same name has the store `<name>-2` and shows so. Two stores in folders
+  of the same name, such as two `SAAIO_HOME`s, show as `<name>` and `<name> (2)`.
 - Projects without flows are left out.
 - A store whose folder is gone is dropped.

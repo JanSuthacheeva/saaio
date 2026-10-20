@@ -163,7 +163,8 @@ is one, and the reason until the file reads again. The error also goes to `serve
 theme: ~/.config/saaio/theme.toml:3: accent belongs in [ui], not [state]
 ```
 
-Other messages, after the file, line and key (`theme.toml:3: accent: #d9825 is no #rrggbb color`):
+Other messages, after the file and the line where there is one, with the key first for a color
+(`theme.toml:3: accent: #d9825 is no #rrggbb color`):
 
 - `#d9825 is no #rrggbb color`
 - `300 is no ANSI index (0-255)`

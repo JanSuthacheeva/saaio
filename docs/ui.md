@@ -32,8 +32,8 @@ One terminal with the master, every worker and every plain session. Run by an ag
 ### Sidebar
 
 Row `0` is the master, with its folder and branch. Spinner while it works. Waiting dot when it ends
-a turn, asks something or wants permission while another session is in view, until you look at it;
-a dot in the blocked color when its turn failed.
+a turn, asks something or wants permission while another session is in view, until you look at it.
+The dot is in the blocked color when its turn failed.
 
 Workers and plain sessions follow, grouped:
 
@@ -95,7 +95,8 @@ Sidebar numbers follow the sort order, so a flow's number changes with its state
 
 Under the selected worker: its latest tool calls and text, read from the harness's transcript, not
 its screen. Paths in the worker's worktree show relative to it, others in your home folder with ~.
-For a finished flow: its branch and worktree. The peek shows in the sidebar only, not on the rail.
+For a finished flow, its branch and worktree (`gone` once removed) come first. The peek shows in
+the sidebar only, not on the rail.
 
 ## The board
 
@@ -117,7 +118,8 @@ Other projects' flows are read-only. `enter` and `x` work on this project's flow
 A flow whose services saaio paused ([repository.md](repository.md#pause-and-resume)) says so
 beside its state on its card: `ready · paused`, `working · resuming`, or `working · services down`
 when the resume failed. The selected flow's header says since when (`services paused 14:02`),
-`services resuming`, or why the resume failed (`services down: port 8003 is taken`). The sidebar does not show it.
+`services resuming`, or why the resume failed (`services down: port 8003 is taken`). The
+sidebar does not show it.
 
 ## Starting a flow
 
