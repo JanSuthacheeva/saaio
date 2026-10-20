@@ -155,7 +155,7 @@ Unchanged: every step moves or regroups code. Error paths stay where they are.
 - [x] 1b. Move the theme example to `default_file::THEME_EXAMPLE`
 - [x] 1c. Move the news text to `wake::for_worker`/`for_master`, `truncated` to `text`
 - [x] 1d. Move `Refusal` to `refusal.rs` with `Refusal::phrase`
-- [ ] 1e. Add `layering.rs` with `the_top_level_modules_form_no_cycle`
+- [x] 1e. Add `layering.rs` with `the_top_level_modules_form_no_cycle`
 - [ ] 2. Split `ui/input.rs` into `input.rs`, `input/keys.rs`, `input/mouse.rs`
 - [ ] 3. Split `workspace.rs` into `workspace.rs`, `git.rs`, `hooks.rs`, `process.rs`
 - [ ] 4. Rename `config::path`, `slots::taken`, `pane::env`, `worktree::add_argv`/`remove_argv`

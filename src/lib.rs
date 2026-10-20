@@ -13,6 +13,8 @@ mod fixtures;
 mod fold;
 mod forge;
 mod launch;
+#[cfg(test)]
+mod layering;
 mod pause;
 mod private;
 mod proto;
