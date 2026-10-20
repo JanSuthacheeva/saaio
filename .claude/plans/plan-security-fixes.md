@@ -244,8 +244,8 @@ i. Config type error (L2)
 5. Pasted text keeps line breaks and drops every other control character, Tab included.
 6. Bug reports go up to `-100` a day.
 7. Theme errors get the same redaction for consistency.
-8. No CHANGELOG entry. Docs change only where they describe what changed: `docs/cli.md` on the
-   bug report's name.
+8. No CHANGELOG entry. Docs change only where they describe what changed: `docs/cli.md` and
+   `docs/troubleshooting.md` on the bug report's name.
 
 ## Decisions during review
 
