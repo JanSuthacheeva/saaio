@@ -68,7 +68,7 @@ pub fn run(
     let branching = Branching::load(&repo)?;
     let kind = pick_kind(branching.as_ref(), args.kind.as_deref())?;
     let (flows, _) = views(store, now);
-    let name = name::flow_name(args.name.as_deref(), request, &live_names(&flows));
+    let name = name::choose(args.name.as_deref(), request, &live_names(&flows));
     let first = Event::new(
         now,
         EventKind::Started {

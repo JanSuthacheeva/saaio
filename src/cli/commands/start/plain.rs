@@ -28,7 +28,7 @@ pub(super) fn open(
             last.to_string_lossy().into_owned()
         })
     });
-    let name = name::flow_name(Some(&base), "", &live_names(&flows));
+    let name = name::choose(Some(&base), "", &live_names(&flows));
     let first = Event::new(
         now,
         EventKind::Started {
