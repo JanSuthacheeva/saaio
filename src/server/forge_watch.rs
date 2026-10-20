@@ -29,6 +29,7 @@ pub enum Answer {
 }
 
 /// A query succeeded (and may have listed no current PR), or no forge could be queried.
+#[derive(Debug)]
 enum Lookup {
     Listed(Option<Found>),
     Unavailable,
