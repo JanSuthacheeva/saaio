@@ -1,9 +1,10 @@
 use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -316,8 +317,8 @@ fn finish_within(mut command: Command, program: &str, limit: Duration) -> Result
         }
         thread::sleep(WAIT_STEP);
     };
-    let stdout = stdout.join().unwrap_or_default();
-    let stderr = stderr.join().unwrap_or_default();
+    let stdout = stdout.collect();
+    let stderr = stderr.collect();
     if !status.success() {
         bail!("{}", last_line(&stderr, &stdout));
     }
@@ -327,15 +328,48 @@ fn finish_within(mut command: Command, program: &str, limit: Duration) -> Result
 /// How often finish_within looks whether its command ended.
 const WAIT_STEP: Duration = Duration::from_millis(20);
 
-/// All a pipe gives until it closes, read on a thread of its own.
-fn read_in_background(pipe: Option<impl Read + Send + 'static>) -> JoinHandle<Vec<u8>> {
-    thread::spawn(move || {
-        let mut bytes = Vec::new();
-        if let Some(mut pipe) = pipe {
-            let _ = pipe.read_to_end(&mut bytes);
+/// How long the output of a command that ended is read: a process it left behind may hold its
+/// pipes open for as long as it runs.
+const READ_GRACE: Duration = Duration::from_millis(500);
+
+/// A pipe read on a thread of its own, into bytes the reader shares.
+struct Pipe {
+    bytes: Arc<Mutex<Vec<u8>>>,
+    reader: JoinHandle<()>,
+}
+
+impl Pipe {
+    /// All the pipe gives until it closes, or what it gave within READ_GRACE.
+    fn collect(self) -> Vec<u8> {
+        let deadline = Instant::now() + READ_GRACE;
+        while !self.reader.is_finished() && Instant::now() < deadline {
+            thread::sleep(WAIT_STEP);
         }
-        bytes
-    })
+        std::mem::take(&mut *self.bytes.lock().unwrap_or_else(PoisonError::into_inner))
+    }
+}
+
+fn read_in_background(pipe: Option<impl Read + Send + 'static>) -> Pipe {
+    let bytes = Arc::new(Mutex::new(Vec::new()));
+    let shared = Arc::clone(&bytes);
+    let reader = thread::spawn(move || {
+        let Some(mut pipe) = pipe else {
+            return;
+        };
+        let mut chunk = [0; 8192];
+        loop {
+            match pipe.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(read) => shared
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .extend_from_slice(&chunk[..read]),
+                Err(error) if error.kind() == ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+        }
+    });
+    Pipe { bytes, reader }
 }
 
 /// Runs an argv; its stdout, or an error with the last line it printed.
@@ -619,6 +653,30 @@ mod tests {
         )
         .unwrap();
         assert!(!has_hook(&repo, Hook::Resume), "not executable is none");
+    }
+
+    #[test]
+    fn a_hook_that_leaves_a_process_behind_still_ends() {
+        let (_dir, repo) = repo();
+        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 3, "claude");
+        create_worktree(&repo, &workspace).unwrap();
+        hook(&repo, "resume", "#!/bin/sh\necho up\nsleep 30 &\n");
+        hook(
+            &repo,
+            "pause",
+            "#!/bin/sh\nsleep 30 &\necho 'docker is not running' >&2\nexit 1\n",
+        );
+        let started = Instant::now();
+
+        assert!(run_hook_within(&repo, Hook::Resume, &workspace, &[], LIMIT).unwrap());
+        let error = run_hook_within(&repo, Hook::Pause, &workspace, &[], LIMIT).unwrap_err();
+
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "{:?}",
+            started.elapsed()
+        );
+        assert_eq!(format!("{error:#}"), "docker is not running");
     }
 
     #[test]
