@@ -73,6 +73,11 @@ failure there means a dependency needs an update or, when none exists yet, an `i
 `deny.toml` with its reason. A new dependency under a licence `deny.toml` does not allow fails
 `deny` until the licence is added there.
 
+`.github/workflows/stable.yml` runs clippy and the tests on the latest stable Rust every Monday
+and on demand (Actions, stable, Run workflow), since `cargo install --git` builds with the user's
+Rust. It is not a required check: a failure there is a new lint or a break to fix before users
+meet it.
+
 CI uses the toolchain `rust-toolchain.toml` pins, as you do locally. To move to a newer Rust,
 change `channel` there and `rust-version` in `Cargo.toml` in one pull request, and fix what the
 new clippy finds in the same one. The build cache is saved from `main` only, so a pull request
@@ -128,8 +133,11 @@ The full rules and the architecture: [CLAUDE.md](CLAUDE.md). In short:
 ## Releasing
 
 A `v*` tag runs `.github/workflows/release.yml`. It builds saaio natively for macOS and Linux,
-runs the tests on each build and publishes a GitHub release with the tarballs, `SHA256SUMS` and
-`install.sh`.
+runs the tests on each build, attests the tarballs' build provenance and publishes a GitHub
+release with the tarballs, `SHA256SUMS` and `install.sh`. The release profile builds with thin
+LTO, one codegen unit and stripped symbols, so a release build takes about twice as long as a
+plain one. `saaio --version` names the commit `build.rs` takes from git, only from saaio's own
+checkout; `SAAIO_COMMIT` set while building overrides it.
 
 1. Set `version` in `Cargo.toml`. In `CHANGELOG.md`, rename `## [Unreleased]` to the version and
    its date, such as `## [0.2.0] - 2026-11-03`.
