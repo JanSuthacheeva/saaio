@@ -98,7 +98,7 @@ Isolated review of `main..HEAD` against this plan.
   finishes and Claude Code resumes on its own, no `UserPromptSubmit` fires, so the busy mark stays
   idle through that resumed turn and the server may type a queued line into it (`server/typing.rs`).
   Claude Code queues input typed while it works, so this looks harmless; not proven either way.
-  Recommendation: leave it, watch for it in use.
+  Recommendation: leave it, watch for it in use. Decided 2026-10-20: left as is.
 
 **Where to look**
 1. `src/adapter/claude_code.rs` `translate` "Stop" arm and `turn`: the only behaviour change.
