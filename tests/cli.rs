@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
+use portable_pty::{CommandBuilder, MasterPty, PtySize, SlavePty, native_pty_system};
 use tempfile::TempDir;
 
 /// The saaio binary with a test's own state: `home` as SAAIO_HOME, the shared folder inside it, a
@@ -197,6 +197,8 @@ struct Terminal {
     child: Box<dyn portable_pty::Child + Send + Sync>,
     screen: Arc<Mutex<Vec<u8>>>,
     _master: Box<dyn MasterPty + Send>,
+    /// Held open: macOS drops what the child wrote but nobody read yet once the last slave closes.
+    _slave: Box<dyn SlavePty + Send>,
 }
 
 impl Terminal {
@@ -226,7 +228,6 @@ impl Terminal {
             })
             .unwrap();
         let child = pair.slave.spawn_command(command).unwrap();
-        drop(pair.slave);
         let screen = Arc::new(Mutex::new(Vec::new()));
         let mut reader = pair.master.try_clone_reader().unwrap();
         let shown = Arc::clone(&screen);
@@ -240,6 +241,7 @@ impl Terminal {
             child,
             screen,
             _master: pair.master,
+            _slave: pair.slave,
         }
     }
 
