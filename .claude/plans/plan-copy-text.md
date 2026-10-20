@@ -289,6 +289,9 @@ Clipboard (`c`) and primary (`p`) stores both pass on; OSC 52 reads stay refused
 - [x] Rewrite docs/ui.md "Mouse": drag, double and triple click, wheel, Shift or Option for the terminal's own selection, terminal table, iTerm2 setting, tmux `set-clipboard on`
 - [x] End to end in tmux with a scratch store: drag on sidebar, rail, title, board, a dialog, history and a shell pane, checked with pbpaste and a tmux buffer; sidebar click and wheel; Claude Code pane with `SSH_CONNECTION` set passes its OSC 52 on
 
+- [ ] Wheel over a pane on the alternate screen without the mouse sends arrow keys, as tmux does: `Modes.alt_screen` from `TermMode::ALT_SCREEN`; `on_wheel` in `View::Panes` sends 3 up or down arrows (`ESC O A` with app_cursor, else `ESC [ A`) instead of opening history; tests in terminal.rs and app/tests/pointer.rs
+- [ ] docs/ui.md: a pane's OSC 52 passes on "while it is the focused session"
+
 ## Review
 
 Reviewed in isolation against this plan, CLAUDE.md and the code around the diff (main..0e1745e).
@@ -318,6 +321,12 @@ The fix commits were checked by a second, fresh agent.
 - The highlight stays on screen cells while the pane under it scrolls, and toggling REVERSED
   un-reverses cells that were already reversed. Both follow the plan's assumptions; recommendation:
   accept.
+
+### Decided
+
+- Wheel in a pager: fix in this PR the tmux way (task added).
+- OSC 52 while the board covers the pane: accept; docs say "while it is the focused session" (task added).
+- Highlight on scrolling cells and toggled REVERSED: accepted.
 
 ### Where to look
 
