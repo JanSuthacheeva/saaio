@@ -173,13 +173,19 @@ fn unix_ms(stamp: &str) -> Option<u64> {
         ("Z" | "z", "") => 0,
         (sign, offset) => {
             let (hours, minutes) = offset.split_once(':')?;
-            let minutes = hours.parse::<i64>().ok()? * 60 + minutes.parse::<i64>().ok()?;
+            let hours = hours.parse::<i64>().ok()?;
+            let minutes = minutes.parse::<i64>().ok()?;
+            if !(0..=23).contains(&hours) || !(0..=59).contains(&minutes) {
+                return None;
+            }
+            let minutes = hours * 60 + minutes;
             if sign == "-" { -minutes } else { minutes }
         }
     };
     let valid = (1970..=9999).contains(&year)
         && (1..=12).contains(&month)
-        && (1..=31).contains(&day)
+        && day <= days_in_month(year, month)
+        && day >= 1
         && hour < 24
         && minute < 60
         && second < 61;
@@ -189,6 +195,15 @@ fn unix_ms(stamp: &str) -> Option<u64> {
     let seconds = days_from_civil(year, month, day) * 86_400 + hour * 3600 + minute * 60 + second
         - offset * 60;
     u64::try_from(seconds * 1000 + millis).ok()
+}
+
+fn days_in_month(year: i64, month: i64) -> i64 {
+    match month {
+        4 | 6 | 9 | 11 => 30,
+        2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
+        2 => 28,
+        _ => 31,
+    }
 }
 
 /// Days since 1970-01-01 of a date in the proleptic Gregorian calendar (Howard Hinnant's
@@ -524,6 +539,15 @@ mod tests {
                 .parse(r#"[{"url":"u","state":"OPEN","createdAt":"yesterday"}]"#)
                 .is_err()
         );
+        for stamp in [
+            "2026-02-29T00:00:00Z",
+            "2026-02-31T00:00:00Z",
+            "2026-10-18T02:00:35+24:00",
+            "2026-10-18T02:00:35+02:60",
+        ] {
+            let json = format!(r#"[{{"url":"u","state":"OPEN","createdAt":"{stamp}"}}]"#);
+            assert!(Forge::GitHub.parse(&json).is_err(), "{stamp}");
+        }
     }
 
     #[test]
@@ -565,6 +589,8 @@ mod tests {
             unix_ms("2024-02-29T23:30:00-01:00"),
             unix_ms("2024-03-01T00:30:00Z")
         );
+        assert!(unix_ms("2000-02-29T00:00:00Z").is_some());
+        assert_eq!(unix_ms("2100-02-29T00:00:00Z"), None);
         assert_eq!(unix_ms("2026-13-01T00:00:00Z"), None);
         assert_eq!(unix_ms("9223372036854775807-01-01T00:00:00Z"), None);
         assert_eq!(unix_ms("2026-10-18"), None);

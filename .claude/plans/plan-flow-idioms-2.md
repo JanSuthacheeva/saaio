@@ -69,7 +69,7 @@ source fix, or test change was made.
 ## Tasks
 
 - [x] Prove and fix the stale closed-PR case in `forge::news`/`pick`.
-- [ ] Reject impossible forge timestamps in `forge::unix_ms` with focused tests.
+- [x] Reject impossible forge timestamps in `forge::unix_ms` with focused tests.
 - [ ] Preserve PRs opened in the flow's first second in `forge::pick` with a boundary test.
 - [ ] Add `Debug` to the listed new types.
 - [ ] Split `ui/theme.rs` at the palette/style seam and adjust imports without behavior change.
