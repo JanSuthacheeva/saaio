@@ -279,7 +279,7 @@ Clipboard (`c`) and primary (`p`) stores both pass on; OSC 52 reads stay refused
 
 - [x] Add `base64` and `ui/clipboard.rs`: `osc52`, `Clipboard::new`, `Clipboard::copy`, with unit tests for the bytes, command choice and copy without a command
 - [x] Add `ui/selection.rs`: `Selection`, `Unit`, `new`, `extend`, `is_click`, `text`, `render`, with unit tests on a hand-built Buffer (rows, trimming, clamping, wide chars, word, line, render)
-- [ ] Make `Mouse` ordered and add `outer::captured`; `Outer::enter` turns capture on and `mirror` writes captured modes, with tests for Off, Press and Motion panes
+- [x] Make `Mouse` ordered and add `outer::captured`; `Outer::enter` turns capture on and `mirror` writes captured modes, with tests for Off, Press and Motion panes
 - [ ] Router: `Target`, `Pointer`, `PointerKind`, `held`, `encode`, `wanted`; `Routed::Pointer` replaces `Click`; tests for ownership of drags, mode filtering, X10/SGR encoding and modal routing (callers adapted, clicks still focus)
 - [ ] App: `selection`, `clicks`, `surface_at`, `dialog`, `pane_modes`, `app/pointer.rs` (`on_pointer`, `on_wheel`, `on_click` moved), `Effect::CopySelection`, selection drawn and cleared; tests in `app/tests/pointer.rs`
 - [ ] Env `ssh`, `wayland`, `x11` and `Env::clipboard`; `UiEnv.clipboard`; ui.rs builds `Target`, keeps `drawn`, runs `Effect::CopySelection` and logs a failed copy
