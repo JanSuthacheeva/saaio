@@ -5,6 +5,7 @@ use crate::cli::Env;
 use crate::cli::output::{Document, news};
 use crate::config::watch::ConfigWatch;
 use crate::deliver::{self, WorkerNews};
+use crate::event::is_uuid;
 use crate::store::{Busy, Store, Waiter};
 use crate::view::FlowView;
 
@@ -26,8 +27,8 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
     };
     let waiter = match env.flow_id() {
         _ if args.master => Waiter::Master,
-        Some(id) => Waiter::Flow(id.to_string()),
-        None => return Document::Silent,
+        Some(id) if is_uuid(id) => Waiter::Flow(id.to_string()),
+        _ => return Document::Silent,
     };
     let mut configs = ConfigWatch::new(env.config_file());
     match wait(&store, &waiter, &mut configs, clock) {

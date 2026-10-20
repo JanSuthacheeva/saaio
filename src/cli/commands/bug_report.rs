@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
 
 use crate::bug_report::{self, Facts, FileCheck, Loaded, LogTail, TAIL_LINES};
@@ -7,6 +7,7 @@ use crate::cli::Env;
 use crate::cli::output::{self, Document, Failure};
 use crate::client;
 use crate::config::Config;
+use crate::private;
 use crate::system::System;
 use crate::text;
 use crate::ui::theme_file;
@@ -55,14 +56,36 @@ pub fn run(env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
         theme,
         logs,
     };
-    let path = cwd.join(bug_report::file_name(now, offset_secs));
-    fs::write(&path, bug_report::text(&facts, env.user_home())).map_err(|error| {
+    let text = bug_report::text(&facts, env.user_home());
+    let path = write(&cwd, now, offset_secs, text.as_bytes()).map_err(|(path, error)| {
         Failure::error(
             format!("could not write {}: {error}", path.display()),
             vec!["Run `saaio bug-report` in a folder you can write to".to_string()],
         )
     })?;
     Ok(output::bug_report::written(&path))
+}
+
+/// The most reports a day gets before saaio stops looking for a free name.
+const REPORTS_A_DAY: u32 = 100;
+
+/// Writes the report under the day's first name nothing is at yet, never through a link; the
+/// last path tried and why when none works.
+fn write(
+    dir: &Path,
+    at: u64,
+    offset_secs: i64,
+    text: &[u8],
+) -> Result<PathBuf, (PathBuf, io::Error)> {
+    let mut n = 1;
+    loop {
+        let path = dir.join(bug_report::file_name(at, offset_secs, n));
+        match private::write_new(&path, text) {
+            Ok(()) => return Ok(path),
+            Err(error) if error.kind() == ErrorKind::AlreadyExists && n < REPORTS_A_DAY => n += 1,
+            Err(error) => return Err((path, error)),
+        }
+    }
 }
 
 /// Whether `file` loads by `load`: Missing when there is none.

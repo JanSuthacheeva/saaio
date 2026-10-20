@@ -100,21 +100,21 @@ pub fn ask_in_background(asks: Vec<Ask>, events: Sender<Event>) {
     });
 }
 
-/// One flow's question: its worktree's remotes -> Forge::of -> gh or glab -> parse -> pick.
-/// Unavailable for a gone worktree or no known forge; Listed(None) for a successful query with
-/// no merge request opened since the flow started.
+/// One flow's question, asked in the main checkout: its remotes -> Forge::of -> gh or glab ->
+/// parse -> pick. Unavailable for a gone worktree or no known forge; Listed(None) for a successful
+/// query with no merge request opened since the flow started.
 fn ask(ask: &Ask) -> Result<Lookup> {
     if !ask.dir.is_dir() {
         return Ok(Lookup::Unavailable);
     }
-    let remotes = workspace::remote_urls(&ask.dir);
+    let remotes = workspace::remote_urls(&ask.repo);
     let Some(forge) = Forge::of(&remotes, workspace::ssh_hostname) else {
         return Ok(Lookup::Unavailable);
     };
-    let json = workspace::output_in(&ask.dir, &forge.argv(&ask.branch), ASK_LIMIT)
+    let json = workspace::output_in(&ask.repo, &forge.argv(&ask.branch), ASK_LIMIT)
         .with_context(|| format!("{} failed", forge.program()))?;
     let found = with_shown(forge, forge.parse(&json)?, ask.shown.as_deref(), |argv| {
-        workspace::output_in(&ask.dir, argv, ASK_LIMIT)
+        workspace::output_in(&ask.repo, argv, ASK_LIMIT)
     })?;
     Ok(Lookup::Listed(forge::pick(found, ask.since)))
 }
@@ -240,7 +240,7 @@ mod tests {
                 phases: None,
             },
             EventKind::Workspace {
-                path: "/work/csv".into(),
+                path: "/work/shop/.saaio/worktrees/csv".into(),
                 branch: Some("flow/csv".into()),
                 slot: None,
                 window: None,

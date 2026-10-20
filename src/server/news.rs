@@ -6,6 +6,7 @@ use crate::deliver::{self, WorkerNews};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::server_log;
 use crate::store::{Busy, Waiter};
+use crate::text::printable;
 use crate::view::FlowView;
 
 /// No key into a pane for this long before the server types news into it, so it does not land in
@@ -97,10 +98,12 @@ pub(super) fn quiet(busy: Busy, typed_at: Option<Instant>, now: Instant) -> bool
 }
 
 /// `text` as one bracketed paste, then Enter: a single prompt however many lines it has, which
-/// Codex's composer takes whole instead of as typed keys.
+/// Codex's composer takes whole instead of as typed keys. Every line loses its control
+/// characters, so the text can neither end the paste nor type keys of its own.
 pub(super) fn paste(text: &str) -> Vec<u8> {
+    let lines: Vec<String> = text.lines().map(printable).collect();
     let mut bytes = b"\x1b[200~".to_vec();
-    bytes.extend_from_slice(text.as_bytes());
+    bytes.extend_from_slice(lines.join("\n").as_bytes());
     bytes.extend_from_slice(b"\x1b[201~\r");
     bytes
 }
@@ -126,5 +129,13 @@ mod tests {
     #[test]
     fn pastes_the_news_as_one_prompt() {
         assert_eq!(paste("a\nb"), b"\x1b[200~a\nb\x1b[201~\r");
+    }
+
+    #[test]
+    fn pasted_text_cannot_end_the_paste_or_type_keys() {
+        assert_eq!(
+            paste("ok\x1b[201~\x1b[B\x03\r\nnext"),
+            b"\x1b[200~ok[201~[B\nnext\x1b[201~\r"
+        );
     }
 }

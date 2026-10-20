@@ -43,9 +43,14 @@ pub struct LogTail {
     pub text: Option<Result<String, String>>,
 }
 
-/// `saaio-report-2026-10-18.txt`.
-pub fn file_name(at: u64, offset_secs: i64) -> String {
-    format!("saaio-report-{}.txt", text::date(at, offset_secs))
+/// The n-th report of a day: 1 is `saaio-report-2026-10-18.txt`, 2 is
+/// `saaio-report-2026-10-18-2.txt`.
+pub fn file_name(at: u64, offset_secs: i64, n: u32) -> String {
+    let date = text::date(at, offset_secs);
+    match n {
+        1 => format!("saaio-report-{date}.txt"),
+        n => format!("saaio-report-{date}-{n}.txt"),
+    }
 }
 
 /// The whole report, `home` replaced by `~` everywhere in it.
@@ -295,6 +300,7 @@ two
 
     #[test]
     fn names_the_file_by_the_local_date() {
-        assert_eq!(file_name(AT, OFFSET), "saaio-report-2026-10-18.txt");
+        assert_eq!(file_name(AT, OFFSET, 1), "saaio-report-2026-10-18.txt");
+        assert_eq!(file_name(AT, OFFSET, 2), "saaio-report-2026-10-18-2.txt");
     }
 }

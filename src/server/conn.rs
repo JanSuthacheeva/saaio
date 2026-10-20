@@ -11,6 +11,7 @@ use anyhow::{Context, Result, bail};
 
 use super::master::Start;
 use super::{ConnId, Event, FRAME_EVERY, Server, Stop, WRITE_TIMEOUT, spawn_named};
+use crate::private;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, Role, ServerMsg};
 use crate::server_log;
 
@@ -21,7 +22,7 @@ impl Server {
                 version,
                 role,
                 peer,
-            } => self.hello(conn, version, role, peer),
+            } => self.hello(conn, version, role, peer.printable()),
             ClientMsg::Focus(key) => {
                 self.focus = key;
                 self.history = None;
@@ -237,7 +238,7 @@ impl Server {
 /// Binds the socket readable only by this user; a socket nobody answers on is stale and replaced.
 pub(super) fn bind(socket: &Path) -> Result<UnixListener> {
     if let Some(dir) = socket.parent() {
-        fs::create_dir_all(dir).with_context(|| format!("could not create {}", dir.display()))?;
+        private::create_dir(dir).with_context(|| format!("could not create {}", dir.display()))?;
     }
     let listener = match UnixListener::bind(socket) {
         Ok(listener) => listener,

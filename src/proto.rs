@@ -8,6 +8,7 @@ use anyhow::{Context, Result, bail};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::text;
 use crate::view::{Board, MasterTurn};
 
 pub const PROTOCOL_VERSION: u32 = 6;
@@ -24,6 +25,16 @@ pub struct Peer {
 }
 
 impl Peer {
+    /// This peer with its folder and build stripped of control characters: what a client claims
+    /// about itself, safe for server.log and another UI's terminal.
+    pub fn printable(self) -> Peer {
+        Peer {
+            pid: self.pid,
+            cwd: PathBuf::from(text::printable(&self.cwd.to_string_lossy())),
+            build: text::printable(&self.build),
+        }
+    }
+
     /// Its folder, or "an unknown folder" when the process could not read its own.
     pub fn folder(&self) -> Cow<'_, str> {
         if self.cwd.as_os_str().is_empty() {
@@ -260,11 +271,27 @@ fn read_full<R: Read>(reader: &mut R, buf: &mut [u8]) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
+    use std::path::Path;
 
     use super::*;
     use crate::event::{Event, EventKind, Mode};
     use crate::fold;
     use crate::view::{FlowView, VIEW_VERSION};
+
+    #[test]
+    fn a_printable_peer_has_no_control_characters() {
+        let peer = Peer {
+            pid: 7,
+            cwd: "/tmp/\x1b]52;c;aGk=\x07x".into(),
+            build: "0.1.0\u{9b}2J".into(),
+        };
+
+        let clean = peer.printable();
+
+        assert_eq!(clean.pid, 7);
+        assert_eq!(clean.cwd, Path::new("/tmp/]52;c;aGk=x"));
+        assert_eq!(clean.build, "0.1.02J");
+    }
 
     /// A flow whose harness picked its own session, as a Codex worker's does.
     fn flow_with_session() -> FlowView {

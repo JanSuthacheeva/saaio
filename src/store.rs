@@ -1,5 +1,5 @@
 use std::fs::{self, OpenOptions};
-use std::io::{self, ErrorKind, Write};
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -7,6 +7,7 @@ use anyhow::{Context, Result, bail};
 use uuid::Uuid;
 
 use crate::event::{Event, unix_ms};
+use crate::private::{self, write_atomic};
 use crate::view::MasterTurn;
 use crate::wake::Seen;
 
@@ -90,10 +91,10 @@ impl Store {
     /// A new flow with a fresh UUID v4 and its first event; returns the id.
     pub fn create(&self, first: &Event) -> Result<String> {
         let flows = self.root.join("flows");
-        fs::create_dir_all(&flows)
+        private::create_dir(&flows)
             .with_context(|| format!("could not create flow in {}", flows.display()))?;
         let id = Uuid::new_v4().to_string();
-        let mut log = OpenOptions::new()
+        let mut log = private::options()
             .write(true)
             .create_new(true)
             .open(self.log(&id))
@@ -202,7 +203,7 @@ impl Store {
         if !self.log(id).exists() {
             bail!("no flow {id}");
         }
-        let alive = OpenOptions::new()
+        let alive = private::options()
             .create(true)
             .truncate(false)
             .write(true)
@@ -359,7 +360,7 @@ impl Store {
 
     fn write_wait(&self, name: &str, text: &str) -> Result<()> {
         let waits = self.root.join(WAITS_DIR);
-        fs::create_dir_all(&waits)
+        private::create_dir(&waits)
             .with_context(|| format!("could not create {}", waits.display()))?;
         let file = waits.join(name);
         write_atomic(&file, text.as_bytes())
@@ -373,15 +374,6 @@ impl Store {
     fn alive(&self, id: &str) -> PathBuf {
         self.root.join("flows").join(format!("{id}.alive"))
     }
-}
-
-/// Writes `contents` to a hidden file beside `path` and renames it over, so a reader never sees half
-/// a file.
-pub fn write_atomic(path: &Path, contents: &[u8]) -> io::Result<()> {
-    let name = path.file_name().unwrap_or_default().to_string_lossy();
-    let partial = path.with_file_name(format!(".{name}.{}", std::process::id()));
-    fs::write(&partial, contents)?;
-    fs::rename(&partial, path)
 }
 
 #[cfg(test)]

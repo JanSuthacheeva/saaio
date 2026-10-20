@@ -385,8 +385,9 @@ branch: deleted
 help[1]: Run `saaio` to see what is left
 ```
 
-Refuses and changes nothing when the worktree has uncommitted work or the branch has commits on no
-other branch, local or pushed:
+Refuses and changes nothing when the worktree has uncommitted work, git cannot check it (git does
+not list it as a worktree of the repository), or the branch has commits on no other branch, local
+or pushed:
 
 ```
 $ saaio remove shop-221
@@ -429,7 +430,8 @@ help[2]: Run `saaio` to see what is left,"Commit or discard the work in a kept w
 saaio bug-report
 ```
 
-Writes `saaio-report-<date>.txt` in the current folder, replacing one of the same day: the
+Writes `saaio-report-<date>.txt` in the current folder, or `saaio-report-<date>-2.txt` and on
+when that name is taken, readable only by you: the
 versions of saaio, the OS, `claude`, `codex`, `gh` and `glab`, the store's path, whether
 `config.toml` and `theme.toml` load, and the last 300 lines of `server.log` and `server.log.1`.
 The home folder is written `~`. Works without a store, and then says why there is none.

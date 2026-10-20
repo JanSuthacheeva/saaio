@@ -11,7 +11,7 @@ use toml::de::{DeTable, DeValue};
 
 use crate::adapter::Adapter;
 use crate::default_file::DefaultFile;
-use crate::text::{line_of, place};
+use crate::text::{line_of, place, without_value};
 use crate::ui::prefix::Prefix;
 use crate::workflow::Workflow;
 
@@ -123,7 +123,7 @@ impl Config {
     fn parse(path: &Path, text: &str) -> Result<Config> {
         let at = |error: toml::de::Error| {
             let line = line_of(text, error.span().map_or(0, |span| span.start));
-            anyhow!("{}", error.message().trim_end()).context(place(path, line))
+            anyhow!("{}", without_value(error.message().trim_end())).context(place(path, line))
         };
         let table = DeTable::parse(text).map_err(at)?.into_inner();
         for (key, value) in &table {
@@ -552,6 +552,11 @@ command = ["pi", "{prompt}"]
         let phases = error("\n[phases]\nplan = \"design-code\"\n");
         assert!(phases.starts_with(&at(2)), "{phases}");
         assert!(phases.contains("[[phases]]"), "{phases}");
+        assert_eq!(
+            error("[master]\nwake = \"sk-secret\"\n"),
+            format!("{}invalid type: a string, expected a boolean", at(2)),
+            "the value can be a secret pasted in the wrong place"
+        );
     }
 
     #[test]
@@ -586,7 +591,10 @@ command = ["pi", "{prompt}"]
         let error = format!("{:#}", Config::read(Some(&file)).unwrap_err());
 
         assert!(error.contains(&file.display().to_string()), "{error}");
-        assert!(error.contains("claud-code"), "{error}");
+        assert!(
+            error.ends_with(":4: unknown variant, expected `claude-code` or `codex`"),
+            "{error}"
+        );
     }
 
     #[test]

@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use crate::adapter::answer::turn_end;
 use crate::adapter::calls::{created_merge_request, simple_commands, tool_call};
 use crate::adapter::{Adapter, Approver, LineMatch, Turn, cut};
-use crate::event::{EventKind, Phase};
+use crate::event::{EventKind, Phase, is_uuid};
 use crate::workflow::Workflow;
 
 /// One hook saaio listens to: Codex's event name, the key its trust state uses, its timeout.
@@ -289,9 +289,10 @@ fn read_skill_phase(command: &str, workflow: &Workflow) -> Option<Phase> {
 /// How the subagent tool's name ends: Codex puts its namespace in front (collaborationspawn_agent).
 const SPAWN_AGENT: &str = "spawn_agent";
 
-/// The session a payload names: Codex's session id and its rollout file.
+/// The session a payload names: Codex's session id and its rollout file; none when the id is no
+/// UUID, since a resume passes it to codex as an argument.
 fn session(payload: &Value) -> Option<EventKind> {
-    let id = payload["session_id"].as_str().filter(|id| !id.is_empty())?;
+    let id = payload["session_id"].as_str().filter(|id| is_uuid(id))?;
     Some(EventKind::Session {
         id: id.to_string(),
         transcript: payload["transcript_path"].as_str().map(String::from),
@@ -689,6 +690,20 @@ mod tests {
             }],
             "no session id, no session"
         );
+    }
+
+    #[test]
+    fn a_session_id_that_is_no_uuid_is_no_session() {
+        for forged in ["-cnotify=[\"sh\",\"-c\",\"id\"]", "../../x", "7f3c"] {
+            let payload = serde_json::json!({"hook_event_name": "Stop", "session_id": forged});
+            assert_eq!(
+                translate(&payload, &phases(), Approver::User),
+                vec![EventKind::Idle {
+                    note: "turn ended".into()
+                }],
+                "{forged}"
+            );
+        }
     }
 
     #[test]

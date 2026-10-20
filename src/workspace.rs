@@ -112,8 +112,9 @@ pub fn remove_worktree(repo: &Path, workspace: &Workspace, force: bool) -> Resul
 }
 
 /// Whether the worktree has changes or untracked files git would refuse to remove it over.
-pub fn has_uncommitted_work(workspace: &Workspace) -> Result<bool> {
-    let status = git(&workspace.path, &["status", "--porcelain"])?;
+pub fn has_uncommitted_work(repo: &Path, workspace: &Workspace) -> Result<bool> {
+    let path = Path::new(&workspace.path);
+    let status = worktree_git(repo, path, &["status", "--porcelain"])?;
     Ok(!status.trim().is_empty())
 }
 
@@ -195,6 +196,50 @@ fn git(dir: impl AsRef<OsStr>, args: &[&str]) -> Result<String> {
     let mut command = Command::new("git");
     command.arg("-C").arg(dir).args(args);
     stdout_of(command, "git")
+}
+
+/// git on a worker's worktree through the git dir the repository registered for it, with no
+/// fsmonitor and no hooks: nothing the worker wrote into its worktree configures it.
+fn worktree_git(repo: &Path, worktree: &Path, args: &[&str]) -> Result<String> {
+    let git_dir = registered_git_dir(repo, worktree)?;
+    let mut command = Command::new("git");
+    command
+        .arg("--git-dir")
+        .arg(git_dir)
+        .arg("--work-tree")
+        .arg(worktree)
+        .args([
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "core.hooksPath=/dev/null",
+        ])
+        .args(args)
+        .current_dir(worktree);
+    stdout_of(command, "git")
+}
+
+/// The git dir the repository registered for `worktree`: the <common>/worktrees/<n> whose gitdir
+/// file names a .git in that folder (relative to <n> under worktree.useRelativePaths); Err when
+/// none does.
+fn registered_git_dir(repo: &Path, worktree: &Path) -> Result<PathBuf> {
+    let common = git_common_dir(repo).context("not a git repository")?;
+    let wanted = worktree.canonicalize()?;
+    for entry in fs::read_dir(common.join("worktrees"))? {
+        let dir = entry?.path();
+        let Ok(gitdir) = fs::read_to_string(dir.join("gitdir")) else {
+            continue;
+        };
+        let folder = dir.join(gitdir.trim()).parent().map(Path::canonicalize);
+        if matches!(folder, Some(Ok(folder)) if folder == wanted) {
+            return Ok(dir);
+        }
+    }
+    bail!(
+        "{} is no worktree of {}",
+        worktree.display(),
+        repo.display()
+    )
 }
 
 /// Runs an argv in `dir` with GH_PROMPT_DISABLED=1 and no stdin; its stdout, or an error with
@@ -528,5 +573,53 @@ mod tests {
         assert!(!Path::new(&clean.path).exists());
         assert!(!remove_worktree(&repo, &dirty, false).unwrap());
         assert!(remove_worktree(&repo, &dirty, true).unwrap());
+    }
+
+    #[test]
+    fn reads_uncommitted_work_through_the_git_dir_the_repository_registered() {
+        let (dir, repo) = repo();
+        let space = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        create_worktree(&repo, &space).unwrap();
+        let path = Path::new(&space.path);
+        let marker = dir.path().join("marker");
+        let monitor = dir.path().join("monitor");
+        fs::write(
+            &monitor,
+            format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+        )
+        .unwrap();
+        fs::set_permissions(&monitor, fs::Permissions::from_mode(0o755)).unwrap();
+        let planted = dir.path().join("planted");
+        git(dir.path(), &["init", "-q", "planted"]);
+        git(
+            &planted,
+            &["config", "core.fsmonitor", &monitor.display().to_string()],
+        );
+        let gitdir = format!("gitdir: {}\n", planted.join(".git").display());
+
+        assert!(!has_uncommitted_work(&repo, &space).unwrap());
+        fs::write(path.join("work.txt"), "unsaved").unwrap();
+        assert!(has_uncommitted_work(&repo, &space).unwrap());
+        fs::write(path.join(".git"), gitdir).unwrap();
+        assert!(has_uncommitted_work(&repo, &space).unwrap());
+        assert!(!marker.exists(), "the worktree's own .git configured git");
+        let elsewhere = workspace_for(&repo, "other", "flow/other".into(), 2, "claude");
+        fs::create_dir_all(&elsewhere.path).unwrap();
+        assert!(
+            has_uncommitted_work(&repo, &elsewhere).is_err(),
+            "no registered worktree"
+        );
+    }
+
+    #[test]
+    fn reads_uncommitted_work_in_a_repository_that_records_relative_paths() {
+        let (_dir, repo) = repo();
+        git(&repo, &["config", "worktree.useRelativePaths", "true"]);
+        let space = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        create_worktree(&repo, &space).unwrap();
+
+        assert!(!has_uncommitted_work(&repo, &space).unwrap());
+        fs::write(Path::new(&space.path).join("work.txt"), "unsaved").unwrap();
+        assert!(has_uncommitted_work(&repo, &space).unwrap());
     }
 }

@@ -25,7 +25,7 @@ impl TryFrom<String> for Prefix {
 
     /// "C-space" or "C-a".."C-z"; Err names what is accepted, or why a pane needs the key.
     fn try_from(name: String) -> Result<Prefix, String> {
-        let unknown = || format!("unknown prefix {name:?}: use C-space or C-a to C-z");
+        let unknown = || "unknown prefix: use C-space or C-a to C-z".to_string();
         let Some(key) = name.strip_prefix("C-") else {
             return Err(unknown());
         };
@@ -136,7 +136,7 @@ mod tests {
         ] {
             assert_eq!(
                 parse(name).unwrap_err(),
-                format!("unknown prefix {name:?}: use C-space or C-a to C-z")
+                "unknown prefix: use C-space or C-a to C-z"
             );
         }
     }

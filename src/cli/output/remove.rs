@@ -44,6 +44,17 @@ pub(crate) fn uncommitted(name: &str, path: &str) -> Failure {
     )
 }
 
+/// The refusal of flow `name`'s removal when git cannot say whether its worktree at `path` holds
+/// uncommitted work, and why (no worktree git lists, git failing).
+pub(crate) fn unchecked(name: &str, path: &str, reason: &anyhow::Error) -> Failure {
+    Failure::error(
+        format!("git cannot check {path} for uncommitted changes ({reason:#})"),
+        vec![format!(
+            "Run `saaio remove {name} --force` to remove it without the check"
+        )],
+    )
+}
+
 /// The refusal of flow `name`'s removal while its `branch` has `count` commits on no other branch.
 pub(crate) fn unmerged(name: &str, branch: &str, count: u32) -> Failure {
     Failure::error(

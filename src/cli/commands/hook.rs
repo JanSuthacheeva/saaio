@@ -11,7 +11,7 @@ use crate::cli::output::{Document, news};
 use crate::client;
 use crate::config::Config;
 use crate::deliver::{self, WorkerNews};
-use crate::event::{Event, EventKind};
+use crate::event::{Event, EventKind, is_uuid};
 use crate::fold;
 use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
@@ -43,6 +43,11 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
     };
     let hooked = match env.flow_id() {
         _ if env.is_master() => Hooked::Master,
+        Some(id) if !is_uuid(id) => {
+            Log::new(&store, &args.adapter, &Hooked::Nobody, clock)
+                .error(&format!("SAAIO_FLOW_ID {id:?} is no flow id"));
+            return Document::Silent;
+        }
         Some(id) => Hooked::Flow(id.to_string()),
         None => Hooked::Nobody,
     };

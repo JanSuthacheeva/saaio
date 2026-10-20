@@ -35,7 +35,8 @@ The file holds:
 - whether `config.toml` and `theme.toml` load, with the error when one does not
 - the last 300 lines of `server.log` and `server.log.1`
 
-The home folder is written `~`. A second report on the same day replaces the first.
+The home folder is written `~`. A second report on the same day is written beside the first, as
+`saaio-report-<date>-2.txt`.
 
 ## The terminal UI
 
@@ -81,5 +82,6 @@ The home folder is written `~`. A second report on the same day replaces the fir
 | Problem | Cause | Fix |
 | --- | --- | --- |
 | `saaio remove` refuses: uncommitted work | uncommitted changes in the worktree | commit or stash them, or `--force` to discard them |
+| `saaio remove` refuses: git cannot check the worktree for uncommitted changes | git does not list the folder as a worktree of the repository, or git failed | `git worktree list` in the repository shows what git knows; `--force` removes it without the check |
 | `saaio remove` refuses: commits on no other branch | the branch has commits that exist nowhere else, local or pushed | merge or push the branch, or `--delete-unmerged` to delete it with its commits |
 | `saaio clear` kept a worktree | it had uncommitted work | commit or discard it, then `git worktree remove <path>` |

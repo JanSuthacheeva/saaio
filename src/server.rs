@@ -34,6 +34,7 @@ use crate::config::watch::ConfigWatch;
 use crate::config::{self, Config};
 use crate::fold;
 use crate::launch::pane::LaunchEnv;
+use crate::private;
 use crate::proto::{BUILD, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, ServerMsg, Size};
 use crate::server_log;
 use crate::store::Store;
@@ -202,6 +203,8 @@ pub fn run(
     system: &System,
     clock: fn() -> u64,
 ) -> Result<()> {
+    private::create_dir(store.root())
+        .with_context(|| format!("could not close {} to others", store.root().display()))?;
     let listener = bind(&paths.socket)?;
     server_log::write(clock(), &started(system));
     write_defaults(paths, clock);

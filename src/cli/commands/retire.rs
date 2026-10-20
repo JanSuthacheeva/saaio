@@ -30,18 +30,21 @@ pub enum Unmerged {
 /// Fails before anything is touched when the worktree remove would tear down holds uncommitted work;
 /// a plain session's folder is never torn down, so never checked.
 pub fn refuse_uncommitted_work(flow: &FlowView) -> Result<(), Failure> {
-    let Some(space) = flow
-        .workspace
-        .as_ref()
-        .filter(|space| worktree::repo_of(space).is_some())
-    else {
+    let Some(space) = flow.workspace.as_ref() else {
         return Ok(());
     };
-    if !Path::new(&space.path).exists() || !workspace::has_uncommitted_work(space).unwrap_or(false)
-    {
+    let Some(repo) = worktree::repo_of(space) else {
+        return Ok(());
+    };
+    if !Path::new(&space.path).exists() {
         return Ok(());
     }
-    Err(remove::uncommitted(&flow.name, &space.path))
+    // Fails closed: a worktree git cannot answer for is refused too; --force still removes it.
+    match workspace::has_uncommitted_work(&repo, space) {
+        Ok(false) => Ok(()),
+        Ok(true) => Err(remove::uncommitted(&flow.name, &space.path)),
+        Err(error) => Err(remove::unchecked(&flow.name, &space.path, &error)),
+    }
 }
 
 /// Fails before anything is touched when the flow's branch has commits on no other branch.
