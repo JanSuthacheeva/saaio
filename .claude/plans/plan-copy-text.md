@@ -277,7 +277,7 @@ Clipboard (`c`) and primary (`p`) stores both pass on; OSC 52 reads stay refused
 
 ## Tasks
 
-- [ ] Add `base64` and `ui/clipboard.rs`: `osc52`, `Clipboard::new`, `Clipboard::copy`, with unit tests for the bytes, command choice and copy without a command
+- [x] Add `base64` and `ui/clipboard.rs`: `osc52`, `Clipboard::new`, `Clipboard::copy`, with unit tests for the bytes, command choice and copy without a command
 - [ ] Add `ui/selection.rs`: `Selection`, `Unit`, `new`, `extend`, `is_click`, `text`, `render`, with unit tests on a hand-built Buffer (rows, trimming, clamping, wide chars, word, line, render)
 - [ ] Make `Mouse` ordered and add `outer::captured`; `Outer::enter` turns capture on and `mirror` writes captured modes, with tests for Off, Press and Motion panes
 - [ ] Router: `Target`, `Pointer`, `PointerKind`, `held`, `encode`, `wanted`; `Routed::Pointer` replaces `Click`; tests for ownership of drags, mode filtering, X10/SGR encoding and modal routing (callers adapted, clicks still focus)

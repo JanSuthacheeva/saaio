@@ -1,5 +1,10 @@
 pub mod app;
 pub mod board;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the ui loop uses it once the copy is wired")
+)]
+pub mod clipboard;
 pub mod dialog;
 pub mod fit;
 pub mod focus;
