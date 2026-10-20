@@ -14,6 +14,7 @@ not on `PATH`, it prints the line to add.
 | --- | --- | --- |
 | `SAAIO_VERSION` | the latest release | the tag to install, such as `v0.1.0` |
 | `SAAIO_INSTALL_DIR` | `~/.local/bin` | the folder `saaio` is installed to |
+| `SAAIO_DOWNLOAD_URL` | the GitHub release | a folder or mirror holding the release assets (`file://` works). `SHA256SUMS` is read from the same place, so it checks the download, not the source. |
 
 ```sh
 curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | SAAIO_VERSION=v0.1.0 sh
@@ -41,7 +42,7 @@ url=https://github.com/JanSuthacheeva/saaio/releases/latest/download
 curl -fsSLO "$url/saaio-aarch64-apple-darwin.tar.gz"
 curl -fsSLO "$url/SHA256SUMS"
 shasum -a 256 -c --ignore-missing SHA256SUMS    # on Linux: sha256sum -c --ignore-missing SHA256SUMS
-tar xzf saaio-aarch64-apple-darwin.tar.gz
+tar xzf saaio-aarch64-apple-darwin.tar.gz saaio
 mkdir -p ~/.local/bin && mv saaio ~/.local/bin/
 ```
 
@@ -55,7 +56,7 @@ For other platforms, or to build it yourself. Requires Rust 1.95+, installed wit
 [rustup](https://rustup.rs).
 
 ```sh
-cargo install --git https://github.com/JanSuthacheeva/saaio --tag v0.1.0
+cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.1.0
 ```
 
 Installs `saaio` to `~/.cargo/bin`.
@@ -83,6 +84,12 @@ npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature design-code i
 Optional. Own skills instead: [Use your own workflow](configuration.md#use-your-own-workflow). No
 skills at all: [Without matching skills](configuration.md#without-matching-skills).
 
+## Agent settings
+
+saaio leaves permissions to each harness. Recommended settings for workers, such as Claude Code's
+permission mode and allow rules and Codex's automatic review, sandbox network access and command
+rules: [agents.md](agents.md).
+
 ## First run
 
 ```sh
@@ -99,8 +106,9 @@ Writes to `~/.config/saaio`:
 
 | Prompt | Answer |
 | --- | --- |
-| an agent opening in a new folder asks whether to trust it | answer in its pane |
-| the first Codex worker asks to review saaio's hooks | "Trust all and continue". Asked again only when saaio's hooks change. |
+| a Claude Code worker opening in a new worktree asks whether to trust the folder | answer in its pane |
+
+Codex workers trust saaio's hooks and their own worktree without asking.
 
 ## Updating
 
@@ -112,13 +120,13 @@ saaio --stop
 saaio
 ```
 
-From source: `cargo install --git https://github.com/JanSuthacheeva/saaio --tag <new tag> --force`
+From source: `cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag <new tag> --force`
 instead of the script.
 
 - The running server keeps the old version until stopped.
 - Unfinished flows resume after the restart.
-- `master.md`, `config.toml` and `theme.toml` are refreshed unless edited. Edited files stay as
-  they are.
+- `master.md` is refreshed while it still holds an earlier default. `config.toml` and `theme.toml`
+  are written only when missing. Edited files stay as they are.
 - Changes: [CHANGELOG.md](../CHANGELOG.md).
 
 ## Uninstalling
