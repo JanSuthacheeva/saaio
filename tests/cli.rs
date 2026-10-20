@@ -2382,6 +2382,39 @@ fn stop_ends_a_running_server_and_says_when_none_runs() {
 }
 
 #[test]
+fn a_server_stopped_while_it_starts_still_stops_cleanly() {
+    let home = TempDir::new().unwrap();
+    let config = home.path().join("config.toml");
+    fs::write(
+        &config,
+        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n\n[agents.master]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
+    )
+    .unwrap();
+    let socket = home.path().join("server.sock");
+
+    let server = saaio_command(home.path())
+        .arg("server")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .env("SAAIO_CONFIG", &config)
+        .spawn()
+        .unwrap();
+    let mut server = Running(server);
+    // No sleep between looks: the signal has to land right after the bind.
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !socket.exists() {
+        assert!(Instant::now() < deadline, "the server never bound");
+        thread::yield_now();
+    }
+    let pid = libc::pid_t::try_from(server.id()).unwrap();
+    assert_eq!(unsafe { libc::kill(pid, libc::SIGTERM) }, 0);
+
+    let status = server.wait().unwrap();
+    assert!(status.success(), "{status:?}");
+    assert!(!socket.exists());
+}
+
+#[test]
 fn stop_refuses_inside_a_worker_on_its_own_store_and_points_to_a_scratch_home() {
     let home = TempDir::new().unwrap();
     let id = new_flow(home.path(), "shop-221");

@@ -205,6 +205,9 @@ pub fn run(
 ) -> Result<()> {
     private::create_dir(store.root())
         .with_context(|| format!("could not close {} to others", store.root().display()))?;
+    // Before the bind: a client may signal the server as soon as it can connect.
+    let (events, inbox) = mpsc::channel();
+    stop_on_signals(events.clone())?;
     let listener = bind(&paths.socket)?;
     server_log::write(clock(), &started(system));
     write_defaults(paths, clock);
@@ -212,8 +215,6 @@ pub fn run(
     // The server was handed this config; the watch only needs to know the file as it is.
     let _ = configs.changed();
     let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;
-    let (events, inbox) = mpsc::channel();
-    stop_on_signals(events.clone())?;
     let host = Host::new(START_SIZE, forward_host_events(events.clone()));
     let mut server = Server {
         store,
