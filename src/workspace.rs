@@ -675,8 +675,9 @@ mod tests {
             Command::new("kill").arg(pid).status().unwrap();
         }
 
+        // Short of the 30 s the processes left behind run; a new script's first exec can take seconds.
         assert!(
-            started.elapsed() < Duration::from_secs(5),
+            started.elapsed() < Duration::from_secs(20),
             "{:?}",
             started.elapsed()
         );
