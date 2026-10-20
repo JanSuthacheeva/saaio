@@ -1333,8 +1333,7 @@ fn passes_on_what_the_pane_in_view_copies_and_nothing_else() {
     let store = Store::at(dir.path().to_path_buf());
     let script = |name: &str, body: &str| {
         let path = dir.path().join(name);
-        fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        executable(&path, &format!("#!/bin/sh\n{body}\n"));
         let command = vec![path.display().to_string()];
         Agent {
             command: command.clone(),
@@ -1344,10 +1343,12 @@ fn passes_on_what_the_pane_in_view_copies_and_nothing_else() {
         }
     };
     let printed = dir.path().join("printed");
+    // The worker copies again and again, so a copy wrongly passed on reaches the UI before the
+    // master's, whenever the server reads it.
     let worker = script(
         "worker",
         &format!(
-            "printf '\\033]52;c;Ynll\\007'; touch '{}'; cat",
+            "printf '\\033]52;c;Ynll\\007'; touch '{}'\nwhile :; do printf '\\033]52;c;Ynll\\007'; sleep 0.05; done",
             printed.display()
         ),
     );
@@ -1366,12 +1367,11 @@ fn passes_on_what_the_pane_in_view_copies_and_nothing_else() {
             size: Size { cols: 30, rows: 4 },
         },
     );
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + PATIENCE;
     while !printed.exists() {
         assert!(Instant::now() < deadline, "the worker never copied");
         thread::sleep(Duration::from_millis(20));
     }
-    thread::sleep(WATCH_EVERY);
 
     proto::write_msg(&mut ui, &ClientMsg::Input(b"go\r".to_vec())).unwrap();
 
