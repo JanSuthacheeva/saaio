@@ -2429,8 +2429,12 @@ fn the_ui_refuses_a_prefix_the_panes_need_before_it_starts_anything() {
     fs::write(&config, "[ui]\nprefix = \"Ctrl+b\"\n").unwrap();
     let (_, unknown) = opened("C-a to C-z");
     assert!(
-        unknown.contains("unknown prefix \\\"Ctrl+b\\\": use C-space or C-a to C-z"),
+        unknown.contains("unknown prefix: use C-space or C-a to C-z"),
         "{unknown}"
+    );
+    assert!(
+        !unknown.contains("Ctrl+b"),
+        "a value never comes back: {unknown}"
     );
 }
 

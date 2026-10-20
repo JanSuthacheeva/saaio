@@ -281,7 +281,7 @@ Decided by the user on the review's open items.
   `retire::refuse_uncommitted_work` maps `has_uncommitted_work`'s Err to a new
   `output::remove::unchecked(name, path, reason)` Failure (still refused, `--force` the way
   out); `tests/cli.rs` test with a worktree git does not list
-- [ ] `[ui] prefix` errors without the refused name (`ui::prefix`), as L2 does for toml errors;
+- [x] `[ui] prefix` errors without the refused name (`ui::prefix`), as L2 does for toml errors;
   prefix tests updated
 
 ## Review
