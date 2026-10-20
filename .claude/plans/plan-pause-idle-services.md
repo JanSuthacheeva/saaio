@@ -367,7 +367,7 @@ resume: the hook waits `PICKUP_WAIT` and lets the tool run.
 
 - [x] Add `ServiceStatus` and `EventKind::Services` (event.rs) and `Services` / `FlowView::services` (view.rs), fold them in `Folding::apply` with Problem entries for failures; bump `PROTOCOL_VERSION`; fold and log-line tests
 - [x] Add `ServicesConfig` with `pause_after()` to config.rs and the `[services]` lines to examples/config.toml; config and example tests
-- [ ] Add `pause::next`, `rests` and `holds_tools` in src/pause.rs with table tests over every status and state
+- [x] Add `pause::next`, `rests` and `holds_tools` in src/pause.rs with table tests over every status and state
 - [ ] Add `Hook::Pause`/`Hook::Resume`, `workspace::has_hook` and `workspace::run_hook_within` (shared `hook_file`, deadline loop shared with `output_in`); tests for env, missing script and the limit
 - [ ] Add `server/pause_watch.rs` (`PauseWatch::due`/`done`, `Server::pause_idle`, `Server::pause_finished`, `run_in_background`, `Event::Paused`) and wire it into `Server::serve` and `handle`; unit tests and a server test that pauses and resumes over a real socket
 - [ ] Add `Adapter::before_tool`, the 150 s PreToolUse timeouts in both adapters, and `wait_for_services` in hook.rs; adapter tests and tests/cli.rs for waiting on resuming and not stalling without a server
