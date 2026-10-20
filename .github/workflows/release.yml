@@ -1,0 +1,187 @@
+# A v* tag builds saaio for every target, tests and checks each build, and publishes a GitHub
+# release with the tarballs, SHA256SUMS and install.sh. A tag with a "-" (v0.1.0-rc.1) publishes
+# a pre-release. Nothing is published when any step fails.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: version
+        name: Match the tag with Cargo.toml
+        run: |
+          tag=$GITHUB_REF_NAME
+          version=${tag#v}
+          version=${version%%-*}
+          cargo=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          if [ "$version" != "$cargo" ]; then
+            echo "::error::tag $tag does not match Cargo.toml $cargo"
+            exit 1
+          fi
+          case $tag in
+            *-*) prerelease=true ;;
+            *) prerelease=false ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+      - name: Take the release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          heading=$(grep -F "## [$VERSION]" CHANGELOG.md || true)
+          if [ -z "$heading" ]; then
+            echo "::error::CHANGELOG.md has no entry for $VERSION"
+            exit 1
+          fi
+          if [ "$PRERELEASE" = false ] && echo "$heading" | grep -q "not released yet"; then
+            echo "::error::CHANGELOG.md: date the $VERSION entry before tagging it"
+            exit 1
+          fi
+          awk -v heading="## [$VERSION]" '
+            /^## \[/ { if (found) exit; if (index($0, heading) == 1) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > notes.md
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: notes
+          path: notes.md
+
+  build:
+    needs: check
+    strategy:
+      matrix:
+        include:
+          - { target: aarch64-apple-darwin, runner: macos-15, archive: tar.gz }
+          - { target: x86_64-apple-darwin, runner: macos-15-intel, archive: tar.gz }
+          - { target: x86_64-unknown-linux-musl, runner: ubuntu-24.04, archive: tar.gz }
+          - { target: aarch64-unknown-linux-musl, runner: ubuntu-24.04-arm, archive: tar.gz }
+    runs-on: ${{ matrix.runner }}
+    env:
+      TARGET: ${{ matrix.target }}
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --target "$TARGET"
+          rustup default stable
+      - name: Test
+        run: cargo test --release --locked --target "$TARGET"
+      - name: Build
+        run: cargo build --release --locked --target "$TARGET"
+      - name: Check the build names this commit
+        run: |
+          expected="saaio $VERSION ($(git rev-parse --short HEAD))"
+          actual=$("target/$TARGET/release/saaio" --version)
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::saaio --version says '$actual', not '$expected'"
+            exit 1
+          fi
+      - name: Check the Linux build is static
+        if: runner.os == 'Linux'
+        run: |
+          file "target/$TARGET/release/saaio"
+          file "target/$TARGET/release/saaio" | grep -q "static"
+      - name: Pack
+        env:
+          COPYFILE_DISABLE: 1
+        run: |
+          mkdir pack
+          cp "target/$TARGET/release/saaio" LICENSE-MIT LICENSE-APACHE README.md pack/
+          tar czf "saaio-$TARGET.${{ matrix.archive }}" -C pack saaio LICENSE-MIT LICENSE-APACHE README.md
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: saaio-${{ matrix.target }}
+          path: saaio-${{ matrix.target }}.${{ matrix.archive }}
+
+  package:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: saaio-*
+          path: release
+          merge-multiple: true
+      - name: Add SHA256SUMS and install.sh
+        run: |
+          cp install.sh release/
+          cd release
+          sha256sum saaio-* > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: release/
+
+  install-check:
+    needs: [check, package]
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      - name: Install from the release assets
+        run: |
+          SAAIO_DOWNLOAD_URL="file://$PWD/release" SAAIO_INSTALL_DIR="$RUNNER_TEMP/bin" sh release/install.sh
+          actual=$("$RUNNER_TEMP/bin/saaio" --version)
+          case $actual in
+            "saaio $VERSION ("*) echo "$actual" ;;
+            *) echo "::error::the installed saaio says '$actual'"; exit 1 ;;
+          esac
+
+  publish:
+    needs: [check, install-check]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: notes
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.check.outputs.version }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+        run: |
+          prerelease=
+          if [ "$PRERELEASE" = true ]; then prerelease=--prerelease; fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "saaio ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md $prerelease release/*

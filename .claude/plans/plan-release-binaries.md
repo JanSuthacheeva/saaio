@@ -28,12 +28,17 @@ jobs:
   check:          # ubuntu-24.04: VERSION = tag without "v" and without "-*";
                   #   must equal Cargo.toml's version, else fail
                   #   "tag v0.2.0 does not match Cargo.toml 0.1.0"; outputs version, prerelease
+                  #   notes.md = CHANGELOG.md section "## [$VERSION]" up to the next "## ["
+                  #     (none: fail "CHANGELOG.md has no entry for $VERSION"; a release, not a
+                  #     pre-release, whose heading still says "not released yet" fails too);
+                  #   upload-artifact notes
   build:          # needs check; matrix below; per row:
-                  #   checkout, rust stable + target, (linux) apt musl-tools
+                  #   checkout, rustup stable + target
                   #   cargo test --release --locked --target $T
                   #   cargo build --release --locked --target $T
                   #   target/$T/release/saaio --version must equal
                   #     "saaio $VERSION ($(git rev-parse --short HEAD))"
+                  #   (linux) `file` must say static
                   #   pack saaio-$T.tar.gz: saaio, LICENSE-MIT, LICENSE-APACHE, README.md (top level)
                   #   upload-artifact saaio-$T
   package:        # needs build: download all, sha256sum saaio-*.tar.gz > SHA256SUMS,
@@ -42,11 +47,15 @@ jobs:
                   #   SAAIO_DOWNLOAD_URL=file://$dir SAAIO_INSTALL_DIR=$RUNNER_TEMP/bin sh install.sh
                   #   $RUNNER_TEMP/bin/saaio --version names $VERSION
   publish:        # needs check, install-check; contents: write
-                  #   notes = CHANGELOG.md section "## [$VERSION]" up to the next "## ["
-                  #     (none: fail "CHANGELOG.md has no entry for $VERSION")
-                  #   gh release create $TAG --verify-tag --title "saaio $VERSION"
+                  #   gh release create $TAG --verify-tag --title "saaio ${TAG#v}"
                   #     --notes-file notes.md [--prerelease when the tag has "-"] release/*
+```
 
+Changed during the build: the notes are taken in `check`, so a missing CHANGELOG entry fails
+before the builds; no musl-tools (no dependency builds C, so Rust's self-contained musl links);
+the title names the tag, so a pre-release reads "saaio 0.1.0-rc.1".
+
+```yaml
 matrix.include:
   - { target: aarch64-apple-darwin,       runner: macos-15,         archive: tar.gz }
   - { target: x86_64-apple-darwin,        runner: macos-15-intel,   archive: tar.gz }
@@ -141,7 +150,8 @@ Pushing a tag (any failing step stops the run; nothing is published):
 4. `build[T]` -> `tar czf saaio-T.tar.gz` -> `upload-artifact`.
 5. `package` -> `sha256sum > SHA256SUMS`, copies `install.sh`.
 6. `install-check[os]` -> `install.sh` with `SAAIO_DOWNLOAD_URL=file://...` -> `saaio --version`; mismatch -> fail.
-7. `publish` -> CHANGELOG section; missing -> fail -> `gh release create ... --verify-tag [--prerelease]`.
+7. `publish` -> `gh release create ... --verify-tag [--prerelease]` with the notes `check` took (a missing
+   CHANGELOG entry already failed `check`, step 1).
 
 A user installs:
 
@@ -182,6 +192,6 @@ A user installs:
 
 - [x] Fix the flaky `config::watch` test `reads_the_file_again_once_it_changed` (a really new length)
 - [x] Add `install.sh` (`main`, `target`, `base_url`, `fetch`, `sha256`, `verify`, `place`, `path_hint`) with `tests/install.rs` (installs, replaces, refuses a checksum mismatch, PATH hint, `SAAIO_VERSION` url)
-- [ ] Add `.github/workflows/release.yml` (check, build x4 with test and `--version` check, package, install-check x2, publish)
+- [x] Add `.github/workflows/release.yml` (check, build x4 with test and `--version` check, package, install-check x2, publish)
 - [ ] Docs: README Install, docs/install.md (install, manual download, from source, updating), docs/files.md, docs/cli.md, ROADMAP (binaries row), CHANGELOG 0.1.0, CONTRIBUTING Releasing, CLAUDE.md Structure
 - [ ] End to end: push the branch and `v0.1.0-rc.1`, all jobs green, download the pre-release, `sha256sum -c`, install from it on this Mac and check `saaio --version` names the branch head, then delete the pre-release and tag
