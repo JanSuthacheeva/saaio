@@ -11,7 +11,6 @@ mod event;
 mod fold;
 mod forge;
 mod launch;
-#[cfg_attr(not(test), expect(dead_code, reason = "PauseWatch runs it"))]
 mod pause;
 mod private;
 mod proto;

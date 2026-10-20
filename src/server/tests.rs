@@ -36,6 +36,15 @@ fn start_with_agents(
     dir: &Path,
     agents: BTreeMap<String, Agent>,
 ) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
+    start_at(dir, agents, || 0)
+}
+
+/// A server whose master is `cat`, on the clock given.
+fn start_at(
+    dir: &Path,
+    agents: BTreeMap<String, Agent>,
+    clock: fn() -> u64,
+) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
     let paths = ServerPaths {
         socket: dir.join("server.sock"),
         master: dir.join("master.json"),
@@ -58,7 +67,7 @@ fn start_with_agents(
             LaunchEnv::default(),
             &std::env::current_dir().unwrap(),
             &System::default(),
-            || 0,
+            clock,
         )
     });
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -1341,4 +1350,115 @@ fn the_start_line_names_the_build_and_the_system() {
             "started: saaio {BUILD}, protocol {PROTOCOL_VERSION}, Darwin 25.6.0 arm64, glab missing"
         )
     );
+}
+
+fn now() -> u64 {
+    crate::event::unix_ms(std::time::SystemTime::now())
+}
+
+/// A flow idle for ten minutes in a worktree of `repo`.
+fn idle_flow(store: &Store, repo: &Path, name: &str) -> String {
+    let id = store
+        .create(&LogEvent::new(
+            now() - 20 * 60_000,
+            EventKind::Started {
+                name: name.into(),
+                request: "x".into(),
+                mode: crate::event::Mode::Auto,
+                phases: None,
+            },
+        ))
+        .unwrap();
+    let path = repo.join(".saaio/worktrees").join(name);
+    fs::create_dir_all(&path).unwrap();
+    let workspace = EventKind::Workspace {
+        path: path.display().to_string(),
+        branch: Some(format!("flow/{name}")),
+        slot: Some(4),
+        window: None,
+        agent: "claude".into(),
+    };
+    store
+        .append(&id, &LogEvent::new(now() - 20 * 60_000, workspace))
+        .unwrap();
+    let idle = EventKind::Idle {
+        note: "Plan ready.".into(),
+    };
+    store
+        .append(&id, &LogEvent::new(now() - 10 * 60_000, idle))
+        .unwrap();
+    id
+}
+
+fn services(store: &Store, id: &str) -> Vec<crate::event::ServiceStatus> {
+    store
+        .events(id)
+        .unwrap()
+        .into_iter()
+        .filter_map(|event| match event.kind {
+            EventKind::Services { status, .. } => Some(status),
+            _ => None,
+        })
+        .collect()
+}
+
+fn wait_for_services(store: &Store, id: &str, last: crate::event::ServiceStatus) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while services(store, id).last() != Some(&last) {
+        assert!(
+            Instant::now() < deadline,
+            "never {last:?}: {:?}",
+            services(store, id)
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn pauses_an_idle_flows_services_and_resumes_them_when_it_works() {
+    use crate::event::ServiceStatus::{Paused, Pausing, Resuming, Running};
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let repo = dir.path().join("shop");
+    let ran = dir.path().join("ran.txt");
+    for name in ["pause", "resume"] {
+        let script = repo.join(".saaio").join(name);
+        fs::create_dir_all(script.parent().unwrap()).unwrap();
+        let body = format!(
+            "#!/bin/sh\necho \"{name} $SAAIO_SLOT $(basename \"$PWD\")\" >> '{}'\n",
+            ran.display()
+        );
+        fs::write(&script, body).unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let id = idle_flow(&store, &repo, "csv");
+    let bare = idle_flow(&store, &dir.path().join("plain-repo"), "pdf");
+    let (paths, handle) = start_at(
+        dir.path(),
+        BTreeMap::from([(
+            "claude".to_string(),
+            Agent {
+                command: vec!["cat".into()],
+                prompt: None,
+                adapter: None,
+                resume: Some(vec!["cat".into()]),
+            },
+        )]),
+        now,
+    );
+
+    wait_for_services(&store, &id, Paused);
+    assert_eq!(fs::read_to_string(&ran).unwrap(), "pause 4 csv\n");
+    store
+        .append(&id, &LogEvent::new(now(), EventKind::Working))
+        .unwrap();
+    wait_for_services(&store, &id, Running);
+
+    assert_eq!(services(&store, &id), [Pausing, Paused, Resuming, Running]);
+    assert_eq!(
+        fs::read_to_string(&ran).unwrap(),
+        "pause 4 csv\nresume 4 csv\n"
+    );
+    assert!(services(&store, &bare).is_empty(), "a repo without scripts");
+    stop(&paths, handle);
 }

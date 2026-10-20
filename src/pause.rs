@@ -46,6 +46,7 @@ fn rests(state: State) -> bool {
 }
 
 /// Pausing, paused or resuming: a tool call waits.
+#[cfg_attr(not(test), expect(dead_code, reason = "saaio hook waits on it"))]
 pub fn holds_tools(flow: &FlowView) -> bool {
     flow.services.as_ref().is_some_and(|services| {
         matches!(

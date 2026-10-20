@@ -19,9 +19,7 @@ use crate::view::Workspace;
 pub enum Hook {
     Setup,
     Teardown,
-    #[cfg_attr(not(test), expect(dead_code, reason = "PauseWatch runs them"))]
     Pause,
-    #[cfg_attr(not(test), expect(dead_code, reason = "PauseWatch runs them"))]
     Resume,
 }
 
@@ -101,7 +99,6 @@ pub fn run_hook(
 }
 
 /// run_hook with no stdin, killed and failed past `limit` ("no answer within 5m").
-#[cfg_attr(not(test), expect(dead_code, reason = "PauseWatch runs them"))]
 pub fn run_hook_within(
     repo: &Path,
     hook: Hook,
@@ -122,7 +119,6 @@ pub fn run_hook_within(
 }
 
 /// Whether <repo>/.saaio/<hook> exists and is executable.
-#[cfg_attr(not(test), expect(dead_code, reason = "PauseWatch runs them"))]
 pub fn has_hook(repo: &Path, hook: Hook) -> bool {
     is_executable(&hook_file(repo, hook))
 }

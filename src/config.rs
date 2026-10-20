@@ -120,7 +120,6 @@ impl Default for ServicesConfig {
 
 impl ServicesConfig {
     /// The delay; None at 0.
-    #[cfg_attr(not(test), expect(dead_code, reason = "PauseWatch reads it"))]
     pub fn pause_after(&self) -> Option<Duration> {
         (self.pause_after_minutes > 0)
             .then(|| Duration::from_mins(u64::from(self.pause_after_minutes)))
