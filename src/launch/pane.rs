@@ -74,7 +74,8 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str, session: &str) -> Option
 /// either way with the agent's adapter wired in right after the program. A plain session starts
 /// without a prompt and gets the adapter's plain wiring. A harness that picks its own session
 /// resumes by the one its hooks reported, and starts again when it never reported one (it had no
-/// turn) or reported one that is no UUID, which must never become an argument. None when the flow has no workspace, or must resume and the agent has no resume template.
+/// turn) or reported one that is no UUID, which must never become an argument. None when the flow
+/// has no workspace, or must resume and the agent has no resume template.
 pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec> {
     let space = flow.workspace.as_ref()?;
     let session = flow

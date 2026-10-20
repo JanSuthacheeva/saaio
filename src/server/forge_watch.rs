@@ -100,9 +100,9 @@ pub fn ask_in_background(asks: Vec<Ask>, events: Sender<Event>) {
     });
 }
 
-/// One flow's question, asked in the main checkout: its remotes -> Forge::of -> gh or glab -> parse -> pick.
-/// Unavailable for a gone worktree or no known forge; Listed(None) for a successful query with
-/// no merge request opened since the flow started.
+/// One flow's question, asked in the main checkout: its remotes -> Forge::of -> gh or glab ->
+/// parse -> pick. Unavailable for a gone worktree or no known forge; Listed(None) for a successful
+/// query with no merge request opened since the flow started.
 fn ask(ask: &Ask) -> Result<Lookup> {
     if !ask.dir.is_dir() {
         return Ok(Lookup::Unavailable);
