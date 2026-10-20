@@ -1,7 +1,8 @@
 use std::fs;
+use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 use tempfile::TempDir;
 
@@ -22,9 +23,23 @@ fn tarball() -> String {
     format!("saaio-{}.tar.gz", target())
 }
 
-fn executable(path: &Path, text: &str) {
-    fs::write(path, text).unwrap();
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+/// Writes an executable script through a child process, so this process never holds it open for
+/// writing while another test thread forks: exec of such a file fails with ETXTBSY on Linux.
+fn executable(path: &Path, body: &str) {
+    let mut writer = Command::new("sh")
+        .args(["-c", "cat > \"$1\" && chmod 755 \"$1\"", "sh"])
+        .arg(path)
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
+    writer
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(body.as_bytes())
+        .unwrap();
+    let status = writer.wait().unwrap();
+    assert!(status.success(), "could not write {}", path.display());
 }
 
 /// A temp folder with the assets of a release: a tarball whose saaio prints `version` (or runs
