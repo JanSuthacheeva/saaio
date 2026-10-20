@@ -226,10 +226,13 @@ flows[2]{name,state,phase,tasks,age,services}:
   long-running.
 - Compose: pause `docker compose stop`; resume `docker compose up -d --no-recreate --wait` (keeps
   the containers and ports setup made, returns when healthy).
-- A dev server setup started in the background: pause kills the pid in `.saaio/run/*.pid`, resume
-  starts it again and waits for its port.
+- Dev servers: no pause or resume. The skill's setup never starts one (the worker runs it
+  itself), so there is nothing of saaio's to stop. (Changed in the build: the background dev
+  server case does not exist in the skill.)
 - Both idempotent, quiet, one-line error on stderr when they fail.
 - The scratch-worktree proof runs pause, resume, then teardown.
+- Built on branch `setup-saaio/pause-resume` in `~/projects/agent-skills-pause-services`
+  (commit 69bcfa3), with grader checks; pushed and opened as a PR on the user's OK.
 
 ## Data
 
@@ -375,5 +378,5 @@ resume: the hook waits `PICKUP_WAIT` and lets the tool run.
 - [x] Show services in `saaio status`: the list's `services` column (and `--all`), the detail's `services` and `services_error`; TOON tests
 - [x] Show services on the board card label and in the board detail header; UI tests and goldens
 - [x] Update docs/repository.md (pause and resume section, Compose example, the slot line fix), docs/configuration.md, docs/flows.md, docs/json.md, docs/ui.md, docs/cli.md
-- [ ] Update the setup-saaio skill in ~/projects/agent-skills to write and prove `.saaio/pause` and `.saaio/resume`, as a separate PR there
+- [x] Update the setup-saaio skill in ~/projects/agent-skills to write and prove `.saaio/pause` and `.saaio/resume`, as a separate PR there
 - [ ] End-to-end check: scratch `SAAIO_HOME`, a repo whose pause and resume write timestamps and sleep, `pause_after_minutes = 1`, a Claude worker in the UI: it pauses after a minute idle, the card says `ready · paused`, a new prompt resumes it and the first tool call waits for it; status and `--json` agree
