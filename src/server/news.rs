@@ -9,16 +9,9 @@ use crate::store::{Busy, Waiter};
 use crate::text::printable;
 use crate::view::FlowView;
 
-/// No key into a pane for this long before the server types news into it, so it does not land in
-/// the middle of what the person types there.
-#[cfg(not(test))]
-pub(super) const QUIET: Duration = Duration::from_secs(10);
-#[cfg(test)]
-pub(super) const QUIET: Duration = Duration::from_millis(200);
-
 impl Server {
     /// Types the news of each session that cannot wake itself into its pane, when it sits idle at
-    /// its prompt and nobody typed there for QUIET: a Codex worker's messages from the master, a
+    /// its prompt and nobody typed there for `timing.quiet`: a Codex worker's messages from the master, a
     /// Codex master's stopped flows. A busy session gets them from its Stop hook instead.
     pub(super) fn deliver_news(&mut self) {
         let now = Instant::now();
@@ -32,7 +25,12 @@ impl Server {
             .filter_map(|key| self.server_delivered(&key).map(|waiter| (key, waiter)))
             .filter(|(key, waiter)| {
                 let busy = self.store.busy(waiter);
-                quiet(busy, self.typed_at.get(key).copied(), now)
+                quiet(
+                    busy,
+                    self.typed_at.get(key).copied(),
+                    now,
+                    self.timing.quiet,
+                )
             })
             .collect();
         for (key, waiter) in due {
@@ -92,9 +90,9 @@ impl Server {
 }
 
 /// True when the server may type into a session: not running a turn, and no key typed into its
-/// pane within QUIET.
-pub(super) fn quiet(busy: Busy, typed_at: Option<Instant>, now: Instant) -> bool {
-    busy == Busy::Idle && typed_at.is_none_or(|at| now.duration_since(at) >= QUIET)
+/// pane within `wait`.
+pub(super) fn quiet(busy: Busy, typed_at: Option<Instant>, now: Instant, wait: Duration) -> bool {
+    busy == Busy::Idle && typed_at.is_none_or(|at| now.duration_since(at) >= wait)
 }
 
 /// `text` as one bracketed paste, then Enter: a single prompt however many lines it has, which
@@ -111,19 +109,24 @@ pub(super) fn paste(text: &str) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::server::Timing;
 
     #[test]
     fn types_only_into_an_idle_session_nobody_typed_into_lately() {
+        let wait = Timing::default().quiet;
         let typed = Instant::now();
 
-        assert!(quiet(Busy::Idle, None, typed));
-        assert!(!quiet(Busy::Turn, None, typed), "running a turn");
-        assert!(!quiet(Busy::Typed, None, typed), "typed into, no turn yet");
+        assert!(quiet(Busy::Idle, None, typed, wait));
+        assert!(!quiet(Busy::Turn, None, typed, wait), "running a turn");
         assert!(
-            !quiet(Busy::Idle, Some(typed), typed + QUIET / 2),
+            !quiet(Busy::Typed, None, typed, wait),
+            "typed into, no turn yet"
+        );
+        assert!(
+            !quiet(Busy::Idle, Some(typed), typed + wait / 2, wait),
             "typed into lately"
         );
-        assert!(quiet(Busy::Idle, Some(typed), typed + QUIET));
+        assert!(quiet(Busy::Idle, Some(typed), typed + wait, wait));
     }
 
     #[test]

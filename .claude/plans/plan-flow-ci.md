@@ -251,8 +251,8 @@ Docs:
 ### Server startup and timing
 
 - [x] `server::run` installs `stop_on_signals` before `bind`; new `tests/cli.rs` test sends SIGTERM as soon as the socket file appears and expects a clean exit with no socket left
-- [ ] Add `server::Timing` (`timing.rs`) with `Default` and its unit test; `ServerPaths.cwd`; `run(.., system, timing, clock)`; `Server.timing`; `commands::server` passes `Timing::default()`
-- [ ] Replace `QUIET`, `FIRST_TURN_GRACE`, `UNSTARTED` with `self.timing.*` in news, typing, dismiss and startup; their pure checks take a duration; unit tests use `Timing::default()` values
+- [x] Add `server::Timing` (`timing.rs`) with `Default` and its unit test; `ServerPaths.cwd`; `run(.., system, timing, clock)`; `Server.timing`; `commands::server` passes `Timing::default()`
+- [x] Replace `QUIET`, `FIRST_TURN_GRACE`, `UNSTARTED` with `self.timing.*` in news, typing, dismiss and startup; their pure checks take a duration; unit tests use `Timing::default()` values
 - [ ] `server/tests.rs`: `quick()`, `start_timed`, `wait_until` (30 s); the let-go test on `unstarted: 300 ms`; the stalled-start test polls; every hand-written deadline loop and `wait_until_typed` through `wait_until`
 
 ### Flaky tests

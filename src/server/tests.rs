@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
+use std::path::Path;
 use std::thread;
 
 use tempfile::TempDir;
@@ -32,6 +33,15 @@ fn start_with(dir: &Path, agent: Agent) -> (ServerPaths, thread::JoinHandle<Resu
     start_with_agents(dir, BTreeMap::from([("claude".to_string(), agent)]))
 }
 
+/// Quick to type and to call a start stalled.
+fn quick() -> Timing {
+    Timing {
+        quiet: Duration::from_millis(200),
+        first_turn_grace: Duration::from_millis(300),
+        unstarted: Duration::from_secs(3),
+    }
+}
+
 fn start_with_agents(
     dir: &Path,
     agents: BTreeMap<String, Agent>,
@@ -42,6 +52,7 @@ fn start_with_agents(
         instructions: dir.join("master.md"),
         config: Some(dir.join("config/config.toml")),
         theme: Some(dir.join("config/theme.toml")),
+        cwd: std::env::current_dir().unwrap(),
     };
     let thread_paths = paths.clone();
     let store = Store::at(dir.to_path_buf());
@@ -56,8 +67,8 @@ fn start_with_agents(
             store,
             config,
             LaunchEnv::default(),
-            &std::env::current_dir().unwrap(),
             &System::default(),
+            quick(),
             || 0,
         )
     });
@@ -264,7 +275,7 @@ fn a_codex_worker_that_never_starts_a_turn_waits_once() {
     let (paths, handle) =
         start_with_agents(dir.path(), BTreeMap::from([("codex".to_string(), codex)]));
 
-    thread::sleep(super::startup::FIRST_TURN_GRACE + WATCH_EVERY * 2);
+    thread::sleep(quick().first_turn_grace + WATCH_EVERY * 2);
     let events = store.events(&id).unwrap();
     let waiting: Vec<_> = events
         .iter()
@@ -1075,7 +1086,7 @@ fn queue(store: &Store, id: &str, line: &str) {
 }
 
 fn wait_until_typed(dir: &Path, name: &str, want: &str) {
-    let deadline = Instant::now() + typing::UNSTARTED + Duration::from_secs(5);
+    let deadline = Instant::now() + quick().unstarted + Duration::from_secs(5);
     while !typed(dir, name).contains(want) {
         assert!(
             Instant::now() < deadline,
