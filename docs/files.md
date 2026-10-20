@@ -83,4 +83,5 @@ saaio --stop      # end the server and every session
 saaio clear       # or saaio remove <name>, for flows whose worktrees you want gone
 rm ~/.local/bin/saaio    # or cargo uninstall saaio, when built from source
 rm -rf ~/.config/saaio ~/.local/state/saaio   # and any SAAIO_HOME you used
+# and a completion script you saved, such as ~/.zfunc/_saaio
 ```

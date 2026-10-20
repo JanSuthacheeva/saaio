@@ -46,6 +46,8 @@ tar xzf saaio-aarch64-apple-darwin.tar.gz saaio
 mkdir -p ~/.local/bin && mv saaio ~/.local/bin/
 ```
 
+The tarball also holds the [completion scripts](#shell-completions) in `complete/`.
+
 Each tarball has a build provenance attestation: proof that the release workflow built it from
 the tagged commit. With the [GitHub CLI](https://cli.github.com):
 
@@ -69,6 +71,31 @@ cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.1.
 Installs `saaio` to `~/.cargo/bin`. `saaio --version` names the commit it was built from, or
 `unknown` when the source is not a git checkout of saaio. To name one anyway, set `SAAIO_COMMIT`
 when building.
+
+## Shell completions
+
+`saaio completions <shell>` prints the completion script for bash, zsh, fish, elvish or
+PowerShell. It completes commands, options and their values, not flow names.
+
+```sh
+# zsh: add `fpath=(~/.zfunc $fpath)` to ~/.zshrc before compinit
+mkdir -p ~/.zfunc && saaio completions zsh > ~/.zfunc/_saaio
+
+# bash, with the bash-completion package
+mkdir -p ~/.local/share/bash-completion/completions
+saaio completions bash > ~/.local/share/bash-completion/completions/saaio
+
+# fish
+mkdir -p ~/.config/fish/completions
+saaio completions fish > ~/.config/fish/completions/saaio.fish
+```
+
+| Shell | Line for the startup file |
+| --- | --- |
+| elvish | `eval (saaio completions elvish \| slurp)` in `~/.config/elvish/rc.elv` |
+| PowerShell | `saaio completions powershell \| Out-String \| Invoke-Expression` in `$PROFILE` |
+
+Open a new shell afterwards. The same scripts are in `complete/` in each release tarball.
 
 ## Skills
 
@@ -134,6 +161,7 @@ instead of the script.
 
 - The running server keeps the old version until stopped.
 - Unfinished flows resume after the restart.
+- Write a completion script saved to a file again, so it knows the new version's commands.
 - `master.md` is refreshed while it still holds an earlier default. `config.toml` and `theme.toml`
   are written only when missing. Edited files stay as they are.
 - Changes: [CHANGELOG.md](../CHANGELOG.md).

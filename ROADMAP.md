@@ -30,6 +30,7 @@ Nothing in progress.
 
 | Item | Today | Planned |
 | --- | --- | --- |
+| Flow names in shell completions | `saaio completions` completes commands, options and their values | `saaio send`, `saaio status` and `saaio remove` complete the names of the flows in the store, once clap_complete's completion through the binary is stable |
 | The master asks a worker | no command for it | `saaio ask` puts the master's question to a worker and returns the answer, without waiting on the user |
 | An interrupted Claude Code turn shown as idle | Claude Code runs no hook on Esc. The spinner stays until the next prompt. | the interrupted turn shows as idle |
 | Task counts and an end event for Codex | a Codex flow shows no task counts and is ended from the UI or with `saaio remove` | both, as for Claude Code |
