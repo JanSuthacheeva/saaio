@@ -8,12 +8,6 @@ use crate::proto::{PaneKey, PaneStatus};
 use crate::server_log;
 use crate::view::{FlowView, State};
 
-/// How long a Codex worker may run with no first turn before its flow shows waiting.
-#[cfg(not(test))]
-pub(super) const FIRST_TURN_GRACE: Duration = Duration::from_secs(30);
-#[cfg(test)]
-pub(super) const FIRST_TURN_GRACE: Duration = Duration::from_millis(300);
-
 /// The question a stalled start waits on.
 pub(super) const STALLED_START: &str = "no turn began after launch: answer the dialog in its pane";
 
@@ -74,6 +68,7 @@ impl Server {
                     self.host.status(&key),
                     self.opened_at.get(&key).copied(),
                     now,
+                    self.timing.first_turn_grace,
                 )
             })
             .map(|flow| flow.id.clone())
@@ -100,20 +95,21 @@ fn exited_while_working(flow: &FlowView, status: Option<&PaneStatus>) -> bool {
         && matches!(status, Some(PaneStatus::Exited { .. }))
 }
 
-/// True when a worker opened at `opened_at` began no turn by `now`.
+/// True when a worker opened at `opened_at` began no turn within `grace` by `now`.
 pub(super) fn stalled(
     flow: &FlowView,
     adapter: Option<Adapter>,
     status: Option<&PaneStatus>,
     opened_at: Option<Instant>,
     now: Instant,
+    grace: Duration,
 ) -> bool {
     adapter == Some(Adapter::Codex)
         && status == Some(&PaneStatus::Running)
         && !flow.is_plain()
         && flow.state == State::Working
         && flow.session.is_none()
-        && opened_at.is_some_and(|at| now.saturating_duration_since(at) >= FIRST_TURN_GRACE)
+        && opened_at.is_some_and(|at| now.saturating_duration_since(at) >= grace)
 }
 
 #[cfg(test)]
@@ -121,6 +117,7 @@ mod tests {
     use super::*;
     use crate::event::{Event as LogEvent, EventKind, Mode};
     use crate::fold;
+    use crate::server::Timing;
     use crate::view::Session;
 
     fn flow() -> FlowView {
@@ -155,28 +152,32 @@ mod tests {
 
     #[test]
     fn stalls_only_a_running_codex_worker_that_never_began_a_turn() {
+        let grace = Timing::default().first_turn_grace;
         let opened = Instant::now();
-        let now = opened + FIRST_TURN_GRACE;
+        let now = opened + grace;
         assert!(stalled(
             &flow(),
             Some(Adapter::Codex),
             Some(&PaneStatus::Running),
             Some(opened),
-            now
+            now,
+            grace
         ));
         assert!(!stalled(
             &flow(),
             Some(Adapter::ClaudeCode),
             Some(&PaneStatus::Running),
             Some(opened),
-            now
+            now,
+            grace
         ));
         assert!(!stalled(
             &flow(),
             Some(Adapter::Codex),
             Some(&PaneStatus::Exited { code: Some(0) }),
             Some(opened),
-            now
+            now,
+            grace
         ));
         let mut plain = flow();
         plain.mode = Mode::Plain;
@@ -185,7 +186,8 @@ mod tests {
             Some(Adapter::Codex),
             Some(&PaneStatus::Running),
             Some(opened),
-            now
+            now,
+            grace
         ));
         let mut waiting = flow();
         waiting.state = State::Waiting;
@@ -194,7 +196,8 @@ mod tests {
             Some(Adapter::Codex),
             Some(&PaneStatus::Running),
             Some(opened),
-            now
+            now,
+            grace
         ));
         let mut started = flow();
         started.session = Some(Session {
@@ -206,21 +209,24 @@ mod tests {
             Some(Adapter::Codex),
             Some(&PaneStatus::Running),
             Some(opened),
-            now
+            now,
+            grace
         ));
         assert!(!stalled(
             &flow(),
             Some(Adapter::Codex),
             Some(&PaneStatus::Running),
             None,
-            now
+            now,
+            grace
         ));
         assert!(!stalled(
             &flow(),
             Some(Adapter::Codex),
             Some(&PaneStatus::Running),
             Some(now),
-            now
+            now,
+            grace
         ));
     }
 

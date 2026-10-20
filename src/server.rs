@@ -11,6 +11,7 @@ mod news;
 mod panes;
 mod pause_watch;
 mod startup;
+mod timing;
 mod typing;
 
 use std::collections::{HashMap, HashSet};
@@ -19,7 +20,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::ops::ControlFlow;
 use std::os::unix::net::UnixStream;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -50,6 +51,8 @@ use panes::forward_host_events;
 use pause_watch::PauseWatch;
 use watch::StoreWatch;
 
+pub use timing::Timing;
+
 /// The shortest time between two frames of the focused pane (60 a second).
 const FRAME_EVERY: Duration = Duration::from_millis(16);
 /// How long a stop waits for the panes to exit.
@@ -77,6 +80,8 @@ pub struct ServerPaths {
     pub config: Option<PathBuf>,
     /// Where saaio writes the example theme.toml, beside config.toml.
     pub theme: Option<PathBuf>,
+    /// The folder a new master opens in.
+    pub cwd: PathBuf,
 }
 
 pub(super) type ConnId = u64;
@@ -130,6 +135,7 @@ impl fmt::Display for Stop {
 struct Server {
     store: Store,
     clock: fn() -> u64,
+    timing: Timing,
     watch: StoreWatch,
     board: Board,
     sent_board: Option<Board>,
@@ -205,25 +211,27 @@ pub fn run(
     store: Store,
     config: Config,
     env: LaunchEnv,
-    cwd: &Path,
     system: &System,
+    timing: Timing,
     clock: fn() -> u64,
 ) -> Result<()> {
     private::create_dir(store.root())
         .with_context(|| format!("could not close {} to others", store.root().display()))?;
+    // Before the bind: a client may signal the server as soon as it can connect.
+    let (events, inbox) = mpsc::channel();
+    stop_on_signals(events.clone())?;
     let listener = bind(&paths.socket)?;
     server_log::write(clock(), &started(system));
     write_defaults(paths, clock);
     let mut configs = ConfigWatch::new(paths.config.clone());
     // The server was handed this config; the watch only needs to know the file as it is.
     let _ = configs.changed();
-    let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;
-    let (events, inbox) = mpsc::channel();
-    stop_on_signals(events.clone())?;
+    let (record, start) = MasterRecord::load_or_create(&paths.master, &paths.cwd)?;
     let host = Host::new(START_SIZE, forward_host_events(events.clone()));
     let mut server = Server {
         store,
         clock,
+        timing,
         watch: StoreWatch::default(),
         board: fold::board(Vec::new(), clock()),
         sent_board: None,

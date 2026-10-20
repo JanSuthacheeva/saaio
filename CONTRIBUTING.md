@@ -5,12 +5,14 @@ approach is agreed before the code.
 
 - [Build and test](#build-and-test)
 - [Checking the UI by hand](#checking-the-ui-by-hand)
+- [CI](#ci)
 - [Project rules](#project-rules)
 - [Pull requests](#pull-requests)
 
 ## Build and test
 
-Requires Rust 1.95+, git, macOS or Linux.
+Requires rustup, git, macOS or Linux. `rust-toolchain.toml` pins the Rust version; rustup
+installs it on the first `cargo` command.
 
 ```sh
 cargo build                                  # debug build
@@ -18,6 +20,7 @@ cargo run -- status                          # run a command
 cargo test                                   # unit and integration tests
 cargo fmt                                    # format
 cargo clippy --all-targets -- -D warnings    # lint, warnings fail
+cargo deny check                             # advisories, licences, sources
 cargo install --path .                       # install the saaio binary
 ```
 
@@ -52,6 +55,45 @@ agent's markers unset:
 SAAIO_HOME=$(mktemp -d) env -u CLAUDECODE -u CODEX_THREAD_ID -u SAAIO_FLOW_ID -u SAAIO_MASTER cargo run
 ```
 
+## CI
+
+`.github/workflows/ci.yml` runs on every pull request and every push to `main`. Each check is a
+job of its own, named so branch protection can require it:
+
+| Check | Runs |
+| --- | --- |
+| `fmt` | `cargo fmt --check` on Linux |
+| `clippy (linux)`, `clippy (macos)` | `cargo clippy --all-targets --locked -- -D warnings` |
+| `test (linux)`, `test (macos)` | `cargo test --locked`, then fails if a test changed or left a file in the tree |
+| `deny` | `cargo deny --locked check` with `deny.toml`: advisories, licences, bans, sources |
+
+`deny` also runs alone every day at 06:00 UTC, since an advisory can appear without a commit. A
+failure there means a dependency needs an update or, when none exists yet, an `ignore` entry in
+`deny.toml` with its reason. A new dependency under a licence `deny.toml` does not allow fails
+`deny` until the licence is added there.
+
+CI uses the toolchain `rust-toolchain.toml` pins, as you do locally. To move to a newer Rust,
+change `channel` there and `rust-version` in `Cargo.toml` in one pull request, and fix what the
+new clippy finds in the same one. The build cache is saved from `main` only, so a pull request
+reads it but never fills it.
+
+Tests run on slow, shared runners. A test waits for what happens soon with a limit that only a
+failing test reaches (30 s), never with a sleep that guesses how long something takes; a timer
+the server acts on is chosen per test (`server::Timing`). To check a test under load:
+
+```sh
+# macOS: the suite beside six busy cores
+for i in 1 2 3 4 5 6; do (yes > /dev/null &); done
+for i in $(seq 10); do cargo test -q 2>&1 | grep -A8 '^---- '; done
+pkill -x yes
+
+# Linux: two CPUs, 32 test threads, as a user that is not root
+git archive --format=tar.gz -o /tmp/saaio.tgz HEAD
+docker run --rm --cpus=2 -v /tmp/saaio.tgz:/src.tgz:ro rust:1.95 bash -c \
+  'useradd -m runner && su runner -c "mkdir ~/w && cd ~/w && tar xzf /src.tgz &&
+   for i in \$(seq 60); do cargo test -q --lib -- --test-threads=32 2>&1 | grep -A8 \"^---- \"; done"'
+```
+
 ## Project rules
 
 The full rules and the architecture: [CLAUDE.md](CLAUDE.md). In short:
@@ -78,6 +120,6 @@ The full rules and the architecture: [CLAUDE.md](CLAUDE.md). In short:
 - Building or dropping a roadmap item updates `ROADMAP.md`.
 - `CHANGELOG.md` gets no entry before 0.1.0 is released. After it, every pull request adds its
   line under `## [Unreleased]`, written for users.
-- Before review: `cargo test`, `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings`
-  pass.
-- `.github/pull_request_template.md` lists the same checks.
+- CI passes before review. Run `cargo test`, `cargo fmt --check` and
+  `cargo clippy --all-targets -- -D warnings` locally first; they are quicker than a round trip.
+- `.github/pull_request_template.md` lists what CI cannot check.

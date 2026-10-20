@@ -8,6 +8,8 @@ mod config;
 mod default_file;
 mod deliver;
 mod event;
+#[cfg(test)]
+mod fixtures;
 mod fold;
 mod forge;
 mod launch;
