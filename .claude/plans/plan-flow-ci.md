@@ -33,7 +33,7 @@ Also decided:
 | `config::watch::tests::reads_the_file_again_once_it_changed` | 15/15 Linux 2-CPU | `agnet` rewrite has the same length as `agent`; one mtime tick | write a new length |
 | `server::tests::types_queued_lines_after_pr_once_the_turn_before_it_ended` | on demand (stand-in 3.5 s slow) | `UNSTARTED` 3 s in tests lets the next line go mid-turn | `Timing`, this test on 30 s |
 | `system::tests::reads_the_first_line_a_tool_prints` | 2/60 Linux 2-CPU | `ETXTBSY`: another test forks while the script is open for writing | scripts written by a child process |
-| `server::tests::opens_the_next_worker_with_the_config_saved_while_it_runs` | 1/60 Linux 2-CPU | most likely the same `ETXTBSY` on a fake agent; confirm | shared script helper; `wait_until` |
+| `server::tests::opens_the_next_worker_with_the_config_saved_while_it_runs` | 5/23 Linux 2-CPU after the fixes above | not ETXTBSY: `start` returned once the socket listened, before the server wrote config.toml and took its stamp, so the test's file was missing its folder or taken as already read | `start_timed` waits for a Welcome, which comes only once startup is done |
 
 Reproduce them with:
 

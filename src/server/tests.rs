@@ -104,6 +104,9 @@ fn start_timed(
     wait_until("the server did not start", || {
         UnixStream::connect(&paths.socket).is_ok()
     });
+    // It listens before it has written its files and read config.toml; it answers after.
+    let mut ready = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut ready), ServerMsg::Welcome { .. }));
     (paths, handle)
 }
 
