@@ -175,6 +175,9 @@ fn unix_ms(stamp: &str) -> Option<u64> {
     let offset = match zone.split_at(1) {
         ("Z" | "z", "") => 0,
         (sign, offset) => {
+            if sign != "+" && sign != "-" {
+                return None;
+            }
             let (hours, minutes) = offset.split_once(':')?;
             let hours = hours.parse::<i64>().ok()?;
             let minutes = minutes.parse::<i64>().ok()?;
@@ -553,6 +556,7 @@ mod tests {
             "2026-02-31T00:00:00Z",
             "2026-10-18T02:00:35+24:00",
             "2026-10-18T02:00:35+02:60",
+            "2026-10-18T02:00:35Z+00:00",
         ] {
             let json = format!(r#"[{{"url":"u","state":"OPEN","createdAt":"{stamp}"}}]"#);
             assert!(Forge::GitHub.parse(&json).is_err(), "{stamp}");
