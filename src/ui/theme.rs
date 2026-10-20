@@ -374,6 +374,7 @@ mod tests {
             answer: None,
             session: None,
             questions: Vec::new(),
+            services: None,
         }
     }
 
