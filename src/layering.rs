@@ -34,23 +34,53 @@ fn uses(src: &Path) -> Graph {
             let text = fs::read_to_string(&path).unwrap();
             let production = text.split("#[cfg(test)]\nmod tests {").next().unwrap();
             let used = graph.entry(module.to_string()).or_default();
-            for line in production.lines() {
-                if line.trim_start().starts_with("//") {
-                    continue;
-                }
-                for (at, path) in line.match_indices("crate::") {
-                    let target: String = line[at + path.len()..]
-                        .chars()
-                        .take_while(|c| c.is_alphanumeric() || *c == '_')
-                        .collect();
-                    if !target.is_empty() && target != module {
-                        used.insert(target);
-                    }
-                }
-            }
+            used.extend(
+                targets(production)
+                    .into_iter()
+                    .filter(|target| target != module),
+            );
         }
     }
     graph
+}
+
+/// The top-level modules a file's code names after `crate::`, a grouped `crate::{..}` included.
+fn targets(production: &str) -> BTreeSet<String> {
+    let code: String = production
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let ident = |text: &str| -> String {
+        text.chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect()
+    };
+    let mut found = BTreeSet::new();
+    for (at, prefix) in code.match_indices("crate::") {
+        let rest = &code[at + prefix.len()..];
+        let Some(group) = rest.strip_prefix('{') else {
+            found.insert(ident(rest));
+            continue;
+        };
+        let mut depth = 0;
+        let mut item = true;
+        for (index, c) in group.char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' if depth == 0 => break,
+                '}' => depth -= 1,
+                ',' if depth == 0 => item = true,
+                c if item && !c.is_whitespace() => {
+                    found.insert(ident(&group[index..]));
+                    item = false;
+                }
+                _ => {}
+            }
+        }
+    }
+    found.retain(|target| !target.is_empty() && target != "self");
+    found
 }
 
 /// The first cycle in the graph, as the modules on it.
@@ -100,6 +130,16 @@ fn finds_a_cycle_and_names_its_modules() {
     assert_eq!(
         cycle(&graph(&[("cli", "ui"), ("ui", "config"), ("config", "ui")])),
         Some(vec!["ui".to_string(), "config".to_string()])
+    );
+}
+
+#[test]
+fn reads_the_modules_a_grouped_use_names() {
+    let production = "use crate::{\n    cli::Env,\n    ui::{app, theme},\n    self,\n};\n// crate::server\nlet x = crate::store::open();";
+
+    assert_eq!(
+        targets(production),
+        BTreeSet::from(["cli".to_string(), "ui".to_string(), "store".to_string()])
     );
 }
 
