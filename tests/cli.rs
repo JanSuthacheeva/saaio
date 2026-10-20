@@ -3328,12 +3328,17 @@ fn bug_report_says_when_there_is_no_store() {
         .unwrap();
 
     assert!(output.status.success(), "{}", stdout(&output));
+    // Not the folder's only entry: gh, probed for its version, writes .local/ there without HOME.
     let file = fs::read_dir(cwd.path())
         .unwrap()
-        .next()
-        .unwrap()
-        .unwrap()
-        .path();
+        .map(|entry| entry.unwrap().path())
+        .find(|path| {
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("saaio-report-")
+        })
+        .expect("the report is written to the current folder");
     let report = fs::read_to_string(file).unwrap();
     assert!(
         report.contains("\nstore        cannot be opened: cannot find a state directory\n"),
