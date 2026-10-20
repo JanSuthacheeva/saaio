@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
@@ -47,6 +48,7 @@ pub struct Config {
     pub worker: WorkerConfig,
     pub master: MasterConfig,
     pub ui: UiConfig,
+    pub services: ServicesConfig,
 }
 
 /// [worker]: what a flow runs when saaio start names no agent, and what it is asked first.
@@ -97,6 +99,32 @@ impl Default for MasterConfig {
 pub struct UiConfig {
     /// The key before every saaio ui command, C-space unless set.
     pub prefix: Prefix,
+}
+
+/// [services]: when saaio pauses a resting flow's services.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[cfg_attr(test, derive(Serialize))]
+#[serde(default, deny_unknown_fields)]
+pub struct ServicesConfig {
+    /// Minutes a flow rests before its services pause; 0 never pauses. 5 unless set.
+    pub pause_after_minutes: u32,
+}
+
+impl Default for ServicesConfig {
+    fn default() -> ServicesConfig {
+        ServicesConfig {
+            pause_after_minutes: 5,
+        }
+    }
+}
+
+impl ServicesConfig {
+    /// The delay; None at 0.
+    #[cfg_attr(not(test), expect(dead_code, reason = "PauseWatch reads it"))]
+    pub fn pause_after(&self) -> Option<Duration> {
+        (self.pause_after_minutes > 0)
+            .then(|| Duration::from_mins(u64::from(self.pause_after_minutes)))
+    }
 }
 
 impl Config {
@@ -556,6 +584,28 @@ command = ["pi", "{prompt}"]
             error("[master]\nwake = \"sk-secret\"\n"),
             format!("{}invalid type: a string, expected a boolean", at(2)),
             "the value can be a secret pasted in the wrong place"
+        );
+    }
+
+    #[test]
+    fn pauses_services_after_five_minutes_unless_set_and_never_at_zero() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("config.toml");
+        let read = |text: &str| {
+            fs::write(&file, text).unwrap();
+            Config::read(Some(&file)).map(|config| config.services.pause_after())
+        };
+
+        assert_eq!(read("").unwrap(), Some(Duration::from_mins(5)));
+        assert_eq!(
+            read("[services]\npause_after_minutes = 12\n").unwrap(),
+            Some(Duration::from_mins(12))
+        );
+        assert_eq!(read("[services]\npause_after_minutes = 0\n").unwrap(), None);
+        let unknown = format!("{:#}", read("[services]\npause_after = 5\n").unwrap_err());
+        assert!(
+            unknown.contains("expected `pause_after_minutes`"),
+            "{unknown}"
         );
     }
 
