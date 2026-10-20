@@ -171,4 +171,4 @@ Unchanged: every step moves or regroups code. Error paths stay where they are.
 - [x] 5. Group `Server`'s pane maps into `PaneState` and `conns`/`peers` into `Conn`
 - [x] 6. Group `App`'s master fields into `App.master`
 - [x] 7. Replace libc with rustix for kill, killpg, getuid and Linux peer creds
-- [ ] End to end: bare `saaio` on a scratch store in a PTY, start a flow, close it, `saaio --stop`
+- [x] End to end: bare `saaio` on a scratch store in a PTY, start a flow, close it, `saaio --stop`
