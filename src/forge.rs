@@ -219,16 +219,30 @@ pub fn asks(flows: &[FlowView]) -> Vec<Ask> {
         .collect()
 }
 
-/// What to append so `flow` shows `found`: merge-request for an open one it does not show yet,
-/// merged for a merged one, merge-request-closed for the closed one it shows; None otherwise.
+/// What to append after a successful forge query: show a new open or merged PR, or clear the
+/// currently shown PR when no open or merged one remains.
 pub fn news(flow: &FlowView, found: Option<&Found>) -> Option<EventKind> {
-    let found = found?;
-    let shown = flow.merge_request.as_ref() == Some(&found.url);
-    let url = found.url.clone();
-    match found.status {
-        Status::Open => (!shown).then_some(EventKind::MergeRequest { url }),
-        Status::Merged => (!flow.merged).then_some(EventKind::Merged { url }),
-        Status::Closed => (shown && !flow.merged).then_some(EventKind::MergeRequestClosed { url }),
+    match found {
+        Some(Found {
+            url,
+            status: Status::Open,
+            ..
+        }) => (flow.merge_request.as_ref() != Some(url))
+            .then(|| EventKind::MergeRequest { url: url.clone() }),
+        Some(Found {
+            url,
+            status: Status::Merged,
+            ..
+        }) => (!flow.merged).then(|| EventKind::Merged { url: url.clone() }),
+        Some(Found {
+            status: Status::Closed,
+            ..
+        })
+        | None => flow
+            .merge_request
+            .as_ref()
+            .filter(|_| !flow.merged)
+            .map(|url| EventKind::MergeRequestClosed { url: url.clone() }),
     }
 }
 
@@ -347,12 +361,20 @@ mod tests {
             Some(closed(A))
         );
         assert_eq!(news(&flow(vec![]), Some(&shut(A))), None);
-        assert_eq!(news(&flow(vec![opened(B)]), Some(&shut(A))), None);
+        assert_eq!(
+            news(&flow(vec![opened(B)]), Some(&shut(A))),
+            Some(closed(B)),
+            "a different closed PR must not leave the shown one open"
+        );
         assert_eq!(
             news(&flow(vec![opened(A), closed(A)]), Some(&shut(A))),
             None
         );
-        assert_eq!(news(&flow(vec![opened(A)]), None), None);
+        assert_eq!(
+            news(&flow(vec![opened(A)]), None),
+            Some(closed(A)),
+            "a successful empty list must clear the shown PR"
+        );
     }
 
     fn fixture(name: &str) -> &'static str {

@@ -68,7 +68,7 @@ source fix, or test change was made.
 
 ## Tasks
 
-- [ ] Prove and fix the stale closed-PR case in `forge::news`/`pick`.
+- [x] Prove and fix the stale closed-PR case in `forge::news`/`pick`.
 - [ ] Reject impossible forge timestamps in `forge::unix_ms` with focused tests.
 - [ ] Preserve PRs opened in the flow's first second in `forge::pick` with a boundary test.
 - [ ] Add `Debug` to the listed new types.
@@ -76,4 +76,4 @@ source fix, or test change was made.
 - [ ] Rename `launch::name::flow_name` and its call sites.
 - [ ] Run `cargo test`, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --check`; review the resulting diff against this plan.
 
-Stop here for review before beginning any task.
+Implementation approved; keep this checklist current while building.

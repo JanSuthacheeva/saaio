@@ -28,6 +28,12 @@ pub enum Answer {
     Done,
 }
 
+/// A query succeeded (and may have listed no current PR), or no forge could be queried.
+enum Lookup {
+    Listed(Option<Found>),
+    Unavailable,
+}
+
 /// When the next round starts, whether one runs, the last error logged.
 #[derive(Debug, Default)]
 pub struct ForgeWatch {
@@ -81,7 +87,8 @@ pub fn ask_in_background(asks: Vec<Ask>, events: Sender<Event>) {
     spawn_named("forge".to_string(), move || {
         for one in asks {
             let answer = match ask(&one) {
-                Ok(found) => Answer::Found { id: one.id, found },
+                Ok(Lookup::Listed(found)) => Answer::Found { id: one.id, found },
+                Ok(Lookup::Unavailable) => continue,
                 Err(error) => Answer::Failed(format!("{error:#}")),
             };
             if events.send(Event::Forge(answer)).is_err() {
@@ -93,19 +100,19 @@ pub fn ask_in_background(asks: Vec<Ask>, events: Sender<Event>) {
 }
 
 /// One flow's question: its worktree's remotes -> Forge::of -> gh or glab -> parse -> pick.
-/// Ok(None) for a worktree that is gone, a remote of no known forge, or no merge request opened
-/// since the flow started.
-fn ask(ask: &Ask) -> Result<Option<Found>> {
+/// Unavailable for a gone worktree or no known forge; Listed(None) for a successful query with
+/// no merge request opened since the flow started.
+fn ask(ask: &Ask) -> Result<Lookup> {
     if !ask.dir.is_dir() {
-        return Ok(None);
+        return Ok(Lookup::Unavailable);
     }
     let remotes = workspace::remote_urls(&ask.dir);
     let Some(forge) = Forge::of(&remotes, workspace::ssh_hostname) else {
-        return Ok(None);
+        return Ok(Lookup::Unavailable);
     };
     let json = workspace::output_in(&ask.dir, &forge.argv(&ask.branch), ASK_LIMIT)
         .with_context(|| format!("{} failed", forge.program()))?;
-    Ok(forge::pick(forge.parse(&json)?, ask.since))
+    Ok(Lookup::Listed(forge::pick(forge.parse(&json)?, ask.since)))
 }
 
 impl Server {
