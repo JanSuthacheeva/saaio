@@ -27,21 +27,15 @@ impl Server {
                 PaneKey::Flow(id) => Waiter::Flow(id.clone()),
             };
             let mut busy = self.store.busy(&waiter);
-            if unstarted(
-                busy,
-                self.line_at.get(&key).copied(),
-                now,
-                self.timing.unstarted,
-            ) {
+            if unstarted(busy, self.pane(&key).line_at, now, self.timing.unstarted) {
                 self.let_go(&key, &waiter);
                 busy = Busy::Idle;
             }
             let Some(id) = self.takes_lines(&key) else {
                 continue;
             };
-            let opened_at = self.opened_at.get(&key).copied();
-            let typed_at = self.typed_at.get(&key).copied();
-            if !ready(busy, opened_at, typed_at, now, self.timing.quiet) {
+            let pane = self.pane(&key);
+            if !ready(busy, pane.opened_at, pane.typed_at, now, self.timing.quiet) {
                 continue;
             }
             let events = match self.store.events(&id) {
@@ -86,7 +80,7 @@ impl Server {
             }
             return Err(error);
         }
-        self.line_at.insert(key.clone(), Instant::now());
+        self.pane_mut(key).line_at = Some(Instant::now());
         Ok(())
     }
 
@@ -97,14 +91,14 @@ impl Server {
             return None;
         };
         let flow = self.board.flows.iter().find(|flow| &flow.id == id)?;
-        self.adapters.get(key)?;
+        self.pane(key).adapter?;
         let takes = !flow.is_plain() && !flow.is_finished() && flow.answer.is_some();
         takes.then(|| id.clone())
     }
 
     /// Marks a session the server typed into idle again: what it typed began no turn.
     fn let_go(&mut self, key: &PaneKey, waiter: &Waiter) {
-        self.line_at.remove(key);
+        self.pane_mut(key).line_at = None;
         if let Err(error) = self.store.set_busy(waiter, Busy::Idle) {
             server_log::write((self.clock)(), &format!("{error:#}"));
             return;

@@ -113,8 +113,16 @@ struct PaneState {
 struct Conn { stream: UnixStream, peer: Option<Peer> }
 
 struct Server { panes: HashMap<PaneKey, PaneState>, conns: HashMap<ConnId, Conn>, .. }
-impl Server { fn pane(&mut self, key: &PaneKey) -> &mut PaneState; }
+impl Server {
+    /// The pane's state; an empty one for a pane the server never touched.
+    fn pane(&self, key: &PaneKey) -> &PaneState;
+    /// The pane's state to change, made empty the first time.
+    fn pane_mut(&mut self, key: &PaneKey) -> &mut PaneState;
+}
 ```
+
+Built as: `PaneState` and its accessors in `server/pane_state.rs`, `Conn` in `server/conn.rs`
+(server.rs stays under 400 lines). The read accessor `pane` was added so reads create no entry.
 
 Entries are never dropped at close (as today); `resumed` and `closing` are taken (`Option::take`,
 `mem::take`) where the maps removed them.
@@ -160,7 +168,7 @@ Unchanged: every step moves or regroups code. Error paths stay where they are.
 - [x] 2. Split `ui/input.rs` into `input.rs`, `input/keys.rs`, `input/mouse.rs`
 - [x] 3. Split `workspace.rs` into `workspace.rs`, `git.rs`, `hooks.rs`, `process.rs`
 - [x] 4. Rename `config::path`, `slots::taken`, `pane::shared_env`, `worktree::add_argv`/`remove_argv`
-- [ ] 5. Group `Server`'s pane maps into `PaneState` and `conns`/`peers` into `Conn`
+- [x] 5. Group `Server`'s pane maps into `PaneState` and `conns`/`peers` into `Conn`
 - [ ] 6. Group `App`'s master fields into `App.master`
 - [ ] 7. Replace libc with rustix for kill, killpg, getuid and Linux peer creds
 - [ ] End to end: bare `saaio` on a scratch store in a PTY, start a flow, close it, `saaio --stop`

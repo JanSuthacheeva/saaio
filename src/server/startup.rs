@@ -64,9 +64,9 @@ impl Server {
                 let key = PaneKey::Flow(flow.id.clone());
                 stalled(
                     flow,
-                    self.adapters.get(&key).copied(),
+                    self.pane(&key).adapter,
                     self.host.status(&key),
-                    self.opened_at.get(&key).copied(),
+                    self.pane(&key).opened_at,
                     now,
                     self.timing.first_turn_grace,
                 )

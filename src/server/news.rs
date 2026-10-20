@@ -25,12 +25,7 @@ impl Server {
             .filter_map(|key| self.server_delivered(&key).map(|waiter| (key, waiter)))
             .filter(|(key, waiter)| {
                 let busy = self.store.busy(waiter);
-                quiet(
-                    busy,
-                    self.typed_at.get(key).copied(),
-                    now,
-                    self.timing.quiet,
-                )
+                quiet(busy, self.pane(key).typed_at, now, self.timing.quiet)
             })
             .collect();
         for (key, waiter) in due {
@@ -52,7 +47,7 @@ impl Server {
     fn server_delivered(&self, key: &PaneKey) -> Option<Waiter> {
         match key {
             PaneKey::Master => {
-                let adapter = *self.adapters.get(key)?;
+                let adapter = self.pane(key).adapter?;
                 let delivers = !adapter.wakes_itself()
                     && self.config.master.wake
                     && self.store.master_session().is_some();
@@ -60,7 +55,7 @@ impl Server {
             }
             PaneKey::Flow(id) => {
                 let flow = self.board.flows.iter().find(|flow| &flow.id == id)?;
-                let adapter = *self.adapters.get(key)?;
+                let adapter = self.pane(key).adapter?;
                 let delivers = !adapter.wakes_itself()
                     && !flow.is_plain()
                     && !flow.is_finished()

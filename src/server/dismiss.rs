@@ -27,16 +27,15 @@ impl Server {
             })
             .collect();
         for (key, name, dialog) in answered {
-            let typed_at = self.typed_at.get(&key).copied();
-            let opened_at = self.opened_at.get(&key).copied();
-            if self.dismissed.get(&key) == Some(&dialog)
-                || !due(typed_at, opened_at, now, self.timing.quiet)
+            let pane = self.pane(&key);
+            if pane.dismissed == Some(dialog)
+                || !due(pane.typed_at, pane.opened_at, now, self.timing.quiet)
             {
                 continue;
             }
             match self.host.write(&key, ESC) {
                 Ok(()) => {
-                    self.dismissed.insert(key, dialog);
+                    self.pane_mut(&key).dismissed = Some(dialog);
                     server_log::write(
                         (self.clock)(),
                         &format!("closed {name}'s question dialog for the master's message"),
