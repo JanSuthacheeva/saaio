@@ -273,6 +273,17 @@ Each shared piece lands in the commit of its first user: alone it is dead code, 
 ### End to end
 - [x] Replay the audit's PoCs against a scratch store and scratch repos with the installed binary (forged session id via hook then server resume argv, fsmonitor worktree + `saaio remove`, bug-report beside a planted symlink, `SAAIO_FLOW_ID=../../x saaio hook`, `send --type` with ESC into a scratch Codex-like pane, fresh store modes, config type error in the bug report) and confirm each is closed
 
+### After review
+
+Decided by the user on the review's open items.
+
+- [ ] `saaio remove` says when git cannot answer for a worktree, instead of "uncommitted work":
+  `retire::refuse_uncommitted_work` maps `has_uncommitted_work`'s Err to a new
+  `output::remove::unchecked(name, path, reason)` Failure (still refused, `--force` the way
+  out); `tests/cli.rs` test with a worktree git does not list
+- [ ] `[ui] prefix` errors without the refused name (`ui::prefix`), as L2 does for toml errors;
+  prefix tests updated
+
 ## Review
 
 Reviewed in an isolated context against this plan, CLAUDE.md and the code the diff calls.
