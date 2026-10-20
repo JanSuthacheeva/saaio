@@ -77,7 +77,7 @@ saaio writes nothing to `~/.claude` or `~/.codex`. Hooks are passed on each agen
 
 ```sh
 saaio --stop      # end the server and every session
-saaio clear          # or saaio remove <name>, for flows whose worktrees you want gone
-cargo uninstall saaio
+saaio clear       # or saaio remove <name>, for flows whose worktrees you want gone
+rm ~/.local/bin/saaio    # or cargo uninstall saaio, when built from source
 rm -rf ~/.config/saaio ~/.local/state/saaio   # and any SAAIO_HOME you used
 ```

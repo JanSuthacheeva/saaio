@@ -23,6 +23,7 @@ E2E runs of the UI, `saaio server` or `saaio --stop` use a scratch store: `SAAIO
 ## Structure
 
 - One crate: a library (`lib.rs`) with a thin binary. `main.rs` parses, reads the environment variables and the clock, prints, and maps exit codes; nothing else. `build.rs` only sets `SAAIO_COMMIT`, the commit `proto::BUILD` names.
+- Releases: a `v*` tag runs `.github/workflows/release.yml` (native builds for macOS and Linux, tests, `SHA256SUMS`, the GitHub release); `install.sh` installs a release's binary (`tests/install.rs`). Steps: CONTRIBUTING.md, Releasing.
 - One responsibility per file, nameable without "and". Past about 400 production lines a file splits along a real seam; a uniform file (a table of documents, one match of key bindings) may run longer.
 - Unit tests stay inline in `mod tests`. Past about 400 lines of tests they move to a sibling `tests.rs` (`#[cfg(test)] mod tests;`), split further into `tests/*.rs` by subject when large; fixtures several test modules share go in a `#[cfg(test)] mod fixtures;`. CLI behaviour is tested end to end in `tests/cli.rs`.
 - Module files are `foo.rs` beside `foo/`, never `foo/mod.rs` (`clippy::mod_module_files`). An `impl` may span the files of its module's children: they see its private fields.

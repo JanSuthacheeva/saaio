@@ -29,3 +29,5 @@ well tested.
   other tools.
 - The command line for agents (TOON) and `saaio status --json` for programs.
 - Commented example `config.toml` and `theme.toml`, written on the first run.
+- Prebuilt binaries for macOS (Apple silicon, Intel) and Linux (x86_64, aarch64, static) on every
+  release, with checksums and an install script.

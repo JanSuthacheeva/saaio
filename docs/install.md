@@ -1,18 +1,64 @@
 # Install
 
 ```sh
-cargo install --git https://github.com/JanSuthacheeva/saaio --tag v0.1.0
-saaio --version    # saaio 0.1.0
+curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | sh
+saaio --version    # saaio 0.1.0 (abc1234)
 ```
 
-Installs `saaio` to `~/.cargo/bin`.
+The script downloads the binary for this machine from the latest
+[release](https://github.com/JanSuthacheeva/saaio/releases), checks it against the release's
+`SHA256SUMS` and installs it to `~/.local/bin`. It edits no shell startup file: when the folder is
+not on `PATH`, it prints the line to add.
+
+| Variable | Default | Sets |
+| --- | --- | --- |
+| `SAAIO_VERSION` | the latest release | the tag to install, such as `v0.1.0` |
+| `SAAIO_INSTALL_DIR` | `~/.local/bin` | the folder `saaio` is installed to |
+
+```sh
+curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | SAAIO_VERSION=v0.1.0 sh
+```
 
 | Requirement | Notes |
 | --- | --- |
-| macOS or Linux | |
+| macOS or Linux | Apple silicon or Intel; x86_64 or aarch64. The Linux binaries are static and run on any distribution. |
 | git | |
-| Rust 1.95+ | build only. Install with [rustup](https://rustup.rs). |
 | [Claude Code](https://github.com/anthropics/claude-code) or [Codex](https://github.com/openai/codex) | either or both |
+
+## Manual download
+
+Each release holds one `saaio-<target>.tar.gz` per platform and a `SHA256SUMS` file:
+
+| Target | Platform |
+| --- | --- |
+| `aarch64-apple-darwin` | macOS, Apple silicon |
+| `x86_64-apple-darwin` | macOS, Intel |
+| `x86_64-unknown-linux-musl` | Linux, x86_64 |
+| `aarch64-unknown-linux-musl` | Linux, aarch64 |
+
+```sh
+url=https://github.com/JanSuthacheeva/saaio/releases/latest/download
+curl -fsSLO "$url/saaio-aarch64-apple-darwin.tar.gz"
+curl -fsSLO "$url/SHA256SUMS"
+shasum -a 256 -c --ignore-missing SHA256SUMS    # on Linux: sha256sum -c --ignore-missing SHA256SUMS
+tar xzf saaio-aarch64-apple-darwin.tar.gz
+mkdir -p ~/.local/bin && mv saaio ~/.local/bin/
+```
+
+The binaries are not signed. macOS refuses to open one downloaded with a browser until its
+quarantine flag is removed: `xattr -d com.apple.quarantine ~/.local/bin/saaio`. curl sets no such
+flag.
+
+## From source
+
+For other platforms, or to build it yourself. Requires Rust 1.95+, installed with
+[rustup](https://rustup.rs).
+
+```sh
+cargo install --git https://github.com/JanSuthacheeva/saaio --tag v0.1.0
+```
+
+Installs `saaio` to `~/.cargo/bin`.
 
 ## Skills
 
@@ -58,11 +104,16 @@ Writes to `~/.config/saaio`:
 
 ## Updating
 
+Run the install script again, then restart the server:
+
 ```sh
-cargo install --git https://github.com/JanSuthacheeva/saaio --tag <new tag> --force
+curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | sh
 saaio --stop
 saaio
 ```
+
+From source: `cargo install --git https://github.com/JanSuthacheeva/saaio --tag <new tag> --force`
+instead of the script.
 
 - The running server keeps the old version until stopped.
 - Unfinished flows resume after the restart.

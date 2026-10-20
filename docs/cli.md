@@ -65,7 +65,7 @@ Flow counts, one line per flow, and the question or reason of each waiting or bl
 
 ```
 $ saaio
-bin: ~/.cargo/bin/saaio
+bin: ~/.local/bin/saaio
 description: "Tracks parallel feature flows: what each is doing, where it is blocked, how far it got"
 count: 3
 needs_you: 2

@@ -193,5 +193,5 @@ A user installs:
 - [x] Fix the flaky `config::watch` test `reads_the_file_again_once_it_changed` (a really new length)
 - [x] Add `install.sh` (`main`, `target`, `base_url`, `fetch`, `sha256`, `verify`, `place`, `path_hint`) with `tests/install.rs` (installs, replaces, refuses a checksum mismatch, PATH hint, `SAAIO_VERSION` url)
 - [x] Add `.github/workflows/release.yml` (check, build x4 with test and `--version` check, package, install-check x2, publish)
-- [ ] Docs: README Install, docs/install.md (install, manual download, from source, updating), docs/files.md, docs/cli.md, ROADMAP (binaries row), CHANGELOG 0.1.0, CONTRIBUTING Releasing, CLAUDE.md Structure
+- [x] Docs: README Install, docs/install.md (install, manual download, from source, updating), docs/files.md, docs/cli.md, ROADMAP (binaries row), CHANGELOG 0.1.0, CONTRIBUTING Releasing, CLAUDE.md Structure
 - [ ] End to end: push the branch and `v0.1.0-rc.1`, all jobs green, download the pre-release, `sha256sum -c`, install from it on this Mac and check `saaio --version` names the branch head, then delete the pre-release and tag
