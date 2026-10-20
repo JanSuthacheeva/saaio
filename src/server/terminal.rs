@@ -245,6 +245,7 @@ impl Terminal {
             sgr_mouse: mode.contains(TermMode::SGR_MOUSE),
             app_cursor: mode.contains(TermMode::APP_CURSOR),
             focus: mode.contains(TermMode::FOCUS_IN_OUT),
+            alt_screen: mode.contains(TermMode::ALT_SCREEN),
         }
     }
 
@@ -410,7 +411,7 @@ mod tests {
         let mut term = term(20, 2);
         assert_eq!(term.modes(), Modes::default());
 
-        term.feed(b"\x1b[?2004h\x1b[?1002h\x1b[?1006h\x1b[?1h\x1b[?1004h");
+        term.feed(b"\x1b[?2004h\x1b[?1002h\x1b[?1006h\x1b[?1h\x1b[?1004h\x1b[?1049h");
 
         assert_eq!(
             term.modes(),
@@ -420,6 +421,7 @@ mod tests {
                 sgr_mouse: true,
                 app_cursor: true,
                 focus: true,
+                alt_screen: true,
             }
         );
         term.feed(b"\x1b[?1003h");

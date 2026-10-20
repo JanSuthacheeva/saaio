@@ -192,7 +192,7 @@ saaio takes the mouse while it runs, like tmux with `mouse on`.
 | Click a session in the sidebar or rail | jumps to it |
 | Drag | selects text and copies it when you let go |
 | Double-click, triple-click | copies a word, a line |
-| Wheel over the pane | scrolls the history; down past the newest line goes back to the live session |
+| Wheel over the pane | scrolls the history; down past the newest line goes back to the live session. A program on the alternate screen, such as `less`, gets arrow keys instead |
 
 A selection stays inside what it started in: a dialog, the board, the title row, the pane, the
 sidebar or the rail. It stays highlighted until the next key or click.

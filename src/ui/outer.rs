@@ -130,6 +130,7 @@ mod tests {
             sgr_mouse: true,
             app_cursor: false,
             focus: true,
+            alt_screen: true,
         };
 
         assert_eq!(

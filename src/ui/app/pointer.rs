@@ -62,10 +62,24 @@ impl App {
     }
 
     /// Over a pane that leaves the mouse to saaio the wheel scrolls its history, and down past
-    /// the newest line leaves it.
+    /// the newest line leaves it; a program on the alternate screen (less, man) gets arrow keys
+    /// instead, as tmux does.
     fn on_wheel(&mut self, kind: PointerKind, at: Position) -> Vec<Effect> {
         if !self.areas().pane.contains(at) {
             return vec![];
+        }
+        let modes = self.screen.modes;
+        if self.view == View::Panes && modes.alt_screen {
+            let arrow = match (kind, modes.app_cursor) {
+                (PointerKind::WheelUp, true) => "\x1bOA",
+                (PointerKind::WheelUp, false) => "\x1b[A",
+                (_, true) => "\x1bOB",
+                (_, false) => "\x1b[B",
+            };
+            let lines = usize::try_from(WHEEL_LINES).unwrap_or(1);
+            return vec![Effect::Send(ClientMsg::Input(
+                arrow.repeat(lines).into_bytes(),
+            ))];
         }
         let back = match (&self.view, kind) {
             (View::Panes, PointerKind::WheelUp) => WHEEL_LINES,

@@ -212,3 +212,31 @@ fn a_notice_can_be_selected_and_a_click_dismisses_it() {
     click(&mut app, x, title.y);
     assert!(!row(&render_at(&app, FLEET), 0).contains("theme"));
 }
+
+#[test]
+fn the_wheel_over_a_program_on_the_alternate_screen_sends_arrow_keys() {
+    let mut app = with_fleet();
+    let pane = app.areas().pane;
+    let (x, y) = (pane.x + 5, pane.y + 5);
+    let pager = |app_cursor| Modes {
+        alt_screen: true,
+        app_cursor,
+        ..Modes::default()
+    };
+    app.on_server(ServerMsg::Frame(frame_with("less", pager(false))));
+
+    assert_eq!(
+        mouse(&mut app, PointerKind::WheelUp, x, y),
+        vec![Effect::Send(ClientMsg::Input(
+            b"\x1b[A\x1b[A\x1b[A".to_vec()
+        ))]
+    );
+    assert_eq!(app.view, View::Panes, "no history");
+    app.on_server(ServerMsg::Frame(frame_with("less", pager(true))));
+    assert_eq!(
+        mouse(&mut app, PointerKind::WheelDown, x, y),
+        vec![Effect::Send(ClientMsg::Input(
+            b"\x1bOB\x1bOB\x1bOB".to_vec()
+        ))]
+    );
+}
