@@ -82,6 +82,7 @@ help[2]: "Run `saaio status <name>` for one flow's phases, timeline and decision
 - Order: needs you, ready (turn ended, nothing asked), running, finished. Most recent change first
   within each group.
 - `age`: time since the flow's state, phase or blocker last changed.
+- No flows: `flows: none tracked`. A log that cannot be read adds a `warnings[]` line.
 - `services`: empty while the flow's services run or were never paused; else `pausing`, `paused`,
   `resuming`, `pause-failed` or `resume-failed` ([repository.md](repository.md#pause-and-resume)).
 
@@ -123,13 +124,13 @@ help[2]: Run `saaio` in a terminal to open the worker,Run `saaio` for all flows
 
 | Field | Values |
 | --- | --- |
-| `setup` | `ran`, `none` (no setup hook), `failed: <its last error line>`. A failed setup marks the flow blocked. The worker still opens. |
+| `setup` | `ran`, `none` (no executable `.saaio/setup`), `failed: <its last error line>`. A failed setup marks the flow blocked. The worker still opens. |
 | `pane` | `opening` while the UI runs, else `when saaio opens` |
 
 | Option | Default | Effect |
 | --- | --- | --- |
 | `<request>` | | what to build, such as `"SHOP-217 add CSV export"`. Up to 20000 characters. Part of the agent's first prompt. |
-| `--name <name>` | from the request | the flow's name. Default: the ticket key at the start of the request, lowercased (`SHOP-217` becomes `shop-217`), else the first four words (`add-a-dark-mode`). A name held by an unfinished flow gets `-2`, `-3` and so on. |
+| `--name <name>` | from the request | the flow's name, lowercased, with anything but letters and digits turned into `-` (`Skills Reporting` becomes `skills-reporting`). Default: the ticket key at the start of the request, lowercased (`SHOP-217` becomes `shop-217`), else the first four words (`add-a-dark-mode`). A name held by an unfinished flow, given or not, gets `-2`, `-3` and so on. |
 | `--mode <mode>` | `guided` | `guided` or `auto`: who answers the worker's questions ([flows.md](flows.md#guided-and-auto)) |
 | `--agent <agent>` | `[worker] agent`, else `claude` | an agent from the config ([configuration.md](configuration.md#agents)) |
 | `--type <type>` | the repository's first type | a branch type from the repository's `.saaio/config.toml` ([repository.md](repository.md#branch-names)) |
@@ -360,7 +361,8 @@ saaio new --name <name> --request <text> [--mode guided|auto]
 ```
 
 Tracks a flow without a worktree or worker, for a worker run by hand. An existing unfinished flow
-of that name is returned (`existing: true`).
+of that name is returned (`existing: true`). The request: up to 20000 characters, as for
+`saaio start`.
 
 ```
 $ saaio new --name shop-230 --request "SHOP-230 tracked by hand"
@@ -398,9 +400,15 @@ error: flow/shop-221 has 1 commit on no other branch
 help[2]: "Merge or push flow/shop-221, then run `saaio remove shop-221` again",Run `saaio remove shop-221 --delete-unmerged` to delete it with its commits
 ```
 
+| Field | Values |
+| --- | --- |
+| `pane` | `closed`, `none` or `timed out` |
+| `worktree` | `removed`, `none` or `kept: <path>`, with a help line to discard what is left |
+| `branch` | `deleted`, `kept` or `none` |
+
 | Option | Effect |
 | --- | --- |
-| `--force` | also remove a worktree with uncommitted work, discarding it |
+| `--force` | also remove a worktree with uncommitted work, discarding it, or one git cannot check |
 | `--delete-unmerged` | also delete a branch whose commits are on no other branch |
 
 A plain session: only the session is forgotten. The folder is never touched.
@@ -482,11 +490,13 @@ Read by saaio:
 | `SAAIO_HOME` | the folder saaio keeps its flows in. Default: the store of the git repository saaio runs in, else the shared folder (`$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`). [files.md](files.md#the-store) |
 | `SAAIO_CONFIG` | the config file. Default: `$XDG_CONFIG_HOME/saaio/config.toml`, else `~/.config/saaio/config.toml`. |
 | `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `HOME` | base of the defaults above |
-| `SAAIO_FLOW_ID` | the flow `saaio report` and `saaio hook` report into. Set in every worker. |
+| `SAAIO_FLOW_ID` | the flow `saaio report`, `saaio hook` and `saaio wait` act for. Set in every worker. While it is set, `saaio` prints the flows instead of opening the UI and `saaio send` refuses. |
 | `SAAIO_MASTER` | `1` in the master's session, whose hooks report no flow |
+| `CLAUDECODE`, `CODEX_THREAD_ID` | set by Claude Code or Codex. `saaio` prints the flows instead of opening the UI. |
+| `SSH_CONNECTION`, `SSH_TTY`, `WAYLAND_DISPLAY`, `DISPLAY` | how the UI copies: OSC 52 only over SSH, else also `pbcopy`, `wl-copy` or `xclip` ([ui.md](ui.md#copying)) |
 | `CLAUDE_CONFIG_DIR` | Claude Code's folder, where the UI reads a worker's transcript for the peek. Default: `~/.claude`. |
 
-Set by saaio in every worker's session and in the setup and teardown hooks:
+Set by saaio in every worker's session and in the setup, teardown, pause and resume hooks:
 
 | Variable | Value |
 | --- | --- |
@@ -535,4 +545,7 @@ help[2]: "Run `saaio status <name>` in a flow's project for its phases, timeline
 ```
 
 - A project is named after its store's folder (`shop` above). The shared folder's store is `default`.
+  A second repository of the same name has the store `<name>-2` and shows so. Two stores in folders
+  of the same name, such as two `SAAIO_HOME`s, show as `<name>` and `<name> (2)`.
+- Projects without flows are left out.
 - A store whose folder is gone is dropped.

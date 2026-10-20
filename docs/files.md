@@ -13,7 +13,8 @@ Location: the folder of `$SAAIO_CONFIG` if set, else `$XDG_CONFIG_HOME/saaio`, e
 | `themes/<name>.toml` | themes `theme.toml` can extend, often written by another tool |
 | `master.md` | the master's instructions ([flows.md](flows.md#the-master)) |
 
-- The UI writes `config.toml`, `theme.toml` and `master.md` on its first run.
+- `saaio server`, which the UI starts, writes `config.toml`, `theme.toml` and `master.md` when they
+  are missing.
 - An edited file is never overwritten.
 - A newer saaio refreshes `master.md` while it still holds an earlier default.
 
@@ -27,7 +28,8 @@ Location, the first that applies:
 3. the shared folder itself (`$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`)
 
 `<repository>` is the repository's folder name. A second repository with the same folder name gets
-`<repository>-2`, a third `-3`.
+`<repository>-2`, a third `-3`. A name whose repository no longer exists goes to the next
+repository of that name.
 
 The UI passes its store to every session it opens as `SAAIO_HOME`, so a worker reports into its
 flow's store from any folder.
@@ -62,6 +64,7 @@ the store outside a repository.
 | --- | --- | --- |
 | `.saaio/config.toml` | the branch convention ([repository.md](repository.md#branch-names)) | yes |
 | `.saaio/setup`, `.saaio/teardown` | the scripts run in each worktree ([repository.md](repository.md#setup-and-teardown)) | yes |
+| `.saaio/pause`, `.saaio/resume` | the scripts that pause and resume a resting flow's services ([repository.md](repository.md#pause-and-resume)) | yes |
 | `.saaio/worktrees/<name>` | each flow's worktree. `.saaio/worktrees/` is listed in `.git/info/exclude`. | no |
 
 ## Read elsewhere
