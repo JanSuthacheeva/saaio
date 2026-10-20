@@ -1,9 +1,5 @@
 pub mod app;
 pub mod board;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the ui loop uses it once the copy is wired")
-)]
 pub mod clipboard;
 pub mod dialog;
 pub mod fit;
@@ -18,10 +14,6 @@ pub mod peek;
 pub mod prefix;
 pub mod rail;
 pub mod screen;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the app selects once the pointer is wired")
-)]
 pub mod selection;
 pub mod sidebar;
 pub mod theme;
@@ -36,8 +28,10 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
+use ratatui::buffer::Buffer;
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
+use ratatui::layout::Rect;
 use signal_hook::consts::SIGWINCH;
 use signal_hook::iterator::Signals;
 
@@ -46,6 +40,7 @@ use crate::client::Client;
 use crate::proto::{Role, ServerMsg};
 use crate::server_log;
 use app::{App, Effect, Job, JobError};
+use clipboard::Clipboard;
 use input::{Router, Target};
 use outer::Outer;
 use peek::PeekCache;
@@ -87,6 +82,8 @@ pub struct UiEnv {
     pub config_file: Option<PathBuf>,
     /// server.log, where the UI says what failed.
     pub log: PathBuf,
+    /// Where selected text goes.
+    pub clipboard: Clipboard,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
@@ -124,6 +121,8 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let mut theme = Theme::default();
     reload_theme(&mut themes, &mut theme, &mut app, &env.log, clock);
     app.on_tick(clock());
+    // What the screen shows, which a selection copies.
+    let mut drawn = Buffer::empty(Rect::default());
     loop {
         let mut effects = Vec::new();
         let mut redraw = false;
@@ -185,7 +184,12 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                     app.on_branching(&repo, branching);
                 }
                 Effect::Run(job) => run_job(&env.exe, job, jobs.clone()),
-                Effect::CopySelection(_) => {}
+                Effect::CopySelection(selection) => {
+                    let text = selection.text(&drawn);
+                    if let Err(error) = env.clipboard.copy(&mut io::stdout(), &text) {
+                        log(&env.log, clock, &format!("ui: copy failed: {error:#}"));
+                    }
+                }
                 Effect::Quit(message) => return Ok(message),
             }
         }
@@ -193,7 +197,8 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
             peek.refresh(app.peeked());
             // The terminal holds the frame until it is complete, so it never shows half of one.
             execute!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
-            terminal.draw(|frame| app.draw(frame, &theme, peek.lines()))?;
+            let frame = terminal.draw(|frame| app.draw(frame, &theme, peek.lines()))?;
+            drawn = frame.buffer.clone();
             execute!(terminal.backend_mut(), EndSynchronizedUpdate)?;
         }
     }

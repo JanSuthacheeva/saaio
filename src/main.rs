@@ -48,6 +48,9 @@ fn env() -> Env {
         terminal: io::stdin().is_terminal() && io::stdout().is_terminal(),
         agent_shell: env::var_os("CLAUDECODE").is_some()
             || env::var_os("CODEX_THREAD_ID").is_some(),
+        ssh: env::var_os("SSH_CONNECTION").is_some() || env::var_os("SSH_TTY").is_some(),
+        wayland: env::var_os("WAYLAND_DISPLAY").is_some(),
+        x11: env::var_os("DISPLAY").is_some(),
     }
 }
 
