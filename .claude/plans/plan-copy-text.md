@@ -1,0 +1,382 @@
+# Copy text from the UI
+
+Implementation page: https://claude.ai/artifact/MNXznsovacXRwbNcy8uRw3
+(approaches: https://claude.ai/artifact/G8iMNgcALPerziiD8kWTvP)
+
+## Decision
+
+Reproduced: Claude Code 2.1.304 and Codex 0.163 turn on `?1003h` + `?1006h`; saaio mirrors that
+onto the real terminal, then drops every mouse event outside the pane but a left press, so no drag
+selects anything. A pane's own OSC 52 copy (Claude Code over SSH) is dropped by
+`server/terminal.rs` (`Event::ClipboardStore` ignored).
+
+Approach A: saaio owns the mouse, like tmux `mouse on`. While the UI runs the real terminal always
+reports buttons and drags (at least `?1002h`, always SGR). A drag on a saaio surface (open dialog,
+board, title row, sidebar or rail, history view, a pane whose program does not use the mouse)
+selects inside that surface, is highlighted, and is copied **on release** via OSC 52 plus the system
+clipboard command when not over SSH. Double-click selects a word, triple-click a line. A pane whose
+program uses the mouse gets every event it asked for, encoded as it asked (SGR or X10); its OSC 52
+is passed on when the pane is in view. The **wheel** over a pane that does not use the mouse scrolls
+saaio's history (opens it; down past the newest line leaves it). Shift-drag (Option-drag in iTerm2
+and Terminal.app) still gives the terminal's own selection. docs/ui.md "Mouse" is rewritten. No
+CHANGELOG entry (none before 0.1.0).
+
+## Units
+
+### `src/ui/selection.rs` (new, pure)
+
+```rust
+/// How far a selection reaches past the cells under it: a drag, a double-click, a triple-click.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unit { Cell, Word, Line }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Selection { bounds: Rect, anchor: Position, head: Position, unit: Unit }
+
+impl Selection {
+    pub fn new(bounds: Rect, at: Position, unit: Unit) -> Selection;
+    /// Moves the free end to `to`, clamped into bounds.
+    pub fn extend(&mut self, to: Position);
+    /// A press and release on one cell with Unit::Cell: a click, nothing selected.
+    pub fn is_click(&self) -> bool;
+    /// Rows in reading order, each with trailing blanks trimmed, joined by newlines; Word and Line
+    /// widen the ends in `buf`. Wide-char spacer cells are skipped.
+    pub fn text(&self, buf: &Buffer) -> String;
+    /// Reverses the selected cells.
+    pub fn render(&self, buf: &mut Buffer);
+}
+```
+
+A word is a run of cells that are neither blank nor box-drawing. A Word selection on a blank cell
+is empty and copies nothing.
+
+### `src/ui/clipboard.rs` (new)
+
+```rust
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Clipboard { command: Option<&'static [&'static str]> }
+
+impl Clipboard {
+    /// pbcopy on macOS; wl-copy under Wayland, else xclip -selection clipboard under X11; none over SSH.
+    pub fn new(ssh: bool, wayland: bool, x11: bool) -> Clipboard;
+    /// Writes osc52(text) to `out`, then pipes `text` to the command (waits for it); Err names what
+    /// failed. Empty text copies nothing.
+    pub fn copy(&self, out: &mut impl Write, text: &str) -> Result<()>;
+}
+
+/// ESC ] 52 ; c ; base64 BEL.
+fn osc52(text: &str) -> String;
+```
+
+New dependency `base64 = "0.22"`.
+
+### `src/ui/input.rs` (modified)
+
+```rust
+pub enum Routed {
+    Pane(Vec<u8>),
+    Command(Command),
+    View(Vec<Key>),
+    /// A mouse event for saaio. Replaces Click.
+    Pointer(Pointer),
+}
+
+pub struct Pointer { pub kind: PointerKind, pub at: Position }
+pub enum PointerKind { Press, Drag, Release, WheelUp, WheelDown }
+
+pub struct Target { pub pane: Rect, pub modal: bool, pub mouse: Mouse, pub sgr: bool }
+
+pub struct Router { /* existing */ held: Option<Holder> }
+enum Holder { Pane, Saaio }
+
+impl Router {
+    pub fn route(&mut self, bytes: &[u8], target: Target) -> Vec<Routed>;
+}
+
+/// The report in pane coordinates, SGR or X10 as the pane asked; None past X10's 223 columns.
+fn encode(event: MouseEvent, pane: Rect, sgr: bool) -> Option<Vec<u8>>;
+/// Whether a program in `mouse` mode asked for `event`: Press press/release/wheel, Drag also
+/// motion with a button, Motion all motion.
+fn wanted(mouse: Mouse, event: MouseEvent) -> bool;
+```
+
+Private `MouseEvent` gains `motion: bool` (button bit 32). Routing: modal -> every left
+press/drag/release and wheel is a Pointer. Not modal: a press inside the pane with `mouse != Off`
+sets `held = Pane`; while held, motion and release go to the pane (coordinates clamped to the pane)
+when `wanted`. Any other left press sets `held = Saaio`; while held, drags and the release are
+Pointers wherever they are. Wheel inside a mouse pane goes to the pane, elsewhere it is a Pointer.
+Release clears `held`. Motion without a button outside a mouse pane, and other buttons outside the
+pane, are dropped.
+
+### `src/ui/outer.rs` (modified)
+
+```rust
+/// The pane's modes with saaio's own mouse needs on top: buttons and drags at least, always SGR.
+fn captured(modes: Modes) -> Modes;
+```
+
+`enter` writes the capture of `Modes::default()` before the first frame; `mirror` writes
+`mode_changes(captured(old), captured(new))`.
+
+### App (`src/ui/app.rs`, `app/pointer.rs` new, `app/keys.rs`, `app/messages.rs`, `app/draw.rs`, `app/effect.rs`)
+
+```rust
+// app.rs
+selection: Option<Selection>,
+clicks: Option<pointer::Clicks>,  // Clicks { at: Position, time: u64, count: u8 } lives in app/pointer.rs
+
+impl App {
+    /// The open dialog inside its frame (a press on the frame selects inside it), the board (whole
+    /// screen), the title row, the pane, the sidebar or rail.
+    fn surface_at(&self, at: Position) -> Option<Rect>;
+    /// The dialog the view shows over the session, shared by draw_view and surface_at.
+    fn dialog<'a>(&'a self, theme: &'a Theme) -> Option<Dialog<'a>>;  // in app/draw.rs
+    /// The focused pane's modes, for the router's Target.
+    pub fn pane_modes(&self) -> Modes;
+}
+
+// app/pointer.rs
+const WHEEL_LINES: u32 = 3;
+const MULTI_CLICK_MS: u64 = 500;
+impl App {
+    pub(super) fn on_pointer(&mut self, pointer: Pointer) -> Vec<Effect>;
+    /// Only over the pane.
+    fn on_wheel(&mut self, kind: PointerKind, at: Position) -> Vec<Effect>;
+    /// Moved from keys.rs.
+    fn on_click(&mut self, at: Position) -> Vec<Effect>;
+}
+
+// app/effect.rs
+pub enum Effect {
+    // existing
+    CopySelection(Selection),
+    Copy(String),
+}
+```
+
+- `on_input`: `Routed::Pointer` -> `on_pointer`; any other input clears `selection`. Focus change,
+  resize and opening a view clear it too.
+- `on_server(ServerMsg::Clipboard(text))` -> `vec![Effect::Copy(text)]`.
+- `draw` ends with `selection.render(frame.buffer_mut())` (board view too).
+- `draw_view` uses `dialog()` for Stop, Confirm, Help; NewFlow's box from `NewFlowView::dialog()`.
+
+### `src/ui.rs` (modified)
+
+`UiEnv` gains `pub clipboard: Clipboard`. The loop routes with
+`Target { pane: app.areas().pane, modal: app.is_modal(), mouse: modes.mouse, sgr: modes.sgr_mouse }`
+from `app.pane_modes()`, keeps `drawn: Buffer` cloned from each `terminal.draw` result, and runs
+`Effect::CopySelection(sel)` as `clipboard.copy(&mut stdout, &sel.text(&drawn))` and
+`Effect::Copy(text)` as `clipboard.copy(&mut stdout, &text)`; an Err is logged as
+`ui: copy failed: {error:#}`.
+
+### Env (`src/main.rs`, `src/cli/env.rs`, `src/cli/commands/ui.rs`)
+
+```rust
+pub struct Env {
+    // existing
+    /// $SSH_CONNECTION or $SSH_TTY is set.
+    pub ssh: bool,
+    /// $WAYLAND_DISPLAY / $DISPLAY are set.
+    pub wayland: bool,
+    pub x11: bool,
+}
+impl Env {
+    pub fn clipboard(&self) -> Clipboard;
+}
+```
+
+### Server (`src/server/terminal.rs`, `host.rs`, `server.rs`, `conn.rs`, `src/proto.rs`)
+
+```rust
+// terminal.rs
+struct Listener { /* existing */ copied: Arc<Mutex<Option<String>>> }
+impl Terminal {
+    /// The text the program last put on the clipboard (OSC 52), drained.
+    pub fn copied(&mut self) -> Option<String>;
+}
+
+// host.rs
+pub fn feed(&mut self, key: &PaneKey, bytes: &[u8]) -> Option<String>;
+
+// conn.rs
+/// Sends the text to the attached UI; over MAX_MESSAGE it is logged and not sent.
+pub(super) fn send_clipboard(&mut self, text: String);
+
+// proto.rs
+pub const PROTOCOL_VERSION: u32 = 7;
+#[derive(..., PartialOrd, Ord)] pub enum Mouse { Off, Press, Drag, Motion }
+pub enum ServerMsg { /* existing */ Clipboard(String) }
+```
+
+Clipboard (`c`) and primary (`p`) stores both pass on; OSC 52 reads stay refused (`Osc52::OnlyCopy`).
+
+## Data
+
+| Type | Fields | Crosses |
+| --- | --- | --- |
+| `Selection`, `Unit` | bounds, anchor, head (screen cells), unit | App -> Effect -> ui.rs |
+| `Pointer`, `PointerKind` | kind, at | Router -> App |
+| `Target` | pane, modal, mouse, sgr | ui.rs -> Router |
+| `ServerMsg::Clipboard(String)` | decoded text | server -> UI (protocol 7) |
+| `Clipboard` | command argv | main -> Env -> UiEnv |
+
+## Call chains
+
+### Drag over a saaio surface
+
+1. `ui.rs -> Router::route(bytes, target): Vec<Routed>` - press outside a mouse pane: `held = Saaio`, `Routed::Pointer(Press)`.
+2. `ui.rs -> App::on_input(Pointer) -> on_pointer` - `surface_at(at): Some(bounds)`; click count from `clicks`; `selection = Some(Selection::new(bounds, at, unit))`.
+3. Drag: `Router` (held Saaio) -> `Pointer(Drag)` even over the pane -> `Selection::extend(at)`; redraw.
+4. `App::draw -> Selection::render(buf)`; loop keeps `drawn`.
+5. Release: `held = None`; `is_click()` -> `on_click(at)` (sidebar or rail focus), `selection = None`; else `Effect::CopySelection(sel)`, highlight stays until the next input.
+6. `ui.rs -> Clipboard::copy(&mut stdout, &sel.text(&drawn)): Result<()>`.
+7. Error: command missing or failing -> Err -> server.log `ui: copy failed: ...`; nothing shown. Press outside every surface -> `surface_at: None`, nothing.
+
+### Drag in a pane whose program uses the mouse
+
+1. `Router::route` - press in pane, `mouse != Off`: `held = Pane`; `Routed::Pane(encode(event, pane, sgr))` when `wanted`.
+2. `App::on_input -> Effect::Send(ClientMsg::Input(bytes))`.
+3. Motion leaving the pane keeps going to it while held, clamped to its edge.
+
+### A pane's program copies with OSC 52
+
+1. `Server::handle(Host(Output(key, bytes))) -> Host::feed(&key, &bytes): Option<String>`.
+2. `Host::feed -> Terminal::feed`; `Listener` stores `ClipboardStore` text; `Terminal::copied()` drains it.
+3. `key == focus` -> `Server::send_clipboard(text) -> send_to(attached, ServerMsg::Clipboard(text))`.
+4. `App::on_server(Clipboard(text)) -> Effect::Copy(text)` -> `Clipboard::copy`.
+5. Error: no UI attached or pane not in view -> dropped; over MAX_MESSAGE -> logged, not sent.
+
+### Wheel
+
+1. Over a pane with mouse Off: `Router -> Pointer(WheelUp)` -> `on_wheel`: `View::Panes` -> `view = History(3)`, `Send(History(Some(3)))`.
+2. In `History(n)` (modal): up -> `n + 3`; down -> `n - 3`, at 0 -> `view = Panes`, `Send(History(None))`.
+3. Over the sidebar, board or dialogs: nothing.
+
+### Double and triple click
+
+1. Press on the same cell within `MULTI_CLICK_MS` of the last: count 2 -> `Unit::Word`, 3 -> `Unit::Line`.
+2. Release copies (never `is_click`); an empty word copies nothing.
+
+## Test seams
+
+- `selection.rs`: hand-built `Buffer`; forward and backward drags over rows, trailing blanks, clamping, wide chars, word and line widening, `render` reverses exactly the selected cells.
+- `clipboard.rs`: `osc52` bytes; `Clipboard::new` choices; `copy` without a command writes only OSC 52.
+- `input.rs`: Pointer outside the pane; drag held by saaio across the pane; drag held by the pane out of it; mode filtering; X10 and SGR encoding; modal sends all to saaio.
+- `outer.rs`: `captured` for Off, Press, Motion.
+- `terminal.rs`: `ESC]52;c;aGk=BEL` -> `copied() == Some("hi")` once; a query writes no reply.
+- `server/tests.rs`: focused pane printing OSC 52 sends `ServerMsg::Clipboard`; a pane not in view does not.
+- `app/tests/pointer.rs` (new): sidebar drag -> CopySelection with the right text from the rendered buffer; click focuses; key clears; wheel opens, scrolls and leaves history; double-click selects a word; dialog drag stays inside the dialog.
+
+## Assumptions
+
+- Highlight is reversed video, not the theme's selection colour.
+- No "copied" notice.
+- Highlight stays after the copy until the next key, click or focus change.
+- OSC 52 from a pane passes on only while it is in view.
+- Clipboard and primary OSC 52 writes both go to the clipboard; reads stay refused.
+- Inside tmux, saaio's OSC 52 needs `set-clipboard on` (documented); locally the system command copies anyway.
+- Linux: wl-copy, else xclip; a failure is logged per copy.
+
+## Tasks
+
+- [x] Add `base64` and `ui/clipboard.rs`: `osc52`, `Clipboard::new`, `Clipboard::copy`, with unit tests for the bytes, command choice and copy without a command
+- [x] Add `ui/selection.rs`: `Selection`, `Unit`, `new`, `extend`, `is_click`, `text`, `render`, with unit tests on a hand-built Buffer (rows, trimming, clamping, wide chars, word, line, render)
+- [x] Make `Mouse` ordered and add `outer::captured`; `Outer::enter` turns capture on and `mirror` writes captured modes, with tests for Off, Press and Motion panes
+- [x] Router: `Target`, `Pointer`, `PointerKind`, `held`, `encode`, `wanted`; `Routed::Pointer` replaces `Click`; tests for ownership of drags, mode filtering, X10/SGR encoding and modal routing (callers adapted, clicks still focus)
+- [x] App: `selection`, `clicks`, `surface_at`, `dialog`, `pane_modes`, `app/pointer.rs` (`on_pointer`, `on_wheel`, `on_click` moved), `Effect::CopySelection`, selection drawn and cleared; tests in `app/tests/pointer.rs`
+- [x] Env `ssh`, `wayland`, `x11` and `Env::clipboard`; `UiEnv.clipboard`; ui.rs builds `Target`, keeps `drawn`, runs `Effect::CopySelection` and logs a failed copy
+- [x] Pass a pane's OSC 52 on: `Terminal::copied`, `Host::feed -> Option<String>`, `Server::send_clipboard`, `ServerMsg::Clipboard`, protocol 7, `Effect::Copy`; tests in terminal.rs and server/tests.rs
+- [x] Rewrite docs/ui.md "Mouse": drag, double and triple click, wheel, Shift or Option for the terminal's own selection, terminal table, iTerm2 setting, tmux `set-clipboard on`
+- [x] End to end in tmux with a scratch store: drag on sidebar, rail, title, board, a dialog, history and a shell pane, checked with pbpaste and a tmux buffer; sidebar click and wheel; Claude Code pane with `SSH_CONNECTION` set passes its OSC 52 on
+
+- [x] Wheel over a pane on the alternate screen without the mouse sends arrow keys, as tmux does: `Modes.alt_screen` from `TermMode::ALT_SCREEN`; `on_wheel` in `View::Panes` sends 3 up or down arrows (`ESC O A` with app_cursor, else `ESC [ A`) instead of opening history; tests in terminal.rs and app/tests/pointer.rs
+- [x] docs/ui.md: a pane's OSC 52 passes on "while it is the focused session"
+
+## Review
+
+### Round 1 (main..0e1745e)
+
+Reviewed in isolation against this plan, CLAUDE.md and the code around the diff (main..0e1745e).
+The fix commits were checked by a second, fresh agent.
+
+### Fixed
+
+- A notice in the title row could not be copied: the press that starts a drag cleared it, so the
+  copy read blanks. Pointer input no longer clears it; a plain click does. Test
+  `a_notice_can_be_selected_and_a_click_dismisses_it` (03b3259).
+- A double-click on a blank (or any selection of blanks) wrote an empty OSC 52 and piped nothing to
+  pbcopy, wiping the clipboard, against "an empty word copies nothing". `Clipboard::copy` now does
+  nothing for empty text. Test `nothing_to_copy_leaves_the_clipboard_alone` (0e1745e).
+
+### Open
+
+- The wheel over a pane whose program is on the alternate screen without the mouse (`less`, `man`,
+  a pager in a shell pane) now opens saaio's history instead of scrolling the program: with the
+  mouse always captured, the terminal's alternate-scroll (wheel as arrow keys) no longer applies,
+  and the UI does not know the pane is on the alternate screen. Claude Code and Codex use the mouse,
+  so agent panes are unaffected. Not shown end to end (needs a shell pane). Recommendation: ship;
+  add to ROADMAP "Planned soon": send arrow keys for the wheel when the pane is on the alternate
+  screen with the mouse off, as tmux does.
+- A pane's OSC 52 passes on while its pane is focused, also while the board covers it; docs/ui.md
+  says "while its pane is in view". Recommendation: accept, it is harmless; or reword the docs to
+  "while it is the focused session".
+- The highlight stays on screen cells while the pane under it scrolls, and toggling REVERSED
+  un-reverses cells that were already reversed. Both follow the plan's assumptions; recommendation:
+  accept.
+
+### Decided
+
+- Wheel in a pager: fix in this PR the tmux way (task added).
+- OSC 52 while the board covers the pane: accept; docs say "while it is the focused session" (task added).
+- Highlight on scrolling cells and toggled REVERSED: accepted.
+
+### Where to look
+
+1. `src/ui/input.rs` `Router::route_mouse`: who holds a drag (`held`), modal routing, `wanted` and
+   `encode` (X10 vs SGR, clamping). The most stateful part.
+2. `src/ui/outer.rs` `captured` and `mirror`: saaio now always turns on `?1002h` + `?1006h`, which
+   changes what every pane sees from the terminal.
+3. `src/ui/app/pointer.rs` `on_pointer` and `surface_at`: click vs selection, multi-click counting
+   on the 100 ms tick clock, dialog bounds.
+4. `src/server.rs` / `conn.rs` `send_clipboard`: OSC 52 from the focused pane only, size cap.
+
+Routine, skim: `selection.rs` (pure, well tested), `clipboard.rs`, the Env plumbing, docs.
+
+### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 0e1745e.
+
+### Round 2 (0d6f886..d5168a8)
+
+Reviewed in isolation: the two tasks from round 1's decisions (wheel in a pager, OSC 52 wording).
+
+#### Fixed
+
+- docs/ui.md "History" still said the wheel over a pane that leaves the mouse to saaio opens the
+  history; on the alternate screen it now sends arrow keys. Reworded (088f65c).
+
+#### Open
+
+- None. Checked and let go: `Modes.alt_screen` changes the postcard layout of `Frame`, but protocol
+  7 is new on this branch, so no released UI or server speaks it; `mode_changes` ignores the new
+  field, so the real terminal sees nothing new; in History or Board view the wheel keeps its old
+  behaviour; a pane that uses the mouse still gets the wheel itself (the router never hands it to
+  App).
+
+#### End to end
+
+Scratch store, master agent set to `less` on 500 numbered lines, in tmux: two wheel-down notches
+moved the top line from 1 to 7, one wheel-up back to 4, no history view opened.
+
+#### Where to look
+
+1. `src/ui/app/pointer.rs` `on_wheel`: the alt-screen branch before the history branch, only in
+   `View::Panes`.
+2. `src/server/terminal.rs` `modes`: `alt_screen` from `TermMode::ALT_SCREEN`.
+
+Routine, skim: the test-fixture updates in proto.rs and outer.rs, docs/ui.md.
+
+#### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 9d56d06;
+only docs and this plan changed after it.

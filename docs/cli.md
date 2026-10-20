@@ -69,10 +69,10 @@ bin: ~/.local/bin/saaio
 description: "Tracks parallel feature flows: what each is doing, where it is blocked, how far it got"
 count: 3
 needs_you: 2
-flows[3]{name,state,phase,tasks,age}:
-  shop-221,waiting,plan,"",2s
-  shop-217,blocked,implement,4/9,2s
-  scratch,idle,"","",11s
+flows[3]{name,state,phase,tasks,age,services}:
+  shop-221,waiting,plan,"",2s,""
+  shop-217,blocked,implement,4/9,2s,""
+  scratch,idle,"","",11s,""
 blockers[2]{name,blocker}:
   shop-221,Should refunds count against the original order's totals or the refund date's?
   shop-217,"Task 5: the migration needs a default value"
@@ -82,6 +82,8 @@ help[2]: "Run `saaio status <name>` for one flow's phases, timeline and decision
 - Order: needs you, ready (turn ended, nothing asked), running, finished. Most recent change first
   within each group.
 - `age`: time since the flow's state, phase or blocker last changed.
+- `services`: empty while the flow's services run or were never paused; else `pausing`, `paused`,
+  `resuming`, `pause-failed` or `resume-failed` ([repository.md](repository.md#pause-and-resume)).
 
 ### --stop
 
@@ -203,6 +205,7 @@ help[2]: Run `saaio report --flow shop-217 working` once the block is resolved,R
 | `branch`, `worktree`, `worktree_exists` | for a flow with a worktree. `worktree_exists` is false once the folder is gone. |
 | `folder` | for a plain session |
 | `answer` | the closing message of the worker's last turn |
+| `services`, `services_error` | while the flow's services are not running: `paused`, `resume-failed`, ..., and the last error line of a failed pause or resume |
 
 A Claude Code worker that asks with a question dialog (AskUserQuestion) shows its questions and
 options:
@@ -521,10 +524,10 @@ Shared in the shared folder (`$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio
 $ saaio status --all
 count: 3
 needs_you: 2
-flows[3]{project,name,state,phase,tasks,age}:
-  shop,shop-221,waiting,plan,"",2s
-  shop,shop-217,blocked,implement,4/9,2s
-  shop,scratch,idle,"","",11s
+flows[3]{project,name,state,phase,tasks,age,services}:
+  shop,shop-221,waiting,plan,"",2s,""
+  shop,shop-217,blocked,implement,4/9,2s,""
+  shop,scratch,idle,"","",11s,""
 blockers[2]{project,name,blocker}:
   shop,shop-221,Should refunds count against the original order's totals or the refund date's?
   shop,shop-217,"Task 5: the migration needs a default value"

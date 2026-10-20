@@ -108,6 +108,30 @@ fn every_view_looks_as_it_did() {
     });
     golden("board-detail", &render_at(&detail, FLEET));
 
+    let mut paused = board_app();
+    let mut fleet = super::fleet();
+    let waiting = fleet
+        .flows
+        .iter_mut()
+        .find(|flow| flow.name == "shop-230")
+        .unwrap();
+    waiting.services = Some(crate::view::Services {
+        status: crate::event::ServiceStatus::Paused,
+        since: waiting.changed_at + 5 * 60_000,
+        reason: None,
+    });
+    let selected = fleet
+        .flows
+        .iter()
+        .position(|flow| flow.name == "shop-230")
+        .unwrap();
+    paused.on_server(ServerMsg::Board(fleet));
+    paused.view = View::Board(BoardState {
+        selected: selected + 1,
+        all: false,
+    });
+    golden("board-paused", &render_at(&paused, FLEET));
+
     let narrow = Size { cols: 96, rows: 30 };
     board.on_resize(narrow);
     golden("narrow-board", &render_at(&board, narrow));

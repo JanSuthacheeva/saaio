@@ -1,30 +1,29 @@
 use std::fmt::Write as _;
 use std::mem;
 
-use ratatui::layout::Position;
-
 use super::{App, Effect, Job, Removal, View};
 use crate::proto::{ClientMsg, PaneKey};
 use crate::text::plural;
 use crate::ui::board::BoardState;
 use crate::ui::input::{Command, Key, Routed, Step};
 use crate::ui::newflow::{FormAction, NewFlowForm};
-use crate::ui::rail::Rail;
 use crate::ui::screen::Screen;
-use crate::ui::theme::Theme;
 
 impl App {
     pub fn on_input(&mut self, routed: Routed) -> Vec<Effect> {
-        if !matches!(routed, Routed::Pane(_)) {
+        if !matches!(routed, Routed::Pane(_) | Routed::Pointer(_)) {
             self.notice = None;
+        }
+        if !matches!(routed, Routed::Pointer(_)) {
+            self.selection = None;
         }
         match routed {
             Routed::Pane(bytes) if self.view == View::Panes => match self.ended_worker() {
                 Some(name) => self.on_ended_key(name, &bytes),
                 None => vec![Effect::Send(ClientMsg::Input(bytes))],
             },
-            Routed::Click { col, row } if self.view == View::Panes => self.on_click(col, row),
-            Routed::Pane(_) | Routed::Click { .. } => vec![],
+            Routed::Pointer(pointer) => self.on_pointer(pointer),
+            Routed::Pane(_) => vec![],
             Routed::View(keys) => self.on_keys(keys),
             Routed::Command(command) => self.on_command(command),
         }
@@ -216,24 +215,6 @@ impl App {
         }
     }
 
-    fn on_click(&mut self, col: u16, row: u16) -> Vec<Effect> {
-        let side = self.areas().side;
-        if !side.contains(Position::new(col, row)) {
-            return vec![];
-        }
-        let theme = Theme::default();
-        let sidebar = self.sidebar(&theme, &[]);
-        let key = if self.folded() {
-            Rail { sidebar }.key_at(row - side.y, side.height)
-        } else {
-            sidebar.key_at(row - side.y, side.height)
-        };
-        match key {
-            Some(key) => self.focus(key),
-            None => vec![],
-        }
-    }
-
     pub(super) fn focus(&mut self, key: PaneKey) -> Vec<Effect> {
         if key == self.focus {
             return vec![];
@@ -243,6 +224,7 @@ impl App {
         }
         self.focus = key.clone();
         self.cursor = None;
+        self.selection = None;
         if matches!(self.view, View::History(_)) {
             self.view = View::Panes;
         }

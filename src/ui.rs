@@ -1,5 +1,6 @@
 pub mod app;
 pub mod board;
+pub mod clipboard;
 pub mod dialog;
 pub mod fit;
 pub mod focus;
@@ -13,6 +14,7 @@ pub mod peek;
 pub mod prefix;
 pub mod rail;
 pub mod screen;
+pub mod selection;
 pub mod sidebar;
 pub mod theme;
 pub mod theme_file;
@@ -26,8 +28,10 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
+use ratatui::buffer::Buffer;
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
+use ratatui::layout::Rect;
 use signal_hook::consts::SIGWINCH;
 use signal_hook::iterator::Signals;
 
@@ -36,7 +40,8 @@ use crate::client::Client;
 use crate::proto::{Role, ServerMsg};
 use crate::server_log;
 use app::{App, Effect, Job, JobError};
-use input::Router;
+use clipboard::Clipboard;
+use input::{Router, Target};
 use outer::Outer;
 use peek::PeekCache;
 use prefix::Prefix;
@@ -77,6 +82,8 @@ pub struct UiEnv {
     pub config_file: Option<PathBuf>,
     /// server.log, where the UI says what failed.
     pub log: PathBuf,
+    /// Where selected text goes.
+    pub clipboard: Clipboard,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
@@ -114,6 +121,8 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let mut theme = Theme::default();
     reload_theme(&mut themes, &mut theme, &mut app, &env.log, clock);
     app.on_tick(clock());
+    // What the screen shows, which a selection copies.
+    let mut drawn = Buffer::empty(Rect::default());
     loop {
         let mut effects = Vec::new();
         let mut redraw = false;
@@ -121,10 +130,15 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
             redraw |= !matches!(event, Event::Tick);
             effects.extend(match event {
                 Event::Input(bytes) => {
-                    let pane = app.areas().pane;
-                    let modal = app.is_modal();
+                    let modes = app.pane_modes();
+                    let target = Target {
+                        pane: app.areas().pane,
+                        modal: app.is_modal(),
+                        mouse: modes.mouse,
+                        sgr: modes.sgr_mouse,
+                    };
                     let mut effects = Vec::new();
-                    for routed in router.route(&bytes, modal, pane) {
+                    for routed in router.route(&bytes, target) {
                         effects.extend(app.on_input(routed));
                     }
                     effects
@@ -170,6 +184,10 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                     app.on_branching(&repo, branching);
                 }
                 Effect::Run(job) => run_job(&env.exe, job, jobs.clone()),
+                Effect::CopySelection(selection) => {
+                    copy(&env.clipboard, &env.log, &selection.text(&drawn), clock);
+                }
+                Effect::Copy(text) => copy(&env.clipboard, &env.log, &text, clock),
                 Effect::Quit(message) => return Ok(message),
             }
         }
@@ -177,9 +195,17 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
             peek.refresh(app.peeked());
             // The terminal holds the frame until it is complete, so it never shows half of one.
             execute!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
-            terminal.draw(|frame| app.draw(frame, &theme, peek.lines()))?;
+            let frame = terminal.draw(|frame| app.draw(frame, &theme, peek.lines()))?;
+            drawn = frame.buffer.clone();
             execute!(terminal.backend_mut(), EndSynchronizedUpdate)?;
         }
+    }
+}
+
+/// Puts `text` on the clipboard; a failure goes to server.log, since nothing on screen asked.
+fn copy(clipboard: &Clipboard, log_file: &Path, text: &str, clock: fn() -> u64) {
+    if let Err(error) = clipboard.copy(&mut io::stdout(), text) {
+        log(log_file, clock, &format!("ui: copy failed: {error:#}"));
     }
 }
 

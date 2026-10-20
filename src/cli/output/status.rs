@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 use super::{DESCRIPTION, Document, LIST_TEXT_LIMIT, toon, truncated};
-use crate::event::Phase;
+use crate::event::{Phase, ServiceStatus};
 use crate::text::short_duration;
 use crate::ui::prefix::Prefix;
 use crate::view::{Board, FlowView, Projects, State};
@@ -49,6 +49,7 @@ struct FlowRow<'a> {
     phase: &'a str,
     tasks: String,
     age: String,
+    services: &'static str,
 }
 
 #[derive(Debug, Serialize)]
@@ -74,6 +75,7 @@ fn board_list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool)
                         .map(|tasks| tasks.to_string())
                         .unwrap_or_default(),
                     age: short_duration(board.now.saturating_sub(flow.changed_at)),
+                    services: services(flow),
                 })
                 .collect(),
         )
@@ -108,6 +110,15 @@ fn board_list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool)
     }))
 }
 
+/// Where a flow's services stand: empty while they run or were never paused, else paused,
+/// pausing, resuming, pause-failed or resume-failed.
+fn services(flow: &FlowView) -> &'static str {
+    match &flow.services {
+        Some(services) if services.status != ServiceStatus::Running => services.status.name(),
+        _ => "",
+    }
+}
+
 /// Every project's flows in one list with a project column, blockers likewise.
 pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Document {
     #[derive(Serialize)]
@@ -135,6 +146,7 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
         phase: &'a str,
         tasks: String,
         age: String,
+        services: &'static str,
     }
     #[derive(Serialize)]
     struct AllBlockerRow<'a> {
@@ -166,6 +178,7 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
                 .map(|tasks| tasks.to_string())
                 .unwrap_or_default(),
             age: short_duration(projects.now.saturating_sub(flow.changed_at)),
+            services: services(flow),
         })
         .collect::<Vec<_>>();
     let blockers = flows
@@ -223,6 +236,10 @@ pub(crate) fn detail(
         phase: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         blocker: Option<String>,
+        #[serde(skip_serializing_if = "str::is_empty")]
+        services: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        services_error: Option<String>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         questions: Vec<QuestionRow>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -297,6 +314,12 @@ pub(crate) fn detail(
         state: flow.state.name(),
         phase: flow.phase.as_ref().map(|phase| phase.name().to_string()),
         blocker: flow.blocker.as_deref().map(cut),
+        services: services(flow),
+        services_error: flow
+            .services
+            .as_ref()
+            .and_then(|services| services.reason.as_deref())
+            .map(cut),
         questions: (1..)
             .zip(&flow.questions)
             .map(|(n, asked)| QuestionRow {
@@ -409,10 +432,10 @@ mod tests {
                 "description: \"Tracks parallel feature flows: what each is doing, where it is blocked, how far it got\"",
                 "count: 3",
                 "needs_you: 1",
-                "flows[3]{name,state,phase,tasks,age}:",
-                "  shop-221,blocked,implement,4/9,7m",
-                "  shop-230,working,plan,\"\",9m",
-                "  export-csv,done,merge-request,\"\",9m",
+                "flows[3]{name,state,phase,tasks,age,services}:",
+                "  shop-221,blocked,implement,4/9,7m,\"\"",
+                "  shop-230,working,plan,\"\",9m,\"\"",
+                "  export-csv,done,merge-request,\"\",9m,paused",
                 "blockers[1]{name,blocker}:",
                 "  shop-221,\"Task 5: migration needs a default value\"",
                 "help[2]: \"Run `saaio status <name>` for one flow's phases, timeline and decisions\",Run `saaio new --name <name> --request <text>` to track a new flow",
@@ -502,7 +525,7 @@ mod tests {
 
         assert!(text.starts_with("count: 4\nneeds_you: 1\n"), "{text}");
         assert!(
-            text.contains("flows[4]{project,name,state,phase,tasks,age}:"),
+            text.contains("flows[4]{project,name,state,phase,tasks,age,services}:"),
             "{text}"
         );
         assert!(text.contains("  api,api-7,working,"), "{text}");
@@ -515,6 +538,10 @@ mod tests {
             "{text}"
         );
         assert!(text.contains("web: cannot read x"), "{text}");
+        assert!(
+            text.contains("  shop,export-csv,done,merge-request,\"\",29m,paused"),
+            "{text}"
+        );
     }
 
     #[test]
@@ -530,6 +557,40 @@ mod tests {
 
         assert!(text.contains("flows: none tracked"), "{text}");
         assert!(!text.contains("saaio status <name>"), "{text}");
+    }
+
+    #[test]
+    fn the_detail_says_where_paused_services_stand_and_why_a_resume_failed() {
+        let services = |status, reason: Option<&str>| EventKind::Services {
+            status,
+            reason: reason.map(str::to_string),
+        };
+        let text = |events| {
+            detail(
+                &flow("shop-221", events, 9 * MIN),
+                9 * MIN,
+                false,
+                None,
+                Prefix::default(),
+            )
+            .text()
+            .to_string()
+        };
+
+        let paused = text(vec![services(ServiceStatus::Paused, None)]);
+        assert!(paused.contains("\nservices: paused\n"), "{paused}");
+        assert!(!paused.contains("services_error"), "{paused}");
+        let failed = text(vec![services(
+            ServiceStatus::ResumeFailed,
+            Some("port 8003 is taken"),
+        )]);
+        assert!(failed.contains("\nservices: resume-failed\n"), "{failed}");
+        assert!(
+            failed.contains("\nservices_error: port 8003 is taken\n"),
+            "{failed}"
+        );
+        let running = text(vec![services(ServiceStatus::Running, None)]);
+        assert!(!running.contains("services"), "{running}");
     }
 
     #[test]

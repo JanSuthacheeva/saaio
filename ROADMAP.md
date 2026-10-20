@@ -22,6 +22,7 @@ Nothing in progress.
 | `saaio start --base <branch>` | a flow's worktree branches from what the repository has checked out, so a stack of merge requests cannot run as one flow each | `saaio start --base <branch>` creates the worktree from the given branch, one flow per merge request in the stack |
 | Messages to a worker at a permission prompt | `saaio send` to a worker waiting on a permission prompt says sent, but the worker reads it only once the prompt is answered in its pane | `saaio send` says the prompt is open, or the master answers the prompt itself |
 | Answers typed in a worker's pane | the master learns only that a flow stopped. When you answer in the worker's pane first, the master can still relay the question it already has. | what you type in a worker's pane shows in its timeline, and news for a flow that left `waiting` before the master woke says it was answered |
+| Hooks killed with what they started | a setup, teardown, pause or resume script that runs too long is killed, but what it started (a `docker compose up`) goes on | the script runs in its own process group, and the whole group is killed |
 | Package managers | the install script fetches the binary from the GitHub release | a Homebrew tap, `cargo binstall saaio`, and the install script at saaio.dev |
 | Windows | saaio runs on macOS and Linux | Windows support: the UI and `saaio server` talk over something other than a Unix socket, panes run in ConPTY, `saaio start` claims slots without `flock`, and the `.saaio/setup` and `.saaio/teardown` hooks run without a Unix shell |
 

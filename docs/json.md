@@ -128,6 +128,7 @@ All times are Unix milliseconds.
 | `answer` | string or null | the worker's last turn's whole closing message, as its harness reported it |
 | `session` | object or null | `{ "id", "transcript" }`: the session id the harness picked and the path of its transcript (`transcript` may be null). Set for Codex, which picks its own id. Null for Claude Code, which uses the flow's. |
 | `questions` | array | the questions of the dialog a `waiting` flow shows. Empty when it waits on none. See [Questions](#questions). |
+| `services` | object or null | where the flow's services stand. Null until saaio first pauses them. See [Services](#services). |
 
 ### States
 
@@ -159,7 +160,7 @@ A flow keeps the phases it started with. Two flows can have different steps.
 | Key | Type | Holds |
 | --- | --- | --- |
 | `at` | number | when it happened |
-| `text` | string | what happened: `started`, `phase: plan`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `PR #42 merged`, `PR #42 closed`, `master: ...` (a message from the master), `ended` |
+| `text` | string | what happened: `started`, `phase: plan`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `PR #42 merged`, `PR #42 closed`, `master: ...` (a message from the master), `pause failed: ...`, `resume failed: ...`, `ended` |
 | `tone` | string | `neutral`, `progress`, `attention`, `problem` or `success` |
 
 ### Questions
@@ -173,6 +174,16 @@ question.
 | `question` | string | the question |
 | `options` | array | `{ "label", "description" }` per option, in the dialog's order |
 | `multiSelect` | boolean | several options may be picked |
+
+### Services
+
+The repo's `.saaio/pause` and `.saaio/resume` ([repository.md](repository.md#pause-and-resume)).
+
+| Key | Type | Holds |
+| --- | --- | --- |
+| `status` | string | `pausing`, `paused`, `resuming`, `running`, `pause-failed` or `resume-failed` |
+| `since` | number | when it got there |
+| `reason` | string or null | the script's last error line, for `pause-failed` and `resume-failed` |
 
 ### Workspace
 

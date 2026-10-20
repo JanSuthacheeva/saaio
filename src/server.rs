@@ -9,7 +9,9 @@ mod dismiss;
 mod forge_watch;
 mod news;
 mod panes;
+mod pause_watch;
 mod startup;
+mod timing;
 mod typing;
 
 use std::collections::{HashMap, HashSet};
@@ -18,7 +20,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::ops::ControlFlow;
 use std::os::unix::net::UnixStream;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -46,7 +48,10 @@ use forge_watch::{Answer, ForgeWatch};
 use host::{Host, HostEvent};
 use master::MasterRecord;
 use panes::forward_host_events;
+use pause_watch::PauseWatch;
 use watch::StoreWatch;
+
+pub use timing::Timing;
 
 /// The shortest time between two frames of the focused pane (60 a second).
 const FRAME_EVERY: Duration = Duration::from_millis(16);
@@ -75,6 +80,8 @@ pub struct ServerPaths {
     pub config: Option<PathBuf>,
     /// Where saaio writes the example theme.toml, beside config.toml.
     pub theme: Option<PathBuf>,
+    /// The folder a new master opens in.
+    pub cwd: PathBuf,
 }
 
 pub(super) type ConnId = u64;
@@ -94,6 +101,8 @@ enum Event {
     Unreadable(ConnId),
     /// What gh or glab said about a flow's merge request.
     Forge(Answer),
+    /// A flow's .saaio/pause or .saaio/resume ended.
+    Paused(pause_watch::Finished),
 }
 
 /// Why the server stops.
@@ -126,6 +135,7 @@ impl fmt::Display for Stop {
 struct Server {
     store: Store,
     clock: fn() -> u64,
+    timing: Timing,
     watch: StoreWatch,
     board: Board,
     sent_board: Option<Board>,
@@ -166,6 +176,8 @@ struct Server {
     dismissed: HashMap<PaneKey, u64>,
     /// When to ask gh and glab about the flows' merge requests.
     forges: ForgeWatch,
+    /// The flows whose services a pause or resume runs for.
+    pauses: PauseWatch,
 }
 
 /// Writes master.md and, when missing, the example config.toml and theme.toml; logs what fails.
@@ -199,25 +211,27 @@ pub fn run(
     store: Store,
     config: Config,
     env: LaunchEnv,
-    cwd: &Path,
     system: &System,
+    timing: Timing,
     clock: fn() -> u64,
 ) -> Result<()> {
     private::create_dir(store.root())
         .with_context(|| format!("could not close {} to others", store.root().display()))?;
+    // Before the bind: a client may signal the server as soon as it can connect.
+    let (events, inbox) = mpsc::channel();
+    stop_on_signals(events.clone())?;
     let listener = bind(&paths.socket)?;
     server_log::write(clock(), &started(system));
     write_defaults(paths, clock);
     let mut configs = ConfigWatch::new(paths.config.clone());
     // The server was handed this config; the watch only needs to know the file as it is.
     let _ = configs.changed();
-    let (record, start) = MasterRecord::load_or_create(&paths.master, cwd)?;
-    let (events, inbox) = mpsc::channel();
-    stop_on_signals(events.clone())?;
+    let (record, start) = MasterRecord::load_or_create(&paths.master, &paths.cwd)?;
     let host = Host::new(START_SIZE, forward_host_events(events.clone()));
     let mut server = Server {
         store,
         clock,
+        timing,
         watch: StoreWatch::default(),
         board: fold::board(Vec::new(), clock()),
         sent_board: None,
@@ -248,6 +262,7 @@ pub fn run(
         line_at: HashMap::new(),
         dismissed: HashMap::new(),
         forges: ForgeWatch::default(),
+        pauses: PauseWatch::default(),
     };
     server.open_master(start);
     server.refresh();
@@ -286,6 +301,7 @@ impl Server {
                 self.refresh();
                 self.notice_stalled_starts();
                 self.ask_forges();
+                self.pause_idle();
                 self.type_lines();
                 self.dismiss_dialogs();
             }
@@ -302,10 +318,14 @@ impl Server {
             Event::Unreadable(conn) => self.refuse_unreadable(conn),
             Event::Signal { name, from } => return ControlFlow::Break(Stop::Signal { name, from }),
             Event::Forge(answer) => self.forge_answer(answer),
+            Event::Paused(finished) => self.pause_finished(finished),
             Event::Host(HostEvent::Output(key, bytes)) => {
-                self.host.feed(&key, &bytes);
+                let copied = self.host.feed(&key, &bytes);
                 if key == self.focus {
                     self.dirty = true;
+                    if let Some(text) = copied {
+                        self.send_clipboard(text);
+                    }
                 }
             }
             Event::Host(HostEvent::Exited(key, code)) => {

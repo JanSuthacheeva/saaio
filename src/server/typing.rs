@@ -3,22 +3,15 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use super::Server;
-use super::news::{QUIET, paste, quiet};
+use super::news::{self, paste};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::server_log;
 use crate::store::{Busy, Waiter};
 use crate::wake;
 
-/// How long a typed line may go without a turn beginning before the next one may follow: a
-/// command such as /cost runs no hook.
-#[cfg(not(test))]
-pub(super) const UNSTARTED: Duration = Duration::from_secs(30);
-#[cfg(test)]
-pub(super) const UNSTARTED: Duration = Duration::from_secs(3);
-
 impl Server {
     /// Types each flow's next queued line into its pane when the pane is ready, and lets a line
-    /// that began no turn within UNSTARTED go.
+    /// that began no turn within `timing.unstarted` go.
     pub(super) fn type_lines(&mut self) {
         let now = Instant::now();
         let running: Vec<PaneKey> = self
@@ -34,7 +27,12 @@ impl Server {
                 PaneKey::Flow(id) => Waiter::Flow(id.clone()),
             };
             let mut busy = self.store.busy(&waiter);
-            if unstarted(busy, self.line_at.get(&key).copied(), now) {
+            if unstarted(
+                busy,
+                self.line_at.get(&key).copied(),
+                now,
+                self.timing.unstarted,
+            ) {
                 self.let_go(&key, &waiter);
                 busy = Busy::Idle;
             }
@@ -42,7 +40,8 @@ impl Server {
                 continue;
             };
             let opened_at = self.opened_at.get(&key).copied();
-            if !ready(busy, opened_at, self.typed_at.get(&key).copied(), now) {
+            let typed_at = self.typed_at.get(&key).copied();
+            if !ready(busy, opened_at, typed_at, now, self.timing.quiet) {
                 continue;
             }
             let events = match self.store.events(&id) {
@@ -126,50 +125,59 @@ impl Server {
     }
 }
 
-/// True when the pane takes a line now: idle, open and untouched by the person for QUIET.
-fn ready(busy: Busy, opened_at: Option<Instant>, typed_at: Option<Instant>, now: Instant) -> bool {
-    let settled = opened_at.is_some_and(|at| now.duration_since(at) >= QUIET);
-    settled && quiet(busy, typed_at, now)
+/// True when the pane takes a line now: idle, open and untouched by the person for `quiet`.
+fn ready(
+    busy: Busy,
+    opened_at: Option<Instant>,
+    typed_at: Option<Instant>,
+    now: Instant,
+    quiet: Duration,
+) -> bool {
+    let settled = opened_at.is_some_and(|at| now.duration_since(at) >= quiet);
+    settled && news::quiet(busy, typed_at, now, quiet)
 }
 
-/// True when the server's own typed line began no turn within UNSTARTED.
-fn unstarted(busy: Busy, line_at: Option<Instant>, now: Instant) -> bool {
-    busy == Busy::Typed && line_at.is_some_and(|at| now.duration_since(at) >= UNSTARTED)
+/// True when the server's own typed line began no turn within `wait`.
+fn unstarted(busy: Busy, line_at: Option<Instant>, now: Instant, wait: Duration) -> bool {
+    busy == Busy::Typed && line_at.is_some_and(|at| now.duration_since(at) >= wait)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::server::Timing;
 
     #[test]
     fn takes_a_line_once_idle_open_and_untouched_for_a_while() {
+        let quiet = Timing::default().quiet;
         let opened = Instant::now();
-        let later = opened + QUIET;
+        let later = opened + quiet;
 
-        assert!(ready(Busy::Idle, Some(opened), None, later));
-        assert!(!ready(Busy::Idle, None, None, later), "not open");
+        assert!(ready(Busy::Idle, Some(opened), None, later, quiet));
+        assert!(!ready(Busy::Idle, None, None, later, quiet), "not open");
         assert!(
-            !ready(Busy::Idle, Some(opened), None, opened + QUIET / 2),
+            !ready(Busy::Idle, Some(opened), None, opened + quiet / 2, quiet),
             "still starting up"
         );
-        assert!(!ready(Busy::Turn, Some(opened), None, later));
-        assert!(!ready(Busy::Typed, Some(opened), None, later));
+        assert!(!ready(Busy::Turn, Some(opened), None, later, quiet));
+        assert!(!ready(Busy::Typed, Some(opened), None, later, quiet));
         assert!(
-            !ready(Busy::Idle, Some(opened), Some(later), later),
+            !ready(Busy::Idle, Some(opened), Some(later), later, quiet),
             "the person types there"
         );
     }
 
     #[test]
     fn lets_a_typed_line_go_once_no_turn_began_for_a_while() {
+        let wait = Timing::default().unstarted;
         let typed = Instant::now();
 
-        assert!(unstarted(Busy::Typed, Some(typed), typed + UNSTARTED));
-        assert!(!unstarted(Busy::Typed, Some(typed), typed + UNSTARTED / 2));
+        assert!(unstarted(Busy::Typed, Some(typed), typed + wait, wait));
+        assert!(!unstarted(Busy::Typed, Some(typed), typed + wait / 2, wait));
         assert!(
-            !unstarted(Busy::Turn, Some(typed), typed + UNSTARTED),
+            !unstarted(Busy::Turn, Some(typed), typed + wait, wait),
             "a turn began"
         );
-        assert!(!unstarted(Busy::Typed, None, typed + UNSTARTED));
+        assert!(!unstarted(Busy::Typed, None, typed + wait, wait));
     }
 }

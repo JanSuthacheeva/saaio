@@ -23,21 +23,27 @@ impl Outer {
     pub fn enter() -> Result<Outer> {
         install_panic_restore();
         terminal::enable_raw_mode().context("could not put the terminal in raw mode")?;
-        execute!(io::stdout(), EnterAlternateScreen).context("could not open the screen")?;
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen).context("could not open the screen")?;
+        let capture = mode_changes(Modes::default(), captured(Modes::default()));
+        stdout
+            .write_all(capture.as_bytes())
+            .and_then(|()| stdout.flush())
+            .context("could not turn on the mouse")?;
         Ok(Outer {
             mirrored: Modes::default(),
         })
     }
 
-    /// Turns paste, mouse, cursor-key and focus modes on or off to match the focused pane.
+    /// Turns paste, mouse, cursor-key and focus modes on or off to match the focused pane, keeping
+    /// the mouse saaio needs itself.
     pub fn mirror(&mut self, modes: Modes) -> Result<()> {
-        let sequence = mode_changes(self.mirrored, modes);
-        if sequence.is_empty() {
-            return Ok(());
+        let sequence = mode_changes(captured(self.mirrored), captured(modes));
+        if !sequence.is_empty() {
+            let mut stdout = io::stdout();
+            stdout.write_all(sequence.as_bytes())?;
+            stdout.flush()?;
         }
-        let mut stdout = io::stdout();
-        stdout.write_all(sequence.as_bytes())?;
-        stdout.flush()?;
         self.mirrored = modes;
         Ok(())
     }
@@ -71,6 +77,15 @@ fn install_panic_restore() {
             previous(info);
         }));
     });
+}
+
+/// The pane's modes with saaio's own mouse needs on top: buttons and drags at least, always SGR.
+fn captured(modes: Modes) -> Modes {
+    Modes {
+        mouse: modes.mouse.max(Mouse::Drag),
+        sgr_mouse: true,
+        ..modes
+    }
 }
 
 /// The escape sequences that take the real terminal from `from` to `to`.
@@ -115,6 +130,7 @@ mod tests {
             sgr_mouse: true,
             app_cursor: false,
             focus: true,
+            alt_screen: true,
         };
 
         assert_eq!(
@@ -130,6 +146,31 @@ mod tests {
         assert_eq!(
             mode_changes(on, off),
             "\x1b[?2004l\x1b[?1004l\x1b[?1006l\x1b[?1003l"
+        );
+    }
+
+    #[test]
+    fn captures_buttons_and_drags_in_sgr_whatever_the_pane_asks() {
+        let pane = |mouse| Modes {
+            paste: true,
+            mouse,
+            ..Modes::default()
+        };
+        let drag = Modes {
+            paste: true,
+            mouse: Mouse::Drag,
+            sgr_mouse: true,
+            ..Modes::default()
+        };
+
+        assert_eq!(captured(pane(Mouse::Off)), drag);
+        assert_eq!(captured(pane(Mouse::Press)), drag);
+        assert_eq!(
+            captured(pane(Mouse::Motion)),
+            Modes {
+                mouse: Mouse::Motion,
+                ..drag
+            }
         );
     }
 }

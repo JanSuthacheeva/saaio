@@ -106,6 +106,26 @@ pub enum EventKind {
         window: Option<String>,
         agent: String,
     },
+    /// Where the flow's services stand: saaio server ran or is running the repo's .saaio/pause
+    /// or .saaio/resume.
+    Services {
+        status: ServiceStatus,
+        /// The script's last error line, for pause-failed and resume-failed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
+}
+
+/// A step of pausing or resuming a flow's services.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ServiceStatus {
+    Pausing,
+    Paused,
+    Resuming,
+    Running,
+    PauseFailed,
+    ResumeFailed,
 }
 
 /// One question of a dialog: its header, text, options and whether several may be picked.
@@ -193,7 +213,10 @@ impl EventKind {
             | EventKind::Decision { text }
             | EventKind::MergeRequest { url: text }
             | EventKind::Merged { url: text }
-            | EventKind::MergeRequestClosed { url: text } => cut_to(text, TEXT_LIMIT),
+            | EventKind::MergeRequestClosed { url: text }
+            | EventKind::Services {
+                reason: Some(text), ..
+            } => cut_to(text, TEXT_LIMIT),
             EventKind::Message { text }
             | EventKind::Typed { text }
             | EventKind::Answer { text } => {
@@ -259,6 +282,20 @@ impl Mode {
             Mode::Guided => "guided",
             Mode::Auto => "auto",
             Mode::Plain => "plain",
+        }
+    }
+}
+
+impl ServiceStatus {
+    /// The name the JSON and TOON output use: paused, resume-failed, ...
+    pub fn name(self) -> &'static str {
+        match self {
+            ServiceStatus::Pausing => "pausing",
+            ServiceStatus::Paused => "paused",
+            ServiceStatus::Resuming => "resuming",
+            ServiceStatus::Running => "running",
+            ServiceStatus::PauseFailed => "pause-failed",
+            ServiceStatus::ResumeFailed => "resume-failed",
         }
     }
 }
@@ -416,6 +453,14 @@ mod tests {
                 window: None,
                 agent: "claude".into(),
             },
+            EventKind::Services {
+                status: ServiceStatus::Paused,
+                reason: None,
+            },
+            EventKind::Services {
+                status: ServiceStatus::ResumeFailed,
+                reason: Some("port 8003 is taken".into()),
+            },
         ]
     }
 
@@ -480,6 +525,39 @@ mod tests {
             .to_line(),
             r#"{"v":1,"at":7,"kind":"typed","text":"/compact"}"#
         );
+    }
+
+    #[test]
+    fn writes_services_with_a_reason_only_when_one_failed() {
+        let services = |status, reason: Option<&str>| {
+            Event::new(
+                7,
+                EventKind::Services {
+                    status,
+                    reason: reason.map(str::to_string),
+                },
+            )
+            .to_line()
+        };
+
+        assert_eq!(
+            services(ServiceStatus::Paused, None),
+            r#"{"v":1,"at":7,"kind":"services","status":"paused"}"#
+        );
+        assert_eq!(
+            services(ServiceStatus::ResumeFailed, Some("port 8003 is taken")),
+            r#"{"v":1,"at":7,"kind":"services","status":"resume-failed","reason":"port 8003 is taken"}"#
+        );
+        for status in [
+            ServiceStatus::Pausing,
+            ServiceStatus::Paused,
+            ServiceStatus::Resuming,
+            ServiceStatus::Running,
+            ServiceStatus::PauseFailed,
+            ServiceStatus::ResumeFailed,
+        ] {
+            assert_eq!(serde_json::to_value(status).unwrap(), status.name());
+        }
     }
 
     #[test]

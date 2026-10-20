@@ -4,6 +4,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use super::{BoardView, every_flow};
+use crate::event::ServiceStatus;
 use crate::text::{clock, long_duration, merge_request, plural, short_duration};
 use crate::ui::fit::{clip, clip_place, wrap};
 use crate::ui::markdown;
@@ -43,6 +44,8 @@ impl BoardView<'_> {
             return;
         };
         let mut facts: Vec<String> = project.into_iter().cloned().collect();
+        // First: it changes, and a long request would cut it off.
+        facts.extend(self.services(flow));
         if !flow.request.is_empty() {
             facts.push(flow.request.clone());
         }
@@ -106,6 +109,24 @@ impl BoardView<'_> {
         );
         self.render_timeline(flow, left, buf);
         self.render_answer(flow, right, buf);
+    }
+
+    /// The header's word on the flow's services: paused since when, resuming, or down and why;
+    /// None while they run or a pause failed (the timeline says so).
+    fn services(&self, flow: &FlowView) -> Option<String> {
+        let services = flow.services.as_ref()?;
+        match services.status {
+            ServiceStatus::Pausing | ServiceStatus::Paused => Some(format!(
+                "services paused {}",
+                clock(services.since, self.offset_secs)
+            )),
+            ServiceStatus::Resuming => Some("services resuming".to_string()),
+            ServiceStatus::ResumeFailed => Some(match &services.reason {
+                Some(reason) => format!("services down: {reason}"),
+                None => "services down".to_string(),
+            }),
+            ServiceStatus::Running | ServiceStatus::PauseFailed => None,
+        }
     }
 
     /// Under the master: where it runs, then each flow that needs you with what it asks, and each
@@ -492,6 +513,24 @@ mod tests {
         );
         assert!(open.contains(" · PR #42 open · started "), "{open}");
         assert!(merged.contains(" · PR #42 merged · started "), "{merged}");
+        let services = |status, reason: Option<&str>| {
+            header(EventKind::Services {
+                status,
+                reason: reason.map(str::to_string),
+            })
+        };
+        let paused = services(ServiceStatus::Paused, None);
+        assert!(
+            paused.contains(" 1 shop-221  services paused 00:01 · "),
+            "{paused}"
+        );
+        let down = services(ServiceStatus::ResumeFailed, Some("port 8003 is taken"));
+        assert!(
+            down.contains("  services down: port 8003 is taken · "),
+            "{down}"
+        );
+        let running = services(ServiceStatus::Running, None);
+        assert!(!running.contains("services"), "{running}");
     }
 
     #[test]

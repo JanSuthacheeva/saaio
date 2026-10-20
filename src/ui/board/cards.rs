@@ -5,7 +5,7 @@ use ratatui::layout::{Margin, Rect};
 use ratatui::text::{Line, Span};
 
 use super::{BoardView, CARD_ROWS, COLUMNS, DETAIL_ROWS, Item, card_rect, every_flow};
-use crate::event::{Mode, Phase};
+use crate::event::{Mode, Phase, ServiceStatus};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::text::{plural, short_duration};
 use crate::ui::fit::{clip, clip_place, columns, spans_width, split};
@@ -281,6 +281,19 @@ impl BoardView<'_> {
                 None => "done".into(),
             },
             State::Ended => "ended".into(),
+        };
+        let services = flow
+            .services
+            .as_ref()
+            .and_then(|services| match services.status {
+                ServiceStatus::Pausing | ServiceStatus::Paused => Some("paused"),
+                ServiceStatus::Resuming => Some("resuming"),
+                ServiceStatus::ResumeFailed => Some("services down"),
+                ServiceStatus::Running | ServiceStatus::PauseFailed => None,
+            });
+        let text = match services {
+            Some(services) if !short => format!("{text} · {services}").into(),
+            _ => text,
         };
         Span::styled(text, theme.flow_style(flow))
     }
@@ -577,6 +590,56 @@ mod tests {
         });
 
         assert_eq!(labels, ["PR merged", "MR merged"]);
+    }
+
+    #[test]
+    fn says_where_paused_services_stand_beside_the_state() {
+        let with = |state: EventKind, status| {
+            flow(
+                "shop-240",
+                Mode::Auto,
+                vec![
+                    state,
+                    EventKind::Services {
+                        status,
+                        reason: None,
+                    },
+                ],
+            )
+        };
+        let idle = || EventKind::Idle {
+            note: "Plan ready.".into(),
+        };
+        let flows = [
+            with(idle(), ServiceStatus::Paused),
+            with(idle(), ServiceStatus::Pausing),
+            with(EventKind::Working, ServiceStatus::Resuming),
+            with(EventKind::Working, ServiceStatus::ResumeFailed),
+            with(EventKind::Working, ServiceStatus::Running),
+            with(idle(), ServiceStatus::PauseFailed),
+        ];
+
+        let (labels, short) = with_view(vec![], |view| {
+            (
+                flows
+                    .each_ref()
+                    .map(|flow| view.state_label(Some(flow), false).content.to_string()),
+                view.state_label(Some(&flows[0]), true).content.to_string(),
+            )
+        });
+
+        assert_eq!(
+            labels,
+            [
+                "ready · paused",
+                "ready · paused",
+                "working · resuming",
+                "working · services down",
+                "working",
+                "ready",
+            ]
+        );
+        assert_eq!(short, "ready", "a narrow card keeps the state");
     }
 
     #[test]

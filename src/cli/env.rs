@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use crate::config::{self, Config};
 use crate::registry::Registry;
 use crate::store::Store;
+use crate::ui::clipboard::Clipboard;
 use crate::workspace;
 
 /// The environment saaio runs in: its variables and its terminal, read once by main so commands get
@@ -23,9 +24,19 @@ pub struct Env {
     pub terminal: bool,
     /// $CLAUDECODE or $CODEX_THREAD_ID is set: an agent's shell tool runs flow.
     pub agent_shell: bool,
+    /// $SSH_CONNECTION or $SSH_TTY is set.
+    pub ssh: bool,
+    /// $WAYLAND_DISPLAY / $DISPLAY are set.
+    pub wayland: bool,
+    pub x11: bool,
 }
 
 impl Env {
+    /// Where the UI copies selected text to.
+    pub(crate) fn clipboard(&self) -> Clipboard {
+        Clipboard::new(self.ssh, self.wayland, self.x11)
+    }
+
     /// The store: $SAAIO_HOME, else the project store of the repository `cwd` is in, else the
     /// shared default store; Ok(None) when neither $SAAIO_HOME, $XDG_STATE_HOME nor $HOME is set.
     pub(crate) fn store(&self, cwd: Option<&Path>) -> anyhow::Result<Option<Store>> {

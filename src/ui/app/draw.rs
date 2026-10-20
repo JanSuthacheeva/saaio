@@ -23,8 +23,16 @@ impl App {
         frame.render_widget(Block::default().style(theme.ui.background), frame.area());
         if let View::Board(state) = self.view {
             self.draw_board(frame, state, theme);
-            return;
+        } else {
+            self.draw_session(frame, theme, peek);
         }
+        if let Some(selection) = &self.selection {
+            selection.render(frame.buffer_mut());
+        }
+    }
+
+    /// The pane with its title, the sidebar or rail, and the view open over them.
+    fn draw_session(&self, frame: &mut Frame, theme: &Theme, peek: &[PeekLine]) {
         let areas = self.areas_in(frame_size(frame));
         self.draw_title(frame, areas.title, theme);
         self.draw_rule(frame, areas.rule, theme);
@@ -101,25 +109,11 @@ impl App {
     /// The open dialog or overlay over the session, or the pane's cursor when there is none.
     fn draw_view(&self, frame: &mut Frame, areas: &Areas, theme: &Theme) {
         match &self.view {
-            View::Stop(unfinished) => {
-                frame.render_widget(self.stop_dialog(theme, unfinished), areas.session());
+            View::Stop(_) | View::Confirm { .. } | View::Help => {
+                if let Some(dialog) = self.dialog(theme) {
+                    frame.render_widget(dialog, areas.session());
+                }
             }
-            View::Confirm { question, .. } => frame.render_widget(
-                Dialog {
-                    border: theme.state.waiting,
-                    keys: vec![
-                        Hint::new("y", "yes"),
-                        Hint::new("any other key", "keeps the flow").kept(),
-                    ],
-                    ..Dialog::new(
-                        "clean up",
-                        vec![Line::styled(question.as_str(), theme.ui.text)],
-                        theme,
-                    )
-                },
-                areas.session(),
-            ),
-            View::Help => frame.render_widget(dialog::help(self.prefix, theme), areas.session()),
             View::Board(_) => {}
             View::History(back) => self.draw_history(frame, areas.pane, *back, theme),
             View::NewFlow(form) => {
@@ -148,6 +142,27 @@ impl App {
                     frame.set_cursor_position((areas.pane.x + col, areas.pane.y + row));
                 }
             }
+        }
+    }
+
+    /// The dialog the view shows over the session, shared by draw_view and surface_at.
+    pub(super) fn dialog<'a>(&'a self, theme: &'a Theme) -> Option<Dialog<'a>> {
+        match &self.view {
+            View::Stop(unfinished) => Some(self.stop_dialog(theme, unfinished)),
+            View::Confirm { question, .. } => Some(Dialog {
+                border: theme.state.waiting,
+                keys: vec![
+                    Hint::new("y", "yes"),
+                    Hint::new("any other key", "keeps the flow").kept(),
+                ],
+                ..Dialog::new(
+                    "clean up",
+                    vec![Line::styled(question.as_str(), theme.ui.text)],
+                    theme,
+                )
+            }),
+            View::Help => Some(dialog::help(self.prefix, theme)),
+            _ => None,
         }
     }
 
