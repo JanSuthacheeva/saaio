@@ -227,7 +227,7 @@ impl NewFlowView<'_> {
             .filter(|flow| !flow.is_finished())
             .map(|flow| flow.name.clone())
             .collect();
-        let name = name::flow_name(None, &form.request, &taken);
+        let name = name::choose(None, &form.request, &taken);
         let branch = branching::branch_name(
             form.branching.as_ref(),
             form.picked_type(),

@@ -29,6 +29,7 @@ struct Link {
 }
 
 /// The current Markdown block and line; wrapping happens before any view adds its own prefix.
+#[derive(Debug)]
 struct Renderer<'a> {
     theme: &'a Theme,
     width: usize,

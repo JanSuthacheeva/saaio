@@ -21,6 +21,7 @@ pub struct Ask {
     pub dir: PathBuf,
     pub branch: String,
     pub since: u64,
+    pub shown: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,10 +37,12 @@ pub struct Found {
     pub url: String,
     pub status: Status,
     pub created_at: u64,
+    /// Whether the forge included fractional seconds in its creation time.
+    pub precise_time: bool,
 }
 
 /// One pull request in `gh pr list --json url,state,createdAt`.
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct GhPull {
     url: String,
     state: String,
@@ -48,7 +51,7 @@ struct GhPull {
 }
 
 /// One merge request in `glab mr list --output json`.
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct GlabRequest {
     web_url: String,
     state: String,
@@ -110,6 +113,27 @@ impl Forge {
             .collect()
     }
 
+    /// Query one already shown request by URL when the limited branch list omits it.
+    pub fn view_argv(self, url: &str) -> Result<Vec<String>> {
+        let args: Vec<&str> = match self {
+            Forge::GitHub => vec!["pr", "view", url, "--json", "url,state,createdAt"],
+            Forge::GitLab => {
+                let (repo, id) = url
+                    .rsplit_once("/-/merge_requests/")
+                    .context("shown GitLab merge request has no request number")?;
+                anyhow::ensure!(
+                    !repo.is_empty() && id.parse::<u64>().is_ok_and(|number| number > 0),
+                    "shown GitLab merge request has an invalid request number"
+                );
+                vec!["mr", "view", id, "--repo", repo, "--output", "json"]
+            }
+        };
+        Ok(std::iter::once(self.program())
+            .chain(args.iter().copied())
+            .map(String::from)
+            .collect())
+    }
+
     /// The merge requests in gh's or glab's JSON (gh: url, state OPEN|MERGED|CLOSED, createdAt;
     /// glab: web_url, state opened|locked|merged|closed, created_at); none for empty output; an
     /// error for JSON of another shape, an unknown state or an unreadable time.
@@ -134,23 +158,37 @@ impl Forge {
         .with_context(|| format!("{} printed no list of merge requests", self.program()))?;
         listed
             .into_iter()
-            .map(|(url, state, created)| {
-                let status = match state.to_lowercase().as_str() {
-                    "open" | "opened" | "locked" => Status::Open,
-                    "merged" => Status::Merged,
-                    "closed" => Status::Closed,
-                    other => anyhow::bail!("{} named an unknown state {other}", self.program()),
-                };
-                let created_at = unix_ms(&created).with_context(|| {
-                    format!("{} named an unreadable time {created}", self.program())
-                })?;
-                Ok(Found {
-                    url,
-                    status,
-                    created_at,
-                })
-            })
+            .map(|(url, state, created)| self.found(url, &state, &created))
             .collect()
+    }
+
+    /// One request returned by `gh pr view` or `glab mr view`.
+    pub fn parse_view(self, json: &str) -> Result<Found> {
+        let (url, state, created) = match self {
+            Forge::GitHub => serde_json::from_str::<GhPull>(json)
+                .map(|pull| (pull.url, pull.state, pull.created_at)),
+            Forge::GitLab => serde_json::from_str::<GlabRequest>(json)
+                .map(|request| (request.web_url, request.state, request.created_at)),
+        }
+        .with_context(|| format!("{} printed no merge request", self.program()))?;
+        self.found(url, &state, &created)
+    }
+
+    fn found(self, url: String, state: &str, created: &str) -> Result<Found> {
+        let status = match state.to_lowercase().as_str() {
+            "open" | "opened" | "locked" => Status::Open,
+            "merged" => Status::Merged,
+            "closed" => Status::Closed,
+            other => anyhow::bail!("{} named an unknown state {other}", self.program()),
+        };
+        let created_at = unix_ms(created)
+            .with_context(|| format!("{} named an unreadable time {created}", self.program()))?;
+        Ok(Found {
+            url,
+            status,
+            created_at,
+            precise_time: created.contains('.'),
+        })
     }
 }
 
@@ -172,14 +210,23 @@ fn unix_ms(stamp: &str) -> Option<u64> {
     let offset = match zone.split_at(1) {
         ("Z" | "z", "") => 0,
         (sign, offset) => {
+            if sign != "+" && sign != "-" {
+                return None;
+            }
             let (hours, minutes) = offset.split_once(':')?;
-            let minutes = hours.parse::<i64>().ok()? * 60 + minutes.parse::<i64>().ok()?;
+            let hours = hours.parse::<i64>().ok()?;
+            let minutes = minutes.parse::<i64>().ok()?;
+            if !(0..=23).contains(&hours) || !(0..=59).contains(&minutes) {
+                return None;
+            }
+            let minutes = hours * 60 + minutes;
             if sign == "-" { -minutes } else { minutes }
         }
     };
     let valid = (1970..=9999).contains(&year)
         && (1..=12).contains(&month)
-        && (1..=31).contains(&day)
+        && day <= days_in_month(year, month)
+        && day >= 1
         && hour < 24
         && minute < 60
         && second < 61;
@@ -189,6 +236,15 @@ fn unix_ms(stamp: &str) -> Option<u64> {
     let seconds = days_from_civil(year, month, day) * 86_400 + hour * 3600 + minute * 60 + second
         - offset * 60;
     u64::try_from(seconds * 1000 + millis).ok()
+}
+
+fn days_in_month(year: i64, month: i64) -> i64 {
+    match month {
+        4 | 6 | 9 | 11 => 30,
+        2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
+        2 => 28,
+        _ => 31,
+    }
 }
 
 /// Days since 1970-01-01 of a date in the proleptic Gregorian calendar (Howard Hinnant's
@@ -214,36 +270,55 @@ pub fn asks(flows: &[FlowView]) -> Vec<Ask> {
                 dir: PathBuf::from(&space.path),
                 branch: space.branch.clone()?,
                 since: flow.started_at,
+                shown: flow.merge_request.clone(),
             })
         })
         .collect()
 }
 
-/// What to append so `flow` shows `found`: merge-request for an open one it does not show yet,
-/// merged for a merged one, merge-request-closed for the closed one it shows; None otherwise.
+/// What to append after a successful forge query: show a new open or merged PR, or clear the
+/// currently shown PR when no open or merged one remains.
 pub fn news(flow: &FlowView, found: Option<&Found>) -> Option<EventKind> {
-    let found = found?;
-    let shown = flow.merge_request.as_ref() == Some(&found.url);
-    let url = found.url.clone();
-    match found.status {
-        Status::Open => (!shown).then_some(EventKind::MergeRequest { url }),
-        Status::Merged => (!flow.merged).then_some(EventKind::Merged { url }),
-        Status::Closed => (shown && !flow.merged).then_some(EventKind::MergeRequestClosed { url }),
+    match found {
+        Some(Found {
+            url,
+            status: Status::Open,
+            ..
+        }) => (flow.merge_request.as_ref() != Some(url))
+            .then(|| EventKind::MergeRequest { url: url.clone() }),
+        Some(Found {
+            url,
+            status: Status::Merged,
+            ..
+        }) => (!flow.merged).then(|| EventKind::Merged { url: url.clone() }),
+        Some(Found {
+            status: Status::Closed,
+            ..
+        })
+        | None => flow
+            .merge_request
+            .as_ref()
+            .filter(|_| !flow.merged)
+            .map(|url| EventKind::MergeRequestClosed { url: url.clone() }),
     }
 }
 
 /// The one that speaks for the branch: the first open, else the first merged, else the first
-/// closed (both tools list newest first); one opened before `since`, the flow's start, belongs to
-/// an earlier branch of the same name and never speaks for it.
+/// closed (both tools list newest first); one opened before `since`, the flow's start, belongs
+/// to an earlier branch of the same name. A time without fractional seconds may stand for any
+/// instant in that second, so include the flow's starting second for those alone.
 pub fn pick(found: Vec<Found>, since: u64) -> Option<Found> {
     let rank = |status| match status {
         Status::Open => 0,
         Status::Merged => 1,
         Status::Closed => 2,
     };
+    let first_second = since - since % 1000;
     found
         .into_iter()
-        .filter(|one| one.created_at >= since)
+        .filter(|one| {
+            one.created_at >= since || (!one.precise_time && one.created_at == first_second)
+        })
         .enumerate()
         .min_by_key(|(at, one)| (rank(one.status), *at))
         .map(|(_, one)| one)
@@ -309,8 +384,10 @@ mod tests {
                 dir: PathBuf::from("/work/csv"),
                 branch: "flow/csv".into(),
                 since: 1,
+                shown: None,
             }]
         );
+        assert_eq!(asks(&[flow(vec![opened(A)])])[0].shown.as_deref(), Some(A));
         assert_eq!(ids(&[flow(vec![opened(A)])]), ["csv-1"], "done, not merged");
         assert_eq!(ids(&[flow(vec![EventKind::Ended])]), ["csv-1"], "ended");
         assert!(ids(&[flow(vec![merged(A)])]).is_empty(), "merged");
@@ -347,12 +424,20 @@ mod tests {
             Some(closed(A))
         );
         assert_eq!(news(&flow(vec![]), Some(&shut(A))), None);
-        assert_eq!(news(&flow(vec![opened(B)]), Some(&shut(A))), None);
+        assert_eq!(
+            news(&flow(vec![opened(B)]), Some(&shut(A))),
+            Some(closed(B)),
+            "a different closed PR must not leave the shown one open"
+        );
         assert_eq!(
             news(&flow(vec![opened(A), closed(A)]), Some(&shut(A))),
             None
         );
-        assert_eq!(news(&flow(vec![opened(A)]), None), None);
+        assert_eq!(
+            news(&flow(vec![opened(A)]), None),
+            Some(closed(A)),
+            "a successful empty list must clear the shown PR"
+        );
     }
 
     fn fixture(name: &str) -> &'static str {
@@ -373,12 +458,14 @@ mod tests {
             url: url.into(),
             status,
             created_at: 0,
+            precise_time: false,
         }
     }
 
     fn found_at(url: &str, status: Status, created: &str) -> Found {
         Found {
             created_at: unix_ms(created).unwrap(),
+            precise_time: created.contains('.'),
             ..found(url, status)
         }
     }
@@ -427,6 +514,40 @@ mod tests {
         assert_eq!(
             Forge::GitLab.argv("flow/csv").join(" "),
             "glab mr list --source-branch flow/csv --all --output json --per-page 10"
+        );
+        assert_eq!(
+            Forge::GitHub.view_argv(A).unwrap().join(" "),
+            format!("gh pr view {A} --json url,state,createdAt")
+        );
+        let glab_url = "https://gitlab.com/acme/shop/-/merge_requests/7";
+        assert_eq!(
+            Forge::GitLab.view_argv(glab_url).unwrap().join(" "),
+            "glab mr view 7 --repo https://gitlab.com/acme/shop --output json"
+        );
+        assert!(
+            Forge::GitLab
+                .view_argv("https://gitlab.com/acme/shop/-/merge_requests/nope")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn reads_one_request_looked_up_by_url() {
+        assert_eq!(
+            Forge::GitHub
+                .parse_view(r#"{"url":"https://github.com/acme/shop/pull/7","state":"OPEN","createdAt":"2026-10-18T02:22:32Z"}"#)
+                .unwrap(),
+            found_at(A, Status::Open, "2026-10-18T02:22:32Z")
+        );
+        assert_eq!(
+            Forge::GitLab
+                .parse_view(r#"{"web_url":"https://gitlab.com/acme/shop/-/merge_requests/7","state":"opened","created_at":"2026-10-18T02:22:32Z"}"#)
+                .unwrap(),
+            found_at(
+                "https://gitlab.com/acme/shop/-/merge_requests/7",
+                Status::Open,
+                "2026-10-18T02:22:32Z"
+            )
         );
     }
 
@@ -502,6 +623,16 @@ mod tests {
                 .parse(r#"[{"url":"u","state":"OPEN","createdAt":"yesterday"}]"#)
                 .is_err()
         );
+        for stamp in [
+            "2026-02-29T00:00:00Z",
+            "2026-02-31T00:00:00Z",
+            "2026-10-18T02:00:35+24:00",
+            "2026-10-18T02:00:35+02:60",
+            "2026-10-18T02:00:35Z+00:00",
+        ] {
+            let json = format!(r#"[{{"url":"u","state":"OPEN","createdAt":"{stamp}"}}]"#);
+            assert!(Forge::GitHub.parse(&json).is_err(), "{stamp}");
+        }
     }
 
     #[test]
@@ -531,6 +662,26 @@ mod tests {
     }
 
     #[test]
+    fn keeps_a_pr_opened_during_the_flows_first_second() {
+        let opened_at = unix_ms("2026-10-18T12:00:00Z").unwrap();
+        let same_second = found_at("same", Status::Open, "2026-10-18T12:00:00Z");
+        let earlier = found_at("earlier", Status::Open, "2026-10-18T11:59:59Z");
+        let precise_earlier = found_at("precise-earlier", Status::Open, "2026-10-18T12:00:00.211Z");
+        let precise_later = found_at("precise-later", Status::Open, "2026-10-18T12:00:00.700Z");
+
+        assert_eq!(
+            pick(vec![same_second.clone()], opened_at + 500),
+            Some(same_second)
+        );
+        assert_eq!(pick(vec![earlier], opened_at + 500), None);
+        assert_eq!(pick(vec![precise_earlier], opened_at + 500), None);
+        assert_eq!(
+            pick(vec![precise_later.clone()], opened_at + 500),
+            Some(precise_later)
+        );
+    }
+
+    #[test]
     fn reads_the_times_gh_and_glab_print() {
         assert_eq!(unix_ms("1970-01-01T00:00:00Z"), Some(0));
         assert_eq!(unix_ms("2026-10-18T02:00:35Z"), Some(1_792_288_835_000));
@@ -543,6 +694,8 @@ mod tests {
             unix_ms("2024-02-29T23:30:00-01:00"),
             unix_ms("2024-03-01T00:30:00Z")
         );
+        assert!(unix_ms("2000-02-29T00:00:00Z").is_some());
+        assert_eq!(unix_ms("2100-02-29T00:00:00Z"), None);
         assert_eq!(unix_ms("2026-13-01T00:00:00Z"), None);
         assert_eq!(unix_ms("9223372036854775807-01-01T00:00:00Z"), None);
         assert_eq!(unix_ms("2026-10-18"), None);
