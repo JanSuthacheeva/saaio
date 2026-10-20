@@ -33,6 +33,9 @@ pub struct Args {
 /// `saaio completions <shell>`: the shell's completion script for every command saaio --help
 /// lists. Runs without a store.
 pub fn run(args: &Args) -> Document; // Document::Text(script), trailing newline trimmed
+
+/// Cli's command without the commands saaio --help hides, which clap_complete would offer.
+fn listed() -> clap::Command;
 ```
 
 `src/cli.rs` (modified):
@@ -67,7 +70,7 @@ Other files:
 1. `main -> Cli::try_parse(): Cli`. An unknown shell is a clap error: `Failure::usage`, exit 2,
    with the possible values.
 2. `main -> cli::run(cli, env, clock)` matches `Completions` before the store opens.
-3. `cli::run -> completions::run(args): Document`: `Cli::command()`,
+3. `cli::run -> completions::run(args): Document`: `listed()`,
    `clap_complete::generate(shell, &mut command, "saaio", &mut buf)`, `Document::Text` trimmed.
 4. `main -> answer` prints it, exit 0. No failure path after parsing.
 
@@ -84,6 +87,14 @@ Other files:
 - The scripts print raw, not as TOON.
 - Tarball folder `complete/`; install.sh does not install the scripts.
 - `saaio completions` is listed in `saaio --help`.
+
+## Decisions made in the build
+
+- `clap_complete` offers hidden subcommands in every shell, so `completions::listed` rebuilds
+  `Cli::command()` with only the visible ones (unit test: the names `saaio --help` lists).
+- `Failure::usage` now keeps clap's possible values of an invalid value
+  (`...; one of bash | elvish | fish | powershell | zsh`), which helps `--mode` too.
+- Fixed on the way: the flaky 5 s bound in `workspace::tests::a_hook_that_leaves_a_process_behind_still_ends`.
 
 ## Tasks
 
