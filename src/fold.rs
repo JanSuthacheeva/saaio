@@ -9,7 +9,7 @@ use crate::workflow::Workflow;
 
 /// A flow with a heartbeat older than this, not done or ended, is not responding.
 pub const SILENT_AFTER_MS: u64 = 90_000;
-/// A Codex automatic review normally finishes before this becomes a user-facing wait.
+/// A permission request answered, or its tool finished, within this never shows as waiting.
 const PERMISSION_GRACE_MS: u64 = 3_000;
 
 /// One flow's view at `now`; None when the log has no Started event to name it.

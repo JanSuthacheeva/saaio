@@ -45,6 +45,18 @@ pub enum Turn {
     Idle,
 }
 
+/// Which lines of a file a reader looks for.
+pub type LineMatch = dyn Fn(&str) -> bool;
+
+/// Who answers a permission request a hook reports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Approver {
+    /// The user, in the pane.
+    User,
+    /// A reviewer the harness runs, which answers without the user.
+    Reviewer,
+}
+
 /// A harness saaio observes through its own hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[cfg_attr(test, derive(serde::Serialize))]
@@ -160,11 +172,31 @@ impl Adapter {
         }
     }
 
-    /// The flow events one hook payload means; empty for one that means nothing.
-    pub fn translate(self, payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
+    /// Who answers this payload's permission request: Codex's automatic reviewer when the
+    /// rollout's turn routes approvals to it, else the user. `last_line` reads the last line that
+    /// matches in a file the payload names; it is called only for a Codex PermissionRequest.
+    pub fn approver(
+        self,
+        payload: &Value,
+        last_line: impl FnOnce(&Path, &LineMatch) -> Option<String>,
+    ) -> Approver {
+        match self {
+            Adapter::ClaudeCode => Approver::User,
+            Adapter::Codex => codex::approver(payload, last_line),
+        }
+    }
+
+    /// The flow events one hook payload means; empty for one that means nothing. A permission
+    /// request the reviewer answers waits for no one.
+    pub fn translate(
+        self,
+        payload: &Value,
+        workflow: &Workflow,
+        approver: Approver,
+    ) -> Vec<EventKind> {
         match self {
             Adapter::ClaudeCode => claude_code::translate(payload, workflow),
-            Adapter::Codex => codex::translate(payload, workflow),
+            Adapter::Codex => codex::translate(payload, workflow, approver),
         }
     }
 }

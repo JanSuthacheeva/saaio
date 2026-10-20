@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 
 use crate::adapter::answer::turn_end;
 use crate::adapter::calls::{created_merge_request, simple_commands, tool_call};
-use crate::adapter::{Adapter, Turn, cut};
+use crate::adapter::{Adapter, Approver, LineMatch, Turn, cut};
 use crate::event::{EventKind, Phase};
 use crate::workflow::Workflow;
 
@@ -145,8 +145,9 @@ pub fn trusted_folder(folder: &Path) -> Vec<String> {
 }
 
 /// The flow events one Codex hook payload means: first the session it runs in, then what it did.
-/// Subagent hooks do not describe the main worker's state or phase.
-pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
+/// Subagent hooks do not describe the main worker's state or phase; a permission request the
+/// reviewer answers waits for no one.
+pub fn translate(payload: &Value, workflow: &Workflow, approver: Approver) -> Vec<EventKind> {
     let tool = payload["tool_name"].as_str().unwrap_or("");
     let input = &payload["tool_input"];
     let event = payload["hook_event_name"].as_str().unwrap_or("");
@@ -182,7 +183,7 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
                 kinds.push(EventKind::MergeRequest { url });
             }
         }
-        "PermissionRequest" if !tool.is_empty() => {
+        "PermissionRequest" if !tool.is_empty() && approver == Approver::User => {
             let cwd = payload["cwd"].as_str().unwrap_or("");
             kinds.push(EventKind::PermissionPending {
                 question: cut(&format!("permission: {}", tool_call(tool, input, cwd))),
@@ -203,6 +204,49 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
         _ => {}
     }
     kinds
+}
+
+/// Who answers a PermissionRequest payload: the reviewer when the rollout's newest turn_context is
+/// the payload's turn and names Codex's automatic reviewer; the user otherwise, also when the
+/// rollout cannot be read or has no such turn. Turns do not interleave in a rollout, so the newest
+/// turn_context is the running turn's; `last_line` finds it reading back from the end.
+pub fn approver(
+    payload: &Value,
+    last_line: impl FnOnce(&Path, &LineMatch) -> Option<String>,
+) -> Approver {
+    let (Some("PermissionRequest"), Some(file), Some(turn)) = (
+        payload["hook_event_name"].as_str(),
+        payload["transcript_path"].as_str(),
+        payload["turn_id"].as_str(),
+    ) else {
+        return Approver::User;
+    };
+    let context = last_line(Path::new(file), &|line| turn_context(line).is_some());
+    let reviewer = context.and_then(|line| approvals_reviewer(&line, turn));
+    match reviewer {
+        Some(reviewer) if REVIEWERS.contains(&reviewer.as_str()) => Approver::Reviewer,
+        _ => Approver::User,
+    }
+}
+
+/// The approvals_reviewer values that mean Codex's automatic reviewer.
+const REVIEWERS: [&str; 2] = ["auto_review", "guardian_subagent"];
+
+/// The payload of a rollout line that is a turn_context.
+fn turn_context(line: &str) -> Option<Value> {
+    if !line.contains("\"turn_context\"") {
+        return None;
+    }
+    let mut line: Value = serde_json::from_str(line).ok()?;
+    (line["type"] == "turn_context").then(|| line["payload"].take())
+}
+
+/// The approvals_reviewer of a turn_context line, when it is `turn`'s.
+fn approvals_reviewer(line: &str, turn: &str) -> Option<String> {
+    let context = turn_context(line)?;
+    (context["turn_id"] == turn)
+        .then(|| context["approvals_reviewer"].as_str().map(String::from))
+        .flatten()
 }
 
 /// A phase skill read by this shell call, unless it reads skills from several phases.
@@ -331,7 +375,7 @@ mod tests {
     }
 
     fn events(name: &str) -> Vec<EventKind> {
-        translate(&fixture(name), &phases())
+        translate(&fixture(name), &phases(), Approver::User)
     }
 
     /// The session every recorded payload ran in.
@@ -387,9 +431,11 @@ mod tests {
             .zip(["plan", "merge-request", "implement", "review"])
         {
             assert!(
-                translate(payload, &Workflow::builtin()).contains(&EventKind::Phase {
-                    phase: Phase::of(phase)
-                }),
+                translate(payload, &Workflow::builtin(), Approver::User).contains(
+                    &EventKind::Phase {
+                        phase: Phase::of(phase)
+                    }
+                ),
                 "each read now signals the phase: {payload}"
             );
         }
@@ -400,7 +446,10 @@ mod tests {
         assert_eq!(events("pre_bash_skills_together"), after_session(vec![]));
         let mut payload = fixture("pre_bash_skills_together");
         payload["tool_input"]["command"] = "cat /repo/.agents/skills/demo-skill/SKILL.md && cat /repo/.agents/skills/implement-plan/SKILL.md".into();
-        assert_eq!(translate(&payload, &phases()), after_session(vec![]));
+        assert_eq!(
+            translate(&payload, &phases(), Approver::User),
+            after_session(vec![])
+        );
     }
 
     #[test]
@@ -411,7 +460,10 @@ mod tests {
             "cat > .agents/skills/demo-skill/SKILL.md",
         ] {
             payload["tool_input"]["command"] = command.into();
-            assert_eq!(translate(&payload, &phases()), after_session(vec![]));
+            assert_eq!(
+                translate(&payload, &phases(), Approver::User),
+                after_session(vec![])
+            );
         }
     }
 
@@ -420,11 +472,14 @@ mod tests {
         let mut payload = fixture("pre_bash_skill");
         payload["tool_input"]["command"] =
             "cat notes.txt # /repo/.agents/skills/demo-skill/SKILL.md".into();
-        assert_eq!(translate(&payload, &phases()), after_session(vec![]));
+        assert_eq!(
+            translate(&payload, &phases(), Approver::User),
+            after_session(vec![])
+        );
 
         payload["tool_input"]["command"] = "cat /repo/.agents/skills/demo-skill/SKILL.md # /repo/.agents/skills/implement-plan/SKILL.md".into();
         assert_eq!(
-            translate(&payload, &phases()),
+            translate(&payload, &phases(), Approver::User),
             after_session(vec![EventKind::Phase {
                 phase: Phase::of("plan")
             }])
@@ -485,6 +540,112 @@ mod tests {
     }
 
     #[test]
+    fn a_permission_the_reviewer_answers_waits_for_no_one() {
+        let payload = fixture("permission_bash");
+
+        assert_eq!(
+            translate(&payload, &phases(), Approver::Reviewer),
+            after_session(vec![])
+        );
+    }
+
+    fn rollout() -> String {
+        let path = format!(
+            "{}/src/adapter/fixtures/codex/rollout_auto_review.jsonl",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        std::fs::read_to_string(path).unwrap()
+    }
+
+    /// A `last_line` over `rollout`'s text.
+    fn last_line_of(rollout: String) -> impl FnOnce(&Path, &LineMatch) -> Option<String> {
+        move |_, matches| {
+            rollout
+                .lines()
+                .rev()
+                .find(|line| matches(line))
+                .map(String::from)
+        }
+    }
+
+    #[test]
+    fn the_reviewer_answers_when_the_turn_routes_approvals_to_it() {
+        let payload = fixture("permission_bash_reviewed");
+        let mut read_from = None;
+
+        let approver = approver(&payload, |file, matches| {
+            read_from = Some(file.to_path_buf());
+            last_line_of(rollout())(file, matches)
+        });
+
+        assert_eq!(approver, Approver::Reviewer);
+        assert_eq!(
+            read_from.unwrap(),
+            Path::new(payload["transcript_path"].as_str().unwrap())
+        );
+    }
+
+    #[test]
+    fn the_newest_turn_context_is_the_one_that_counts() {
+        let mention = r#"{"type":"response_item","payload":{"type":"message","content":"a \"turn_context\" line"}}"#;
+        let rollout = format!("{}{mention}\n", rollout());
+
+        assert_eq!(
+            approver(&fixture("permission_bash_reviewed"), last_line_of(rollout)),
+            Approver::Reviewer
+        );
+    }
+
+    #[test]
+    fn the_user_answers_a_turn_that_routes_approvals_to_the_user() {
+        let earlier = rollout().lines().take(3).collect::<Vec<_>>().join("\n");
+
+        assert_eq!(
+            approver(&fixture("permission_bash"), last_line_of(earlier)),
+            Approver::User
+        );
+    }
+
+    #[test]
+    fn the_user_answers_when_the_rollout_does_not_say() {
+        let payload = fixture("permission_bash_reviewed");
+        let earlier = rollout().lines().take(3).collect::<Vec<_>>().join("\n");
+
+        assert_eq!(approver(&payload, last_line_of(earlier)), Approver::User);
+        assert_eq!(approver(&payload, |_, _| None), Approver::User);
+        assert_eq!(
+            approver(&payload, last_line_of("not json\n".to_string())),
+            Approver::User
+        );
+    }
+
+    #[test]
+    fn only_the_known_reviewer_values_mean_the_reviewer() {
+        let payload = fixture("permission_bash_reviewed");
+
+        for (value, expected) in [
+            ("auto_review", Approver::Reviewer),
+            ("guardian_subagent", Approver::Reviewer),
+            ("user", Approver::User),
+            ("someone_new", Approver::User),
+        ] {
+            let rollout = rollout().replace("\"auto_review\"", &format!("\"{value}\""));
+            assert_eq!(
+                approver(&payload, last_line_of(rollout)),
+                expected,
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_a_permission_request_reads_the_rollout() {
+        let read = |_: &Path, _: &LineMatch| -> Option<String> { panic!("read the rollout") };
+
+        assert_eq!(approver(&fixture("stop"), read), Approver::User);
+    }
+
+    #[test]
     fn a_compaction_is_a_turn_that_changes_nothing() {
         assert_eq!(events("pre_compact"), after_session(vec![]));
         assert_eq!(events("post_compact"), after_session(vec![]));
@@ -518,7 +679,11 @@ mod tests {
         assert_eq!(events("session_start_resume"), vec![session()]);
         assert_eq!(events("session_end"), vec![session()]);
         assert_eq!(
-            translate(&serde_json::json!({"hook_event_name": "Stop"}), &phases()),
+            translate(
+                &serde_json::json!({"hook_event_name": "Stop"}),
+                &phases(),
+                Approver::User
+            ),
             vec![EventKind::Idle {
                 note: "turn ended".into()
             }],

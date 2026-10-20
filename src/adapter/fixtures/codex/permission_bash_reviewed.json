@@ -1,0 +1,14 @@
+{
+ "session_id": "01a14000-0000-7000-8000-000000000000",
+ "turn_id": "01a1575d-9bbf-7530-b2ae-b10a83ec8712",
+ "transcript_path": "/home/dev/.codex/sessions/2026/10/16/rollout-2026-10-16T14-51-43-01a14000-0000-7000-8000-000000000000.jsonl",
+ "cwd": "/repo",
+ "hook_event_name": "PermissionRequest",
+ "model": "gpt-6.1-sol",
+ "permission_mode": "default",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "git add a.txt && git commit -m 'add a'",
+  "description": "May I stage a.txt and commit it with the message 'add a'?"
+ }
+}

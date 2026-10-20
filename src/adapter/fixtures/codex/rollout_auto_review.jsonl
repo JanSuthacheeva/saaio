@@ -1,0 +1,4 @@
+{"timestamp":"2026-10-16T14:51:43.878Z","type":"session_meta","payload":{"id":"01a14000-0000-7000-8000-000000000000","timestamp":"2026-10-16T14:51:43.878Z","cwd":"/repo","originator":"codex-tui","cli_version":"0.163.0","source":"cli"}}
+{"timestamp":"2026-10-16T14:51:44.102Z","type":"turn_context","payload":{"turn_id":"01a143b2-ffcb-71d0-b18d-5b58e899df39","cwd":"/repo","approval_policy":"on-request","approvals_reviewer":"user","model":"gpt-6.1-sol","effort":"medium"}}
+{"timestamp":"2026-10-16T14:51:50.311Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"01a143b2-ffcb-71d0-b18d-5b58e899df39"}}
+{"timestamp":"2026-10-16T14:52:10.540Z","type":"turn_context","payload":{"turn_id":"01a1575d-9bbf-7530-b2ae-b10a83ec8712","cwd":"/repo","approval_policy":"on-request","approvals_reviewer":"auto_review","model":"gpt-6.1-sol","effort":"medium"}}

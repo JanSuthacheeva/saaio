@@ -200,16 +200,19 @@ arguments. A worker also trusts its own worktree for that launch. Nothing is wri
 | a shell command reading one configured phase skill's `SKILL.md` | that skill's phase |
 | a shell command reading skills from several configured phases | no phase; it is treated as read-ahead |
 | a subagent (`spawn_agent`) | `delegated <its task>`, until the main agent goes on |
-| a permission request | after three seconds without a tool completion, `waiting permission: Bash(touch notes.txt)` |
+| a permission request you answer | after three seconds without a tool completion, `waiting permission: Bash(touch notes.txt)` |
+| a permission request automatic review answers | nothing; the flow stays `working` |
 | a tool finishing | `working`. A merge request, as for Claude Code. |
 | the end of a turn | as for Claude Code |
 | Esc | `idle interrupted` |
 
 - saaio trusts only its own hooks and the worker's own worktree. Your configured hooks and a
   repository's hooks still receive Codex's review.
-- Codex runs the permission hook before automatic review or a user prompt. A quick automatic
-  approval finishes the tool and cancels the pending wait. A slow automatic review can still show
-  `waiting` after three seconds; the completed tool returns the flow to `working`.
+- Codex runs the same permission hook whether you or its automatic review (`--approve-for-me`)
+  answers. saaio reads who answers from the turn in the session's rollout file. Automatic review
+  never waits for you, so its requests do not show `waiting`, however long it takes. A rejected
+  request goes back to the worker and is not reported. If the rollout cannot be read, the request
+  counts as yours and server.log says why.
 - Codex has no Skill tool hook. A `$skill` named in a prompt starts its configured phase. For later
   phases, saaio observes a single `SKILL.md` read. The worker instruction makes that read a phase
   start by prohibiting skill reads ahead, including reads in separate commands. If a worker does
