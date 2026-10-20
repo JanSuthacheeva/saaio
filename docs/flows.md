@@ -45,7 +45,7 @@ timeline.
 | Session stops by | Result |
 | --- | --- |
 | `/exit` | the flow ends |
-| anything else (crash, closed connection) | the flow stays, its row shows `exited`. `C-space r` resumes it. The next server start resumes it automatically. |
+| anything else (crash, closed connection) | the flow stays, its row shows `exited`. `C-space r` resumes it. The next server start resumes it automatically. If it exits while the flow is `working`, the flow is `blocked`: `agent exited (code N)` and the last lines of its pane. |
 
 ## Phases
 
@@ -124,7 +124,7 @@ the worker's session runs again.
 | Codex, busy | news arrives when the turn ends |
 | Codex, idle | saaio's server types the news in as one paste, after ten seconds without typing in that pane. Never before the session's first turn. |
 
-`saaio status <name> --full` shows a worker's whole last answer.
+`saaio status <name> --full` shows a worker's last answer, up to 4000 characters.
 
 A Claude Code worker can ask with a question dialog: one to four questions, each with options to
 pick. `saaio status <name>` lists them. The master answers every question in one `saaio send`; saaio's
@@ -177,11 +177,11 @@ Or mode `plain` in the new-flow dialog.
 | --- | --- |
 | a prompt | `working`, and the phase of a typed `/skill` |
 | the Skill tool | `phase`: the workflow's phase whose skills name the skill |
-| the Agent tool | `delegated <description>` |
+| the Agent tool, not in the background | `delegated <description>` |
 | AskUserQuestion | `waiting <the question>` |
 | a permission prompt | `waiting permission: Bash(rm -rf build)` |
 | a tool finishing | `working`. Task counts and blocks from a plan-progress tool (`mcp__plan-progress__report`), when the worker has one. A merge request printed by `gh pr create` or `glab mr create`, when it belongs to a remote of the worktree (origin, or a fork's upstream). |
-| the end of a turn | `waiting <the question>` when the last line asks one, else `idle <the last sentence>`, even while a background task runs. The whole closing message becomes the flow's `answer`. |
+| the end of a turn | `waiting <the question>` when the last line asks one, else `idle <the last sentence>`, even while a background task runs. The closing message, up to 4000 characters, becomes the flow's `answer`. |
 | `/exit` | `ended` |
 
 ### Codex
@@ -225,7 +225,8 @@ arguments. A worker also trusts its own worktree for that launch. Nothing is wri
 
 ### Other agents and subagents
 
-- A subagent's events are ignored, except a phase skill it runs (a review in a fresh agent).
+- A subagent's events are ignored, except a phase skill a Claude Code subagent runs (a review in a
+  fresh agent).
 - An agent without an adapter reports nothing. The UI shows only whether it runs.
 - Scripts and other tools report with `saaio report` ([cli.md](cli.md#saaio-report)).
 
@@ -242,7 +243,8 @@ or merged it: the worker, the master or you.
 | the flow's merge request, closed without a merge, worker already ended | the flow stays `ended`, timeline `PR #42 closed`. Its worker does not restart or reclaim a slot. |
 | nothing, or a closed one the flow does not show | no change |
 
-- Asked: every flow with a branch that is not merged, ended ones included. Never a plain session.
+- Asked: every flow with a branch and a worktree that is not merged, ended ones included. Never a
+  plain session.
 - An open or merged request keeps the workflow's last phase even if later worker hooks mention an
   earlier skill. Later questions and work can update the state while the worker remains live.
   Closing an unmerged request returns a `done` live flow to `idle` in its last phase;
@@ -251,9 +253,10 @@ or merged it: the worker, the master or you.
   name, such as a cleared flow's, is ignored.
 - When: as the server starts, then every 2 minutes, one flow after another. About 30 requests per
   flow an hour.
-- With `gh` for a remote on github.com, `glab` for a host with `gitlab` in its name. Every remote of
-  the worktree counts: origin, a fork's upstream, an SSH host alias. Other hosts are not asked.
-- Runs in the worktree, logged in as you are (`gh auth login`, `glab auth login`).
+- With `gh` when a remote of the repository is on github.com, `glab` when one has `gitlab` in its
+  host. An SSH host alias counts. Other hosts are not asked.
+- Runs in the repository's main checkout, never the worktree, logged in as you are
+  (`gh auth login`, `glab auth login`).
 - No `gh` or `glab`, not logged in, offline, or no answer within a minute: no change. The error goes
   to `server.log` once.
 - Only while the UI (its server) runs. `saaio status` asks no one.

@@ -58,7 +58,8 @@ saaio status shop-217 --json # a board with just that flow
       },
       "answer": null,
       "session": null,
-      "questions": []
+      "questions": [],
+      "services": null
     },
     {
       "id": "5418e55e-581e-4117-a46c-0824b8e475d9",
@@ -87,7 +88,8 @@ saaio status shop-217 --json # a board with just that flow
       },
       "answer": null,
       "session": null,
-      "questions": []
+      "questions": [],
+      "services": null
     }
   ]
 }
@@ -123,9 +125,9 @@ All times are Unix milliseconds.
 | `steps` | array | one per phase of the flow's workflow. Empty for a plain session. See [Steps](#steps). |
 | `timeline` | array | what happened, oldest first. See [Timeline](#timeline). |
 | `startedAt` | number | when the flow started |
-| `changedAt` | number | when its state, phase or blocker last changed |
+| `changedAt` | number | when its state, phase, blocker or idle note last changed, or its merge request closed |
 | `workspace` | object or null | where its worker runs. Null for a flow made with `saaio new`. See [Workspace](#workspace). |
-| `answer` | string or null | the worker's last turn's whole closing message, as its harness reported it |
+| `answer` | string or null | the worker's last turn's closing message, as its harness reported it, up to 4000 characters |
 | `session` | object or null | `{ "id", "transcript" }`: the session id the harness picked and the path of its transcript (`transcript` may be null). Set for Codex, which picks its own id. Null for Claude Code, which uses the flow's. |
 | `questions` | array | the questions of the dialog a `waiting` flow shows. Empty when it waits on none. See [Questions](#questions). |
 | `services` | object or null | where the flow's services stand. Null until saaio first pauses them. See [Services](#services). |
@@ -151,7 +153,10 @@ All times are Unix milliseconds.
 | --- | --- | --- |
 | `phase` | string | the phase's name, as the flow's workflow names it |
 | `status` | string | `done`, `current` or `open` |
-| `durationMs` | number or null | the time spent in the phase. The current phase counts up to now. Null for a phase not reached |
+| `durationMs` | number or null | the time spent in the phase. The current phase counts up to now, or up to when the merge request opened or the flow ended. Null for a phase not reached |
+
+Once a merge request is open or merged, every step is `done`. A phase skipped on the way has
+`durationMs` null.
 
 A flow keeps the phases it started with. Two flows can have different steps.
 
@@ -160,7 +165,7 @@ A flow keeps the phases it started with. Two flows can have different steps.
 | Key | Type | Holds |
 | --- | --- | --- |
 | `at` | number | when it happened |
-| `text` | string | what happened: `started`, `phase: plan`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `PR #42 merged`, `PR #42 closed`, `master: ...` (a message from the master), `pause failed: ...`, `resume failed: ...`, `ended` |
+| `text` | string | what happened: `started`, `phase: plan`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `PR #42 merged` (`MR !88 merged` on GitLab), `PR #42 closed`, `master: ...` (a message from the master), `master typed: ...` (a line typed into its pane), `pause failed: ...`, `resume failed: ...`, `ended` |
 | `tone` | string | `neutral`, `progress`, `attention`, `problem` or `success` |
 
 ### Questions

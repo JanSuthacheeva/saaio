@@ -25,7 +25,7 @@ curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/inst
 Installs the prebuilt binary to `~/.local/bin`. From source, with Rust 1.95+:
 
 ```sh
-cargo install --git https://github.com/JanSuthacheeva/saaio --tag v0.1.0
+cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.1.0
 ```
 
 More: [docs/install.md](docs/install.md).
@@ -102,7 +102,7 @@ commented out at its default.
 
 | Feature | What it does |
 | --- | --- |
-| Master | starts workers, answers them with `saaio send`, is woken when one waits, is blocked or finishes. Guided flows bring every question to you. Auto flows let the master answer what the code and plan settle. |
+| Master | starts workers, answers them with `saaio send`, is woken when a worker's turn ends, it waits, is blocked, stops responding or opens its merge request. Guided flows bring every question to you. Auto flows let the master answer what the code and plan settle. |
 | Worktrees | one branch and worktree per flow. `.saaio/setup` and `.saaio/teardown` run in each. `SAAIO_SLOT` (1 to 20, unique across all projects) gives each worktree its own ports. The `setup-saaio` skill writes both scripts. |
 | Hooks | Claude Code and Codex (experimental) report through their own hooks, no screen reading. Codex workers trust saaio's hooks and their own worktree for that launch; a startup dialog that prevents the first turn shows as waiting. Any other command runs as a worker, shown as running or not. If any worker process exits while its flow is working, the flow shows blocked with its exit code and a short tail of pane output. |
 | Projects | one store, master and sidebar per git repository, picked from the folder saaio runs in. `saaio status --all` and the board show every project. |
