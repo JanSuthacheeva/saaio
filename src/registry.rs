@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::store::{Store, write_atomic};
+use crate::private::write_atomic;
+use crate::store::Store;
 
 /// The file in a project store that names the git dir of the repository owning it.
 const OWNER_FILE: &str = "repo";

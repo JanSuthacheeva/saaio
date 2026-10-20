@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::private::write_atomic;
 use crate::registry::Registry;
-use crate::store::write_atomic;
 use crate::view::FlowView;
 
 /// Slots across every project: SAAIO_SLOT, which setup hooks turn into ports.

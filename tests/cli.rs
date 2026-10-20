@@ -3227,6 +3227,48 @@ fn bug_report_writes_one_file_with_versions_settings_and_the_logs() {
 }
 
 #[test]
+fn bug_report_never_writes_through_what_is_already_there() {
+    let home = TempDir::new().unwrap();
+    let cwd = TempDir::new().unwrap();
+    let report = || {
+        let output = saaio_command(home.path())
+            .arg("bug-report")
+            .current_dir(cwd.path())
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{}", stdout(&output));
+        let said = stdout(&output);
+        let path = said
+            .lines()
+            .next()
+            .unwrap()
+            .strip_prefix("report: ")
+            .unwrap();
+        PathBuf::from(path).file_name().unwrap().to_owned()
+    };
+    let first = report();
+    let target = home.path().join("target");
+    fs::write(&target, "mine").unwrap();
+    fs::remove_file(cwd.path().join(&first)).unwrap();
+    std::os::unix::fs::symlink(&target, cwd.path().join(&first)).unwrap();
+
+    let second = report();
+
+    assert_eq!(fs::read_to_string(&target).unwrap(), "mine");
+    let first = first.to_string_lossy();
+    assert_eq!(
+        second.to_string_lossy(),
+        first.replace(".txt", "-2.txt"),
+        "the next name, beside the link"
+    );
+    let mode = fs::metadata(cwd.path().join(&second))
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600);
+}
+
+#[test]
 fn bug_report_says_when_there_is_no_store() {
     let home = TempDir::new().unwrap();
     let cwd = TempDir::new().unwrap();

@@ -1,5 +1,5 @@
 use std::fs::{self, OpenOptions};
-use std::io::{self, ErrorKind, Write};
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -7,6 +7,7 @@ use anyhow::{Context, Result, bail};
 use uuid::Uuid;
 
 use crate::event::{Event, unix_ms};
+use crate::private::write_atomic;
 use crate::view::MasterTurn;
 use crate::wake::Seen;
 
@@ -373,15 +374,6 @@ impl Store {
     fn alive(&self, id: &str) -> PathBuf {
         self.root.join("flows").join(format!("{id}.alive"))
     }
-}
-
-/// Writes `contents` to a hidden file beside `path` and renames it over, so a reader never sees half
-/// a file.
-pub fn write_atomic(path: &Path, contents: &[u8]) -> io::Result<()> {
-    let name = path.file_name().unwrap_or_default().to_string_lossy();
-    let partial = path.with_file_name(format!(".{name}.{}", std::process::id()));
-    fs::write(&partial, contents)?;
-    fs::rename(&partial, path)
 }
 
 #[cfg(test)]

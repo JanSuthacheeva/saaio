@@ -243,7 +243,8 @@ i. Config type error (L2)
 5. Pasted text keeps line breaks and drops every other control character, Tab included.
 6. Bug reports go up to `-100` a day.
 7. Theme errors get the same redaction for consistency.
-8. No CHANGELOG entry and no doc change.
+8. No CHANGELOG entry. Docs change only where they describe what changed: `docs/cli.md` on the
+   bug report's name.
 
 ## Decisions during review
 
@@ -260,9 +261,9 @@ Each shared piece lands in the commit of its first user: alone it is dead code, 
 - [x] M5: hook and wait refuse a set `SAAIO_FLOW_ID` that is no UUID; `tests/cli.rs` traversal test
 - [x] H2: `workspace::registered_git_dir`, `worktree_git`, `has_uncommitted_work(repo, workspace)`, retire fails closed; fsmonitor test with real git; `tests/cli.rs` remove test
 - [x] H2: `Ask.repo`, forge watch runs remote_urls and gh/glab in the main checkout; forge tests updated
-- [ ] Add `src/private.rs` (`create_dir`, `options`, `write_new`, `write_atomic` moved from store.rs) with mode and symlink tests; CLAUDE.md Architecture line
-- [ ] H3: `bug_report::file_name(at, offset, n)` and `private::write_new` in the command; `tests/cli.rs` symlink test
-- [ ] M3: every store, registry, slots, server_log, client, master, conn and default_file create site through `private`; server start closes the store root; `tests/cli.rs` mode test
+- [x] Add `src/private.rs` (`write_new`, `write_atomic` moved from store.rs) with mode and symlink tests; CLAUDE.md Architecture line
+- [x] H3: `bug_report::file_name(at, offset, n)` and `private::write_new` in the command; `tests/cli.rs` symlink test
+- [ ] M3: `private::create_dir` and `private::options` with mode tests; every store, registry, slots, server_log, client, master, conn and default_file create site through `private`; server start closes the store root; `tests/cli.rs` mode test
 - [ ] Add `text::printable` and `text::without_value` with unit tests
 - [ ] M2: `news::paste` through `text::printable`; paste test
 - [ ] L1: `Peer::printable` in `Server::hello`, `text::printable` on Refused and Detached quit texts; tests
