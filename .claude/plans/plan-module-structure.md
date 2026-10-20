@@ -172,3 +172,52 @@ Unchanged: every step moves or regroups code. Error paths stay where they are.
 - [x] 6. Group `App`'s master fields into `App.master`
 - [x] 7. Replace libc with rustix for kill, killpg, getuid and Linux peer creds
 - [x] End to end: bare `saaio` on a scratch store in a PTY, start a flow, close it, `saaio --stop`
+
+## Review
+
+Reviewed in isolation against this plan, CLAUDE.md and main. Every moved file was compared line by
+line with what it replaced (only visibility, renames and imports differ), and no test was lost
+(763 `#[test]`s at the merge base, all kept; the branch adds 3, this review 1).
+
+### Fixed
+
+- `layering` missed grouped imports: `use crate::{ui, cli}` gave an empty target, so a cycle
+  through one would pass. `targets` now reads the brace list; test
+  `reads_the_modules_a_grouped_use_names` (5456df6).
+
+### Open
+
+- **Conflicts with main** (33 commits ahead): `CLAUDE.md` (keep the `layering.rs` line, take
+  main's cli line without `news`), `src/server/panes.rs` `open_worker` (take main's rewrite, its
+  `self.resumed.insert(key.clone(), ..)` becomes `self.pane_mut(&key).resumed = Some(..)`),
+  `src/workspace.rs` (keep the branch's split; main's `SOON` (20 s) bound for three tests goes
+  into `workspace/process.rs` and `workspace/hooks.rs`, replacing 95637f6's inline 20 s). Main
+  also adds `cli/commands/completions.rs`; rerun `layering` after the merge. Recommendation:
+  merge main into the branch before the PR and run the full suite there.
+- **Linux `peer_pid` on a pid 0**: SO_PEERCRED gives pid 0 when the server is in a pid namespace
+  the caller cannot see; rustix builds its `UCred` (`Pid` is non-zero) with `assume_init`, which
+  is undefined behaviour there. Before, libc gave 0 and `kill(0, ..)` signalled saaio's own
+  process group, so neither was right; macOS now errors cleanly. Only reachable with
+  `saaio --stop` across containers sharing the socket. Recommendation: accept for now; if it
+  matters, read SO_PEERCRED through libc on Linux and refuse a 0 as macOS does.
+
+### Where to look
+
+1. `src/server/pane_state.rs`, then `tell_closed` in `src/server/panes.rs` and the `Exited` arm in
+   `src/server.rs`: the seven maps folded into `PaneState`; `resumed` and `closing` are taken
+   where they were removed, and an empty `closing` now returns as a missing entry did.
+2. `src/server/conn.rs` `hello` and `drop_conn`: `peers` folded into `Conn.peer`; a hello for a
+   connection already dropped no longer leaves a stray peer.
+3. `src/client.rs` `stop_server`, `peer_pid` and `src/server/host.rs` `signal_group`: the rustix
+   calls (see the Linux open item).
+4. `src/layering.rs`: the text scan the no-cycle guarantee rests on (comment lines and
+   `#[cfg(test)]\nmod tests {` onward are skipped; other test-only code counts, which can only
+   fail the test, never hide a cycle).
+
+Routine, skim: the `ui/input` and `workspace` splits, the five renames, `Prefix`,
+`THEME_EXAMPLE`, `wake::for_*`, `Refusal::phrase`, `App.master`.
+
+### Checks
+
+fmt, clippy and the full test suite passed at ac25b4b; after 5456df6 (test code only) fmt,
+clippy and the `layering` tests pass. Not yet run on the branch merged with main.
