@@ -277,7 +277,7 @@ Each shared piece lands in the commit of its first user: alone it is dead code, 
 
 Decided by the user on the review's open items.
 
-- [ ] `saaio remove` says when git cannot answer for a worktree, instead of "uncommitted work":
+- [x] `saaio remove` says when git cannot answer for a worktree, instead of "uncommitted work":
   `retire::refuse_uncommitted_work` maps `has_uncommitted_work`'s Err to a new
   `output::remove::unchecked(name, path, reason)` Failure (still refused, `--force` the way
   out); `tests/cli.rs` test with a worktree git does not list

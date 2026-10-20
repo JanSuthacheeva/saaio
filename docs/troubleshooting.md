@@ -82,5 +82,6 @@ The home folder is written `~`. A second report on the same day is written besid
 | Problem | Cause | Fix |
 | --- | --- | --- |
 | `saaio remove` refuses: uncommitted work | uncommitted changes in the worktree | commit or stash them, or `--force` to discard them |
+| `saaio remove` refuses: git cannot check the worktree for uncommitted changes | git does not list the folder as a worktree of the repository, or git failed | `git worktree list` in the repository shows what git knows; `--force` removes it without the check |
 | `saaio remove` refuses: commits on no other branch | the branch has commits that exist nowhere else, local or pushed | merge or push the branch, or `--delete-unmerged` to delete it with its commits |
 | `saaio clear` kept a worktree | it had uncommitted work | commit or discard it, then `git worktree remove <path>` |

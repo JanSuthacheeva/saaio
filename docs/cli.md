@@ -385,8 +385,9 @@ branch: deleted
 help[1]: Run `saaio` to see what is left
 ```
 
-Refuses and changes nothing when the worktree has uncommitted work or the branch has commits on no
-other branch, local or pushed:
+Refuses and changes nothing when the worktree has uncommitted work, git cannot check it (git does
+not list it as a worktree of the repository), or the branch has commits on no other branch, local
+or pushed:
 
 ```
 $ saaio remove shop-221

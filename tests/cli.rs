@@ -2244,6 +2244,29 @@ fn remove_refuses_uncommitted_work_unless_forced() {
 }
 
 #[test]
+fn remove_says_when_git_cannot_check_a_worktree() {
+    let lab = Lab::new();
+    assert!(lab.start(&["SHOP-1 unlisted"]).status.success());
+    let worktree = lab.repo.join(".saaio/worktrees/shop-1");
+    fs::remove_dir_all(lab.repo.join(".git/worktrees/shop-1")).unwrap();
+
+    let refused = lab.run(&["remove", "shop-1"]);
+
+    let text = stdout(&refused);
+    assert_eq!(refused.status.code(), Some(1), "{text}");
+    assert!(
+        text.starts_with(&format!(
+            "error: git cannot check {} for uncommitted changes (",
+            worktree.display()
+        )),
+        "{text}"
+    );
+    assert!(text.contains("is no worktree of"), "{text}");
+    assert!(text.contains("saaio remove shop-1 --force"), "{text}");
+    assert!(worktree.exists());
+}
+
+#[test]
 fn remove_runs_nothing_the_worktree_configures() {
     let lab = Lab::new();
     assert!(lab.start(&["SHOP-1 planted"]).status.success());
