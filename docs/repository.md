@@ -121,7 +121,7 @@ needs them.
 | Script | Runs |
 | --- | --- |
 | `.saaio/pause` | the flow rested (idle, waiting, blocked, done or ended) for `pause_after_minutes`, 5 by default ([configuration.md](configuration.md#services)) |
-| `.saaio/resume` | the paused flow's worker works again |
+| `.saaio/resume` | the paused flow's worker works again: a new prompt, or its first tool call after the master woke it |
 
 They run like setup: from the main checkout, in the worktree, with the same variables. A repo
 needs both, executable; with one or neither nothing is paused and nothing shows.

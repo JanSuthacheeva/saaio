@@ -262,7 +262,7 @@ or merged it: the worker, the master or you.
 
 A flow that rests, `idle`, `waiting`, `blocked`, `done` or `ended`, for 5 minutes
 (`[services] pause_after_minutes`) gets its services paused: `saaio server` runs the repo's
-`.saaio/pause`. When its worker works again, `.saaio/resume` runs, and the worker's tool calls wait
+`.saaio/pause`. When its worker works again (a new prompt, or a tool call once the master woke it), `.saaio/resume` runs, and the worker's tool calls wait
 until the services are back, up to 2 minutes.
 
 - Only in repos with both scripts. Others are never paused.
