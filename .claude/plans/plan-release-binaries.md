@@ -196,3 +196,33 @@ A user installs:
 - [x] Add `.github/workflows/release.yml` (check, build x4 with test and `--version` check, package, install-check x2, publish)
 - [x] Docs: README Install, docs/install.md (install, manual download, from source, updating), docs/files.md, docs/cli.md, ROADMAP (binaries row), CHANGELOG 0.1.0, CONTRIBUTING Releasing, CLAUDE.md Structure
 - [x] End to end: push the branch and `v0.1.0-rc.1`, all jobs green, download the pre-release, `sha256sum -c`, install from it on this Mac and check `saaio --version` names the branch head, then delete the pre-release and tag
+
+## Review
+
+Fixed
+- install.sh reported a binary that does not run as installed: a tarball whose saaio exits 126
+  printed "installed  to ..." and exited 0 (on a noexec folder, say). It now fails with
+  "saaio: <path> does not run on this machine", exit 1; test
+  `fails_when_the_installed_binary_does_not_run` (b0f65cb). Reviewed again by the same agent in a
+  separate pass, not independently.
+
+Open
+- install.sh leaves its temp folder when interrupted with Ctrl-C under dash (the EXIT trap does not
+  run on a signal) and a `.saaio.<pid>` file beside saaio when `cp` fails half way. Both are
+  harmless leftovers; recommend leaving them.
+- `SAAIO_INSTALL_DIR` with a trailing slash prints the PATH hint even when the folder is on PATH.
+  Cosmetic; leave.
+
+Where to look
+1. `.github/workflows/release.yml` `check`: the tag-to-Cargo.toml match and the CHANGELOG
+   extraction (a release whose heading says "not released yet" fails; a pre-release does not).
+2. `publish`: `--verify-tag`, `--prerelease` only for tags with "-", `contents: write` on this job
+   alone.
+3. `install.sh` `target`, `verify` and `place`: the Rosetta case, the checksum line match, the
+   rename over a running binary.
+Routine, skim: the docs, ROADMAP and CHANGELOG lines, the two `tests/cli.rs` test robustness fixes,
+the `config::watch` test length change.
+
+Checks
+- `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at b0f65cb.
+  The release workflow last ran green at ac92772; install.sh changed since, only its last step.
