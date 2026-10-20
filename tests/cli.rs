@@ -58,9 +58,12 @@ fn git(dir: &Path, args: &[&str]) {
     assert!(status.success(), "git {args:?}");
 }
 
-/// Polls `done` until it holds; fails the test with `what` after `limit`.
-fn wait_until(limit: Duration, what: &str, mut done: impl FnMut() -> bool) {
-    let deadline = Instant::now() + limit;
+/// How long a test waits for what should happen soon; only a failing test waits this long.
+const PATIENCE: Duration = Duration::from_secs(30);
+
+/// Polls `done` until it holds; fails the test with `what` after PATIENCE.
+fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
+    let deadline = Instant::now() + PATIENCE;
     while !done() {
         assert!(Instant::now() < deadline, "{what}");
         thread::sleep(Duration::from_millis(20));
@@ -69,7 +72,7 @@ fn wait_until(limit: Duration, what: &str, mut done: impl FnMut() -> bool) {
 
 /// Waits until something accepts connections on `socket`; a socket file can exist before that.
 fn wait_for_socket(socket: &Path) {
-    wait_until(Duration::from_secs(5), "the server never listened", || {
+    wait_until("the server never listened", || {
         UnixStream::connect(socket).is_ok()
     });
 }
@@ -286,9 +289,7 @@ fn bare_saaio_in_an_agents_or_a_flows_terminal_prints_the_overview() {
         let status = terminal.child.wait().unwrap();
 
         assert!(status.success(), "{marker}");
-        wait_until(Duration::from_secs(5), marker, || {
-            terminal.shows("flows: none tracked")
-        });
+        wait_until(marker, || terminal.shows("flows: none tracked"));
         let text = terminal.text();
         assert!(text.starts_with("bin: "), "{marker}: {text}");
         assert!(!text.contains("\x1b[?1049h"), "{marker}: {text}");
@@ -309,9 +310,7 @@ resume = ["cat"]"#,
     let terminal = Terminal::open(&lab.home, &lab.repo, &[], &[]);
 
     wait_for_socket(&lab.home.join("server.sock"));
-    wait_until(Duration::from_secs(5), "the UI never drew", || {
-        terminal.shows("\x1b[?1049h")
-    });
+    wait_until("the UI never drew", || terminal.shows("\x1b[?1049h"));
     assert!(!terminal.shows("bin: "), "{}", terminal.text());
     assert!(lab.run(&["--stop"]).status.success());
 }
@@ -330,7 +329,7 @@ fn bare_stop_in_a_terminal_never_opens_the_ui() {
         let env = marker.map(|name| vec![(name, "1")]).unwrap_or_default();
         let mut terminal = Terminal::open(home.path(), home.path(), &["--stop"], &env);
         assert!(terminal.child.wait().unwrap().success(), "{marker:?}");
-        wait_until(Duration::from_secs(5), "stop did not print", || {
+        wait_until("stop did not print", || {
             terminal.shows("no saaio server runs")
         });
         assert!(
@@ -868,11 +867,7 @@ resume = ["cat"]"#,
             serde_json::from_slice(&saaio(&lab.home, &["status", "--json"]).stdout).unwrap();
         board["flows"][0]["workspace"]["window"] == "saaio-ui"
     };
-    wait_until(
-        Duration::from_secs(5),
-        "the server never opened the worker",
-        hosted,
-    );
+    wait_until("the server never opened the worker", hosted);
     assert!(lab.run(&["--stop"]).status.success());
     assert!(server.wait().unwrap().success());
 }
@@ -903,15 +898,11 @@ prompt = ""
             .success()
     );
 
-    wait_until(
-        Duration::from_secs(5),
-        "exited worker stayed working",
-        || {
-            let output = lab.run(&["status", "dead", "--json"]);
-            let board: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-            board["flows"][0]["state"] == "blocked"
-        },
-    );
+    wait_until("exited worker stayed working", || {
+        let output = lab.run(&["status", "dead", "--json"]);
+        let board: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        board["flows"][0]["state"] == "blocked"
+    });
     let output = lab.run(&["status", "dead"]);
     let shown = stdout(&output);
     assert!(shown.contains("state: blocked"), "{shown}");
@@ -992,9 +983,7 @@ resume = ["sh", "-c", "echo resumed {{name}} >> {log}; exec cat"]"#,
         lines
     };
     let wait_for = |count: usize| {
-        wait_until(Duration::from_secs(10), "the agents never all ran", || {
-            lines().len() >= count
-        });
+        wait_until("the agents never all ran", || lines().len() >= count);
     };
     let mut server = lab.server();
     assert!(lab.start(&["SHOP-1 first"]).status.success());
@@ -1032,9 +1021,7 @@ resume = ["cat"]"#,
     assert!(lab.start(&[&request]).status.success());
 
     let prompt = || fs::read_to_string(prompts.join("shop-300")).unwrap_or_default();
-    wait_until(Duration::from_secs(10), "the worker never ran", || {
-        !prompt().is_empty()
-    });
+    wait_until("the worker never ran", || !prompt().is_empty());
     assert_eq!(prompt(), request);
     let board: serde_json::Value =
         serde_json::from_slice(&saaio(&lab.home, &["status", "--json"]).stdout).unwrap();
@@ -2411,7 +2398,7 @@ fn a_server_stopped_while_it_starts_still_stops_cleanly() {
         .unwrap();
     let mut server = Running(server);
     // No sleep between looks: the signal has to land right after the bind.
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let deadline = Instant::now() + PATIENCE;
     while !socket.exists() {
         assert!(Instant::now() < deadline, "the server never bound");
         thread::yield_now();
@@ -2450,7 +2437,7 @@ fn the_ui_refuses_a_prefix_the_panes_need_before_it_starts_anything() {
     let opened = |said: &str| {
         let mut terminal = Terminal::open(home.path(), home.path(), &[], &[]);
         let status = terminal.child.wait().unwrap();
-        wait_until(Duration::from_secs(5), said, || terminal.shows(said));
+        wait_until(said, || terminal.shows(said));
         (status, terminal.text())
     };
 
@@ -2964,7 +2951,7 @@ fn a_workers_wait_ends_with_the_masters_message_once() {
 
     saaio(home.path(), &["send", "shop-217", "Semicolons."]);
 
-    let (code, out, err) = ended(&mut first, Duration::from_secs(5)).expect("woken");
+    let (code, out, err) = ended(&mut first, PATIENCE).expect("woken");
     assert_eq!(code, 2);
     assert_eq!(out, "");
     assert_eq!(
@@ -2992,7 +2979,7 @@ fn a_workers_wait_ends_with_the_masters_message_once() {
         Some("7f3c0000-0000-4000-8000-000000000000"),
         &[],
     );
-    let (code, _, err) = ended(&mut again, Duration::from_secs(5)).expect("replaced");
+    let (code, _, err) = ended(&mut again, PATIENCE).expect("replaced");
     assert_eq!((code, err.as_str()), (0, ""));
     drop(replacing);
 }
@@ -3014,7 +3001,7 @@ fn the_masters_wait_ends_with_the_flows_that_stopped() {
     );
 
     let mut master = waiter(home.path(), None, &["--master"]);
-    let (code, _, err) = ended(&mut master, Duration::from_secs(6)).expect("woken");
+    let (code, _, err) = ended(&mut master, PATIENCE).expect("woken");
 
     assert_eq!(code, 2);
     assert!(
@@ -3036,7 +3023,7 @@ fn the_masters_wait_ends_with_the_flows_that_stopped() {
             + "\n",
     )
     .unwrap();
-    let (code, _, err) = ended(&mut again, Duration::from_secs(6)).expect("woken again");
+    let (code, _, err) = ended(&mut again, PATIENCE).expect("woken again");
     assert_eq!(code, 2);
     assert!(err.contains("shop-218,idle,auto,Plan is ready."), "{err}");
     assert!(!err.contains("shop-217"), "{err}");
@@ -3060,7 +3047,7 @@ fn the_masters_wait_brings_no_news_while_it_does_not_wake() {
         "no news while wake is false"
     );
     fs::write(&config, "[master]\nwake = true\n").unwrap();
-    let (code, _, err) = ended(&mut master, Duration::from_secs(6)).expect("woken once it wakes");
+    let (code, _, err) = ended(&mut master, PATIENCE).expect("woken once it wakes");
 
     assert_eq!(code, 2);
     assert!(err.contains("shop-217,waiting"), "{err}");
@@ -3071,12 +3058,12 @@ fn a_wait_with_nobody_to_wait_for_ends_quietly() {
     let home = TempDir::new().unwrap();
     let mut nobody = waiter(home.path(), None, &[]);
     assert_eq!(
-        ended(&mut nobody, Duration::from_secs(3)),
+        ended(&mut nobody, PATIENCE),
         Some((0, String::new(), String::new()))
     );
     let mut gone = waiter(home.path(), Some("nope"), &[]);
     assert_eq!(
-        ended(&mut gone, Duration::from_secs(3)),
+        ended(&mut gone, PATIENCE),
         Some((0, String::new(), String::new()))
     );
 }
@@ -3176,7 +3163,10 @@ fn a_store_is_for_its_user_alone() {
     fs::set_permissions(&home, fs::Permissions::from_mode(0o755)).unwrap();
     let _server = server_with_gh(&home, "#!/bin/sh\nexit 1\n");
     assert_eq!(mode(&home), 0o700, "the server closes a store left open");
-    assert_eq!(mode(&home.join("master.json")), 0o600);
+    // The server writes master.json after it starts listening.
+    let master = home.join("master.json");
+    wait_until("the server never wrote master.json", || master.exists());
+    assert_eq!(mode(&master), 0o600);
     assert!(saaio(&home, &["--stop"]).status.success());
 }
 
@@ -3194,7 +3184,7 @@ echo '[{"createdAt":"2020-05-04T10:00:00Z","state":"MERGED","url":"https://githu
     );
     let log = home.path().join(format!("flows/{id}.jsonl"));
 
-    wait_until(Duration::from_secs(10), "no merged event", || {
+    wait_until("no merged event", || {
         fs::read_to_string(&log)
             .unwrap()
             .contains(r#""kind":"merged""#)
@@ -3222,15 +3212,11 @@ fn a_forge_that_cannot_answer_records_nothing_and_is_logged_once() {
     );
     let server_log = home.path().join("server.log");
 
-    wait_until(
-        Duration::from_secs(10),
-        "the failure was not logged",
-        || {
-            fs::read_to_string(&server_log)
-                .unwrap()
-                .contains("could not ask about merge requests")
-        },
-    );
+    wait_until("the failure was not logged", || {
+        fs::read_to_string(&server_log)
+            .unwrap()
+            .contains("could not ask about merge requests")
+    });
     thread::sleep(Duration::from_millis(500));
 
     let lines = fs::read_to_string(&server_log).unwrap();

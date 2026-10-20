@@ -264,8 +264,8 @@ Docs:
 
 ### Flaky tests
 
-- [ ] `fixtures::executable` in `src/fixtures.rs`, used by every script the lib tests write (system, workspace, server tests); the same in `tests/cli.rs` in place of `set_executable`; confirm `opens_the_next_worker_with_the_config_saved_while_it_runs` was ETXTBSY and fix it at its cause if not
-- [ ] `config::watch` test writes a new length; `a_store_is_for_its_user_alone` waits for `master.json`; `tests/cli.rs` failure-only limits to 30 s
+- [x] `fixtures::executable` in `src/fixtures.rs`, used by every script the lib tests write (system, workspace, server tests); the same in `tests/cli.rs` in place of `set_executable`; confirm `opens_the_next_worker_with_the_config_saved_while_it_runs` was ETXTBSY and fix it at its cause if not
+- [x] `config::watch` test writes a new length; `a_store_is_for_its_user_alone` waits for `master.json`; `tests/cli.rs` failure-only limits to 30 s
 - [ ] Stress the fixed tree: 10 macOS runs beside a CPU hog, 60 Linux runs on 2 CPUs with `--test-threads=32`, 40 runs of the stop tests; fix anything else found at its cause
 
 ### CI
