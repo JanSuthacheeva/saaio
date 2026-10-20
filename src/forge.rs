@@ -36,6 +36,8 @@ pub struct Found {
     pub url: String,
     pub status: Status,
     pub created_at: u64,
+    /// Whether the forge included fractional seconds in its creation time.
+    pub precise_time: bool,
 }
 
 /// One pull request in `gh pr list --json url,state,createdAt`.
@@ -148,6 +150,7 @@ impl Forge {
                     url,
                     status,
                     created_at,
+                    precise_time: created.contains('.'),
                 })
             })
             .collect()
@@ -262,9 +265,9 @@ pub fn news(flow: &FlowView, found: Option<&Found>) -> Option<EventKind> {
 }
 
 /// The one that speaks for the branch: the first open, else the first merged, else the first
-/// closed (both tools list newest first); one opened before the second containing `since`, the
-/// flow's start, belongs to an earlier branch of the same name. The second itself is included
-/// because a forge may omit fractional seconds from a later PR's creation time.
+/// closed (both tools list newest first); one opened before `since`, the flow's start, belongs
+/// to an earlier branch of the same name. A time without fractional seconds may stand for any
+/// instant in that second, so include the flow's starting second for those alone.
 pub fn pick(found: Vec<Found>, since: u64) -> Option<Found> {
     let rank = |status| match status {
         Status::Open => 0,
@@ -274,7 +277,9 @@ pub fn pick(found: Vec<Found>, since: u64) -> Option<Found> {
     let first_second = since - since % 1000;
     found
         .into_iter()
-        .filter(|one| one.created_at >= first_second)
+        .filter(|one| {
+            one.created_at >= since || (!one.precise_time && one.created_at == first_second)
+        })
         .enumerate()
         .min_by_key(|(at, one)| (rank(one.status), *at))
         .map(|(_, one)| one)
@@ -412,12 +417,14 @@ mod tests {
             url: url.into(),
             status,
             created_at: 0,
+            precise_time: false,
         }
     }
 
     fn found_at(url: &str, status: Status, created: &str) -> Found {
         Found {
             created_at: unix_ms(created).unwrap(),
+            precise_time: created.contains('.'),
             ..found(url, status)
         }
     }
@@ -583,12 +590,19 @@ mod tests {
         let opened_at = unix_ms("2026-10-18T12:00:00Z").unwrap();
         let same_second = found_at("same", Status::Open, "2026-10-18T12:00:00Z");
         let earlier = found_at("earlier", Status::Open, "2026-10-18T11:59:59Z");
+        let precise_earlier = found_at("precise-earlier", Status::Open, "2026-10-18T12:00:00.211Z");
+        let precise_later = found_at("precise-later", Status::Open, "2026-10-18T12:00:00.700Z");
 
         assert_eq!(
             pick(vec![same_second.clone()], opened_at + 500),
             Some(same_second)
         );
         assert_eq!(pick(vec![earlier], opened_at + 500), None);
+        assert_eq!(pick(vec![precise_earlier], opened_at + 500), None);
+        assert_eq!(
+            pick(vec![precise_later.clone()], opened_at + 500),
+            Some(precise_later)
+        );
     }
 
     #[test]

@@ -41,7 +41,9 @@ source fix, or test change was made.
    `flow.started_at` in milliseconds (`src/forge.rs:216`). For a flow started at
    `12:00:00.500` and a PR opened at `12:00:00.700` whose forge timestamp is
    `12:00:00Z`, `created_at < since` and the PR is discarded. Test that boundary and use a
-   conservative precision-aware cutoff that still rejects genuinely older PRs.
+   conservative precision-aware cutoff that still rejects genuinely older PRs. Implementation
+   records whether the forge timestamp included fractional seconds, so exact earlier times in
+   the same second remain excluded.
 
 ### Idioms and structure
 
