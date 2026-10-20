@@ -118,9 +118,71 @@ pub fn printable(text: &str) -> String {
     text.chars().filter(|c| !c.is_control()).collect()
 }
 
+/// A toml error message without the value it quotes ("invalid type: string \"sk-..\", expected a
+/// sequence" -> "invalid type: a string, expected a sequence"; invalid value and unknown variant
+/// alike), since a bug report carries it; other messages unchanged.
+pub fn without_value(message: &str) -> String {
+    let Some(end) = message.rfind(", expected ") else {
+        return message.to_string();
+    };
+    let (found, expected) = message.split_at(end);
+    if found.starts_with("unknown variant ") {
+        return format!("unknown variant{expected}");
+    }
+    for prefix in ["invalid type: ", "invalid value: "] {
+        if let Some(value) = found.strip_prefix(prefix) {
+            let kind = [
+                ("string ", "a string"),
+                ("integer ", "an integer"),
+                ("floating point ", "a floating point number"),
+                ("boolean ", "a boolean"),
+                ("character ", "a character"),
+            ]
+            .into_iter()
+            .find_map(|(quoted, kind)| value.starts_with(quoted).then_some(kind))
+            .unwrap_or(value);
+            return format!("{prefix}{kind}{expected}");
+        }
+    }
+    message.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_toml_error_says_what_kind_of_value_but_not_the_value() {
+        let cases = [
+            (
+                "invalid type: string \"sk-1, expected a\", expected a boolean",
+                "invalid type: a string, expected a boolean",
+            ),
+            (
+                "invalid type: integer `5`, expected a string",
+                "invalid type: an integer, expected a string",
+            ),
+            (
+                "invalid value: string \"sk-1\", expected a key such as C-b",
+                "invalid value: a string, expected a key such as C-b",
+            ),
+            (
+                "unknown variant `sk-1`, expected `claude-code` or `codex`",
+                "unknown variant, expected `claude-code` or `codex`",
+            ),
+            (
+                "invalid type: sequence, expected a string",
+                "invalid type: sequence, expected a string",
+            ),
+            (
+                "unknown field `wke`, expected `wake` or `agent`",
+                "unknown field `wke`, expected `wake` or `agent`",
+            ),
+        ];
+        for (message, said) in cases {
+            assert_eq!(without_value(message), said, "{message}");
+        }
+    }
 
     #[test]
     fn printable_text_has_no_control_characters() {

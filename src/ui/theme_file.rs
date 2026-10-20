@@ -12,7 +12,7 @@ use toml::de::{DeTable, DeValue, ValueDeserializer};
 use crate::default_file::DefaultFile;
 use crate::event::Phase;
 use crate::store::Stamp;
-use crate::text::{line_of, place};
+use crate::text::{line_of, place, without_value};
 #[cfg(test)]
 use crate::ui::theme::MARK;
 use crate::ui::theme::{ColorKey, Palette, PaletteKey, PhaseColors, Section, Theme, hex};
@@ -114,7 +114,7 @@ fn parse(path: &Path, text: &str) -> Result<ThemeFile> {
         Ok(table) => table.into_inner(),
         Err(error) => {
             let line = line_of(text, error.span().map_or(0, |span| span.start));
-            return Err(anyhow!("{}", error.message())).context(place(path, line));
+            return Err(anyhow!("{}", without_value(error.message()))).context(place(path, line));
         }
     };
     let mut keys: Vec<_> = table.into_iter().collect();
