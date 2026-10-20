@@ -21,6 +21,7 @@ Nothing in progress.
 | Shared memory for the master | each agent keeps its own memory (Claude Code per project, Codex none), so switching the master's agent loses what it knew | one memory per project in its store (`MEMORY.md` index, one file per note) that every master reads at the start and writes to, whatever its agent. Claude Code's memory folder is linked to it. Workers can read it too. |
 | `saaio start --base <branch>` | a flow's worktree branches from what the repository has checked out, so a stack of merge requests cannot run as one flow each | `saaio start --base <branch>` creates the worktree from the given branch, one flow per merge request in the stack |
 | Messages to a worker at a permission prompt | `saaio send` to a worker waiting on a permission prompt says sent, but the worker reads it only once the prompt is answered in its pane | `saaio send` says the prompt is open, or the master answers the prompt itself |
+| Answers typed in a worker's pane | the master learns only that a flow stopped. When you answer in the worker's pane first, the master can still relay the question it already has. | what you type in a worker's pane shows in its timeline, and news for a flow that left `waiting` before the master woke says it was answered |
 | Prebuilt binaries | install builds from source with `cargo install`, which needs Rust | binaries for macOS and Linux on every release, an install script at saaio.dev, a Homebrew tap and `cargo binstall saaio` |
 
 ## Planned future
