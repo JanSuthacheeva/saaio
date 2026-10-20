@@ -284,5 +284,5 @@ Clipboard (`c`) and primary (`p`) stores both pass on; OSC 52 reads stay refused
 - [x] App: `selection`, `clicks`, `surface_at`, `dialog`, `pane_modes`, `app/pointer.rs` (`on_pointer`, `on_wheel`, `on_click` moved), `Effect::CopySelection`, selection drawn and cleared; tests in `app/tests/pointer.rs`
 - [x] Env `ssh`, `wayland`, `x11` and `Env::clipboard`; `UiEnv.clipboard`; ui.rs builds `Target`, keeps `drawn`, runs `Effect::CopySelection` and logs a failed copy
 - [x] Pass a pane's OSC 52 on: `Terminal::copied`, `Host::feed -> Option<String>`, `Server::send_clipboard`, `ServerMsg::Clipboard`, protocol 7, `Effect::Copy`; tests in terminal.rs and server/tests.rs
-- [ ] Rewrite docs/ui.md "Mouse": drag, double and triple click, wheel, Shift or Option for the terminal's own selection, terminal table, iTerm2 setting, tmux `set-clipboard on`
+- [x] Rewrite docs/ui.md "Mouse": drag, double and triple click, wheel, Shift or Option for the terminal's own selection, terminal table, iTerm2 setting, tmux `set-clipboard on`
 - [ ] End to end in tmux with a scratch store: drag on sidebar, rail, title, board, a dialog, history and a shell pane, checked with pbpaste and a tmux buffer; sidebar click and wheel; Claude Code pane with `SSH_CONNECTION` set passes its OSC 52 on

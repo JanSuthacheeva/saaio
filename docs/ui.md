@@ -173,7 +173,7 @@ The master's session ended: `C-space r` resumes it, `C-space Q` stops saaio.
 
 ## History
 
-`C-space [`.
+`C-space [`, or the wheel over a pane whose session leaves the mouse to saaio.
 
 | Key | Does |
 | --- | --- |
@@ -185,8 +185,41 @@ The master's session ended: `C-space r` resumes it, `C-space Q` stops saaio.
 
 ## Mouse
 
-- Click a session in the sidebar or rail to jump to it.
-- Mouse events in the pane go to the session.
+saaio takes the mouse while it runs, like tmux with `mouse on`.
+
+| Action | Does |
+| --- | --- |
+| Click a session in the sidebar or rail | jumps to it |
+| Drag | selects text and copies it when you let go |
+| Double-click, triple-click | copies a word, a line |
+| Wheel over the pane | scrolls the history; down past the newest line goes back to the live session |
+
+A selection stays inside what it started in: a dialog, the board, the title row, the pane, the
+sidebar or the rail. It stays highlighted until the next key or click.
+
+A session that uses the mouse itself, such as Claude Code or Codex, gets the clicks, drags and
+wheel in its pane and selects and copies on its own. What it copies with OSC 52, as Claude Code
+does over SSH, reaches your clipboard while its pane is in view.
+
+### Copying
+
+saaio copies with OSC 52, which works over SSH too, and locally also with `pbcopy` on macOS, or
+`wl-copy` or `xclip` on Linux.
+
+Hold Shift while you drag (Option in iTerm2 and Terminal.app) to use the terminal's own selection
+instead. It can span the pane and the sidebar.
+
+| Terminal | OSC 52 copy | Terminal's own selection |
+| --- | --- | --- |
+| Alacritty | yes | Shift-drag |
+| Ghostty | yes | Shift-drag |
+| kitty | yes | Shift-drag |
+| WezTerm | yes | Shift-drag |
+| iTerm2 | after Settings > General > Selection > "Applications in terminal may access clipboard" | Option-drag |
+| Terminal.app | no | Option-drag |
+
+Over SSH, OSC 52 is the only way to your clipboard: in Terminal.app use Option-drag. Inside tmux,
+OSC 52 needs `set -g set-clipboard on` in `~/.tmux.conf`.
 
 ## Leaving and stopping
 
