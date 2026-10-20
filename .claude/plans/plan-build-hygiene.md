@@ -12,7 +12,8 @@ release.yml publishes no attestation.
   `lto = "thin"`, `codegen-units = 1`, `strip = "debuginfo"` (`true` strips the symbols too and leaves the panic hooks' backtraces as
   bare addresses). `panic` stays `unwind`: the server's panic
   hook logs a panic, and a UI thread's panic must reach its hook. Size before: 5164672 bytes
-  (macOS arm64, 1.95.0, `cargo build --release`).
+  (macOS arm64, 1.95.0, `cargo build --release`); after: 4240128 (-18%), 3683568 with
+  `strip = true`. A clean release build: 34 s before, 61 s after.
 - **Commit stamp**: `build/commit.rs` holds the pure choice in two functions: `is_own(toplevel,
   manifest)`, whether `git rev-parse --show-toplevel` is the manifest folder (both
   canonicalized), and `stamp(env, head)`: a non-empty `SAAIO_COMMIT` from the environment wins;
