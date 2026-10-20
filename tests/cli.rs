@@ -1118,6 +1118,55 @@ fn a_recorded_codex_skill_read_advances_the_flow_once() {
     assert_eq!(log.matches("\"kind\":\"phase\"").count(), 1, "{log}");
 }
 
+#[test]
+fn a_codex_permission_waits_only_when_the_user_answers_it() {
+    let home = TempDir::new().unwrap();
+    let rollout = home.path().join("rollout.jsonl");
+    fs::write(
+        &rollout,
+        include_str!("../src/adapter/fixtures/codex/rollout_auto_review.jsonl"),
+    )
+    .unwrap();
+    let pointed = |payload: &str, path: &Path| {
+        let mut payload: serde_json::Value = serde_json::from_str(payload).unwrap();
+        payload["transcript_path"] = path.to_str().unwrap().into();
+        payload.to_string()
+    };
+    let reviewed = pointed(
+        include_str!("../src/adapter/fixtures/codex/permission_bash_reviewed.json"),
+        &rollout,
+    );
+    let by_user = pointed(
+        include_str!("../src/adapter/fixtures/codex/permission_bash.json"),
+        &rollout,
+    );
+    let unread = pointed(
+        include_str!("../src/adapter/fixtures/codex/permission_bash_reviewed.json"),
+        &home.path().join("missing.jsonl"),
+    );
+    let pending = |id: &str| {
+        let log = fs::read_to_string(home.path().join(format!("flows/{id}.jsonl"))).unwrap();
+        log.matches("\"kind\":\"permission-pending\"").count()
+    };
+
+    for (name, payload, expected) in [
+        ("auto-review", &reviewed, 0),
+        ("by-user", &by_user, 1),
+        ("unread", &unread, 1),
+    ] {
+        let id = new_flow(home.path(), name);
+        let output = hook_with(home.path(), &["codex"], Some(&id), payload);
+        assert!(output.status.success());
+        assert!(output.stdout.is_empty() && output.stderr.is_empty());
+        assert_eq!(pending(&id), expected, "{name}");
+    }
+    let server_log = fs::read_to_string(home.path().join("server.log")).unwrap();
+    assert!(
+        server_log.contains("could not read the rollout") && server_log.contains("missing.jsonl"),
+        "{server_log}"
+    );
+}
+
 /// What `saaio send` would append: the master's message to the flow's worker.
 fn message_for(home: &Path, id: &str, text: &str) {
     let line = format!("{{\"v\":1,\"at\":5,\"kind\":\"message\",\"text\":\"{text}\"}}\n");
