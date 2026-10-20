@@ -1,4 +1,4 @@
-use ratatui::layout::{Position, Rect};
+use ratatui::layout::{Margin, Position, Rect};
 
 use super::{App, Effect, View};
 use crate::proto::ClientMsg;
@@ -115,7 +115,8 @@ impl App {
         count
     }
 
-    /// The open dialog, the board (whole screen), the title row, the pane, the sidebar or rail.
+    /// The open dialog inside its frame, the board (whole screen), the title row, the pane, the
+    /// sidebar or rail.
     fn surface_at(&self, at: Position) -> Option<Rect> {
         if let View::Board(_) = self.view {
             let screen = layout::screen(self.size);
@@ -138,14 +139,11 @@ impl App {
                 .dialog(&theme)
                 .map(|dialog| dialog.area(areas.session())),
         };
-        [
-            dialog,
-            Some(areas.title),
-            Some(areas.pane),
-            Some(areas.side),
-        ]
-        .into_iter()
-        .flatten()
-        .find(|surface| surface.contains(at))
+        if let Some(dialog) = dialog.filter(|dialog| dialog.contains(at)) {
+            return Some(dialog.inner(Margin::new(1, 1)));
+        }
+        [areas.title, areas.pane, areas.side]
+            .into_iter()
+            .find(|surface| surface.contains(at))
     }
 }

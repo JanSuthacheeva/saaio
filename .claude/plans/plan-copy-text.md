@@ -125,7 +125,8 @@ selection: Option<Selection>,
 clicks: Option<pointer::Clicks>,  // Clicks { at: Position, time: u64, count: u8 } lives in app/pointer.rs
 
 impl App {
-    /// The open dialog, the board (whole screen), the title row, the pane, the sidebar or rail.
+    /// The open dialog inside its frame (a press on the frame selects inside it), the board (whole
+    /// screen), the title row, the pane, the sidebar or rail.
     fn surface_at(&self, at: Position) -> Option<Rect>;
     /// The dialog the view shows over the session, shared by draw_view and surface_at.
     fn dialog<'a>(&'a self, theme: &'a Theme) -> Option<Dialog<'a>>;  // in app/draw.rs
@@ -285,4 +286,4 @@ Clipboard (`c`) and primary (`p`) stores both pass on; OSC 52 reads stay refused
 - [x] Env `ssh`, `wayland`, `x11` and `Env::clipboard`; `UiEnv.clipboard`; ui.rs builds `Target`, keeps `drawn`, runs `Effect::CopySelection` and logs a failed copy
 - [x] Pass a pane's OSC 52 on: `Terminal::copied`, `Host::feed -> Option<String>`, `Server::send_clipboard`, `ServerMsg::Clipboard`, protocol 7, `Effect::Copy`; tests in terminal.rs and server/tests.rs
 - [x] Rewrite docs/ui.md "Mouse": drag, double and triple click, wheel, Shift or Option for the terminal's own selection, terminal table, iTerm2 setting, tmux `set-clipboard on`
-- [ ] End to end in tmux with a scratch store: drag on sidebar, rail, title, board, a dialog, history and a shell pane, checked with pbpaste and a tmux buffer; sidebar click and wheel; Claude Code pane with `SSH_CONNECTION` set passes its OSC 52 on
+- [x] End to end in tmux with a scratch store: drag on sidebar, rail, title, board, a dialog, history and a shell pane, checked with pbpaste and a tmux buffer; sidebar click and wheel; Claude Code pane with `SSH_CONNECTION` set passes its OSC 52 on

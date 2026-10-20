@@ -119,6 +119,7 @@ fn a_drag_in_a_dialog_stays_inside_the_dialog() {
     let theme = Theme::default();
     let dialog = app.dialog(&theme).unwrap().area(app.areas().session());
     let inside = (dialog.x + 2, dialog.y + 2);
+    let frame = dialog.inner(ratatui::layout::Margin::new(1, 1));
 
     mouse(&mut app, PointerKind::Press, inside.0, inside.1);
     let effects = mouse(&mut app, PointerKind::Release, 149, 43);
@@ -129,8 +130,8 @@ fn a_drag_in_a_dialog_stays_inside_the_dialog() {
     assert!(
         cells
             .iter()
-            .all(|&(x, y)| dialog.contains(Position::new(x, y))),
-        "{cells:?} outside {dialog:?}"
+            .all(|&(x, y)| frame.contains(Position::new(x, y))),
+        "{cells:?} outside {frame:?}"
     );
 }
 
