@@ -45,6 +45,9 @@ pub enum Turn {
     Idle,
 }
 
+/// Which lines of a file a reader looks for.
+pub type LineMatch = dyn Fn(&str) -> bool;
+
 /// Who answers a permission request a hook reports.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Approver {
@@ -170,12 +173,16 @@ impl Adapter {
     }
 
     /// Who answers this payload's permission request: Codex's automatic reviewer when the
-    /// rollout's turn routes approvals to it, else the user. `read` reads a file the payload
-    /// names; it is called only for a Codex PermissionRequest.
-    pub fn approver(self, payload: &Value, read: impl FnOnce(&Path) -> Option<String>) -> Approver {
+    /// rollout's turn routes approvals to it, else the user. `last_line` reads the last line that
+    /// matches in a file the payload names; it is called only for a Codex PermissionRequest.
+    pub fn approver(
+        self,
+        payload: &Value,
+        last_line: impl FnOnce(&Path, &LineMatch) -> Option<String>,
+    ) -> Approver {
         match self {
             Adapter::ClaudeCode => Approver::User,
-            Adapter::Codex => codex::approver(payload, read),
+            Adapter::Codex => codex::approver(payload, last_line),
         }
     }
 
