@@ -9,7 +9,6 @@ use toml::Spanned;
 use toml::Value;
 use toml::de::{DeTable, DeValue, ValueDeserializer};
 
-use crate::default_file::DefaultFile;
 use crate::event::Phase;
 use crate::store::Stamp;
 use crate::text::{line_of, place, without_value};
@@ -18,11 +17,6 @@ use crate::ui::theme::MARK;
 use crate::ui::theme::{ColorKey, Palette, PaletteKey, PhaseColors, Section, Theme, hex};
 
 pub const THEME_FILE: &str = "theme.toml";
-/// What saaio writes as theme.toml on its first run: the terminal theme, commented out.
-pub const EXAMPLE: DefaultFile = DefaultFile {
-    text: include_str!("../../examples/theme.toml"),
-    earlier: &[],
-};
 pub const THEMES_DIR: &str = "themes";
 /// How many extends a theme may follow before saaio gives up (a loop, most likely).
 const EXTENDS_LIMIT: usize = 4;
@@ -330,7 +324,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::default_file::uncommented;
+    use crate::default_file::{THEME_EXAMPLE, uncommented};
     use crate::workflow::Workflow;
 
     fn write(dir: &TempDir, name: &str, text: &str) {
@@ -624,7 +618,7 @@ mod tests {
     #[test]
     fn the_example_uncommented_is_the_terminal_theme() {
         let dir = TempDir::new().unwrap();
-        write(&dir, "theme.toml", &uncommented(EXAMPLE.text));
+        write(&dir, "theme.toml", &uncommented(THEME_EXAMPLE.text));
 
         let theme = theme(&dir);
 
@@ -652,7 +646,7 @@ mod tests {
 
     #[test]
     fn the_example_lists_every_key_and_parses_as_it_is() {
-        let lines: Vec<&str> = EXAMPLE.text.lines().collect();
+        let lines: Vec<&str> = THEME_EXAMPLE.text.lines().collect();
         let names = ["extends", "phase_colors"]
             .into_iter()
             .chain(PaletteKey::ALL.map(PaletteKey::name));
@@ -669,7 +663,7 @@ mod tests {
         }
 
         let dir = TempDir::new().unwrap();
-        write(&dir, "theme.toml", EXAMPLE.text);
+        write(&dir, "theme.toml", THEME_EXAMPLE.text);
 
         assert_eq!(theme(&dir).palette, Palette::TERMINAL);
     }

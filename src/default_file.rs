@@ -6,6 +6,12 @@ use anyhow::{Context, Result};
 
 use crate::private;
 
+/// What saaio writes as theme.toml on its first run: the terminal theme, commented out.
+pub const THEME_EXAMPLE: DefaultFile = DefaultFile {
+    text: include_str!("../examples/theme.toml"),
+    earlier: &[],
+};
+
 /// A file saaio writes with its default text: when it is missing, or still holds an earlier default
 /// nobody edited. An edited file is never overwritten.
 #[derive(Debug, Clone, Copy)]

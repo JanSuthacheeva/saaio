@@ -34,6 +34,7 @@ use signal_hook::low_level::signal_name;
 use crate::adapter::Adapter;
 use crate::config::watch::ConfigWatch;
 use crate::config::{self, Config};
+use crate::default_file;
 use crate::fold;
 use crate::launch::pane::LaunchEnv;
 use crate::private;
@@ -41,7 +42,6 @@ use crate::proto::{BUILD, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, ServerMsg,
 use crate::server_log;
 use crate::store::Store;
 use crate::system::System;
-use crate::ui::theme_file;
 use crate::view::Board;
 use conn::{accept_in_background, bind};
 use forge_watch::{Answer, ForgeWatch};
@@ -185,7 +185,7 @@ fn write_defaults(paths: &ServerPaths, clock: fn() -> u64) {
     let files = [
         (master::INSTRUCTIONS, Some(&paths.instructions)),
         (config::EXAMPLE, paths.config.as_ref()),
-        (theme_file::EXAMPLE, paths.theme.as_ref()),
+        (default_file::THEME_EXAMPLE, paths.theme.as_ref()),
     ];
     for (file, path) in files {
         if let Some(path) = path
