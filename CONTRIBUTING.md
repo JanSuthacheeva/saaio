@@ -28,7 +28,7 @@ cargo install --path .                       # install the saaio binary
 | Test | Where |
 | --- | --- |
 | unit tests | inline `mod tests`, or a sibling `tests.rs` past about 400 lines |
-| command line, end to end | `tests/cli.rs` |
+| command line, end to end | `tests/cli/`, one module per subject (`main.rs` lists them) |
 | UI screens | golden files in `src/ui/golden` |
 
 A change to the UI's look that is meant rewrites the golden files:
