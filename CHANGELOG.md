@@ -6,6 +6,11 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A flow that ended, or went on to a subagent, no longer shows the question it asked earlier as
+  its blocker in `saaio status`, its `--json` and the master's news.
+
 ## [0.1.0] - 2026-10-21
 
 The first public release. Planned next: [ROADMAP.md](ROADMAP.md).
