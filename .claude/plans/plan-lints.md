@@ -69,5 +69,5 @@ undocumented_unsafe_blocks = "warn"
 - [x] Deny `unsafe_code`, warn `undocumented_unsafe_blocks`; local allows at the 4 unsafe statements; rustix kill in tests/cli/server.rs
 - [x] Add clippy.toml disallowed-methods with the local and test-only allows
 - [x] `expect` with a reason for the two unwraps in adapter/codex.rs
-- [ ] CLAUDE.md and CONTRIBUTING.md name the rules
+- [x] CLAUDE.md and CONTRIBUTING.md name the rules
 - [ ] End to end: clippy, test and fmt pass; each new rule proved once by a throwaway violation
