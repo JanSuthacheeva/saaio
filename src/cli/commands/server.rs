@@ -14,6 +14,9 @@ use crate::ui::theme_file;
 /// server.log, so it answers nothing on success and logs why it failed.
 pub fn run(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
     server_log::exit_on_panic(clock);
+    // A session of its own, so closing the terminal saaio ui started it from does not hang it up.
+    // A server a shell started as a job leads its process group already and keeps its session.
+    let _ = rustix::process::setsid();
     let config = env.config()?;
     let config_file = env.config_file();
     let theme = env.config_dir().map(|dir| dir.join(theme_file::THEME_FILE));

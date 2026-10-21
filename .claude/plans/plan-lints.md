@@ -89,7 +89,7 @@ as they are (clap's env read runs inside main.rs's parse; CI compiles the Linux 
 - All four gone: `unsafe_code = "forbid"`, `undocumented_unsafe_blocks` dropped (nothing left for
   it), libc dropped if unused. CLAUDE.md and CONTRIBUTING.md say unsafe is forbidden.
 
-- [ ] Server's own session through rustix setsid in `saaio server`, no pre_exec
+- [x] Server's own session through rustix setsid in `saaio server`, no pre_exec
 - [ ] peer_pid through nix's safe getsockopt on macOS and Linux
 - [ ] local_offset_secs through jiff
 - [ ] unsafe_code = "forbid", drop undocumented_unsafe_blocks and unused libc; docs

@@ -2,9 +2,9 @@ use std::fs;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, Stdio};
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use rustix::process::{Pid, Signal, kill_process};
+use rustix::process::{Pid, Signal, getsid, kill_process};
 use tempfile::TempDir;
 
 use crate::support::*;
@@ -104,6 +104,37 @@ fn a_server_stopped_while_it_starts_still_stops_cleanly() {
     let status = server.wait().unwrap();
     assert!(status.success(), "{status:?}");
     assert!(!socket.exists());
+}
+
+#[test]
+fn the_server_leads_a_session_of_its_own() {
+    let home = TempDir::new().unwrap();
+    let config = home.path().join("config.toml");
+    fs::write(
+        &config,
+        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n\n[agents.master]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
+    )
+    .unwrap();
+    let socket = home.path().join("server.sock");
+
+    let server = saaio_command(home.path())
+        .arg("server")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .env("SAAIO_CONFIG", &config)
+        .spawn()
+        .unwrap();
+    let mut server = Running(server);
+    let deadline = Instant::now() + PATIENCE;
+    while !socket.exists() {
+        assert!(Instant::now() < deadline, "the server never bound");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let pid = Pid::from_raw(i32::try_from(server.id()).unwrap()).unwrap();
+    assert_eq!(getsid(Some(pid)).unwrap(), pid);
+
+    kill_process(pid, Signal::TERM).unwrap();
+    assert!(server.wait().unwrap().success());
 }
 
 #[test]

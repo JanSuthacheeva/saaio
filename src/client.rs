@@ -1,7 +1,6 @@
 use std::io::{self, ErrorKind};
 use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -314,18 +313,6 @@ pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Res
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log);
-    // A session of its own, so closing this terminal does not hang up the server.
-    #[allow(unsafe_code, reason = "setsid runs in the child, before exec")]
-    // SAFETY: pre_exec runs between fork and exec, where only async-signal-safe calls are
-    // allowed; setsid is one, and the closure allocates nothing.
-    unsafe {
-        command.pre_exec(|| {
-            if libc::setsid() == -1 {
-                return Err(io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
     command
         .spawn()
         .with_context(|| format!("could not start {} server", exe.display()))?;
