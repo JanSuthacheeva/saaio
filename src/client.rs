@@ -170,6 +170,7 @@ fn stops_listening(socket: &Path, wait: Duration) -> bool {
 fn peer_pid(stream: &UnixStream) -> io::Result<Pid> {
     let mut pid: libc::pid_t = 0;
     let mut len = libc::socklen_t::try_from(size_of::<libc::pid_t>()).expect("a pid fits");
+    #[allow(unsafe_code, reason = "LOCAL_PEERPID has only an unsafe getsockopt")]
     // SAFETY: getsockopt writes at most len bytes into pid, which is that big.
     let result = unsafe {
         libc::getsockopt(
@@ -195,6 +196,7 @@ fn peer_pid(stream: &UnixStream) -> io::Result<Pid> {
         gid: 0,
     };
     let mut len = libc::socklen_t::try_from(size_of::<libc::ucred>()).expect("a ucred fits");
+    #[allow(unsafe_code, reason = "rustix's UCred drops the pid 0 of SO_PEERCRED")]
     // SAFETY: getsockopt writes at most len bytes into cred, which is that big. Read through libc,
     // not rustix: rustix's UCred cannot hold the pid 0 Linux gives for a peer in a pid namespace
     // this process cannot see.
@@ -313,6 +315,7 @@ pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Res
         .stdout(log.try_clone()?)
         .stderr(log);
     // A session of its own, so closing this terminal does not hang up the server.
+    #[allow(unsafe_code, reason = "setsid runs in the child, before exec")]
     // SAFETY: pre_exec runs between fork and exec, where only async-signal-safe calls are
     // allowed; setsid is one, and the closure allocates nothing.
     unsafe {

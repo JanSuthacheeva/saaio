@@ -4,6 +4,7 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Instant;
 
+use rustix::process::{Pid, Signal, kill_process};
 use tempfile::TempDir;
 
 use crate::support::*;
@@ -97,8 +98,8 @@ fn a_server_stopped_while_it_starts_still_stops_cleanly() {
         assert!(Instant::now() < deadline, "the server never bound");
         thread::yield_now();
     }
-    let pid = libc::pid_t::try_from(server.id()).unwrap();
-    assert_eq!(unsafe { libc::kill(pid, libc::SIGTERM) }, 0);
+    let pid = Pid::from_raw(i32::try_from(server.id()).unwrap()).unwrap();
+    kill_process(pid, Signal::TERM).unwrap();
 
     let status = server.wait().unwrap();
     assert!(status.success(), "{status:?}");

@@ -79,6 +79,7 @@ fn civil_date(days: i64) -> (i64, i64, i64) {
 
 /// How many seconds the local time zone is east of UTC now; 0 when the system cannot say.
 pub fn local_offset_secs() -> i64 {
+    #[allow(unsafe_code, reason = "the local offset comes only from localtime_r")]
     // SAFETY: time and localtime_r only write into the tm we pass; a zeroed tm is a valid start.
     unsafe {
         let now = libc::time(std::ptr::null_mut());
