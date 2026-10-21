@@ -1,4 +1,4 @@
-//! The title row above the pane: the session in view, a notice or the rail's hint
+//! The title row above the pane: the session in view, a notice, a newer release or the rail's hint
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
@@ -13,14 +13,17 @@ use crate::view::State;
 
 /// The fewest columns a cut branch keeps in the title before it goes.
 const BRANCH_KEPT: usize = 12;
+/// The fewest columns the session in view keeps before a newer release's line goes.
+const TITLE_KEPT: usize = 20;
 
 impl App {
     /// The row above the pane that names the session, on the panel color: what is in view on the
-    /// left, a notice or the rail's hint on the right. The left is fitted so the right stays.
+    /// left, a notice, or a newer release and the rail's hint on the right. The left is fitted so
+    /// the right stays.
     pub(super) fn draw_title(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let right = match &self.notice {
             Some(notice) => Some(Line::styled(format!(" {notice} "), theme.state.waiting)),
-            None => self.border_hint(theme),
+            None => self.release_and_hint(theme, area.width),
         };
         let left = self.title_line(theme, area.width, right.as_ref().map_or(0, Line::width));
         frame.render_widget(Block::default().style(theme.ui.bar), area);
@@ -88,6 +91,38 @@ impl App {
             }
         }
         Line::from(title)
+    }
+
+    /// A newer release, then the rail's hint; the release goes when the session in view would keep
+    /// fewer than TITLE_KEPT columns.
+    fn release_and_hint(&self, theme: &Theme, width: u16) -> Option<Line<'static>> {
+        let hint = self.border_hint(theme);
+        let Some(update) = &self.update else {
+            return hint;
+        };
+        let (news, command) = match update.rsplit_once(": ") {
+            Some((news, command)) => (format!(" {news}: "), command.to_string()),
+            None => (format!(" {update}"), String::new()),
+        };
+        let mut spans = vec![
+            Span::styled(news, theme.ui.faint),
+            Span::styled(command, theme.ui.key),
+        ];
+        match hint {
+            Some(hint) => {
+                spans.push(Span::styled(
+                    format!("  {} ", theme.glyphs.separator),
+                    theme.ui.rule,
+                ));
+                spans.extend(hint.spans);
+            }
+            None => spans.push(Span::raw(" ")),
+        }
+        let line = Line::from(spans);
+        if (width as usize) < line.width() + TITLE_KEPT {
+            return self.border_hint(theme);
+        }
+        Some(line)
     }
 
     /// The right of the pane's top edge: with the rail, the next flow that needs you and the way back

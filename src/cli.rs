@@ -11,7 +11,7 @@ use clap::{Parser, Subcommand};
 
 use commands::{
     bug_report, clear, completions, home, hook, new, remove, report, send, server, start, status,
-    stop, ui, wait,
+    stop, ui, update, wait,
 };
 use output::{Document, Failure};
 
@@ -64,6 +64,8 @@ enum Command {
     BugReport,
     /// Print the completion script for a shell
     Completions(completions::Args),
+    /// Install the latest release over this binary, or the release --version names
+    Update(update::Args),
     /// What a session's asyncRewake hook runs: sleeps until there is news for it, prints it, exits 2
     #[command(hide = true)]
     Wait(wait::Args),
@@ -79,14 +81,15 @@ enum Command {
 ///
 /// # Errors
 ///
-/// The command's failure, with its message, next steps and exit code. Hook, Wait, BugReport and
-/// Completions run without a store; every other command fails without one.
+/// The command's failure, with its message, next steps and exit code. Hook, Wait, BugReport,
+/// Completions and Update run without a store; every other command fails without one.
 pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
     match &cli.command {
         Some(Command::Hook(args)) => return Ok(hook::run(args, env, clock)),
         Some(Command::Wait(args)) => return Ok(wait::run(args, env, clock)),
         Some(Command::BugReport) => return bug_report::run(env, clock),
         Some(Command::Completions(args)) => return Ok(completions::run(args)),
+        Some(Command::Update(args)) => return update::run(args, env),
         _ => {}
     }
     let cwd = std::env::current_dir().ok();
@@ -130,7 +133,11 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
         Some(Command::Clear) => clear::run(store, now),
         Some(Command::Server) => server::run(store.clone(), env, clock),
         Some(
-            Command::Hook(_) | Command::Wait(_) | Command::BugReport | Command::Completions(_),
+            Command::Hook(_)
+            | Command::Wait(_)
+            | Command::BugReport
+            | Command::Completions(_)
+            | Command::Update(_),
         ) => Ok(Document::Silent),
     }
 }

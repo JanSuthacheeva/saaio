@@ -6,6 +6,12 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The UI names a newer release in its title row (`0.1.1 is out: saaio update`), looking once a
+  day. `[ui] update_check = false` turns it off.
+- `saaio update` installs the latest release, or `--version <tag>`, over the binary you run.
+
 ### Fixed
 
 - A flow that ended, or went on to a subagent, no longer shows the question it asked earlier as

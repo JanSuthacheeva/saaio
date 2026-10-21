@@ -95,13 +95,24 @@ impl Default for MasterConfig {
     }
 }
 
-/// [ui]: how saaio ui takes keys.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+/// [ui]: how saaio ui takes keys, and whether it looks for a new release.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
 #[serde(default, deny_unknown_fields)]
 pub struct UiConfig {
     /// The key before every saaio ui command, C-space unless set.
     pub prefix: Prefix,
+    /// The UI asks for the latest release once a day and names a newer one; true unless set.
+    pub update_check: bool,
+}
+
+impl Default for UiConfig {
+    fn default() -> UiConfig {
+        UiConfig {
+            prefix: Prefix::default(),
+            update_check: true,
+        }
+    }
 }
 
 /// [services]: when saaio pauses a resting flow's services.

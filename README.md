@@ -164,6 +164,7 @@ public interface. The logs are private.
 | `saaio remove <flow>`, `saaio clear` | tear down and forget |
 | `saaio bug-report` | a file to attach to a bug report |
 | `saaio completions <shell>` | the completion script for bash, zsh, fish, elvish or PowerShell |
+| `saaio update` | install the latest release over this binary |
 
 All options: [docs/cli.md](docs/cli.md).
 

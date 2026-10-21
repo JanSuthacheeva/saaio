@@ -156,24 +156,26 @@ Codex workers trust saaio's hooks and their own worktree without asking.
 
 ## Updating
 
-Run the install script again, then restart the server:
-
 ```sh
-curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | sh
+saaio update
 saaio --stop
 saaio
 ```
 
-From source: `cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag <new tag> --force`
-instead of the script.
+`saaio update` runs the latest release's install script over the binary you run
+([cli.md](cli.md#saaio-update)). Running the script again does the same.
+
+From source: `cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag <new tag> --force`.
+`saaio update` names this line for a build from source.
 
 - The running server keeps the old version until stopped.
 - Unfinished flows resume after the restart.
 - Write a completion script saved to a file again, so it knows the new version's commands.
 - `master.md` is refreshed while it still holds an earlier default. `config.toml` and `theme.toml`
   are written only when missing. Edited files stay as they are.
-- New versions: GitHub's Watch > Custom > Releases on the repository, or the
-  [releases feed](https://github.com/JanSuthacheeva/saaio/releases.atom).
+- New versions: the UI's title row names a newer release once a day, `0.1.1 is out: saaio update`
+  ([configuration.md](configuration.md#ui) turns it off). Or GitHub's Watch > Custom > Releases on
+  the repository, or the [releases feed](https://github.com/JanSuthacheeva/saaio/releases.atom).
 - Changes: [CHANGELOG.md](../CHANGELOG.md).
 
 ## Uninstalling

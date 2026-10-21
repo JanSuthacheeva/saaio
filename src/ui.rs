@@ -19,6 +19,7 @@ pub mod selection;
 pub mod sidebar;
 pub mod theme;
 pub mod theme_file;
+mod update_watch;
 
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -40,7 +41,10 @@ use crate::branching::Branching;
 use crate::client::Client;
 use crate::config::prefix::Prefix;
 use crate::proto::{Role, ServerMsg};
+use crate::release::source::Releases;
+use crate::release::{Build, Tag};
 use crate::server_log;
+use crate::update::UpdateCheck;
 use app::{App, Effect, Job, JobError};
 use clipboard::Clipboard;
 use input::{Router, Target};
@@ -48,6 +52,7 @@ use outer::Outer;
 use peek::PeekCache;
 use theme::Theme;
 use theme_file::ThemeWatch;
+use update_watch::UpdateWatch;
 
 use crate::config::watch::ConfigWatch;
 
@@ -59,6 +64,8 @@ enum Event {
     Resize,
     Tick,
     Ran(Job, Result<String, JobError>),
+    /// The latest release a look found, None when it found none.
+    Latest(Option<Tag>),
 }
 
 /// How often spinners turn.
@@ -67,6 +74,8 @@ const TICK_EVERY: Duration = Duration::from_millis(100);
 const TICKS_PER_PEEK: u32 = 10;
 /// Ticks between two looks at theme.toml and the theme it extends, and at config.toml.
 const TICKS_PER_THEME: u32 = 10;
+/// Ticks between two looks at whether a day passed since the last look for a release: an hour.
+const TICKS_PER_UPDATE: u32 = 36_000;
 
 /// What saaio ui reads from where it runs: Claude's home for the peek, the user's home for ~.
 #[derive(Debug)]
@@ -85,6 +94,10 @@ pub struct UiEnv {
     pub log: PathBuf,
     /// Where selected text goes.
     pub clipboard: Clipboard,
+    /// update.json in the shared folder; None without one.
+    pub update: Option<UpdateCheck>,
+    /// Where the latest release is read.
+    pub releases: Releases,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
@@ -104,7 +117,8 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
         .with_store(env.store.display().to_string());
     let mut router = Router::new(Prefix::default());
     let mut configs = ConfigWatch::new(env.config_file);
-    reload_config(&mut configs, &mut app, &mut router);
+    let mut updates = UpdateWatch::new(env.update, env.releases, Build::running());
+    reload_config(&mut configs, &mut app, &mut router, &mut updates);
     let client = Client::connect(
         socket,
         Role::Attach {
@@ -115,6 +129,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let mut writer = client.try_clone()?;
     let (events, inbox) = mpsc::channel();
     let jobs = events.clone();
+    let looks = events.clone();
     read_stdin(events.clone());
     read_server(client, events.clone());
     watch_resize(events.clone())?;
@@ -125,6 +140,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let mut themes = ThemeWatch::new(env.theme_dir);
     let mut theme = Theme::default();
     reload_theme(&mut themes, &mut theme, &mut app, &env.log, clock);
+    updates.ask_if_due(clock(), &looks);
     app.on_tick(clock());
     // What the screen shows, which a selection copies.
     let mut drawn = Buffer::empty(Rect::default());
@@ -166,6 +182,11 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                     app.on_ran(job, result);
                     vec![]
                 }
+                Event::Latest(latest) => {
+                    updates.answered(clock(), latest);
+                    app.set_update(updates.notice());
+                    vec![]
+                }
                 Event::Tick => {
                     redraw |= app.on_tick(clock());
                     ticks = ticks.wrapping_add(1);
@@ -174,7 +195,12 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                     }
                     if ticks.is_multiple_of(TICKS_PER_THEME) {
                         redraw |= reload_theme(&mut themes, &mut theme, &mut app, &env.log, clock);
-                        redraw |= reload_config(&mut configs, &mut app, &mut router);
+                        redraw |= reload_config(&mut configs, &mut app, &mut router, &mut updates);
+                    }
+                    if ticks.is_multiple_of(TICKS_PER_UPDATE) {
+                        // Another UI may have looked meanwhile.
+                        redraw |= app.set_update(updates.notice());
+                        updates.ask_if_due(clock(), &looks);
                     }
                     app.overview_due()
                 }
@@ -251,7 +277,12 @@ const CONFIG_NOTICE: &str = "config: ";
 
 /// Takes config.toml again when it changed; a broken one keeps the last and says why until it
 /// reads again. True when something changed on screen.
-fn reload_config(configs: &mut ConfigWatch, app: &mut App, router: &mut Router) -> bool {
+fn reload_config(
+    configs: &mut ConfigWatch,
+    app: &mut App,
+    router: &mut Router,
+    updates: &mut UpdateWatch,
+) -> bool {
     match configs.changed() {
         None => false,
         Some(Ok(config)) => {
@@ -264,6 +295,8 @@ fn reload_config(configs: &mut ConfigWatch, app: &mut App, router: &mut Router) 
                     .map(String::from)
                     .collect(),
             );
+            updates.set_enabled(config.ui.update_check);
+            app.set_update(updates.notice());
             app.take_back(CONFIG_NOTICE);
             true
         }

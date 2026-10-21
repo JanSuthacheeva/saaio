@@ -91,6 +91,7 @@ of a save. No restart.
 | `[master] wake` | at once |
 | `[master] agent` | the next time the master starts |
 | `[ui] prefix` | at once. The hints show the new prefix. |
+| `[ui] update_check` | off: at once, the line goes. On: the line shows at once, and the next look follows within the hour once a day has passed. |
 | `[services] pause_after_minutes` | at once, for every resting flow |
 | an added or removed agent in the new-flow dialog | the next time the dialog opens |
 
@@ -130,6 +131,7 @@ prefix = "C-b"
 | Key | Default | Effect |
 | --- | --- | --- |
 | `prefix` | `"C-space"` | key pressed before every UI command: `"C-space"` or `"C-a"` to `"C-z"` |
+| `update_check` | `true` | the UI looks for a newer release once a day and names it in its title row: `0.1.1 is out: saaio update` |
 
 | Refused prefix | Reason |
 | --- | --- |
@@ -139,6 +141,11 @@ prefix = "C-b"
 - The UI's hints and help show the configured prefix.
 - The prefix pressed twice is sent to the pane. A prefix that is also a UI key (`C-b`, page back
   in history) still works there.
+- The update check is the one network call saaio makes on its own (the server also runs `gh` and
+  `glab` for merge requests). It reads one small file, the latest release's `VERSION`, through
+  `curl` with a 5 second limit, at most once a day for every UI on the machine
+  (`update.json`, [files.md](files.md#the-shared-folder)). Offline or without `curl` it shows
+  nothing. The request carries nothing about you or your projects.
 
 ## [services]
 

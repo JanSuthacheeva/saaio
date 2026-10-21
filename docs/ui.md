@@ -25,7 +25,7 @@ One terminal with the master, every worker and every plain session. Run by an ag
 | Area | Shows |
 | --- | --- |
 | pane (left) | the session in view. The master when the UI opens. Receives all typing except the [prefix key](#keys). |
-| title row (above the pane) | worker: state, name, steps, phase, branch, slot. Plain session: state, name, folder. Master: branch, plus folder while the sidebar is folded. Notices on the right, such as a theme error or "starting the flow…". |
+| title row (above the pane) | worker: state, name, steps, phase, branch, slot. Plain session: state, name, folder. Master: branch, plus folder while the sidebar is folded. Notices on the right, such as a theme error or "starting the flow…", else a newer release: `0.1.1 is out: saaio update` ([cli.md](cli.md#saaio-update)). |
 | sidebar (right) | every session, see below |
 | rail | the folded sidebar: numbers and marks only. Below 110 columns, or `C-space b`. The title row then names the first flow that needs you and is not in view. |
 

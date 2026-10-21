@@ -138,6 +138,15 @@ pub fn id_in(text: &str) -> String {
         .to_string()
 }
 
+/// Stops the server of a test's state when the test ends, also one that failed.
+pub struct StopsServer<'a>(pub &'a Path);
+
+impl Drop for StopsServer<'_> {
+    fn drop(&mut self) {
+        let _ = saaio(self.0, &["--stop"]);
+    }
+}
+
 /// The shared folder every project registers in: inside the test's home, never the real one.
 pub fn shared(home: &Path) -> PathBuf {
     home.join("shared")
@@ -196,11 +205,19 @@ impl Terminal {
         let child = pair.slave.spawn_command(command).unwrap();
         let screen = Arc::new(Mutex::new(Vec::new()));
         let mut reader = pair.master.try_clone_reader().unwrap();
+        let mut writer = pair.master.take_writer().unwrap();
         let shown = Arc::clone(&screen);
         thread::spawn(move || {
             let mut buf = [0; 4096];
             while let Ok(n @ 1..) = reader.read(&mut buf) {
-                shown.lock().unwrap().extend_from_slice(&buf[..n]);
+                let mut screen = shown.lock().unwrap();
+                let asked = |screen: &[u8]| screen.windows(4).filter(|w| w == b"\x1b[6n").count();
+                let before = asked(&screen);
+                screen.extend_from_slice(&buf[..n]);
+                // Answers where the cursor is, as a terminal does, so the UI starts.
+                for _ in before..asked(&screen) {
+                    let _ = writer.write_all(b"\x1b[1;1R");
+                }
             }
         });
         Terminal {

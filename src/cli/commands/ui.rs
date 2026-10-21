@@ -8,6 +8,7 @@ use crate::client;
 use crate::server_log;
 use crate::store::Store;
 use crate::ui;
+use crate::update::UpdateCheck;
 
 /// Opens the terminal UI, starting the server first; what fails, a panic too, goes to server.log.
 pub fn run(store: &Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
@@ -39,6 +40,10 @@ fn attach(store: &Store, env: &Env, log: PathBuf, clock: fn() -> u64) -> anyhow:
         config_file: env.config_file(),
         log,
         clipboard: env.clipboard(),
+        update: env
+            .registry()
+            .map(|registry| UpdateCheck::in_folder(registry.root())),
+        releases: env.releases(),
     };
     ui::run(&socket, ui_env, clock)
 }

@@ -17,6 +17,7 @@ mod start;
 mod status;
 mod store;
 mod support;
+mod update;
 mod wait;
 
 use std::fs;

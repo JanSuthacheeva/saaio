@@ -42,15 +42,6 @@ fn the_home_view_shortens_the_binary_only_inside_home() {
     assert_eq!(bin_with(Path::new("")), format!("bin: {}", exe.display()));
 }
 
-/// Stops the saaio server of a store when the test ends, also when it fails.
-struct StopsServer<'a>(&'a Path);
-
-impl Drop for StopsServer<'_> {
-    fn drop(&mut self) {
-        let _ = saaio(self.0, &["--stop"]);
-    }
-}
-
 #[test]
 fn bare_saaio_in_an_agents_or_a_flows_terminal_prints_the_overview() {
     let home = TempDir::new().unwrap();

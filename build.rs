@@ -1,4 +1,5 @@
-//! `SAAIO_COMMIT`, the commit `proto::BUILD` names, set again once HEAD moves
+//! `SAAIO_COMMIT`, the commit `proto::BUILD` names, set again once HEAD moves; `SAAIO_RELEASE`,
+//! the tag release.yml builds
 
 #[path = "build/commit.rs"]
 mod commit;
@@ -15,6 +16,9 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=build/commit.rs");
     println!("cargo:rerun-if-env-changed=SAAIO_COMMIT");
+    println!("cargo:rerun-if-env-changed=SAAIO_RELEASE");
+    let release = env::var("SAAIO_RELEASE").unwrap_or_default();
+    println!("cargo:rustc-env=SAAIO_RELEASE={}", release.trim());
     let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets it"));
     let own = git(&["rev-parse", "--show-toplevel"])
         .is_some_and(|toplevel| commit::is_own(Path::new(&toplevel), &manifest));

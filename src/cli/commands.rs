@@ -15,6 +15,7 @@ pub(super) mod start;
 pub(super) mod status;
 pub(super) mod stop;
 pub(super) mod ui;
+pub(super) mod update;
 pub(super) mod wait;
 
 use crate::cli::output::Failure;

@@ -1,0 +1,44 @@
+
+  master  ~/projects/shop · main                                 0.1.1 is out: saaio update  │  ● 1 shop-221 is blocked  │  C-space b sidebar │ ▚▄▞
+                                                                                                                                              ├──────
+                                                                                                                                              │▌0
+                                                                                                                                              │
+                                                                                                                                              │ 1 ●
+                                                                                                                                              │ 2 ●
+                                                                                                                                              │
+                                                                                                                                              │ 3 ◓
+                                                                                                                                              │
+                                                                                                                                              │ 4 ○
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              │
+                                                                                                                                              ├──────
+                                                                                                                                              │ C-␣
+

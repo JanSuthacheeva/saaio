@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>saaio update notice</title>
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+:root {
+  color-scheme: light;
+  --surface: #f8f9fb; --card: #eceff4; --ink: #2e3440; --muted: #4c566a; --subtle: #d8dee9;
+  --border: #d8dee9; --code-block: #2e3440; --code-block-ink: #eceff4; --code-bg: #e5e9f0; --code-ink: #4b6c8a;
+  --accent: #7b5eaf; --on-accent: #f8f9fb; --link: #4b6c8a;
+  --new: #a3be8c; --mod: #d08770; --old: #d8dee9;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --gap: 24px; --gap-phone: 14px; --radius: 6px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #2e3440; --card: #3b4252; --ink: #eceff4; --muted: #93b1cc; --subtle: #434c5e;
+  --border: #4c566a; --code-block: #3b4252; --code-block-ink: #eceff4; --code-bg: #3b4252; --code-ink: #88c0d0;
+  --accent: #bd93f9; --on-accent: #2e3440; --link: #88c0d0;
+  --new: #a3be8c; --mod: #ebcb8b; --old: #4c566a;
+}
+body { margin: 0; background: var(--surface); color: var(--ink); font: 18px/1.6 var(--sans); }
+.page { max-width: 720px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: var(--gap); }
+h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+h2 { font-size: 24px; line-height: 1.3; font-weight: 700; margin: 0; text-wrap: balance; }
+h3 { font-size: 18px; margin: 0; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.meta { font-size: 13px; line-height: 1.5; color: var(--muted); }
+a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+code { font-family: var(--mono); font-size: 0.78em; background: var(--code-bg); color: var(--code-ink); border-radius: 0.2rem; padding: 0.1em 0.3em; overflow-wrap: anywhere; }
+pre { background: var(--code-block); color: var(--code-block-ink); border-radius: var(--radius); padding: 14px 16px; font: 14px/1.5 var(--mono); overflow-x: auto; margin: 0; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--gap); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.pill { align-self: flex-start; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em; line-height: 1.4; padding: 2px 10px; border-radius: 99px; background: var(--accent); color: var(--on-accent); }
+.rec { border: 2px solid var(--accent); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.two > div { min-width: 0; }
+.plus, .minus { font-size: 16px; }
+.label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.diagram { overflow-x: auto; }
+.diagram svg { display: block; min-width: 520px; width: 100%; height: auto; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; border: 1px solid var(--muted); }
+svg text { fill: var(--ink); font: 13px var(--sans); }
+svg .box { stroke: var(--muted); stroke-width: 1; }
+svg .n { fill: var(--new); } svg .m { fill: var(--mod); } svg .o { fill: var(--old); }
+svg .arrow { stroke: var(--muted); stroke-width: 1.4; fill: none; marker-end: url(#ah); }
+svg #ah path { fill: var(--muted); }
+svg text.on { fill: #2e3440; }
+@media (max-width: 560px) { .two { grid-template-columns: 1fr; } .card { padding: var(--gap-phone); } .page { gap: var(--gap-phone); padding-block: 24px 48px; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="stack">
+    <span class="meta">design-code, step 2 of 3 - flow/update-notice - 2026-10-21</span>
+    <h1>saaio update notice</h1>
+    <p>Two choices shape the design: who asks for the latest release and how (the notice), and how saaio knows whether it is a release binary at all (the command). Signatures and call chains follow on the next page.</p>
+  </div>
+
+  <div class="card">
+    <h2>What exists today</h2>
+    <ul>
+      <li>No HTTP client in <code>Cargo.toml</code>. <code>install.sh</code> already needs <code>curl</code>, verifies the tarball against <code>SHA256SUMS</code> and replaces the binary by copy + rename, so a running server keeps its old file (<code>install.sh:77</code>).</li>
+      <li>Every release holds the four tarballs, <code>SHA256SUMS</code> and <code>install.sh</code>; a tag with <code>-</code> publishes a pre-release (<code>release.yml:1</code>, <code>:178</code>). The version check strips <code>-rc.1</code>, so an rc binary reports the plain Cargo version <code>0.1.1</code>.</li>
+      <li><code>proto::BUILD</code> is <code>0.1.0 (abc1234)</code>; nothing in the binary says whether CI built it or <code>cargo install</code> did (<code>build.rs</code>, <code>src/proto.rs:18</code>).</li>
+      <li>The UI loop already runs work off its thread and gets the answer back as an event (<code>Event::Ran</code>, <code>src/ui.rs:270</code>), and re-reads config.toml every second (<code>reload_config</code>).</li>
+      <li>The title row's right side shows a notice, else the rail hint when folded, else nothing (<code>src/ui/app/chrome.rs:20</code>).</li>
+      <li>Commands that need no store (bug-report, completions) dispatch before the store is opened (<code>src/cli.rs:86</code>). Processes with a deadline: <code>workspace/process.rs</code>.</li>
+      <li>saaio already reaches the network indirectly: the server runs <code>gh</code> and <code>glab</code> for merge requests. The docs line will say the update check is the one call saaio makes <em>itself</em>.</li>
+    </ul>
+  </div>
+
+  <h2>1. Who checks, and how</h2>
+
+  <div class="card rec">
+    <span class="pill">Recommended</span>
+    <h3>A. The UI, on a thread, through curl, reading a VERSION asset</h3>
+    <p>Each release gets one more asset, <code>VERSION</code>, holding its tag. The UI asks <code>curl</code> for <code>releases/latest/download/VERSION</code> (GitHub's "latest" skips pre-releases and drafts) with a 5 s limit on its own thread. The answer and the time go to <code>update.json</code> in the shared folder, so every project's UI on the machine shares one check a day and a restarted UI shows the notice without asking again. Offline, curl missing, a 404: nothing shows, nothing is logged.</p>
+    <div class="diagram"><svg viewBox="0 0 560 170" role="img" aria-label="Approach A components">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <rect class="box m" x="10" y="20" width="120" height="40" rx="5"/><text class="on" x="70" y="45" text-anchor="middle">ui loop</text>
+      <rect class="box n" x="200" y="20" width="150" height="40" rx="5"/><text class="on" x="275" y="45" text-anchor="middle">update::Check</text>
+      <rect class="box n" x="410" y="5" width="140" height="34" rx="5"/><text class="on" x="480" y="27" text-anchor="middle">release::Releases</text>
+      <rect class="box o" x="410" y="60" width="140" height="34" rx="5"/><text class="on" x="480" y="82" text-anchor="middle">curl</text>
+      <rect class="box n" x="200" y="110" width="150" height="40" rx="5"/><text class="on" x="275" y="135" text-anchor="middle">update.json</text>
+      <rect class="box m" x="10" y="110" width="120" height="40" rx="5"/><text class="on" x="70" y="135" text-anchor="middle">chrome (title)</text>
+      <path class="arrow" d="M130,40 L198,40"/>
+      <path class="arrow" d="M350,35 L408,22"/><path class="arrow" d="M480,39 L480,58"/>
+      <path class="arrow" d="M275,60 L275,108"/>
+      <path class="arrow" d="M70,60 L70,108"/>
+    </svg></div>
+    <div class="legend"><span><span class="sw" style="background:var(--new)"></span>new</span><span><span class="sw" style="background:var(--mod)"></span>modified</span><span><span class="sw" style="background:var(--old)"></span>existing</span></div>
+    <p class="meta">Touches: new <code>src/release.rs</code> (versions, URLs, fetch), new <code>src/update.rs</code> (the daily check and its file), <code>src/ui.rs</code>, <code>src/ui/app/chrome.rs</code>, <code>src/config.rs</code>, <code>release.yml</code> (VERSION asset).</p>
+    <div class="two">
+      <div class="plus"><p class="label">Gains</p><ul><li>No new network stack: curl brings the system's TLS and proxy settings, as install.sh does.</li><li>The test fake is a <code>file://</code> folder laid out like the releases page; curl reads it the same way.</li><li>No JSON, no API rate limit, no token.</li></ul></div>
+      <div class="minus"><p class="label">Costs</p><ul><li>A release asset more, and 0.1.0's release has none (harmless: only 0.1.1+ binaries ask, and they read the newest release).</li><li>Needs curl on PATH; without it there is no notice.</li><li>A UI that stays open for days needs an hourly look at whether the day passed.</li></ul></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>B. The server checks and tells the UIs</h3>
+    <p>The same fetch, run by <code>saaio server</code>, with a new <code>ServerMsg::Update</code> to every attached UI.</p>
+    <div class="two">
+      <div class="plus"><p class="label">Gains</p><ul><li>The server already runs background watchers (<code>forge_watch</code>).</li></ul></div>
+      <div class="minus"><p class="label">Costs</p><ul><li>A protocol change, and one server per project asks separately.</li><li>The UI owns the title row and its config already; the server would only relay.</li></ul></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>C. An HTTP client in the binary, GitHub's API</h3>
+    <p><code>ureq</code> with <code>rustls</code>, reading <code>api.github.com/repos/.../releases/latest</code> JSON.</p>
+    <div class="two">
+      <div class="plus"><p class="label">Gains</p><ul><li>Works without curl; no release asset needed.</li></ul></div>
+      <div class="minus"><p class="label">Costs</p><ul><li>About 30 crates more to audit in <code>cargo deny</code> and a larger binary, for one request a day.</li><li>API rate limit (60/h per IP) and a fake needs an HTTP server in tests.</li><li><code>saaio update</code> runs install.sh, which needs curl anyway.</li></ul></div>
+    </div>
+  </div>
+
+  <h2>2. Release binary or source build</h2>
+
+  <div class="card rec">
+    <span class="pill">Recommended</span>
+    <h3>A. The release workflow stamps the tag into the build</h3>
+    <p><code>release.yml</code> builds with <code>SAAIO_RELEASE=v0.1.1</code>; <code>build.rs</code> passes it on like <code>SAAIO_COMMIT</code>. A binary without it was built from source: <code>saaio update</code> names the <code>cargo install --locked --git ... --tag v0.1.2 --force</code> line instead of replacing anything, and the notice still shows. The stamp is the exact tag, so an rc binary knows it is <code>0.1.1-rc.1</code>, older than <code>0.1.1</code>, and is told about the final release.</p>
+    <div class="two">
+      <div class="plus"><p class="label">Gains</p><ul><li>Certain: no guessing from paths.</li><li>Fixes the rc-reports-0.1.1 blind spot for comparisons.</li></ul></div>
+      <div class="minus"><p class="label">Costs</p><ul><li>One more build input; <code>--version</code> output stays as it is.</li></ul></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>B. Guess from where the binary lives</h3>
+    <p>Under <code>~/.cargo/bin</code> or a <code>target/</code> folder: source; anywhere else: release. Breaks for <code>CARGO_HOME</code>, a copied binary, or a release binary moved into <code>~/.cargo/bin</code>, and replacing a source build with a release binary would silently switch the user's channel.</p>
+  </div>
+
+  <div class="card">
+    <h2>Recommendation</h2>
+    <p><b>1A and 2A.</b> They add no dependency, keep the check where the notice is drawn, make the fake a plain folder, and decide the source-build case from a fact instead of a path. <code>saaio update</code> then resolves the tag in Rust, checks the folder is writable, downloads that release's <code>install.sh</code> and runs it with <code>SAAIO_VERSION</code> and <code>SAAIO_INSTALL_DIR</code> set, so the checksum check and the rename stay in one place. Pick one per question, or say what to mix.</p>
+  </div>
+</div>
+</body>
+</html>

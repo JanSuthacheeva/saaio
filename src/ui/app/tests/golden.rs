@@ -81,6 +81,18 @@ fn every_view_looks_as_it_did() {
     rail.on_input(Routed::Command(Command::Rail));
     golden("rail", &render_at(&rail, FLEET));
 
+    let update = Some("0.1.1 is out: saaio update".to_string());
+    let mut release = board_app();
+    release.set_update(update.clone());
+    golden("update", &render_at(&release, FLEET));
+    release.on_input(Routed::Command(Command::Rail));
+    golden("rail-update", &render_at(&release, FLEET));
+    let mut cramped = board_app();
+    cramped.set_update(update);
+    let tight = Size { cols: 70, rows: 20 };
+    cramped.on_resize(tight);
+    golden("narrow-update", &render_at(&cramped, tight));
+
     let mut working = board_app();
     working.on_server(master_at(State::Working, 1));
     golden("master-working", &render_at(&working, FLEET));

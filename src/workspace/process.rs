@@ -24,6 +24,16 @@ pub fn output_in(dir: &Path, argv: &[String], limit: Duration) -> Result<String>
     Ok(String::from_utf8_lossy(&stdout).into_owned())
 }
 
+/// Runs an argv with no stdin; its stdout, or an error with the last line it printed. Past `limit`
+/// it is killed and fails.
+pub fn output(argv: &[String], limit: Duration) -> Result<String> {
+    let (program, args) = argv.split_first().context("empty command")?;
+    let mut command = Command::new(program);
+    command.args(args);
+    let stdout = finish_within(command, program, limit)?;
+    Ok(String::from_utf8_lossy(&stdout).into_owned())
+}
+
 /// Runs `command` with no stdin; its stdout, or an error with the last line it printed. Past
 /// `limit` it is killed and fails.
 pub(super) fn finish_within(
@@ -164,6 +174,22 @@ mod tests {
         let missing = ["saaio-test-no-such-program".to_string()];
         let error = output_in(&folder, &missing, LIMIT).unwrap_err();
         assert!(format!("{error:#}").starts_with("could not run saaio-test-no-such-program"));
+    }
+
+    #[test]
+    fn runs_a_command_wherever_saaio_runs() {
+        let argv = ["printf".to_string(), "%s".to_string(), "v0.1.1".to_string()];
+
+        assert_eq!(output(&argv, LIMIT).unwrap(), "v0.1.1");
+        let failing = [
+            "sh".to_string(),
+            "-c".to_string(),
+            "echo gone >&2; exit 6".to_string(),
+        ];
+        assert_eq!(
+            format!("{:#}", output(&failing, LIMIT).unwrap_err()),
+            "gone"
+        );
     }
 
     #[test]
