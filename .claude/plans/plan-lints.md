@@ -71,3 +71,42 @@ undocumented_unsafe_blocks = "warn"
 - [x] `expect` with a reason for the two unwraps in adapter/codex.rs
 - [x] CLAUDE.md and CONTRIBUTING.md name the rules
 - [x] End to end: clippy, test and fmt pass; each new rule proved once by a throwaway violation
+
+## Review
+
+### Fixed
+
+- `clippy.toml` left ways round its own rules: `File::options` (the same as `OpenOptions::new`),
+  `DirBuilder::new`, `fs::copy`, `env::home_dir` and `env::temp_dir` (HOME, TMPDIR) all passed
+  clippy in production code, shown by a throwaway function in `text.rs`. Now banned; the throwaway
+  fails on all five and the tree is clean (430d0f7). Config only, no production code changed.
+
+### Open
+
+- `#[arg(env = "SAAIO_FLOW_ID")]` in `cli/commands/report.rs` reads the environment through clap,
+  which no lint sees. It runs inside `Cli::try_parse` in `main.rs`, so it keeps to the rule's
+  intent; recommend leaving it.
+- The Linux `peer_pid` in `client.rs` (the allow, then the SAFETY comment, on a `let`) was only
+  compiled by CI's Linux job, not here. It has the same shape as the macOS one that passes, so the
+  risk is small; CI shows it.
+
+### Where to look
+
+1. `clippy.toml` against the exceptions: `private.rs`, `store.rs` (module allows), `workspace.rs`
+   `exclude_worktrees`, `main.rs` `env`, `build.rs` `main`. Whether the list of banned methods is
+   the rule you mean, and whether the module-wide allow in `store.rs` is wider than it needs to be.
+2. `src/lib.rs` `cfg_attr(test, allow(...))`: every test in the crate is exempt, so the rules check
+   production code only.
+3. `src/client.rs` and `src/text.rs`: the four `#[allow(unsafe_code)]` sites and their SAFETY
+   comments.
+
+Routine, skim: the 18 `#[expect]` sites (each a lint moved from `Cargo.toml` to its site with a
+reason; an unneeded one would fail as an unfulfilled expectation), the two `expect`s in
+`adapter/codex.rs`, the rustix `kill_process` in `tests/cli/server.rs`, and the docs lines.
+
+### Checks
+
+fmt, clippy, test and deny passed at 045d9a3; after the fix, which changes only `clippy.toml`,
+`cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 430d0f7. Tests were not
+rerun: no compiled code changed. The fix was reviewed in a separate pass by the reviewer, not by an
+independent agent.
