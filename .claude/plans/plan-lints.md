@@ -97,37 +97,81 @@ as they are (clap's env read runs inside main.rs's parse; CI compiles the Linux 
 
 ## Review
 
-### Fixed
+### Round 2: no unsafe (after 9beff63)
+
+#### Fixed
+
+- `the_server_leads_a_session_of_its_own` polled for the socket file by hand, which exists before
+  the server listens, instead of `support::wait_for_socket`; the cat agents config was written out
+  four times across `tests/cli/server.rs` and `store.rs`. Now `wait_for_socket` and one
+  `support::cat_agents` (eae892a). Tests only; the session test still fails with the `setsid` line
+  removed (getsid gave the test's session, not the server's pid).
+
+#### Open
+
+- The Linux `peer_pid` (`sockopt::PeerCredentials`, `cred.pid()`) compiles only on CI's Linux job;
+  this macOS machine has no Linux target. Read against nix 0.28's source: `PeerCredentials` and
+  `UnixCredentials::pid` sit under `linux_android` and the `socket` feature saaio enables, and
+  `getsockopt` takes `&impl AsFd`. Recommend letting CI confirm it.
+- `saaio server` started by hand from a shell as a job leads its process group, so `setsid` fails
+  (EPERM, ignored) and it keeps the shell's session. Before, only the UI's spawn set a session, so
+  that path is unchanged; the UI's spawn is never a group leader and gets its own session.
+  Recommend leaving it.
+
+#### Where to look
+
+1. `src/cli/commands/server.rs` `run`: the `setsid` now runs after exec, in the server, instead of
+   in the child before exec. Nothing between spawn and this line touches a terminal (stdin is null,
+   stdout and stderr the log); `tests/cli/server.rs` `the_server_leads_a_session_of_its_own`
+   proves the session.
+2. `src/text.rs` `local_offset_secs` through jiff: checked end to end with `saaio bug-report`:
+   TZ unset (+07:00 from /etc/localtime), `America/New_York` and the POSIX rule
+   `EST5EDT,M3.2.0,M11.1.0` (-04:00), `:Europe/Berlin` (+02:00), empty and unknown TZ (+00:00), as
+   localtime_r gave. jiff caches the system zone with a TTL, so a long-running server still follows
+   a zone change.
+3. `src/client.rs` `peer_pid`: both platforms through nix, `seen_pid` still refusing 0.
+
+Routine, skim: `Cargo.toml` (libc out, jiff and nix in, `unsafe_code = "forbid"`, the dropped
+`undocumented_unsafe_blocks`), `Cargo.lock` (jiff's crates; defmt and portable-atomic-util are
+optional deps of jiff the lock lists but nothing builds), and the CLAUDE.md and CONTRIBUTING.md
+lines.
+
+#### Checks
+
+fmt, clippy, test and deny passed at 8043b69. After the fix (tests only) fmt, clippy and the whole
+`cargo test` pass at eae892a; deny not rerun (no dependency changed). The fix was reviewed by the
+reviewer itself, not an independent agent, and it touches no production code.
+
+### Round 1 (up to 9beff63)
+
+#### Fixed
 
 - `clippy.toml` left ways round its own rules: `File::options` (the same as `OpenOptions::new`),
   `DirBuilder::new`, `fs::copy`, `env::home_dir` and `env::temp_dir` (HOME, TMPDIR) all passed
   clippy in production code, shown by a throwaway function in `text.rs`. Now banned; the throwaway
   fails on all five and the tree is clean (430d0f7). Config only, no production code changed.
 
-### Open
+#### Open
 
 - `#[arg(env = "SAAIO_FLOW_ID")]` in `cli/commands/report.rs` reads the environment through clap,
   which no lint sees. It runs inside `Cli::try_parse` in `main.rs`, so it keeps to the rule's
   intent; recommend leaving it.
-- The Linux `peer_pid` in `client.rs` (the allow, then the SAFETY comment, on a `let`) was only
-  compiled by CI's Linux job, not here. It has the same shape as the macOS one that passes, so the
-  risk is small; CI shows it.
+- The Linux `peer_pid` (then still unsafe) compiled only on CI: superseded by round 2.
 
-### Where to look
+#### Where to look
 
 1. `clippy.toml` against the exceptions: `private.rs`, `store.rs` (module allows), `workspace.rs`
    `exclude_worktrees`, `main.rs` `env`, `build.rs` `main`. Whether the list of banned methods is
    the rule you mean, and whether the module-wide allow in `store.rs` is wider than it needs to be.
 2. `src/lib.rs` `cfg_attr(test, allow(...))`: every test in the crate is exempt, so the rules check
    production code only.
-3. `src/client.rs` and `src/text.rs`: the four `#[allow(unsafe_code)]` sites and their SAFETY
-   comments.
+3. (The four unsafe sites this named are gone: round 2.)
 
 Routine, skim: the 18 `#[expect]` sites (each a lint moved from `Cargo.toml` to its site with a
 reason; an unneeded one would fail as an unfulfilled expectation), the two `expect`s in
 `adapter/codex.rs`, the rustix `kill_process` in `tests/cli/server.rs`, and the docs lines.
 
-### Checks
+#### Checks
 
 fmt, clippy, test and deny passed at 045d9a3; after the fix, which changes only `clippy.toml`,
 `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at 430d0f7. Tests were not
