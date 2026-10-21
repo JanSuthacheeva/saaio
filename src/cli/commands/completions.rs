@@ -56,7 +56,8 @@ mod tests {
                 "send",
                 "clear",
                 "bug-report",
-                "completions"
+                "completions",
+                "update"
             ]
         );
     }

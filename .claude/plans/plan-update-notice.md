@@ -134,7 +134,10 @@ pub struct UiConfig { pub prefix: Prefix, pub update_check: bool } // true unles
 // src/cli/commands/update.rs
 pub struct Args { #[arg(long, value_name = "TAG")] version: Option<String> }
 pub fn run(args: &Args, env: &Env) -> Result<Document, Failure>;
-fn install(releases: &Releases, tag: &Tag, dir: &Path) -> anyhow::Result<String>;
+fn install(releases: &Releases, tag: &Tag, dir: &Path) -> anyhow::Result<()>; // tests run the installed binary
+
+// Build: Env::releases and SAAIO_RELEASES_URL came with the UI task, which needed them first;
+// UpdateWatch is a private module of ui, as it takes ui's private Event.
 
 // src/cli/output/update.rs
 pub fn updated(from: &Build, to: &Tag, binary: &str) -> Document;

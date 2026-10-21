@@ -1,13 +1,5 @@
 //! Updates: when the UI looks for a release again (`UpdateCheck`), its notice, `saaio update`'s `Step`
 
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "saaio update and the UI use it from later tasks on"
-    )
-)]
-
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

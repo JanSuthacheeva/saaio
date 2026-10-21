@@ -1,10 +1,5 @@
 //! `Tag`, a release's tag, and `Build`, what this binary is: a release's or a source build
 
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "saaio update uses it from a later task on")
-)]
-
 pub mod source;
 
 use std::cmp::Ordering;
