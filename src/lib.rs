@@ -41,6 +41,7 @@ mod store;
 mod system;
 mod text;
 mod ui;
+mod update;
 mod view;
 mod wake;
 mod workflow;
