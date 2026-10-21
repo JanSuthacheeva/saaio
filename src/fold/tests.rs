@@ -1,5 +1,6 @@
 use super::*;
 use crate::event::{Question, ServiceStatus};
+use crate::fixtures;
 use crate::view::Services;
 
 const MIN: u64 = 60_000;
@@ -234,15 +235,10 @@ fn kinds_that_say_no_state_leave_the_master_as_it_was() {
 }
 
 fn started(at: u64) -> Event {
-    Event::new(
+    Event {
         at,
-        EventKind::Started {
-            name: "shop-221".into(),
-            request: "SHOP-221 add CSV export".into(),
-            mode: Mode::Auto,
-            phases: None,
-        },
-    )
+        ..fixtures::started("shop-221", "SHOP-221 add CSV export")
+    }
 }
 
 fn at(at: u64, kind: EventKind) -> Event {

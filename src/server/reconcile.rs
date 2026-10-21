@@ -61,9 +61,10 @@ pub fn reconcile(
 mod tests {
     use super::*;
     use crate::config::{Agent, builtin_agents};
-    use crate::event::{Event, EventKind, Mode};
-    use crate::fold;
+    use crate::event::{Event, EventKind};
+    use crate::fixtures;
     use crate::launch::pane::HOSTED;
+    use crate::view::Workspace;
 
     fn config() -> Config {
         let mut agents = builtin_agents();
@@ -84,44 +85,19 @@ mod tests {
     }
 
     fn flow(id: &str, agent: &str, window: Option<&str>, ended: bool) -> FlowView {
-        let mut events = vec![
-            Event::new(
-                0,
-                EventKind::Started {
-                    name: id.into(),
-                    request: "x".into(),
-                    mode: Mode::Auto,
-                    phases: None,
-                },
-            ),
-            Event::new(
-                1,
-                EventKind::Workspace {
-                    path: format!("/repo/.saaio/worktrees/{id}"),
-                    branch: Some(format!("flow/{id}")),
-                    slot: Some(1),
-                    window: window.map(String::from),
-                    agent: agent.into(),
-                },
-            ),
-        ];
+        let workspace = Workspace {
+            window: window.map(String::from),
+            ..fixtures::workspace(id, agent)
+        };
+        let mut events = vec![Event::new(1, workspace.into())];
         if ended {
             events.push(Event::new(2, EventKind::Ended));
         }
-        fold::fold(id, &events, None, 3).unwrap()
+        fixtures::flow(id, events, 3)
     }
 
     fn unstarted(id: &str) -> FlowView {
-        let started = Event::new(
-            0,
-            EventKind::Started {
-                name: id.into(),
-                request: "x".into(),
-                mode: Mode::Guided,
-                phases: None,
-            },
-        );
-        fold::fold(id, &[started], None, 1).unwrap()
+        fixtures::flow(id, Vec::new(), 1)
     }
 
     fn keys(wanted: &Wanted) -> Vec<PaneKey> {

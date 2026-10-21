@@ -245,8 +245,7 @@ impl Theme {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event::Mode;
-    use crate::view::{Step, StepStatus};
+    use crate::fixtures;
 
     #[test]
     fn every_key_belongs_in_one_section() {
@@ -345,36 +344,10 @@ mod tests {
 
     /// A flow in the built-in workflow's phases.
     fn flow(state: State, phase: Option<Phase>) -> FlowView {
-        let step = |name| Step {
-            phase: Phase::of(name),
-            status: StepStatus::Open,
-            duration_ms: None,
-        };
         FlowView {
-            id: "shop-217".into(),
-            name: "shop-217".into(),
-            request: String::new(),
-            mode: Mode::Guided,
             phase,
             state,
-            blocker: None,
-            delegate: None,
-            tasks: None,
-            review: None,
-            merge_request: None,
-            merged: false,
-            decisions: Vec::new(),
-            steps: ["plan", "implement", "review", "merge-request"]
-                .map(step)
-                .to_vec(),
-            timeline: Vec::new(),
-            started_at: 0,
-            changed_at: 0,
-            workspace: None,
-            answer: None,
-            session: None,
-            questions: Vec::new(),
-            services: None,
+            ..fixtures::flow("shop-217", Vec::new(), 0)
         }
     }
 

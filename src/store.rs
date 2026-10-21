@@ -381,7 +381,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::event::{EventKind, Mode};
+    use crate::event::EventKind;
+    use crate::fixtures;
     use crate::view::{MasterTurn, State};
     use crate::wake::Mark;
 
@@ -395,15 +396,7 @@ mod tests {
     }
 
     fn started() -> Event {
-        Event::new(
-            1,
-            EventKind::Started {
-                name: "shop-221".into(),
-                request: "SHOP-221".into(),
-                mode: Mode::Guided,
-                phases: None,
-            },
-        )
+        fixtures::started("shop-221", "SHOP-221")
     }
 
     #[test]

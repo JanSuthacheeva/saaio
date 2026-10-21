@@ -54,22 +54,21 @@ Reads `tests/cli/*.rs` under `CARGO_MANIFEST_DIR`, fails naming each stem withou
 /// `name`'s first event: started at 0 in auto mode with the built-in phases.
 pub fn started(name: &str, request: &str) -> Event;
 /// A worktree for `name` at /repo/.saaio/worktrees/<name> on flow/<name>, slot 1, run by `agent`.
-pub fn workspace(name: &str, agent: &str) -> EventKind;
+pub fn workspace(name: &str, agent: &str) -> Workspace;
 /// `id` started (named after it), then `events`, folded at `now`.
 pub fn flow(id: &str, events: Vec<Event>, now: u64) -> FlowView;
 ```
 
+`workspace` returns `view::Workspace` (decided in the build), so a caller overrides one field with struct update and turns it into an event with `.into()`.
+
 Users:
 
-- `store.rs`, `server/watch.rs` `started()`: deleted, callers use `fixtures::started`.
-- `deliver.rs` `started(store)`: kept, body from `fixtures::started`.
-- `fold/tests.rs` `started(at)`: deleted; `Event { at, ..started(..) }` where `at` is not 0.
-- `server/tests.rs` `started_flow`: kept, events from `fixtures`.
-- `wake.rs`, `server/startup.rs` `flow`: deleted or one line over `fixtures::flow`.
-- `pause.rs`, `server/reconcile.rs`, `forge.rs` `flow`: kept for their extra shape, built on `fixtures`.
-- `ui/theme.rs` `flow`: `fixtures::flow` then set `state`, `phase`, `mode`.
-- `ui/board/fixtures.rs`, `cli/output/fixtures.rs`: `Started` from `fixtures::started`; board keeps its `/shop` workspace (goldens).
-- `view.rs` `flow`: left as is (pins the `--json` contract).
+- `server/watch.rs` `started()`: deleted, callers use `fixtures::started`.
+- `store.rs` `started()`, `fold/tests.rs` `started(at)`: one line over `fixtures::started` (13 and 47 callers).
+- `deliver.rs` `started(store)`, `server/tests.rs` `started_flow`: kept (they create the log), events from `fixtures`.
+- `wake.rs` `flow`, `answered`; `server/startup.rs`, `pause.rs`, `server/reconcile.rs` `flow`, `unstarted`; `ui/theme.rs` `flow`: built on `fixtures`.
+- `cli/output/fixtures.rs`: `Started` from `fixtures::started`.
+- Left as they are: `forge.rs` `flow_of` (asserts on its `/work/shop` path, varies the mode), `ui/board/fixtures.rs` (varies the mode, its `/shop` path is in the goldens), `view.rs` `flow` (pins the `--json` contract).
 
 ### Inline tests moved
 
@@ -98,7 +97,7 @@ src/adapter/claude_code.rs -> src/adapter/claude_code/tests.rs
 ## Tasks
 
 - [x] Replace the three guess-sleeps and the hand-rolled poll in `src/server/tests.rs`; amend CLAUDE.md's test rule
-- [ ] Add `fixtures::started`, `fixtures::workspace`, `fixtures::flow` and move every listed builder onto them
+- [x] Add `fixtures::started`, `fixtures::workspace`, `fixtures::flow` and move every listed builder onto them
 - [ ] Move the inline tests of `config.rs`, `adapter/codex.rs`, `adapter/claude_code.rs` to sibling `tests.rs`
 - [ ] Split `tests/cli.rs` into `tests/cli/` with `support.rs`, the subject modules and `every_file_in_tests_cli_is_a_module`
 - [ ] Update CLAUDE.md and CONTRIBUTING.md for `tests/cli/`, `fixtures.rs` and the new `tests.rs` files

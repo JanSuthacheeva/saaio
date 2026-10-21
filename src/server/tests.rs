@@ -11,11 +11,11 @@ use super::*;
 use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
-use crate::fixtures::executable;
+use crate::fixtures::{self, executable};
 use crate::launch::pane::HOSTED;
 use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
 use crate::store::{Busy, Waiter};
-use crate::view::{MasterTurn, State};
+use crate::view::{MasterTurn, State, Workspace};
 
 /// A server whose master is `cat`, run on its own thread.
 fn start(dir: &Path) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
@@ -258,27 +258,16 @@ fn tells_the_ui_where_the_masters_turn_stands_from_its_start() {
 
 /// A flow with a worktree at dir/<name>, as `saaio start` leaves it.
 fn started_flow(store: &Store, dir: &Path, name: &str, agent: &str) -> String {
-    let id = store
-        .create(&LogEvent::new(
-            0,
-            EventKind::Started {
-                name: name.into(),
-                request: "x".into(),
-                mode: crate::event::Mode::Auto,
-                phases: None,
-            },
-        ))
-        .unwrap();
+    let id = store.create(&fixtures::started(name, "x")).unwrap();
     let path = dir.join(name);
     fs::create_dir_all(&path).unwrap();
-    let workspace = EventKind::Workspace {
+    let workspace = Workspace {
         path: path.display().to_string(),
-        branch: Some(format!("flow/{name}")),
-        slot: Some(1),
-        window: None,
-        agent: agent.into(),
+        ..fixtures::workspace(name, agent)
     };
-    store.append(&id, &LogEvent::new(1, workspace)).unwrap();
+    store
+        .append(&id, &LogEvent::new(1, workspace.into()))
+        .unwrap();
     id
 }
 

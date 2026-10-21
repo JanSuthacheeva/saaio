@@ -64,9 +64,9 @@ pub fn wakes_at_tool_call(flow: &FlowView) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event::{Event, EventKind, Mode};
-    use crate::fold::fold;
-    use crate::view::{Services, Workspace};
+    use crate::event::Mode;
+    use crate::fixtures;
+    use crate::view::Services;
 
     const MIN: u64 = 60_000;
     const AFTER: Option<Duration> = Some(Duration::from_mins(5));
@@ -85,23 +85,8 @@ mod tests {
     /// A started flow with a worktree, in `state` since minute 10, its services at `services`
     /// since `since`.
     fn flow(state: State, services: Option<(ServiceStatus, u64)>) -> FlowView {
-        let started = Event::new(
-            0,
-            EventKind::Started {
-                name: "shop-217".into(),
-                request: "x".into(),
-                mode: Mode::Auto,
-                phases: None,
-            },
-        );
-        let mut flow = fold("7f3c", &[started], None, 0).unwrap();
-        flow.workspace = Some(Workspace {
-            path: "/repo/.saaio/worktrees/shop-217".into(),
-            branch: Some("flow/shop-217".into()),
-            slot: Some(1),
-            window: None,
-            agent: "claude".into(),
-        });
+        let mut flow = fixtures::flow("shop-217", Vec::new(), 0);
+        flow.workspace = Some(fixtures::workspace("shop-217", "claude"));
         flow.state = state;
         flow.changed_at = 10 * MIN;
         flow.services = services.map(|(status, since)| Services {

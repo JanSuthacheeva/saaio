@@ -162,20 +162,15 @@ pub fn for_master(flows: &[&FlowView]) -> String {
 mod tests {
     use super::*;
     use crate::event::Question;
+    use crate::fixtures;
     use crate::fold;
 
     fn flow(id: &str, kinds: Vec<(u64, EventKind)>) -> FlowView {
-        let mut events = vec![Event::new(
-            0,
-            EventKind::Started {
-                name: id.into(),
-                request: id.into(),
-                mode: Mode::Auto,
-                phases: None,
-            },
-        )];
-        events.extend(kinds.into_iter().map(|(at, kind)| Event::new(at, kind)));
-        fold::fold(id, &events, None, 100).unwrap()
+        let events = kinds
+            .into_iter()
+            .map(|(at, kind)| Event::new(at, kind))
+            .collect();
+        fixtures::flow(id, events, 100)
     }
 
     fn waiting(question: &str) -> EventKind {
@@ -198,15 +193,7 @@ mod tests {
 
     /// Whether the master answered the dialog of a flow whose log holds `kinds`.
     fn answered(kinds: Vec<EventKind>) -> bool {
-        let mut events = vec![Event::new(
-            0,
-            EventKind::Started {
-                name: "ask".into(),
-                request: "ask".into(),
-                mode: Mode::Guided,
-                phases: None,
-            },
-        )];
+        let mut events = vec![fixtures::started("ask", "ask")];
         events.extend(kinds.into_iter().map(|kind| Event::new(1, kind)));
         let flow = fold::fold("ask", &events, None, 2).unwrap();
         dialog_answered(&flow, &events)
