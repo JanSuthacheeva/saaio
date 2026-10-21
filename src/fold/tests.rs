@@ -597,6 +597,38 @@ fn a_dialog_shows_its_questions_until_the_flow_leaves_waiting() {
 }
 
 #[test]
+fn a_question_or_reason_does_not_outlive_waiting_or_blocked() {
+    let asked = at(
+        2 * MIN,
+        EventKind::Waiting {
+            question: "Should I also update the README?".into(),
+            questions: Vec::new(),
+        },
+    );
+    let stuck = at(
+        2 * MIN,
+        EventKind::Blocked {
+            reason: "exited with code 1".into(),
+        },
+    );
+    let delegated = EventKind::Delegated {
+        description: "review the branch".into(),
+    };
+    for stop in [asked, stuck] {
+        for next in [EventKind::Ended, delegated.clone()] {
+            let events = [
+                started(0),
+                opened(MIN, PR),
+                stop.clone(),
+                at(3 * MIN, next.clone()),
+            ];
+            let flow = view(&events, 4 * MIN);
+            assert_eq!(flow.blocker, None, "{:?} then {next:?}", stop.kind);
+        }
+    }
+}
+
+#[test]
 fn a_new_dialog_with_the_same_first_question_is_a_change() {
     let events = vec![
         started(0),

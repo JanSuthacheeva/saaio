@@ -246,7 +246,6 @@ impl Folding {
                         self.view.state = State::Working;
                         self.view.delegate = None;
                     }
-                    self.view.blocker = None;
                     let text = format!("phase: {}", self.phases[position].name());
                     self.note(at, text, Tone::Progress);
                 }
@@ -257,7 +256,6 @@ impl Folding {
                     self.note(at, "answered".to_string(), Tone::Progress);
                 }
                 self.view.state = State::Working;
-                self.view.blocker = None;
                 self.view.delegate = None;
             }
             EventKind::Delegated { description } => {
@@ -283,7 +281,6 @@ impl Folding {
                 if !same {
                     self.view.changed_at = at;
                     self.view.state = State::Idle;
-                    self.view.blocker = None;
                     self.view.delegate = None;
                     self.note(at, text, Tone::Neutral);
                 }
@@ -405,6 +402,9 @@ impl Folding {
         if self.view.state != State::Waiting {
             self.view.questions.clear();
         }
+        if !matches!(self.view.state, State::Waiting | State::Blocked) {
+            self.view.blocker = None;
+        }
         if before
             != (
                 self.view.state,
@@ -425,7 +425,6 @@ impl Folding {
         }
         if self.view.merge_request.is_none() && !self.ended {
             self.view.state = State::Done;
-            self.view.blocker = None;
             self.view.delegate = None;
         }
         self.view.merge_request = Some(url.to_string());
