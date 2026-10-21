@@ -1,3 +1,11 @@
+#![cfg_attr(
+    test,
+    allow(
+        clippy::disallowed_methods,
+        reason = "tests set up their files and read PATH directly"
+    )
+)]
+
 pub mod cli;
 
 mod adapter;

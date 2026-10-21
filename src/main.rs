@@ -34,6 +34,10 @@ fn main() -> ExitCode {
 }
 
 /// The environment variables and the terminal saaio runs in, read once here.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the one place the environment is read"
+)]
 fn env() -> Env {
     let path = |name| env::var_os(name).map(PathBuf::from);
     Env {

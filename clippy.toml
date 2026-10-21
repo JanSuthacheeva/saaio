@@ -1,0 +1,15 @@
+# The rules CLAUDE.md states, as checks. Where one is broken on purpose, a local allow says why.
+disallowed-methods = [
+    { path = "std::env::var", reason = "main.rs reads the environment into cli::Env" },
+    { path = "std::env::var_os", reason = "main.rs reads the environment into cli::Env" },
+    { path = "std::env::vars", reason = "main.rs reads the environment into cli::Env" },
+    { path = "std::env::vars_os", reason = "main.rs reads the environment into cli::Env" },
+    { path = "std::env::set_var", reason = "main.rs reads the environment into cli::Env" },
+    { path = "std::env::remove_var", reason = "main.rs reads the environment into cli::Env" },
+    { path = "std::fs::write", reason = "create files through private.rs, for the user alone" },
+    { path = "std::fs::File::create", reason = "create files through private.rs, for the user alone" },
+    { path = "std::fs::File::create_new", reason = "create files through private.rs, for the user alone" },
+    { path = "std::fs::OpenOptions::new", reason = "create files through private.rs, for the user alone" },
+    { path = "std::fs::create_dir", reason = "create folders through private.rs, for the user alone" },
+    { path = "std::fs::create_dir_all", reason = "create folders through private.rs, for the user alone" },
+]
