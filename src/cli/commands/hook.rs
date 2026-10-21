@@ -9,7 +9,7 @@ use serde_json::Value;
 use super::views;
 use crate::adapter::{Adapter, LineMatch, Turn, calls};
 use crate::cli::Env;
-use crate::cli::output::{Document, news};
+use crate::cli::output::Document;
 use crate::client;
 use crate::config::Config;
 use crate::deliver::{self, WorkerNews};
@@ -19,6 +19,7 @@ use crate::pause;
 use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
 use crate::view::{FlowView, MasterTurn, State};
+use crate::wake;
 use crate::workspace;
 
 #[derive(Debug, clap::Args)]
@@ -308,11 +309,11 @@ fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, log: &Log, now: u64)
 fn of_own_repo(store: &Store, id: &str, url: &str, now: u64) -> bool {
     let events = store.events(id).unwrap_or_default();
     let worktree = fold::fold(id, &events, None, now).and_then(|flow| flow.workspace);
-    let remotes = worktree.map(|space| workspace::remote_urls(Path::new(&space.path)));
+    let remotes = worktree.map(|space| workspace::git::remote_urls(Path::new(&space.path)));
     remotes
         .unwrap_or_default()
         .iter()
-        .any(|remote| calls::in_repo(url, remote, workspace::ssh_hostname))
+        .any(|remote| calls::in_repo(url, remote, workspace::git::ssh_hostname))
 }
 
 /// The news a session's Stop hands over: a worker's messages from the master (its flow working
@@ -327,12 +328,12 @@ fn hand_over(store: &Store, waiter: &Waiter, log: &Log, now: u64) -> Option<Stri
                 log.error(&format!("{error:#}"));
             }
             let messages: Vec<&str> = messages.iter().map(String::as_str).collect();
-            Some(news::for_worker(&messages))
+            Some(wake::for_worker(&messages))
         }
         Waiter::Master => {
             let changed = deliver::master_news_now(store, &views(store, now).0);
             let changed: Vec<&FlowView> = changed.iter().collect();
-            (!changed.is_empty()).then(|| news::for_master(&changed))
+            (!changed.is_empty()).then(|| wake::for_master(&changed))
         }
     }
 }

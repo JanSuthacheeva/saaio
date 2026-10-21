@@ -11,7 +11,6 @@ pub mod markdown;
 pub mod newflow;
 pub mod outer;
 pub mod peek;
-pub mod prefix;
 pub mod rail;
 pub mod screen;
 pub mod selection;
@@ -37,6 +36,7 @@ use signal_hook::iterator::Signals;
 
 use crate::branching::Branching;
 use crate::client::Client;
+use crate::config::prefix::Prefix;
 use crate::proto::{Role, ServerMsg};
 use crate::server_log;
 use app::{App, Effect, Job, JobError};
@@ -44,7 +44,6 @@ use clipboard::Clipboard;
 use input::{Router, Target};
 use outer::Outer;
 use peek::PeekCache;
-use prefix::Prefix;
 use theme::Theme;
 use theme_file::ThemeWatch;
 

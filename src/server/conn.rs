@@ -15,6 +15,13 @@ use crate::private;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, Role, ServerMsg};
 use crate::server_log;
 
+/// One UI connection: its socket, and who it said it is once its hello came.
+#[derive(Debug)]
+pub(super) struct Conn {
+    stream: UnixStream,
+    peer: Option<Peer>,
+}
+
 impl Server {
     pub(super) fn message(&mut self, conn: ConnId, message: ClientMsg) -> ControlFlow<Stop> {
         match message {
@@ -29,7 +36,8 @@ impl Server {
                 self.send_full_frame();
             }
             ClientMsg::Input(bytes) => {
-                self.typed_at.insert(self.focus.clone(), Instant::now());
+                let focus = self.focus.clone();
+                self.pane_mut(&focus).typed_at = Some(Instant::now());
                 if let Err(error) = self.host.write(&self.focus, &bytes) {
                     server_log::write((self.clock)(), &format!("{error:#}"));
                 }
@@ -54,7 +62,8 @@ impl Server {
                 self.send_full_frame();
             }
             ClientMsg::StopServer => {
-                return ControlFlow::Break(Stop::Asked(self.peers.get(&conn).cloned()));
+                let peer = self.conns.get(&conn).and_then(|open| open.peer.clone());
+                return ControlFlow::Break(Stop::Asked(peer));
             }
             ClientMsg::EndFlows => self.end_flows(),
         }
@@ -81,7 +90,7 @@ impl Server {
         if let Role::Attach { size } = role {
             let line = match self.attached.replace(conn) {
                 Some(old) => {
-                    let dropped = self.peers.remove(&old);
+                    let dropped = self.conns.get_mut(&old).and_then(|open| open.peer.take());
                     self.send_to(old, &ServerMsg::Detached { by: peer.clone() });
                     self.drop_conn(old);
                     match dropped {
@@ -97,7 +106,9 @@ impl Server {
             self.history = None;
             self.host.resize(size);
         }
-        self.peers.insert(conn, peer);
+        if let Some(open) = self.conns.get_mut(&conn) {
+            open.peer = Some(peer);
+        }
         self.send_to(
             conn,
             &ServerMsg::Welcome {
@@ -121,7 +132,7 @@ impl Server {
             return;
         };
         let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
-        self.conns.insert(conn, stream);
+        self.conns.insert(conn, Conn { stream, peer: None });
         read_in_background(conn, reader, self.events.clone());
     }
 
@@ -142,10 +153,11 @@ impl Server {
 
     /// Closes a connection and forgets it; the attached UI leaving is logged.
     pub(super) fn drop_conn(&mut self, conn: ConnId) {
-        if let Some(stream) = self.conns.remove(&conn) {
-            let _ = stream.shutdown(std::net::Shutdown::Both);
+        let gone = self.conns.remove(&conn);
+        if let Some(gone) = &gone {
+            let _ = gone.stream.shutdown(std::net::Shutdown::Both);
         }
-        let peer = self.peers.remove(&conn);
+        let peer = gone.and_then(|gone| gone.peer);
         if self.attached == Some(conn) {
             self.attached = None;
             let who = peer.map_or_else(|| "a ui".to_string(), |peer| peer.to_string());
@@ -155,10 +167,10 @@ impl Server {
 
     /// Writes one message; a connection that cannot take it is dropped.
     pub(super) fn send_to(&mut self, conn: ConnId, message: &ServerMsg) {
-        let Some(stream) = self.conns.get_mut(&conn) else {
+        let Some(open) = self.conns.get_mut(&conn) else {
             return;
         };
-        if proto::write_msg(stream, message).is_err() {
+        if proto::write_msg(&mut open.stream, message).is_err() {
             self.drop_conn(conn);
         }
     }
@@ -214,7 +226,7 @@ impl Server {
         };
         let master = ServerMsg::Master {
             cwd: self.record.cwd.display().to_string(),
-            branch: crate::workspace::current_branch(&self.record.cwd),
+            branch: crate::workspace::git::current_branch(&self.record.cwd),
             turn: self.store.master_turn(),
         };
         if self.sent_master.as_ref() == Some(&master) {

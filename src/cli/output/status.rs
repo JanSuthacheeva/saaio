@@ -1,9 +1,10 @@
 use serde::Serialize;
 
-use super::{DESCRIPTION, Document, LIST_TEXT_LIMIT, toon, truncated};
+use super::{DESCRIPTION, Document, toon};
+use crate::config::prefix::Prefix;
 use crate::event::{Phase, ServiceStatus};
 use crate::text::short_duration;
-use crate::ui::prefix::Prefix;
+use crate::text::{LIST_TEXT_LIMIT, truncated};
 use crate::view::{Board, FlowView, Projects, State};
 
 /// bin, description, then the list view.

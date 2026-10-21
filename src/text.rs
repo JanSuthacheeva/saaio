@@ -113,6 +113,19 @@ pub fn merge_request(url: &str) -> String {
     }
 }
 
+/// List views cut long texts to this many chars, with a hint; --full lifts it.
+pub const LIST_TEXT_LIMIT: usize = 80;
+
+/// Text cut to `limit` chars with " (truncated, N chars - use --full)" unless `full`.
+pub fn truncated(text: &str, limit: usize, full: bool) -> String {
+    let length = text.chars().count();
+    if full || length <= limit {
+        return text.to_string();
+    }
+    let kept: String = text.chars().take(limit).collect();
+    format!("{kept} (truncated, {length} chars - use --full)")
+}
+
 /// `text` without control characters (C0, DEL, C1, ESC above all), safe to print or type.
 pub fn printable(text: &str) -> String {
     text.chars().filter(|c| !c.is_control()).collect()
@@ -150,6 +163,21 @@ pub fn without_value(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn truncates_long_texts_with_a_hint_unless_full() {
+        let long = "x".repeat(LIST_TEXT_LIMIT + 5);
+
+        assert_eq!(
+            truncated(&long, LIST_TEXT_LIMIT, false),
+            format!(
+                "{} (truncated, 85 chars - use --full)",
+                "x".repeat(LIST_TEXT_LIMIT)
+            )
+        );
+        assert_eq!(truncated(&long, LIST_TEXT_LIMIT, true), long);
+        assert_eq!(truncated("short", LIST_TEXT_LIMIT, false), "short");
+    }
 
     #[test]
     fn a_toml_error_says_what_kind_of_value_but_not_the_value() {

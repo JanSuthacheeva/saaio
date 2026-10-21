@@ -382,7 +382,7 @@ the pane (payloads in `src/adapter/fixtures/*/pre_compact.json`, `post_compact.j
   `[worker] agent` applies at once. `flow start` could fill the prompt and record it in the flow's
   events, so the server only reads it back.
 - **`flow example config|theme`.** Prints the commented example `config.toml` or `theme.toml`
-  (`config::EXAMPLE`, `theme_file::EXAMPLE`), so a user who edited theirs can see every setting and
+  (`config::EXAMPLE`, `default_file::THEME_EXAMPLE`), so a user who edited theirs can see every setting and
   default of the installed version, and an agent can read them without the docs. flow server writes
   the examples only when the files are missing or untouched (plan `plan-flow-release-docs.md`).
 - **Extensions:** glab and ClickUp as data sources (ticket as the request, MR and pipeline status

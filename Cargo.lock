@@ -1583,6 +1583,7 @@ dependencies = [
  "postcard",
  "pulldown-cmark",
  "ratatui",
+ "rustix",
  "serde",
  "serde_json",
  "serde_toon_format",

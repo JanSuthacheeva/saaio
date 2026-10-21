@@ -11,11 +11,12 @@ use serde::Serialize;
 use toml::de::{DeTable, DeValue};
 
 use crate::adapter::Adapter;
+use crate::config::prefix::Prefix;
 use crate::default_file::DefaultFile;
 use crate::text::{line_of, place, without_value};
-use crate::ui::prefix::Prefix;
 use crate::workflow::Workflow;
 
+pub mod prefix;
 pub mod watch;
 
 /// How to launch one agent: its command line, the first prompt it gets, and how to resume it.
@@ -238,7 +239,7 @@ impl Config {
 }
 
 /// $SAAIO_CONFIG, else $XDG_CONFIG_HOME/saaio/config.toml, else ~/.config/saaio/config.toml.
-pub fn config_file(
+pub fn path(
     saaio_config: Option<PathBuf>,
     xdg_config: Option<PathBuf>,
     home: Option<PathBuf>,
@@ -535,14 +536,14 @@ command = ["pi", "{prompt}"]
         .unwrap();
 
         assert_eq!(
-            Config::read(config_file(None, Some(xdg), Some(home.clone())).as_deref())
+            Config::read(path(None, Some(xdg), Some(home.clone())).as_deref())
                 .unwrap()
                 .worker
                 .agent,
             "from-xdg"
         );
         assert_eq!(
-            Config::read(config_file(None, None, Some(home)).as_deref())
+            Config::read(path(None, None, Some(home)).as_deref())
                 .unwrap()
                 .worker
                 .agent,

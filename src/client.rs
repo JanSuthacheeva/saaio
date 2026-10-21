@@ -8,6 +8,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
+use rustix::process::{Pid, Signal};
 
 use crate::launch::{pane, worktree};
 use crate::private;
@@ -136,17 +137,15 @@ pub fn stop_server(socket: &Path, clock: fn() -> u64) -> Result<bool> {
     note(format!(
         "saaio --stop (saaio {BUILD}) sends SIGTERM to pid {pid}"
     ));
-    for (signal, wait) in [(libc::SIGTERM, STOP_WAIT), (libc::SIGKILL, KILL_WAIT)] {
-        if signal == libc::SIGKILL {
+    for (signal, wait) in [(Signal::TERM, STOP_WAIT), (Signal::KILL, KILL_WAIT)] {
+        if signal == Signal::KILL {
             note(format!(
                 "pid {pid} still listens after {} s; sends SIGKILL",
                 STOP_WAIT.as_secs()
             ));
         }
-        // SAFETY: kill only sends a signal; a pid that already exited fails with ESRCH.
-        unsafe {
-            libc::kill(pid, signal);
-        }
+        // A pid that already exited fails with ESRCH: it stops listening all the same.
+        let _ = rustix::process::kill_process(pid, signal);
         if stops_listening(socket, wait) {
             return Ok(true);
         }
@@ -168,7 +167,7 @@ fn stops_listening(socket: &Path, wait: Duration) -> bool {
 
 /// The pid of the process at the other end of a Unix socket.
 #[cfg(target_os = "macos")]
-fn peer_pid(stream: &UnixStream) -> io::Result<libc::pid_t> {
+fn peer_pid(stream: &UnixStream) -> io::Result<Pid> {
     let mut pid: libc::pid_t = 0;
     let mut len = libc::socklen_t::try_from(size_of::<libc::pid_t>()).expect("a pid fits");
     // SAFETY: getsockopt writes at most len bytes into pid, which is that big.
@@ -184,19 +183,21 @@ fn peer_pid(stream: &UnixStream) -> io::Result<libc::pid_t> {
     if result == -1 {
         return Err(io::Error::last_os_error());
     }
-    Ok(pid)
+    seen_pid(pid)
 }
 
 /// The pid of the process at the other end of a Unix socket.
 #[cfg(target_os = "linux")]
-fn peer_pid(stream: &UnixStream) -> io::Result<libc::pid_t> {
+fn peer_pid(stream: &UnixStream) -> io::Result<Pid> {
     let mut cred = libc::ucred {
         pid: 0,
         uid: 0,
         gid: 0,
     };
     let mut len = libc::socklen_t::try_from(size_of::<libc::ucred>()).expect("a ucred fits");
-    // SAFETY: getsockopt writes at most len bytes into cred, which is that big.
+    // SAFETY: getsockopt writes at most len bytes into cred, which is that big. Read through libc,
+    // not rustix: rustix's UCred cannot hold the pid 0 Linux gives for a peer in a pid namespace
+    // this process cannot see.
     let result = unsafe {
         libc::getsockopt(
             stream.as_raw_fd(),
@@ -209,7 +210,16 @@ fn peer_pid(stream: &UnixStream) -> io::Result<libc::pid_t> {
     if result == -1 {
         return Err(io::Error::last_os_error());
     }
-    Ok(cred.pid)
+    seen_pid(cred.pid)
+}
+
+/// The peer pid the kernel gave, refused when it is 0: a process outside this pid namespace, which
+/// a signal to 0 would never reach (it goes to this process group instead).
+fn seen_pid(raw: libc::pid_t) -> io::Result<Pid> {
+    (raw > 0)
+        .then(|| Pid::from_raw(raw))
+        .flatten()
+        .ok_or_else(|| io::Error::other("the process at the other end is not visible from here"))
 }
 
 /// Asks a running server to end a flow's pane and waits for it; the outcome when there is no server or no pane.
@@ -261,8 +271,7 @@ fn socket_path_for(root: &Path, tmp: &Path) -> PathBuf {
     if near.as_os_str().len() < SOCKET_PATH_LIMIT {
         return near;
     }
-    // SAFETY: getuid cannot fail and touches no memory.
-    let uid = unsafe { libc::getuid() };
+    let uid = rustix::process::getuid().as_raw();
     tmp.join(format!("saaio-{uid}")).join(format!(
         "{:016x}.sock",
         registry::fnv1a(root.as_os_str().as_encoded_bytes())
@@ -373,7 +382,19 @@ mod tests {
         let stream = UnixStream::connect(&socket).unwrap();
 
         let pid = peer_pid(&stream).unwrap();
-        assert_eq!(u32::try_from(pid).unwrap(), std::process::id());
+        assert_eq!(
+            pid,
+            Pid::from_raw(i32::try_from(std::process::id()).unwrap()).unwrap()
+        );
+    }
+
+    #[test]
+    fn refuses_a_peer_pid_of_0_from_another_pid_namespace() {
+        assert_eq!(
+            seen_pid(0).unwrap_err().to_string(),
+            "the process at the other end is not visible from here"
+        );
+        assert_eq!(seen_pid(42).unwrap(), Pid::from_raw(42).unwrap());
     }
 
     /// Answers one hello with `reply`, then keeps the connection open until dropped.

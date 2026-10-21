@@ -8,6 +8,7 @@ mod conn;
 mod dismiss;
 mod forge_watch;
 mod news;
+mod pane_state;
 mod panes;
 mod pause_watch;
 mod startup;
@@ -31,9 +32,9 @@ use signal_hook::iterator::SignalsInfo;
 use signal_hook::iterator::exfiltrator::WithOrigin;
 use signal_hook::low_level::signal_name;
 
-use crate::adapter::Adapter;
 use crate::config::watch::ConfigWatch;
 use crate::config::{self, Config};
+use crate::default_file;
 use crate::fold;
 use crate::launch::pane::LaunchEnv;
 use crate::private;
@@ -41,12 +42,13 @@ use crate::proto::{BUILD, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, ServerMsg,
 use crate::server_log;
 use crate::store::Store;
 use crate::system::System;
-use crate::ui::theme_file;
 use crate::view::Board;
+use conn::Conn;
 use conn::{accept_in_background, bind};
 use forge_watch::{Answer, ForgeWatch};
 use host::{Host, HostEvent};
 use master::MasterRecord;
+use pane_state::PaneState;
 use panes::forward_host_events;
 use pause_watch::PauseWatch;
 use watch::StoreWatch;
@@ -150,30 +152,16 @@ struct Server {
     master_file: PathBuf,
     instructions: PathBuf,
     host: Host,
-    /// The adapter each open pane started with.
-    adapters: HashMap<PaneKey, Adapter>,
-    conns: HashMap<ConnId, UnixStream>,
-    /// Who each connection said it is.
-    peers: HashMap<ConnId, Peer>,
+    /// What the server keeps about each pane it opened or typed into.
+    panes: HashMap<PaneKey, PaneState>,
+    conns: HashMap<ConnId, Conn>,
     next_conn: ConnId,
     attached: Option<ConnId>,
     focus: PaneKey,
     history: Option<u32>,
-    resumed: HashMap<PaneKey, Instant>,
-    /// The connections waiting for a pane to close, by pane.
-    closing: HashMap<PaneKey, Vec<ConnId>>,
     dirty: bool,
     flushed_at: Instant,
     events: Sender<Event>,
-    /// When each pane last got a key from the person, so typed news waits until they pause.
-    typed_at: HashMap<PaneKey, Instant>,
-    /// When each pane opened, so nothing is typed into a harness still starting up.
-    opened_at: HashMap<PaneKey, Instant>,
-    /// When the server last typed into each pane, for a line that begins no turn.
-    line_at: HashMap<PaneKey, Instant>,
-    /// The last question dialog (when its Waiting event was logged) the server pressed Esc into,
-    /// by pane; kept, so no failed read of a log forgets it.
-    dismissed: HashMap<PaneKey, u64>,
     /// When to ask gh and glab about the flows' merge requests.
     forges: ForgeWatch,
     /// The flows whose services a pause or resume runs for.
@@ -185,7 +173,7 @@ fn write_defaults(paths: &ServerPaths, clock: fn() -> u64) {
     let files = [
         (master::INSTRUCTIONS, Some(&paths.instructions)),
         (config::EXAMPLE, paths.config.as_ref()),
-        (theme_file::EXAMPLE, paths.theme.as_ref()),
+        (default_file::THEME_EXAMPLE, paths.theme.as_ref()),
     ];
     for (file, path) in files {
         if let Some(path) = path
@@ -245,22 +233,15 @@ pub fn run(
         master_file: paths.master.clone(),
         instructions: paths.instructions.clone(),
         host,
-        adapters: HashMap::new(),
+        panes: HashMap::new(),
         conns: HashMap::new(),
-        peers: HashMap::new(),
         next_conn: 0,
         attached: None,
         focus: PaneKey::Master,
         history: None,
-        resumed: HashMap::new(),
-        closing: HashMap::new(),
         dirty: false,
         flushed_at: Instant::now(),
         events: events.clone(),
-        typed_at: HashMap::new(),
-        opened_at: HashMap::new(),
-        line_at: HashMap::new(),
-        dismissed: HashMap::new(),
         forges: ForgeWatch::default(),
         pauses: PauseWatch::default(),
     };
@@ -330,7 +311,10 @@ impl Server {
             }
             Event::Host(HostEvent::Exited(key, code)) => {
                 self.host.exited(&key, code);
-                let resumed_at = self.resumed.remove(&key);
+                let resumed_at = self
+                    .panes
+                    .get_mut(&key)
+                    .and_then(|pane| pane.resumed.take());
                 let resume_failed =
                     code != Some(0) && resumed_at.is_some_and(|at| at.elapsed() < RESUME_GRACE);
                 if resume_failed {

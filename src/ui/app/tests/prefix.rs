@@ -1,5 +1,5 @@
 use super::*;
-use crate::ui::prefix::Prefix;
+use crate::config::prefix::Prefix;
 
 fn c_b() -> Prefix {
     Prefix::try_from("C-b".to_string()).unwrap()

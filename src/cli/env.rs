@@ -50,7 +50,7 @@ impl Env {
         let Some(registry) = self.registry() else {
             return Ok(None);
         };
-        match cwd.and_then(workspace::git_common_dir) {
+        match cwd.and_then(workspace::git::common_dir) {
             Some(git_dir) => registry.project_store(&git_dir).map(Some),
             None => Ok(Some(Store::at(registry.root().to_path_buf()))),
         }
@@ -68,7 +68,7 @@ impl Env {
 
     /// The config file $SAAIO_CONFIG, $XDG_CONFIG_HOME or $HOME point to.
     pub(crate) fn config_file(&self) -> Option<PathBuf> {
-        config::config_file(
+        config::path(
             self.saaio_config.clone(),
             self.xdg_config_home.clone(),
             self.home.clone(),

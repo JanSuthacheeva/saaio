@@ -16,9 +16,12 @@ mod fixtures;
 mod fold;
 mod forge;
 mod launch;
+#[cfg(test)]
+mod layering;
 mod pause;
 mod private;
 mod proto;
+mod refusal;
 mod registry;
 mod server;
 mod server_log;

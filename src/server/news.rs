@@ -1,13 +1,13 @@
 use std::time::{Duration, Instant};
 
 use super::Server;
-use crate::cli::output::news;
 use crate::deliver::{self, WorkerNews};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::server_log;
 use crate::store::{Busy, Waiter};
 use crate::text::printable;
 use crate::view::FlowView;
+use crate::wake;
 
 impl Server {
     /// Types the news of each session that cannot wake itself into its pane, when it sits idle at
@@ -25,12 +25,7 @@ impl Server {
             .filter_map(|key| self.server_delivered(&key).map(|waiter| (key, waiter)))
             .filter(|(key, waiter)| {
                 let busy = self.store.busy(waiter);
-                quiet(
-                    busy,
-                    self.typed_at.get(key).copied(),
-                    now,
-                    self.timing.quiet,
-                )
+                quiet(busy, self.pane(key).typed_at, now, self.timing.quiet)
             })
             .collect();
         for (key, waiter) in due {
@@ -52,7 +47,7 @@ impl Server {
     fn server_delivered(&self, key: &PaneKey) -> Option<Waiter> {
         match key {
             PaneKey::Master => {
-                let adapter = *self.adapters.get(key)?;
+                let adapter = self.pane(key).adapter?;
                 let delivers = !adapter.wakes_itself()
                     && self.config.master.wake
                     && self.store.master_session().is_some();
@@ -60,7 +55,7 @@ impl Server {
             }
             PaneKey::Flow(id) => {
                 let flow = self.board.flows.iter().find(|flow| &flow.id == id)?;
-                let adapter = *self.adapters.get(key)?;
+                let adapter = self.pane(key).adapter?;
                 let delivers = !adapter.wakes_itself()
                     && !flow.is_plain()
                     && !flow.is_finished()
@@ -76,14 +71,14 @@ impl Server {
             Waiter::Flow(id) => match deliver::worker_news(&self.store, id, (self.clock)()) {
                 WorkerNews::News(messages) => {
                     let messages: Vec<&str> = messages.iter().map(String::as_str).collect();
-                    Some(news::for_worker(&messages))
+                    Some(wake::for_worker(&messages))
                 }
                 WorkerNews::Nothing | WorkerNews::Gone => None,
             },
             Waiter::Master => {
                 let changed = deliver::master_news_now(&self.store, &self.board.flows);
                 let changed: Vec<&FlowView> = changed.iter().collect();
-                (!changed.is_empty()).then(|| news::for_master(&changed))
+                (!changed.is_empty()).then(|| wake::for_master(&changed))
             }
         }
     }

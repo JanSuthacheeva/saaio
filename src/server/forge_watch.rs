@@ -107,14 +107,14 @@ fn ask(ask: &Ask) -> Result<Lookup> {
     if !ask.dir.is_dir() {
         return Ok(Lookup::Unavailable);
     }
-    let remotes = workspace::remote_urls(&ask.repo);
-    let Some(forge) = Forge::of(&remotes, workspace::ssh_hostname) else {
+    let remotes = workspace::git::remote_urls(&ask.repo);
+    let Some(forge) = Forge::of(&remotes, workspace::git::ssh_hostname) else {
         return Ok(Lookup::Unavailable);
     };
-    let json = workspace::output_in(&ask.repo, &forge.argv(&ask.branch), ASK_LIMIT)
+    let json = workspace::process::output_in(&ask.repo, &forge.argv(&ask.branch), ASK_LIMIT)
         .with_context(|| format!("{} failed", forge.program()))?;
     let found = with_shown(forge, forge.parse(&json)?, ask.shown.as_deref(), |argv| {
-        workspace::output_in(&ask.repo, argv, ASK_LIMIT)
+        workspace::process::output_in(&ask.repo, argv, ASK_LIMIT)
     })?;
     Ok(Lookup::Listed(forge::pick(found, ask.since)))
 }

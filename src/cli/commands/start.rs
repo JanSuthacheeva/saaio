@@ -16,7 +16,8 @@ use crate::registry::Registry;
 use crate::slots::{self, Claim, Slots};
 use crate::store::Store;
 use crate::view::{FlowView, Workspace};
-use crate::workspace::{self, Hook};
+use crate::workspace::hooks::{self, Hook};
+use crate::workspace::{self, git};
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -59,7 +60,7 @@ pub fn run(
         .expect("clap requires a request without --plain");
     check_request(request)?;
     let agent_name = pick_agent(config, args.agent.as_deref())?;
-    let repo = workspace::repo_root(cwd).map_err(|_| {
+    let repo = git::repo_root(cwd).map_err(|_| {
         Failure::error(
             "saaio start needs a git repository",
             vec!["Run it inside the repository the flow works on".to_string()],
@@ -93,7 +94,7 @@ pub fn run(
     workspace::create_worktree(&repo, &space)?;
     rollback.disarm();
 
-    let setup = match workspace::run_hook(
+    let setup = match hooks::run(
         &repo,
         Hook::Setup,
         &space,
@@ -174,7 +175,7 @@ fn claim_slot(
     now: u64,
 ) -> Result<u8, Failure> {
     let mut held = held_slots(registry, now);
-    held.extend(slots::taken_slots(flows));
+    held.extend(slots::taken(flows));
     Slots::at(registry)
         .claim(claim, &held, |claim| claim_is_live(claim, now))?
         .ok_or_else(|| {
@@ -194,7 +195,7 @@ fn held_slots(registry: &Registry, now: u64) -> Vec<u8> {
     registry
         .stores()
         .iter()
-        .flat_map(|store| slots::taken_slots(&views(store, now).0))
+        .flat_map(|store| slots::taken(&views(store, now).0))
         .collect()
 }
 
@@ -211,7 +212,7 @@ fn claim_is_live(claim: &Claim, now: u64) -> bool {
 fn free_branch(repo: &Path, base: &str) -> String {
     std::iter::once(base.to_string())
         .chain((2..).map(|number| format!("{base}-{number}")))
-        .find(|branch| !workspace::branch_exists(repo, branch))
+        .find(|branch| !git::branch_exists(repo, branch))
         .expect("an unused suffix always exists")
 }
 

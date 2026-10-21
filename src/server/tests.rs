@@ -1031,7 +1031,7 @@ fn writes_the_default_files_on_its_first_start_and_keeps_a_config_of_your_own() 
         master::INSTRUCTIONS.text
     );
     assert_eq!(read(&paths.config), crate::config::EXAMPLE.text);
-    assert_eq!(read(&paths.theme), crate::ui::theme_file::EXAMPLE.text);
+    assert_eq!(read(&paths.theme), crate::default_file::THEME_EXAMPLE.text);
 
     let edited = TempDir::new().unwrap();
     let mine = edited.path().join("config/config.toml");
@@ -1041,7 +1041,7 @@ fn writes_the_default_files_on_its_first_start_and_keeps_a_config_of_your_own() 
     stop(&paths, handle);
 
     assert_eq!(read(&paths.config), "[worker]\nagent = \"codex\"\n");
-    assert_eq!(read(&paths.theme), crate::ui::theme_file::EXAMPLE.text);
+    assert_eq!(read(&paths.theme), crate::default_file::THEME_EXAMPLE.text);
 }
 
 #[test]

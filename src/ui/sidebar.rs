@@ -10,12 +10,12 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 
+use crate::config::prefix::Prefix;
 use crate::proto::{PaneInfo, PaneKey, PaneStatus};
 use crate::ui::fit;
 use crate::ui::focus;
 use crate::ui::layout::SIDEBAR_WIDTH;
 use crate::ui::peek::PeekLine;
-use crate::ui::prefix::Prefix;
 use crate::ui::theme::Theme;
 use crate::view::{Board, FlowView, Group, State};
 

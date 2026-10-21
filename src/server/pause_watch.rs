@@ -9,7 +9,7 @@ use crate::launch::worktree;
 use crate::pause::{self, Job};
 use crate::server_log;
 use crate::view::FlowView;
-use crate::workspace::{self, Hook};
+use crate::workspace::hooks::{self, Hook};
 
 /// The longest a pause or resume script may run before it is killed.
 pub const HOOK_LIMIT: Duration = Duration::from_mins(5);
@@ -123,8 +123,8 @@ fn scripted_repo(flow: &FlowView) -> Option<PathBuf> {
     let space = flow.workspace.as_ref()?;
     let repo = worktree::repo_of(space)?;
     let scripted = Path::new(&space.path).is_dir()
-        && workspace::has_hook(&repo, Hook::Pause)
-        && workspace::has_hook(&repo, Hook::Resume);
+        && hooks::exists(&repo, Hook::Pause)
+        && hooks::exists(&repo, Hook::Resume);
     scripted.then_some(repo)
 }
 
@@ -139,7 +139,7 @@ fn run_in_background(flow: FlowView, repo: PathBuf, job: Job, events: Sender<Eve
             Job::Resume => Hook::Resume,
         };
         let env = worktree::hook_env(&flow.id, &flow.name, &repo, space);
-        let result = workspace::run_hook_within(&repo, hook, space, &env, HOOK_LIMIT)
+        let result = hooks::run_within(&repo, hook, space, &env, HOOK_LIMIT)
             .map_err(|error| format!("{error:#}"));
         let _ = events.send(Event::Paused(Finished {
             id: flow.id,

@@ -125,9 +125,9 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+    use crate::config::prefix::Prefix;
     use crate::event::{Event, EventKind, Mode};
     use crate::proto::PaneKey;
-    use crate::ui::prefix::Prefix;
     use crate::ui::theme::{Palette, Theme};
     use crate::view::{Board, VIEW_VERSION};
 

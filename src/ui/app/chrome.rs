@@ -35,7 +35,7 @@ impl App {
         let PaneKey::Flow(id) = &self.focus else {
             let mut title = vec![Span::styled(" master", theme.ui.strong)];
             // The sidebar says where the master runs and the title its branch; the rail says neither.
-            let place = match &self.master {
+            let place = match &self.master.place {
                 Some(place) if self.folded() => Some(place.clone()),
                 Some(place) => place
                     .rsplit_once(" · ")

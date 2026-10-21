@@ -118,7 +118,7 @@ impl Server {
         ) {
             Some(spec) => match self.open_pane(spec) {
                 Ok(()) if start == Start::Resume => {
-                    self.resumed.insert(PaneKey::Master, Instant::now());
+                    self.pane_mut(&PaneKey::Master).resumed = Some(Instant::now());
                 }
                 Ok(()) => {}
                 Err(error) => server_log::write(
@@ -152,12 +152,10 @@ impl Server {
         let key = spec.key.clone();
         let adapter = spec.adapter;
         self.host.open(spec)?;
-        match adapter {
-            Some(adapter) => self.adapters.insert(key.clone(), adapter),
-            None => self.adapters.remove(&key),
-        };
-        self.opened_at.insert(key.clone(), Instant::now());
-        self.line_at.remove(&key);
+        let pane = self.pane_mut(&key);
+        pane.adapter = adapter;
+        pane.opened_at = Some(Instant::now());
+        pane.line_at = None;
         Ok(())
     }
 
@@ -193,7 +191,7 @@ impl Server {
         }
         match self.open_pane(spec) {
             Ok(()) if resumes => {
-                self.resumed.insert(key.clone(), Instant::now());
+                self.pane_mut(&key).resumed = Some(Instant::now());
             }
             Ok(()) => {}
             Err(error) => {
@@ -300,7 +298,7 @@ impl Server {
             self.send_to(conn, &ServerMsg::NotOpen(id));
             return;
         };
-        self.closing.entry(key.clone()).or_default().push(conn);
+        self.pane_mut(&key).closing.push(conn);
         self.host.close(&key);
         if !running {
             self.tell_closed(&key);
@@ -312,9 +310,14 @@ impl Server {
         if self.host.status(key).is_some() {
             return;
         }
-        let Some(waiting) = self.closing.remove(key) else {
+        let waiting = self
+            .panes
+            .get_mut(key)
+            .map(|pane| std::mem::take(&mut pane.closing))
+            .unwrap_or_default();
+        if waiting.is_empty() {
             return;
-        };
+        }
         if let PaneKey::Flow(id) = key {
             for conn in waiting {
                 self.send_to(conn, &ServerMsg::Closed(id.clone()));

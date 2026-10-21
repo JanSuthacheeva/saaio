@@ -220,7 +220,7 @@ impl App {
             return vec![];
         }
         if key == PaneKey::Master {
-            self.master_unseen = false;
+            self.master.unseen = false;
         }
         self.focus = key.clone();
         self.cursor = None;

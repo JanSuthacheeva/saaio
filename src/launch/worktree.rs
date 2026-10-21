@@ -27,7 +27,7 @@ pub fn folder_workspace(folder: &Path, agent: &str) -> Workspace {
 }
 
 /// git -C <repo> worktree add -b <branch> <path>; workspace_for always sets the branch.
-pub fn worktree_add_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
+pub fn add_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
     let repo = repo.display().to_string();
     let branch = workspace
         .branch
@@ -48,7 +48,7 @@ pub fn worktree_add_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
 }
 
 /// git -C <repo> worktree remove [--force] <path>; without force a dirty worktree is kept.
-pub fn worktree_remove_argv(repo: &Path, workspace: &Workspace, force: bool) -> Vec<String> {
+pub fn remove_argv(repo: &Path, workspace: &Workspace, force: bool) -> Vec<String> {
     let repo = repo.display().to_string();
     let mut argv: Vec<String> = ["git", "-C", &repo, "worktree", "remove"]
         .map(String::from)
@@ -113,7 +113,7 @@ mod tests {
         assert_eq!(workspace.window, None);
         assert_eq!(workspace.agent, "claude");
         assert_eq!(
-            worktree_add_argv(Path::new("/repo"), &workspace),
+            add_argv(Path::new("/repo"), &workspace),
             strings(&[
                 "git",
                 "-C",
@@ -126,7 +126,7 @@ mod tests {
             ])
         );
         assert_eq!(
-            worktree_remove_argv(Path::new("/repo"), &workspace, false),
+            remove_argv(Path::new("/repo"), &workspace, false),
             strings(&[
                 "git",
                 "-C",
@@ -137,7 +137,7 @@ mod tests {
             ])
         );
         assert_eq!(
-            worktree_remove_argv(Path::new("/repo"), &workspace, true),
+            remove_argv(Path::new("/repo"), &workspace, true),
             strings(&[
                 "git",
                 "-C",
