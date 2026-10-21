@@ -26,9 +26,9 @@ undocumented_unsafe_blocks = "warn"
 
 `disallowed-methods`, each with a reason:
 
-- `std::env::var`, `var_os`, `vars`, `vars_os`, `set_var`, `remove_var`: read in main.rs into `cli::Env`
-- `std::fs::write`, `std::fs::File::create`, `File::create_new`, `std::fs::OpenOptions::new`,
-  `std::fs::create_dir`, `create_dir_all`: create files through private.rs
+- `std::env::var`, `var_os`, `vars`, `vars_os`, `set_var`, `remove_var`, `home_dir`, `temp_dir`: read in main.rs into `cli::Env`
+- `std::fs::write`, `std::fs::File::create`, `File::create_new`, `File::options`, `std::fs::OpenOptions::new`,
+  `std::fs::copy`, `std::fs::create_dir`, `create_dir_all`, `DirBuilder::new`: create files through private.rs
 
 ## Local exceptions
 
