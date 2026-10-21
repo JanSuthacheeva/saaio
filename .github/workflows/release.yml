@@ -1,5 +1,6 @@
 # A v* tag builds saaio for every target, tests and checks each build, attests where the tarballs
-# were built, and publishes a GitHub release with the tarballs, SHA256SUMS and install.sh. A tag
+# were built, and publishes a GitHub release with the tarballs, SHA256SUMS, install.sh and VERSION
+# (the tag, which saaio ui and saaio update read as the latest release's). A tag
 # with a "-" (v0.1.0-rc.1) publishes a pre-release. Nothing is published when any step fails.
 name: release
 
@@ -96,7 +97,11 @@ jobs:
           echo "CC_$(echo "$TARGET" | tr - _)=musl-gcc" >> "$GITHUB_ENV"
       - name: Test
         run: cargo test --release --locked --target "$TARGET"
+      # The tag marks a release binary, which saaio update may replace; the tests run without it,
+      # as a source build.
       - name: Build
+        env:
+          SAAIO_RELEASE: ${{ github.ref_name }}
         run: cargo build --release --locked --target "$TARGET"
       - name: Check the build names this commit
         run: |
@@ -144,9 +149,10 @@ jobs:
           pattern: saaio-*
           path: release
           merge-multiple: true
-      - name: Add SHA256SUMS and install.sh
+      - name: Add SHA256SUMS, install.sh and VERSION
         run: |
           cp install.sh release/
+          echo "$GITHUB_REF_NAME" > release/VERSION
           cd release
           sha256sum saaio-* > SHA256SUMS
           cat SHA256SUMS
@@ -180,6 +186,10 @@ jobs:
             "saaio $VERSION ("*) echo "$actual" ;;
             *) echo "::error::the installed saaio says '$actual'"; exit 1 ;;
           esac
+          if [ "$(cat release/VERSION)" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::VERSION says '$(cat release/VERSION)', not $GITHUB_REF_NAME"
+            exit 1
+          fi
 
   publish:
     needs: [check, install-check]
