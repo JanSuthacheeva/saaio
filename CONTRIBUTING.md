@@ -136,6 +136,8 @@ The full rules and the architecture: [CLAUDE.md](CLAUDE.md). In short:
 - CI passes before review. Run `cargo test`, `cargo fmt --check` and
   `cargo clippy --all-targets -- -D warnings` locally first; they are quicker than a round trip.
 - `.github/pull_request_template.md` lists what CI cannot check.
+- `.claude/settings.json` lets Claude Code run `git merge`, `git commit` and `git push` without
+  asking, since saaio's workers run in worktrees that never see `settings.local.json`.
 
 ## Releasing
 
