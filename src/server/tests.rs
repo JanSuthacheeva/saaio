@@ -1339,6 +1339,12 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
         dir.path(),
         BTreeMap::from([("claude-keys".to_string(), fake_claude_keys(dir.path()))]),
     );
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
 
     wait_until("no Esc into the answered dialog", || {
         typed(dir.path(), "asks").contains('\x1b')
@@ -1366,7 +1372,10 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
         note: "declined".into(),
     };
     store.append(&asks, &LogEvent::new(5, idle)).unwrap();
-    thread::sleep(WATCH_EVERY * 3);
+    recv_until(&mut ui, "the flow never showed idle", |message| {
+        matches!(message, ServerMsg::Board(board)
+            if board.flows.iter().any(|flow| flow.id == asks && flow.state == State::Idle))
+    });
     let again = EventKind::Waiting {
         question: "Which color?".into(),
         questions: color(),
@@ -1421,7 +1430,11 @@ fn a_running_worker_keeps_the_adapter_it_started_with() {
     });
     let without_adapter = format!("[agents.codex]\ncommand = [\"{}\"]\n", codex.command[0]);
     fs::write(paths.config.as_ref().unwrap(), without_adapter).unwrap();
-    thread::sleep(WATCH_EVERY * 2);
+    // The server takes config.toml again right before it opens panes, so this one proves it did.
+    started_flow(&store, dir.path(), "next", "codex");
+    wait_until("the edited config never took", || {
+        dir.path().join("next/typed").exists()
+    });
 
     tell(&store, &csv, "Tabs.");
     wait_until("an edited agent took the running worker's adapter", || {

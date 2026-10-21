@@ -103,6 +103,7 @@ src/adapter/claude_code.rs -> src/adapter/claude_code/tests.rs
 - [x] Split `tests/cli.rs` into `tests/cli/` with `support.rs`, the subject modules and `every_file_in_tests_cli_is_a_module`
 - [x] Update CLAUDE.md and CONTRIBUTING.md for `tests/cli/`, `fixtures.rs` and the new `tests.rs` files
 - [x] End to end: full fmt, clippy, test, deny; test count before vs after; diff outside tests limited to `mod tests` lines; disk left clean
+- [x] Review item: in `presses_esc_once_into_each_dialog_the_master_answered` wait for the board to show the flow `Idle` instead of sleeping; in `a_running_worker_keeps_the_adapter_it_started_with` open a second worker under the edited config and wait for it (the server reloads config right before it opens panes). The sleeps across the unreadable log stay: the failed read they cover (30650e1) is internal to the dialog check and observable from nowhere, so they assert that no second Esc happens
 
 ## Review
 
@@ -119,7 +120,7 @@ Reviewed in an isolated context against this plan, CLAUDE.md and CONTRIBUTING.md
 - The replaced waits are sound: `an_exited_idle_worker_keeps_its_state` waits for `Exited`, and the server appends any `Blocked` in `notice_exited_worker` before `send_panes`, so the fold after the wait sees it; the fresh-command marker files fail the test after 30 s if the retry never runs.
 - Builders whose mode, `at`, id or request changed (`store.rs`, `wake.rs` `answered`, `reconcile.rs` `unstarted`, `startup.rs`, `pause.rs`, `ui/theme.rs`) have no code under test that reads the changed field.
 
-**Open**
+**Open** (decided by the builder, under the request's own item (1); see the last task)
 
 - CLAUDE.md and CONTRIBUTING.md now say a bounded sleep only asserts that nothing happens, but three pre-existing sleeps in `src/server/tests.rs` let something happen instead: the unreadable-log window and the sleep after `Idle` in the dialog test (around :1356 and :1369), and `a_running_worker_keeps_the_adapter_it_started_with` (around :1424), where the sleep stands in for the config reload. If the reload has not happened yet, the last one still passes, because `deliver_news` runs before `refresh` reloads the config, so under load it can pass without testing anything. None of them can fail without cause. Recommendation: a follow-up giving each an observable anchor (for the config, a second worker opened under the new file, as `opens_the_next_worker_with_the_config_saved_while_it_runs` does), or loosen the sentence until then.
 
