@@ -4,10 +4,11 @@ All notable changes to saaio are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and saaio uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - not released yet
+## [Unreleased]
 
-The first public release. The date is added when it is tagged. Planned next:
-[ROADMAP.md](ROADMAP.md).
+## [0.1.0] - 2026-10-21
+
+The first public release. Planned next: [ROADMAP.md](ROADMAP.md).
 
 An early version: expect rough edges, especially with Codex, which is experimental and not yet
 well tested.
