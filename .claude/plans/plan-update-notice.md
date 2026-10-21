@@ -225,3 +225,42 @@ Errors: offline, timeout, 404, no curl, file errors -> nothing shows, nothing lo
 - [x] `release.yml`: `SAAIO_RELEASE` on the Build step, `VERSION` asset, install-check reads it
 - [x] Docs: `docs/cli.md` (saaio update, SAAIO_RELEASES_URL), `docs/install.md` Updating, `docs/configuration.md` [ui] and the one network call, `docs/files.md` update.json, ROADMAP row removed, CHANGELOG Added, CLAUDE.md module lines; design pages into `docs/design/`
 - [x] End to end: the UI in a PTY with a scratch store and a fake releases folder shows `9.9.9 is out: saaio update`, and `update_check = false` hides it; `saaio update` from a source build names the cargo line
+
+## Review
+
+Isolated review of main..a803e8a. Every changed line read; `saaio update` also run end to end from a
+release-stamped build (`SAAIO_RELEASE=v0.1.0`) against a `file://` mirror: install, `--version`
+of a missing tag, an unwritable folder, already on the latest.
+
+**Fixed**
+
+- A failed install (such as `--version` naming a tag that is no release) printed only curl's
+  error with no `help[]`; it now reads `could not install <tag>: <why>` with the releases page and
+  the connection as next steps (`output::update::failed`, `Releases::page`). a803e8a. The fix was
+  reviewed by the same agent in a second pass, not independently.
+
+**Open** (none needs a decision before merge)
+
+- A config.toml that is already broken when the UI starts leaves the update check off until it
+  reads again (the Err branch never enables it). Recommend keeping it: off is the safe side for a
+  network call.
+- The unwritable help quotes the env values but not the install.sh URL; only a mirror URL with
+  shell characters would break it. Recommend leaving it.
+- Two UIs started in the same instant may both look; the once a day is best effort. Fine.
+- An attached UI keeps its notice after `saaio update` until it restarts, as the docs say.
+
+**Where to look**
+
+1. `src/cli/commands/update.rs` `run` -> `install`: the only code that replaces a binary
+   (canonical exe folder, `sh -s` with install.sh on stdin, install.sh's checksum and rename).
+2. `.github/workflows/release.yml`: `SAAIO_RELEASE` only on the Build step, the `VERSION` asset
+   and its check. A mistake here shows only at the next tag.
+3. `src/update.rs` `UpdateCheck::due`/`record` with `src/ui/update_watch.rs`: the once-a-day
+   file and the thread.
+
+Routine, skim: docs, CHANGELOG, config example, golden files, `tests/cli/support.rs` (the PTY now
+answers the cursor-position query).
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at a803e8a.
