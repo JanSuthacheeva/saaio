@@ -38,6 +38,7 @@ send.rs        send and send --type, dialogs
 wait.rs        saaio wait
 store.rs       a store per repository, its permissions, the forge watch
 bug_report.rs  saaio bug-report
+completions.rs saaio completions
 ```
 
 ```rust
@@ -102,3 +103,34 @@ src/adapter/claude_code.rs -> src/adapter/claude_code/tests.rs
 - [x] Split `tests/cli.rs` into `tests/cli/` with `support.rs`, the subject modules and `every_file_in_tests_cli_is_a_module`
 - [x] Update CLAUDE.md and CONTRIBUTING.md for `tests/cli/`, `fixtures.rs` and the new `tests.rs` files
 - [x] End to end: full fmt, clippy, test, deny; test count before vs after; diff outside tests limited to `mod tests` lines; disk left clean
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and CONTRIBUTING.md, at 55ab877.
+
+**Fixed**
+
+- The plan's `tests/cli/` tree left out `completions.rs`, which the split created for the four completions tests (plan only).
+
+**Verified, no finding**
+
+- `tests/cli/`: the same 101 test functions as `tests/cli.rs` plus the guard; a line-by-line comparison shows only `use` lines, `pub` on support items and `../../` fixture paths changed. Every support item is used by more than one subject or by another support helper.
+- The three moved `tests.rs` files hold every line of the old inline tests (only rustfmt re-wraps); production files change by `mod tests;` alone; `fixtures` stays `#[cfg(test)]` in `lib.rs`.
+- The replaced waits are sound: `an_exited_idle_worker_keeps_its_state` waits for `Exited`, and the server appends any `Blocked` in `notice_exited_worker` before `send_panes`, so the fold after the wait sees it; the fresh-command marker files fail the test after 30 s if the retry never runs.
+- Builders whose mode, `at`, id or request changed (`store.rs`, `wake.rs` `answered`, `reconcile.rs` `unstarted`, `startup.rs`, `pause.rs`, `ui/theme.rs`) have no code under test that reads the changed field.
+
+**Open**
+
+- CLAUDE.md and CONTRIBUTING.md now say a bounded sleep only asserts that nothing happens, but three pre-existing sleeps in `src/server/tests.rs` let something happen instead: the unreadable-log window and the sleep after `Idle` in the dialog test (around :1356 and :1369), and `a_running_worker_keeps_the_adapter_it_started_with` (around :1424), where the sleep stands in for the config reload. If the reload has not happened yet, the last one still passes, because `deliver_news` runs before `refresh` reloads the config, so under load it can pass without testing anything. None of them can fail without cause. Recommendation: a follow-up giving each an observable anchor (for the config, a second worker opened under the new file, as `opens_the_next_worker_with_the_config_saved_while_it_runs` does), or loosen the sentence until then.
+
+**Where to look**
+
+1. `src/server/tests.rs` diff: the four replaced waits, the only changes that alter what a test observes.
+2. `src/fixtures.rs` and its users: the defaults (`at` 0, auto mode, request "x", `/repo/.saaio/worktrees/<name>`) that the builders now inherit.
+3. `tests/cli/main.rs`: the guard.
+
+Routine, skim: the `tests/cli/*.rs` subject files and the three moved `tests.rs` files (verbatim moves), and the CLAUDE.md and CONTRIBUTING.md wording.
+
+**Checks**
+
+fmt, clippy `--all-targets -D warnings`, test (672 unit, 102 cli, 7 install) and deny passed at 55ab877; the review changed only this plan, so they were not run again. The plan fix was not reviewed independently; it is documentation only.
