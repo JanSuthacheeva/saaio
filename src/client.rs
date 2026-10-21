@@ -1,3 +1,5 @@
+//! The server's client: connecting, starting it (`ensure_server`), stopping it, closing a pane
+
 use std::io::{self, ErrorKind};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};

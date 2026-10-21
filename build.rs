@@ -1,4 +1,4 @@
-//! SAAIO_COMMIT: the commit this binary is built from, so server.log can say which saaio ran.
+//! `SAAIO_COMMIT`, the commit `proto::BUILD` names, set again once HEAD moves
 
 #[path = "build/commit.rs"]
 mod commit;

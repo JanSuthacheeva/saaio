@@ -1,3 +1,5 @@
+//! `Dialog`, the one frame every box over a session is drawn in; the help and pane notices
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};

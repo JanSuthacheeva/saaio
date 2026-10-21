@@ -1,3 +1,5 @@
+//! `saaio new`: tracks a new flow, or returns the unfinished flow of that name
+
 use super::{check_request, views};
 use crate::cli::output::{Document, Failure, flow};
 use crate::event::{Event, EventKind, Mode};

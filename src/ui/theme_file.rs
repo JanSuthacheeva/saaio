@@ -1,3 +1,5 @@
+//! theme.toml and what it extends, read into a `Theme`; `ThemeWatch`
+
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};

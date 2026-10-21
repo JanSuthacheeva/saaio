@@ -22,6 +22,6 @@ behaviour change; no CHANGELOG entry (nothing a user sees).
 
 - [ ] Verify every Architecture and Structure claim in CLAUDE.md against main; list the drift
 - [ ] Fix the Architecture list: add the unlisted files, drop or correct what no longer holds
-- [ ] Amend the rules: `super::`, fixed sleeps, `saaio --stop` after a scratch server
+- [x] Amend the rules: `super::`, fixed sleeps, `saaio --stop` after a scratch server
 - [ ] Add one `//!` line to every module in `src/`, `build/`, `build.rs` and `tests/`
 - [ ] fmt, clippy, test; nothing extra left on disk

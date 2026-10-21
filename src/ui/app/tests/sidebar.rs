@@ -1,3 +1,5 @@
+//! Tests of `App`'s sidebar and rail: rows, focus, the peek, the master's dot, phase colors
+
 use super::*;
 
 #[test]

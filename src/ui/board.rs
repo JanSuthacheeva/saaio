@@ -1,3 +1,5 @@
+//! `BoardView`, the board of cards over the session, and `BoardState`, its cursor
+
 mod cards;
 mod detail;
 #[cfg(test)]

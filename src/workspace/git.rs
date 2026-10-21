@@ -1,3 +1,5 @@
+//! What git says of a repository and its worktrees, and ssh of a host; a branch deleted
+
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};

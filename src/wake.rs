@@ -1,3 +1,5 @@
+//! What is news for a session (pure), and how it reads: `for_worker`, `for_master`
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};

@@ -1,3 +1,5 @@
+//! `PaneState`: what the server keeps about each pane, kept past its close
+
 use std::time::Instant;
 
 use super::{ConnId, Server};

@@ -1,3 +1,5 @@
+//! `Event`, `EventKind`, `Phase`, `Mode` and the JSON line format of the log
+
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 

@@ -1,3 +1,5 @@
+//! What `App` does with the server's messages, job answers, ticks and resizes
+
 use std::path::Path;
 
 use super::{

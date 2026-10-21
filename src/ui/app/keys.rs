@@ -1,3 +1,5 @@
+//! Input for `App`: pane bytes, the commands after the prefix and the keys of each view
+
 use std::fmt::Write as _;
 use std::mem;
 

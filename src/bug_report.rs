@@ -1,3 +1,5 @@
+//! The text of the file `saaio bug-report` writes, and its name (pure)
+
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 

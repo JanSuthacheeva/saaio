@@ -1,3 +1,5 @@
+//! News typed into the idle pane of a session that cannot wake itself: a Codex worker or master
+
 use std::time::{Duration, Instant};
 
 use super::Server;

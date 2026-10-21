@@ -1,3 +1,5 @@
+//! `Prefix`: the `[ui] prefix` key, its name and the bytes a terminal sends for it
+
 use serde::Deserialize;
 
 /// C-space or C-a..C-z, as the byte a terminal sends (C-space is NUL, C-b is 0x02); C-space unless

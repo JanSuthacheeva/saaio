@@ -1,3 +1,5 @@
+//! The status documents: the home view, the list, every project (`--all`), one flow's detail
+
 use serde::Serialize;
 
 use super::{DESCRIPTION, Document, toon};

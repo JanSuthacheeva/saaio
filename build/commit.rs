@@ -1,5 +1,4 @@
-//! The commit a build names: SAAIO_COMMIT when set, else git's when the repository git answers
-//! for is saaio's own. build.rs and the crate's tests include this file.
+//! The commit a build names: `SAAIO_COMMIT`, else git's in saaio's own checkout, else `unknown`
 
 use std::path::Path;
 

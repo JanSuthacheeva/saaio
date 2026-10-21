@@ -1,3 +1,5 @@
+//! Builders several test modules of `workspace` share: a repo, `git`, a repo hook, limits
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

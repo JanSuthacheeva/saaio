@@ -1,3 +1,5 @@
+//! Tests of `App`'s dialogs: stop, clean up, refusals, help and the new-flow dialog
+
 use super::*;
 
 #[test]

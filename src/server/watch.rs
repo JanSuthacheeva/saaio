@@ -1,3 +1,5 @@
+//! `StoreWatch`: when the board must be folded again, from file sizes and times alone
+
 use std::collections::HashMap;
 
 use anyhow::Result;

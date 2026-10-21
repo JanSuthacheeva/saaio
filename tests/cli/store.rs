@@ -1,3 +1,5 @@
+//! Tests of the store: one per repository, private to its user, merge requests from the forge
+
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;

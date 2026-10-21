@@ -1,3 +1,5 @@
+//! Tests of `saaio completions`: a script per shell, valid bash, no store, unknown shells
+
 use std::fs;
 use std::process::Command;
 

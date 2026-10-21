@@ -1,3 +1,5 @@
+//! `ConfigWatch`: the config file read again when it appeared, changed or went away
+
 use std::path::PathBuf;
 
 use anyhow::Result;

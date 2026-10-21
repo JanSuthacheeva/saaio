@@ -1,3 +1,5 @@
+//! Tests of `App`: the builders and renders its tests by subject in `tests/` share
+
 use std::path::Path;
 
 use ratatui::Terminal;

@@ -1,3 +1,5 @@
+//! Tests of install.sh: installs, replaces, checksums, versions and a folder not on PATH
+
 #![allow(
     clippy::disallowed_methods,
     reason = "tests set up their files and read PATH directly"

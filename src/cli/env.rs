@@ -1,3 +1,5 @@
+//! `Env`: the environment as values, and the store, registry, config and homes it points to
+
 use std::env;
 use std::path::{Path, PathBuf};
 

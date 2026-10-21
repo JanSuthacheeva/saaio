@@ -1,3 +1,5 @@
+//! The board's keys: moving over the cards, jumping in, every project, clearing a flow
+
 use super::{App, Effect, Removal, View};
 use crate::proto::PaneKey;
 use crate::ui::board::{self, BoardState};

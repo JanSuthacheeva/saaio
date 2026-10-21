@@ -1,3 +1,5 @@
+//! Claude Code's `--settings` hooks and its hook events -> flow events and turns (pure)
+
 use std::path::Path;
 
 use serde_json::{Value, json};

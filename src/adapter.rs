@@ -1,3 +1,5 @@
+//! `Adapter`: a harness's wiring, its instructions and its hook events as flow events
+
 mod answer;
 pub mod calls;
 pub mod claude_code;

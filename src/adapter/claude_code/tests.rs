@@ -1,3 +1,5 @@
+//! Tests of `claude_code`: recorded payloads as flow events and turns, the `--settings` hooks
+
 use super::*;
 use crate::event::Phase;
 

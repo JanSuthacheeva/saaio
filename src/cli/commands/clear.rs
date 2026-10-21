@@ -1,3 +1,5 @@
+//! `saaio clear`: forgets finished flows with their panes, worktrees and merged branches
+
 use super::retire::{Uncommitted, Unmerged, close_pane, drop_branch, retire_worktree};
 use super::views;
 use crate::cli::output::remove::{self, Retired};

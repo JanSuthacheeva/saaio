@@ -1,3 +1,5 @@
+//! `Effect`, what `App` asks of the loop; `Job`, the saaio commands it runs, and their outcome
+
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;

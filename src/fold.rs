@@ -1,3 +1,5 @@
+//! A flow's events folded into its `FlowView`, views into the sorted `Board`, a name into a flow
+
 use crate::event::{Event, EventKind, Mode, Phase, ServiceStatus};
 use crate::store::FlowLog;
 use crate::text;

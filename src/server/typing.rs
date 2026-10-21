@@ -1,3 +1,5 @@
+//! A flow's queued lines (`Typed` events) typed into its pane once ready, through `type_into`
+
 use std::time::{Duration, Instant};
 
 use anyhow::Result;

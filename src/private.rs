@@ -1,3 +1,5 @@
+//! Files and folders for the user alone: 0700 and 0600, `write_new`, `write_atomic`
+
 #![allow(
     clippy::disallowed_methods,
     reason = "the module the rule routes file creation through"

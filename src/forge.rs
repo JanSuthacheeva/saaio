@@ -1,3 +1,5 @@
+//! `Forge`: gh and glab argv for a branch's merge requests, their JSON, and the news (pure)
+
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};

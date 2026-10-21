@@ -1,3 +1,5 @@
+//! `saaio server`'s event loop: `run`, `serve`, `handle`, `stop`, and the signals that stop it
+
 pub mod host;
 pub mod master;
 pub mod reconcile;

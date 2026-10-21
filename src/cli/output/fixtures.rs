@@ -1,3 +1,5 @@
+//! Flows and a sample board the tests of `output::flow` and `output::status` share
+
 use crate::event::{Event, EventKind, Phase, ServiceStatus};
 use crate::fixtures;
 use crate::fold;

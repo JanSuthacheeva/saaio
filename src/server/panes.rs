@@ -1,3 +1,5 @@
+//! Which panes are open: refresh, reconcile, open, resume and close
+
 use std::fs;
 use std::sync::mpsc::{self, Sender};
 use std::time::Instant;

@@ -1,3 +1,5 @@
+//! What `saaio new`, `saaio report` and `saaio send` print about one flow
+
 use serde::Serialize;
 
 use super::{Document, toon};

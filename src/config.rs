@@ -1,3 +1,5 @@
+//! `Config` from config.toml: agents, `[worker]`, `[[phases]]`, `[master]`, `[ui]`, `[services]`
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;

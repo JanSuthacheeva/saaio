@@ -1,3 +1,5 @@
+//! Tests of `App` on the panes: keys, modes, sizes, the master, history, any terminal size
+
 use super::*;
 use crate::proto::Peer;
 

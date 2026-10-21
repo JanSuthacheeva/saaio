@@ -1,3 +1,5 @@
+//! UI connections (`Conn`): the socket, hello, messages, and the frames, board and panes sent
+
 use std::fs;
 use std::io::ErrorKind;
 use std::ops::ControlFlow;
@@ -137,7 +139,7 @@ impl Server {
     }
 
     /// Refuses a connection whose first message could not be read: a flow of an older protocol,
-    /// which then says to run saaio ui --stop.
+    /// which then says to run saaio --stop.
     pub(super) fn refuse_unreadable(&mut self, conn: ConnId) {
         server_log::write((self.clock)(), "refused an unreadable hello");
         self.send_to(

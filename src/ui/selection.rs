@@ -1,3 +1,5 @@
+//! `Selection`: text selected with the mouse, read and highlighted
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Modifier;

@@ -1,3 +1,5 @@
+//! Text in terminal columns: split, wrapped, clipped, cut to its tail, paths with a tilde
+
 use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 

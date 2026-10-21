@@ -1,3 +1,5 @@
+//! A flow's name, and the ticket and slug of a request
+
 /// The flow's name: an explicit name slugified whole, else the request's ticket key lowercased
 /// (SHOP-217 -> shop-217), else its first four words; -2, -3 ... when taken.
 #[expect(

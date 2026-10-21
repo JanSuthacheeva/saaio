@@ -1,3 +1,5 @@
+//! A worker that exited while working, and a Codex worker that began no first turn
+
 use std::time::{Duration, Instant};
 
 use super::Server;

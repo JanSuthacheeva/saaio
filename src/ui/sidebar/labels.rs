@@ -1,3 +1,5 @@
+//! The sidebar's labels: glyphs, steps, state labels and a flow's last note
+
 use ratatui::style::Style;
 use ratatui::text::Span;
 

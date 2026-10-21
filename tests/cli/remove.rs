@@ -1,3 +1,5 @@
+//! Tests of `saaio remove` and `saaio clear`: teardown, kept work and branches, plain sessions
+
 use std::fs;
 
 use tempfile::TempDir;

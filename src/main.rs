@@ -1,3 +1,5 @@
+//! The process boundary: `Cli::try_parse`, the environment into `cli::Env`, the clock, exit codes
+
 use std::env;
 use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;

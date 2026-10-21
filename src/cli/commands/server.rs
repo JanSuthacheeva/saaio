@@ -1,3 +1,5 @@
+//! `saaio server`: the session server's paths and environment, run until it stops
+
 use anyhow::Context;
 
 use crate::cli::Env;

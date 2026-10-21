@@ -1,3 +1,5 @@
+//! SGR mouse reports read, matched to a pane's mouse mode and re-encoded for the pane
+
 use ratatui::layout::{Position, Rect};
 
 use super::PointerKind;

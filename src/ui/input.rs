@@ -1,3 +1,5 @@
+//! `Router`: raw input split at the prefix, mouse events to the pane or saaio
+
 use ratatui::layout::{Position, Rect};
 
 use crate::config::prefix::Prefix;

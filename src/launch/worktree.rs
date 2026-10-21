@@ -1,3 +1,5 @@
+//! A flow's worktree path, its git command lines and the hooks' environment
+
 use std::path::{Path, PathBuf};
 
 use crate::view::Workspace;

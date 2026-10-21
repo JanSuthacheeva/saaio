@@ -1,3 +1,5 @@
+//! The terminal UI bare `saaio` opens: its threads and the loop over input, server and ticks
+
 pub mod app;
 pub mod board;
 pub mod clipboard;

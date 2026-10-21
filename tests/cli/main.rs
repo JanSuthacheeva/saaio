@@ -1,3 +1,5 @@
+//! The CLI end to end: one module per subject, and the test that every file is declared
+
 #![allow(
     clippy::disallowed_methods,
     reason = "tests set up their files and read PATH directly"

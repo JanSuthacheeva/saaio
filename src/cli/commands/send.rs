@@ -1,3 +1,5 @@
+//! `saaio send`: the master's message to a worker, or with `--type` a line typed into its pane
+
 use super::{no_flow, views};
 use crate::cli::Env;
 use crate::cli::output::{self, Document, Failure};

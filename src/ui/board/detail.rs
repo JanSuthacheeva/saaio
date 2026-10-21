@@ -1,3 +1,5 @@
+//! The selected card's detail: its header, steps, timeline, decisions and last answer
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;

@@ -1,3 +1,5 @@
+//! Tests of `config`: the example, the file's agents, workflow and sections, its errors
+
 use std::fs;
 
 use tempfile::TempDir;

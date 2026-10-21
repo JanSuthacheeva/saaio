@@ -1,3 +1,5 @@
+//! Esc pressed once into a pane whose question dialog the master answered
+
 use std::time::{Duration, Instant};
 
 use super::Server;

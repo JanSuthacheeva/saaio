@@ -1,3 +1,5 @@
+//! Builders several test modules of `launch` share
+
 use std::path::Path;
 
 use crate::launch::worktree::workspace_for;

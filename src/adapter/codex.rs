@@ -1,3 +1,5 @@
+//! Codex's `-c hooks.*` arguments and folder trust, its hook events -> flow events (pure)
+
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::Path;

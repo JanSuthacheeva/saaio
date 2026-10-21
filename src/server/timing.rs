@@ -1,3 +1,5 @@
+//! `Timing`: how long the server waits before it types, calls a start stalled or lets a line go
+
 use std::time::Duration;
 
 /// How long the server waits before it acts on a session; `default` is what saaio runs with.

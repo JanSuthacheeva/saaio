@@ -1,3 +1,5 @@
+//! `Outer`: the real terminal, its raw mode, alternate screen and mirrored modes
+
 use std::fmt::Write as _;
 use std::io::{self, Write};
 use std::sync::Once;

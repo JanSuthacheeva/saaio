@@ -1,3 +1,5 @@
+//! The title row above the pane: the session in view, a notice or the rail's hint
+
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::text::{Line, Span};

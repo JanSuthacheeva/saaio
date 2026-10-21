@@ -1,3 +1,5 @@
+//! `Key`: raw bytes as keys for a modal view, and how long a sequence is
+
 /// A key as a modal view reads it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Key {

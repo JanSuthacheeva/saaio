@@ -1,3 +1,5 @@
+//! The module tree: `cli` public, the rest crate-only; `commit`, `fixtures`, `layering` in tests
+
 #![cfg_attr(
     test,
     allow(

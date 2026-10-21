@@ -1,3 +1,5 @@
+//! What a pane runs: agent and resume argv, `PaneSpec`, the pane environment
+
 use std::path::{Path, PathBuf};
 
 use crate::adapter::Adapter;

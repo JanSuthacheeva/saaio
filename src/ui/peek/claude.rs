@@ -1,3 +1,5 @@
+//! Claude Code's session JSONL: where it is and the peek lines in it
+
 use std::fs;
 use std::path::{Path, PathBuf};
 

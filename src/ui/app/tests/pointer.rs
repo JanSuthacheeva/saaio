@@ -1,3 +1,5 @@
+//! Tests of `App`'s mouse: selections, copies, clicks and the wheel
+
 use super::*;
 use crate::ui::selection::Selection;
 

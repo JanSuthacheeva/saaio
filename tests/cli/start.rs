@@ -1,3 +1,5 @@
+//! Tests of `saaio start`: worktrees, setup, slots, `--plain`, branch names and the server
+
 use std::fs;
 use std::io::Write;
 use std::path::Path;

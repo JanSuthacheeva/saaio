@@ -1,3 +1,5 @@
+//! `saaio completions`: clap_complete's script for the commands `saaio --help` lists
+
 use clap::CommandFactory;
 use clap_complete::Shell;
 

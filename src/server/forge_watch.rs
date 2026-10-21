@@ -1,3 +1,5 @@
+//! `ForgeWatch`: rounds asking gh and glab about the flows' merge requests, off the server thread
+
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
