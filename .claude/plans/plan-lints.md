@@ -65,7 +65,7 @@ undocumented_unsafe_blocks = "warn"
 
 ## Tasks
 
-- [ ] Move the six narrow allows to `#[expect]` at the 18 sites, drop them and their comments from Cargo.toml
+- [x] Move the six narrow allows to `#[expect]` at the 18 sites, drop them and their comments from Cargo.toml
 - [ ] Deny `unsafe_code`, warn `undocumented_unsafe_blocks`; local allows at the 4 unsafe statements; rustix kill in tests/cli/server.rs
 - [ ] Add clippy.toml disallowed-methods with the local and test-only allows
 - [ ] `expect` with a reason for the two unwraps in adapter/codex.rs

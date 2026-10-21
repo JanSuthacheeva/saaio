@@ -202,6 +202,10 @@ impl Folding {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one flat match over every event kind"
+    )]
     fn apply(&mut self, event: &Event) {
         // A PR fixes the final workflow phase, though the worker can still ask or work.
         if self.view.merge_request.is_some() && matches!(event.kind, EventKind::Phase { .. }) {

@@ -190,6 +190,10 @@ impl Sidebar<'_> {
 
     /// What the flow under the cursor did lately, newest at the bottom, in at most `budget` rows:
     /// a dashed rule, the transcript lines, and how to jump in.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the rule, the transcript and the jump hint, fitted to one budget"
+    )]
     fn peek_rows(&self, flow: &FlowView, budget: usize) -> Vec<Row> {
         let theme = self.theme;
         let glyphs = &theme.glyphs;

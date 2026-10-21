@@ -29,6 +29,10 @@ struct Link {
 }
 
 /// The current Markdown block and line; wrapping happens before any view adds its own prefix.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent states of the block and line being rendered"
+)]
 #[derive(Debug)]
 struct Renderer<'a> {
     theme: &'a Theme,

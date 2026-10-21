@@ -206,6 +206,10 @@ impl BitOr for Flags {
 }
 
 /// The terminal modes a pane's program turned on, mirrored on the real terminal.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent terminal mode switches"
+)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Modes {
     pub paste: bool,

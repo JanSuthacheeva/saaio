@@ -9,6 +9,10 @@ use crate::store::Stamp;
 #[derive(Debug)]
 pub struct ConfigWatch {
     file: Option<PathBuf>,
+    #[expect(
+        clippy::option_option,
+        reason = "never looked, against looked and found no file"
+    )]
     stamp: Option<Option<Stamp>>,
 }
 

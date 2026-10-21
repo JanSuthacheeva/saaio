@@ -56,21 +56,9 @@ cast_possible_wrap = "allow"
 cast_sign_loss = "allow"
 # Sent.sent, Removed.removed, Projects.projects: TOON keys and the --json contract.
 struct_field_names = "allow"
-# Modes holds five independent terminal mode switches.
-struct_excessive_bools = "allow"
-# fold's apply is one flat match over every event kind.
-too_many_lines = "allow"
-# find over (1..) or (2..) ends: the names taken are finite.
-maybe_infinite_iter = "allow"
-# Outer::size reads the size of the terminal Outer has entered.
-unused_self = "allow"
 # Words that are close, such as they and them, or argv and args.
 similar_names = "allow"
 # An explicit arm that does nothing documents a key that does nothing.
 match_same_arms = "allow"
 # map_or_else puts the default first and reads worse.
 map_unwrap_or = "allow"
-# Every command handler returns Result<Document, Failure>, so run's arms stay alike.
-unnecessary_wraps = "allow"
-# The test pump's Option<Option<u32>> is "exited, with or without a code" against "timed out".
-option_option = "allow"

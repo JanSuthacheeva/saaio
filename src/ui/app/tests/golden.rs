@@ -34,6 +34,10 @@ fn golden(name: &str, terminal: &Terminal<TestBackend>) {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one golden file per view, listed in a row"
+)]
 #[test]
 fn every_view_looks_as_it_did() {
     let mut alone = App::new(FLEET).with_home(Some("/Users/jan".into()));

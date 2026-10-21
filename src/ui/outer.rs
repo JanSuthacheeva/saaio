@@ -48,6 +48,10 @@ impl Outer {
         Ok(())
     }
 
+    #[expect(
+        clippy::unused_self,
+        reason = "the size of the terminal Outer has entered"
+    )]
     pub fn size(&self) -> Result<Size> {
         let (cols, rows) = terminal::size().context("could not read the terminal size")?;
         Ok(Size { cols, rows })

@@ -218,6 +218,10 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
 /// One flow with its steps, decisions and timeline, and for a started flow where its code is:
 /// branch, worktree and whether the worktree is still there (`worktree_exists`), or a plain
 /// session's folder.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one document, its fields in the order an agent reads them"
+)]
 pub(crate) fn detail(
     flow: &FlowView,
     now: u64,
