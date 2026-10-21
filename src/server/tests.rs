@@ -399,7 +399,7 @@ fn a_failed_resume_retries_fresh_before_blocking() {
         )
         .unwrap();
     let shell = Agent {
-        command: vec!["cat".into()],
+        command: vec!["sh".into(), "-c".into(), "touch fresh; exec cat".into()],
         prompt: Some(String::new()),
         adapter: None,
         resume: Some(vec!["sh".into(), "-c".into(), "exit 23".into()]),
@@ -407,7 +407,9 @@ fn a_failed_resume_retries_fresh_before_blocking() {
     let (paths, handle) =
         start_with_agents(dir.path(), BTreeMap::from([("shell".to_string(), shell)]));
 
-    thread::sleep(Duration::from_millis(600));
+    wait_until("the worker never started fresh", || {
+        dir.path().join("retry/fresh").exists()
+    });
     assert_eq!(
         store
             .events(&id)
@@ -447,13 +449,19 @@ fn an_exited_idle_worker_keeps_its_state() {
     };
     let (paths, handle) =
         start_with_agents(dir.path(), BTreeMap::from([("shell".to_string(), shell)]));
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    let mut panes = Vec::new();
 
-    thread::sleep(Duration::from_millis(600));
+    let exited = PaneStatus::Exited { code: Some(23) };
+    wait_for(&mut ui, &mut panes, &id, Some(&exited));
     let flow = fold::fold(&id, &store.events(&id).unwrap(), None, 3).unwrap();
     assert_eq!(flow.state, State::Idle);
-    let mut control = connect(&paths.socket, Role::Control);
-    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
 }
 
@@ -947,10 +955,15 @@ fn starts_the_master_fresh_when_its_session_cannot_be_resumed() {
         r#"{"session": "5e55", "cwd": "/tmp"}"#,
     )
     .unwrap();
+    let fresh = dir.path().join("fresh");
     let (paths, handle) = start_with(
         dir.path(),
         Agent {
-            command: vec!["cat".into()],
+            command: vec![
+                "sh".into(),
+                "-c".into(),
+                format!("touch '{}'; exec cat", fresh.display()),
+            ],
             prompt: None,
             adapter: None,
             resume: Some(vec![
@@ -966,7 +979,7 @@ fn starts_the_master_fresh_when_its_session_cannot_be_resumed() {
             size: Size { cols: 30, rows: 4 },
         },
     );
-    thread::sleep(Duration::from_millis(500));
+    wait_until("the master never started fresh", || fresh.exists());
 
     proto::write_msg(&mut ui, &ClientMsg::Input(b"again\r".to_vec())).unwrap();
 
@@ -1483,14 +1496,11 @@ fn passes_on_what_the_pane_in_view_copies_and_nothing_else() {
             size: Size { cols: 30, rows: 4 },
         },
     );
-    let deadline = Instant::now() + PATIENCE;
-    while !printed.exists() {
-        assert!(Instant::now() < deadline, "the worker never copied");
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_until("the worker never copied", || printed.exists());
 
     proto::write_msg(&mut ui, &ClientMsg::Input(b"go\r".to_vec())).unwrap();
 
+    let deadline = Instant::now() + PATIENCE;
     let copied = loop {
         assert!(Instant::now() < deadline, "nothing was passed on");
         if let ServerMsg::Clipboard(text) = recv(&mut ui) {

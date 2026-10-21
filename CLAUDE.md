@@ -19,7 +19,7 @@ cargo fmt                      # format
 cargo install --path .         # install the saaio binary
 ```
 
-CI (`.github/workflows/ci.yml`) runs fmt, clippy and test on Linux and macOS, and deny, on the toolchain `rust-toolchain.toml` pins; CONTRIBUTING.md names the checks. `.github/workflows/stable.yml` runs clippy and test on the latest stable weekly and on demand, not as a required check. A test waits for what happens soon with a limit only a failure reaches (30 s), never a sleep that guesses how long it takes.
+CI (`.github/workflows/ci.yml`) runs fmt, clippy and test on Linux and macOS, and deny, on the toolchain `rust-toolchain.toml` pins; CONTRIBUTING.md names the checks. `.github/workflows/stable.yml` runs clippy and test on the latest stable weekly and on demand, not as a required check. A test waits for what happens soon with a limit only a failure reaches (30 s), never a sleep that guesses how long it takes; a bounded sleep only asserts that nothing happens.
 
 E2E runs of the UI, `saaio server` or `saaio --stop` use a scratch store: `SAAIO_HOME=$(mktemp -d)`. On the project's real store a second UI takes over the user's, and `--stop` ends every session in it; inside a worker, `saaio --stop` refuses its own store. Bare `saaio` opens the UI only in a person's terminal, so an agent runs it in a PTY with its markers unset: `SAAIO_HOME=$(mktemp -d) env -u CLAUDECODE -u CODEX_THREAD_ID -u SAAIO_FLOW_ID -u SAAIO_MASTER saaio`.
 
