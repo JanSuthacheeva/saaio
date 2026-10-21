@@ -86,6 +86,8 @@ pub struct App {
     master: Master,
     /// A one-line message, such as why a flow command failed, until the next key.
     notice: Option<String>,
+    /// A newer release, as the title row names it: `0.1.1 is out: saaio update`.
+    update: Option<String>,
     /// The sidebar folded to a rail: Some once the prefix and b chose, None follows the width (RAIL_BELOW).
     rail: Option<bool>,
     /// This project's store, to tell its flows from other projects'.
@@ -123,6 +125,7 @@ impl App {
             offset_secs: 0,
             master: Master::default(),
             notice: None,
+            update: None,
             rail: None,
             here: None,
             projects: None,
@@ -138,6 +141,17 @@ impl App {
     /// Shows a one-line notice until the next key, such as why theme.toml could not be read.
     pub fn say(&mut self, notice: String) {
         self.notice = Some(notice);
+    }
+
+    /// Names a newer release in the title row, or none; true when that changed.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the update watch calls it from the next task on")
+    )]
+    pub fn set_update(&mut self, line: Option<String>) -> bool {
+        let changed = self.update != line;
+        self.update = line;
+        changed
     }
 
     /// Clears the notice when it starts with `prefix`, such as a theme error once the theme reads.

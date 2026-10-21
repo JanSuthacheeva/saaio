@@ -214,7 +214,7 @@ Errors: offline, timeout, 404, no curl, file errors -> nothing shows, nothing lo
 - [x] Add `workspace::process::output` and `release::source::Releases` (url, latest, fetch, install_env, curl) with tests against a `file://` folder
 - [x] Add `update::UpdateCheck`, `Checked`, `notice` and `step` with unit tests (due, record keeping an earlier tag, notice text, step matrix)
 - [x] Add `[ui] update_check` to `UiConfig` and `#update_check = true` to `examples/config.toml`; config tests pass
-- [ ] Add `App::set_update` and the update line in `chrome.rs`; golden files with the sidebar, the rail and a narrow row
+- [x] Add `App::set_update` and the update line in `chrome.rs`; golden files with the sidebar, the rail and a narrow row
 - [ ] Add `ui::update_watch::UpdateWatch`, `Event::Latest`, `UiEnv` fields and the hourly look in `ui.rs`; unit tests for off, answered and ask_if_due
 - [ ] Add `Env::saaio_releases_url`, `Env::releases`, `Command::Update`, `commands::update::{run, install}` and `output::update`; tests for install with the real install.sh, and `tests/cli/update.rs`
 - [ ] `release.yml`: `SAAIO_RELEASE` on the Build step, `VERSION` asset, install-check reads it
