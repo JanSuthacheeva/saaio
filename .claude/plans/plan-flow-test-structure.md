@@ -124,6 +124,12 @@ Reviewed in an isolated context against this plan, CLAUDE.md and CONTRIBUTING.md
 
 - CLAUDE.md and CONTRIBUTING.md now say a bounded sleep only asserts that nothing happens, but three pre-existing sleeps in `src/server/tests.rs` let something happen instead: the unreadable-log window and the sleep after `Idle` in the dialog test (around :1356 and :1369), and `a_running_worker_keeps_the_adapter_it_started_with` (around :1424), where the sleep stands in for the config reload. If the reload has not happened yet, the last one still passes, because `deliver_news` runs before `refresh` reloads the config, so under load it can pass without testing anything. None of them can fail without cause. Recommendation: a follow-up giving each an observable anchor (for the config, a second worker opened under the new file, as `opens_the_next_worker_with_the_config_saved_while_it_runs` does), or loosen the sentence until then.
 
+**Second round** (b183ce7..8bd34a5, test-only)
+
+- The Open item is closed for the two sleeps that let something happen. The dialog test now waits for a Board showing `asks` Idle; no earlier Board can match, since `asks` waits on its dialog until then, and the Esc check keys on the Waiting event's `at`, so the anchor is at least as strong as the sleep. The adapter test opens `next` under the edited file: `refresh` calls `reload_config` before `apply`, so once `next/typed` exists the reload has happened, and the later `tell` is delivered under the new config.
+- The attached UI is left unread until `recv_until`; the server writes to it blocking, but over that window it sends only a few Boards, the master and small 30x4 frames, far below a socket buffer.
+- The sleeps across the unreadable log stay, as the plan's last task says; they assert that no second Esc happens. No finding; nothing fixed.
+
 **Where to look**
 
 1. `src/server/tests.rs` diff: the four replaced waits, the only changes that alter what a test observes.
