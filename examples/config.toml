@@ -28,6 +28,9 @@
 # The key you press before every UI command: "C-space", or "C-a" to "C-z". C-c, C-d, C-h,
 # C-i, C-j, C-m, C-q, C-s and C-z aren't allowed, because a pane needs them.
 #prefix = "C-space"
+# Once a day the UI asks GitHub for the latest release and names a newer one in its title row:
+# "0.1.1 is out: saaio update". The one network call saaio makes on its own. false turns it off.
+#update_check = true
 
 #[services]
 # Minutes a flow rests (idle, waiting, blocked, done or ended) before saaio runs the repo's

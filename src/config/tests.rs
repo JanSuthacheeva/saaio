@@ -276,7 +276,10 @@ fn says_every_error_as_file_line_and_message() {
     assert!(error("\n\n[worker\n").starts_with(&at(3)));
     assert_eq!(
         error("[ui]\nprefix = \"C-b\"\nagent = \"codex\"\n"),
-        format!("{}unknown field `agent`, expected `prefix`", at(3))
+        format!(
+            "{}unknown field `agent`, expected `prefix` or `update_check`",
+            at(3)
+        )
     );
     let top = error("# old\nagent = \"codex\"\n");
     assert!(top.starts_with(&at(2)), "{top}");
@@ -464,4 +467,14 @@ fn reads_the_ui_prefix_and_refuses_one_a_pane_needs() {
     );
     let unknown = format!("{:#}", load("[ui]\nprefx = \"C-b\"\n").unwrap_err());
     assert!(unknown.contains("prefx"), "{unknown}");
+}
+
+#[test]
+fn looks_for_updates_unless_turned_off() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("config.toml");
+    fs::write(&file, "[ui]\nupdate_check = false\n").unwrap();
+
+    assert!(Config::builtin().ui.update_check);
+    assert!(!Config::read(Some(&file)).unwrap().ui.update_check);
 }
