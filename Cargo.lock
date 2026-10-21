@@ -990,6 +990,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases 0.1.1",
  "libc",
+ "memoffset",
 ]
 
 [[package]]
@@ -1579,6 +1580,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "libc",
+ "nix 0.28.0",
  "portable-pty",
  "postcard",
  "pulldown-cmark",

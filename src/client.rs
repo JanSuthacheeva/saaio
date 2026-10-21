@@ -1,5 +1,4 @@
 use std::io::{self, ErrorKind};
-use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -7,6 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
+use nix::sys::socket::{getsockopt, sockopt};
 use rustix::process::{Pid, Signal};
 
 use crate::launch::{pane, worktree};
@@ -167,56 +167,22 @@ fn stops_listening(socket: &Path, wait: Duration) -> bool {
 /// The pid of the process at the other end of a Unix socket.
 #[cfg(target_os = "macos")]
 fn peer_pid(stream: &UnixStream) -> io::Result<Pid> {
-    let mut pid: libc::pid_t = 0;
-    let mut len = libc::socklen_t::try_from(size_of::<libc::pid_t>()).expect("a pid fits");
-    #[allow(unsafe_code, reason = "LOCAL_PEERPID has only an unsafe getsockopt")]
-    // SAFETY: getsockopt writes at most len bytes into pid, which is that big.
-    let result = unsafe {
-        libc::getsockopt(
-            stream.as_raw_fd(),
-            libc::SOL_LOCAL,
-            libc::LOCAL_PEERPID,
-            (&raw mut pid).cast(),
-            &raw mut len,
-        )
-    };
-    if result == -1 {
-        return Err(io::Error::last_os_error());
-    }
+    let pid = getsockopt(stream, sockopt::LocalPeerPid)?;
     seen_pid(pid)
 }
 
-/// The pid of the process at the other end of a Unix socket.
+/// The pid of the process at the other end of a Unix socket. Read through nix, not rustix:
+/// rustix's UCred cannot hold the pid 0 Linux gives for a peer in a pid namespace this process
+/// cannot see.
 #[cfg(target_os = "linux")]
 fn peer_pid(stream: &UnixStream) -> io::Result<Pid> {
-    let mut cred = libc::ucred {
-        pid: 0,
-        uid: 0,
-        gid: 0,
-    };
-    let mut len = libc::socklen_t::try_from(size_of::<libc::ucred>()).expect("a ucred fits");
-    #[allow(unsafe_code, reason = "rustix's UCred drops the pid 0 of SO_PEERCRED")]
-    // SAFETY: getsockopt writes at most len bytes into cred, which is that big. Read through libc,
-    // not rustix: rustix's UCred cannot hold the pid 0 Linux gives for a peer in a pid namespace
-    // this process cannot see.
-    let result = unsafe {
-        libc::getsockopt(
-            stream.as_raw_fd(),
-            libc::SOL_SOCKET,
-            libc::SO_PEERCRED,
-            (&raw mut cred).cast(),
-            &raw mut len,
-        )
-    };
-    if result == -1 {
-        return Err(io::Error::last_os_error());
-    }
-    seen_pid(cred.pid)
+    let cred = getsockopt(stream, sockopt::PeerCredentials)?;
+    seen_pid(cred.pid())
 }
 
 /// The peer pid the kernel gave, refused when it is 0: a process outside this pid namespace, which
 /// a signal to 0 would never reach (it goes to this process group instead).
-fn seen_pid(raw: libc::pid_t) -> io::Result<Pid> {
+fn seen_pid(raw: i32) -> io::Result<Pid> {
     (raw > 0)
         .then(|| Pid::from_raw(raw))
         .flatten()

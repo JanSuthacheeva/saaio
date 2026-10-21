@@ -90,7 +90,7 @@ as they are (clap's env read runs inside main.rs's parse; CI compiles the Linux 
   it), libc dropped if unused. CLAUDE.md and CONTRIBUTING.md say unsafe is forbidden.
 
 - [x] Server's own session through rustix setsid in `saaio server`, no pre_exec
-- [ ] peer_pid through nix's safe getsockopt on macOS and Linux
+- [x] peer_pid through nix's safe getsockopt on macOS and Linux
 - [ ] local_offset_secs through jiff
 - [ ] unsafe_code = "forbid", drop undocumented_unsafe_blocks and unused libc; docs
 - [ ] End to end: the UI starts the server in its own session (ps shows sess/tty), saaio --stop finds its pid, log stamps carry the local offset
