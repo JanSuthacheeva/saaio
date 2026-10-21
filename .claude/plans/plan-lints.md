@@ -72,6 +72,29 @@ undocumented_unsafe_blocks = "warn"
 - [x] CLAUDE.md and CONTRIBUTING.md name the rules
 - [x] End to end: clippy, test and fmt pass; each new rule proved once by a throwaway violation
 
+### No unsafe (the user, after the review)
+
+Ideally no unsafe at all; keep a block only when no safe way exists. Review's open items: both left
+as they are (clap's env read runs inside main.rs's parse; CI compiles the Linux peer_pid).
+
+- `client::ensure_server`: no `pre_exec`. `saaio server` calls `rustix::process::setsid()` itself
+  as it starts (ignoring EPERM, a process group leader started by a shell), so the server keeps its
+  own session and no controlling terminal, as before. `process_group(0)` alone would keep the
+  terminal and makes setsid impossible.
+- `client::peer_pid`: `nix::sys::socket::getsockopt` with `sockopt::LocalPeerPid` (macOS) and
+  `sockopt::PeerCredentials` (Linux), still refusing pid 0 (`seen_pid`). nix 0.28, the version
+  portable-pty already builds, feature `socket`: no new crate compiled.
+- `text::local_offset_secs`: `jiff::tz::TimeZone::system()` and `Timestamp::now()`; like
+  localtime_r it reads TZ, then /etc/localtime. New dependency jiff (MIT OR Unlicense).
+- All four gone: `unsafe_code = "forbid"`, `undocumented_unsafe_blocks` dropped (nothing left for
+  it), libc dropped if unused. CLAUDE.md and CONTRIBUTING.md say unsafe is forbidden.
+
+- [ ] Server's own session through rustix setsid in `saaio server`, no pre_exec
+- [ ] peer_pid through nix's safe getsockopt on macOS and Linux
+- [ ] local_offset_secs through jiff
+- [ ] unsafe_code = "forbid", drop undocumented_unsafe_blocks and unused libc; docs
+- [ ] End to end: the UI starts the server in its own session (ps shows sess/tty), saaio --stop finds its pid, log stamps carry the local offset
+
 ## Review
 
 ### Fixed
