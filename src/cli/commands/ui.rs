@@ -1,3 +1,5 @@
+//! Bare `saaio` in a person's terminal: starts the server and runs the terminal UI
+
 use std::path::{Path, PathBuf};
 
 use crate::cli::Env;

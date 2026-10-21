@@ -1,3 +1,5 @@
+//! `saaio report`: one event appended to a flow, or a heartbeat
+
 use clap::Subcommand;
 
 use super::{no_flow, views};

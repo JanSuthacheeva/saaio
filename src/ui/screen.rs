@@ -1,3 +1,5 @@
+//! `Screen`, the client's copy of the focused pane, and `ScreenView`, which draws it
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color as TuiColor, Modifier, Style};

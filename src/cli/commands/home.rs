@@ -1,3 +1,5 @@
+//! Bare `saaio` run by an agent or a script: the binary, the description and every flow
+
 use super::views;
 use crate::cli::output::{Document, Failure, status};
 use crate::fold;

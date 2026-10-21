@@ -1,3 +1,5 @@
+//! What `saaio remove` and `saaio clear` print, and the work `saaio remove` refuses to lose
+
 use std::fmt;
 
 use serde::Serialize;

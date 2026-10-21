@@ -1,3 +1,5 @@
+//! Mouse input for `App`: selections, double and triple clicks, focus clicks and the wheel
+
 use ratatui::layout::{Margin, Position, Rect};
 
 use super::{App, Effect, View};

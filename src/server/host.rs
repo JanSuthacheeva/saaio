@@ -1,3 +1,5 @@
+//! `Host`: every pane's PTY, the process in it and the `Terminal` showing its screen
+
 use std::collections::BTreeMap;
 use std::fmt;
 use std::io::{ErrorKind, Read, Write};

@@ -1,3 +1,5 @@
+//! `Hint`: key hints fitted to a width, inactive ones faint
+
 use std::borrow::Cow;
 
 use ratatui::text::{Line, Span};

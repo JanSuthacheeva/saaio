@@ -1,3 +1,5 @@
+//! `NewFlowView`: the new-flow dialog drawn over the session
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Margin;
 use ratatui::layout::Rect;

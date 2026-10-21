@@ -1,3 +1,5 @@
+//! Flows and board views the tests of `cards` and `detail` share
+
 use std::collections::HashMap;
 
 use ratatui::buffer::Buffer;

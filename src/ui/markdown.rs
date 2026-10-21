@@ -1,3 +1,5 @@
+//! Worker Markdown as styled lines in terminal columns, without escape sequences
+
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};

@@ -1,3 +1,5 @@
+//! Tests of `server` over a real socket: panes, the master, UIs, typing, news, pauses, stop
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

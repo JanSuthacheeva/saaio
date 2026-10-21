@@ -1,3 +1,5 @@
+//! `PauseWatch`: the repo's pause and resume scripts for resting flows, off the server thread
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;

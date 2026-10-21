@@ -1,3 +1,5 @@
+//! Tests of `saaio send`: messages into a flow's log, `--type` lines, refusals, dialogs
+
 use std::fs;
 
 use tempfile::TempDir;

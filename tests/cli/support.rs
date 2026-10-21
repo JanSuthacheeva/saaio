@@ -1,3 +1,5 @@
+//! What several CLI subjects share: saaio with a test's own state, repos, hooks, waiters
+
 use std::fs;
 use std::io::{Read, Write};
 use std::ops::{Deref, DerefMut};

@@ -1,3 +1,5 @@
+//! Tests of the module tree: the top-level modules' production `crate::` uses form no cycle
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;

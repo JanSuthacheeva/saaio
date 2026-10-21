@@ -1,3 +1,5 @@
+//! How a tool call reads, and the merge request a shell command created in a repo
+
 use serde_json::Value;
 
 /// The merge request a shell command created: when one of its simple commands runs `gh pr create`

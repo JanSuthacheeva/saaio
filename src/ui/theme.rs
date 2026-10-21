@@ -1,3 +1,5 @@
+//! `Theme`: a `Palette`'s colors as styles and glyphs, and `PhaseColors`
+
 mod palette;
 
 use std::collections::BTreeMap;

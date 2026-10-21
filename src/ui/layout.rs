@@ -1,3 +1,5 @@
+//! Where each part of the screen goes: the pane beside the sidebar or rail, `RAIL_BELOW`
+
 use ratatui::layout::Rect;
 
 use crate::proto::Size;

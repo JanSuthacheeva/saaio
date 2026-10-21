@@ -1,3 +1,5 @@
+//! Codex's rollout: the peek lines in it
+
 use serde_json::Value;
 
 use super::{Lines, PeekLine};

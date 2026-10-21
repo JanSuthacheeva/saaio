@@ -1,3 +1,5 @@
+//! `Clipboard`: copies through OSC 52 and pbcopy, wl-copy or xclip
+
 use std::io::Write;
 use std::process::{Command, Stdio};
 

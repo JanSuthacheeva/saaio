@@ -1,3 +1,5 @@
+//! `Registry`: the shared folder every store registers in, and each repository's own store
+
 use std::ffi::OsStr;
 use std::fs;
 use std::io::{self, ErrorKind};

@@ -1,3 +1,5 @@
+//! The sidebar's rows: the master's, each flow's and the peek's
+
 use ratatui::text::{Line, Span};
 
 use super::{Mark, Row, Sidebar, WIDTH, digit, plain};

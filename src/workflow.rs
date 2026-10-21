@@ -1,3 +1,5 @@
+//! `Workflow`: the phases a flow walks through, the built-in four, the phase a skill starts
+
 use serde::Deserialize;
 #[cfg(test)]
 use serde::Serialize;

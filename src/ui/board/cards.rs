@@ -1,3 +1,5 @@
+//! The board's cards: the master's, each flow's, project headings and state labels
+
 use std::borrow::Cow;
 
 use ratatui::buffer::Buffer;

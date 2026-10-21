@@ -1,3 +1,5 @@
+//! `Refusal`: the work `saaio remove` refuses to lose, in the words its message carries
+
 /// Work `saaio remove` refuses to lose unless told to; saaio ui asks the person instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refusal {

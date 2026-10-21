@@ -1,3 +1,5 @@
+//! `Sidebar`: the master, then every worker grouped by what it needs, and the peek
+
 mod labels;
 mod rows;
 

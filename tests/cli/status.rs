@@ -1,3 +1,5 @@
+//! Tests of `saaio status`: the list, detail, `--json`, usage errors, help and a closed pipe
+
 use std::path::Path;
 
 use tempfile::TempDir;

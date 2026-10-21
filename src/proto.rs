@@ -1,3 +1,5 @@
+//! The messages between the UI and `saaio server` as length-prefixed postcard; `Peer`
+
 use std::borrow::Cow;
 use std::fmt;
 use std::io::{ErrorKind, Read, Write};

@@ -1,3 +1,5 @@
+//! Tests of `saaio bug-report`: the file it writes, never through a link, without a store
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;

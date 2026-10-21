@@ -1,3 +1,5 @@
+//! server.log: rotation, stamped lines, and the panic hooks of the server and the UI
+
 use std::backtrace::Backtrace;
 use std::fs;
 use std::io::{self, Write};
@@ -42,7 +44,7 @@ pub fn write(now: u64, text: &str) {
     let _ = io::stderr().write_all(line.as_bytes());
 }
 
-/// Appends a line to `log`, for a process that is not the server (saaio ui --stop).
+/// Appends a line to `log`, for a process that is not the server (saaio --stop).
 pub fn append(log: &Path, now: u64, text: &str) -> io::Result<()> {
     let line = line(now, text::local_offset_secs(), process::id(), text) + "\n";
     private::options()

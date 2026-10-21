@@ -1,3 +1,5 @@
+//! `DefaultFile`: a file written with its default text until edited; the theme.toml example
+
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;

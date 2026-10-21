@@ -1,3 +1,5 @@
+//! `System`: the OS and the versions of claude, codex, gh and glab, probed with a deadline
+
 use std::io::{self, BufRead, BufReader, ErrorKind};
 use std::process::{ChildStdout, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};

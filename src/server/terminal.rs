@@ -1,3 +1,5 @@
+//! `Terminal`: one pane's screen, the only file that knows alacritty_terminal
+
 use std::fmt;
 use std::sync::{Arc, Mutex};
 

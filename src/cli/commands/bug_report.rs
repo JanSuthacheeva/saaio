@@ -1,3 +1,5 @@
+//! `saaio bug-report`: gathers the `Facts` and writes the report file in the current folder
+
 use std::fs;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};

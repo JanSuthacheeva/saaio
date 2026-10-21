@@ -1,3 +1,5 @@
+//! `NewFlowForm`: the new-flow dialog's form and keys
+
 mod view;
 
 use std::path::PathBuf;

@@ -1,3 +1,5 @@
+//! `saaio status`: every flow, one flow in detail, or `--all` projects, as TOON or `--json`
+
 use std::path::Path;
 
 use super::{no_flow, views};

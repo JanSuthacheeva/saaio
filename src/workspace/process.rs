@@ -1,3 +1,5 @@
+//! Commands run with a deadline, their output read even past a process they left behind
+
 use std::io::{ErrorKind, Read};
 use std::path::Path;
 use std::process::{Command, Stdio};

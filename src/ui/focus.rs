@@ -1,3 +1,5 @@
+//! The one focus look: the selection fill and the accent bar
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 

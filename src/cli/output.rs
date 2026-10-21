@@ -1,3 +1,5 @@
+//! `Document`, `Failure` and the TOON encoding every document family below uses
+
 pub(crate) mod bug_report;
 pub(crate) mod flow;
 pub(crate) mod remove;

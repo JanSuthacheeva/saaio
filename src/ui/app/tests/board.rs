@@ -1,3 +1,5 @@
+//! Tests of `App` on the board: cards, moving, jumping in, every project, faint keys
+
 use super::*;
 
 #[test]

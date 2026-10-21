@@ -1,3 +1,5 @@
+//! `saaio wait`: polls the store for news as Claude Code's `asyncRewake` hook
+
 use std::thread;
 use std::time::Duration;
 

@@ -1,3 +1,5 @@
+//! What `saaio start` prints: the started or plain flow, its setup and where it opens
+
 use std::fmt;
 
 use serde::Serialize;

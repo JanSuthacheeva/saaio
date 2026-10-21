@@ -1,3 +1,5 @@
+//! `saaio hook`: one harness event into its flow or the master's turn, news handed over at Stop
+
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};

@@ -1,3 +1,5 @@
+//! The master session: `MasterRecord` in master.json, its launch, master.md (`INSTRUCTIONS`)
+
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};

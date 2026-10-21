@@ -1,3 +1,5 @@
+//! Tests of `App`'s look: every view against its file in `src/ui/golden`
+
 use super::*;
 
 /// The whole screen as text, compared with src/ui/golden/<name>.txt. SAAIO_UPDATE_GOLDEN=1

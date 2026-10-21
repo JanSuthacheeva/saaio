@@ -1,3 +1,5 @@
+//! The command line: `Cli`, `Command` and `run`, which dispatches each command
+
 mod commands;
 mod env;
 pub mod output;

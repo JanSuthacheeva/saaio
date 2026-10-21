@@ -1,3 +1,5 @@
+//! `Rail`: the sidebar folded to a digit and a glyph per session
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};

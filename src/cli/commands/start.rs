@@ -1,3 +1,5 @@
+//! `saaio start`: a flow, a slot, a worktree, the setup hook and the agent saaio ui opens
+
 mod plain;
 
 use std::path::{Path, PathBuf};

@@ -1,3 +1,5 @@
+//! `saaio --stop`: stops the server and every session, refused on a worker's own store
+
 use crate::cli::Env;
 use crate::cli::output::{Document, Failure};
 use crate::client;

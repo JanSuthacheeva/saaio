@@ -1,3 +1,5 @@
+//! `saaio start --plain`: a plain session in any folder, with no worktree, branch or slot
+
 use std::path::{Path, PathBuf};
 
 use super::{Args, append_workspace, live_names, opening, pick_agent};

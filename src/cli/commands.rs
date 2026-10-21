@@ -1,3 +1,5 @@
+//! One module per command, and what several share: `views`, `check_request`, `no_flow`
+
 pub(super) mod bug_report;
 pub(super) mod clear;
 pub(super) mod completions;

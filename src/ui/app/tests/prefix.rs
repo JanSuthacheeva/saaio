@@ -1,3 +1,5 @@
+//! Tests of `App` with a configured prefix: help, sidebar, title, peek and ended sessions
+
 use super::*;
 use crate::config::prefix::Prefix;
 

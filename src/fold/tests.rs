@@ -1,3 +1,5 @@
+//! Tests of `fold`: states, phases, steps, merge requests, services, the board, name lookups
+
 use super::*;
 use crate::event::{Question, ServiceStatus};
 use crate::fixtures;

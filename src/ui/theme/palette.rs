@@ -1,3 +1,5 @@
+//! `Palette`: the built-in terminal, saaio and saaio-light colors, the keys a theme sets
+
 use std::collections::BTreeMap;
 
 use ratatui::style::Color;

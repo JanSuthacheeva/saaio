@@ -1,3 +1,5 @@
+//! A worker's transcript tailed for the peek: `PeekLine`, `PeekCache`
+
 mod claude;
 mod codex;
 

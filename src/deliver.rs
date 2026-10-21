@@ -1,3 +1,5 @@
+//! One look for news on the store: a worker's undelivered messages, the master's stopped flows
+
 use std::thread;
 use std::time::Duration;
 

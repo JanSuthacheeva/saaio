@@ -1,3 +1,5 @@
+//! `Slots`: `SAAIO_SLOT` claimed across every project under a flock; the slots flows hold
+
 use std::fs::{self, File};
 use std::io::ErrorKind;
 use std::path::PathBuf;

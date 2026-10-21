@@ -1,3 +1,5 @@
+//! Tests of `saaio hook`: reports, tool calls waiting on services, Codex, the master, MRs
+
 use std::fs;
 use std::io::Write;
 use std::path::Path;

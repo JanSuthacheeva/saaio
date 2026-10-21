@@ -1,3 +1,5 @@
+//! What `saaio bug-report` prints: the report's path and the check before uploading it
+
 use std::path::Path;
 
 use serde::Serialize;

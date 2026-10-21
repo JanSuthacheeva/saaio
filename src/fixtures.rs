@@ -1,3 +1,5 @@
+//! What tests across the crate share: `executable`, `started`, `workspace` and `flow`
+
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};

@@ -1,3 +1,5 @@
+//! Tests of `saaio new` and `saaio report`: flows, workflow phases, heartbeats, clear
+
 use std::fs;
 
 use tempfile::TempDir;

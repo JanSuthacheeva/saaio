@@ -1,3 +1,5 @@
+//! Tests of `codex`: recorded payloads as flow events, turns and approvers, the `-c` arguments
+
 use super::*;
 
 fn fixture(name: &str) -> Value {

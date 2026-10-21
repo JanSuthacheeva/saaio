@@ -1,3 +1,5 @@
+//! Tests of `saaio wait`: a worker's message, the master's stopped flows, quiet ends
+
 use std::fs;
 use std::time::Duration;
 

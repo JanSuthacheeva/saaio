@@ -1,3 +1,5 @@
+//! Git worktrees: created with `.saaio/worktrees/` kept out of git status, and removed
+
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;

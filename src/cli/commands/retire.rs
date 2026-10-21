@@ -1,3 +1,5 @@
+//! What remove and clear share: closing the pane, the teardown hook, the worktree and branch
+
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 

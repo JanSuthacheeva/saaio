@@ -1,3 +1,5 @@
+//! `App`, the Elm-style core of the UI with no I/O: its state and queries
+
 mod board_keys;
 mod chrome;
 mod draw;

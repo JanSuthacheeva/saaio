@@ -1,3 +1,5 @@
+//! The view `App` draws: the session, the board, the history and the dialogs over them
+
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::text::{Line, Span};

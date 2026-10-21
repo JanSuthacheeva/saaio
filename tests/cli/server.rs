@@ -1,3 +1,5 @@
+//! Tests of `saaio server` and `saaio --stop`: stopping, its own session, the UI's prefix check
+
 use std::fs;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, Stdio};

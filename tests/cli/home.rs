@@ -1,3 +1,5 @@
+//! Tests of bare `saaio`: the overview for agents, the UI in a person's terminal, `--stop`
+
 use std::path::Path;
 
 use tempfile::TempDir;

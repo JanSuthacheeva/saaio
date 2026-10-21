@@ -1,3 +1,5 @@
+//! When a flow's services pause and resume, and whether its tool calls wait (pure)
+
 use std::time::Duration;
 
 use crate::event::ServiceStatus;

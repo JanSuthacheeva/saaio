@@ -1,3 +1,5 @@
+//! The repo's `.saaio/setup`, `.saaio/teardown`, `.saaio/pause` and `.saaio/resume`
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

@@ -1,3 +1,5 @@
+//! How counts, durations, times and merge requests are written; texts cut or made printable
+
 use std::path::Path;
 
 use jiff::Timestamp;

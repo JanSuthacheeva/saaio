@@ -1,3 +1,5 @@
+//! `saaio remove`: stops a flow's worker, tears down its worktree and branch, forgets the flow
+
 use super::retire::{
     Uncommitted, Unmerged, close_pane, drop_branch, refuse_uncommitted_work,
     refuse_unmerged_commits, retire_worktree,

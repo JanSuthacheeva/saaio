@@ -1,3 +1,5 @@
+//! How a turn's closing message reads: waiting on its last question, else idle with a note
+
 use crate::adapter::cut;
 use crate::event::EventKind;
 

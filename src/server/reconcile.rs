@@ -1,3 +1,5 @@
+//! Which flows need a pane and which panes to close (`Wanted`), pure
+
 use std::collections::HashSet;
 
 use crate::config::Config;

@@ -1,3 +1,5 @@
+//! Every file operation on a store: flow logs, heartbeats, `waits/` and the master's turn
+
 #![allow(
     clippy::disallowed_methods,
     reason = "the store writes its own logs and marks"

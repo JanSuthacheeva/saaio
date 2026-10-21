@@ -1,3 +1,5 @@
+//! `Branching`: a repo's `[branch]` convention and the branch name `saaio start` gives a flow
+
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
