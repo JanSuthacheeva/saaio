@@ -185,21 +185,12 @@ line with what it replaced (only visibility, renames and imports differ), and no
   through one would pass. `targets` now reads the brace list; test
   `reads_the_modules_a_grouped_use_names` (5456df6).
 
-### Open
+### Decided
 
-- **Conflicts with main** (33 commits ahead): `CLAUDE.md` (keep the `layering.rs` line, take
-  main's cli line without `news`), `src/server/panes.rs` `open_worker` (take main's rewrite, its
-  `self.resumed.insert(key.clone(), ..)` becomes `self.pane_mut(&key).resumed = Some(..)`),
-  `src/workspace.rs` (keep the branch's split; main's `SOON` (20 s) bound for three tests goes
-  into `workspace/process.rs` and `workspace/hooks.rs`, replacing 95637f6's inline 20 s). Main
-  also adds `cli/commands/completions.rs`; rerun `layering` after the merge. Recommendation:
-  merge main into the branch before the PR and run the full suite there.
-- **Linux `peer_pid` on a pid 0**: SO_PEERCRED gives pid 0 when the server is in a pid namespace
-  the caller cannot see; rustix builds its `UCred` (`Pid` is non-zero) with `assume_init`, which
-  is undefined behaviour there. Before, libc gave 0 and `kill(0, ..)` signalled saaio's own
-  process group, so neither was right; macOS now errors cleanly. Only reachable with
-  `saaio --stop` across containers sharing the socket. Recommendation: accept for now; if it
-  matters, read SO_PEERCRED through libc on Linux and refuse a 0 as macOS does.
+- **Conflicts with main**: merged origin/main (cd31fb7) as recommended; main's `SOON` bound lives
+  in `workspace/fixtures.rs`, used by the three tests in `process.rs` and `hooks.rs`.
+- **Linux `peer_pid` on a pid 0**: closed in this PR, not deferred (9e61756): Linux peer creds
+  read through libc again, and `seen_pid` refuses a 0 on both platforms, with a test.
 
 ### Where to look
 
@@ -220,4 +211,5 @@ Routine, skim: the `ui/input` and `workspace` splits, the five renames, `Prefix`
 ### Checks
 
 fmt, clippy and the full test suite passed at ac25b4b; after 5456df6 (test code only) fmt,
-clippy and the `layering` tests pass. Not yet run on the branch merged with main.
+clippy and the `layering` tests pass. On the merge cd31fb7: fmt, clippy, the full suite (672
+unit, 101 cli, 7 install), `layering` and `cargo deny` pass.
