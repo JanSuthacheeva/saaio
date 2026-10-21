@@ -144,10 +144,6 @@ impl App {
     }
 
     /// Names a newer release in the title row, or none; true when that changed.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the update watch calls it from the next task on")
-    )]
     pub fn set_update(&mut self, line: Option<String>) -> bool {
         let changed = self.update != line;
         self.update = line;

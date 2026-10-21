@@ -1,8 +1,8 @@
 //! `Tag`, a release's tag, and `Build`, what this binary is: a release's or a source build
 
-#![expect(
-    dead_code,
-    reason = "saaio update and the UI use it from later tasks on"
+#![cfg_attr(
+    not(test),
+    expect(dead_code, reason = "saaio update uses it from a later task on")
 )]
 
 pub mod source;

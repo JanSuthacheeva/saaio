@@ -215,7 +215,7 @@ Errors: offline, timeout, 404, no curl, file errors -> nothing shows, nothing lo
 - [x] Add `update::UpdateCheck`, `Checked`, `notice` and `step` with unit tests (due, record keeping an earlier tag, notice text, step matrix)
 - [x] Add `[ui] update_check` to `UiConfig` and `#update_check = true` to `examples/config.toml`; config tests pass
 - [x] Add `App::set_update` and the update line in `chrome.rs`; golden files with the sidebar, the rail and a narrow row
-- [ ] Add `ui::update_watch::UpdateWatch`, `Event::Latest`, `UiEnv` fields and the hourly look in `ui.rs`; unit tests for off, answered and ask_if_due
+- [x] Add `ui::update_watch::UpdateWatch`, `Event::Latest`, `UiEnv` fields and the hourly look in `ui.rs`; unit tests for off, answered and ask_if_due
 - [ ] Add `Env::saaio_releases_url`, `Env::releases`, `Command::Update`, `commands::update::{run, install}` and `output::update`; tests for install with the real install.sh, and `tests/cli/update.rs`
 - [ ] `release.yml`: `SAAIO_RELEASE` on the Build step, `VERSION` asset, install-check reads it
 - [ ] Docs: `docs/cli.md` (saaio update, SAAIO_RELEASES_URL), `docs/install.md` Updating, `docs/configuration.md` [ui] and the one network call, `docs/files.md` update.json, ROADMAP row removed, CHANGELOG Added, CLAUDE.md module lines; design pages into `docs/design/`

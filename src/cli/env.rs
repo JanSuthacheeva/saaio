@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use crate::config::{self, Config};
 use crate::registry::Registry;
+use crate::release::source::Releases;
 use crate::store::Store;
 use crate::ui::clipboard::Clipboard;
 use crate::workspace;
@@ -26,6 +27,8 @@ pub struct Env {
     pub xdg_state_home: Option<PathBuf>,
     pub xdg_config_home: Option<PathBuf>,
     pub claude_config_dir: Option<PathBuf>,
+    /// $SAAIO_RELEASES_URL: a mirror of saaio's releases page.
+    pub saaio_releases_url: Option<String>,
     /// stdin and stdout are both terminals.
     pub terminal: bool,
     /// $CLAUDECODE or $CODEX_THREAD_ID is set: an agent's shell tool runs flow.
@@ -85,6 +88,11 @@ impl Env {
     pub(crate) fn config_dir(&self) -> Option<PathBuf> {
         self.config_file()
             .and_then(|file| file.parent().map(Path::to_path_buf))
+    }
+
+    /// Where releases are read: $SAAIO_RELEASES_URL, else GitHub.
+    pub(crate) fn releases(&self) -> Releases {
+        Releases::at(self.saaio_releases_url.clone())
     }
 
     /// Claude Code's home, for the peek: $CLAUDE_CONFIG_DIR, else ~/.claude.
