@@ -74,19 +74,13 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::event::{Event, EventKind, Mode};
+    use crate::event::{Event, EventKind};
+    use crate::fixtures;
 
     fn started(store: &Store) -> String {
-        let first = Event::new(
-            1,
-            EventKind::Started {
-                name: "csv".to_string(),
-                request: "SHOP-221 add CSV export".to_string(),
-                mode: Mode::Auto,
-                phases: None,
-            },
-        );
-        store.create(&first).unwrap()
+        store
+            .create(&fixtures::started("csv", "SHOP-221 add CSV export"))
+            .unwrap()
     }
 
     fn send(store: &Store, id: &str, text: &str) {

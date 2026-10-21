@@ -38,19 +38,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::event::{Event, EventKind, Mode};
-
-    fn started() -> Event {
-        Event::new(
-            0,
-            EventKind::Started {
-                name: "csv".into(),
-                request: "add csv".into(),
-                mode: Mode::Auto,
-                phases: None,
-            },
-        )
-    }
+    use crate::event::{Event, EventKind};
+    use crate::fixtures::started;
 
     #[test]
     fn sees_a_new_flow_an_append_a_beat_and_a_removal() {
@@ -61,7 +50,7 @@ mod tests {
         assert!(watch.changed(&store, 0).unwrap(), "the first look folds");
         assert!(!watch.changed(&store, 100).unwrap());
 
-        let id = store.create(&started()).unwrap();
+        let id = store.create(&started("csv", "add csv")).unwrap();
         assert!(watch.changed(&store, 200).unwrap(), "a new flow");
         assert!(!watch.changed(&store, 300).unwrap());
 

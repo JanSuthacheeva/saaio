@@ -1,19 +1,13 @@
-use crate::event::{Event, EventKind, Mode, Phase, ServiceStatus};
+use crate::event::{Event, EventKind, Phase, ServiceStatus};
+use crate::fixtures;
 use crate::fold;
 use crate::view::{Board, FlowView};
 
 pub(super) const MIN: u64 = 60_000;
 
 pub(super) fn flow(name: &str, events: Vec<EventKind>, now: u64) -> FlowView {
-    let mut all = vec![Event::new(
-        0,
-        EventKind::Started {
-            name: name.into(),
-            request: format!("{} add CSV export", name.to_uppercase()),
-            mode: Mode::Auto,
-            phases: None,
-        },
-    )];
+    let request = format!("{} add CSV export", name.to_uppercase());
+    let mut all = vec![fixtures::started(name, &request)];
     all.extend(
         events
             .into_iter()

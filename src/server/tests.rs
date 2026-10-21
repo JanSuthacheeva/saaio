@@ -11,11 +11,11 @@ use super::*;
 use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
-use crate::fixtures::executable;
+use crate::fixtures::{self, executable};
 use crate::launch::pane::HOSTED;
 use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
 use crate::store::{Busy, Waiter};
-use crate::view::{MasterTurn, State};
+use crate::view::{MasterTurn, State, Workspace};
 
 /// A server whose master is `cat`, run on its own thread.
 fn start(dir: &Path) -> (ServerPaths, thread::JoinHandle<Result<()>>) {
@@ -258,27 +258,16 @@ fn tells_the_ui_where_the_masters_turn_stands_from_its_start() {
 
 /// A flow with a worktree at dir/<name>, as `saaio start` leaves it.
 fn started_flow(store: &Store, dir: &Path, name: &str, agent: &str) -> String {
-    let id = store
-        .create(&LogEvent::new(
-            0,
-            EventKind::Started {
-                name: name.into(),
-                request: "x".into(),
-                mode: crate::event::Mode::Auto,
-                phases: None,
-            },
-        ))
-        .unwrap();
+    let id = store.create(&fixtures::started(name, "x")).unwrap();
     let path = dir.join(name);
     fs::create_dir_all(&path).unwrap();
-    let workspace = EventKind::Workspace {
+    let workspace = Workspace {
         path: path.display().to_string(),
-        branch: Some(format!("flow/{name}")),
-        slot: Some(1),
-        window: None,
-        agent: agent.into(),
+        ..fixtures::workspace(name, agent)
     };
-    store.append(&id, &LogEvent::new(1, workspace)).unwrap();
+    store
+        .append(&id, &LogEvent::new(1, workspace.into()))
+        .unwrap();
     id
 }
 
@@ -399,7 +388,7 @@ fn a_failed_resume_retries_fresh_before_blocking() {
         )
         .unwrap();
     let shell = Agent {
-        command: vec!["cat".into()],
+        command: vec!["sh".into(), "-c".into(), "touch fresh; exec cat".into()],
         prompt: Some(String::new()),
         adapter: None,
         resume: Some(vec!["sh".into(), "-c".into(), "exit 23".into()]),
@@ -407,7 +396,9 @@ fn a_failed_resume_retries_fresh_before_blocking() {
     let (paths, handle) =
         start_with_agents(dir.path(), BTreeMap::from([("shell".to_string(), shell)]));
 
-    thread::sleep(Duration::from_millis(600));
+    wait_until("the worker never started fresh", || {
+        dir.path().join("retry/fresh").exists()
+    });
     assert_eq!(
         store
             .events(&id)
@@ -447,13 +438,19 @@ fn an_exited_idle_worker_keeps_its_state() {
     };
     let (paths, handle) =
         start_with_agents(dir.path(), BTreeMap::from([("shell".to_string(), shell)]));
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    let mut panes = Vec::new();
 
-    thread::sleep(Duration::from_millis(600));
+    let exited = PaneStatus::Exited { code: Some(23) };
+    wait_for(&mut ui, &mut panes, &id, Some(&exited));
     let flow = fold::fold(&id, &store.events(&id).unwrap(), None, 3).unwrap();
     assert_eq!(flow.state, State::Idle);
-    let mut control = connect(&paths.socket, Role::Control);
-    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
 }
 
@@ -947,10 +944,15 @@ fn starts_the_master_fresh_when_its_session_cannot_be_resumed() {
         r#"{"session": "5e55", "cwd": "/tmp"}"#,
     )
     .unwrap();
+    let fresh = dir.path().join("fresh");
     let (paths, handle) = start_with(
         dir.path(),
         Agent {
-            command: vec!["cat".into()],
+            command: vec![
+                "sh".into(),
+                "-c".into(),
+                format!("touch '{}'; exec cat", fresh.display()),
+            ],
             prompt: None,
             adapter: None,
             resume: Some(vec![
@@ -966,7 +968,7 @@ fn starts_the_master_fresh_when_its_session_cannot_be_resumed() {
             size: Size { cols: 30, rows: 4 },
         },
     );
-    thread::sleep(Duration::from_millis(500));
+    wait_until("the master never started fresh", || fresh.exists());
 
     proto::write_msg(&mut ui, &ClientMsg::Input(b"again\r".to_vec())).unwrap();
 
@@ -1337,6 +1339,12 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
         dir.path(),
         BTreeMap::from([("claude-keys".to_string(), fake_claude_keys(dir.path()))]),
     );
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
 
     wait_until("no Esc into the answered dialog", || {
         typed(dir.path(), "asks").contains('\x1b')
@@ -1364,7 +1372,10 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
         note: "declined".into(),
     };
     store.append(&asks, &LogEvent::new(5, idle)).unwrap();
-    thread::sleep(WATCH_EVERY * 3);
+    recv_until(&mut ui, "the flow never showed idle", |message| {
+        matches!(message, ServerMsg::Board(board)
+            if board.flows.iter().any(|flow| flow.id == asks && flow.state == State::Idle))
+    });
     let again = EventKind::Waiting {
         question: "Which color?".into(),
         questions: color(),
@@ -1419,7 +1430,11 @@ fn a_running_worker_keeps_the_adapter_it_started_with() {
     });
     let without_adapter = format!("[agents.codex]\ncommand = [\"{}\"]\n", codex.command[0]);
     fs::write(paths.config.as_ref().unwrap(), without_adapter).unwrap();
-    thread::sleep(WATCH_EVERY * 2);
+    // The server takes config.toml again right before it opens panes, so this one proves it did.
+    started_flow(&store, dir.path(), "next", "codex");
+    wait_until("the edited config never took", || {
+        dir.path().join("next/typed").exists()
+    });
 
     tell(&store, &csv, "Tabs.");
     wait_until("an edited agent took the running worker's adapter", || {
@@ -1483,14 +1498,11 @@ fn passes_on_what_the_pane_in_view_copies_and_nothing_else() {
             size: Size { cols: 30, rows: 4 },
         },
     );
-    let deadline = Instant::now() + PATIENCE;
-    while !printed.exists() {
-        assert!(Instant::now() < deadline, "the worker never copied");
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_until("the worker never copied", || printed.exists());
 
     proto::write_msg(&mut ui, &ClientMsg::Input(b"go\r".to_vec())).unwrap();
 
+    let deadline = Instant::now() + PATIENCE;
     let copied = loop {
         assert!(Instant::now() < deadline, "nothing was passed on");
         if let ServerMsg::Clipboard(text) = recv(&mut ui) {

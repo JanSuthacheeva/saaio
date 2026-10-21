@@ -28,7 +28,7 @@ cargo install --path .                       # install the saaio binary
 | Test | Where |
 | --- | --- |
 | unit tests | inline `mod tests`, or a sibling `tests.rs` past about 400 lines |
-| command line, end to end | `tests/cli.rs` |
+| command line, end to end | `tests/cli/`, one module per subject (`main.rs` lists them) |
 | UI screens | golden files in `src/ui/golden` |
 
 A change to the UI's look that is meant rewrites the golden files:
@@ -84,8 +84,9 @@ new clippy finds in the same one. The build cache is saved from `main` only, so 
 reads it but never fills it.
 
 Tests run on slow, shared runners. A test waits for what happens soon with a limit that only a
-failing test reaches (30 s), never with a sleep that guesses how long something takes; a timer
-the server acts on is chosen per test (`server::Timing`). To check a test under load:
+failing test reaches (30 s), never with a sleep that guesses how long something takes; a bounded
+sleep only asserts that nothing happens, and a timer the server acts on is chosen per test
+(`server::Timing`). To check a test under load:
 
 ```sh
 # macOS: the suite beside six busy cores

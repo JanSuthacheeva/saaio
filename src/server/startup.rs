@@ -115,39 +115,18 @@ pub(super) fn stalled(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event::{Event as LogEvent, EventKind, Mode};
-    use crate::fold;
+    use crate::event::{Event as LogEvent, Mode};
+    use crate::fixtures;
     use crate::server::Timing;
     use crate::view::Session;
+    use crate::view::Workspace;
 
     fn flow() -> FlowView {
-        fold::fold(
-            "7f3c",
-            &[
-                LogEvent::new(
-                    0,
-                    EventKind::Started {
-                        name: "worker".into(),
-                        request: "x".into(),
-                        mode: Mode::Auto,
-                        phases: None,
-                    },
-                ),
-                LogEvent::new(
-                    1,
-                    EventKind::Workspace {
-                        path: "/worktree".into(),
-                        branch: None,
-                        slot: None,
-                        window: Some("saaio-ui".into()),
-                        agent: "codex".into(),
-                    },
-                ),
-            ],
-            None,
-            2,
-        )
-        .unwrap()
+        let workspace = Workspace {
+            window: Some("saaio-ui".into()),
+            ..fixtures::workspace("worker", "codex")
+        };
+        fixtures::flow("worker", vec![LogEvent::new(1, workspace.into())], 2)
     }
 
     #[test]
