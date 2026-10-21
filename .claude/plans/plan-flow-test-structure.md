@@ -101,4 +101,4 @@ src/adapter/claude_code.rs -> src/adapter/claude_code/tests.rs
 - [x] Move the inline tests of `config.rs`, `adapter/codex.rs`, `adapter/claude_code.rs` to sibling `tests.rs`
 - [x] Split `tests/cli.rs` into `tests/cli/` with `support.rs`, the subject modules and `every_file_in_tests_cli_is_a_module`
 - [x] Update CLAUDE.md and CONTRIBUTING.md for `tests/cli/`, `fixtures.rs` and the new `tests.rs` files
-- [ ] End to end: full fmt, clippy, test, deny; test count before vs after; diff outside tests limited to `mod tests` lines; disk left clean
+- [x] End to end: full fmt, clippy, test, deny; test count before vs after; diff outside tests limited to `mod tests` lines; disk left clean
