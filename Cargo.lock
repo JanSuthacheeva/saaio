@@ -1658,7 +1658,6 @@ dependencies = [
  "clap",
  "clap_complete",
  "jiff",
- "libc",
  "nix 0.28.0",
  "portable-pty",
  "postcard",
