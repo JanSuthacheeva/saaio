@@ -56,8 +56,9 @@ impl Failure {
     }
 
     /// Exit code 2: clap's message, with what it lists below a closing colon (the missing
-    /// arguments), and where to read the usage: the command of clap's usage line, else
-    /// `subcommand` (clap prints none for a flag missing its value).
+    /// arguments) or the possible values of an invalid one, and where to read the usage: the
+    /// command of clap's usage line, else `subcommand` (clap prints none for a flag missing its
+    /// value).
     #[must_use]
     pub fn usage(clap_error: &clap::Error, subcommand: Option<&str>) -> Failure {
         let rendered = clap_error.to_string();
@@ -73,6 +74,13 @@ impl Failure {
                 .map(str::trim)
                 .collect();
             message = format!("{message} {}", listed.join(", "));
+        } else if let Some(values) = rendered.lines().find_map(|line| {
+            line.trim()
+                .strip_prefix("[possible values: ")
+                .and_then(|rest| rest.strip_suffix(']'))
+        }) {
+            // Without commas or colons, which make TOON quote the message.
+            message = format!("{message}; one of {}", values.replace(", ", " | "));
         }
         let command = rendered
             .lines()
@@ -152,6 +160,8 @@ mod tests {
             request: Option<String>,
             #[arg(long, conflicts_with = "request")]
             plain: Option<String>,
+            #[arg(long, value_parser = ["guided", "auto"])]
+            mode: Option<String>,
         },
     }
 
@@ -195,6 +205,18 @@ mod tests {
             "the following required arguments were not provided: <REQUEST>"
         );
         assert_eq!(failure.help, vec!["Run `saaio start --help` for the usage"]);
+    }
+
+    #[test]
+    fn names_the_possible_values_of_an_invalid_value() {
+        let error = Cli::try_parse_from(["saaio", "start", "x", "--mode", "nope"]).unwrap_err();
+
+        let failure = Failure::usage(&error, None);
+
+        assert_eq!(
+            failure.message,
+            "invalid value 'nope' for '--mode <MODE>'; one of guided | auto"
+        );
     }
 
     #[test]

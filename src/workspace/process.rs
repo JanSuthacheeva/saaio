@@ -143,7 +143,7 @@ mod tests {
 
     use super::*;
     use crate::fixtures::executable;
-    use crate::workspace::fixtures::LIMIT;
+    use crate::workspace::fixtures::{LIMIT, SOON};
 
     #[test]
     fn runs_a_command_in_a_folder_without_prompts() {
@@ -174,7 +174,7 @@ mod tests {
 
         let error = output_in(dir.path(), &argv, Duration::from_millis(200)).unwrap_err();
 
-        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(started.elapsed() < SOON);
         assert!(
             format!("{error:#}").ends_with("no answer within 0s"),
             "{error:#}"

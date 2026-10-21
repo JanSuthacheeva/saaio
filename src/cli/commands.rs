@@ -1,5 +1,6 @@
 pub(super) mod bug_report;
 pub(super) mod clear;
+pub(super) mod completions;
 pub(super) mod home;
 pub(super) mod hook;
 pub(super) mod new;

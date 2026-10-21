@@ -159,6 +159,9 @@ impl Server {
         Ok(())
     }
 
+    /// Marks the worker HOSTED in its log before its agent starts, so a server that dies right
+    /// after the start leaves a worker the next one resumes, not one it starts again fresh; takes
+    /// the mark back when the agent could not start, since there is no session to resume.
     fn open_worker(&mut self, spec: PaneSpec) {
         let key = spec.key.clone();
         let PaneKey::Flow(id) = &key else {
@@ -168,26 +171,41 @@ impl Server {
         let Some(space) = self.flow(id).and_then(|flow| flow.workspace.clone()) else {
             return;
         };
-        let now = (self.clock)();
-        let event = match self.open_pane(spec) {
-            Ok(()) => {
-                if space.window.is_some() {
-                    self.pane_mut(&key).resumed = Some(Instant::now());
-                }
-                if space.window.as_deref() == Some(HOSTED) {
-                    return;
-                }
-                EventKind::from(Workspace {
-                    window: Some(HOSTED.to_string()),
-                    ..space
-                })
+        let resumes = space.window.is_some();
+        let recorded = space.window.as_deref() != Some(HOSTED);
+        if recorded {
+            let hosted = EventKind::from(Workspace {
+                window: Some(HOSTED.to_string()),
+                ..space.clone()
+            });
+            if let Err(error) = self
+                .store
+                .append(id, &LogEvent::new((self.clock)(), hosted))
+            {
+                self.host.fail(
+                    key.clone(),
+                    format!("could not record its start: {error:#}"),
+                );
+                return;
             }
-            Err(error) => EventKind::Blocked {
-                reason: format!("could not start the agent: {error:#}"),
-            },
-        };
-        if let Err(error) = self.store.append(id, &LogEvent::new(now, event)) {
-            server_log::write((self.clock)(), &format!("{error:#}"));
+        }
+        match self.open_pane(spec) {
+            Ok(()) if resumes => {
+                self.pane_mut(&key).resumed = Some(Instant::now());
+            }
+            Ok(()) => {}
+            Err(error) => {
+                let blocked = EventKind::Blocked {
+                    reason: format!("could not start the agent: {error:#}"),
+                };
+                let unhosted = recorded.then(|| EventKind::from(space));
+                for event in unhosted.into_iter().chain([blocked]) {
+                    if let Err(error) = self.store.append(id, &LogEvent::new((self.clock)(), event))
+                    {
+                        server_log::write((self.clock)(), &format!("{error:#}"));
+                    }
+                }
+            }
         }
     }
 

@@ -8,6 +8,8 @@ use tempfile::TempDir;
 use crate::fixtures::executable;
 
 pub(super) const LIMIT: Duration = Duration::from_secs(10);
+/// Under the 30 s the scripts' sleep takes, which only a command waited out reaches.
+pub(super) const SOON: Duration = Duration::from_secs(20);
 
 pub(super) fn git(dir: &Path, args: &[&str]) {
     let status = Command::new("git")

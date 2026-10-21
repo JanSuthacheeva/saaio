@@ -87,7 +87,7 @@ mod tests {
     use super::*;
     use crate::launch::worktree::workspace_for;
     use crate::workspace::create_worktree;
-    use crate::workspace::fixtures::{LIMIT, hook, repo};
+    use crate::workspace::fixtures::{LIMIT, SOON, hook, repo};
 
     #[test]
     fn runs_a_hook_in_the_worktree_with_the_flow_environment() {
@@ -153,7 +153,7 @@ mod tests {
         let started = Instant::now();
         let limit = Duration::from_millis(200);
         let error = run_within(&repo, Hook::Resume, &workspace, &env, limit).unwrap_err();
-        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(started.elapsed() < SOON);
         assert_eq!(format!("{error:#}"), "no answer within 0s");
         fs::set_permissions(
             repo.join(".saaio/resume"),
@@ -185,12 +185,7 @@ mod tests {
             Command::new("kill").arg(pid).status().unwrap();
         }
 
-        // Short of the 30 s the processes left behind run; a new script's first exec can take seconds.
-        assert!(
-            started.elapsed() < Duration::from_secs(20),
-            "{:?}",
-            started.elapsed()
-        );
+        assert!(started.elapsed() < SOON, "{:?}", started.elapsed());
         assert_eq!(format!("{error:#}"), "docker is not running");
     }
 }

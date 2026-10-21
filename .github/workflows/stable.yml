@@ -1,0 +1,38 @@
+# cargo install --git builds with the user's own Rust, usually the latest stable, while CI uses the
+# pinned toolchain. This runs clippy and the tests on the latest stable every week, so a new lint
+# or a break shows up here first. Not a required check.
+name: stable
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  stable:
+    name: stable (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-24.04
+          - os: macos
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install stable --profile minimal --component clippy
+      - run: cargo +stable --version
+      - run: cargo +stable clippy --all-targets --locked -- -D warnings
+      - run: cargo +stable test --locked
