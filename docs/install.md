@@ -164,6 +164,8 @@ instead of the script.
 - Write a completion script saved to a file again, so it knows the new version's commands.
 - `master.md` is refreshed while it still holds an earlier default. `config.toml` and `theme.toml`
   are written only when missing. Edited files stay as they are.
+- New versions: GitHub's Watch > Custom > Releases on the repository, or the
+  [releases feed](https://github.com/JanSuthacheeva/saaio/releases.atom).
 - Changes: [CHANGELOG.md](../CHANGELOG.md).
 
 ## Uninstalling
