@@ -1,3 +1,8 @@
+#![allow(
+    clippy::disallowed_methods,
+    reason = "the module the rule routes file creation through"
+)]
+
 use std::fs::{self, DirBuilder, OpenOptions, Permissions};
 use std::io::{self, Write};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};

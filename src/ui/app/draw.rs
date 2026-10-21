@@ -167,6 +167,10 @@ impl App {
     }
 
     /// The scrollback hint along the pane's last row, fitted by hints::line.
+    #[expect(
+        clippy::unused_self,
+        reason = "drawn as a part of the app, like the other draw methods"
+    )]
     fn draw_history(&self, frame: &mut Frame, pane: Rect, back: u32, theme: &Theme) {
         let mut spans = vec![Span::styled(
             format!("↑ {back} lines back"),

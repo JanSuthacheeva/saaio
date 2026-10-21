@@ -68,6 +68,17 @@ pub fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
     }
 }
 
+/// A config file in `home` that runs cat for the worker and the master; its path.
+pub fn cat_agents(home: &Path) -> PathBuf {
+    let config = home.join("config.toml");
+    fs::write(
+        &config,
+        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n\n[agents.master]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
+    )
+    .unwrap();
+    config
+}
+
 /// Waits until something accepts connections on `socket`; a socket file can exist before that.
 pub fn wait_for_socket(socket: &Path) {
     wait_until("the server never listened", || {

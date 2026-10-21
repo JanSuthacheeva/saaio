@@ -9,6 +9,10 @@ use crate::workspace;
 
 /// The environment saaio runs in: its variables and its terminal, read once by main so commands get
 /// them as values.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent facts about the environment"
+)]
 #[derive(Debug, Clone, Default)]
 pub struct Env {
     pub saaio_home: Option<PathBuf>,

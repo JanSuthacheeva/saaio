@@ -366,6 +366,10 @@ mod tests {
     }
 
     /// Feeds output into the host until the pane exits or the time is up; the exit code.
+    #[expect(
+        clippy::option_option,
+        reason = "exited, with or without a code, against timed out"
+    )]
     fn pump(host: &mut Host, rx: &Receiver<HostEvent>, limit: Duration) -> Option<Option<u32>> {
         let deadline = Instant::now() + limit;
         while let Some(left) = deadline.checked_duration_since(Instant::now()) {

@@ -67,6 +67,14 @@ fn one_store(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document
 }
 
 /// Every registered project with flows, each as its board; unreadable logs become warnings.
+#[expect(
+    clippy::maybe_infinite_iter,
+    reason = "find over (1..) ends: the names taken are finite"
+)]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "returned from run as its other arm is"
+)]
 fn all_stores(registry: &Registry, json: bool, full: bool, now: u64) -> Result<Document, Failure> {
     let mut projects: Vec<view::Project> = Vec::new();
     let mut warnings = Vec::new();

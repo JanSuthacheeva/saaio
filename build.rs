@@ -7,6 +7,10 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "cargo hands a build script its input as variables"
+)]
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=build/commit.rs");

@@ -1,3 +1,8 @@
+#![allow(
+    clippy::disallowed_methods,
+    reason = "tests set up their files and read PATH directly"
+)]
+
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;

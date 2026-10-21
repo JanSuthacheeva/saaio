@@ -209,6 +209,10 @@ fn claim_is_live(claim: &Claim, now: u64) -> bool {
 }
 
 /// `base`, or base-2, base-3, ... when the repo has that branch already.
+#[expect(
+    clippy::maybe_infinite_iter,
+    reason = "find over (2..) ends: the branches taken are finite"
+)]
 fn free_branch(repo: &Path, base: &str) -> String {
     std::iter::once(base.to_string())
         .chain((2..).map(|number| format!("{base}-{number}")))

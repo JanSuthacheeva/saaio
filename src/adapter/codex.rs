@@ -87,10 +87,13 @@ fn trust_hash(hook: &Hook, command: &str) -> String {
         ("event_name", Value::String(hook.key.to_string())),
         (
             "hooks",
-            Value::Array(vec![serde_json::to_value(command_hook).unwrap()]),
+            Value::Array(vec![
+                serde_json::to_value(command_hook).expect("a map with string keys serialises"),
+            ]),
         ),
     ]);
-    let hash = Sha256::digest(serde_json::to_string(&json).unwrap());
+    let hash =
+        Sha256::digest(serde_json::to_string(&json).expect("a map with string keys serialises"));
     format!("sha256:{hash:x}")
 }
 

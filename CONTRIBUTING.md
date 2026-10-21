@@ -114,6 +114,12 @@ The full rules and the architecture: [CLAUDE.md](CLAUDE.md). In short:
 - Modules are nouns for what they hold, never `utils` or `helpers`. Functions do not repeat their
   module's name.
 - Module files are `foo.rs` beside `foo/`, never `foo/mod.rs`.
+- No `unsafe`: `unsafe_code` is forbidden. System calls go through rustix and nix.
+- The environment is read only in `main.rs`, into `cli::Env`; files and folders are created only
+  through `private.rs` and `store.rs`. `clippy.toml` checks both; a local allow with a reason
+  marks a deliberate exception.
+- A clippy lint is allowed at its site with `#[expect(..., reason = "...")]`, not globally in
+  `Cargo.toml`.
 - The event log is private. The public interface is the command line and `saaio status --json`
   ([docs/json.md](docs/json.md)).
 - Code explains itself. Comments only where it cannot.

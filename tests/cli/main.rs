@@ -1,3 +1,8 @@
+#![allow(
+    clippy::disallowed_methods,
+    reason = "tests set up their files and read PATH directly"
+)]
+
 mod bug_report;
 mod completions;
 mod home;

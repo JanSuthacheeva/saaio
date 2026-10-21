@@ -34,6 +34,10 @@ pub fn remove_worktree(repo: &Path, workspace: &Workspace, force: bool) -> Resul
 }
 
 /// Adds .saaio/worktrees/ to .git/info/exclude once, so worktrees never show in git status.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "info/exclude is git's file, kept with git's modes"
+)]
 fn exclude_worktrees(repo: &Path) -> Result<()> {
     let git_dir =
         common_dir(repo).with_context(|| format!("not a git repository: {}", repo.display()))?;

@@ -27,6 +27,10 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "builds the Option the stamp takes"
+    )]
     fn some(text: &str) -> Option<String> {
         Some(text.to_string())
     }

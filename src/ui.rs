@@ -86,6 +86,10 @@ pub struct UiEnv {
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
+#[expect(
+    clippy::too_many_lines,
+    reason = "the one loop over every event the UI waits on"
+)]
 pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let mut outer = Outer::enter()?;
     // Before any thread reads stdin: creating the terminal asks for the cursor position.
