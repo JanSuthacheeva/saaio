@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>saaio update design</title>
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+:root {
+  color-scheme: light;
+  --surface: #f8f9fb; --card: #eceff4; --ink: #2e3440; --muted: #4c566a; --subtle: #d8dee9;
+  --border: #d8dee9; --code-block: #2e3440; --code-block-ink: #eceff4; --code-bg: #e5e9f0; --code-ink: #4b6c8a;
+  --accent: #7b5eaf; --on-accent: #f8f9fb; --link: #4b6c8a;
+  --new: #a3be8c; --mod: #d08770; --old: #d8dee9;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --gap: 24px; --gap-phone: 14px; --radius: 6px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #2e3440; --card: #3b4252; --ink: #eceff4; --muted: #93b1cc; --subtle: #434c5e;
+  --border: #4c566a; --code-block: #3b4252; --code-block-ink: #eceff4; --code-bg: #3b4252; --code-ink: #88c0d0;
+  --accent: #bd93f9; --on-accent: #2e3440; --link: #88c0d0;
+  --new: #a3be8c; --mod: #ebcb8b; --old: #4c566a;
+}
+body { margin: 0; background: var(--surface); color: var(--ink); font: 18px/1.6 var(--sans); }
+.page { max-width: 720px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: var(--gap); }
+h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+h2 { font-size: 24px; line-height: 1.3; font-weight: 700; margin: 0; text-wrap: balance; }
+h3 { font-size: 18px; margin: 0; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.meta { font-size: 13px; line-height: 1.5; color: var(--muted); }
+a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+code { font-family: var(--mono); font-size: 0.78em; background: var(--code-bg); color: var(--code-ink); border-radius: 0.2rem; padding: 0.1em 0.3em; overflow-wrap: anywhere; }
+pre { background: var(--code-block); color: var(--code-block-ink); border-radius: var(--radius); padding: 14px 16px; font: 14px/1.5 var(--mono); overflow-x: auto; margin: 0; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--gap); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.pill { align-self: flex-start; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em; line-height: 1.4; padding: 2px 10px; border-radius: 99px; background: var(--accent); color: var(--on-accent); }
+.rec { border: 2px solid var(--accent); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.two > div { min-width: 0; }
+.plus, .minus { font-size: 16px; }
+.label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.diagram { overflow-x: auto; }
+.diagram svg { display: block; min-width: 520px; width: 100%; height: auto; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; border: 1px solid var(--muted); }
+svg text { fill: var(--ink); font: 13px var(--sans); }
+svg .box { stroke: var(--muted); stroke-width: 1; }
+svg .n { fill: var(--new); } svg .m { fill: var(--mod); } svg .o { fill: var(--old); }
+svg .arrow { stroke: var(--muted); stroke-width: 1.4; fill: none; marker-end: url(#ah); }
+svg #ah path { fill: var(--muted); }
+svg text.on { fill: #2e3440; }
+@media (max-width: 560px) { .two { grid-template-columns: 1fr; } .card { padding: var(--gap-phone); } .page { gap: var(--gap-phone); padding-block: 24px 48px; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="stack">
+    <span class="meta">design-code, step 3 of 3 - flow/update-notice - 2026-10-21</span>
+    <h1>saaio update design</h1>
+    <p>The units, signatures and call chains for the update notice and <code>saaio update</code>. No bodies.</p>
+  </div>
+
+  <div class="card">
+    <h2>1. Decision recap</h2>
+    <p>The UI checks a <code>VERSION</code> release asset through <code>curl</code> on its own thread, at most once a day across every UI on the machine (<code>update.json</code> in the shared folder). <code>release.yml</code> stamps <code>SAAIO_RELEASE=&lt;tag&gt;</code> into release builds, so <code>saaio update</code> knows a source build and names the <code>cargo install</code> line instead of replacing it.</p>
+    <p class="meta">Chosen: 1A, 2A. The user delegated every later decision to the recommendations below.</p>
+  </div>
+
+  <div class="card">
+    <h2>2. Structure</h2>
+    <div class="diagram"><svg viewBox="0 0 640 300" role="img" aria-label="Units and dependencies">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <rect class="box m" x="10" y="10" width="140" height="34" rx="5"/><text class="on" x="80" y="32" text-anchor="middle">ui.rs (loop)</text>
+      <rect class="box n" x="10" y="70" width="140" height="34" rx="5"/><text class="on" x="80" y="92" text-anchor="middle">ui/update_watch.rs</text>
+      <rect class="box m" x="10" y="130" width="140" height="34" rx="5"/><text class="on" x="80" y="152" text-anchor="middle">ui/app/chrome.rs</text>
+      <rect class="box n" x="250" y="10" width="160" height="34" rx="5"/><text class="on" x="330" y="32" text-anchor="middle">cli/commands/update.rs</text>
+      <rect class="box n" x="250" y="70" width="160" height="34" rx="5"/><text class="on" x="330" y="92" text-anchor="middle">update.rs</text>
+      <rect class="box n" x="250" y="130" width="160" height="34" rx="5"/><text class="on" x="330" y="152" text-anchor="middle">release.rs</text>
+      <rect class="box n" x="250" y="190" width="160" height="34" rx="5"/><text class="on" x="330" y="212" text-anchor="middle">release/source.rs</text>
+      <rect class="box m" x="250" y="250" width="160" height="34" rx="5"/><text class="on" x="330" y="272" text-anchor="middle">workspace/process.rs</text>
+      <rect class="box m" x="480" y="10" width="150" height="34" rx="5"/><text class="on" x="555" y="32" text-anchor="middle">cli/output/update.rs</text>
+      <rect class="box m" x="480" y="70" width="150" height="34" rx="5"/><text class="on" x="555" y="92" text-anchor="middle">config.rs [ui]</text>
+      <rect class="box m" x="480" y="130" width="150" height="34" rx="5"/><text class="on" x="555" y="152" text-anchor="middle">build.rs, release.yml</text>
+      <rect class="box o" x="480" y="190" width="150" height="34" rx="5"/><text class="on" x="555" y="212" text-anchor="middle">curl, install.sh</text>
+      <path class="arrow" d="M80,44 L80,68"/><path class="arrow" d="M80,104 L80,128"/>
+      <path class="arrow" d="M150,87 L248,87"/>
+      <path class="arrow" d="M330,44 L330,68"/><path class="arrow" d="M410,27 L478,27"/>
+      <path class="arrow" d="M330,104 L330,128"/><path class="arrow" d="M330,164 L330,188"/><path class="arrow" d="M330,224 L330,248"/>
+      <path class="arrow" d="M410,207 L478,207"/><path class="arrow" d="M410,147 L478,147"/>
+      <path class="arrow" d="M150,22 L478,80"/>
+    </svg></div>
+    <div class="legend"><span><span class="sw" style="background:var(--new)"></span>new</span><span><span class="sw" style="background:var(--mod)"></span>modified</span><span><span class="sw" style="background:var(--old)"></span>existing</span></div>
+  </div>
+
+  <h2>3. Units</h2>
+
+  <div class="card">
+    <h3>src/release.rs - new</h3>
+    <p>What a release is: its tag, and the build this binary is (release or source).</p>
+<pre>pub mod source;
+
+/// A release's tag, v0.1.1 or v0.1.2-rc.1.
+pub struct Tag { version: semver::Version }
+impl Tag {
+    pub fn parse(text: &amp;str) -&gt; Result&lt;Tag&gt;;      // "v0.1.1" or "0.1.1"; else an error naming it
+    pub fn version(&amp;self) -&gt; &amp;semver::Version;
+}
+impl Display for Tag;                                // v0.1.1
+impl Ord for Tag;                                    // semver: 0.1.1-rc.1 &lt; 0.1.1 &lt; 0.1.2
+
+/// What this binary is: built by release.yml from a tag, or from source.
+pub enum Build { Release(Tag), Source(semver::Version) }
+impl Build {
+    pub fn running() -&gt; Build;                       // from env!("SAAIO_RELEASE"), else CARGO_PKG_VERSION
+    fn of(stamp: &amp;str, package: &amp;str) -&gt; Build;     // pure, for tests
+    pub fn version(&amp;self) -&gt; &amp;semver::Version;
+}</pre>
+  </div>
+
+  <div class="card">
+    <h3>src/release/source.rs - new</h3>
+    <p>Where releases are read: GitHub's releases page, or a folder laid out like it (<code>SAAIO_RELEASES_URL</code>), through curl.</p>
+<pre>pub const GITHUB: &amp;str = "https://github.com/JanSuthacheeva/saaio/releases";
+
+pub struct Releases { root: String }
+impl Releases {
+    pub fn at(root: Option&lt;String&gt;) -&gt; Releases;     // GITHUB unless set and non-empty
+    /// &lt;root&gt;/latest/download/&lt;asset&gt; or &lt;root&gt;/download/&lt;tag&gt;/&lt;asset&gt;.
+    pub fn url(&amp;self, tag: Option&lt;&amp;Tag&gt;, asset: &amp;str) -&gt; String;
+    /// The tag in the latest release's VERSION; Err offline, past `limit`, on a 404 or a bad tag.
+    pub fn latest(&amp;self, limit: Duration) -&gt; Result&lt;Tag&gt;;
+    /// An asset's text: a release's install.sh.
+    pub fn fetch(&amp;self, tag: &amp;Tag, asset: &amp;str, limit: Duration) -&gt; Result&lt;String&gt;;
+    /// True for GITHUB: curl then insists on https and TLS 1.2, as install.sh does.
+    fn is_github(&amp;self) -&gt; bool;
+    /// What install.sh needs besides SAAIO_VERSION: SAAIO_DOWNLOAD_URL for a root that is not GITHUB.
+    pub fn install_env(&amp;self, tag: &amp;Tag) -&gt; Vec&lt;(String, String)&gt;;
+}
+fn curl(&amp;self, url: &amp;str, limit: Duration) -&gt; Result&lt;String&gt;; // -fsSL, --max-time, process::output</pre>
+  </div>
+
+  <div class="card">
+    <h3>src/update.rs - new</h3>
+    <p>When to ask again, what the last answer was, and what <code>saaio update</code> does with a tag (pure, apart from the file).</p>
+<pre>pub const EVERY_MS: u64 = 24 * 60 * 60 * 1000;
+pub const FILE: &amp;str = "update.json";
+
+/// The last look: when, and the latest tag it or an earlier look found.
+#[derive(Serialize, Deserialize)]
+pub struct Checked { pub at: u64, pub latest: Option&lt;Tag&gt; }
+
+/// update.json in the shared folder.
+pub struct UpdateCheck { file: PathBuf }
+impl UpdateCheck {
+    pub fn in_folder(registry: &amp;Path) -&gt; UpdateCheck;
+    pub fn last(&amp;self) -&gt; Option&lt;Checked&gt;;               // None when missing or unreadable
+    pub fn due(&amp;self, now: u64) -&gt; bool;                  // no look in the last EVERY_MS
+    /// Records a look at `now`; a None answer keeps the latest an earlier one found.
+    pub fn record(&amp;self, now: u64, latest: Option&lt;Tag&gt;) -&gt; io::Result&lt;()&gt;;
+}
+
+/// "0.1.1 is out: saaio update" when `latest` is newer than the running build.
+pub fn notice(running: &amp;Build, latest: &amp;Tag) -&gt; Option&lt;String&gt;;
+
+/// What saaio update does.
+pub enum Step { Latest, Source, Unwritable, Install }
+pub fn step(running: &amp;Build, target: &amp;Tag, asked: bool, writable: bool) -&gt; Step;</pre>
+  </div>
+
+  <div class="card">
+    <h3>src/ui/update_watch.rs - new</h3>
+    <p>The UI's side of the check: asks when due and enabled, keeps the notice line.</p>
+<pre>pub struct UpdateWatch { check: Option&lt;UpdateCheck&gt;, releases: Releases, running: Build, enabled: bool, asking: bool }
+impl UpdateWatch {
+    pub fn new(check: Option&lt;UpdateCheck&gt;, releases: Releases, running: Build) -&gt; UpdateWatch;
+    pub fn set_enabled(&amp;mut self, enabled: bool);
+    /// Records the look and asks curl on a thread; the answer comes back as Event::Latest.
+    pub fn ask_if_due(&amp;mut self, now: u64, events: &amp;Sender&lt;Event&gt;);
+    pub fn answered(&amp;mut self, now: u64, latest: Option&lt;Tag&gt;);
+    /// The title row's line; None when off or nothing newer.
+    pub fn notice(&amp;self) -&gt; Option&lt;String&gt;;
+}
+const LIMIT: Duration = Duration::from_secs(8);   // curl --max-time 5, connect 3</pre>
+  </div>
+
+  <div class="card">
+    <h3>Modified units</h3>
+<pre>// src/ui.rs
+enum Event { ..., Latest(Option&lt;Tag&gt;) }
+pub struct UiEnv { ..., update: Option&lt;UpdateCheck&gt;, releases: Releases }
+const TICKS_PER_UPDATE: u32 = 36_000;   // an hour of ticks: a UI open for days still looks daily
+// reload_config also calls updates.set_enabled(config.ui.update_check)
+
+// src/ui/app.rs
+update: Option&lt;String&gt;,
+pub fn set_update(&amp;mut self, line: Option&lt;String&gt;) -&gt; bool;   // true when it changed
+
+// src/ui/app/chrome.rs
+fn update_line(&amp;self, theme: &amp;Theme, width: u16) -&gt; Vec&lt;Span&lt;'static&gt;&gt;;
+// right = notice, else update line + rail hint; the update line goes first when room is short
+
+// src/config.rs
+pub struct UiConfig { pub prefix: Prefix, pub update_check: bool }   // true unless set
+
+// src/cli.rs: Command::Update(update::Args), run without a store
+// src/cli/env.rs: pub saaio_releases_url: Option&lt;String&gt;; fn releases(&amp;self) -&gt; Releases
+// src/main.rs: reads SAAIO_RELEASES_URL
+// src/workspace/process.rs: pub fn output(argv: &amp;[String], limit: Duration) -&gt; Result&lt;String&gt;
+
+// src/cli/commands/update.rs
+#[derive(clap::Args)] pub struct Args { #[arg(long, value_name = "TAG")] version: Option&lt;String&gt; }
+pub fn run(args: &amp;Args, env: &amp;Env) -&gt; Result&lt;Document, Failure&gt;;
+fn install(releases: &amp;Releases, tag: &amp;Tag, dir: &amp;Path) -&gt; anyhow::Result&lt;String&gt;; // sh -s, script on stdin
+
+// src/cli/output/update.rs
+pub fn updated(from: &amp;Build, to: &amp;Tag, binary: &amp;str) -&gt; Document;
+pub fn latest(running: &amp;Build, latest: &amp;Tag) -&gt; Document;
+pub fn source(to: &amp;Tag) -&gt; Failure;
+pub fn unwritable(dir: &amp;str, releases: &amp;Releases, to: &amp;Tag) -&gt; Failure;
+
+// build.rs: cargo:rustc-env=SAAIO_RELEASE=&lt;$SAAIO_RELEASE or empty&gt;, rerun-if-env-changed
+// release.yml: Build step env SAAIO_RELEASE=$GITHUB_REF_NAME; package writes release/VERSION;
+//              install-check reads it back</pre>
+  </div>
+
+  <div class="card">
+    <h2>4. Data</h2>
+<pre># ~/.local/state/saaio/update.json (0600, write_atomic)
+{"at":1792569600000,"latest":"v0.1.1"}
+
+# each release: VERSION
+v0.1.1
+
+# saaio update, TOON
+updated: saaio 0.1.0 -&gt; 0.1.1
+binary: ~/.local/bin/saaio
+help[2]: A running saaio server keeps 0.1.0 until `saaio --stop`; unfinished flows resume after,Changes: https://github.com/JanSuthacheeva/saaio/releases/tag/v0.1.1</pre>
+  </div>
+
+  <h2>5. Call chains</h2>
+  <div class="card">
+    <h3>The UI starts, and every hour while it runs</h3>
+    <ol>
+      <li><code>ui::run -&gt; UpdateWatch::new(env.update, env.releases, Build::running())</code></li>
+      <li><code>reload_config -&gt; UpdateWatch::set_enabled(config.ui.update_check)</code>; off: <code>App::set_update(None)</code>, no look</li>
+      <li><code>ui::run -&gt; App::set_update(watch.notice())</code>: the last answer from update.json, no network</li>
+      <li><code>ui::run -&gt; UpdateWatch::ask_if_due(now, &amp;events)</code> at start and each TICKS_PER_UPDATE</li>
+      <li><code>UpdateWatch -&gt; UpdateCheck::due(now)</code>: false -&gt; done</li>
+      <li><code>UpdateWatch -&gt; UpdateCheck::record(now, None)</code> first, so a second UI does not ask too</li>
+      <li>thread: <code>Releases::latest(LIMIT) -&gt; curl .../latest/download/VERSION</code> -&gt; <code>Event::Latest(Some(tag))</code></li>
+      <li><code>ui::run -&gt; UpdateWatch::answered(now, latest) -&gt; UpdateCheck::record</code>; <code>App::set_update(watch.notice())</code> redraws</li>
+    </ol>
+    <p class="meta">Errors: offline, timeout, 404, no curl, unreadable or unwritable file -&gt; <code>Event::Latest(None)</code> or nothing; the notice stays as it was. Nothing is logged and nothing shows.</p>
+  </div>
+
+  <div class="card">
+    <h3><code>saaio update [--version TAG]</code></h3>
+    <ol>
+      <li><code>cli::run -&gt; commands::update::run(args, env)</code>, before the store is opened</li>
+      <li><code>run -&gt; Tag::parse(version)</code> or <code>env.releases().latest(15 s)</code></li>
+      <li><code>run -&gt; current_exe().canonicalize()</code>, its folder; <code>rustix::fs::access(dir, WRITE_OK)</code></li>
+      <li><code>run -&gt; update::step(Build::running(), tag, asked, writable)</code></li>
+      <li>Latest -&gt; <code>output::update::latest</code>, exit 0</li>
+      <li>Source -&gt; <code>output::update::source</code>: the cargo install line with the tag, exit 1</li>
+      <li>Unwritable -&gt; <code>output::update::unwritable</code>: <code>curl ... | sudo env SAAIO_VERSION=.. SAAIO_INSTALL_DIR=.. sh</code>, exit 1</li>
+      <li>Install -&gt; <code>Releases::fetch(tag, "install.sh")</code> -&gt; <code>sh -s</code> with SAAIO_VERSION, SAAIO_INSTALL_DIR and <code>Releases::install_env</code> -&gt; install.sh downloads, verifies SHA256SUMS, renames over the binary</li>
+      <li><code>output::update::updated(from, to, binary)</code></li>
+    </ol>
+    <p class="meta">Errors: a bad --version -&gt; exit 2 usage-style message naming it; latest unreachable -&gt; exit 1 "could not read the latest release: &lt;curl's line&gt;", help: check the connection or pass --version; install.sh fails (checksum mismatch, no prebuilt binary for the platform) -&gt; exit 1 with its last line.</p>
+  </div>
+
+  <div class="card">
+    <h2>6. Conventions followed</h2>
+    <ul>
+      <li>A thread whose answer comes back as an <code>Event</code>: <code>run_job</code>, <code>src/ui.rs:270</code>.</li>
+      <li>Commands without a store: <code>BugReport</code>, <code>src/cli.rs:86</code>.</li>
+      <li>A build input passed through <code>build.rs</code>: <code>SAAIO_COMMIT</code>.</li>
+      <li>Shared-folder files written through <code>private::write_atomic</code>: <code>slots.rs</code>, <code>registry.rs</code>.</li>
+      <li>Processes with a deadline: <code>workspace/process.rs:16</code>; config defaults with a manual <code>Default</code>: <code>ServicesConfig</code>.</li>
+      <li>One deviation: a new dependency, <code>semver</code> (dtolnay, no dependencies of its own), for correct pre-release ordering instead of a hand-written comparison.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>7. Test seams</h2>
+    <ul>
+      <li><code>release.rs</code>: Tag parse and ordering, <code>Build::of</code>; unit.</li>
+      <li><code>release/source.rs</code>: URLs; <code>latest</code> and <code>fetch</code> against a <code>file://</code> folder; a missing folder errs.</li>
+      <li><code>update.rs</code>: due, record keeping an earlier tag, notice, the <code>step</code> matrix; unit with a temp folder.</li>
+      <li><code>update_watch.rs</code>: disabled shows nothing; an answer sets the notice; ask_if_due sends Latest from a fake folder.</li>
+      <li>chrome: golden files for the update line with the sidebar, with the rail, and dropped when narrow.</li>
+      <li><code>commands/update.rs install</code>: the real install.sh against a fake release folder (tarball, SHA256SUMS), replacing a binary in a temp folder; a bad checksum fails.</li>
+      <li><code>tests/cli/update.rs</code>: a source build names the cargo line; the latest unreachable fails with help; <code>--version nonsense</code> fails.</li>
+      <li>config: the example test covers <code>#update_check = true</code>.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>8. Assumptions</h2>
+    <ol>
+      <li>A failed look counts as the day's look, so an offline laptop does not try every hour.</li>
+      <li>The notice only shows; no key dismisses it. It goes when saaio is updated and the UI restarted.</li>
+      <li><code>saaio update</code> with no newer release does nothing; <code>--version</code> installs that tag even if it is older or the same.</li>
+      <li>A source build is never replaced by a release binary, even with <code>--version</code>.</li>
+      <li>The notice is on for source builds too.</li>
+      <li><code>SAAIO_RELEASES_URL</code> is public and documented as a mirror of the releases page, which is also the test fake.</li>
+      <li>The title shows <code>0.1.1 is out:</code> faint and <code>saaio update</code> in the key color, and drops first when the row is short.</li>
+      <li>The ROADMAP row is removed, as it ships in this PR.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>9. Open questions</h2>
+    <p>None: decided by the recommendations above, as the user asked.</p>
+  </div>
+</div>
+</body>
+</html>
