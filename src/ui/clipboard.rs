@@ -48,18 +48,18 @@ impl Clipboard {
             .stderr(Stdio::null())
             .spawn()
             .with_context(|| format!("could not run {program}"))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(text.as_bytes())
-                .with_context(|| format!("could not write to {program}"))?;
-        }
+        // Waited for even when the write fails: a command that exited first says why in its status.
+        let written = child
+            .stdin
+            .take()
+            .map_or(Ok(()), |mut stdin| stdin.write_all(text.as_bytes()));
         let status = child
             .wait()
             .with_context(|| format!("could not wait for {program}"))?;
         if !status.success() {
             bail!("{program} failed: {status}");
         }
-        Ok(())
+        written.with_context(|| format!("could not write to {program}"))
     }
 }
 
@@ -140,5 +140,18 @@ mod tests {
 
         assert_eq!(error.to_string(), "false failed: exit status: 1");
         assert_eq!(out, b"\x1b]52;c;aGk=\x07");
+    }
+
+    #[test]
+    fn a_command_that_fails_before_reading_is_named_by_its_status() {
+        let text = "x".repeat(1 << 20);
+
+        let error = Clipboard {
+            command: Some(&["false"]),
+        }
+        .copy(&mut Vec::new(), &text)
+        .unwrap_err();
+
+        assert_eq!(error.to_string(), "false failed: exit status: 1");
     }
 }
