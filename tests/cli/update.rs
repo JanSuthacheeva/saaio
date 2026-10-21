@@ -1,10 +1,57 @@
-//! Tests of `saaio update`: a source build, an unreachable releases page, a tag that is none
+//! Tests of updates: the UI's notice, and `saaio update` from a source build, an unreachable
+//! releases page, a tag that is none
 
 use std::fs;
+use std::path::Path;
+use std::thread;
+use std::time::Duration;
 
 use tempfile::TempDir;
 
 use crate::support::*;
+
+/// A releases page in `dir` whose latest release is `latest`; its file:// URL.
+fn releases_page(dir: &Path, latest: &str) -> String {
+    let page = dir.join("releases/latest/download");
+    fs::create_dir_all(&page).unwrap();
+    fs::write(page.join("VERSION"), format!("{latest}\n")).unwrap();
+    format!("file://{}/releases", dir.display())
+}
+
+#[test]
+fn the_ui_names_a_newer_release_unless_turned_off() {
+    for on in [true, false] {
+        let lab = Lab::new();
+        lab.agent("command = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]");
+        if !on {
+            let config = lab.home.join("no-config.toml");
+            let text = fs::read_to_string(&config).unwrap();
+            fs::write(&config, format!("{text}\n[ui]\nupdate_check = false\n")).unwrap();
+        }
+        let url = releases_page(lab.dir.path(), "v9.9.9");
+        let _stops = StopsServer(&lab.home);
+
+        let terminal = Terminal::open(&lab.home, &lab.repo, &[], &[("SAAIO_RELEASES_URL", &url)]);
+
+        wait_until("the UI never drew", || terminal.shows("\x1b[?1049h"));
+        let looked = shared(&lab.home).join("saaio/update.json");
+        if on {
+            wait_until("the UI never named the release", || {
+                terminal.shows("9.9.9 is out: ")
+            });
+            assert!(
+                fs::read_to_string(&looked)
+                    .unwrap()
+                    .contains("\"latest\":\"v9.9.9\"")
+            );
+        } else {
+            thread::sleep(Duration::from_secs(1));
+            assert!(!terminal.shows("is out: "), "{}", terminal.text());
+            assert!(!looked.exists());
+        }
+        assert!(lab.run(&["--stop"]).status.success());
+    }
+}
 
 #[test]
 fn a_build_from_source_names_the_cargo_line_for_the_latest_release() {
