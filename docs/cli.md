@@ -15,6 +15,7 @@
 - [saaio clear](#saaio-clear)
 - [saaio bug-report](#saaio-bug-report)
 - [saaio completions](#saaio-completions)
+- [saaio update](#saaio-update)
 - [Commands saaio runs itself](#commands-saaio-runs-itself)
 - [Output, errors and exit codes](#output-errors-and-exit-codes)
 - [Environment variables](#environment-variables)
@@ -37,6 +38,7 @@
 | `saaio clear` | forget finished flows and tear down their worktrees |
 | `saaio bug-report` | write a file to attach to a bug report |
 | `saaio completions <shell>` | print the completion script for a shell |
+| `saaio update [--version <tag>]` | install the latest release over this binary |
 
 - `<flow>`: a flow's name or id. A name means the unfinished flow of that name, else the most recent
   finished one.
@@ -474,6 +476,38 @@ error: invalid value 'tcsh' for '<SHELL>'; one of bash | elvish | fish | powersh
 help[1]: Run `saaio completions --help` for the usage
 ```
 
+## saaio update
+
+```
+saaio update [--version <tag>]
+```
+
+Installs the latest release, or the tag `--version` names (a pre-release too), over the `saaio`
+being run, in the folder it is in. It runs that release's `install.sh`, which checks the download
+against `SHA256SUMS` and renames the new binary over the old one. Works without a store.
+
+```
+$ saaio update
+updated: saaio 0.1.0 -> 0.1.1
+binary: ~/.local/bin/saaio
+help[2]: A running saaio server keeps 0.1.0 until `saaio --stop`; unfinished flows resume after,"Changes: https://github.com/JanSuthacheeva/saaio/releases/tag/v0.1.1"
+```
+
+- Already on the latest release (or a newer pre-release), it changes nothing and says so.
+  `--version` installs the tag it names even when it is older.
+- The latest release never is a pre-release. Install one with `--version v0.1.2-rc.1`.
+- A build from source (`cargo install`) is not replaced. It names the `cargo install` line for the
+  new tag instead.
+- A folder you cannot write, such as `/usr/local/bin`, is not touched. It names the `sudo` line
+  that runs `install.sh` there.
+- The running server and the UI attached to it keep the old version until `saaio --stop`.
+
+```
+$ saaio update
+error: "this saaio was built from source, so saaio update does not replace it"
+help[2]: "Run `cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.1.1 --force`","Or install the release binary instead: docs/install.md"
+```
+
 ## Commands saaio runs itself
 
 Not listed in `saaio --help`. Not for manual use.
@@ -514,6 +548,7 @@ Read by saaio:
 | `CLAUDECODE`, `CODEX_THREAD_ID` | set by Claude Code or Codex. `saaio` prints the flows instead of opening the UI. |
 | `SSH_CONNECTION`, `SSH_TTY`, `WAYLAND_DISPLAY`, `DISPLAY` | how the UI copies: OSC 52 only over SSH, else also `pbcopy`, `wl-copy` or `xclip` ([ui.md](ui.md#copying)) |
 | `CLAUDE_CONFIG_DIR` | Claude Code's folder, where the UI reads a worker's transcript for the peek. Default: `~/.claude`. |
+| `SAAIO_RELEASES_URL` | a mirror of the [releases page](https://github.com/JanSuthacheeva/saaio/releases), laid out like it (`latest/download/VERSION`, `download/<tag>/...`; `file://` works). Read by the UI's update check and `saaio update`. |
 
 Set by saaio in every worker's session and in the setup, teardown, pause and resume hooks:
 

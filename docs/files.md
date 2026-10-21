@@ -57,6 +57,7 @@ the store outside a repository.
 | `stores/<hash>` | one store's folder, so `saaio status --all` finds every project. Dropped when the folder is gone. |
 | `slots/<n>` | the flow holding slot `n`. Counts only while that flow is unfinished. |
 | `slots/.lock` | held while a slot is claimed, so two starts never get the same slot |
+| `update.json` | when the UI last looked for a newer release, and the latest it found ([configuration.md](configuration.md#ui)) |
 
 ## In a repository
 
