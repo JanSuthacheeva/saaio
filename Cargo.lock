@@ -1664,6 +1664,7 @@ dependencies = [
  "pulldown-cmark",
  "ratatui",
  "rustix",
+ "semver",
  "serde",
  "serde_json",
  "serde_toon_format",

@@ -33,6 +33,7 @@ mod private;
 mod proto;
 mod refusal;
 mod registry;
+mod release;
 mod server;
 mod server_log;
 mod slots;

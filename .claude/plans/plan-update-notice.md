@@ -210,7 +210,7 @@ Errors: offline, timeout, 404, no curl, file errors -> nothing shows, nothing lo
 
 ## Tasks
 
-- [ ] Add `release::Tag` and `release::Build` with `semver`, `build.rs` passing `SAAIO_RELEASE`; unit tests for parse, ordering and `Build::of`
+- [x] Add `release::Tag` and `release::Build` with `semver`, `build.rs` passing `SAAIO_RELEASE`; unit tests for parse, ordering and `Build::of`
 - [ ] Add `workspace::process::output` and `release::source::Releases` (url, latest, fetch, install_env, curl) with tests against a `file://` folder
 - [ ] Add `update::UpdateCheck`, `Checked`, `notice` and `step` with unit tests (due, record keeping an earlier tag, notice text, step matrix)
 - [ ] Add `[ui] update_check` to `UiConfig` and `#update_check = true` to `examples/config.toml`; config tests pass
