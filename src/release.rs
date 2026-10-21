@@ -5,10 +5,12 @@
     reason = "saaio update and the UI use it from later tasks on"
 )]
 
+pub mod source;
+
 use std::cmp::Ordering;
 use std::fmt;
 
-use anyhow::{Context, Result};
+use anyhow::{Result, anyhow};
 use semver::Version;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -25,7 +27,7 @@ impl Tag {
         let version = text.strip_prefix('v').unwrap_or(text);
         Version::parse(version)
             .map(|version| Tag { version })
-            .with_context(|| format!("not a release tag: {text}"))
+            .map_err(|_| anyhow!("not a release tag: {text}"))
     }
 
     pub fn version(&self) -> &Version {
