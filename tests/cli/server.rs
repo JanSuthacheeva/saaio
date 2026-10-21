@@ -2,7 +2,7 @@ use std::fs;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, Stdio};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use rustix::process::{Pid, Signal, getsid, kill_process};
 use tempfile::TempDir;
@@ -12,12 +12,7 @@ use crate::support::*;
 #[test]
 fn stop_ends_a_running_server_and_says_when_none_runs() {
     let home = TempDir::new().unwrap();
-    let config = home.path().join("config.toml");
-    fs::write(
-        &config,
-        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n\n[agents.master]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
-    )
-    .unwrap();
+    let config = cat_agents(home.path());
     let socket = home.path().join("server.sock");
     let log = home.path().join("server.log");
 
@@ -76,12 +71,7 @@ fn stop_ends_a_running_server_and_says_when_none_runs() {
 #[test]
 fn a_server_stopped_while_it_starts_still_stops_cleanly() {
     let home = TempDir::new().unwrap();
-    let config = home.path().join("config.toml");
-    fs::write(
-        &config,
-        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n\n[agents.master]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
-    )
-    .unwrap();
+    let config = cat_agents(home.path());
     let socket = home.path().join("server.sock");
 
     let server = saaio_command(home.path())
@@ -109,12 +99,7 @@ fn a_server_stopped_while_it_starts_still_stops_cleanly() {
 #[test]
 fn the_server_leads_a_session_of_its_own() {
     let home = TempDir::new().unwrap();
-    let config = home.path().join("config.toml");
-    fs::write(
-        &config,
-        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n\n[agents.master]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
-    )
-    .unwrap();
+    let config = cat_agents(home.path());
     let socket = home.path().join("server.sock");
 
     let server = saaio_command(home.path())
@@ -125,11 +110,7 @@ fn the_server_leads_a_session_of_its_own() {
         .spawn()
         .unwrap();
     let mut server = Running(server);
-    let deadline = Instant::now() + PATIENCE;
-    while !socket.exists() {
-        assert!(Instant::now() < deadline, "the server never bound");
-        thread::sleep(Duration::from_millis(20));
-    }
+    wait_for_socket(&socket);
     let pid = Pid::from_raw(i32::try_from(server.id()).unwrap()).unwrap();
     assert_eq!(getsid(Some(pid)).unwrap(), pid);
 

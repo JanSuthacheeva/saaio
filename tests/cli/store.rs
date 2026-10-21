@@ -67,12 +67,7 @@ fn worktree_of(home: &Path, id: &str, name: &str, origin: &str) {
 /// `saaio server` with cat for the worker and the master and `gh` from `script` first on PATH;
 /// its stderr in home/server.log.
 fn server_with_gh(home: &Path, script: &str) -> Running {
-    let config = home.join("config.toml");
-    fs::write(
-        &config,
-        "[agents.claude]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n\n[agents.master]\ncommand = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]\n",
-    )
-    .unwrap();
+    let config = cat_agents(home);
     let bin = home.join("bin");
     fs::create_dir_all(&bin).unwrap();
     executable(&bin.join("gh"), script);
