@@ -140,6 +140,14 @@ Writes to `~/.config/saaio`:
 | `theme.toml` | every color, commented out ([themes.md](themes.md)) |
 | `master.md` | the master's instructions ([flows.md](flows.md#the-master)) |
 
+Highly recommended:
+
+1. Read `config.toml` once. Every setting is there, commented out at its default
+   ([configuration.md](configuration.md), [examples/config.toml](../examples/config.toml)).
+2. Set the recommended permissions in your agents (Claude Code's `settings.json`, Codex's
+   `config.toml`), so workers run without stopping at every prompt and saaio works as intended
+   ([agents.md](agents.md)).
+
 | Prompt | Answer |
 | --- | --- |
 | an agent opening in a folder it does not trust yet (a Claude Code worker's new worktree, the master's or a plain session's folder) asks whether to trust it | answer in its pane |

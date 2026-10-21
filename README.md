@@ -30,6 +30,16 @@ cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.1.
 
 More: [docs/install.md](docs/install.md).
 
+> [!IMPORTANT]
+> Highly recommended before you start:
+>
+> 1. Read `~/.config/saaio/config.toml` once. The first run writes it, every setting commented out
+>    at its default. Same file: [examples/config.toml](examples/config.toml). Details:
+>    [docs/configuration.md](docs/configuration.md).
+> 2. Set the recommended permissions in your agents (Claude Code's `settings.json`, Codex's
+>    `config.toml`). Workers then run without stopping at every prompt, and saaio works as
+>    intended. Details: [docs/agents.md](docs/agents.md).
+
 ## Workflow
 
 A worker's first prompt is `/ship-feature <request>` (`$ship-feature` in Codex) by default. Pick one:
