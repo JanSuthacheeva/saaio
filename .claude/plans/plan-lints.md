@@ -93,7 +93,7 @@ as they are (clap's env read runs inside main.rs's parse; CI compiles the Linux 
 - [x] peer_pid through nix's safe getsockopt on macOS and Linux
 - [x] local_offset_secs through jiff
 - [x] unsafe_code = "forbid", drop undocumented_unsafe_blocks and unused libc; docs
-- [ ] End to end: the UI starts the server in its own session (ps shows sess/tty), saaio --stop finds its pid, log stamps carry the local offset
+- [x] End to end: the UI starts the server in its own session (ps shows sess/tty), saaio --stop finds its pid, log stamps carry the local offset
 
 ## Review
 
