@@ -144,6 +144,7 @@ pub fn updated(from: &Build, to: &Tag, binary: &str) -> Document;
 pub fn latest(running: &Build, latest: &Tag) -> Document;
 pub fn source(to: &Tag) -> Failure;
 pub fn unwritable(dir: &str, releases: &Releases, to: &Tag) -> Failure;
+pub fn failed(to: &Tag, why: &str, releases: &Releases) -> Failure; // Releases::page names the page
 
 // build.rs: cargo:rustc-env=SAAIO_RELEASE=<$SAAIO_RELEASE or "">, rerun-if-env-changed=SAAIO_RELEASE
 // release.yml: Build step env SAAIO_RELEASE=$GITHUB_REF_NAME (Test step without it);
@@ -187,7 +188,8 @@ Errors: offline, timeout, 404, no curl, file errors -> nothing shows, nothing lo
 6. Source -> `output::update::source`: `cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag <tag> --force`, exit 1
 7. Unwritable -> `output::update::unwritable`: `curl -fsSL <install.sh url> | sudo env SAAIO_VERSION=<tag> SAAIO_INSTALL_DIR=<dir> sh`, exit 1
 8. Install -> `install`: `Releases::fetch(tag, "install.sh")` -> `sh -s` with `install_env` and
-   `SAAIO_INSTALL_DIR`; a failure -> exit 1 with install.sh's last line
+   `SAAIO_INSTALL_DIR`; a failure -> `output::update::failed`: exit 1, "could not install <tag>: <why>"
+   (install.sh's last line or curl's), help: check the tag on the releases page, or the connection
 9. `output::update::updated(from, to, binary)`
 
 ## Test seams

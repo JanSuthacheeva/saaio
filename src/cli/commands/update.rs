@@ -54,7 +54,8 @@ pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
             &target,
         )),
         Step::Install => {
-            install(&releases, &target, dir)?;
+            install(&releases, &target, dir)
+                .map_err(|error| output::failed(&target, &format!("{error:#}"), &releases))?;
             Ok(output::updated(&running, &target, &env.bin_path()))
         }
     }

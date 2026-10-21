@@ -30,6 +30,11 @@ impl Releases {
         Releases { root }
     }
 
+    /// The releases page itself.
+    pub fn page(&self) -> &str {
+        &self.root
+    }
+
     /// The latest release's `asset` without a tag, else that tag's.
     pub fn url(&self, tag: Option<&Tag>, asset: &str) -> String {
         match tag {

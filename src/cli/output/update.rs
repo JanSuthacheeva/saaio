@@ -57,6 +57,17 @@ pub(crate) fn source(to: &Tag) -> Failure {
     )
 }
 
+/// `to` could not be installed: `why`, such as a tag that is no release or a failed download.
+pub(crate) fn failed(to: &Tag, why: &str, releases: &Releases) -> Failure {
+    Failure::error(
+        format!("could not install {to}: {why}"),
+        vec![
+            format!("Check that {to} is a release: {}", releases.page()),
+            "Check the connection, then try again".to_string(),
+        ],
+    )
+}
+
 /// The binary's folder `dir` cannot be written: install.sh run as root can.
 pub(crate) fn unwritable(dir: &str, releases: &Releases, to: &Tag) -> Failure {
     let env: Vec<String> = releases
@@ -132,6 +143,20 @@ mod tests {
             ]
         );
         assert_eq!(word("it's"), r"'it'\''s'");
+    }
+
+    #[test]
+    fn a_failed_install_names_the_tag_and_where_releases_are() {
+        let failure = failed(&tag("v0.1.9"), "curl: (22) 404", &Releases::at(None));
+
+        assert_eq!(failure.message, "could not install v0.1.9: curl: (22) 404");
+        assert_eq!(
+            failure.help,
+            vec![
+                "Check that v0.1.9 is a release: https://github.com/JanSuthacheeva/saaio/releases",
+                "Check the connection, then try again",
+            ]
+        );
     }
 
     #[test]
