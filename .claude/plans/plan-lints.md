@@ -70,4 +70,4 @@ undocumented_unsafe_blocks = "warn"
 - [x] Add clippy.toml disallowed-methods with the local and test-only allows
 - [x] `expect` with a reason for the two unwraps in adapter/codex.rs
 - [x] CLAUDE.md and CONTRIBUTING.md name the rules
-- [ ] End to end: clippy, test and fmt pass; each new rule proved once by a throwaway violation
+- [x] End to end: clippy, test and fmt pass; each new rule proved once by a throwaway violation
