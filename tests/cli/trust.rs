@@ -69,3 +69,27 @@ fn revokes_the_trust_so_start_asks_again() {
     assert_eq!(start.status.code(), Some(1));
     assert!(stdout(&start).contains("is not trusted"));
 }
+
+#[test]
+fn revokes_the_trust_of_a_folder_that_is_gone() {
+    let lab = Lab::new();
+    let other = lab.home.join("other");
+    std::fs::create_dir_all(&other).unwrap();
+    let other = other.canonicalize().unwrap();
+    let mut terminal = Terminal::open(&lab.home, &other, &["trust"], &[]);
+    wait_until("saaio trust did not end", || {
+        terminal.child.try_wait().unwrap().is_some()
+    });
+    assert!(terminal.shows("trusted: "), "{}", terminal.text());
+    std::fs::remove_dir(&other).unwrap();
+
+    let revoked = lab.run(&["trust", "--revoke", other.to_str().unwrap()]);
+
+    let text = stdout(&revoked);
+    assert_eq!(revoked.status.code(), Some(0), "{text}");
+    assert!(
+        text.starts_with(&format!("revoked: {}\n", other.display())),
+        "{text}"
+    );
+    assert!(stdout(&lab.run(&["trust", "--list"])).starts_with("trusted: []\n"));
+}

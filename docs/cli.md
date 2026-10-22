@@ -468,7 +468,7 @@ help[1]: Run `saaio trust --revoke ~/projects/shop` to take it back
 
 | Option | Effect |
 | --- | --- |
-| `--revoke` | takes the trust back: `revoked: <repository>`, or `revoked: none` when it was not trusted. Works anywhere. |
+| `--revoke` | takes the trust back: `revoked: <repository>`, or `revoked: none` when it was not trusted. Works anywhere, also on a folder deleted since (pass the path `--list` shows). |
 | `--list` | every trusted repository |
 
 ## saaio bug-report

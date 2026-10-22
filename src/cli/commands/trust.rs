@@ -35,10 +35,17 @@ pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
         return Ok(output::list(&trust.repos()));
     }
     let cwd = std::env::current_dir()?;
-    let root = root(&cwd.join(args.folder.as_deref().unwrap_or(Path::new("."))))?;
+    let folder = cwd.join(args.folder.as_deref().unwrap_or(Path::new(".")));
     if args.revoke {
+        // A repository deleted since keeps its trust until revoked by the path --list shows.
+        let root = if folder.exists() {
+            root(&folder)?
+        } else {
+            folder
+        };
         return Ok(output::revoked(&root, trust.revoke(&root)?));
     }
+    let root = root(&folder)?;
     if !env.is_person() {
         return Err(output::not_a_person(&root));
     }
