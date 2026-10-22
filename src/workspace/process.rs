@@ -229,20 +229,22 @@ mod tests {
     #[test]
     fn a_command_killed_past_its_limit_takes_what_it_started_with_it() {
         let dir = TempDir::new().unwrap();
-        let script = dir.path().join("compose");
         let pid_file = dir.path().join("pid");
-        executable(
-            &script,
-            &format!(
-                "#!/bin/sh\nsleep 30 &\necho $! > {}\nexec sleep 30\n",
+        // sh itself, not a script written for the test: a new executable can take seconds to
+        // start under load on macOS, past the limit.
+        let argv = [
+            "sh".to_string(),
+            "-c".to_string(),
+            format!(
+                "sleep 30 & echo $! > '{}'; exec sleep 30",
                 pid_file.display()
             ),
-        );
+        ];
 
-        let error = output(&[script.display().to_string()], Duration::from_secs(2));
+        let error = output(&argv, Duration::from_secs(2));
 
-        assert!(error.is_err());
-        let pid = fs::read_to_string(&pid_file).unwrap();
+        let error = error.unwrap_err();
+        let pid = fs::read_to_string(&pid_file).unwrap_or_else(|_| panic!("no pid: {error:#}"));
         let pid = Pid::from_raw(pid.trim().parse().unwrap()).unwrap();
         let started = Instant::now();
         while test_kill_process(pid).is_ok() && started.elapsed() < SOON {
