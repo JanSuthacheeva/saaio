@@ -40,14 +40,14 @@ pub enum Job {
 }
 
 impl Job {
-    /// The arguments after the flow binary.
+    /// The arguments after the flow binary: options first, then `--` before a request or a flow
+    /// name, so one that starts with `-` is never read as an option.
     pub fn args(&self) -> Vec<String> {
         match self {
             Job::Start(form) if form.mode == Mode::Plain => {
                 let mut args = vec![
                     "start".to_string(),
-                    "--plain".to_string(),
-                    form.folder.trim().to_string(),
+                    format!("--plain={}", form.folder.trim()),
                 ];
                 if let Some(agent) = form.picked_agent() {
                     args.extend(["--agent".to_string(), agent.to_string()]);
@@ -57,7 +57,6 @@ impl Job {
             Job::Start(form) => {
                 let mut args = vec![
                     "start".to_string(),
-                    form.request.trim().to_string(),
                     "--mode".to_string(),
                     form.mode.name().to_string(),
                 ];
@@ -67,16 +66,18 @@ impl Job {
                 if let Some(agent) = form.picked_agent() {
                     args.extend(["--agent".to_string(), agent.to_string()]);
                 }
+                args.extend(["--".to_string(), form.request.trim().to_string()]);
                 args
             }
             Job::Remove(removal) => {
-                let mut args = vec!["remove".to_string(), removal.name.clone()];
+                let mut args = vec!["remove".to_string()];
                 if removal.force {
                     args.push("--force".to_string());
                 }
                 if removal.delete_unmerged {
                     args.push("--delete-unmerged".to_string());
                 }
+                args.extend(["--".to_string(), removal.name.clone()]);
                 args
             }
             Job::Overview => vec![
@@ -87,7 +88,7 @@ impl Job {
         }
     }
 
-    /// How server.log names it: `saaio start in ~/projects/shop`, `saaio remove shop-230 --force`;
+    /// How server.log names it: `saaio start in ~/projects/shop`, `saaio remove --force -- shop-230`;
     /// without the request, which can be long.
     pub fn summary(&self) -> String {
         match self {
