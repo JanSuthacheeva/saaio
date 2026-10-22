@@ -5,7 +5,7 @@
 | Source | Shows |
 | --- | --- |
 | `saaio status <name> --full` | everything saaio knows about a flow, nothing truncated |
-| `server.log` in the store (`~/.local/state/saaio/projects/<repository>/server.log`, `~/.local/state/saaio/server.log` outside a repository, or under `$SAAIO_HOME`; `/tmp/saaio-<uid>/<hash>.log` when the store's path is long, [files.md](files.md#the-store)) | sessions opened, resumed or failed to start, files that could not be written, why the server stopped. Also errors of the hooks in each worker (`hook ...`) and of the UI (`ui: ...`). |
+| `server.log` in the store (`~/.local/state/saaio/projects/<repository>/server.log`, `~/.local/state/saaio/server.log` outside a repository, or under `$SAAIO_HOME`; `saaio-<uid>/<hash>.log` in `$XDG_RUNTIME_DIR`, `$TMPDIR` or `/tmp` when the store's path is long, [files.md](files.md#the-store)) | sessions opened, resumed or failed to start, files that could not be written, why the server stopped. Also errors of the hooks in each worker (`hook ...`) and of the UI (`ui: ...`). |
 
 Each `server.log` line starts with a time and a process id. The start line names the saaio
 version and commit, the OS and the versions of `claude`, `codex`, `gh` and `glab`:
@@ -43,7 +43,10 @@ The home folder is written `~`. A second report on the same day is written besid
 
 | Problem | Cause | Fix |
 | --- | --- | --- |
-| `saaio server runs protocol 6, this saaio speaks 7` | after an update, the old server still runs | `saaio --stop`, then `saaio`. Unfinished flows resume. |
+| `saaio server runs protocol 7, this saaio speaks 8` | after an update, the old server still runs | `saaio --stop`, then `saaio`. Unfinished flows resume. |
+| `a saaio server of an earlier version still runs on /tmp/saaio-<uid>/...` | after updating from 0.1.0, its server of a store with a long path still runs | `saaio --stop`, then `saaio` |
+| `saaio connects to its server only in a private folder: ... is open to others` | the socket's folder is not yours alone (`0700`) | `chmod 700` it if it is yours, else remove it, then `saaio` |
+| a session's state no longer changes; server.log says `SAAIO_KEY does not prove ...` | the session was not opened by the running server, such as one still open from before an update | `saaio --stop`, then `saaio`: every session reopens with its key |
 | the prefix key does nothing | the terminal or a surrounding tmux keeps `C-space` | set another prefix, such as `prefix = "C-b"` under `[ui]` in `config.toml`. It applies on save ([configuration.md](configuration.md#ui)) |
 | `saaio` prints the flows instead of opening the UI | it runs inside an agent or a worker (`CLAUDECODE`, `CODEX_THREAD_ID`, `SAAIO_FLOW_ID` or `SAAIO_MASTER` set), or stdin or stdout is not a terminal | run it in a terminal of its own |
 | the UI or `saaio status` shows none of a project's flows | each git repository has its own store, picked from the folder saaio runs in | run it in that repository, or `saaio status --all` for every project ([cli.md](cli.md#several-projects)) |

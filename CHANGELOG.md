@@ -12,8 +12,24 @@ All notable changes to saaio are listed here. The format follows
   day. `[ui] update_check = false` turns it off.
 - `saaio update` installs the latest release, or `--version <tag>`, over the binary you run.
 
+### Changed
+
+- When the store's path is too long for a socket, the socket and its log move from
+  `/tmp/saaio-<uid>/` to `$XDG_RUNTIME_DIR` or `$TMPDIR` (`/tmp` when neither fits).
+  `saaio --stop` still stops a server 0.1.0 started there.
+
 ### Fixed
 
+- `saaio hook`, `saaio wait` and `saaio send` act only for the session the server opened: each
+  session gets its own key in `SAAIO_KEY`. Setting `SAAIO_FLOW_ID` or `SAAIO_MASTER` no longer
+  reports into another flow, takes the master's news or sends as the master.
+- saaio uses the socket's folder only when it belongs to you and is closed to others, and the UI
+  and the server talk only to processes of your own user.
+- The server takes requests only after a connection's hello, closes one that says none within
+  5 seconds, lets `saaio remove` and `saaio clear` do nothing but close a pane, and takes at most
+  16 connections at once.
+- The server keeps running when the system is out of open files or threads, instead of spinning
+  or stopping.
 - A flow that ended, or went on to a subagent, no longer shows the question it asked earlier as
   its blocker in `saaio status`, its `--json` and the master's news.
 

@@ -236,5 +236,5 @@ Hello -> sets role and peer.
 - [x] Connection rules: `Conn::role`, `proto::allowed`, refuse before hello / second hello / Control beyond CloseFlow; server tests failing before
 - [x] Hello deadline and connection cap: HELLO_WAIT read timeout, MAX_CONNS; server tests
 - [x] Graceful accept and spawn: `accept_pause`, `spawn_named` -> io::Result and its callers; unit test of accept_pause
-- [ ] PROTOCOL_VERSION 8; CHANGELOG Fixed lines; docs (files.md socket, troubleshooting.md log path, cli.md send, flows.md hooks, agents/configuration env if listed); CLAUDE.md Architecture (identity.rs)
+- [x] PROTOCOL_VERSION 8; CHANGELOG Fixed lines; docs (files.md socket, troubleshooting.md log path, cli.md send, flows.md hooks, agents/configuration env if listed); CLAUDE.md Architecture (identity.rs)
 - [ ] End to end on a scratch store (long path, dummy master): the three repros refused, a real hook with the pane's key recorded, socket under $TMPDIR in a 0700 folder; `saaio --stop`; scratch removed
