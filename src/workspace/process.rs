@@ -1,6 +1,7 @@
 //! Commands run with a deadline, their output read even past a process they left behind
 
 use std::io::{ErrorKind, Read};
+use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -8,6 +9,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
+use rustix::process::{Pid, Signal, kill_process_group};
 
 use crate::text::short_duration;
 
@@ -34,8 +36,9 @@ pub fn output(argv: &[String], limit: Duration) -> Result<String> {
     Ok(String::from_utf8_lossy(&stdout).into_owned())
 }
 
-/// Runs `command` with no stdin; its stdout, or an error with the last line it printed. Past
-/// `limit` it is killed and fails.
+/// Runs `command` with no stdin in a process group of its own; its stdout, or an error with the
+/// last line it printed. Past `limit` the whole group is killed, with what the command started,
+/// and it fails.
 pub(super) fn finish_within(
     mut command: Command,
     program: &str,
@@ -45,6 +48,7 @@ pub(super) fn finish_within(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .process_group(0)
         .spawn()
         .with_context(|| format!("could not run {program}"))?;
     // Read in the background, so a full pipe never stops the command before it ends.
@@ -56,7 +60,14 @@ pub(super) fn finish_within(
             break status;
         }
         if Instant::now() >= deadline {
-            let _ = child.kill();
+            match Pid::from_raw(child.id().cast_signed()) {
+                Some(group) => {
+                    let _ = kill_process_group(group, Signal::KILL);
+                }
+                None => {
+                    let _ = child.kill();
+                }
+            }
             let _ = child.wait();
             let millis = u64::try_from(limit.as_millis()).unwrap_or(u64::MAX);
             bail!("no answer within {}", short_duration(millis));
@@ -153,6 +164,8 @@ mod tests {
 
     use tempfile::TempDir;
 
+    use rustix::process::{Pid, Signal, kill_process, test_kill_process};
+
     use super::*;
     use crate::fixtures::executable;
     use crate::workspace::fixtures::{LIMIT, SOON};
@@ -211,5 +224,34 @@ mod tests {
         executable(&failing, "#!/bin/sh\necho 'not logged in' >&2\nexit 4\n");
         let error = output_in(dir.path(), &[failing.display().to_string()], LIMIT).unwrap_err();
         assert_eq!(format!("{error:#}"), "not logged in");
+    }
+
+    #[test]
+    fn a_command_killed_past_its_limit_takes_what_it_started_with_it() {
+        let dir = TempDir::new().unwrap();
+        let script = dir.path().join("compose");
+        let pid_file = dir.path().join("pid");
+        executable(
+            &script,
+            &format!(
+                "#!/bin/sh\nsleep 30 &\necho $! > {}\nexec sleep 30\n",
+                pid_file.display()
+            ),
+        );
+
+        let error = output(&[script.display().to_string()], Duration::from_secs(2));
+
+        assert!(error.is_err());
+        let pid = fs::read_to_string(&pid_file).unwrap();
+        let pid = Pid::from_raw(pid.trim().parse().unwrap()).unwrap();
+        let started = Instant::now();
+        while test_kill_process(pid).is_ok() && started.elapsed() < SOON {
+            thread::sleep(WAIT_STEP);
+        }
+        let alive = test_kill_process(pid).is_ok();
+        if alive {
+            let _ = kill_process(pid, Signal::KILL);
+        }
+        assert!(!alive, "the background sleep outlived its command");
     }
 }

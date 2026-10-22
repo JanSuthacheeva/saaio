@@ -16,6 +16,9 @@ All notable changes to saaio are listed here. The format follows
 
 - A flow that ended, or went on to a subagent, no longer shows the question it asked earlier as
   its blocker in `saaio status`, its `--json` and the master's news.
+- A `.saaio` script stopped for running too long now takes what it started with it (a
+  `docker compose up` it began, a dev server): it runs in a process group of its own, and the
+  whole group is stopped.
 
 ## [0.1.0] - 2026-10-21
 
