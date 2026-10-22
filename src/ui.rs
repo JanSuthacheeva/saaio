@@ -44,7 +44,9 @@ use crate::proto::{Role, ServerMsg};
 use crate::release::source::Releases;
 use crate::release::{Build, Tag};
 use crate::server_log;
+use crate::trust::Trust;
 use crate::update::UpdateCheck;
+use crate::workspace::git;
 use app::{App, Effect, Job, JobError};
 use clipboard::Clipboard;
 use input::{Router, Target};
@@ -98,6 +100,8 @@ pub struct UiEnv {
     pub update: Option<UpdateCheck>,
     /// Where the latest release is read.
     pub releases: Releases,
+    /// The repositories the person trusts; None without a shared folder.
+    pub trust: Option<Trust>,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
@@ -219,6 +223,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                     copy(&env.clipboard, &env.log, &selection.text(&drawn), clock);
                 }
                 Effect::Copy(text) => copy(&env.clipboard, &env.log, &text, clock),
+                Effect::Trust(folder) => trust(env.trust.as_ref(), &folder, &env.log, clock),
                 Effect::Quit(message) => return Ok(message),
             }
         }
@@ -237,6 +242,18 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
 fn copy(clipboard: &Clipboard, log_file: &Path, text: &str, clock: fn() -> u64) {
     if let Err(error) = clipboard.copy(&mut io::stdout(), text) {
         log(log_file, clock, &format!("ui: copy failed: {error:#}"));
+    }
+}
+
+/// Trusts the repository `folder` is in, as the person said; a failure goes to server.log, and the
+/// start that follows asks again.
+fn trust(trust: Option<&Trust>, folder: &Path, log_file: &Path, clock: fn() -> u64) {
+    let Some(trust) = trust else {
+        log(log_file, clock, "ui: no shared folder to keep the trust in");
+        return;
+    };
+    if let Err(error) = trust.grant(&git::root_or_folder(folder)) {
+        log(log_file, clock, &format!("ui: {error:#}"));
     }
 }
 

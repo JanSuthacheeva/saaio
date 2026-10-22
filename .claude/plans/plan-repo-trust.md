@@ -77,7 +77,7 @@ fn refuse_links(repo: &Path) -> Result<()>;
 
 `src/server`: `Server` keeps `trust: Trust` (from the server command's registry); panes and reconcile pass `trust.covers(&trust::root_of(space))`; `PauseWatch` skips repos trust does not cover (`scripted_repo(flow, trust)`), `run_in_background` passes the trust to `hooks::run`; `HOOK_LIMIT` goes (Hook::limit).
 
-`src/ui`: `View::Confirm { question, then: Confirmed }` with `enum Confirmed { Remove(Removal), Trust(NewFlowForm) }`; `on_ran` turns `(Job::Start(form), Err(Untrusted))` into a Confirm `"{message}. Trust it?"`; `y` on Trust gives `[Effect::Trust(form.repo.clone()), Effect::Run(Job::Start(form))]`; `ui.rs` performs `Effect::Trust` with `UiEnv::trust: Option<Trust>`, a failure shown as the notice.
+`src/ui`: `View::Confirm { question, then: Confirmed }` with `enum Confirmed { Remove(Removal), Trust(NewFlowForm) }`; `on_ran` turns `(Job::Start(form), Err(Untrusted))` into a Confirm `"{message}. Trust it?"`; `y` on Trust gives `[Effect::Trust(form.repo.clone()), Effect::Run(Job::Start(form))]`; `ui.rs` performs `Effect::Trust` with `UiEnv::trust: Option<Trust>`, trusting `git::root_or_folder(folder)` (shared with `saaio trust`); a failure goes to server.log and the start that follows asks again. `Confirmed` lives in `ui/app.rs`.
 
 ## Call chains
 
@@ -123,6 +123,6 @@ Symlinked `.saaio/worktrees`: start -> workspace::create_worktree -> refuse_link
 - [x] Hooks: `Hook::limit`, `Hook::name`, `hooks::present`, trust-checked `run`/`run_within`; callers in start, retire and pause_watch pass the trust (start refuses untrusted via `refuse_untrusted` and `Refusal::Untrusted`; retire returns `Teardown`; pause watch skips untrusted); unit and CLI tests
 - [x] `saaio trust` command (grant in a person's terminal, `--revoke`, `--list`) with output documents and CLI tests (PTY grant, refused without a terminal)
 - [x] Codex folder trust only when trusted: `wiring`/`plain_wiring` take `Option<&Path>`, `worker_spec` takes `trusted`, the server computes it; tests
-- [ ] saaio ui asks: `Confirmed`, `Effect::Trust`, `UiEnv::trust`; app tests
+- [x] saaio ui asks: `Confirmed`, `Effect::Trust`, `UiEnv::trust`; app tests
 - [ ] Docs (cli.md, repository.md, flows.md, troubleshooting.md, README where hooks are described), CHANGELOG Unreleased lines, CLAUDE.md architecture lines for trust.rs and the trust command
 - [ ] End to end: scratch SAAIO_HOME repo with setup/teardown: start refused, `saaio trust` in a PTY, start runs setup, hanging hook killed with its children, symlinked `.saaio/worktrees` refused, remove, `--revoke`; server stopped, nothing left on disk

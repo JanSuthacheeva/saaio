@@ -54,5 +54,5 @@ fn root(folder: &Path) -> Result<PathBuf, Failure> {
             vec!["Pass an existing folder".to_string()],
         )
     })?;
-    Ok(git::repo_root(&folder).unwrap_or(folder))
+    Ok(git::root_or_folder(&folder))
 }

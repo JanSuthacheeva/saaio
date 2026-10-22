@@ -79,7 +79,7 @@ fn draws_a_question_longer_than_any_terminal() {
     let mut app = App::new(SIZE);
     app.view = View::Confirm {
         question: "x".repeat(usize::from(u16::MAX) - 2),
-        then: Removal::of("shop-230"),
+        then: Confirmed::Remove(Removal::of("shop-230")),
     };
 
     let terminal = render(&app);
@@ -309,7 +309,7 @@ fn draws_every_view_in_a_terminal_of_any_size() {
         View::Help,
         View::Confirm {
             question: "shop-230 has uncommitted changes. Discard them?".into(),
-            then: Removal::of("shop-230"),
+            then: Confirmed::Remove(Removal::of("shop-230")),
         },
     ];
     for view in views {
