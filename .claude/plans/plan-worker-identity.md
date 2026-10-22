@@ -287,3 +287,36 @@ the test helpers passing keys, the docs.
 
 `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at
 d821217; `cargo deny check` passed at c05d3f8 (no dependency change since).
+
+### Second round
+
+Isolated review of `5f0029d..702472f`: the two tasks under "After the review".
+
+**Fixed**
+
+- Nothing: no finding.
+
+**Checked**
+
+- The rename is complete: no `SAAIO_KEY`, `KEY_ENV` or `saaio_key` is left in code, tests, docs,
+  CHANGELOG, CLAUDE.md or log lines (only in this plan's history). Internal names that speak of
+  the key itself (`Env::key`, `hand_key`, `Store::set_key`, test names) stay: the variable still
+  carries a key.
+- The first round's open point on `saaio wait` is closed by 7b47c20. In a scratch store, an
+  unproven worker wait and an unproven `saaio wait --master` each exit 0 with no output and add
+  one line to server.log (`wait flow <id>: SAAIO_PROOF does not prove flow <id>`,
+  `wait master: SAAIO_PROOF does not prove the master`), in the shape of the hook's lines; a log
+  that cannot be written is let go and the wait still ends silently. `tests/cli/identity.rs`
+  asserts both lines.
+
+**Open**
+
+- `saaio wait` with a `SAAIO_FLOW_ID` that is no uuid ends silently without a server.log line,
+  where `saaio hook` logs `SAAIO_FLOW_ID "..." is no flow id`. It predates this branch and a
+  worker's pane always gets a real id. Recommendation: leave, or log it the same way in a later
+  change if it ever confuses a report.
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at
+7b47c20; later commits change only this plan.
