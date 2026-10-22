@@ -11,11 +11,9 @@ use crate::event::{Event as LogEvent, EventKind, ServiceStatus};
 use crate::launch::worktree;
 use crate::pause::{self, Job};
 use crate::server_log;
+use crate::trust::Trust;
 use crate::view::FlowView;
 use crate::workspace::hooks::{self, Hook};
-
-/// The longest a pause or resume script may run before it is killed.
-pub const HOOK_LIMIT: Duration = Duration::from_mins(5);
 
 /// What a job's thread sends back.
 #[derive(Debug)]
@@ -60,15 +58,29 @@ impl PauseWatch {
 }
 
 impl Server {
-    /// Each tick: starts the jobs due, for flows whose repo has both scripts; appends pausing or
-    /// resuming before the thread starts.
+    /// Each tick: starts the jobs due, for flows whose trusted repo has the scripts; appends
+    /// pausing or resuming before the thread starts. A job that cannot run while the flow's tool
+    /// calls wait for it fails with why, so they stop waiting.
     pub(super) fn pause_idle(&mut self) {
         let now = (self.clock)();
         let after = self.config.services.pause_after();
         for (flow, job) in self.pauses.due(&self.board.flows, now, after) {
-            let Some(repo) = scripted_repo(&flow) else {
-                self.pauses.done(&flow.id);
-                continue;
+            let (repo, trust) = match (scripted_repo(&flow, self.trust.as_ref(), job), &self.trust)
+            {
+                (Ok(repo), Some(trust)) => (repo, trust.clone()),
+                (Err(reason), _) if pause::holds_tools(&flow) => {
+                    let status = match job {
+                        Job::Pause => ServiceStatus::PauseFailed,
+                        Job::Resume => ServiceStatus::ResumeFailed,
+                    };
+                    self.append_services(&flow.id, now, status, Some(reason));
+                    self.pauses.done(&flow.id);
+                    continue;
+                }
+                _ => {
+                    self.pauses.done(&flow.id);
+                    continue;
+                }
             };
             let status = match job {
                 Job::Pause => ServiceStatus::Pausing,
@@ -84,7 +96,7 @@ impl Server {
                 continue;
             }
             let id = flow.id.clone();
-            if let Err(error) = run_in_background(flow, repo, job, self.events.clone()) {
+            if let Err(error) = run_in_background(flow, repo, trust, job, self.events.clone()) {
                 self.pause_finished(Finished {
                     id,
                     job,
@@ -120,28 +132,46 @@ impl Server {
                 &format!("{job} the services of {name} failed: {reason}"),
             );
         }
+        self.append_services(&finished.id, now, status, reason);
+    }
+
+    fn append_services(&self, id: &str, now: u64, status: ServiceStatus, reason: Option<String>) {
         let kind = EventKind::Services { status, reason };
-        if let Err(error) = self.store.append(&finished.id, &LogEvent::new(now, kind)) {
+        if let Err(error) = self.store.append(id, &LogEvent::new(now, kind)) {
             server_log::write(now, &format!("{error:#}"));
         }
     }
 }
 
-/// The repository of a flow whose worktree is there and whose repo has both .saaio/pause and
-/// .saaio/resume; None when either is missing.
-fn scripted_repo(flow: &FlowView) -> Option<PathBuf> {
-    let space = flow.workspace.as_ref()?;
-    let repo = worktree::repo_of(space)?;
-    let scripted = Path::new(&space.path).is_dir()
-        && hooks::exists(&repo, Hook::Pause)
-        && hooks::exists(&repo, Hook::Resume);
-    scripted.then_some(repo)
+/// The repository of a flow whose worktree is there and whose repo, trusted, has the scripts `job`
+/// needs: .saaio/pause and .saaio/resume to pause, .saaio/resume to resume; else why it cannot run.
+fn scripted_repo(flow: &FlowView, trust: Option<&Trust>, job: Job) -> Result<PathBuf, String> {
+    let (hook, needs): (Hook, &[Hook]) = match job {
+        Job::Pause => (Hook::Pause, &[Hook::Pause, Hook::Resume]),
+        Job::Resume => (Hook::Resume, &[Hook::Resume]),
+    };
+    let space = flow.workspace.as_ref().ok_or("the flow has no worktree")?;
+    let repo = worktree::repo_of(space).ok_or("the flow has no worktree")?;
+    if !Path::new(&space.path).is_dir() {
+        return Err("its worktree is gone".to_string());
+    }
+    if let Some(gone) = needs.iter().find(|&&need| !hooks::exists(&repo, need)) {
+        return Err(format!(".saaio/{} is gone", gone.name()));
+    }
+    if !trust.is_some_and(|trust| trust.covers(&repo)) {
+        return Err(format!(
+            "the repository is not trusted, so .saaio/{} did not run",
+            hook.name()
+        ));
+    }
+    Ok(repo)
 }
 
 /// The script on a thread of its own; Event::Paused(Finished) when it ends.
 fn run_in_background(
     flow: FlowView,
     repo: PathBuf,
+    trust: Trust,
     job: Job,
     events: Sender<Event>,
 ) -> io::Result<()> {
@@ -154,8 +184,8 @@ fn run_in_background(
             Job::Resume => Hook::Resume,
         };
         let env = worktree::hook_env(&flow.id, &flow.name, &repo, space);
-        let result = hooks::run_within(&repo, hook, space, &env, HOOK_LIMIT)
-            .map_err(|error| format!("{error:#}"));
+        let result =
+            hooks::run(&trust, &repo, hook, space, &env).map_err(|error| format!("{error:#}"));
         let _ = events.send(Event::Paused(Finished {
             id: flow.id,
             job,
@@ -228,5 +258,24 @@ mod tests {
         assert_eq!(again.len(), 1);
         assert_eq!(again[0].0.id, "csv");
         assert!(watch.due(&flows, 10 * MIN, None).is_empty());
+    }
+
+    #[test]
+    fn names_the_script_a_job_cannot_run_and_resumes_without_a_pause_script() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let repo = dir.path().join("shop");
+        let mut flow = idle("csv");
+        let space = flow.workspace.as_mut().unwrap();
+        space.path = repo.join(".saaio/worktrees/csv").display().to_string();
+        std::fs::create_dir_all(&space.path).unwrap();
+        let trust = Trust::at(&crate::registry::Registry::at(dir.path().join("state")));
+        trust.grant(&repo).unwrap();
+        crate::fixtures::executable(&repo.join(".saaio/resume"), "#!/bin/sh\nexit 0\n");
+
+        assert_eq!(
+            scripted_repo(&flow, Some(&trust), Job::Pause),
+            Err(".saaio/pause is gone".to_string())
+        );
+        assert_eq!(scripted_repo(&flow, Some(&trust), Job::Resume), Ok(repo));
     }
 }

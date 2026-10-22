@@ -16,6 +16,7 @@ fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_saaio_ui() {
         "setup",
         "#!/bin/sh\necho \"slot $SAAIO_SLOT\" > setup-ran\n",
     );
+    lab.trust();
 
     let output = lab.start(&["SHOP-217 add CSV export"]);
 
@@ -454,6 +455,7 @@ fn a_failing_setup_marks_the_flow_blocked_but_still_records_the_worker() {
         "setup",
         "#!/bin/sh\necho 'port 8001 is taken' >&2\nexit 1\n",
     );
+    lab.trust();
 
     let output = lab.start(&["SHOP-218 fix totals"]);
 
@@ -471,6 +473,67 @@ fn a_failing_setup_marks_the_flow_blocked_but_still_records_the_worker() {
         board["flows"][0]["blocker"],
         "setup failed: port 8001 is taken"
     );
+}
+
+#[test]
+fn start_runs_nothing_of_a_repository_the_person_has_not_trusted() {
+    let lab = Lab::new();
+    lab.hook("setup", "#!/bin/sh\ntouch \"$SAAIO_REPO/setup-ran\"\n");
+    lab.hook("teardown", "#!/bin/sh\nexit 0\n");
+
+    let output = lab.start(&["SHOP-217 add CSV export"]);
+
+    let text = stdout(&output);
+    assert_eq!(output.status.code(), Some(1), "{text}");
+    assert!(
+        text.contains(&format!(
+            "{} is not trusted: saaio would run .saaio/setup and .saaio/teardown",
+            lab.repo.display()
+        )),
+        "{text}"
+    );
+    assert!(text.contains("run `saaio trust`"), "{text}");
+    assert!(!lab.repo.join("setup-ran").exists());
+    assert!(!lab.repo.join(".saaio/worktrees").exists());
+    assert!(lab.branches().is_empty());
+    assert!(stdout(&saaio(&lab.home, &["status"])).contains("count: 0"));
+
+    lab.trust();
+    assert!(lab.start(&["SHOP-217 add CSV export"]).status.success());
+    assert!(lab.repo.join("setup-ran").exists());
+}
+
+#[test]
+fn start_needs_no_trust_in_a_repository_without_scripts() {
+    let lab = Lab::new();
+
+    let output = lab.start(&["SHOP-217 add CSV export"]);
+
+    assert!(output.status.success(), "{}", stdout(&output));
+}
+
+#[test]
+fn start_refuses_a_worktrees_folder_that_links_elsewhere() {
+    let lab = Lab::new();
+    let elsewhere = TempDir::new().unwrap();
+    fs::create_dir(lab.repo.join(".saaio")).unwrap();
+    std::os::unix::fs::symlink(elsewhere.path(), lab.repo.join(".saaio/worktrees")).unwrap();
+
+    let output = lab.start(&["SHOP-217 add CSV export"]);
+
+    let text = stdout(&output);
+    assert_eq!(output.status.code(), Some(1), "{text}");
+    assert!(
+        text.contains(&format!(
+            "{} is a symbolic link",
+            lab.repo.join(".saaio/worktrees").display()
+        )),
+        "{text}"
+    );
+    assert_eq!(fs::read_dir(elsewhere.path()).unwrap().count(), 0);
+    assert!(lab.branches().is_empty());
+    let board = stdout(&saaio(&lab.home, &["status"]));
+    assert!(!board.contains("shop-217"), "{board}");
 }
 
 #[test]
@@ -691,6 +754,7 @@ fn setup_gets_no_key_of_the_session_that_started_the_flow() {
         "setup",
         "#!/bin/sh\nprintf '%s' \"${SAAIO_PROOF-none}\" > setup-key\n",
     );
+    lab.trust();
 
     let output = saaio_command(&lab.home)
         .args(["start", "SHOP-217 add CSV export"])

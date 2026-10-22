@@ -10,7 +10,7 @@ use ratatui::style::Modifier;
 use super::*;
 use crate::branching::Branching;
 use crate::cli::output::Failure;
-use crate::cli::output::remove;
+use crate::cli::output::{remove, trust};
 use crate::event::{Event, EventKind};
 use crate::fold;
 use crate::proto::{Cell, ClientMsg, Color, Flags, Frame, Mouse, ServerMsg};
@@ -18,6 +18,7 @@ use crate::refusal::Refusal;
 use crate::ui::input::{Command, Key, Pointer, PointerKind, Routed, Step};
 use crate::ui::theme::PhaseColors;
 use crate::view::{MasterTurn, State, VIEW_VERSION};
+use crate::workspace::hooks::Hook;
 
 const SIZE: Size = Size { cols: 80, rows: 10 };
 

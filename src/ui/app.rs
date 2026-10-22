@@ -45,11 +45,20 @@ pub enum View {
     Stop(Vec<String>),
     /// The prefix and ?: every key.
     Help,
-    /// A question before a removal loses work: y runs `then`, any other key keeps the flow.
+    /// A question before a removal loses work or a start trusts a repository: y does `then`, any
+    /// other key leaves it.
     Confirm {
         question: String,
-        then: Removal,
+        then: Confirmed,
     },
+}
+
+/// What a yes to View::Confirm does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Confirmed {
+    Remove(Removal),
+    /// Trust the form's repository, then start the flow again.
+    Trust(NewFlowForm),
 }
 
 /// The master as the UI shows it.

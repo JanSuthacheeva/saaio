@@ -66,6 +66,29 @@ impl fmt::Display for Retired {
     }
 }
 
+/// What the repo's .saaio/teardown did before the worktree went.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Teardown {
+    /// No worktree, or no teardown script.
+    None,
+    Ran,
+    Failed(String),
+    /// The person has not trusted the repository, so its script did not run.
+    Untrusted,
+}
+
+/// none, ran, failed: reason, not trusted
+impl fmt::Display for Teardown {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Teardown::None => f.write_str("none"),
+            Teardown::Ran => f.write_str("ran"),
+            Teardown::Failed(reason) => write!(f, "failed: {reason}"),
+            Teardown::Untrusted => f.write_str("not run, the repository is not trusted"),
+        }
+    }
+}
+
 /// What became of a flow's branch once its worktree was gone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BranchFate {
@@ -92,17 +115,19 @@ fn pane_name(closing: Closing) -> &'static str {
     }
 }
 
-/// removed, pane (closed, none or timed out), worktree, branch (deleted, kept or none), help.
+/// removed, pane (closed, none or timed out), teardown, worktree, branch (deleted, kept or none),
+/// help.
 pub(crate) fn removed(
     name: &str,
     pane: Closing,
-    worktree: &Retired,
+    (worktree, teardown): &(Retired, Teardown),
     branch: BranchFate,
 ) -> Document {
     #[derive(Serialize)]
     struct Removed<'a> {
         removed: &'a str,
         pane: &'a str,
+        teardown: String,
         worktree: String,
         branch: &'a str,
         help: Vec<String>,
@@ -113,18 +138,31 @@ pub(crate) fn removed(
             "Run `git worktree remove --force {path}` to discard what is left"
         ));
     }
+    if *teardown == Teardown::Untrusted {
+        help.push(UNTRUSTED_TEARDOWN.to_string());
+    }
     help.push("Run `saaio` to see what is left".to_string());
     Document::Toon(toon(&Removed {
         removed: name,
         pane: pane_name(pane),
+        teardown: teardown.to_string(),
         worktree: worktree.to_string(),
         branch: branch.name(),
         help,
     }))
 }
 
-/// cleared: n, names[n], kept[n]{name,path} for worktrees with uncommitted work, help.
-pub(crate) fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
+/// The help line when a teardown did not run because the repository is not trusted.
+const UNTRUSTED_TEARDOWN: &str =
+    "Stop what the flow's setup started yourself or run `saaio trust` before the next removal";
+
+/// cleared: n, names[n], kept[n]{name,path} for worktrees with uncommitted work, untrusted[n]
+/// for flows whose teardown did not run, help.
+pub(crate) fn cleared(
+    names: &[String],
+    kept: &[(String, String)],
+    untrusted: &[String],
+) -> Document {
     #[derive(Serialize)]
     struct Kept<'a> {
         name: &'a str,
@@ -137,11 +175,16 @@ pub(crate) fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
         names: &'a [String],
         #[serde(skip_serializing_if = "Vec::is_empty")]
         kept: Vec<Kept<'a>>,
+        #[serde(skip_serializing_if = "<[String]>::is_empty")]
+        untrusted: &'a [String],
         help: Vec<&'static str>,
     }
     let mut help = vec!["Run `saaio` to see what is left"];
     if !kept.is_empty() {
         help.push("Commit or discard the work in a kept worktree, then remove it with `git worktree remove <path>`");
+    }
+    if !untrusted.is_empty() {
+        help.push(UNTRUSTED_TEARDOWN);
     }
     Document::Toon(toon(&Cleared {
         cleared: names.len(),
@@ -150,6 +193,7 @@ pub(crate) fn cleared(names: &[String], kept: &[(String, String)]) -> Document {
             .iter()
             .map(|(name, path)| Kept { name, path })
             .collect(),
+        untrusted,
         help,
     }))
 }
@@ -174,12 +218,19 @@ mod tests {
     #[test]
     fn cleared_counts_and_names_the_removed_flows() {
         assert_eq!(
-            cleared(&["export-csv".into(), "shop-198".into()], &[]).text(),
+            cleared(&["export-csv".into(), "shop-198".into()], &[], &[]).text(),
             "cleared: 2\nnames[2]: export-csv,shop-198\nhelp[1]: Run `saaio` to see what is left"
         );
         assert_eq!(
-            cleared(&[], &[]).text(),
+            cleared(&[], &[], &[]).text(),
             "cleared: 0\nhelp[1]: Run `saaio` to see what is left"
+        );
+        assert_eq!(
+            cleared(&["shop-198".into()], &[], &["shop-198".into()]).text(),
+            format!(
+                "cleared: 1\nnames[1]: shop-198\nuntrusted[1]: shop-198\nhelp[2]: Run `saaio` to see \
+                 what is left,{UNTRUSTED_TEARDOWN}"
+            )
         );
     }
 }

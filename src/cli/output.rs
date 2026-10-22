@@ -5,6 +5,7 @@ pub(crate) mod flow;
 pub(crate) mod remove;
 pub(crate) mod start;
 pub(crate) mod status;
+pub(crate) mod trust;
 pub(crate) mod update;
 
 #[cfg(test)]

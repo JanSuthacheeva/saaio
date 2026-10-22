@@ -81,9 +81,15 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str, session: &str) -> Option
 /// either way with the agent's adapter wired in right after the program. A plain session starts
 /// without a prompt and gets the adapter's plain wiring. A harness that picks its own session
 /// resumes by the one its hooks reported, and starts again when it never reported one (it had no
-/// turn) or reported one that is no UUID, which must never become an argument. None when the flow
-/// has no workspace, or must resume and the agent has no resume template.
-pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<PaneSpec> {
+/// turn) or reported one that is no UUID, which must never become an argument. Codex trusts the
+/// folder only when the person `trusted` its repository. None when the flow has no workspace, or
+/// must resume and the agent has no resume template.
+pub fn worker_spec(
+    flow: &FlowView,
+    agent: &Agent,
+    env: &LaunchEnv,
+    trusted: bool,
+) -> Option<PaneSpec> {
     let space = flow.workspace.as_ref()?;
     let session = flow
         .session
@@ -99,10 +105,11 @@ pub fn worker_spec(flow: &FlowView, agent: &Agent, env: &LaunchEnv) -> Option<Pa
         agent_argv(agent, &flow.id, &flow.name, &flow.request)
     };
     if let Some(adapter) = agent.adapter {
+        let folder = trusted.then_some(Path::new(&space.path));
         let wiring = if flow.is_plain() {
-            adapter.plain_wiring(&env.flow_exe, Path::new(&space.path))
+            adapter.plain_wiring(&env.flow_exe, folder)
         } else {
-            adapter.wiring(&env.flow_exe, Path::new(&space.path))
+            adapter.wiring(&env.flow_exe, folder)
         };
         let at = 1.min(argv.len());
         argv.splice(at..at, wiring);
@@ -312,7 +319,7 @@ mod tests {
         let claude = &unwired;
         let env = LaunchEnv::default();
 
-        let fresh = worker_spec(&worker(None), claude, &env).unwrap();
+        let fresh = worker_spec(&worker(None), claude, &env, true).unwrap();
         assert_eq!(fresh.key, PaneKey::Flow("7f3c".into()));
         assert_eq!(fresh.cwd, PathBuf::from("/repo/.saaio/worktrees/shop-217"));
         assert_eq!(
@@ -326,12 +333,12 @@ mod tests {
             "SAAIO_SLOT and the rest, as the hooks get them"
         );
 
-        let resumed = worker_spec(&worker(Some(HOSTED)), claude, &env).unwrap();
+        let resumed = worker_spec(&worker(Some(HOSTED)), claude, &env, true).unwrap();
         assert_eq!(
             resumed.argv,
             strings(&["claude", "-n", "shop-217", "--resume", "7f3c"])
         );
-        let old_tmux = worker_spec(&worker(Some("@12")), claude, &env).unwrap();
+        let old_tmux = worker_spec(&worker(Some("@12")), claude, &env, true).unwrap();
         assert_eq!(
             old_tmux.argv, resumed.argv,
             "a tmux worker already took its id"
@@ -348,8 +355,8 @@ mod tests {
             ..LaunchEnv::default()
         };
 
-        let fresh = worker_spec(&worker(None), &claude, &env).unwrap();
-        let resumed = worker_spec(&worker(Some(HOSTED)), &claude, &env).unwrap();
+        let fresh = worker_spec(&worker(None), &claude, &env, true).unwrap();
+        let resumed = worker_spec(&worker(Some(HOSTED)), &claude, &env, true).unwrap();
 
         for spec in [&fresh, &resumed] {
             assert_eq!(spec.argv[0], "claude");
@@ -382,18 +389,23 @@ mod tests {
         };
         let env = LaunchEnv::default();
 
-        let resumed = worker_spec(&codex_worker(Some(HOSTED), Some(SESSION)), &codex, &env);
+        let resumed = worker_spec(
+            &codex_worker(Some(HOSTED), Some(SESSION)),
+            &codex,
+            &env,
+            true,
+        );
         assert_eq!(
             resumed.unwrap().argv,
             strings(&["codex", "resume", SESSION])
         );
         let forged = codex_worker(Some(HOSTED), Some("-cnotify=[\"sh\",\"-c\",\"id\"]"));
         assert_eq!(
-            worker_spec(&forged, &codex, &env).unwrap().argv,
+            worker_spec(&forged, &codex, &env, true).unwrap().argv,
             strings(&["codex", "$ship-feature SHOP-217 add CSV export"]),
             "a session that is no UUID starts again, never in the argv"
         );
-        let never_ran = worker_spec(&codex_worker(Some(HOSTED), None), &codex, &env).unwrap();
+        let never_ran = worker_spec(&codex_worker(Some(HOSTED), None), &codex, &env, true).unwrap();
         assert_eq!(
             never_ran.argv,
             strings(&["codex", "$ship-feature SHOP-217 add CSV export"]),
@@ -402,7 +414,7 @@ mod tests {
         let mut plain = codex_worker(Some(HOSTED), None);
         plain.mode = Mode::Plain;
         assert_eq!(
-            worker_spec(&plain, &codex, &env).unwrap().argv,
+            worker_spec(&plain, &codex, &env, true).unwrap().argv,
             strings(&["codex"])
         );
     }
@@ -416,18 +428,33 @@ mod tests {
             ..LaunchEnv::default()
         };
 
-        let fresh = worker_spec(&codex_worker(None, None), codex, &env).unwrap();
-        let resumed = worker_spec(&codex_worker(Some(HOSTED), Some(SESSION)), codex, &env).unwrap();
+        let fresh = worker_spec(&codex_worker(None, None), codex, &env, true).unwrap();
+        let resumed = worker_spec(
+            &codex_worker(Some(HOSTED), Some(SESSION)),
+            codex,
+            &env,
+            true,
+        )
+        .unwrap();
 
         let wiring = crate::adapter::Adapter::Codex.wiring(
             Path::new("/bin/saaio"),
-            Path::new("/repo/.saaio/worktrees/shop-217"),
+            Some(Path::new("/repo/.saaio/worktrees/shop-217")),
         );
         for spec in [&fresh, &resumed] {
             assert_eq!(spec.argv[0], "codex");
             assert_eq!(spec.argv[1..=wiring.len()], wiring[..]);
         }
         assert_eq!(resumed.argv[wiring.len() + 1..], ["resume", SESSION]);
+        let untrusted = worker_spec(&codex_worker(None, None), codex, &env, false).unwrap();
+        assert!(
+            !untrusted
+                .argv
+                .iter()
+                .any(|arg| arg.starts_with("projects=")),
+            "{:?}",
+            untrusted.argv
+        );
     }
 
     fn scratch(window: Option<&str>) -> FlowView {
@@ -463,10 +490,12 @@ mod tests {
             flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
-        let wiring = crate::adapter::Adapter::ClaudeCode
-            .plain_wiring(Path::new("/bin/saaio"), Path::new("/Users/jan/scratch"));
+        let wiring = crate::adapter::Adapter::ClaudeCode.plain_wiring(
+            Path::new("/bin/saaio"),
+            Some(Path::new("/Users/jan/scratch")),
+        );
 
-        let fresh = worker_spec(&scratch(None), claude, &env).unwrap();
+        let fresh = worker_spec(&scratch(None), claude, &env, true).unwrap();
         let mut expected = vec![claude.command[0].clone()];
         expected.extend(wiring.clone());
         expected.extend(plain_argv(claude, "9b1d", "scratch").into_iter().skip(1));
@@ -484,7 +513,7 @@ mod tests {
             "no SAAIO_SLOT, SAAIO_WORKTREE or SAAIO_REPO"
         );
 
-        let resumed = worker_spec(&scratch(Some(HOSTED)), claude, &env).unwrap();
+        let resumed = worker_spec(&scratch(Some(HOSTED)), claude, &env, true).unwrap();
         let mut expected = vec![claude.command[0].clone()];
         expected.extend(wiring);
         expected.extend(strings(&["-n", "scratch", "--resume", "9b1d"]));
@@ -516,10 +545,10 @@ mod tests {
         };
         let env = LaunchEnv::default();
 
-        assert!(worker_spec(&worker(None), &agent, &env).is_some());
-        assert_eq!(worker_spec(&worker(Some(HOSTED)), &agent, &env), None);
+        assert!(worker_spec(&worker(None), &agent, &env, true).is_some());
+        assert_eq!(worker_spec(&worker(Some(HOSTED)), &agent, &env, true), None);
         let mut bare = worker(None);
         bare.workspace = None;
-        assert_eq!(worker_spec(&bare, &agent, &env), None);
+        assert_eq!(worker_spec(&bare, &agent, &env, true), None);
     }
 }

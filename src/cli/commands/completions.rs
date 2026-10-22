@@ -57,6 +57,7 @@ mod tests {
                 "clear",
                 "bug-report",
                 "completions",
+                "trust",
                 "update"
             ]
         );

@@ -1,6 +1,7 @@
 //! Which panes are open: refresh, reconcile, open, resume and close
 
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Sender};
 use std::time::Instant;
 
@@ -14,12 +15,21 @@ use crate::event::{Event as LogEvent, EventKind};
 use crate::fold;
 use crate::identity;
 use crate::launch::pane::{self, HOSTED, PROOF_ENV, PaneSpec};
+use crate::launch::worktree;
 use crate::proto::{PaneKey, PaneStatus, ServerMsg};
 use crate::server_log;
 use crate::store::{Busy, Waiter};
 use crate::view::{FlowView, Workspace};
+use crate::workspace::git;
 
 impl Server {
+    /// Whether the person trusts the repository of a flow's workspace, so Codex may trust it too.
+    fn trusts(&self, space: &Workspace) -> bool {
+        self.trust
+            .as_ref()
+            .is_some_and(|trust| trust.covers(&trust_root(space)))
+    }
+
     /// Re-folds when the store changed, reconciles, sends Board and Panes to the attached UI.
     pub(super) fn refresh(&mut self) {
         self.refreshed_at = Instant::now();
@@ -49,6 +59,7 @@ impl Server {
             &self.known,
             &self.config,
             &self.env,
+            &|space| self.trusts(space),
         );
         let panes_change = wanted != Wanted::default();
         self.apply(wanted);
@@ -252,7 +263,7 @@ impl Server {
                 .fail(key, format!("no agent named {}", space.agent));
             return;
         };
-        match pane::worker_spec(&flow, agent, &self.env) {
+        match pane::worker_spec(&flow, agent, &self.env, self.trusts(space)) {
             Some(spec) => self.open_worker(spec),
             None => self.host.fail(key, reconcile::unopenable(name)),
         }
@@ -288,10 +299,11 @@ impl Server {
             return;
         };
         space.window = None;
+        let trusted = self.trusts(space);
         let spec = self
             .config
             .agent(Some(&space.agent))
-            .and_then(|(_, agent)| pane::worker_spec(&flow, agent, &self.env));
+            .and_then(|(_, agent)| pane::worker_spec(&flow, agent, &self.env, trusted));
         if let Some(spec) = spec
             && let Err(error) = self.open_pane(spec)
         {
@@ -390,4 +402,31 @@ pub(super) fn forward_host_events(events: Sender<Event>) -> Result<Sender<HostEv
     })
     .context("could not start the thread that forwards the panes' output")?;
     Ok(host_events)
+}
+
+/// The folder trust is kept for: a worktree's repository, else the repository a plain session's
+/// folder is in, else that folder, as `saaio trust` records it.
+fn trust_root(space: &Workspace) -> PathBuf {
+    worktree::repo_of(space).unwrap_or_else(|| git::root_or_folder(Path::new(&space.path)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::launch::worktree::{folder_workspace, workspace_for};
+    use crate::workspace::fixtures::repo;
+
+    #[test]
+    fn keeps_trust_for_the_repository_a_session_works_in() {
+        let (_dir, repo) = repo();
+        let sub = repo.join("docs");
+        std::fs::create_dir(&sub).unwrap();
+        let elsewhere = tempfile::TempDir::new().unwrap();
+        let worktree = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+
+        assert_eq!(trust_root(&worktree), repo);
+        assert_eq!(trust_root(&folder_workspace(&sub, "codex")), repo);
+        let plain = folder_workspace(elsewhere.path(), "codex");
+        assert_eq!(trust_root(&plain), elsewhere.path());
+    }
 }

@@ -145,7 +145,11 @@ fn asks_before_a_clean_up_loses_work() {
         Job::Remove(forced.clone()),
         printed(&remove::unmerged("shop-230", "flow/shop-230", 2)),
     );
-    let View::Confirm { question, then } = &app.view else {
+    let View::Confirm {
+        question,
+        then: Confirmed::Remove(then),
+    } = &app.view
+    else {
         panic!("expected a question: {:?}", app.view);
     };
     assert_eq!(
@@ -313,6 +317,41 @@ fn starts_a_flow_from_the_dialog_in_the_repo_in_view() {
     };
     assert_eq!(form.request, "SHOP-240 rate-limit the export endpoint");
     assert_eq!(form.error.as_deref(), Some("all 20 slots are in use"));
+}
+
+#[test]
+fn asks_the_person_to_trust_a_repository_before_its_first_flow() {
+    let mut app = board_app();
+    app.on_input(Routed::Command(Command::NewFlow));
+    app.on_input(Routed::View(
+        "SHOP-240 export".chars().map(Key::Char).collect(),
+    ));
+    let effects = app.on_input(Routed::View(vec![Key::Enter]));
+    let [Effect::Run(job @ Job::Start(form))] = &effects[..] else {
+        panic!("expected a start: {effects:?}");
+    };
+    let refusal = trust::untrusted(Path::new("/Users/jan/projects/shop"), &[Hook::Setup], false);
+
+    app.on_ran(job.clone(), printed(&refusal));
+
+    let View::Confirm { question, .. } = &app.view else {
+        panic!("expected a question: {:?}", app.view);
+    };
+    assert_eq!(
+        question,
+        "~/projects/shop is not trusted: saaio would run .saaio/setup. Trust it?"
+    );
+    assert_eq!(app.on_input(Routed::View(vec![Key::Char('n')])), vec![]);
+    assert!(!app.is_modal());
+    app.on_ran(job.clone(), printed(&refusal));
+    assert_eq!(
+        app.on_input(Routed::View(vec![Key::Char('y')])),
+        vec![
+            Effect::Trust(PathBuf::from("/Users/jan/projects/shop")),
+            Effect::Run(Job::Start(form.clone())),
+        ]
+    );
+    assert_eq!(app.notice.as_deref(), Some("starting the flow…"));
 }
 
 #[test]

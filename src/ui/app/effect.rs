@@ -119,6 +119,8 @@ pub enum Effect {
     CopySelection(Selection),
     /// Copy text a pane's program put on the clipboard.
     Copy(String),
+    /// Trust the repository this folder is in: the person said yes in saaio ui.
+    Trust(PathBuf),
     Quit(String),
 }
 

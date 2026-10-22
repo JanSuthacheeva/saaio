@@ -11,9 +11,11 @@ use clap::{Parser, Subcommand};
 
 use commands::{
     bug_report, clear, completions, home, hook, new, remove, report, send, server, start, status,
-    stop, ui, update, wait,
+    stop, trust, ui, update, wait,
 };
 use output::{Document, Failure};
+
+use crate::trust::Trust;
 
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 #[derive(Debug, Parser)]
@@ -64,6 +66,8 @@ enum Command {
     BugReport,
     /// Print the completion script for a shell
     Completions(completions::Args),
+    /// Let saaio run a repository's .saaio scripts and Codex trust its worktrees; --revoke, --list
+    Trust(trust::Args),
     /// Install the latest release over this binary, or the release --version names
     Update(update::Args),
     /// What a session's asyncRewake hook runs: sleeps until there is news for it, prints it, exits 2
@@ -90,6 +94,7 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
         Some(Command::BugReport) => return bug_report::run(env, clock),
         Some(Command::Completions(args)) => return Ok(completions::run(args)),
         Some(Command::Update(args)) => return update::run(args, env),
+        Some(Command::Trust(args)) => return trust::run(args, env),
         _ => {}
     }
     let cwd = std::env::current_dir().ok();
@@ -128,15 +133,18 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
             let cwd = std::env::current_dir()?;
             start::run(&args, store, registry, &config, &cwd, env, now)
         }
-        Some(Command::Remove(args)) => remove::run(&args, store, &env.socket(store), now),
+        Some(Command::Remove(args)) => {
+            remove::run(&args, store, &env.socket(store), &Trust::at(registry), now)
+        }
         Some(Command::Send(args)) => send::run(&args, store, env, now),
-        Some(Command::Clear) => clear::run(store, &env.socket(store), now),
+        Some(Command::Clear) => clear::run(store, &env.socket(store), &Trust::at(registry), now),
         Some(Command::Server) => server::run(store.clone(), env, clock),
         Some(
             Command::Hook(_)
             | Command::Wait(_)
             | Command::BugReport
             | Command::Completions(_)
+            | Command::Trust(_)
             | Command::Update(_),
         ) => Ok(Document::Silent),
     }

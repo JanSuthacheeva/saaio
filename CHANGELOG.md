@@ -17,9 +17,16 @@ All notable changes to saaio are listed here. The format follows
 - When the store's path is too long for a socket, the socket and its log move from
   `/tmp/saaio-<uid>/` to `$XDG_RUNTIME_DIR` or `$TMPDIR` (`/tmp` when neither fits).
   `saaio --stop` still stops a server 0.1.0 started there.
+- saaio runs a repository's `.saaio` scripts, and lets Codex workers trust its worktrees, only
+  once you trusted the repository. `saaio start` refuses until then and names the scripts; the
+  new-flow dialog asks you. `saaio trust` trusts the repository you are in (from your own
+  terminal only), `saaio trust --revoke` takes it back, `saaio trust --list` shows every one.
+- `saaio remove` says what the teardown did (`teardown: ran`, `none`, `failed: ...`).
 
 ### Fixed
 
+- A `.saaio` script that never ends no longer blocks `saaio start`, `saaio remove` or
+  `saaio clear`: setup is stopped after 10 minutes and teardown after 2, and the flow says so.
 - `saaio hook`, `saaio wait` and `saaio send` act only for the session the server opened: each
   session gets its own key in `SAAIO_PROOF`. Setting `SAAIO_FLOW_ID` or `SAAIO_MASTER` no longer
   reports into another flow, takes the master's news or sends as the master.
@@ -41,6 +48,11 @@ All notable changes to saaio are listed here. The format follows
   or stopping.
 - A flow that ended, or went on to a subagent, no longer shows the question it asked earlier as
   its blocker in `saaio status`, its `--json` and the master's news.
+- A `.saaio` script stopped for running too long now takes what it started with it (a
+  `docker compose up` it began, a dev server): it runs in a process group of its own, and the
+  whole group is stopped.
+- `saaio start` refuses a repository whose `.saaio` or `.saaio/worktrees` folder is a symbolic
+  link, so a worktree is never created outside the repository.
 
 ## [0.1.0] - 2026-10-21
 

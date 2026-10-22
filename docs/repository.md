@@ -17,6 +17,7 @@ the setup starts services.
 
 - [Worktrees](#worktrees)
 - [Branch names](#branch-names)
+- [Trust](#trust)
 - [Setup and teardown](#setup-and-teardown)
 - [Pause and resume](#pause-and-resume)
 - [Slots and ports](#slots-and-ports)
@@ -28,6 +29,8 @@ the setup starts services.
 - Each flow gets a [git worktree](https://git-scm.com/docs/git-worktree) in
   `.saaio/worktrees/<name>`, on a new branch from the current checkout's `HEAD`.
 - The worker runs there. The main checkout is untouched.
+- `saaio start` refuses a repository whose `.saaio` or `.saaio/worktrees` is a symbolic link, so a
+  worktree is never created outside the repository.
 - On first use saaio adds `.saaio/worktrees/` to `.git/info/exclude`.
 - `saaio remove` and `saaio clear` remove worktrees ([cli.md](cli.md#saaio-remove)).
 
@@ -78,6 +81,34 @@ error: "no branch type nope; this repo has feature, bugfix, hotfix, chore"
 help[1]: "Name the types in .saaio/config.toml: [branch] types = [\"feature\", \"bugfix\"]"
 ```
 
+## Trust
+
+The scripts in `.saaio` are code from the repository. saaio runs them, and lets a Codex worker
+trust its worktree, only once you trusted the repository. A repository without scripts needs no
+trust for a Claude Code worker.
+
+| Command | Does |
+| --- | --- |
+| `saaio trust` | trusts the repository you are in, from now on. Only in your own terminal: an agent's shell is refused. It lists the scripts that will run. |
+| `saaio trust --revoke` | takes it back. saaio asks again before it runs the scripts. |
+| `saaio trust --list` | every trusted repository |
+
+Read the scripts before you trust a repository you did not write: a script changed later is not
+asked about again. The trust holds for the repository's folder, in every store.
+
+| Case | Result |
+| --- | --- |
+| `saaio start` in a repository not trusted yet | refuses and creates nothing. The error names the scripts that would run. |
+| the new-flow dialog in `saaio` | asks you, then starts the flow |
+| `saaio remove` or `saaio clear` in a repository no longer trusted | the worktree goes, the teardown does not run (`teardown: not run, the repository is not trusted`) |
+| a resting flow in a repository no longer trusted | its services are not paused. Paused ones are not resumed: the resume fails with `the repository is not trusted`, and its tool calls stop waiting. |
+
+```
+$ saaio start "SHOP-240 export"
+error: "~/projects/shop is not trusted: saaio would run .saaio/setup and .saaio/teardown"
+help[2]: "Ask the person to read its .saaio scripts, then run `saaio trust` in ~/projects/shop in their terminal","Or start the flow in `saaio`, which asks them"
+```
+
 ## Setup and teardown
 
 | Script | Runs |
@@ -85,7 +116,8 @@ help[1]: "Name the types in .saaio/config.toml: [branch] types = [\"feature\", \
 | `.saaio/setup` | after `saaio start` creates the worktree, before the worker starts |
 | `.saaio/teardown` | before `saaio remove` or `saaio clear` removes the worktree. `saaio clear` runs it even on a worktree it then keeps for its uncommitted work. |
 
-Both must be executable. They run from the main checkout with the worktree as working directory.
+Both must be executable. They run from the main checkout with the worktree as working directory,
+once the repository is [trusted](#trust).
 
 | Variable | Value |
 | --- | --- |
@@ -101,7 +133,9 @@ The worker's session gets the same variables.
 | --- | --- |
 | setup runs | `saaio start` waits. Output is not shown. |
 | setup exits non-zero | the flow is blocked with the setup's last error line. The worker still opens. |
+| setup runs longer than 10 minutes | it is stopped with everything it started, and the flow is blocked with `setup failed: no answer within 10m` |
 | teardown fails | the removal goes on |
+| teardown runs longer than 2 minutes | it is stopped with everything it started, and the removal goes on |
 | a script changes | applies at once (run from the main checkout) |
 | `compose.yaml` or `.gitignore` changes | reach new worktrees only once committed (worktrees are made from the last commit) |
 
@@ -131,7 +165,7 @@ minutes. The model's thinking before its first tool call hides most of a resume.
 
 | Case | Result |
 | --- | --- |
-| a script runs | on a thread of `saaio server`; at most 5 minutes, then it is killed and fails |
+| a script runs | on a thread of `saaio server`; at most 5 minutes, then it is stopped with everything it started, and fails |
 | pause fails | the flow's timeline says `pause failed: <last error line>`. It is tried again once the flow's state changed. |
 | resume fails | the tool runs anyway. The board card says `working · services down`, `saaio status` says `resume-failed` with the error. It is tried again at the next turn. |
 | resume takes longer than 2 minutes | the tool runs. The script goes on. |

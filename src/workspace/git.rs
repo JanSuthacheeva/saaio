@@ -26,6 +26,11 @@ pub fn repo_root(cwd: &Path) -> Result<PathBuf> {
     ))
 }
 
+/// The root of the repository `folder` is in, else the folder itself.
+pub fn root_or_folder(folder: &Path) -> PathBuf {
+    repo_root(folder).unwrap_or_else(|_| folder.to_path_buf())
+}
+
 /// The git dir shared by every worktree of the repository `dir` is in (git rev-parse
 /// --git-common-dir), absolute and canonical; None outside a repository or without git.
 pub fn common_dir(dir: &Path) -> Option<PathBuf> {
