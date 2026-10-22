@@ -36,7 +36,8 @@ The file holds:
 - where `config.toml` and `theme.toml` are and whether they load, with the error when one does not
 - the last 300 lines of `server.log` and `server.log.1`
 
-The home folder is written `~`. A second report on the same day is written beside the first, as
+The home folder is written `~`, also as the real path a linked home leads to and in Claude Code's
+project names. A second report on the same day is written beside the first, as
 `saaio-report-<date>-2.txt`.
 
 ## The terminal UI

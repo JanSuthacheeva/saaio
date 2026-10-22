@@ -450,7 +450,8 @@ Writes `saaio-report-<date>.txt` in the current folder, or `saaio-report-<date>-
 when that name is taken, readable only by you: the
 versions of saaio, the OS, `claude`, `codex`, `gh` and `glab`, the store's path, whether
 `config.toml` and `theme.toml` load, and the last 300 lines of `server.log` and `server.log.1`.
-The home folder is written `~`. Works without a store, and then says why there is none.
+The home folder is written `~`, also as the real path a linked home leads to and in Claude Code's
+project names (`-Users-you-...`). Works without a store, and then says why there is none.
 
 ```
 $ saaio bug-report
