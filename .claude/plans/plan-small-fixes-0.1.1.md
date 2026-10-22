@@ -102,5 +102,5 @@ false -> `Err(flow::foreign_merge_request)` (exit 1, nothing appended).
 - [x] `commands::of_own_repo` and `repo_dir` shared by hook and report; `saaio report merge-request` refuses a URL of another repository, with CLI tests
 - [x] `Forge::view_argv` puts flags first and `--` before the URL or number, with tests
 - [x] `Job::args` puts `--` before the request and the flow name and passes the folder as `--plain=`, with tests
-- [ ] CHANGELOG Fixed lines under `## [Unreleased]`, docs/cli.md on the refused URL, CLAUDE.md E2E note on `XDG_STATE_HOME`
-- [ ] End to end: rerun the four reproductions on scratch stores, stop every server, remove the scratch folders
+- [x] CHANGELOG Fixed lines under `## [Unreleased]`, docs/cli.md on the refused URL, CLAUDE.md E2E note on `XDG_STATE_HOME`
+- [x] End to end: rerun the four reproductions on scratch stores, stop every server, remove the scratch folders
