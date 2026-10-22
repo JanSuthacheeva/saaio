@@ -46,6 +46,7 @@ fn quick() -> Timing {
         quiet: Duration::from_millis(200),
         first_turn_grace: Duration::from_millis(300),
         unstarted: Duration::from_secs(30),
+        hello: Duration::from_millis(500),
     }
 }
 
@@ -921,6 +922,44 @@ fn takes_nothing_before_a_hello_and_only_closeflow_from_a_control_connection() {
     assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
     proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
     assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+    stop(&paths, handle);
+}
+
+#[test]
+fn closes_a_connection_that_says_no_hello_in_time() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+
+    let mut silent = UnixStream::connect(&paths.socket).unwrap();
+    silent.set_read_timeout(Some(PATIENCE)).unwrap();
+
+    assert!(matches!(
+        proto::read_msg::<_, ServerMsg>(&mut silent),
+        Ok(Some(ServerMsg::Refused { .. }) | None)
+    ));
+    stop(&paths, handle);
+}
+
+#[test]
+fn takes_at_most_16_connections_at_once() {
+    let dir = TempDir::new().unwrap();
+    let patient = Timing {
+        hello: PATIENCE,
+        ..quick()
+    };
+    let (paths, handle) = start_timed(dir.path(), BTreeMap::new(), patient, || 0);
+    let open: Vec<UnixStream> = (0..16)
+        .map(|_| UnixStream::connect(&paths.socket).unwrap())
+        .collect();
+
+    let mut one_more = connect(&paths.socket, Role::Control);
+    assert!(closed(&mut one_more), "the 17th connection");
+
+    drop(open);
+    wait_until("the server never took a connection again", || {
+        let mut control = connect(&paths.socket, Role::Control);
+        !closed(&mut control)
+    });
     stop(&paths, handle);
 }
 

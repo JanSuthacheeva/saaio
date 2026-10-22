@@ -7,12 +7,15 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::mpsc::Sender;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
 use super::master::Start;
 use super::{ConnId, Event, FRAME_EVERY, Server, Stop, WRITE_TIMEOUT, spawn_named};
+
+/// At most this many connections at once; one more is closed.
+const MAX_CONNS: usize = 16;
 use crate::private;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, Role, ServerMsg};
 use crate::server_log;
@@ -157,6 +160,11 @@ impl Server {
                 return;
             }
         }
+        if self.conns.len() >= MAX_CONNS {
+            let line = format!("refused a connection: {MAX_CONNS} are open");
+            server_log::write((self.clock)(), &line);
+            return;
+        }
         let conn = self.next_conn;
         self.next_conn += 1;
         let Ok(reader) = stream.try_clone() else {
@@ -171,7 +179,7 @@ impl Server {
                 role: None,
             },
         );
-        read_in_background(conn, reader, self.events.clone());
+        read_in_background(conn, reader, self.timing.hello, self.events.clone());
     }
 
     /// Refuses a connection whose first message could not be read: a flow of an older protocol,
@@ -337,12 +345,24 @@ pub(super) fn accept_in_background(listener: UnixListener, events: Sender<Event>
     });
 }
 
-fn read_in_background(conn: ConnId, mut stream: UnixStream, events: Sender<Event>) {
+/// Reads a connection's messages into `events`; one whose hello does not come within `hello`, or
+/// cannot be read, is Unreadable.
+fn read_in_background(
+    conn: ConnId,
+    mut stream: UnixStream,
+    hello: Duration,
+    events: Sender<Event>,
+) {
     spawn_named(format!("conn {conn}"), move || {
         let mut first = true;
+        // macOS refuses socket options once the client hung up (EINVAL); the read says so.
+        let _ = stream.set_read_timeout(Some(hello));
         loop {
             match proto::read_msg::<_, ClientMsg>(&mut stream) {
                 Ok(Some(message)) => {
+                    if first {
+                        let _ = stream.set_read_timeout(None);
+                    }
                     first = false;
                     if events.send(Event::Message(conn, message)).is_err() {
                         return;
