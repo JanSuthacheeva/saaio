@@ -10,11 +10,9 @@ use crate::event::{Event as LogEvent, EventKind, ServiceStatus};
 use crate::launch::worktree;
 use crate::pause::{self, Job};
 use crate::server_log;
+use crate::trust::Trust;
 use crate::view::FlowView;
 use crate::workspace::hooks::{self, Hook};
-
-/// The longest a pause or resume script may run before it is killed.
-pub const HOOK_LIMIT: Duration = Duration::from_mins(5);
 
 /// What a job's thread sends back.
 #[derive(Debug)]
@@ -59,13 +57,17 @@ impl PauseWatch {
 }
 
 impl Server {
-    /// Each tick: starts the jobs due, for flows whose repo has both scripts; appends pausing or
-    /// resuming before the thread starts.
+    /// Each tick: starts the jobs due, for flows whose trusted repo has both scripts; appends
+    /// pausing or resuming before the thread starts.
     pub(super) fn pause_idle(&mut self) {
         let now = (self.clock)();
         let after = self.config.services.pause_after();
         for (flow, job) in self.pauses.due(&self.board.flows, now, after) {
-            let Some(repo) = scripted_repo(&flow) else {
+            let Some((repo, trust)) = self
+                .trust
+                .as_ref()
+                .and_then(|trust| Some((scripted_repo(&flow, trust)?, trust.clone())))
+            else {
                 self.pauses.done(&flow.id);
                 continue;
             };
@@ -82,7 +84,7 @@ impl Server {
                 self.pauses.done(&flow.id);
                 continue;
             }
-            run_in_background(flow, repo, job, self.events.clone());
+            run_in_background(flow, repo, trust, job, self.events.clone());
         }
     }
 
@@ -119,19 +121,20 @@ impl Server {
     }
 }
 
-/// The repository of a flow whose worktree is there and whose repo has both .saaio/pause and
-/// .saaio/resume; None when either is missing.
-fn scripted_repo(flow: &FlowView) -> Option<PathBuf> {
+/// The repository of a flow whose worktree is there and whose repo, trusted, has both .saaio/pause
+/// and .saaio/resume; None when either is missing or trust does not cover it.
+fn scripted_repo(flow: &FlowView, trust: &Trust) -> Option<PathBuf> {
     let space = flow.workspace.as_ref()?;
     let repo = worktree::repo_of(space)?;
     let scripted = Path::new(&space.path).is_dir()
+        && trust.covers(&repo)
         && hooks::exists(&repo, Hook::Pause)
         && hooks::exists(&repo, Hook::Resume);
     scripted.then_some(repo)
 }
 
 /// The script on a thread of its own; Event::Paused(Finished) when it ends.
-fn run_in_background(flow: FlowView, repo: PathBuf, job: Job, events: Sender<Event>) {
+fn run_in_background(flow: FlowView, repo: PathBuf, trust: Trust, job: Job, events: Sender<Event>) {
     spawn_named(format!("pause {}", flow.name), move || {
         let Some(space) = &flow.workspace else {
             return;
@@ -141,8 +144,8 @@ fn run_in_background(flow: FlowView, repo: PathBuf, job: Job, events: Sender<Eve
             Job::Resume => Hook::Resume,
         };
         let env = worktree::hook_env(&flow.id, &flow.name, &repo, space);
-        let result = hooks::run_within(&repo, hook, space, &env, HOOK_LIMIT)
-            .map_err(|error| format!("{error:#}"));
+        let result =
+            hooks::run(&trust, &repo, hook, space, &env).map_err(|error| format!("{error:#}"));
         let _ = events.send(Event::Paused(Finished {
             id: flow.id,
             job,

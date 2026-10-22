@@ -9,6 +9,7 @@ use crate::cli::output::remove::{self, BranchFate, Retired};
 use crate::cli::output::{Document, Failure};
 use crate::fold;
 use crate::store::Store;
+use crate::trust::Trust;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -23,7 +24,7 @@ pub struct Args {
 }
 
 /// Stops a flow's worker, tears down its worktree, deletes a merged branch and forgets the flow.
-pub fn run(args: &Args, store: &Store, now: u64) -> Result<Document, Failure> {
+pub fn run(args: &Args, store: &Store, trust: &Trust, now: u64) -> Result<Document, Failure> {
     let uncommitted = if args.force {
         Uncommitted::Discard
     } else {
@@ -43,8 +44,8 @@ pub fn run(args: &Args, store: &Store, now: u64) -> Result<Document, Failure> {
         refuse_unmerged_commits(flow)?;
     }
     let pane = close_pane(store, flow)?;
-    let retired = retire_worktree(flow, uncommitted);
-    let branch = match retired {
+    let retired = retire_worktree(trust, flow, uncommitted);
+    let branch = match retired.0 {
         Retired::Kept(_) => BranchFate::Kept,
         Retired::NoWorktree | Retired::Removed => drop_branch(flow, unmerged),
     };

@@ -44,6 +44,7 @@ use crate::proto::{BUILD, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, ServerMsg,
 use crate::server_log;
 use crate::store::Store;
 use crate::system::System;
+use crate::trust::Trust;
 use crate::view::Board;
 use conn::Conn;
 use conn::{accept_in_background, bind};
@@ -86,6 +87,8 @@ pub struct ServerPaths {
     pub theme: Option<PathBuf>,
     /// The folder a new master opens in.
     pub cwd: PathBuf,
+    /// The repositories whose hooks run and whose worktrees Codex trusts; None trusts none.
+    pub trust: Option<Trust>,
 }
 
 pub(super) type ConnId = u64;
@@ -168,6 +171,7 @@ struct Server {
     forges: ForgeWatch,
     /// The flows whose services a pause or resume runs for.
     pauses: PauseWatch,
+    trust: Option<Trust>,
 }
 
 /// Writes master.md and, when missing, the example config.toml and theme.toml; logs what fails.
@@ -246,6 +250,7 @@ pub fn run(
         events: events.clone(),
         forges: ForgeWatch::default(),
         pauses: PauseWatch::default(),
+        trust: paths.trust.clone(),
     };
     server.open_master(start);
     server.refresh();

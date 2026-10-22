@@ -13,6 +13,7 @@ fn clear_tears_down_and_removes_clean_worktrees_but_keeps_uncommitted_work() {
         "teardown",
         "#!/bin/sh\necho \"$SAAIO_FLOW_NAME\" >> \"$SAAIO_REPO/torn-down\"\n",
     );
+    lab.trust();
     assert!(lab.start(&["SHOP-1 clean one"]).status.success());
     assert!(lab.start(&["SHOP-2 dirty one"]).status.success());
     assert!(lab.start(&["SHOP-3 still running"]).status.success());
@@ -62,6 +63,7 @@ fn remove_tears_down_and_forgets_a_running_flow() {
         "teardown",
         "#!/bin/sh\necho \"$SAAIO_FLOW_NAME\" >> \"$SAAIO_REPO/torn-down\"\n",
     );
+    lab.trust();
     assert!(lab.start(&["SHOP-1 first try"]).status.success());
     assert!(lab.start(&["SHOP-2 keep me"]).status.success());
 
@@ -70,7 +72,9 @@ fn remove_tears_down_and_forgets_a_running_flow() {
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
     assert!(
-        text.starts_with("removed: shop-1\npane: none\nworktree: removed\nbranch: deleted\n"),
+        text.starts_with(
+            "removed: shop-1\npane: none\nteardown: ran\nworktree: removed\nbranch: deleted\n"
+        ),
         "{text}"
     );
     assert!(!lab.repo.join(".saaio/worktrees/shop-1").exists());
@@ -85,6 +89,38 @@ fn remove_tears_down_and_forgets_a_running_flow() {
         list.contains("count: 1") && list.contains("shop-2"),
         "{list}"
     );
+}
+
+#[test]
+fn remove_and_clear_run_no_teardown_once_the_trust_is_revoked() {
+    let lab = Lab::new();
+    lab.hook("teardown", "#!/bin/sh\ntouch \"$SAAIO_REPO/torn-down\"\n");
+    lab.trust();
+    assert!(lab.start(&["SHOP-1 first try"]).status.success());
+    assert!(lab.start(&["SHOP-2 second try"]).status.success());
+    assert!(lab.run(&["trust", "--revoke"]).status.success());
+
+    let output = lab.run(&["remove", "shop-1"]);
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(
+        text.contains("teardown: \"not run, the repository is not trusted\"\nworktree: removed\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Stop what the flow's setup started yourself"),
+        "{text}"
+    );
+    assert!(!lab.repo.join("torn-down").exists());
+    assert!(
+        lab.run(&["report", "--flow", "shop-2", "ended"])
+            .status
+            .success()
+    );
+    let cleared = stdout(&lab.run(&["clear"]));
+    assert!(cleared.contains("untrusted[1]: shop-2\n"), "{cleared}");
+    assert!(!lab.repo.join("torn-down").exists());
 }
 
 #[test]

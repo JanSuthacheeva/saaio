@@ -5,9 +5,10 @@ mod plain;
 use std::path::{Path, PathBuf};
 
 use super::{check_request, views};
+use crate::adapter::Adapter;
 use crate::branching::{self, Branching};
 use crate::cli::output::start::{self, Opening, Setup};
-use crate::cli::output::{Document, Failure};
+use crate::cli::output::{self, Document, Failure};
 use crate::client::{self, Client};
 use crate::config::Config;
 use crate::event::{Event, EventKind, Mode};
@@ -17,6 +18,7 @@ use crate::proto::Role;
 use crate::registry::Registry;
 use crate::slots::{self, Claim, Slots};
 use crate::store::Store;
+use crate::trust::Trust;
 use crate::view::{FlowView, Workspace};
 use crate::workspace::hooks::{self, Hook};
 use crate::workspace::{self, git};
@@ -68,6 +70,8 @@ pub fn run(
             vec!["Run it inside the repository the flow works on".to_string()],
         )
     })?;
+    let trust = Trust::at(registry);
+    refuse_untrusted(&trust, &repo, config, agent_name)?;
     let branching = Branching::load(&repo)?;
     let kind = pick_kind(branching.as_ref(), args.kind.as_deref())?;
     let (flows, _) = views(store, now);
@@ -97,6 +101,7 @@ pub fn run(
     rollback.disarm();
 
     let setup = match hooks::run(
+        &trust,
         &repo,
         Hook::Setup,
         &space,
@@ -117,6 +122,24 @@ pub fn run(
     let events = store.events(&id)?;
     let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");
     Ok(start::started(&flow, &space, &setup, opening(store)))
+}
+
+/// Fails before anything is created when the repo has hooks, or the agent is Codex, and the person
+/// has not trusted it yet.
+fn refuse_untrusted(
+    trust: &Trust,
+    repo: &Path,
+    config: &Config,
+    agent: &str,
+) -> Result<(), Failure> {
+    let hooks = hooks::present(repo);
+    let codex = config
+        .agent(Some(agent))
+        .is_some_and(|(_, agent)| agent.adapter == Some(Adapter::Codex));
+    if (hooks.is_empty() && !codex) || trust.covers(repo) {
+        return Ok(());
+    }
+    Err(output::trust::untrusted(repo, &hooks, codex))
 }
 
 /// The names unfinished flows hold; a new flow takes another.

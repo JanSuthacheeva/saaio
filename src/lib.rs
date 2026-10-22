@@ -40,6 +40,7 @@ mod slots;
 mod store;
 mod system;
 mod text;
+mod trust;
 mod ui;
 mod update;
 mod view;

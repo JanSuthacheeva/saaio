@@ -350,6 +350,15 @@ impl Lab {
         );
     }
 
+    /// `saaio trust` in the repo, run in a terminal as the person runs it.
+    pub fn trust(&self) {
+        let mut terminal = Terminal::open(&self.home, &self.repo, &["trust"], &[]);
+        wait_until("saaio trust did not end", || {
+            terminal.child.try_wait().unwrap().is_some()
+        });
+        assert!(terminal.shows("trusted: "), "{}", terminal.text());
+    }
+
     pub fn hook(&self, name: &str, script: &str) {
         let dir = self.repo.join(".saaio");
         fs::create_dir_all(&dir).unwrap();

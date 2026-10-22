@@ -63,13 +63,15 @@ fn refuse_links(repo: &Path) -> Result<()>;
 
 `src/refusal.rs`: `Refusal::Untrusted`, phrase `"is not trusted"`.
 
-`src/cli/commands/trust.rs` (new): `Args { folder: Option<PathBuf>, revoke: bool, list: bool }`, `run(args, trust, env, cwd) -> Result<Document, Failure>`. The root is `git::repo_root(folder)` else the folder made absolute and canonical.
+`src/cli/commands/trust.rs` (new): `Args { folder: Option<PathBuf>, revoke: bool, list: bool }`, `run(args, env) -> Result<Document, Failure>`, run without a store (like update), the trust from `Env::registry`, the folder from `current_dir`. The root is `git::repo_root(folder)` else the folder made absolute and canonical.
 
 `src/cli/output/trust.rs` (new): `trusted(repo, hooks)`, `revoked(repo, was)`, `list(repos)`, `untrusted(repo, hooks, codex) -> Failure`, `not_a_person() -> Failure`.
 
 `src/cli/commands/start.rs`: after `repo` and agent are known, before the flow is created, `refuse_untrusted(&trust, &repo, adapter)?`; `hooks::run` gets the trust. `run` takes `&Trust` (from `Env::registry`; none -> nothing trusted).
 
-`src/cli/commands/retire.rs`: `retire_worktree(trust, flow, uncommitted) -> (Retired, Teardown)`; `Teardown { None, Ran, Failed(String), Untrusted }` in `cli/output/remove.rs`, printed as `teardown:` in remove and as a help line in clear when skipped.
+`src/cli/commands/retire.rs`: `retire_worktree(trust, flow, uncommitted) -> (Retired, Teardown)`; `Teardown { None, Ran, Failed(String), Untrusted }` in `cli/output/remove.rs`, printed as `teardown:` in remove; clear lists `untrusted[n]` flows with a help line. `remove::run` and `clear::run` take `&Trust`; `start::run` builds it from its registry.
+
+`ServerPaths` gains `trust: Option<Trust>`, kept on `Server`; `HOOK_LIMIT` is gone.
 
 `src/launch/pane.rs`: `worker_spec(flow, agent, env, trusted: bool)`; `Adapter::wiring(flow_exe, folder: Option<&Path>)` and `plain_wiring` the same: `None` leaves out `codex::trusted_folder`.
 
@@ -117,9 +119,9 @@ Symlinked `.saaio/worktrees`: start -> workspace::create_worktree -> refuse_link
 
 - [x] Process group: `finish_within` runs its command in its own process group and kills the group past the limit; unit test that a hung command's background child is gone after the timeout; remove the ROADMAP row
 - [x] Symlinks: `refuse_links` in `create_worktree` with unit tests for `.saaio` and `.saaio/worktrees` links; CLI test that `saaio start` refuses and creates nothing at the target
-- [ ] `src/trust.rs`: `Trust` (at, covers, grant, revoke, repos) and `root_of`, with unit tests
-- [ ] Hooks: `Hook::limit`, `Hook::name`, `hooks::present`, trust-checked `run`/`run_within`; callers in start, retire and pause_watch pass the trust (start refuses untrusted via `refuse_untrusted` and `Refusal::Untrusted`; retire returns `Teardown`; pause watch skips untrusted); unit and CLI tests
-- [ ] `saaio trust` command (grant in a person's terminal, `--revoke`, `--list`) with output documents and CLI tests (PTY grant, refused without a terminal)
+- [x] `src/trust.rs`: `Trust` (at, covers, grant, revoke, repos) and `root_of`, with unit tests
+- [x] Hooks: `Hook::limit`, `Hook::name`, `hooks::present`, trust-checked `run`/`run_within`; callers in start, retire and pause_watch pass the trust (start refuses untrusted via `refuse_untrusted` and `Refusal::Untrusted`; retire returns `Teardown`; pause watch skips untrusted); unit and CLI tests
+- [x] `saaio trust` command (grant in a person's terminal, `--revoke`, `--list`) with output documents and CLI tests (PTY grant, refused without a terminal)
 - [ ] Codex folder trust only when trusted: `wiring`/`plain_wiring` take `Option<&Path>`, `worker_spec` takes `trusted`, the server computes it; tests
 - [ ] saaio ui asks: `Confirmed`, `Effect::Trust`, `UiEnv::trust`; app tests
 - [ ] Docs (cli.md, repository.md, flows.md, troubleshooting.md, README where hooks are described), CHANGELOG Unreleased lines, CLAUDE.md architecture lines for trust.rs and the trust command
