@@ -277,7 +277,8 @@ prompt = "{request}"
 - No `adapter`: its row shows only whether it runs.
 - A custom agent that runs Claude Code or Codex sets `adapter` to be followed like the built-in ones.
 - With an adapter, saaio adds to the command line: its hooks, for workers a system prompt naming
-  the saaio master, for the master `master.md`, and for Codex trust of the worktree. Nothing is
+  the saaio master, for the master `master.md`, and for Codex trust of the worktree in a
+  [trusted](repository.md#trust) repository. Nothing is
   installed. Nothing is written to `~/.claude` or `~/.codex`
   ([flows.md](flows.md#how-a-worker-reports)).
 

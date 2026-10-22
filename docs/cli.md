@@ -13,6 +13,7 @@
 - [saaio new](#saaio-new)
 - [saaio remove](#saaio-remove)
 - [saaio clear](#saaio-clear)
+- [saaio trust](#saaio-trust)
 - [saaio bug-report](#saaio-bug-report)
 - [saaio completions](#saaio-completions)
 - [saaio update](#saaio-update)
@@ -36,6 +37,7 @@
 | `saaio new --name <name> --request <text> [--mode]` | track a flow without starting a worker |
 | `saaio remove <flow> [--force] [--delete-unmerged]` | end a flow and tear down its worktree |
 | `saaio clear` | forget finished flows and tear down their worktrees |
+| `saaio trust [<folder>] [--revoke] [--list]` | let saaio run a repository's `.saaio` scripts |
 | `saaio bug-report` | write a file to attach to a bug report |
 | `saaio completions <shell>` | print the completion script for a shell |
 | `saaio update [--version <tag>]` | install the latest release over this binary |
@@ -108,11 +110,13 @@ saaio start --plain <folder> [--name <name>] [--agent <agent>]
 
 Run in the repository the flow works on. Steps:
 
-1. names the flow
-2. claims a slot (1 to 20, [repository.md](repository.md#slots-and-ports))
-3. creates a git worktree in `.saaio/worktrees/<name>` on a new branch
-4. runs the repository's `.saaio/setup` there, if present
-5. records the flow, so the UI opens the agent in the worktree
+1. refuses a repository not [trusted](repository.md#trust) yet when it has `.saaio` scripts or the
+   agent is Codex
+2. names the flow
+3. claims a slot (1 to 20, [repository.md](repository.md#slots-and-ports))
+4. creates a git worktree in `.saaio/worktrees/<name>` on a new branch
+5. runs the repository's `.saaio/setup` there, if present, for at most 10 minutes
+6. records the flow, so the UI opens the agent in the worktree
 
 ```
 $ saaio start "SHOP-217 add CSV export"
@@ -390,6 +394,7 @@ the worktree, deletes the branch, forgets the flow.
 $ saaio remove shop-217
 removed: shop-217
 pane: none
+teardown: none
 worktree: removed
 branch: deleted
 help[1]: Run `saaio` to see what is left
@@ -408,6 +413,7 @@ help[2]: "Merge or push flow/shop-221, then run `saaio remove shop-221` again",R
 | Field | Values |
 | --- | --- |
 | `pane` | `closed`, `none` or `timed out` |
+| `teardown` | `ran`, `none` (no worktree or no executable `.saaio/teardown`), `failed: <its last error line>`, or `not run, the repository is not trusted` |
 | `worktree` | `removed`, `none` or `kept: <path>`, with a help line to discard what is left |
 | `branch` | `deleted`, `kept` or `none` |
 
@@ -428,6 +434,8 @@ Forgets every ended flow and tears down its worktree like `saaio remove`,
 except:
 
 - a worktree with uncommitted work is kept and listed under `kept`
+- a flow whose teardown did not run, since the repository is no longer trusted, is listed under
+  `untrusted`
 - a branch is deleted only when all its commits are on another branch
 - a pushed branch with its merge request stays on the remote
 
@@ -439,6 +447,29 @@ kept[1]{name,path}:
   shop-230,~/projects/shop/.saaio/worktrees/shop-230
 help[2]: Run `saaio` to see what is left,"Commit or discard the work in a kept worktree, then remove it with `git worktree remove <path>`"
 ```
+
+## saaio trust
+
+```
+saaio trust [<folder>] [--revoke]
+saaio trust --list
+```
+
+Trusts the repository `<folder>` is in (default: the current folder), so saaio runs its `.saaio`
+scripts and lets Codex workers trust its worktrees ([repository.md](repository.md#trust)). Only a
+person trusts: run without a terminal, or in an agent's or a worker's shell, it refuses.
+
+```
+$ saaio trust
+trusted: ~/projects/shop
+scripts[2]: .saaio/setup,.saaio/teardown
+help[1]: Run `saaio trust --revoke ~/projects/shop` to take it back
+```
+
+| Option | Effect |
+| --- | --- |
+| `--revoke` | takes the trust back: `revoked: <repository>`, or `revoked: none` when it was not trusted. Works anywhere. |
+| `--list` | every trusted repository |
 
 ## saaio bug-report
 

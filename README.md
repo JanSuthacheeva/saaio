@@ -84,8 +84,9 @@ so each worktree gets its own ports, `.env` and services and workers do not coll
 npx skills add JanSuthacheeva/agent-skills -g --skill setup-saaio   # included in the command above
 ```
 
-Then ask the agent in the project: "set up saaio for this project". Details:
-[Repository setup](docs/repository.md#the-setup-saaio-skill).
+Then ask the agent in the project: "set up saaio for this project". Once you have read the scripts,
+run `saaio trust` in the project in your terminal, so saaio runs them (the new-flow dialog in
+`saaio` asks too). Details: [Repository setup](docs/repository.md#the-setup-saaio-skill).
 
 ## Usage
 
@@ -113,8 +114,8 @@ commented out at its default.
 | Feature | What it does |
 | --- | --- |
 | Master | starts workers, answers them with `saaio send`, is woken when a worker's turn ends, it waits, is blocked, stops responding or opens its merge request. Guided flows bring every question to you. Auto flows let the master answer what the code and plan settle. |
-| Worktrees | one branch and worktree per flow. `.saaio/setup` and `.saaio/teardown` run in each. `SAAIO_SLOT` (1 to 20, unique across all projects) gives each worktree its own ports. The `setup-saaio` skill writes both scripts. |
-| Hooks | Claude Code and Codex (experimental) report through their own hooks, no screen reading. Codex workers trust saaio's hooks and their own worktree for that launch; a startup dialog that prevents the first turn shows as waiting. Any other command runs as a worker, shown as running or not. If any worker process exits while its flow is working, the flow shows blocked with its exit code and a short tail of pane output. |
+| Worktrees | one branch and worktree per flow. `.saaio/setup` and `.saaio/teardown` run in each, once you trusted the repository (`saaio trust`, or the new-flow dialog asks). `SAAIO_SLOT` (1 to 20, unique across all projects) gives each worktree its own ports. The `setup-saaio` skill writes both scripts. |
+| Hooks | Claude Code and Codex (experimental) report through their own hooks, no screen reading. Codex workers trust saaio's hooks, and their own worktree once you trusted the repository, for that launch; a startup dialog that prevents the first turn shows as waiting. Any other command runs as a worker, shown as running or not. If any worker process exits while its flow is working, the flow shows blocked with its exit code and a short tail of pane output. |
 | Projects | one store, master and sidebar per git repository, picked from the folder saaio runs in. `saaio status --all` and the board show every project. |
 | Plain sessions | an agent in any folder, no worktree, no flow |
 | Themes | terminal colors by default, built-in dark and light themes, live reload, themes written by other tools (Noctalia template in the docs) |

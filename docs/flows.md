@@ -193,7 +193,8 @@ The review phase may not show: Codex hands the review to a subagent without read
 skill itself, so no hook names it. A merge request still moves the flow to its last phase.
 
 `adapter = "codex"`. Hooks, their per-launch trust state and the worker prompt pass as `-c`
-arguments. A worker also trusts its own worktree for that launch. Nothing is written to `~/.codex`.
+arguments. A worker also trusts its own worktree for that launch once you
+[trusted](repository.md#trust) the repository. Nothing is written to `~/.codex`.
 
 | Codex event | Reported |
 | --- | --- |
@@ -207,7 +208,7 @@ arguments. A worker also trusts its own worktree for that launch. Nothing is wri
 | the end of a turn | as for Claude Code |
 | Esc | `idle interrupted` |
 
-- saaio trusts only its own hooks and the worker's own worktree. Your configured hooks and a
+- saaio trusts only its own hooks and, in a trusted repository, the worker's own worktree. Your configured hooks and a
   repository's hooks still receive Codex's review.
 - Codex runs the same permission hook whether you or its automatic review (`--approve-for-me`)
   answers. saaio reads who answers from the turn in the session's rollout file. Automatic review

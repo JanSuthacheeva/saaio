@@ -152,7 +152,9 @@ Highly recommended:
 | --- | --- |
 | an agent opening in a folder it does not trust yet (a Claude Code worker's new worktree, the master's or a plain session's folder) asks whether to trust it | answer in its pane |
 
-Codex workers trust saaio's hooks and their own worktree without asking.
+Codex workers trust saaio's hooks without asking, and their own worktree once you trusted the
+repository: `saaio start` refuses until you do, and the new-flow dialog asks
+([repository.md](repository.md#trust)).
 
 ## Updating
 

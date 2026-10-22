@@ -124,5 +124,5 @@ Symlinked `.saaio/worktrees`: start -> workspace::create_worktree -> refuse_link
 - [x] `saaio trust` command (grant in a person's terminal, `--revoke`, `--list`) with output documents and CLI tests (PTY grant, refused without a terminal)
 - [x] Codex folder trust only when trusted: `wiring`/`plain_wiring` take `Option<&Path>`, `worker_spec` takes `trusted`, the server computes it; tests
 - [x] saaio ui asks: `Confirmed`, `Effect::Trust`, `UiEnv::trust`; app tests
-- [ ] Docs (cli.md, repository.md, flows.md, troubleshooting.md, README where hooks are described), CHANGELOG Unreleased lines, CLAUDE.md architecture lines for trust.rs and the trust command
+- [x] Docs (cli.md, repository.md, flows.md, troubleshooting.md, README where hooks are described), CHANGELOG Unreleased lines, CLAUDE.md architecture lines for trust.rs and the trust command
 - [ ] End to end: scratch SAAIO_HOME repo with setup/teardown: start refused, `saaio trust` in a PTY, start runs setup, hanging hook killed with its children, symlinked `.saaio/worktrees` refused, remove, `--revoke`; server stopped, nothing left on disk

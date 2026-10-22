@@ -73,6 +73,9 @@ The home folder is written `~`. A second report on the same day is written besid
 | Problem | Cause | Fix |
 | --- | --- | --- |
 | `saaio start` needs a git repository | run outside a repository | run it in the repository, or use `saaio start --plain <folder>` |
+| `... is not trusted: saaio would run .saaio/setup` | you have not trusted the repository yet | read its `.saaio` scripts, then run `saaio trust` in it in your terminal, or start the flow from the new-flow dialog in `saaio`, which asks ([repository.md](repository.md#trust)) |
+| `... .saaio/worktrees is a symbolic link` | `.saaio` or `.saaio/worktrees` points elsewhere | make it a plain folder |
+| `setup: failed: no answer within 10m` | `.saaio/setup` ran longer than 10 minutes. It was stopped with everything it started. | find what it waits for, such as a prompt or a service that never starts |
 | `setup: failed: ...` | `.saaio/setup` exited with an error. The text is its last error line. The flow is blocked, the worker is open. | fix the script, remove the flow, start it again. The [setup-saaio](repository.md#the-setup-saaio-skill) skill writes or repairs the script. |
 | `all 20 slots are in use` | 20 unfinished flows across all projects | `saaio status --all` lists them. A done flow keeps its slot until its session ends: end it, or `saaio remove` flows you no longer need. |
 | `config.toml:<line>: ...` | a broken config. The message names the file, line and key. | fix the key. A key from an earlier version names its new form ([configuration.md](configuration.md#errors)). |
@@ -86,3 +89,4 @@ The home folder is written `~`. A second report on the same day is written besid
 | `saaio remove` refuses: git cannot check the worktree for uncommitted changes | git does not list the folder as a worktree of the repository, or git failed | `git worktree list` in the repository shows what git knows; `--force` removes it without the check |
 | `saaio remove` refuses: commits on no other branch | the branch has commits that exist nowhere else, local or pushed | merge or push the branch, or `--delete-unmerged` to delete it with its commits |
 | `saaio clear` kept a worktree | it had uncommitted work | commit or discard it, then `git worktree remove <path>` |
+| `teardown: not run, the repository is not trusted` | the trust was revoked | stop what the setup started yourself, or `saaio trust` before the next removal |

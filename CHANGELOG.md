@@ -12,8 +12,18 @@ All notable changes to saaio are listed here. The format follows
   day. `[ui] update_check = false` turns it off.
 - `saaio update` installs the latest release, or `--version <tag>`, over the binary you run.
 
+### Changed
+
+- saaio runs a repository's `.saaio` scripts, and lets Codex workers trust its worktrees, only
+  once you trusted the repository. `saaio start` refuses until then and names the scripts; the
+  new-flow dialog asks you. `saaio trust` trusts the repository you are in (from your own
+  terminal only), `saaio trust --revoke` takes it back, `saaio trust --list` shows every one.
+- `saaio remove` says what the teardown did (`teardown: ran`, `none`, `failed: ...`).
+
 ### Fixed
 
+- A `.saaio` script that never ends no longer blocks `saaio start`, `saaio remove` or
+  `saaio clear`: setup is stopped after 10 minutes and teardown after 2, and the flow says so.
 - A flow that ended, or went on to a subagent, no longer shows the question it asked earlier as
   its blocker in `saaio status`, its `--json` and the master's news.
 - A `.saaio` script stopped for running too long now takes what it started with it (a
