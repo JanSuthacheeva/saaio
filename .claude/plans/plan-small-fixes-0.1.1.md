@@ -60,14 +60,16 @@ pub fn repo_dir(flow: &FlowView) -> Option<PathBuf>;
 `repo_dir` (the main checkout, never the worktree's own .git).
 
 `src/cli/commands/report.rs` (modified): `MergeRequest { url }` refused unless
-`of_own_repo(repo_dir(flow) or the current folder, url)`. `run` gets `cwd: &Path`.
-
-`src/cli/output/flow.rs` (modified)
+`of_own_repo(repo_dir(flow) or the current folder, url)`; the current folder is read there, only
+for a flow without a folder, so a report from a removed folder still works.
 
 ```rust
 /// `<url> is not a merge request of <flow>'s repository`; help: report the URL gh or glab printed.
-pub fn foreign_merge_request(flow: &FlowView, url: &str) -> Failure;
+fn foreign_merge_request(flow: &FlowView, url: &str) -> Failure;
 ```
+
+Built beside `no_phase` in report.rs (the plan had it in `output/flow.rs`; report's other
+failures live in report.rs).
 
 `src/forge.rs` (modified): `view_argv`:
 `gh pr view --json url,state,createdAt -- <url>`,
@@ -96,7 +98,7 @@ false -> `Err(flow::foreign_merge_request)` (exit 1, nothing appended).
 ## Tasks
 
 - [x] `text::fill` in one pass; `launch::pane` and `branching` use it, with tests that a request holding placeholders is passed once and verbatim
-- [ ] `bug_report::text`/`tilde` take every home form, dash-encoded and after `/` and `:`; the command passes the canonical home; tests
+- [x] `bug_report::text`/`tilde` take every home form, dash-encoded and after `/` and `:`; the command passes the canonical home; tests
 - [ ] `commands::of_own_repo` and `repo_dir` shared by hook and report; `saaio report merge-request` refuses a URL of another repository, with CLI tests
 - [ ] `Forge::view_argv` puts flags first and `--` before the URL or number, with tests
 - [ ] `Job::args` puts `--` before the request and the flow name and passes the folder as `--plain=`, with tests

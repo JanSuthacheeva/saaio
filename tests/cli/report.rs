@@ -183,28 +183,101 @@ fn a_heartbeat_marks_the_flow_alive_without_an_event() {
 }
 
 #[test]
-fn clear_forgets_finished_flows_only() {
-    let home = TempDir::new().unwrap();
-    let done = new_flow(home.path(), "export-csv");
-    new_flow(home.path(), "shop-221");
-    saaio_in(
-        home.path(),
-        &done,
-        &["report", "merge-request", "https://x/88"],
+fn report_takes_only_a_merge_request_of_the_flows_repository() {
+    let lab = Lab::new();
+    git(
+        &lab.repo,
+        &["remote", "add", "origin", "git@github.com:acme/shop.git"],
     );
-    let still_live = saaio(home.path(), &["clear"]);
-    assert!(stdout(&still_live).starts_with("cleared: 0"));
-    saaio_in(home.path(), &done, &["report", "ended"]);
+    let started = lab.start(&["SHOP-1 export"]);
+    assert!(started.status.success(), "{}", stdout(&started));
+    let id = id_in(&stdout(&started));
+    let report = |url: &str| saaio_in(&lab.home, &id, &["report", "merge-request", "--", url]);
 
-    let cleared = saaio(home.path(), &["clear"]);
-    let again = saaio(home.path(), &["clear"]);
+    for url in [
+        "--web",
+        "https://example.com/acme/shop/pull/7",
+        "https://github.com/other/shop/pull/7",
+    ] {
+        let refused = report(url);
+        assert_eq!(refused.status.code(), Some(1), "{url}");
+        let said = stdout(&refused);
+        assert!(
+            said.contains(&format!(
+                "error: \"{url} is not a merge request of shop-1's repository\""
+            )),
+            "{said}"
+        );
+    }
+    let opened = report("https://github.com/acme/shop/pull/7");
+
+    assert!(opened.status.success(), "{}", stdout(&opened));
+    let board: serde_json::Value =
+        serde_json::from_slice(&lab.run(&["status", "--json"]).stdout).unwrap();
+    assert_eq!(
+        board["flows"][0]["mergeRequest"],
+        "https://github.com/acme/shop/pull/7"
+    );
+}
+
+#[test]
+fn a_flow_without_a_worktree_takes_a_merge_request_of_the_folder_it_reports_from() {
+    let lab = Lab::new();
+    git(
+        &lab.repo,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://gitlab.com/acme/shop.git",
+        ],
+    );
+    let id = new_flow(&lab.home, "shop-221");
+    let url = "https://gitlab.com/acme/shop/-/merge_requests/3";
+
+    let elsewhere = saaio_in(&lab.home, &id, &["report", "merge-request", url]);
+    let in_repo = lab.run_as(&id, &["report", "merge-request", url]);
+
+    assert_eq!(elsewhere.status.code(), Some(1), "{}", stdout(&elsewhere));
+    assert!(in_repo.status.success(), "{}", stdout(&in_repo));
+}
+
+#[test]
+fn clear_forgets_finished_flows_only() {
+    let lab = Lab::new();
+    git(
+        &lab.repo,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/shop.git",
+        ],
+    );
+    let home = &lab.home;
+    let done = new_flow(home, "export-csv");
+    new_flow(home, "shop-221");
+    lab.run_as(
+        &done,
+        &[
+            "report",
+            "merge-request",
+            "https://github.com/acme/shop/pull/88",
+        ],
+    );
+    let still_live = saaio(home, &["clear"]);
+    assert!(stdout(&still_live).starts_with("cleared: 0"));
+    saaio_in(home, &done, &["report", "ended"]);
+
+    let cleared = saaio(home, &["clear"]);
+    let again = saaio(home, &["clear"]);
 
     assert_eq!(
         stdout(&cleared),
         "cleared: 1\nnames[1]: export-csv\nhelp[1]: Run `saaio` to see what is left\n"
     );
     assert!(stdout(&again).starts_with("cleared: 0"));
-    let list = stdout(&saaio(home.path(), &["status"]));
+    let list = stdout(&saaio(home, &["status"]));
     assert!(
         list.contains("count: 1") && list.contains("shop-221"),
         "{list}"

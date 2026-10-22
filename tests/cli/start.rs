@@ -562,6 +562,10 @@ fn projects_never_share_a_slot_and_show_up_together() {
 #[test]
 fn a_closed_pr_keeps_an_ended_flow_finished_after_its_slot_is_reclaimed() {
     let lab = Lab::new();
+    git(
+        &lab.repo,
+        &["remote", "add", "origin", "https://github.com/a/b.git"],
+    );
     let first = lab.start(&["SHOP-1 first"]);
     assert!(first.status.success(), "{}", stdout(&first));
     let first_id = id_in(&stdout(&first));

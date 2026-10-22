@@ -1,4 +1,5 @@
-//! One module per command, and what several share: `views`, `check_request`, `no_flow`
+//! One module per command, and what several share: `views`, `check_request`, `no_flow`,
+//! `repo_dir`, `of_own_repo`
 
 pub(super) mod bug_report;
 pub(super) mod clear;
@@ -18,11 +19,16 @@ pub(super) mod ui;
 pub(super) mod update;
 pub(super) mod wait;
 
+use std::path::{Path, PathBuf};
+
+use crate::adapter::calls;
 use crate::cli::output::Failure;
 use crate::event::REQUEST_LIMIT;
 use crate::fold;
+use crate::launch::worktree::repo_of;
 use crate::store::Store;
 use crate::view::FlowView;
+use crate::workspace;
 
 /// Every flow folded; unreadable ones become warnings so the rest still shows.
 fn views(store: &Store, now: u64) -> (Vec<FlowView>, Vec<String>) {
@@ -50,4 +56,19 @@ fn no_flow(name: &str) -> Failure {
             format!("Run `saaio new --name {name} --request <text>` to start it"),
         ],
     )
+}
+
+/// Where a flow's remotes are read: its main checkout, never the worktree whose .git the worker
+/// controls; a plain session's own folder; None without a folder.
+fn repo_dir(flow: &FlowView) -> Option<PathBuf> {
+    let space = flow.workspace.as_ref()?;
+    Some(repo_of(space).unwrap_or_else(|| PathBuf::from(&space.path)))
+}
+
+/// True when `url` is a merge request of the repository whose remotes git reads in `dir`: origin,
+/// or the upstream a fork's `gh pr create` opens it in.
+fn of_own_repo(dir: &Path, url: &str) -> bool {
+    workspace::git::remote_urls(dir)
+        .iter()
+        .any(|remote| calls::in_repo(url, remote, workspace::git::ssh_hostname))
 }
