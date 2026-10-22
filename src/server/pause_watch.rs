@@ -1,6 +1,7 @@
 //! `PauseWatch`: the repo's pause and resume scripts for resting flows, off the server thread
 
 use std::collections::HashSet;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
@@ -82,7 +83,14 @@ impl Server {
                 self.pauses.done(&flow.id);
                 continue;
             }
-            run_in_background(flow, repo, job, self.events.clone());
+            let id = flow.id.clone();
+            if let Err(error) = run_in_background(flow, repo, job, self.events.clone()) {
+                self.pause_finished(Finished {
+                    id,
+                    job,
+                    result: Err(format!("could not start the script: {error}")),
+                });
+            }
         }
     }
 
@@ -131,7 +139,12 @@ fn scripted_repo(flow: &FlowView) -> Option<PathBuf> {
 }
 
 /// The script on a thread of its own; Event::Paused(Finished) when it ends.
-fn run_in_background(flow: FlowView, repo: PathBuf, job: Job, events: Sender<Event>) {
+fn run_in_background(
+    flow: FlowView,
+    repo: PathBuf,
+    job: Job,
+    events: Sender<Event>,
+) -> io::Result<()> {
     spawn_named(format!("pause {}", flow.name), move || {
         let Some(space) = &flow.workspace else {
             return;
@@ -148,7 +161,7 @@ fn run_in_background(flow: FlowView, repo: PathBuf, job: Job, events: Sender<Eve
             job,
             result,
         }));
-    });
+    })
 }
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
 //! `ForgeWatch`: rounds asking gh and glab about the flows' merge requests, off the server thread
 
+use std::io;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
@@ -86,7 +87,7 @@ impl ForgeWatch {
 }
 
 /// Asks about each flow in turn on the "forge" thread, sending an Answer for each and Done last.
-pub fn ask_in_background(asks: Vec<Ask>, events: Sender<Event>) {
+pub fn ask_in_background(asks: Vec<Ask>, events: Sender<Event>) -> io::Result<()> {
     spawn_named("forge".to_string(), move || {
         for one in asks {
             let answer = match ask(&one) {
@@ -99,7 +100,7 @@ pub fn ask_in_background(asks: Vec<Ask>, events: Sender<Event>) {
             }
         }
         let _ = events.send(Event::Forge(Answer::Done));
-    });
+    })
 }
 
 /// One flow's question, asked in the main checkout: its remotes -> Forge::of -> gh or glab ->
@@ -147,8 +148,12 @@ fn with_shown(
 impl Server {
     /// Starts a round when ForgeWatch says one is due; from refresh.
     pub(super) fn ask_forges(&mut self) {
-        if let Some(asks) = self.forges.due(&self.board.flows, Instant::now()) {
-            ask_in_background(asks, self.events.clone());
+        if let Some(asks) = self.forges.due(&self.board.flows, Instant::now())
+            && let Err(error) = ask_in_background(asks, self.events.clone())
+        {
+            let line = format!("could not ask about merge requests: {error}");
+            server_log::write((self.clock)(), &line);
+            self.forge_answer(Answer::Done);
         }
     }
 

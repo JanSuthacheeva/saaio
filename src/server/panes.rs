@@ -12,7 +12,8 @@ use super::reconcile::{self, Wanted};
 use super::{ConnId, Event, Server, spawn_named};
 use crate::event::{Event as LogEvent, EventKind};
 use crate::fold;
-use crate::launch::pane::{self, HOSTED, PaneSpec};
+use crate::identity;
+use crate::launch::pane::{self, HOSTED, PROOF_ENV, PaneSpec};
 use crate::proto::{PaneKey, PaneStatus, ServerMsg};
 use crate::server_log;
 use crate::store::{Busy, Waiter};
@@ -138,11 +139,9 @@ impl Server {
     /// Opens a pane, forgetting the busy mark (and the master's turn) an earlier process of it may
     /// have left: one killed mid-turn never reached its Stop, and a new process runs no turn yet;
     /// keeps when it opened.
-    fn open_pane(&mut self, spec: PaneSpec) -> anyhow::Result<()> {
-        let waiter = match &spec.key {
-            PaneKey::Master => Waiter::Master,
-            PaneKey::Flow(id) => Waiter::Flow(id.clone()),
-        };
+    fn open_pane(&mut self, mut spec: PaneSpec) -> anyhow::Result<()> {
+        let waiter = waiter_of(&spec.key);
+        self.hand_key(&mut spec)?;
         if let Err(error) = self.store.set_busy(&waiter, Busy::Idle) {
             server_log::write((self.clock)(), &format!("{error:#}"));
         }
@@ -158,6 +157,19 @@ impl Server {
         pane.adapter = adapter;
         pane.opened_at = Some(Instant::now());
         pane.line_at = None;
+        Ok(())
+    }
+
+    /// A fresh key for the pane `spec` opens: its digest in the store, the key in spec.env;
+    /// Err when the pane already runs (its key stays) or the digest cannot be written.
+    fn hand_key(&mut self, spec: &mut PaneSpec) -> anyhow::Result<()> {
+        if self.host.is_running(&spec.key) {
+            anyhow::bail!("{} is already running", spec.key);
+        }
+        let key = identity::new_key().context("could not make a key for the pane")?;
+        self.store
+            .set_key(&waiter_of(&spec.key), &identity::digest(&key))?;
+        spec.env.push((PROOF_ENV.to_string(), key));
         Ok(())
     }
 
@@ -359,7 +371,15 @@ impl Server {
     }
 }
 
-pub(super) fn forward_host_events(events: Sender<Event>) -> Sender<HostEvent> {
+/// Whose wait a pane's session is.
+fn waiter_of(key: &PaneKey) -> Waiter {
+    match key {
+        PaneKey::Master => Waiter::Master,
+        PaneKey::Flow(id) => Waiter::Flow(id.clone()),
+    }
+}
+
+pub(super) fn forward_host_events(events: Sender<Event>) -> Result<Sender<HostEvent>> {
     let (host_events, inbox) = mpsc::channel();
     spawn_named("host events".to_string(), move || {
         for event in inbox {
@@ -367,6 +387,7 @@ pub(super) fn forward_host_events(events: Sender<Event>) -> Sender<HostEvent> {
                 break;
             }
         }
-    });
-    host_events
+    })
+    .context("could not start the thread that forwards the panes' output")?;
+    Ok(host_events)
 }

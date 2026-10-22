@@ -98,10 +98,30 @@ fn this_process() -> Peer {
     }
 }
 
-/// None when no server listens on `socket`.
+/// None when no server listens on `socket`; Err when its folder is not this user's alone, or a
+/// process of another user listens on it.
 fn dial(socket: &Path) -> Result<Option<UnixStream>> {
+    match std::fs::symlink_metadata(socket) {
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        _ => {}
+    }
+    if let Some(dir) = socket.parent() {
+        private::verify_dir(dir)
+            .context("saaio connects to its server only in a private folder")?;
+    }
     match UnixStream::connect(socket) {
-        Ok(stream) => Ok(Some(stream)),
+        Ok(stream) => {
+            let uid = proto::peer_uid(&stream)
+                .with_context(|| format!("could not tell who listens on {}", socket.display()))?;
+            let mine = rustix::process::getuid().as_raw();
+            if uid != mine {
+                bail!(
+                    "a process of uid {uid}, not this user (uid {mine}), listens on {}",
+                    socket.display()
+                );
+            }
+            Ok(Some(stream))
+        }
         Err(error)
             if matches!(
                 error.kind(),
@@ -225,34 +245,61 @@ fn timed_out(error: &anyhow::Error) -> bool {
 /// Unix sockets paths must be shorter than this (104 bytes on macOS, 108 on Linux).
 const SOCKET_PATH_LIMIT: usize = 100;
 
-/// <store root>/server.sock; when that is too long for a socket, /tmp/saaio-<uid>/<hash of the root>.sock.
-pub fn socket_path(store: &Store) -> PathBuf {
-    socket_path_for(store.root(), Path::new("/tmp"))
-}
-
-/// server.log of `store`'s server, beside its socket.
-pub fn log_path(store: &Store) -> PathBuf {
-    server_log::path(&socket_path(store))
-}
-
-fn socket_path_for(root: &Path, tmp: &Path) -> PathBuf {
+/// <store root>/server.sock; when that is too long, <dir>/saaio-<uid>/<hash of the root>.sock in
+/// the first of `temp` ($XDG_RUNTIME_DIR, $TMPDIR; empty and relative ones skipped), else /tmp,
+/// where it fits.
+pub fn socket_path(store: &Store, temp: &[PathBuf]) -> PathBuf {
+    let root = store.root();
     let near = root.join("server.sock");
-    if near.as_os_str().len() < SOCKET_PATH_LIMIT {
+    if fits(&near) {
         return near;
     }
+    temp.iter()
+        .filter(|dir| dir.is_absolute())
+        .map(|dir| private_socket(root, dir))
+        .find(|socket| fits(socket))
+        .unwrap_or_else(|| private_socket(root, Path::new("/tmp")))
+}
+
+/// Where saaio 0.1.0 put the socket of a store whose own path is too long: /tmp/saaio-<uid>/.
+pub fn earlier_socket(store: &Store) -> Option<PathBuf> {
+    let root = store.root();
+    (!fits(&root.join("server.sock"))).then(|| private_socket(root, Path::new("/tmp")))
+}
+
+/// Err when a server of saaio 0.1.0 still listens at `earlier`, where it put a long store's
+/// socket: a second server on the same store would open every session twice.
+pub fn refuse_earlier(earlier: &Path) -> Result<()> {
+    if matches!(dial(earlier), Ok(Some(_))) {
+        bail!(
+            "a saaio server of an earlier version still runs on {}; run `saaio --stop` and start saaio again",
+            earlier.display()
+        );
+    }
+    Ok(())
+}
+
+fn fits(socket: &Path) -> bool {
+    socket.as_os_str().len() < SOCKET_PATH_LIMIT
+}
+
+fn private_socket(root: &Path, dir: &Path) -> PathBuf {
     let uid = rustix::process::getuid().as_raw();
-    tmp.join(format!("saaio-{uid}")).join(format!(
+    dir.join(format!("saaio-{uid}")).join(format!(
         "{:016x}.sock",
         registry::fnv1a(root.as_os_str().as_encoded_bytes())
     ))
 }
 
-/// `<exe> server` with `env` and without the hook variables or SAAIO_MASTER of the session it starts
-/// from, so a saaio ui opened inside a worker or the master gives its panes none of that identity.
+/// `<exe> server` with `env` and without the hook variables, SAAIO_MASTER or SAAIO_PROOF of the session
+/// it starts from, so a saaio ui opened inside a worker or the master gives its panes none of that identity.
 fn server_command(exe: &Path, env: &[(String, String)]) -> Command {
     let mut command = Command::new(exe);
     command.arg("server");
-    for var in worktree::HOOK_VARS.iter().chain(&[pane::MASTER_ENV]) {
+    for var in worktree::HOOK_VARS
+        .iter()
+        .chain(&[pane::MASTER_ENV, pane::PROOF_ENV])
+    {
         command.env_remove(var);
     }
     command.envs(env.iter().map(|(key, value)| (key, value)));
@@ -260,15 +307,16 @@ fn server_command(exe: &Path, env: &[(String, String)]) -> Command {
 }
 
 /// Starts `<exe> server` in its own session with output to server.log unless one listens, moving a
-/// log past server_log::CAP to server.log.1 first; waits up to 2 s for the socket.
+/// log past server_log::CAP to server.log.1 first; waits up to 2 s for the socket. Creates the
+/// socket's folder 0700 first, and closes one already there.
 pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Result<()> {
-    if UnixStream::connect(socket).is_ok() {
-        return Ok(());
-    }
-    let log_path = server_log::path(socket);
     if let Some(dir) = socket.parent() {
         private::create_dir(dir).with_context(|| format!("could not create {}", dir.display()))?;
     }
+    if dial(socket)?.is_some() {
+        return Ok(());
+    }
+    let log_path = server_log::path(socket);
     // A log that cannot be moved aside is only longer; it never keeps the server from starting.
     let _ = server_log::rotate(&log_path, server_log::CAP);
     let log = private::options()
@@ -302,6 +350,13 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    /// A folder of this user closed to others, as saaio makes the one its socket is in.
+    fn private_dir() -> TempDir {
+        let dir = TempDir::new().unwrap();
+        private::create_dir(dir.path()).unwrap();
+        dir
+    }
 
     #[test]
     fn starts_the_server_without_the_identity_of_the_session_it_starts_from() {
@@ -368,7 +423,7 @@ mod tests {
 
     #[test]
     fn says_hello_and_is_welcomed() {
-        let dir = TempDir::new().unwrap();
+        let dir = private_dir();
         let socket = dir.path().join("server.sock");
         let server = fake_server(
             &socket,
@@ -392,7 +447,7 @@ mod tests {
 
     #[test]
     fn passes_on_a_refusal_and_finds_no_server_where_none_listens() {
-        let dir = TempDir::new().unwrap();
+        let dir = private_dir();
         let socket = dir.path().join("server.sock");
         let server = fake_server(
             &socket,
@@ -408,6 +463,25 @@ mod tests {
         server.join().unwrap();
         assert!(
             Client::connect(&dir.path().join("none.sock"), Role::Control)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn connects_only_in_a_folder_of_this_user_closed_to_others() {
+        let dir = TempDir::new().unwrap();
+        let open = dir.path().join("open");
+        std::fs::create_dir(&open).unwrap();
+        let socket = open.join("server.sock");
+        let _listener = UnixListener::bind(&socket).unwrap();
+        std::fs::set_permissions(&open, std::fs::Permissions::from_mode(0o777)).unwrap();
+
+        let error = Client::connect(&socket, Role::Control).unwrap_err();
+
+        assert!(format!("{error:#}").contains("open to others"), "{error:#}");
+        assert!(
+            Client::connect(&dir.path().join("missing/server.sock"), Role::Control)
                 .unwrap()
                 .is_none()
         );
@@ -449,28 +523,61 @@ mod tests {
         assert_eq!(mode & 0o777, 0o700);
     }
 
+    fn deep() -> Store {
+        Store::at(PathBuf::from(format!("/state/{}", "deep/".repeat(30))))
+    }
+
     #[test]
-    fn moves_a_socket_whose_path_is_too_long_into_a_private_tmp_directory() {
-        let long = PathBuf::from(format!("/state/{}", "deep/".repeat(30)));
+    fn moves_a_socket_whose_path_is_too_long_into_a_private_folder_of_the_runtime_dir() {
+        let uid = rustix::process::getuid().as_raw();
+        let runtime = PathBuf::from("/run/user/501");
+        let tmpdir = PathBuf::from("/var/folders/wm/h3q0/T");
 
-        let socket = socket_path_for(&long, Path::new("/tmp"));
+        let socket = socket_path(&deep(), &[runtime.clone(), tmpdir.clone()]);
 
-        assert!(socket.as_os_str().len() < SOCKET_PATH_LIMIT);
-        assert!(socket.starts_with("/tmp"), "{}", socket.display());
+        assert!(fits(&socket), "{}", socket.display());
+        assert_eq!(
+            socket.parent().unwrap(),
+            runtime.join(format!("saaio-{uid}"))
+        );
+        assert_eq!(socket, socket_path(&deep(), std::slice::from_ref(&runtime)));
+        let other = Store::at(deep().root().join("other"));
+        assert_ne!(socket, socket_path(&other, &[runtime]));
         assert!(
-            socket
-                .parent()
-                .unwrap()
-                .file_name()
-                .unwrap()
-                .to_string_lossy()
-                .starts_with("saaio-")
+            socket_path(
+                &deep(),
+                &[PathBuf::new(), "relative".into(), tmpdir.clone()]
+            )
+            .starts_with(&tmpdir)
         );
-        assert_eq!(socket, socket_path_for(&long, Path::new("/tmp")));
-        assert_ne!(
-            socket,
-            socket_path_for(&long.join("other"), Path::new("/tmp"))
+    }
+
+    #[test]
+    fn falls_back_to_tmp_when_no_runtime_dir_fits() {
+        let uid = rustix::process::getuid().as_raw();
+        let long = PathBuf::from(format!("/{}", "t".repeat(90)));
+
+        let socket = socket_path(&deep(), &[long]);
+
+        assert_eq!(
+            socket.parent().unwrap(),
+            Path::new(&format!("/tmp/saaio-{uid}"))
         );
+        assert_eq!(earlier_socket(&deep()), Some(socket));
+        assert_eq!(earlier_socket(&Store::at(PathBuf::from("/state"))), None);
+    }
+
+    #[test]
+    fn refuses_to_start_beside_a_server_at_the_earlier_place() {
+        let dir = private_dir();
+        let earlier = dir.path().join("earlier.sock");
+
+        refuse_earlier(&earlier).unwrap();
+        let _listener = UnixListener::bind(&earlier).unwrap();
+        let error = refuse_earlier(&earlier).unwrap_err().to_string();
+
+        assert!(error.contains("earlier version"), "{error}");
+        assert!(error.contains("saaio --stop"), "{error}");
     }
 
     #[test]
@@ -478,7 +585,7 @@ mod tests {
         let store = Store::at(PathBuf::from("/state/saaio"));
 
         assert_eq!(
-            socket_path(&store),
+            socket_path(&store, &[PathBuf::from("/run/user/501")]),
             PathBuf::from("/state/saaio/server.sock")
         );
     }
@@ -497,7 +604,10 @@ mod tests {
             })
             .collect();
 
-        for var in worktree::HOOK_VARS.iter().chain(&[pane::MASTER_ENV]) {
+        for var in worktree::HOOK_VARS
+            .iter()
+            .chain(&[pane::MASTER_ENV, pane::PROOF_ENV])
+        {
             assert!(
                 envs.contains(&(var.to_string(), None)),
                 "{var} removed: {envs:?}"

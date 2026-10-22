@@ -4,7 +4,6 @@ use anyhow::Context;
 
 use crate::cli::Env;
 use crate::cli::output::{Document, Failure};
-use crate::client;
 use crate::launch::pane::LaunchEnv;
 use crate::server::{self, ServerPaths, Timing};
 use crate::server_log;
@@ -26,7 +25,7 @@ pub fn run(store: Store, env: &Env, clock: fn() -> u64) -> Result<Document, Fail
         .config_dir()
         .unwrap_or_else(|| store.root().to_path_buf());
     let paths = ServerPaths {
-        socket: client::socket_path(&store),
+        socket: env.socket(&store),
         master: store.root().join("master.json"),
         instructions: config_dir.join("master.md"),
         config: config_file,

@@ -5,7 +5,8 @@ use crate::cli::Env;
 use crate::cli::output::{self, Document, Failure};
 use crate::event::{Event, EventKind, LONG_TEXT_LIMIT};
 use crate::fold;
-use crate::store::Store;
+use crate::identity;
+use crate::store::{Store, Waiter};
 use crate::view::FlowView;
 use crate::wake;
 
@@ -21,9 +22,9 @@ pub struct Args {
 }
 
 /// Appends the master's message to a flow its worker reads when flow wakes it, or with --type a
-/// line saaio server types into its pane; only the master sends (no SAAIO_FLOW_ID in its env).
+/// line saaio server types into its pane; only the master sends (its pane's key proves it).
 pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, Failure> {
-    if env.flow_id().is_some() {
+    if !identity::proves(store, &Waiter::Master, env.key()) {
         return Err(Failure::error(
             "only the master sends",
             vec!["End your turn with the question; saaio wakes the master".to_string()],

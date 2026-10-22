@@ -7,7 +7,6 @@ use crate::cli::output::Failure;
 use crate::cli::output::remove::{self, BranchFate, Retired};
 use crate::client::{self, Closing};
 use crate::launch::worktree;
-use crate::store::Store;
 use crate::view::FlowView;
 use crate::workspace::hooks::{self, Hook};
 use crate::workspace::{self, git};
@@ -62,8 +61,8 @@ pub fn refuse_unmerged_commits(flow: &FlowView) -> Result<(), Failure> {
 }
 
 /// Ends the flow's session in saaio ui before its worktree goes.
-pub fn close_pane(store: &Store, flow: &FlowView) -> Result<Closing, Failure> {
-    client::close_flow(&client::socket_path(store), &flow.id, CLOSE_WAIT).map_err(Failure::from)
+pub fn close_pane(socket: &Path, flow: &FlowView) -> Result<Closing, Failure> {
+    client::close_flow(socket, &flow.id, CLOSE_WAIT).map_err(Failure::from)
 }
 
 /// Runs the teardown hook and removes the flow's worktree; keeps it with uncommitted work unless forced.

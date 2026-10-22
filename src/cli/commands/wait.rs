@@ -8,6 +8,8 @@ use crate::cli::output::Document;
 use crate::config::watch::ConfigWatch;
 use crate::deliver::{self, WorkerNews};
 use crate::event::is_uuid;
+use crate::identity;
+use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
 use crate::view::FlowView;
 use crate::wake;
@@ -22,7 +24,8 @@ pub struct Args {
     master: bool,
 }
 
-/// `saaio wait`: the news to wake the session with; Silent when the wait ends without news.
+/// `saaio wait`: the news to wake the session with; Silent when the wait ends without news, or
+/// at once when the session's key does not prove it.
 pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
     let cwd = std::env::current_dir().ok();
     let Ok(Some(store)) = env.store(cwd.as_deref()) else {
@@ -33,6 +36,15 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
         Some(id) if is_uuid(id) => Waiter::Flow(id.to_string()),
         _ => return Document::Silent,
     };
+    if !identity::proves(&store, &waiter, env.key()) {
+        let line = match &waiter {
+            Waiter::Master => "wait master: SAAIO_PROOF does not prove the master".to_string(),
+            Waiter::Flow(id) => format!("wait flow {id}: SAAIO_PROOF does not prove flow {id}"),
+        };
+        // A log that cannot be written is let go: the wait ends silently all the same.
+        let _ = server_log::append(&env.server_log(&store), clock(), &line);
+        return Document::Silent;
+    }
     let mut configs = ConfigWatch::new(env.config_file());
     match wait(&store, &waiter, &mut configs, clock) {
         Some(news) => Document::Wake(news),

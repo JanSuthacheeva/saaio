@@ -1,5 +1,6 @@
 //! `saaio hook`: one harness event into its flow or the master's turn, news handed over at Stop
 
+use std::fmt;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -12,11 +13,11 @@ use super::views;
 use crate::adapter::{Adapter, LineMatch, Turn, calls};
 use crate::cli::Env;
 use crate::cli::output::Document;
-use crate::client;
 use crate::config::Config;
 use crate::deliver::{self, WorkerNews};
 use crate::event::{Event, EventKind, ServiceStatus, is_uuid};
 use crate::fold;
+use crate::identity;
 use crate::pause;
 use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
@@ -38,6 +39,28 @@ enum Hooked {
     Nobody,
 }
 
+impl Hooked {
+    /// The session it claims to be, None for Nobody.
+    fn waiter(&self) -> Option<Waiter> {
+        match self {
+            Hooked::Flow(id) => Some(Waiter::Flow(id.clone())),
+            Hooked::Master => Some(Waiter::Master),
+            Hooked::Nobody => None,
+        }
+    }
+}
+
+/// the master, flow 7f3c, nobody
+impl fmt::Display for Hooked {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Hooked::Flow(id) => write!(f, "flow {id}"),
+            Hooked::Master => f.write_str("the master"),
+            Hooked::Nobody => f.write_str("nobody"),
+        }
+    }
+}
+
 /// `saaio hook`: never prints to stdout (a hook's stdout can reach the model) and never fails (a
 /// failing hook shows the user a notice); what goes wrong goes to the store's server.log. A Stop
 /// that hands news over wakes the session with it (exit 2, the news on stderr).
@@ -50,14 +73,25 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
     let hooked = match env.flow_id() {
         _ if env.is_master() => Hooked::Master,
         Some(id) if !is_uuid(id) => {
-            Log::new(&store, &args.adapter, &Hooked::Nobody, clock)
-                .error(&format!("SAAIO_FLOW_ID {id:?} is no flow id"));
+            Log::new(
+                env.server_log(&store),
+                &args.adapter,
+                &Hooked::Nobody,
+                clock,
+            )
+            .error(&format!("SAAIO_FLOW_ID {id:?} is no flow id"));
             return Document::Silent;
         }
         Some(id) => Hooked::Flow(id.to_string()),
         None => Hooked::Nobody,
     };
-    let log = Log::new(&store, &args.adapter, &hooked, clock);
+    let log = Log::new(env.server_log(&store), &args.adapter, &hooked, clock);
+    if let Some(claimed) = hooked.waiter()
+        && !identity::proves(&store, &claimed, env.key())
+    {
+        log.error(&format!("SAAIO_PROOF does not prove {hooked}"));
+        return Document::Silent;
+    }
     // A broken config must not stop running workers from reporting; the server logs it, start and
     // ui say it loudly.
     let config = env.config().unwrap_or_else(|_| Config::builtin());
@@ -152,14 +186,14 @@ struct Log {
 }
 
 impl Log {
-    fn new(store: &Store, adapter: &str, hooked: &Hooked, clock: fn() -> u64) -> Log {
+    fn new(path: PathBuf, adapter: &str, hooked: &Hooked, clock: fn() -> u64) -> Log {
         let source = match hooked {
             Hooked::Flow(flow) => format!("hook {adapter} flow {flow}"),
             Hooked::Master => format!("hook {adapter} master"),
             Hooked::Nobody => format!("hook {adapter}"),
         };
         Log {
-            path: client::log_path(store),
+            path,
             source,
             clock,
         }
@@ -418,13 +452,18 @@ mod tests {
     }
 
     #[test]
-    fn logs_an_error_with_its_source_beside_the_socket() {
+    fn logs_an_error_with_its_source() {
         let dir = TempDir::new().unwrap();
-        let store = Store::at(dir.path().to_path_buf());
-        let log = Log::new(&store, "codex", &Hooked::Flow("3f2a9c".to_string()), || 0);
+        let path = dir.path().join("server.log");
+        let log = Log::new(
+            path.clone(),
+            "codex",
+            &Hooked::Flow("3f2a9c".to_string()),
+            || 0,
+        );
 
         log.error("no flow 3f2a9c");
-        Log::new(&store, "codex", &Hooked::Master, || 0).error("broken");
+        Log::new(path, "codex", &Hooked::Master, || 0).error("broken");
 
         let lines = fs::read_to_string(dir.path().join("server.log")).unwrap();
         let ends: Vec<_> = lines

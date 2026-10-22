@@ -1,6 +1,7 @@
 //! Tests of `saaio server` and `saaio --stop`: stopping, its own session, the UI's prefix check
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, Stdio};
 use std::thread;
@@ -180,6 +181,7 @@ fn the_ui_refuses_a_prefix_the_panes_need_before_it_starts_anything() {
 #[test]
 fn stop_ends_a_server_that_speaks_another_protocol() {
     let home = TempDir::new().unwrap();
+    fs::set_permissions(home.path(), fs::Permissions::from_mode(0o700)).unwrap();
     let socket = home.path().join("server.sock");
     let listen = "import socket, sys, time\n\
         server = socket.socket(socket.AF_UNIX)\n\

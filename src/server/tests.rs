@@ -14,6 +14,7 @@ use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
 use crate::fixtures::{self, executable};
+use crate::identity;
 use crate::launch::pane::HOSTED;
 use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
 use crate::store::{Busy, Waiter};
@@ -45,6 +46,7 @@ fn quick() -> Timing {
         quiet: Duration::from_millis(200),
         first_turn_grace: Duration::from_millis(300),
         unstarted: Duration::from_secs(30),
+        hello: Duration::from_millis(500),
     }
 }
 
@@ -210,10 +212,7 @@ fn a_ui_attaches_types_into_the_master_and_sees_it() {
         |message| matches!(message, ServerMsg::Frame(frame) if text(&frame, 0).contains("hello")),
     );
 
-    let mut control = connect(&paths.socket, Role::Control);
-    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
-    handle.join().unwrap().unwrap();
+    stop(&paths, handle);
     assert!(!paths.socket.exists());
     assert!(!paths.master.exists(), "a stop ends the master for good");
 }
@@ -314,10 +313,7 @@ fn a_codex_worker_that_never_starts_a_turn_waits_once() {
     thread::sleep(WATCH_EVERY * 2);
     assert_eq!(stalls(), 1, "once");
 
-    let mut control = connect(&paths.socket, Role::Control);
-    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
-    handle.join().unwrap().unwrap();
+    stop(&paths, handle);
 }
 
 #[test]
@@ -363,10 +359,7 @@ fn an_exited_worker_blocks_once_with_its_code_and_final_output() {
         1
     );
 
-    let mut control = connect(&paths.socket, Role::Control);
-    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
-    handle.join().unwrap().unwrap();
+    stop(&paths, handle);
 }
 
 #[test]
@@ -410,10 +403,7 @@ fn a_failed_resume_retries_fresh_before_blocking() {
             .count(),
         0
     );
-    let mut control = connect(&paths.socket, Role::Control);
-    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
-    handle.join().unwrap().unwrap();
+    stop(&paths, handle);
 }
 
 #[test]
@@ -894,6 +884,85 @@ fn a_ui_that_attaches_again_starts_on_the_master() {
     handle.join().unwrap().unwrap();
 }
 
+/// Whether the server closed `stream` without a word.
+fn closed(stream: &mut UnixStream) -> bool {
+    matches!(proto::read_msg::<_, ServerMsg>(stream), Ok(None) | Err(_))
+}
+
+#[test]
+fn takes_nothing_before_a_hello_and_only_closeflow_from_a_control_connection() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+
+    let mut early = UnixStream::connect(&paths.socket).unwrap();
+    early.set_read_timeout(Some(PATIENCE)).unwrap();
+    proto::write_msg(&mut early, &ClientMsg::StopServer).unwrap();
+    assert!(closed(&mut early), "a message before the hello");
+
+    for message in [
+        ClientMsg::StopServer,
+        ClientMsg::EndFlows,
+        ClientMsg::Input(b"x".to_vec()),
+        ClientMsg::Hello {
+            version: PROTOCOL_VERSION,
+            role: Role::Control,
+            peer: peer(4),
+        },
+    ] {
+        let mut control = connect(&paths.socket, Role::Control);
+        assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+        proto::write_msg(&mut control, &message).unwrap();
+        assert!(
+            closed(&mut control),
+            "{message:?} from a control connection"
+        );
+    }
+
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
+    assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+    stop(&paths, handle);
+}
+
+#[test]
+fn closes_a_connection_that_says_no_hello_in_time() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+
+    let mut silent = UnixStream::connect(&paths.socket).unwrap();
+    silent.set_read_timeout(Some(PATIENCE)).unwrap();
+
+    assert!(matches!(
+        proto::read_msg::<_, ServerMsg>(&mut silent),
+        Ok(Some(ServerMsg::Refused { .. }) | None)
+    ));
+    stop(&paths, handle);
+}
+
+#[test]
+fn takes_at_most_16_connections_at_once() {
+    let dir = TempDir::new().unwrap();
+    let patient = Timing {
+        hello: PATIENCE,
+        ..quick()
+    };
+    let (paths, handle) = start_timed(dir.path(), BTreeMap::new(), patient, || 0);
+    let open: Vec<UnixStream> = (0..16)
+        .map(|_| UnixStream::connect(&paths.socket).unwrap())
+        .collect();
+
+    let mut one_more = connect(&paths.socket, Role::Control);
+    assert!(closed(&mut one_more), "the 17th connection");
+
+    drop(open);
+    wait_until("the server never took a connection again", || {
+        let mut control = connect(&paths.socket, Role::Control);
+        !closed(&mut control)
+    });
+    stop(&paths, handle);
+}
+
 #[test]
 fn a_second_ui_takes_over_and_an_old_protocol_is_refused() {
     let dir = TempDir::new().unwrap();
@@ -1017,10 +1086,46 @@ fn replaces_a_stale_socket_but_not_a_live_one() {
 }
 
 fn stop(paths: &ServerPaths, handle: thread::JoinHandle<Result<()>>) {
-    let mut control = connect(&paths.socket, Role::Control);
-    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-    proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
+    let size = Size { cols: 20, rows: 4 };
+    let mut ui = connect(&paths.socket, Role::Attach { size });
+    assert!(matches!(recv(&mut ui), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
+}
+
+#[test]
+fn hands_each_pane_a_key_only_the_store_digest_proves() {
+    let dir = TempDir::new().unwrap();
+    let script = dir.path().join("master");
+    let seen = dir.path().join("key");
+    executable(
+        &script,
+        &format!(
+            "#!/bin/sh\nprintf %s \"$SAAIO_PROOF\" > '{}'\nexec cat\n",
+            seen.display()
+        ),
+    );
+    let master = Agent {
+        command: vec![script.display().to_string()],
+        prompt: None,
+        adapter: None,
+        resume: Some(vec![script.display().to_string()]),
+    };
+    let (paths, handle) = start_with(dir.path(), master);
+
+    wait_until("the master did not write its key", || {
+        fs::read_to_string(&seen).is_ok_and(|key| !key.is_empty())
+    });
+    let key = fs::read_to_string(&seen).unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    assert!(identity::proves(&store, &Waiter::Master, Some(&key)));
+    assert_ne!(store.key(&Waiter::Master).unwrap(), key, "only its digest");
+    let mode = fs::metadata(dir.path().join("waits/master.key"))
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600);
+    stop(&paths, handle);
 }
 
 #[test]
@@ -1286,7 +1391,8 @@ fn a_typed_line_that_begins_no_turn_lets_the_next_one_follow() {
     );
 
     wait_until_typed(dir.path(), "csv", "go on");
-    assert_eq!(store.busy(&Waiter::Flow(id.clone())), Busy::Typed);
+    // Not its busy mark: "go on" begins no turn either, and is let go itself after `unstarted`.
+    assert_eq!(store.typed(&id), 2);
     assert_eq!(
         typed(dir.path(), "fresh"),
         "",

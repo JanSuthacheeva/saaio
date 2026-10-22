@@ -11,6 +11,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use portable_pty::{CommandBuilder, MasterPty, PtySize, SlavePty, native_pty_system};
+use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
 /// The saaio binary with a test's own state: `home` as SAAIO_HOME, the shared folder inside it, a
@@ -43,8 +44,29 @@ pub fn saaio_in(home: &Path, flow_id: &str, args: &[&str]) -> Output {
     saaio_command(home)
         .args(args)
         .env("SAAIO_FLOW_ID", flow_id)
+        .env("SAAIO_PROOF", key(home, flow_id))
         .output()
         .expect("the saaio binary runs")
+}
+
+/// `saaio <args>` in the master's session: with the key its pane was handed.
+pub fn as_master(home: &Path, args: &[&str]) -> Output {
+    saaio_command(home)
+        .args(args)
+        .env("SAAIO_PROOF", key(home, "master"))
+        .output()
+        .expect("the saaio binary runs")
+}
+
+/// The key the pane of `name` (a flow id, or master) proves its session with, its digest kept in
+/// the store as saaio server keeps it.
+pub fn key(home: &Path, name: &str) -> String {
+    let key = format!("{name}-key");
+    let waits = home.join("waits");
+    fs::create_dir_all(&waits).unwrap();
+    let digest = Sha256::digest(key.as_bytes());
+    fs::write(waits.join(format!("{name}.key")), format!("{digest:x}")).unwrap();
+    key
 }
 
 /// git in `dir`, which must succeed.
@@ -391,7 +413,9 @@ pub fn hook_command(home: &Path, args: &[&str], flow_id: Option<&str>) -> Comman
     let mut command = saaio_command(home);
     command.arg("hook").args(args);
     if let Some(id) = flow_id {
-        command.env("SAAIO_FLOW_ID", id);
+        command
+            .env("SAAIO_FLOW_ID", id)
+            .env("SAAIO_PROOF", key(home, id));
     }
     command
 }
@@ -430,7 +454,12 @@ pub fn waiter(home: &Path, flow_id: Option<&str>, args: &[&str]) -> Running {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if let Some(id) = flow_id {
-        command.env("SAAIO_FLOW_ID", id);
+        command
+            .env("SAAIO_FLOW_ID", id)
+            .env("SAAIO_PROOF", key(home, id));
+    }
+    if args.contains(&"--master") {
+        command.env("SAAIO_PROOF", key(home, "master"));
     }
     Running(command.spawn().expect("the saaio binary runs"))
 }

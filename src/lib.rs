@@ -25,6 +25,7 @@ mod event;
 mod fixtures;
 mod fold;
 mod forge;
+mod identity;
 mod launch;
 #[cfg(test)]
 mod layering;

@@ -14,7 +14,7 @@ use crate::update::UpdateCheck;
 pub fn run(store: &Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
     // A broken config.toml stops the UI here: there is no last good one to keep yet.
     env.config()?;
-    let log = client::log_path(store);
+    let log = env.server_log(store);
     server_log::append_on_panic(log.clone(), "ui", clock);
     match attach(store, env, log.clone(), clock) {
         Ok(message) => Ok(Document::Text(message)),
@@ -27,7 +27,10 @@ pub fn run(store: &Store, env: &Env, clock: fn() -> u64) -> Result<Document, Fai
 
 /// Starts the server unless one runs, then runs the UI until it detaches; what to tell the user.
 fn attach(store: &Store, env: &Env, log: PathBuf, clock: fn() -> u64) -> anyhow::Result<String> {
-    let socket = client::socket_path(store);
+    let socket = env.socket(store);
+    if let Some(earlier) = client::earlier_socket(store).filter(|earlier| *earlier != socket) {
+        client::refuse_earlier(&earlier)?;
+    }
     let exe = std::env::current_exe()?;
     let pinned = [("SAAIO_HOME".to_string(), store.root().display().to_string())];
     client::ensure_server(&socket, &exe, &pinned)?;

@@ -9,6 +9,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 
 use super::process::{finish_within, last_line};
+use crate::launch::pane::PROOF_ENV;
 use crate::view::Workspace;
 
 /// The repo's own hooks: .saaio/setup after the worktree exists, .saaio/teardown before it goes,
@@ -33,9 +34,7 @@ pub fn run(
     if !is_executable(&file) {
         return Ok(false);
     }
-    let output = Command::new(&file)
-        .current_dir(&workspace.path)
-        .envs(env.iter().map(|(key, value)| (key, value)))
+    let output = command(&file, workspace, env)
         .output()
         .with_context(|| format!("could not run {}", file.display()))?;
     if !output.status.success() {
@@ -56,12 +55,22 @@ pub fn run_within(
     if !is_executable(&file) {
         return Ok(false);
     }
-    let mut command = Command::new(&file);
+    finish_within(
+        command(&file, workspace, env),
+        &file.display().to_string(),
+        limit,
+    )?;
+    Ok(true)
+}
+
+/// The hook in the worktree with `env`, without the key of the session that runs it.
+fn command(file: &Path, workspace: &Workspace, env: &[(String, String)]) -> Command {
+    let mut command = Command::new(file);
     command
         .current_dir(&workspace.path)
+        .env_remove(PROOF_ENV)
         .envs(env.iter().map(|(key, value)| (key, value)));
-    finish_within(command, &file.display().to_string(), limit)?;
-    Ok(true)
+    command
 }
 
 /// Whether <repo>/.saaio/<hook> exists and is executable.
