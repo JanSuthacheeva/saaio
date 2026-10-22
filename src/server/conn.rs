@@ -1,21 +1,25 @@
 //! UI connections (`Conn`): the socket, hello, messages, and the frames, board and panes sent
 
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 use std::ops::ControlFlow;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::mpsc::Sender;
+use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
+use rustix::io::Errno;
 
 use super::master::Start;
 use super::{ConnId, Event, FRAME_EVERY, Server, Stop, WRITE_TIMEOUT, spawn_named};
 
 /// At most this many connections at once; one more is closed.
 const MAX_CONNS: usize = 16;
+/// How long accept rests after an error such as EMFILE before it tries again.
+const ACCEPT_PAUSE: Duration = Duration::from_millis(100);
 use crate::private;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, Role, ServerMsg};
 use crate::server_log;
@@ -179,7 +183,12 @@ impl Server {
                 role: None,
             },
         );
-        read_in_background(conn, reader, self.timing.hello, self.events.clone());
+        if let Err(error) = read_in_background(conn, reader, self.timing.hello, self.events.clone())
+        {
+            let line = format!("dropped a connection: {error}");
+            server_log::write((self.clock)(), &line);
+            self.drop_conn(conn);
+        }
     }
 
     /// Refuses a connection whose first message could not be read: a flow of an older protocol,
@@ -335,14 +344,47 @@ pub(super) fn bind(socket: &Path) -> Result<UnixListener> {
     Ok(listener)
 }
 
-pub(super) fn accept_in_background(listener: UnixListener, events: Sender<Event>) {
+/// Accepts connections on the "accept" thread; after an error it rests, so running out of files
+/// or memory never spins, and logs the first of a run of them.
+pub(super) fn accept_in_background(
+    listener: UnixListener,
+    events: Sender<Event>,
+    clock: fn() -> u64,
+) -> Result<()> {
     spawn_named("accept".to_string(), move || {
-        for stream in listener.incoming().flatten() {
-            if events.send(Event::Accepted(stream)).is_err() {
-                break;
+        let mut failing = false;
+        for stream in listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    failing = false;
+                    if events.send(Event::Accepted(stream)).is_err() {
+                        break;
+                    }
+                }
+                Err(error) => {
+                    let Some(pause) = accept_pause(&error) else {
+                        continue;
+                    };
+                    if !failing {
+                        let line = format!("could not accept a connection: {error}; tries again");
+                        server_log::write(clock(), &line);
+                        failing = true;
+                    }
+                    thread::sleep(pause);
+                }
             }
         }
-    });
+    })
+    .context("could not start the thread that accepts connections")
+}
+
+/// How long accept rests after `error`: not at all after a client that gave up or a signal
+/// (ECONNABORTED, EINTR), else ACCEPT_PAUSE, so running out of files or memory never spins.
+fn accept_pause(error: &io::Error) -> Option<Duration> {
+    match Errno::from_io_error(error) {
+        Some(Errno::CONNABORTED | Errno::INTR) => None,
+        _ => Some(ACCEPT_PAUSE),
+    }
 }
 
 /// Reads a connection's messages into `events`; one whose hello does not come within `hello`, or
@@ -352,7 +394,7 @@ fn read_in_background(
     mut stream: UnixStream,
     hello: Duration,
     events: Sender<Event>,
-) {
+) -> io::Result<()> {
     spawn_named(format!("conn {conn}"), move || {
         let mut first = true;
         // macOS refuses socket options once the client hung up (EINVAL); the read says so.
@@ -376,5 +418,22 @@ fn read_in_background(
             }
         }
         let _ = events.send(Event::Gone(conn));
-    });
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rests_after_running_out_of_files_but_not_after_a_client_that_gave_up() {
+        for errno in [Errno::MFILE, Errno::NFILE, Errno::NOBUFS, Errno::NOMEM] {
+            let error = io::Error::from_raw_os_error(errno.raw_os_error());
+            assert_eq!(accept_pause(&error), Some(ACCEPT_PAUSE), "{error}");
+        }
+        for errno in [Errno::CONNABORTED, Errno::INTR] {
+            let error = io::Error::from_raw_os_error(errno.raw_os_error());
+            assert_eq!(accept_pause(&error), None, "{error}");
+        }
+    }
 }

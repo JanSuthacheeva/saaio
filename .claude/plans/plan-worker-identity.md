@@ -217,6 +217,11 @@ Hello -> sets role and peer.
 - `start::run` takes `&Env` in place of `home` (it needs the socket, and stays at 7 arguments);
   `remove::run`, `clear::run` and `retire::close_pane` take the socket path.
 - `client::refuse_earlier(earlier)` holds the UI's check, so it is testable without /tmp.
+- `accept_pause` rests after every accept error but ECONNABORTED and EINTR (an unknown lasting
+  error must not spin either); the first of a run is logged.
+- A pause or resume script whose thread cannot start ends as pause-failed or resume-failed (the
+  existing failure path) instead of being tried at the next tick; a forge round that cannot start
+  ends as if Done.
 - The hello deadline is `Timing::hello` (5 s; tests pick their own), not a const in conn.rs.
 
 ## Tasks
@@ -230,6 +235,6 @@ Hello -> sets role and peer.
 - [x] Earlier location: `saaio --stop` stops a server at `earlier_socket`, the UI refuses to start beside one; tests
 - [x] Connection rules: `Conn::role`, `proto::allowed`, refuse before hello / second hello / Control beyond CloseFlow; server tests failing before
 - [x] Hello deadline and connection cap: HELLO_WAIT read timeout, MAX_CONNS; server tests
-- [ ] Graceful accept and spawn: `accept_pause`, `spawn_named` -> io::Result and its callers; unit test of accept_pause
+- [x] Graceful accept and spawn: `accept_pause`, `spawn_named` -> io::Result and its callers; unit test of accept_pause
 - [ ] PROTOCOL_VERSION 8; CHANGELOG Fixed lines; docs (files.md socket, troubleshooting.md log path, cli.md send, flows.md hooks, agents/configuration env if listed); CLAUDE.md Architecture (identity.rs)
 - [ ] End to end on a scratch store (long path, dummy master): the three repros refused, a real hook with the pane's key recorded, socket under $TMPDIR in a 0700 folder; `saaio --stop`; scratch removed

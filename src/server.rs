@@ -20,7 +20,7 @@ mod typing;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 use std::ops::ControlFlow;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
@@ -217,7 +217,7 @@ pub fn run(
     // The server was handed this config; the watch only needs to know the file as it is.
     let _ = configs.changed();
     let (record, start) = MasterRecord::load_or_create(&paths.master, &paths.cwd)?;
-    let host = Host::new(START_SIZE, forward_host_events(events.clone()));
+    let host = Host::new(START_SIZE, forward_host_events(events.clone())?);
     let mut server = Server {
         store,
         clock,
@@ -249,7 +249,7 @@ pub fn run(
     };
     server.open_master(start);
     server.refresh();
-    accept_in_background(listener, events);
+    accept_in_background(listener, events, clock)?;
 
     let result = server.serve(&inbox);
     let _ = fs::remove_file(&paths.socket);
@@ -370,7 +370,7 @@ impl Server {
 fn stop_on_signals(events: Sender<Event>) -> Result<()> {
     let mut signals = SignalsInfo::<WithOrigin>::new([SIGTERM, SIGINT, SIGHUP])
         .context("could not watch for SIGTERM, SIGINT and SIGHUP")?;
-    spawn_named("signals".to_string(), move || {
+    let watch = spawn_named("signals".to_string(), move || {
         for origin in signals.forever() {
             let event = Event::Signal {
                 name: signal_name(origin.signal).unwrap_or("a signal"),
@@ -383,15 +383,13 @@ fn stop_on_signals(events: Sender<Event>) -> Result<()> {
             }
         }
     });
-    Ok(())
+    watch.context("could not start the thread that watches for signals")
 }
 
-/// Starts a thread with a name, so a panic in it says where it happened.
-pub(super) fn spawn_named<F: FnOnce() + Send + 'static>(name: String, body: F) {
-    thread::Builder::new()
-        .name(name)
-        .spawn(body)
-        .expect("the system could not start a thread");
+/// Starts a thread with a name, so a panic in it says where it happened; Err when the system
+/// cannot start one.
+pub(super) fn spawn_named<F: FnOnce() + Send + 'static>(name: String, body: F) -> io::Result<()> {
+    thread::Builder::new().name(name).spawn(body).map(drop)
 }
 
 #[cfg(test)]

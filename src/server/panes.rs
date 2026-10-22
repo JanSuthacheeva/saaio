@@ -379,7 +379,7 @@ fn waiter_of(key: &PaneKey) -> Waiter {
     }
 }
 
-pub(super) fn forward_host_events(events: Sender<Event>) -> Sender<HostEvent> {
+pub(super) fn forward_host_events(events: Sender<Event>) -> Result<Sender<HostEvent>> {
     let (host_events, inbox) = mpsc::channel();
     spawn_named("host events".to_string(), move || {
         for event in inbox {
@@ -387,6 +387,7 @@ pub(super) fn forward_host_events(events: Sender<Event>) -> Sender<HostEvent> {
                 break;
             }
         }
-    });
-    host_events
+    })
+    .context("could not start the thread that forwards the panes' output")?;
+    Ok(host_events)
 }

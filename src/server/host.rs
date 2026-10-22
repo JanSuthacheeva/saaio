@@ -190,12 +190,16 @@ impl Host {
         let pid = process.pid;
         let exited = process.exited.clone();
         signal_group(pid, Signal::HUP);
-        spawn_named(format!("pane {key} close"), move || {
+        let grace = spawn_named(format!("pane {key} close"), move || {
             thread::sleep(CLOSE_GRACE);
             if !exited.load(Ordering::SeqCst) {
                 signal_group(pid, Signal::KILL);
             }
         });
+        // Without a thread to wait out the grace, the pane gets none.
+        if grace.is_err() {
+            signal_group(pid, Signal::KILL);
+        }
     }
 
     /// The pane's rows: all when full, else the damaged ones; scrolled back by history lines,
@@ -296,7 +300,7 @@ impl Host {
         let (drained_tx, drained_rx) = mpsc::channel::<()>();
         let events = self.events.clone();
         let key = spec.key.clone();
-        spawn_named(format!("pane {key} output"), move || {
+        let output = spawn_named(format!("pane {key} output"), move || {
             let mut buf = vec![0u8; 64 * 1024];
             loop {
                 match reader.read(&mut buf) {
@@ -314,16 +318,24 @@ impl Host {
             }
             let _ = drained_tx.send(());
         });
+        if let Err(error) = output {
+            let _ = child.kill();
+            return Err(error).context("could not start the thread that reads the pane");
+        }
 
         let events = self.events.clone();
         let key = spec.key;
         let done = exited.clone();
-        spawn_named(format!("pane {key} wait"), move || {
+        let waiting = spawn_named(format!("pane {key} wait"), move || {
             let code = child.wait().ok().map(|status| status.exit_code());
             let _ = drained_rx.recv_timeout(DRAIN);
             done.store(true, Ordering::SeqCst);
             let _ = events.send(HostEvent::Exited(key, code));
         });
+        if let Err(error) = waiting {
+            signal_group(pid, Signal::KILL);
+            return Err(error).context("could not start the thread that waits for the pane");
+        }
 
         Ok(Process {
             master: pair.master,
