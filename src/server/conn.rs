@@ -128,6 +128,19 @@ impl Server {
     }
 
     pub(super) fn accept(&mut self, stream: UnixStream) {
+        let mine = rustix::process::getuid().as_raw();
+        match proto::peer_uid(&stream) {
+            Ok(uid) if uid == mine => {}
+            Ok(uid) => {
+                server_log::write((self.clock)(), &format!("refused a process of uid {uid}"));
+                return;
+            }
+            Err(error) => {
+                let line = format!("refused a connection whose user is unknown: {error}");
+                server_log::write((self.clock)(), &line);
+                return;
+            }
+        }
         let conn = self.next_conn;
         self.next_conn += 1;
         let Ok(reader) = stream.try_clone() else {
@@ -263,10 +276,13 @@ impl Server {
     }
 }
 
-/// Binds the socket readable only by this user; a socket nobody answers on is stale and replaced.
+/// Binds the socket readable only by this user, in a folder of this user closed to others; a
+/// socket nobody answers on is stale and replaced.
 pub(super) fn bind(socket: &Path) -> Result<UnixListener> {
     if let Some(dir) = socket.parent() {
         private::create_dir(dir).with_context(|| format!("could not create {}", dir.display()))?;
+        private::verify_dir(dir)
+            .context("saaio listens only in a folder of this user closed to others")?;
     }
     let listener = match UnixListener::bind(socket) {
         Ok(listener) => listener,

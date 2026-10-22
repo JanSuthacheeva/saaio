@@ -209,15 +209,24 @@ Hello -> sets role and peer.
 - A second Hello on a connection is refused like any message not allowed.
 - `saaio report` and `saaio --stop` keep their current env handling.
 
+## Decisions during the build
+
+- Tasks 1-3 went in as one commit: the key's reader and writer are useless apart.
+- `dial` answers None when no socket file is there before it checks the folder, so a store folder
+  a person made 0755 works until a server starts (the server closes it to 0700).
+- `start::run` takes `&Env` in place of `home` (it needs the socket, and stays at 7 arguments);
+  `remove::run`, `clear::run` and `retire::close_pane` take the socket path.
+- `client::refuse_earlier(earlier)` holds the UI's check, so it is testable without /tmp.
+
 ## Tasks
 
 - [x] identity: `identity::new_key`, `digest`, `proves`; `Store::set_key`, `key`, remove deletes it; `KEY_ENV`; getrandom dependency; unit tests
 - [x] Server hands keys: `Host::is_running`, `Server::hand_key` in `open_pane`; `server_command` and `run_job` drop SAAIO_KEY; server test that a pane gets a key whose digest is stored
 - [x] Commands prove: `Env::saaio_key`/`key`, main reads SAAIO_KEY; hook, send, wait refuse the unproven; CLI tests (forged flow, forged master, send, wait) failing before; existing tests pass the key
-- [ ] `private::verify_dir` with unit tests
-- [ ] Socket location: `Env::xdg_runtime_dir`/`tmpdir`, `client::socket_path(store, temp)`, `earlier_socket`, `Env::socket`/`server_log`; call sites; unit tests
-- [ ] Checked connect and bind: dial verifies the folder and the server's uid; ensure_server and bind verify after create; `proto::peer_uid`; server accept refuses another uid; tests
-- [ ] Earlier location: `saaio --stop` stops a server at `earlier_socket`, the UI refuses to start beside one; tests
+- [x] `private::verify_dir` with unit tests
+- [x] Socket location: `Env::xdg_runtime_dir`/`tmpdir`, `client::socket_path(store, temp)`, `earlier_socket`, `Env::socket`/`server_log`; call sites; unit tests
+- [x] Checked connect and bind: dial verifies the folder and the server's uid; ensure_server and bind verify after create; `proto::peer_uid`; server accept refuses another uid; tests
+- [x] Earlier location: `saaio --stop` stops a server at `earlier_socket`, the UI refuses to start beside one; tests
 - [ ] Connection rules: `Conn::role`, `proto::allowed`, refuse before hello / second hello / Control beyond CloseFlow; server tests failing before
 - [ ] Hello deadline and connection cap: HELLO_WAIT read timeout, MAX_CONNS; server tests
 - [ ] Graceful accept and spawn: `accept_pause`, `spawn_named` -> io::Result and its callers; unit test of accept_pause

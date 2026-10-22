@@ -667,12 +667,18 @@ fn a_flow_id_that_is_no_uuid_never_becomes_a_path() {
 
     for adapter in ["claude-code", "codex"] {
         for payload in [prompt, stop] {
-            let output = hook_with(&home, &[adapter], Some(forged), payload);
+            let mut command = hook_command(&home, &[adapter], None);
+            command.env("SAAIO_FLOW_ID", forged);
+            let output = feed(command, payload);
             assert!(output.status.success());
             assert!(output.stdout.is_empty() && output.stderr.is_empty());
         }
     }
-    let wait = saaio_in(&home, forged, &["wait"]);
+    let wait = saaio_command(&home)
+        .arg("wait")
+        .env("SAAIO_FLOW_ID", forged)
+        .output()
+        .unwrap();
 
     assert!(wait.status.success());
     assert!(wait.stdout.is_empty() && wait.stderr.is_empty());

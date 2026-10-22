@@ -1,5 +1,7 @@
 //! `saaio remove`: stops a flow's worker, tears down its worktree and branch, forgets the flow
 
+use std::path::Path;
+
 use super::retire::{
     Uncommitted, Unmerged, close_pane, drop_branch, refuse_uncommitted_work,
     refuse_unmerged_commits, retire_worktree,
@@ -23,7 +25,7 @@ pub struct Args {
 }
 
 /// Stops a flow's worker, tears down its worktree, deletes a merged branch and forgets the flow.
-pub fn run(args: &Args, store: &Store, now: u64) -> Result<Document, Failure> {
+pub fn run(args: &Args, store: &Store, socket: &Path, now: u64) -> Result<Document, Failure> {
     let uncommitted = if args.force {
         Uncommitted::Discard
     } else {
@@ -42,7 +44,7 @@ pub fn run(args: &Args, store: &Store, now: u64) -> Result<Document, Failure> {
     if unmerged == Unmerged::Keep {
         refuse_unmerged_commits(flow)?;
     }
-    let pane = close_pane(store, flow)?;
+    let pane = close_pane(socket, flow)?;
     let retired = retire_worktree(flow, uncommitted);
     let branch = match retired {
         Retired::Kept(_) => BranchFate::Kept,

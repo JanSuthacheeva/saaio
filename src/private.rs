@@ -1,4 +1,4 @@
-//! Files and folders for the user alone: 0700 and 0600, `write_new`, `write_atomic`
+//! Files and folders for the user alone: 0700 and 0600, `write_new`, `write_atomic`, `verify_dir`
 
 #![allow(
     clippy::disallowed_methods,
@@ -7,7 +7,7 @@
 
 use std::fs::{self, DirBuilder, OpenOptions, Permissions};
 use std::io::{self, Write};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
 /// What every folder saaio creates for the user alone is made with.
@@ -23,6 +23,30 @@ pub fn create_dir(dir: &Path) -> io::Result<()> {
         .mode(DIR_MODE)
         .create(dir)?;
     fs::set_permissions(dir, Permissions::from_mode(DIR_MODE))
+}
+
+/// Ok when `dir` is a folder, not a link, owned by this user and closed to group and others;
+/// Err naming what is wrong (NotFound when nothing is there).
+pub fn verify_dir(dir: &Path) -> io::Result<()> {
+    let metadata = fs::symlink_metadata(dir)?;
+    let shown = dir.display();
+    if !metadata.is_dir() {
+        return Err(io::Error::other(format!("{shown} is not a folder")));
+    }
+    let uid = rustix::process::getuid().as_raw();
+    if metadata.uid() != uid {
+        return Err(io::Error::other(format!(
+            "{shown} belongs to uid {}, not to this user (uid {uid})",
+            metadata.uid()
+        )));
+    }
+    if metadata.mode() & 0o077 != 0 {
+        return Err(io::Error::other(format!(
+            "{shown} is open to others (mode {:o})",
+            metadata.mode() & 0o777
+        )));
+    }
+    Ok(())
 }
 
 /// OpenOptions whose create makes the file 0600.
@@ -80,6 +104,40 @@ mod tests {
         for folder in ["state", "state/saaio", "state/saaio/flows", "open"] {
             assert_eq!(mode(&dir.path().join(folder)), 0o700, "{folder}");
         }
+    }
+
+    #[test]
+    fn trusts_only_a_folder_of_this_user_closed_to_others() {
+        let dir = TempDir::new().unwrap();
+        let closed = dir.path().join("closed");
+        let open = dir.path().join("open");
+        let link = dir.path().join("link");
+        create_dir(&closed).unwrap();
+        fs::create_dir(&open).unwrap();
+        fs::set_permissions(&open, fs::Permissions::from_mode(0o755)).unwrap();
+        symlink(&closed, &link).unwrap();
+        let file = closed.join("file");
+        fs::write(&file, "").unwrap();
+
+        verify_dir(&closed).unwrap();
+        let refused = |path: &Path| verify_dir(path).unwrap_err().to_string();
+        assert!(
+            refused(&open).contains("open to others"),
+            "{}",
+            refused(&open)
+        );
+        assert!(
+            refused(&link).contains("not a folder"),
+            "{}",
+            refused(&link)
+        );
+        assert!(
+            refused(&file).contains("not a folder"),
+            "{}",
+            refused(&file)
+        );
+        let missing = verify_dir(&dir.path().join("missing")).unwrap_err();
+        assert_eq!(missing.kind(), io::ErrorKind::NotFound);
     }
 
     #[test]

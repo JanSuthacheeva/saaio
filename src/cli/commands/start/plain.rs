@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use super::{Args, append_workspace, live_names, opening, pick_agent};
+use crate::cli::Env;
 use crate::cli::commands::views;
 use crate::cli::output::start;
 use crate::cli::output::{Document, Failure};
@@ -19,11 +20,11 @@ pub(super) fn open(
     store: &Store,
     config: &Config,
     cwd: &Path,
-    home: Option<&Path>,
+    env: &Env,
     now: u64,
 ) -> Result<Document, Failure> {
     let agent = pick_agent(config, args.agent.as_deref())?;
-    let folder = resolve(folder, cwd, home)?;
+    let folder = resolve(folder, cwd, env.user_home())?;
     let (flows, _) = views(store, now);
     let base = args.name.clone().unwrap_or_else(|| {
         folder.file_name().map_or("session".to_string(), |last| {
@@ -49,7 +50,7 @@ pub(super) fn open(
 
     let events = store.events(&id)?;
     let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");
-    Ok(start::opened(&flow, &space, opening(store)))
+    Ok(start::opened(&flow, &space, opening(&env.socket(store))))
 }
 
 /// `given` made absolute: a leading ~ from $HOME (the dialog passes it unexpanded), relative to

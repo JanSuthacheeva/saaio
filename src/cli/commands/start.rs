@@ -6,9 +6,10 @@ use std::path::{Path, PathBuf};
 
 use super::{check_request, views};
 use crate::branching::{self, Branching};
+use crate::cli::Env;
 use crate::cli::output::start::{self, Opening, Setup};
 use crate::cli::output::{Document, Failure};
-use crate::client::{self, Client};
+use crate::client::Client;
 use crate::config::Config;
 use crate::event::{Event, EventKind, Mode};
 use crate::fold;
@@ -50,11 +51,12 @@ pub fn run(
     registry: &Registry,
     config: &Config,
     cwd: &Path,
-    home: Option<&Path>,
+    env: &Env,
     now: u64,
 ) -> Result<Document, Failure> {
+    let socket = env.socket(store);
     if let Some(folder) = &args.plain {
-        return plain::open(folder, args, store, config, cwd, home, now);
+        return plain::open(folder, args, store, config, cwd, env, now);
     }
     let request = args
         .request
@@ -116,7 +118,7 @@ pub fn run(
 
     let events = store.events(&id)?;
     let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");
-    Ok(start::started(&flow, &space, &setup, opening(store)))
+    Ok(start::started(&flow, &space, &setup, opening(&socket)))
 }
 
 /// The names unfinished flows hold; a new flow takes another.
@@ -141,8 +143,8 @@ fn pick_agent<'a>(config: &'a Config, asked: Option<&str>) -> Result<&'a str, Fa
 }
 
 /// Whether saaio ui opens the new agent now or once it runs.
-fn opening(store: &Store) -> Opening {
-    match Client::connect(&client::socket_path(store), Role::Control) {
+fn opening(socket: &Path) -> Opening {
+    match Client::connect(socket, Role::Control) {
         Ok(None) => Opening::WhenUiRuns,
         Ok(Some(_)) | Err(_) => Opening::Running,
     }

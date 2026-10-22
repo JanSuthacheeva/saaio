@@ -126,11 +126,11 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
         Some(Command::Start(args)) => {
             let config = env.config()?;
             let cwd = std::env::current_dir()?;
-            start::run(&args, store, registry, &config, &cwd, env.user_home(), now)
+            start::run(&args, store, registry, &config, &cwd, env, now)
         }
-        Some(Command::Remove(args)) => remove::run(&args, store, now),
+        Some(Command::Remove(args)) => remove::run(&args, store, &env.socket(store), now),
         Some(Command::Send(args)) => send::run(&args, store, env, now),
-        Some(Command::Clear) => clear::run(store, now),
+        Some(Command::Clear) => clear::run(store, &env.socket(store), now),
         Some(Command::Server) => server::run(store.clone(), env, clock),
         Some(
             Command::Hook(_)

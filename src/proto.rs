@@ -2,11 +2,13 @@
 
 use std::borrow::Cow;
 use std::fmt;
-use std::io::{ErrorKind, Read, Write};
+use std::io::{self, ErrorKind, Read, Write};
 use std::ops::BitOr;
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
+use nix::sys::socket::{getsockopt, sockopt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -58,6 +60,18 @@ impl fmt::Display for Peer {
             self.build
         )
     }
+}
+
+/// The uid of the process at the other end of a Unix socket.
+#[cfg(target_os = "macos")]
+pub fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
+    Ok(getsockopt(stream, sockopt::LocalPeerCred)?.uid())
+}
+
+/// The uid of the process at the other end of a Unix socket.
+#[cfg(target_os = "linux")]
+pub fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
+    Ok(getsockopt(stream, sockopt::PeerCredentials)?.uid())
 }
 
 /// Which session a pane runs: the master, or the worker of a flow id.
@@ -501,6 +515,13 @@ mod tests {
             panic!("no hello");
         };
         assert_eq!((version, role), (PROTOCOL_VERSION, Role::Control));
+    }
+
+    #[test]
+    fn knows_the_uid_at_the_other_end_of_a_socket() {
+        let (ours, _theirs) = UnixStream::pair().unwrap();
+
+        assert_eq!(peer_uid(&ours).unwrap(), rustix::process::getuid().as_raw());
     }
 
     #[test]

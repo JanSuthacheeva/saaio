@@ -51,6 +51,8 @@ fn env() -> Env {
         home: path("HOME"),
         xdg_state_home: path("XDG_STATE_HOME"),
         xdg_config_home: path("XDG_CONFIG_HOME"),
+        xdg_runtime_dir: path("XDG_RUNTIME_DIR"),
+        tmpdir: path("TMPDIR"),
         claude_config_dir: path("CLAUDE_CONFIG_DIR"),
         saaio_releases_url: env::var("SAAIO_RELEASES_URL").ok(),
         terminal: io::stdin().is_terminal() && io::stdout().is_terminal(),

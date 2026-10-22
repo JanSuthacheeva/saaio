@@ -3,9 +3,11 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
+use crate::client;
 use crate::config::{self, Config};
 use crate::registry::Registry;
 use crate::release::source::Releases;
+use crate::server_log;
 use crate::store::Store;
 use crate::ui::clipboard::Clipboard;
 use crate::workspace;
@@ -28,6 +30,9 @@ pub struct Env {
     pub home: Option<PathBuf>,
     pub xdg_state_home: Option<PathBuf>,
     pub xdg_config_home: Option<PathBuf>,
+    /// $XDG_RUNTIME_DIR and $TMPDIR: where a socket goes whose store path is too long.
+    pub xdg_runtime_dir: Option<PathBuf>,
+    pub tmpdir: Option<PathBuf>,
     pub claude_config_dir: Option<PathBuf>,
     /// $SAAIO_RELEASES_URL: a mirror of saaio's releases page.
     pub saaio_releases_url: Option<String>,
@@ -65,6 +70,21 @@ impl Env {
             Some(git_dir) => registry.project_store(&git_dir).map(Some),
             None => Ok(Some(Store::at(registry.root().to_path_buf()))),
         }
+    }
+
+    /// The socket of `store`'s server.
+    pub(crate) fn socket(&self, store: &Store) -> PathBuf {
+        let temp: Vec<PathBuf> = [&self.xdg_runtime_dir, &self.tmpdir]
+            .into_iter()
+            .flatten()
+            .cloned()
+            .collect();
+        client::socket_path(store, &temp)
+    }
+
+    /// server.log of `store`'s server, beside its socket.
+    pub(crate) fn server_log(&self, store: &Store) -> PathBuf {
+        server_log::path(&self.socket(store))
     }
 
     /// The shared folder every store registers in, from $XDG_STATE_HOME or $HOME.
