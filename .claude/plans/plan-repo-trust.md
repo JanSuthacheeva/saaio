@@ -196,3 +196,28 @@ remove and clear output; docs and CHANGELOG.
 ### Checks
 
 `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` pass at cdb13d8.
+
+### Second review
+
+Scope: f361b5b and 4d91c3f (the two Decided items).
+
+Fixed:
+
+- A held resume failed with `.saaio/resume is gone` when only `.saaio/pause` was missing, so the
+  services stayed paused though the script that restarts them was there. `scripted_repo` now
+  needs both scripts to pause and only `.saaio/resume` to resume, and names the script that is
+  missing; unit test `names_the_script_a_job_cannot_run_and_resumes_without_a_pause_script`
+  (cf59652). Pausing still needs both, as the docs say.
+
+Open: none.
+
+Notes, no action recommended:
+
+- `panes::trust_root` now runs `git rev-parse` for a plain session, on the server thread, only
+  when its pane opens (reconcile or resume), with no deadline. It is as quick as the pane's own
+  spawn in practice; worth moving off the thread only if a slow filesystem ever shows up.
+- The fix was re-read by the same reviewer against its finding and its neighbours (pause with
+  resume missing, a leftover Pausing), not reviewed independently.
+
+Checks: `cargo fmt`, `cargo clippy --all-targets -- -D warnings` and `cargo test` pass at
+cf59652.
