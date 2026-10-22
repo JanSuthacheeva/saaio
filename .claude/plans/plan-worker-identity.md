@@ -238,3 +238,43 @@ Hello -> sets role and peer.
 - [x] Graceful accept and spawn: `accept_pause`, `spawn_named` -> io::Result and its callers; unit test of accept_pause
 - [x] PROTOCOL_VERSION 8; CHANGELOG Fixed lines; docs (files.md socket, troubleshooting.md log path, cli.md send, flows.md hooks, agents/configuration env if listed); CLAUDE.md Architecture (identity.rs)
 - [x] End to end on a scratch store (long path, dummy master): the three repros refused, a real hook with the pane's key recorded, socket under $TMPDIR in a 0700 folder; `saaio --stop`; scratch removed
+
+## Review
+
+Isolated review of `origin/main..flow/worker-identity` against this plan.
+
+**Fixed**
+
+- The repo's setup, teardown, pause and resume scripts inherited `SAAIO_KEY` from the session
+  that ran `saaio start` or `saaio remove` (the master's), although docs/cli.md says hooks get
+  none. Shown by a CLI test whose setup printed the master's key; `workspace::hooks` now removes
+  it (d821217).
+
+**Open**
+
+- The socket of a long store path now depends on the caller's `$XDG_RUNTIME_DIR` / `$TMPDIR`. The
+  server and its panes share the UI's environment, so they agree; a `saaio remove`, `clear` or
+  `--stop` run from a shell with another `$TMPDIR` (or none, on Linux without a login session)
+  looks elsewhere and finds no server. Not reproduced in a real setup; rare, since store paths are
+  short by default. Recommendation: keep, revisit if a report shows it.
+- `saaio wait` refuses an unproven session silently but, unlike `saaio hook`, writes no
+  server.log line (the Decision table says both log). Recommendation: leave; the hook's line
+  already names the session.
+
+**Where to look**
+
+1. `src/server/panes.rs` `open_pane` -> `hand_key`, then `src/identity.rs` `proves` and its
+   three callers (`cli/commands/hook.rs`, `send.rs`, `wait.rs`): who gets a key and what it
+   unlocks.
+2. `src/client.rs` `dial`, `socket_path`, `earlier_socket`, and `cli/commands/stop.rs` / `ui.rs`:
+   where the socket lives and the upgrade path from 0.1.0.
+3. `src/server/conn.rs` `accept`, `message` with `proto::allowed`, `read_in_background`: the
+   connection rules.
+
+Routine, skim: the `spawn_named` -> `io::Result` callers, the `Env::socket` call-site changes,
+the test helpers passing keys, the docs.
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at
+d821217; `cargo deny check` passed at c05d3f8 (no dependency change since).
