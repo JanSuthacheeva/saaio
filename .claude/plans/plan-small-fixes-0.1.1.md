@@ -104,3 +104,35 @@ false -> `Err(flow::foreign_merge_request)` (exit 1, nothing appended).
 - [x] `Job::args` puts `--` before the request and the flow name and passes the folder as `--plain=`, with tests
 - [x] CHANGELOG Fixed lines under `## [Unreleased]`, docs/cli.md on the refused URL, CLAUDE.md E2E note on `XDG_STATE_HOME`
 - [x] End to end: rerun the four reproductions on scratch stores, stop every server, remove the scratch folders
+
+## Review
+
+Reviewed in an isolated context against this plan and CLAUDE.md. Every changed line read; the
+fixes match the plan's units, call chains and tests.
+
+**Fixed**
+
+- `bug_report::tilde` left Claude Code's project name for the home folder itself
+  (`~/.claude/projects/-Users-you/x.jsonl`) unredacted: the dashed form did not take a following
+  `/` as the end of a name. Shown by a unit test that failed before; 460f12a. The fix was
+  re-read against the finding, not reviewed by a second agent.
+
+**Open**
+
+- None for this branch.
+
+**Where to look**
+
+1. `src/cli/commands/report.rs` `run` -> `commands::repo_dir` -> `of_own_repo`: which folder's
+   remotes decide, and the current folder only for a flow without one.
+2. `src/bug_report.rs` `tilde` / `tilde_form`: the start and end rules for the path and dashed
+   forms, longest form first.
+3. `src/text.rs` `fill` and `src/launch/pane.rs` `agent_argv`: the prompt filled first, then each
+   command part once.
+
+Routine, skim: `forge::view_argv` and `Job::args` (flags first, then `--`), the test updates that
+add a remote to the lab repo, docs and CHANGELOG.
+
+**Checks**
+
+`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` pass at 460f12a.
