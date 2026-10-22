@@ -119,9 +119,10 @@ fn help_and_version_still_print_normally() {
     );
     assert!(stdout(&help).contains("--stop"), "{}", stdout(&help));
     let version = stdout(&version);
+    let prefix = format!("saaio {} (", env!("CARGO_PKG_VERSION"));
     let commit = version
         .trim()
-        .strip_prefix("saaio 0.1.0 (")
+        .strip_prefix(prefix.as_str())
         .and_then(|rest| rest.strip_suffix(')'));
     assert!(
         commit.is_some_and(|commit| !commit.is_empty() && !commit.contains(' ')),

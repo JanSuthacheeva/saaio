@@ -53,7 +53,8 @@ fn bug_report_writes_one_file_with_versions_settings_and_the_logs() {
 
     let report = fs::read_to_string(file).unwrap();
     assert!(report.starts_with("saaio bug report, 20"), "{report}");
-    assert!(report.contains("\nsaaio   0.1.0 ("), "{report}");
+    let version = format!("\nsaaio   {} (", env!("CARGO_PKG_VERSION"));
+    assert!(report.contains(&version), "{report}");
     assert!(report.contains("\nstore        ~\n"), "{report}");
     assert!(
         report.contains("\nconfig.toml  ~/no-config.toml: does not load: ~/no-config.toml:2: "),
