@@ -245,8 +245,8 @@ Decided: the socket's place stays as it is. A name with KEY in it can be dropped
 default environment filters (Codex excludes `*KEY*`, `*SECRET*`, `*TOKEN*` unless told
 otherwise), so the variable gets a name without them before it ships.
 
-- [ ] Rename `SAAIO_KEY` to `SAAIO_PROOF` everywhere (`pane::KEY_ENV` -> `PROOF_ENV`, `Env::saaio_key` -> `saaio_proof`, docs, CHANGELOG, log line `SAAIO_PROOF does not prove ...`); tests pass
-- [ ] An unproven `saaio wait` logs `SAAIO_PROOF does not prove <the master|flow id>` to server.log, as the hook does; CLI test failing before
+- [x] Rename `SAAIO_KEY` to `SAAIO_PROOF` everywhere (`pane::KEY_ENV` -> `PROOF_ENV`, `Env::saaio_key` -> `saaio_proof`, docs, CHANGELOG, log line `SAAIO_PROOF does not prove ...`); tests pass
+- [x] An unproven `saaio wait` logs `SAAIO_PROOF does not prove <the master|flow id>` to server.log, as the hook does; CLI test failing before
 
 ## Review
 
