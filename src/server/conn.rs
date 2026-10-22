@@ -17,15 +17,30 @@ use crate::private;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, Role, ServerMsg};
 use crate::server_log;
 
-/// One UI connection: its socket, and who it said it is once its hello came.
+/// One connection: its socket, and who it said it is and in which role once its hello came.
 #[derive(Debug)]
 pub(super) struct Conn {
     stream: UnixStream,
     peer: Option<Peer>,
+    role: Option<Role>,
 }
 
 impl Server {
     pub(super) fn message(&mut self, conn: ConnId, message: ClientMsg) -> ControlFlow<Stop> {
+        let Some(open) = self.conns.get(&conn) else {
+            return ControlFlow::Continue(());
+        };
+        if !proto::allowed(open.role, &message) {
+            let who = match (&open.peer, open.role) {
+                (Some(peer), Some(Role::Control)) => format!("a control connection of {peer}"),
+                (Some(peer), _) => peer.to_string(),
+                (None, _) => "a connection before its hello".to_string(),
+            };
+            let what = message.name();
+            server_log::write((self.clock)(), &format!("refused {what} from {who}"));
+            self.drop_conn(conn);
+            return ControlFlow::Continue(());
+        }
         match message {
             ClientMsg::Hello {
                 version,
@@ -110,6 +125,7 @@ impl Server {
         }
         if let Some(open) = self.conns.get_mut(&conn) {
             open.peer = Some(peer);
+            open.role = Some(role);
         }
         self.send_to(
             conn,
@@ -147,7 +163,14 @@ impl Server {
             return;
         };
         let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
-        self.conns.insert(conn, Conn { stream, peer: None });
+        self.conns.insert(
+            conn,
+            Conn {
+                stream,
+                peer: None,
+                role: None,
+            },
+        );
         read_in_background(conn, reader, self.events.clone());
     }
 
