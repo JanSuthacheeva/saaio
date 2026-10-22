@@ -246,6 +246,16 @@ impl Store {
             .ok()
     }
 
+    /// Keeps the digest of the key `waiter`'s pane was handed (waits/<name>.key, 0600).
+    pub fn set_key(&self, waiter: &Waiter, digest: &str) -> Result<()> {
+        self.write_wait(&format!("{}.key", waiter.key()), digest)
+    }
+
+    /// The digest kept for `waiter`, if any.
+    pub fn key(&self, waiter: &Waiter) -> Option<String> {
+        self.read_wait(&format!("{}.key", waiter.key()))
+    }
+
     /// How many of the master's messages the flow's worker was given.
     pub fn delivered(&self, id: &str) -> usize {
         self.read_wait(&format!("{id}.delivered"))
@@ -341,6 +351,7 @@ impl Store {
             waits.join(format!("{id}.delivered")),
             waits.join(format!("{id}.typed")),
             waits.join(format!("{id}.busy")),
+            waits.join(format!("{id}.key")),
         ] {
             if let Err(error) = fs::remove_file(&file)
                 && error.kind() != ErrorKind::NotFound
@@ -651,9 +662,11 @@ mod tests {
         store.claim_waiter(&Waiter::Flow(id.clone()), 9).unwrap();
         store.set_delivered(&id, 2).unwrap();
         fs::write(dir.path().join(format!("waits/{id}.typed")), "1").unwrap();
+        store.set_key(&Waiter::Flow(id.clone()), "d1g35t").unwrap();
 
         store.remove(&id).unwrap();
 
+        assert_eq!(store.key(&Waiter::Flow(id.clone())), None);
         assert_eq!(store.waiter(&Waiter::Flow(id.clone())), None);
         assert_eq!(store.delivered(&id), 0);
         assert_eq!(store.typed(&id), 0);

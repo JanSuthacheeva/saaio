@@ -1,5 +1,7 @@
 //! `saaio clear`: forgets finished flows with their panes, worktrees and merged branches
 
+use std::path::Path;
+
 use super::retire::{Uncommitted, Unmerged, close_pane, drop_branch, retire_worktree};
 use super::views;
 use crate::cli::output::remove::{self, Retired, Teardown};
@@ -8,13 +10,13 @@ use crate::store::Store;
 use crate::trust::Trust;
 
 /// Forgets ended flows, with their panes, worktrees and merged branches.
-pub fn run(store: &Store, trust: &Trust, now: u64) -> Result<Document, Failure> {
+pub fn run(store: &Store, socket: &Path, trust: &Trust, now: u64) -> Result<Document, Failure> {
     let (flows, _) = views(store, now);
     let mut names = Vec::new();
     let mut kept = Vec::new();
     let mut untrusted = Vec::new();
     for flow in flows.iter().filter(|flow| flow.is_finished()) {
-        close_pane(store, flow)?;
+        close_pane(socket, flow)?;
         let (retired, teardown) = retire_worktree(trust, flow, Uncommitted::Keep);
         if teardown == Teardown::Untrusted {
             untrusted.push(flow.name.clone());

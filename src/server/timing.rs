@@ -1,4 +1,5 @@
-//! `Timing`: how long the server waits before it types, calls a start stalled or lets a line go
+//! `Timing`: how long the server waits before it types, calls a start stalled, lets a line go or
+//! closes a silent connection
 
 use std::time::Duration;
 
@@ -13,6 +14,8 @@ pub struct Timing {
     /// A typed line that began no turn this long lets the next one follow: a command such as
     /// /cost runs no hook.
     pub unstarted: Duration,
+    /// A connection that says no hello this long is closed.
+    pub hello: Duration,
 }
 
 impl Default for Timing {
@@ -21,6 +24,7 @@ impl Default for Timing {
             quiet: Duration::from_secs(10),
             first_turn_grace: Duration::from_secs(30),
             unstarted: Duration::from_secs(30),
+            hello: Duration::from_secs(5),
         }
     }
 }
@@ -37,6 +41,7 @@ mod tests {
                 quiet: Duration::from_secs(10),
                 first_turn_grace: Duration::from_secs(30),
                 unstarted: Duration::from_secs(30),
+                hello: Duration::from_secs(5),
             }
         );
     }

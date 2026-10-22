@@ -9,6 +9,7 @@ use std::time::Duration;
 use anyhow::{Result, bail};
 
 use super::process::finish_within;
+use crate::launch::pane::PROOF_ENV;
 use crate::trust::Trust;
 use crate::view::Workspace;
 
@@ -52,12 +53,22 @@ pub fn run_within(
     if !trust.covers(repo) {
         bail!("{} is not trusted", repo.display());
     }
-    let mut command = Command::new(&file);
+    finish_within(
+        command(&file, workspace, env),
+        &file.display().to_string(),
+        limit,
+    )?;
+    Ok(true)
+}
+
+/// The hook in the worktree with `env`, without the key of the session that runs it.
+fn command(file: &Path, workspace: &Workspace, env: &[(String, String)]) -> Command {
+    let mut command = Command::new(file);
     command
         .current_dir(&workspace.path)
+        .env_remove(PROOF_ENV)
         .envs(env.iter().map(|(key, value)| (key, value)));
-    finish_within(command, &file.display().to_string(), limit)?;
-    Ok(true)
+    command
 }
 
 /// The executable hooks a repo has, in the order they run.

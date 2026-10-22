@@ -2,18 +2,20 @@
 
 use std::borrow::Cow;
 use std::fmt;
-use std::io::{ErrorKind, Read, Write};
+use std::io::{self, ErrorKind, Read, Write};
 use std::ops::BitOr;
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
+use nix::sys::socket::{getsockopt, sockopt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::text;
 use crate::view::{Board, MasterTurn};
 
-pub const PROTOCOL_VERSION: u32 = 7;
+pub const PROTOCOL_VERSION: u32 = 8;
 /// This binary: `0.1.0 (2904734)`, the commit from build.rs, `unknown` outside a git checkout.
 pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("SAAIO_COMMIT"), ")");
 pub const MAX_MESSAGE: usize = 8 << 20;
@@ -60,6 +62,18 @@ impl fmt::Display for Peer {
     }
 }
 
+/// The uid of the process at the other end of a Unix socket.
+#[cfg(target_os = "macos")]
+pub fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
+    Ok(getsockopt(stream, sockopt::LocalPeerCred)?.uid())
+}
+
+/// The uid of the process at the other end of a Unix socket.
+#[cfg(target_os = "linux")]
+pub fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
+    Ok(getsockopt(stream, sockopt::PeerCredentials)?.uid())
+}
+
 /// Which session a pane runs: the master, or the worker of a flow id.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum PaneKey {
@@ -90,6 +104,17 @@ pub enum Role {
     Control,
 }
 
+/// Whether a connection in `role` (None before its hello) may send `message`: a hello first and
+/// once, then anything from a UI and only CloseFlow from saaio remove and clear.
+pub fn allowed(role: Option<Role>, message: &ClientMsg) -> bool {
+    match (role, message) {
+        (None, ClientMsg::Hello { .. }) => true,
+        (_, ClientMsg::Hello { .. }) | (None, _) => false,
+        (Some(Role::Attach { .. }), _) => true,
+        (Some(Role::Control), message) => matches!(message, ClientMsg::CloseFlow(_)),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientMsg {
     /// `peer` comes last, so a server of an older protocol still reads the version and refuses.
@@ -108,6 +133,23 @@ pub enum ClientMsg {
     StopServer,
     /// Ends every unfinished flow (an Ended event), so none reopens; the UI sends it before StopServer.
     EndFlows,
+}
+
+impl ClientMsg {
+    /// The message's kind, as server.log names it: Hello, StopServer, CloseFlow.
+    pub fn name(&self) -> &'static str {
+        match self {
+            ClientMsg::Hello { .. } => "Hello",
+            ClientMsg::Focus(_) => "Focus",
+            ClientMsg::Input(_) => "Input",
+            ClientMsg::Resize(_) => "Resize",
+            ClientMsg::History(_) => "History",
+            ClientMsg::Reopen(_) => "Reopen",
+            ClientMsg::CloseFlow(_) => "CloseFlow",
+            ClientMsg::StopServer => "StopServer",
+            ClientMsg::EndFlows => "EndFlows",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -501,6 +543,40 @@ mod tests {
             panic!("no hello");
         };
         assert_eq!((version, role), (PROTOCOL_VERSION, Role::Control));
+    }
+
+    #[test]
+    fn a_connection_says_hello_once_and_control_only_closes_a_flow() {
+        let size = Size { cols: 1, rows: 1 };
+        let hello = client_messages().remove(0);
+        let close = ClientMsg::CloseFlow("7f3c".into());
+
+        assert!(allowed(None, &hello));
+        assert!(!allowed(None, &close));
+        assert!(!allowed(None, &ClientMsg::StopServer));
+        for role in [Role::Attach { size }, Role::Control] {
+            assert!(!allowed(Some(role), &hello), "{role:?}");
+            assert!(allowed(Some(role), &close), "{role:?}");
+        }
+        for message in client_messages().into_iter().skip(2) {
+            assert!(
+                allowed(Some(Role::Attach { size }), &message),
+                "{message:?}"
+            );
+            let control = matches!(message, ClientMsg::CloseFlow(_));
+            assert_eq!(
+                allowed(Some(Role::Control), &message),
+                control,
+                "{message:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn knows_the_uid_at_the_other_end_of_a_socket() {
+        let (ours, _theirs) = UnixStream::pair().unwrap();
+
+        assert_eq!(peer_uid(&ours).unwrap(), rustix::process::getuid().as_raw());
     }
 
     #[test]

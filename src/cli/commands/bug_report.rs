@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use crate::bug_report::{self, Facts, FileCheck, Loaded, LogTail, TAIL_LINES};
 use crate::cli::Env;
 use crate::cli::output::{self, Document, Failure};
-use crate::client;
 use crate::config::Config;
 use crate::private;
 use crate::system::System;
@@ -25,7 +24,7 @@ pub fn run(env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
     };
     let logs = match &store {
         Ok(store) => {
-            let log = client::log_path(store);
+            let log = env.server_log(store);
             let mut older = log.clone().into_os_string();
             older.push(".1");
             vec![tail(PathBuf::from(older)), tail(log)]

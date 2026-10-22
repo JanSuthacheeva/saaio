@@ -357,6 +357,7 @@ fn a_codex_master_records_its_session_and_reports_nothing() {
     command
         .args(["hook", "codex"])
         .env("SAAIO_MASTER", "1")
+        .env("SAAIO_PROOF", key(home.path(), "master"))
         .env("SAAIO_FLOW_ID", &id);
     let output = feed(command, prompt);
 
@@ -376,7 +377,9 @@ fn a_codex_master_records_its_session_and_reports_nothing() {
 /// Runs `saaio hook claude-code` as the master's pane does.
 fn master_hook(home: &Path, payload: &str) -> Output {
     let mut command = hook_command(home, &["claude-code"], None);
-    command.env("SAAIO_MASTER", "1");
+    command
+        .env("SAAIO_MASTER", "1")
+        .env("SAAIO_PROOF", key(home, "master"));
     feed(command, payload)
 }
 
@@ -664,12 +667,18 @@ fn a_flow_id_that_is_no_uuid_never_becomes_a_path() {
 
     for adapter in ["claude-code", "codex"] {
         for payload in [prompt, stop] {
-            let output = hook_with(&home, &[adapter], Some(forged), payload);
+            let mut command = hook_command(&home, &[adapter], None);
+            command.env("SAAIO_FLOW_ID", forged);
+            let output = feed(command, payload);
             assert!(output.status.success());
             assert!(output.stdout.is_empty() && output.stderr.is_empty());
         }
     }
-    let wait = saaio_in(&home, forged, &["wait"]);
+    let wait = saaio_command(&home)
+        .arg("wait")
+        .env("SAAIO_FLOW_ID", forged)
+        .output()
+        .unwrap();
 
     assert!(wait.status.success());
     assert!(wait.stdout.is_empty() && wait.stderr.is_empty());

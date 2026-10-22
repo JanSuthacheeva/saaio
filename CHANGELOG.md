@@ -14,6 +14,9 @@ All notable changes to saaio are listed here. The format follows
 
 ### Changed
 
+- When the store's path is too long for a socket, the socket and its log move from
+  `/tmp/saaio-<uid>/` to `$XDG_RUNTIME_DIR` or `$TMPDIR` (`/tmp` when neither fits).
+  `saaio --stop` still stops a server 0.1.0 started there.
 - saaio runs a repository's `.saaio` scripts, and lets Codex workers trust its worktrees, only
   once you trusted the repository. `saaio start` refuses until then and names the scripts; the
   new-flow dialog asks you. `saaio trust` trusts the repository you are in (from your own
@@ -24,6 +27,16 @@ All notable changes to saaio are listed here. The format follows
 
 - A `.saaio` script that never ends no longer blocks `saaio start`, `saaio remove` or
   `saaio clear`: setup is stopped after 10 minutes and teardown after 2, and the flow says so.
+- `saaio hook`, `saaio wait` and `saaio send` act only for the session the server opened: each
+  session gets its own key in `SAAIO_PROOF`. Setting `SAAIO_FLOW_ID` or `SAAIO_MASTER` no longer
+  reports into another flow, takes the master's news or sends as the master.
+- saaio uses the socket's folder only when it belongs to you and is closed to others, and the UI
+  and the server talk only to processes of your own user.
+- The server takes requests only after a connection's hello, closes one that says none within
+  5 seconds, lets `saaio remove` and `saaio clear` do nothing but close a pane, and takes at most
+  16 connections at once.
+- The server keeps running when the system is out of open files or threads, instead of spinning
+  or stopping.
 - A flow that ended, or went on to a subagent, no longer shows the question it asked earlier as
   its blocker in `saaio status`, its `--json` and the master's news.
 - A `.saaio` script stopped for running too long now takes what it started with it (a

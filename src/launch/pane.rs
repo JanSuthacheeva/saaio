@@ -12,6 +12,9 @@ use crate::view::{FlowView, Workspace};
 /// Set to 1 in the master's pane, so the hooks it shares with workers know whose they are.
 pub const MASTER_ENV: &str = "SAAIO_MASTER";
 
+/// The pane's key, which saaio hook, send and wait prove the session with.
+pub const PROOF_ENV: &str = "SAAIO_PROOF";
+
 /// Workspace.window of a worker saaio ui has opened once; its next open resumes it.
 pub const HOSTED: &str = "saaio-ui";
 

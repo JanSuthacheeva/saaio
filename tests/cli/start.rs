@@ -742,3 +742,27 @@ fn start_refuses_a_type_in_a_repo_without_types() {
         stdout(&output)
     );
 }
+
+#[test]
+fn setup_gets_no_key_of_the_session_that_started_the_flow() {
+    let lab = Lab::new();
+    lab.hook(
+        "setup",
+        "#!/bin/sh\nprintf '%s' \"${SAAIO_PROOF-none}\" > setup-key\n",
+    );
+    lab.trust();
+
+    let output = saaio_command(&lab.home)
+        .args(["start", "SHOP-217 add CSV export"])
+        .current_dir(&lab.repo)
+        .env("SAAIO_PROOF", "the-masters-key")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let worktree = lab.repo.join(".saaio/worktrees/shop-217");
+    assert_eq!(
+        fs::read_to_string(worktree.join("setup-key")).unwrap(),
+        "none"
+    );
+}
