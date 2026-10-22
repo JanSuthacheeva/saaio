@@ -165,7 +165,7 @@ fn dashed(path: &str) -> String {
         .collect()
 }
 
-/// `text` with every whole `form` written `~`; a name may go on after it past `separator`.
+/// `text` with every whole `form` written `~`; a name may go on after it past `separator` or `/`.
 fn tilde_form(text: &str, form: &str, separator: char) -> String {
     let in_name = |c: char| c.is_alphanumeric() || matches!(c, '-' | '_' | '.');
     let mut out = String::with_capacity(text.len());
@@ -176,7 +176,7 @@ fn tilde_form(text: &str, form: &str, separator: char) -> String {
         let ends = !after
             .chars()
             .next()
-            .is_some_and(|c| c != separator && (in_name(c) || c == '/'));
+            .is_some_and(|c| c != separator && in_name(c));
         out.push_str(&rest[..at]);
         out.push_str(if starts && ends { "~" } else { form });
         rest = after;
@@ -325,6 +325,10 @@ two
                 &homes
             ),
             "~/.claude/projects/~-projects-shop/a.jsonl -Users-janet"
+        );
+        assert_eq!(
+            tilde("~/.claude/projects/-Users-jan/a.jsonl", &homes),
+            "~/.claude/projects/~/a.jsonl"
         );
     }
 
