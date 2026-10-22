@@ -8,6 +8,7 @@ use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
 use crate::launch::name;
+use crate::text;
 
 /// A repo's branch convention, from `[branch]` in its `.saaio/config.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -73,12 +74,16 @@ pub fn branch_name(
     let Some(branching) = branching else {
         return format!("flow/{name}");
     };
-    let filled = branching
-        .name
-        .replace("{type}", kind.unwrap_or(""))
-        .replace("{ticket}", name::ticket(request).unwrap_or(""))
-        .replace("{slug}", &name::slug(request))
-        .replace("{name}", name);
+    let slug = name::slug(request);
+    let filled = text::fill(
+        &branching.name,
+        &[
+            ("type", kind.unwrap_or("")),
+            ("ticket", name::ticket(request).unwrap_or("")),
+            ("slug", &slug),
+            ("name", name),
+        ],
+    );
     let tidy: Vec<String> = filled
         .split('/')
         .map(tidy_segment)

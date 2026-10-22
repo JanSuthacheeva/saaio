@@ -95,7 +95,7 @@ false -> `Err(flow::foreign_merge_request)` (exit 1, nothing appended).
 
 ## Tasks
 
-- [ ] `text::fill` in one pass; `launch::pane` and `branching` use it, with tests that a request holding placeholders is passed once and verbatim
+- [x] `text::fill` in one pass; `launch::pane` and `branching` use it, with tests that a request holding placeholders is passed once and verbatim
 - [ ] `bug_report::text`/`tilde` take every home form, dash-encoded and after `/` and `:`; the command passes the canonical home; tests
 - [ ] `commands::of_own_repo` and `repo_dir` shared by hook and report; `saaio report merge-request` refuses a URL of another repository, with CLI tests
 - [ ] `Forge::view_argv` puts flags first and `--` before the URL or number, with tests
