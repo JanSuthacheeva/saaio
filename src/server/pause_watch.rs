@@ -57,7 +57,7 @@ impl PauseWatch {
 }
 
 impl Server {
-    /// Each tick: starts the jobs due, for flows whose trusted repo has both scripts; appends
+    /// Each tick: starts the jobs due, for flows whose trusted repo has the scripts; appends
     /// pausing or resuming before the thread starts. A job that cannot run while the flow's tool
     /// calls wait for it fails with why, so they stop waiting.
     pub(super) fn pause_idle(&mut self) {
@@ -135,20 +135,20 @@ impl Server {
     }
 }
 
-/// The repository of a flow whose worktree is there and whose repo, trusted, has both .saaio/pause
-/// and .saaio/resume; else why `job`'s script cannot run.
+/// The repository of a flow whose worktree is there and whose repo, trusted, has the scripts `job`
+/// needs: .saaio/pause and .saaio/resume to pause, .saaio/resume to resume; else why it cannot run.
 fn scripted_repo(flow: &FlowView, trust: Option<&Trust>, job: Job) -> Result<PathBuf, String> {
-    let hook = match job {
-        Job::Pause => Hook::Pause,
-        Job::Resume => Hook::Resume,
+    let (hook, needs): (Hook, &[Hook]) = match job {
+        Job::Pause => (Hook::Pause, &[Hook::Pause, Hook::Resume]),
+        Job::Resume => (Hook::Resume, &[Hook::Resume]),
     };
     let space = flow.workspace.as_ref().ok_or("the flow has no worktree")?;
     let repo = worktree::repo_of(space).ok_or("the flow has no worktree")?;
     if !Path::new(&space.path).is_dir() {
         return Err("its worktree is gone".to_string());
     }
-    if !hooks::exists(&repo, Hook::Pause) || !hooks::exists(&repo, Hook::Resume) {
-        return Err(format!(".saaio/{} is gone", hook.name()));
+    if let Some(gone) = needs.iter().find(|&&need| !hooks::exists(&repo, need)) {
+        return Err(format!(".saaio/{} is gone", gone.name()));
     }
     if !trust.is_some_and(|trust| trust.covers(&repo)) {
         return Err(format!(
@@ -244,5 +244,24 @@ mod tests {
         assert_eq!(again.len(), 1);
         assert_eq!(again[0].0.id, "csv");
         assert!(watch.due(&flows, 10 * MIN, None).is_empty());
+    }
+
+    #[test]
+    fn names_the_script_a_job_cannot_run_and_resumes_without_a_pause_script() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let repo = dir.path().join("shop");
+        let mut flow = idle("csv");
+        let space = flow.workspace.as_mut().unwrap();
+        space.path = repo.join(".saaio/worktrees/csv").display().to_string();
+        std::fs::create_dir_all(&space.path).unwrap();
+        let trust = Trust::at(&crate::registry::Registry::at(dir.path().join("state")));
+        trust.grant(&repo).unwrap();
+        crate::fixtures::executable(&repo.join(".saaio/resume"), "#!/bin/sh\nexit 0\n");
+
+        assert_eq!(
+            scripted_repo(&flow, Some(&trust), Job::Pause),
+            Err(".saaio/pause is gone".to_string())
+        );
+        assert_eq!(scripted_repo(&flow, Some(&trust), Job::Resume), Ok(repo));
     }
 }
