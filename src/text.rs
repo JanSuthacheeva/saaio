@@ -1,4 +1,4 @@
-//! How counts, durations, times and merge requests are written; texts cut, made printable or filled in
+//! How counts, durations, times and merge requests are written; texts cut, made printable, filled
 
 use std::path::Path;
 
