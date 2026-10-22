@@ -1352,7 +1352,8 @@ fn a_typed_line_that_begins_no_turn_lets_the_next_one_follow() {
     );
 
     wait_until_typed(dir.path(), "csv", "go on");
-    assert_eq!(store.busy(&Waiter::Flow(id.clone())), Busy::Typed);
+    // Not its busy mark: "go on" begins no turn either, and is let go itself after `unstarted`.
+    assert_eq!(store.typed(&id), 2);
     assert_eq!(
         typed(dir.path(), "fresh"),
         "",
