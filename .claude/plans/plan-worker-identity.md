@@ -239,6 +239,15 @@ Hello -> sets role and peer.
 - [x] PROTOCOL_VERSION 8; CHANGELOG Fixed lines; docs (files.md socket, troubleshooting.md log path, cli.md send, flows.md hooks, agents/configuration env if listed); CLAUDE.md Architecture (identity.rs)
 - [x] End to end on a scratch store (long path, dummy master): the three repros refused, a real hook with the pane's key recorded, socket under $TMPDIR in a 0700 folder; `saaio --stop`; scratch removed
 
+### After the review
+
+Decided: the socket's place stays as it is. A name with KEY in it can be dropped by an agent's
+default environment filters (Codex excludes `*KEY*`, `*SECRET*`, `*TOKEN*` unless told
+otherwise), so the variable gets a name without them before it ships.
+
+- [ ] Rename `SAAIO_KEY` to `SAAIO_PROOF` everywhere (`pane::KEY_ENV` -> `PROOF_ENV`, `Env::saaio_key` -> `saaio_proof`, docs, CHANGELOG, log line `SAAIO_PROOF does not prove ...`); tests pass
+- [ ] An unproven `saaio wait` logs `SAAIO_PROOF does not prove <the master|flow id>` to server.log, as the hook does; CLI test failing before
+
 ## Review
 
 Isolated review of `origin/main..flow/worker-identity` against this plan.
