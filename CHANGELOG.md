@@ -28,6 +28,15 @@ All notable changes to saaio are listed here. The format follows
 - The server takes requests only after a connection's hello, closes one that says none within
   5 seconds, lets `saaio remove` and `saaio clear` do nothing but close a pane, and takes at most
   16 connections at once.
+- A request that contains `{request}` or another placeholder is passed to the worker as written.
+  Before, it was filled in again, and a request repeating one could grow the worker's command line
+  past the system's limit, so the worker never opened.
+- A request or flow name that starts with `-` no longer fails with a usage error when the UI starts
+  or cleans up a flow.
+- `saaio report merge-request` takes only a merge request of the flow's repository, by any of its
+  remotes, and saaio passes a merge request to `gh` and `glab` after `--`.
+- `saaio bug-report` also writes the home folder as `~` in `file://` URLs, as the real path a linked
+  home leads to, and in Claude Code's project names (`-Users-you-...`).
 - The server keeps running when the system is out of open files or threads, instead of spinning
   or stopping.
 - A flow that ended, or went on to a subagent, no longer shows the question it asked earlier as
