@@ -1289,7 +1289,12 @@ fn a_typed_line_that_begins_no_turn_lets_the_next_one_follow() {
     );
 
     wait_until_typed(dir.path(), "csv", "go on");
-    assert_eq!(store.busy(&Waiter::Flow(id.clone())), Busy::Typed);
+    // Not the busy mark: the server lets this line go too, since cat starts no turn either.
+    assert_eq!(
+        typed(dir.path(), "csv"),
+        "\x1b[200~/cost\x1b[201~\n\x1b[200~go on\x1b[201~\n"
+    );
+    assert_eq!(store.typed(&id), 2);
     assert_eq!(
         typed(dir.path(), "fresh"),
         "",
