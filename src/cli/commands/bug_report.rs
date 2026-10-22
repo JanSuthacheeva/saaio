@@ -57,7 +57,7 @@ pub fn run(env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
         theme,
         logs,
     };
-    let text = bug_report::text(&facts, env.user_home());
+    let text = bug_report::text(&facts, &homes(env.user_home()));
     let path = write(&cwd, now, offset_secs, text.as_bytes()).map_err(|(path, error)| {
         Failure::error(
             format!("could not write {}: {error}", path.display()),
@@ -65,6 +65,16 @@ pub fn run(env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
         )
     })?;
     Ok(output::bug_report::written(&path))
+}
+
+/// The home folder as given and, when it is a link, the real path it leads to.
+fn homes(home: Option<&Path>) -> Vec<PathBuf> {
+    let Some(home) = home else {
+        return Vec::new();
+    };
+    let mut homes = vec![home.to_path_buf()];
+    homes.extend(fs::canonicalize(home).ok().filter(|real| real != home));
+    homes
 }
 
 /// The most reports a day gets before saaio stops looking for a free name.

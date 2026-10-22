@@ -1,7 +1,7 @@
 //! The text of the file `saaio bug-report` writes, and its name (pure)
 
 use std::fmt::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::proto::{BUILD, PROTOCOL_VERSION};
 use crate::system::System;
@@ -55,8 +55,8 @@ pub fn file_name(at: u64, offset_secs: i64, n: u32) -> String {
     }
 }
 
-/// The whole report, `home` replaced by `~` everywhere in it.
-pub fn text(facts: &Facts, home: Option<&Path>) -> String {
+/// The whole report, each of `homes` replaced by `~` everywhere in it.
+pub fn text(facts: &Facts, homes: &[PathBuf]) -> String {
     let mut out = format!(
         "saaio bug report, {}\n\n",
         text::stamp(facts.at, facts.offset_secs)
@@ -102,10 +102,7 @@ pub fn text(facts: &Facts, home: Option<&Path>) -> String {
             }
         };
     }
-    match home {
-        Some(home) => tilde(&out, home),
-        None => out,
-    }
+    tilde(&out, homes)
 }
 
 /// The last `lines` lines of `text`.
@@ -141,23 +138,47 @@ fn check(file: &FileCheck) -> String {
     format!("{}: {state}", path.display())
 }
 
-/// `text` with every `home` path written `~`, but not a longer name it begins (`/Users/janet` for
-/// `/Users/jan`) nor a path it ends (`/private/Users/jan`).
-fn tilde(text: &str, home: &Path) -> String {
-    let home = home.to_string_lossy();
-    let home = home.trim_end_matches('/');
-    if home.is_empty() {
-        return text.to_string();
-    }
-    let in_name = |c: char| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | '/');
+/// `text` with each of `homes`, and the name Claude Code gives its projects folder
+/// (`-Users-jan`), written `~`, the longest first so a real path is not cut by the link to it. A
+/// match counts only as a whole name: not a longer one it begins (`/Users/janet` for `/Users/jan`)
+/// nor one it ends (`x/Users/jan`); a `/` or `:` before it is no part of a name (`file://`,
+/// `PATH`).
+fn tilde(text: &str, homes: &[PathBuf]) -> String {
+    let mut forms: Vec<(String, char)> = homes
+        .iter()
+        .map(|home| home.to_string_lossy().trim_end_matches('/').to_string())
+        .filter(|home| !home.is_empty())
+        .flat_map(|home| [(dashed(&home), '-'), (home, '/')])
+        .collect();
+    forms.sort_by_key(|(form, _)| std::cmp::Reverse(form.len()));
+    forms
+        .iter()
+        .fold(text.to_string(), |text, (form, separator)| {
+            tilde_form(&text, form, *separator)
+        })
+}
+
+/// How Claude Code names a folder's project: every character but ASCII letters and digits a `-`.
+fn dashed(path: &str) -> String {
+    path.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
+}
+
+/// `text` with every whole `form` written `~`; a name may go on after it past `separator` or `/`.
+fn tilde_form(text: &str, form: &str, separator: char) -> String {
+    let in_name = |c: char| c.is_alphanumeric() || matches!(c, '-' | '_' | '.');
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    while let Some(at) = rest.find(home) {
-        let after = &rest[at + home.len()..];
+    while let Some(at) = rest.find(form) {
+        let after = &rest[at + form.len()..];
         let starts = !rest[..at].chars().next_back().is_some_and(in_name);
-        let ends = !after.chars().next().is_some_and(|c| c != '/' && in_name(c));
+        let ends = !after
+            .chars()
+            .next()
+            .is_some_and(|c| c != separator && in_name(c));
         out.push_str(&rest[..at]);
-        out.push_str(if starts && ends { "~" } else { home });
+        out.push_str(if starts && ends { "~" } else { form });
         rest = after;
     }
     out.push_str(rest);
@@ -214,7 +235,7 @@ mod tests {
 
     #[test]
     fn writes_versions_settings_and_the_end_of_each_log() {
-        let report = text(&facts(), Some(Path::new("/Users/jan")));
+        let report = text(&facts(), &[PathBuf::from("/Users/jan")]);
 
         assert_eq!(
             report,
@@ -255,7 +276,7 @@ two
             text: Some(Err("permission denied".to_string())),
         }];
 
-        let report = text(&facts, None);
+        let report = text(&facts, &[]);
 
         assert!(
             report.contains("store        cannot be opened: cannot find a state directory\n"),
@@ -279,16 +300,48 @@ two
 
     #[test]
     fn writes_home_as_a_tilde_only_where_it_is_the_home_folder() {
-        let home = Path::new("/Users/jan/");
+        let homes = [PathBuf::from("/Users/jan/")];
         assert_eq!(
-            tilde("/Users/jan/x and /Users/jan, at /Users/jan", home),
+            tilde("/Users/jan/x and /Users/jan, at /Users/jan", &homes),
             "~/x and ~, at ~"
         );
         assert_eq!(
-            tilde("/Users/janet /private/Users/jan/x", home),
-            "/Users/janet /private/Users/jan/x"
+            tilde("/Users/janet /Users/jan-old x/Users/jan", &homes),
+            "/Users/janet /Users/jan-old x/Users/jan"
         );
-        assert_eq!(tilde("cwd: \"/Users/jan\"", home), "cwd: \"~\"");
+        assert_eq!(tilde("cwd: \"/Users/jan\"", &homes), "cwd: \"~\"");
+    }
+
+    #[test]
+    fn writes_home_as_a_tilde_in_urls_lists_and_claude_code_project_names() {
+        let homes = [PathBuf::from("/Users/jan")];
+        assert_eq!(
+            tilde("file:///Users/jan/x.md PATH=/bin:/Users/jan/bin", &homes),
+            "file://~/x.md PATH=/bin:~/bin"
+        );
+        assert_eq!(
+            tilde(
+                "~/.claude/projects/-Users-jan-projects-shop/a.jsonl -Users-janet",
+                &homes
+            ),
+            "~/.claude/projects/~-projects-shop/a.jsonl -Users-janet"
+        );
+        assert_eq!(
+            tilde("~/.claude/projects/-Users-jan/a.jsonl", &homes),
+            "~/.claude/projects/~/a.jsonl"
+        );
+    }
+
+    #[test]
+    fn writes_the_real_path_of_a_linked_home_as_a_tilde() {
+        let homes = [PathBuf::from("/home/jan"), PathBuf::from("/data/home/jan")];
+        assert_eq!(
+            tilde(
+                "/data/home/jan/x /home/jan/y -data-home-jan-shop -home-jan-shop",
+                &homes
+            ),
+            "~/x ~/y ~-shop ~-shop"
+        );
     }
 
     #[test]

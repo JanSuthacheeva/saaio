@@ -9,8 +9,8 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use super::views;
-use crate::adapter::{Adapter, LineMatch, Turn, calls};
+use super::{of_own_repo, repo_dir, views};
+use crate::adapter::{Adapter, LineMatch, Turn};
 use crate::cli::Env;
 use crate::cli::output::Document;
 use crate::config::Config;
@@ -23,7 +23,6 @@ use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
 use crate::view::{FlowView, MasterTurn, State};
 use crate::wake;
-use crate::workspace;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -317,7 +316,7 @@ fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, log: &Log, now: u64)
     };
     for kind in kinds {
         if let EventKind::MergeRequest { url } = &kind
-            && !of_own_repo(store, &id, url, now)
+            && !of_flow_repo(store, &id, url, now)
         {
             log.error(&format!(
                 "{url} is not a merge request of this flow's repository"
@@ -340,16 +339,13 @@ fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, log: &Log, now: u64)
     Some(id)
 }
 
-/// True when `url` is a merge request of the repository the flow's worktree is in, by any of its
-/// remotes: origin, or the upstream a fork's `gh pr create` opens it in.
-fn of_own_repo(store: &Store, id: &str, url: &str, now: u64) -> bool {
+/// True when `url` is a merge request of the flow's own repository.
+fn of_flow_repo(store: &Store, id: &str, url: &str, now: u64) -> bool {
     let events = store.events(id).unwrap_or_default();
-    let worktree = fold::fold(id, &events, None, now).and_then(|flow| flow.workspace);
-    let remotes = worktree.map(|space| workspace::git::remote_urls(Path::new(&space.path)));
-    remotes
-        .unwrap_or_default()
-        .iter()
-        .any(|remote| calls::in_repo(url, remote, workspace::git::ssh_hostname))
+    fold::fold(id, &events, None, now)
+        .as_ref()
+        .and_then(repo_dir)
+        .is_some_and(|dir| of_own_repo(&dir, url))
 }
 
 /// The news a session's Stop hands over: a worker's messages from the master (its flow working

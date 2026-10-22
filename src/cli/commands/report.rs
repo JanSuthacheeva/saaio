@@ -2,7 +2,7 @@
 
 use clap::Subcommand;
 
-use super::{no_flow, views};
+use super::{no_flow, of_own_repo, repo_dir, views};
 use crate::cli::output::{Document, Failure, flow};
 use crate::event::{Event, EventKind, Phase};
 use crate::fold;
@@ -91,7 +91,17 @@ fn no_phase(flow: &FlowView, phase: &Phase) -> Failure {
     )
 }
 
-/// Appends one event to a flow; skipped without a flow, so an agent outside saaio can report.
+/// The failure for a URL that is no merge request of the flow's repository.
+fn foreign_merge_request(flow: &FlowView, url: &str) -> Failure {
+    Failure::error(
+        format!("{url} is not a merge request of {}'s repository", flow.name),
+        vec!["Report the URL `gh pr create` or `glab mr create` printed".to_string()],
+    )
+}
+
+/// Appends one event to a flow; skipped without a flow, so an agent outside saaio can report. A
+/// merge request must be one of the flow's repository, its remotes read in its main checkout, else
+/// in the current folder for a flow without one.
 pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
     let Some(name) = args.flow.filter(|name| !name.is_empty()) else {
         return Ok(flow::skipped());
@@ -102,6 +112,15 @@ pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
         && !flow.steps.iter().any(|step| step.phase == *phase)
     {
         return Err(no_phase(flow, phase));
+    }
+    if let ReportEvent::MergeRequest { url } = &args.event {
+        let dir = match repo_dir(flow) {
+            Some(dir) => dir,
+            None => std::env::current_dir()?,
+        };
+        if !of_own_repo(&dir, url) {
+            return Err(foreign_merge_request(flow, url));
+        }
     }
     let id = flow.id.clone();
     match args.event.into_kind() {

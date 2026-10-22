@@ -1,4 +1,4 @@
-//! How counts, durations, times and merge requests are written; texts cut or made printable
+//! How counts, durations, times and merge requests are written; texts cut, made printable, filled
 
 use std::path::Path;
 
@@ -130,6 +130,33 @@ pub fn printable(text: &str) -> String {
     text.chars().filter(|c| !c.is_control()).collect()
 }
 
+/// `template` with each `{key}` of `values` replaced by its value in one pass: a value is never
+/// read for placeholders again; an unknown `{...}` stays as written.
+pub fn fill(template: &str, values: &[(&str, &str)]) -> String {
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(open) = rest.find('{') {
+        out.push_str(&rest[..open]);
+        let after = &rest[open + 1..];
+        let value = after.find('}').and_then(|close| {
+            let key = &after[..close];
+            values
+                .iter()
+                .find(|(name, _)| *name == key)
+                .map(|(_, value)| (*value, close))
+        });
+        if let Some((value, close)) = value {
+            out.push_str(value);
+            rest = &after[close + 1..];
+        } else {
+            out.push('{');
+            rest = after;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// A toml error message without the value it quotes ("invalid type: string \"sk-..\", expected a
 /// sequence" -> "invalid type: a string, expected a sequence"; invalid value and unknown variant
 /// alike), since a bug report carries it; other messages unchanged.
@@ -162,6 +189,18 @@ pub fn without_value(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fills_every_placeholder_once() {
+        let values = [("request", "add {request} and {name}"), ("name", "csv")];
+
+        assert_eq!(
+            fill("/ship {request} as {name}", &values),
+            "/ship add {request} and {name} as csv"
+        );
+        assert_eq!(fill("{other} {name}{name} {", &values), "{other} csvcsv {");
+        assert_eq!(fill("{{name}}", &values), "{csv}");
+    }
 
     #[test]
     fn truncates_long_texts_with_a_hint_unless_full() {

@@ -74,6 +74,52 @@ fn bug_report_writes_one_file_with_versions_settings_and_the_logs() {
 }
 
 #[test]
+fn bug_report_writes_a_linked_home_as_a_tilde_in_every_form_a_log_names_it() {
+    let dir = TempDir::new().unwrap();
+    let real = dir.path().join("real");
+    let home = dir.path().join("home");
+    let cwd = TempDir::new().unwrap();
+    fs::create_dir(&real).unwrap();
+    std::os::unix::fs::symlink(&real, &home).unwrap();
+    let real = fs::canonicalize(&real).unwrap();
+    let dashed = |path: &std::path::Path| -> String {
+        path.to_string_lossy()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect()
+    };
+    let log = format!(
+        "open file://{home}/x.md\nreal {real}/y\nPATH=/bin:{home}/bin\n\
+         read ~/.claude/projects/{dashed_home}-shop/a.jsonl\n\
+         read ~/.claude/projects/{dashed_real}-shop/b.jsonl\n",
+        home = home.display(),
+        real = real.display(),
+        dashed_home = dashed(&home),
+        dashed_real = dashed(&real),
+    );
+    fs::write(real.join("server.log"), log).unwrap();
+
+    let output = saaio_command(&home)
+        .arg("bug-report")
+        .env("HOME", &home)
+        .current_dir(cwd.path())
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", stdout(&output));
+    let file = fs::read_dir(cwd.path()).unwrap().next().unwrap().unwrap();
+    let report = fs::read_to_string(file.path()).unwrap();
+    assert!(
+        report.contains(
+            "open file://~/x.md\nreal ~/y\nPATH=/bin:~/bin\n\
+             read ~/.claude/projects/~-shop/a.jsonl\n\
+             read ~/.claude/projects/~-shop/b.jsonl\n"
+        ),
+        "{report}"
+    );
+}
+
+#[test]
 fn bug_report_never_writes_through_what_is_already_there() {
     let home = TempDir::new().unwrap();
     let cwd = TempDir::new().unwrap();

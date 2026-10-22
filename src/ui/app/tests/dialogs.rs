@@ -21,6 +21,36 @@ fn detaches_and_stops_only_after_a_yes() {
 }
 
 #[test]
+fn a_job_passes_a_request_folder_or_name_that_starts_with_a_dash_as_written() {
+    use clap::Parser;
+    let parses = |job: &Job| {
+        let argv = std::iter::once("saaio".to_string()).chain(job.args());
+        crate::cli::Cli::try_parse_from(argv)
+            .map(|cli| format!("{cli:?}"))
+            .map_err(|error| error.to_string())
+    };
+    let mut form = NewFlowForm::new("/shop".into(), "-scratch".into(), vec![]);
+    form.request = "-fix the totals".into();
+    let start = Job::Start(form.clone());
+    form.mode = crate::event::Mode::Plain;
+    let plain = Job::Start(form);
+    let remove = Job::Remove(Removal::of("-old"));
+
+    for (job, value) in [
+        (start, "\"-fix the totals\""),
+        (plain, "\"-scratch\""),
+        (remove, "\"-old\""),
+    ] {
+        let parsed = parses(&job);
+        assert!(
+            parsed.as_ref().is_ok_and(|cli| cli.contains(value)),
+            "{:?}: {parsed:?}",
+            job.args()
+        );
+    }
+}
+
+#[test]
 fn offers_to_clean_up_a_worker_whose_session_ended() {
     let mut app = board_app();
     app.on_input(Routed::Command(Command::Focus(2)));
@@ -129,11 +159,11 @@ fn asks_before_a_clean_up_loses_work() {
     assert!(then.force && then.delete_unmerged);
     assert_eq!(
         Job::Remove(then.clone()).args(),
-        ["remove", "shop-230", "--force", "--delete-unmerged"]
+        ["remove", "--force", "--delete-unmerged", "--", "shop-230"]
     );
     assert_eq!(
         Job::Remove(then.clone()).summary(),
-        "saaio remove shop-230 --force --delete-unmerged"
+        "saaio remove --force --delete-unmerged -- shop-230"
     );
 
     assert_eq!(app.on_input(Routed::View(vec![Key::Char('n')])), vec![]);
@@ -271,9 +301,10 @@ fn starts_a_flow_from_the_dialog_in_the_repo_in_view() {
         job.args(),
         [
             "start",
-            "SHOP-240 rate-limit the export endpoint",
             "--mode",
-            "guided"
+            "guided",
+            "--",
+            "SHOP-240 rate-limit the export endpoint"
         ]
     );
     assert_eq!(job.dir(), Some(Path::new("/Users/jan/projects/shop")));
@@ -349,8 +380,8 @@ fn opens_a_plain_session_from_the_dialog() {
     let [Effect::Run(job)] = &effects[..] else {
         panic!("expected a job: {effects:?}");
     };
-    assert_eq!(job.args(), ["start", "--plain", "~/projects/scratch"]);
-    assert_eq!(job.summary(), "saaio start --plain ~/projects/scratch");
+    assert_eq!(job.args(), ["start", "--plain=~/projects/scratch"]);
+    assert_eq!(job.summary(), "saaio start --plain=~/projects/scratch");
     assert_eq!(job.dir(), Some(Path::new("/Users/jan/projects/shop")));
 }
 
@@ -415,11 +446,12 @@ fn names_the_branch_after_the_repos_convention_in_the_dialog() {
         job.args(),
         [
             "start",
-            "SHOP-240 fix totals",
             "--mode",
             "guided",
             "--type",
-            "bugfix"
+            "bugfix",
+            "--",
+            "SHOP-240 fix totals"
         ]
     );
 
@@ -502,11 +534,12 @@ fn picks_the_agent_in_the_dialog_when_there_are_two() {
         job.args(),
         [
             "start",
-            "SHOP-240 fix totals",
             "--mode",
             "guided",
             "--agent",
-            "codex"
+            "codex",
+            "--",
+            "SHOP-240 fix totals"
         ]
     );
 
@@ -523,7 +556,7 @@ fn picks_the_agent_in_the_dialog_when_there_are_two() {
     };
     assert_eq!(
         job.args(),
-        ["start", "--plain", "~/projects/shop", "--agent", "codex"],
+        ["start", "--plain=~/projects/shop", "--agent", "codex"],
         "a plain session too"
     );
 }

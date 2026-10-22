@@ -313,6 +313,17 @@ impl Lab {
             .unwrap()
     }
 
+    /// Runs saaio in the repo with the lab's state, as the session of flow `flow_id`.
+    pub fn run_as(&self, flow_id: &str, args: &[&str]) -> Output {
+        saaio_command(&self.home)
+            .args(args)
+            .env("SAAIO_FLOW_ID", flow_id)
+            .env("SAAIO_PROOF", key(&self.home, flow_id))
+            .current_dir(&self.repo)
+            .output()
+            .unwrap()
+    }
+
     /// The claude agent saaio runs, as config.toml lines.
     pub fn agent(&self, lines: &str) {
         fs::create_dir_all(&self.home).unwrap();

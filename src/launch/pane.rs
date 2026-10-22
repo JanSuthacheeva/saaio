@@ -7,6 +7,7 @@ use crate::config::Agent;
 use crate::event::is_uuid;
 use crate::launch::worktree::{hook_env, repo_of};
 use crate::proto::PaneKey;
+use crate::text;
 use crate::view::{FlowView, Workspace};
 
 /// Set to 1 in the master's pane, so the hooks it shares with workers know whose they are.
@@ -37,7 +38,8 @@ pub struct PaneSpec {
     pub adapter: Option<Adapter>,
 }
 
-/// The agent's command with {id}, {name}, {prompt}, {request} filled in ({prompt} itself filled first);
+/// The agent's command with {id}, {name}, {prompt}, {request} filled in ({prompt} itself filled first),
+/// each in one pass, so a request holding a placeholder is passed on as written;
 /// an argument that fills to nothing is dropped, so an agent without a prompt gets no empty one.
 pub fn agent_argv(agent: &Agent, id: &str, name: &str, request: &str) -> Vec<String> {
     let template = agent.prompt.as_deref().unwrap_or_default();
@@ -158,12 +160,16 @@ fn fill(
     prompt: &str,
     session: &str,
 ) -> String {
-    template
-        .replace("{prompt}", prompt)
-        .replace("{request}", request)
-        .replace("{name}", name)
-        .replace("{session}", session)
-        .replace("{id}", id)
+    text::fill(
+        template,
+        &[
+            ("prompt", prompt),
+            ("request", request),
+            ("name", name),
+            ("session", session),
+            ("id", id),
+        ],
+    )
 }
 
 #[cfg(test)]
@@ -209,6 +215,27 @@ mod tests {
         assert_eq!(
             agent_argv(&agent, "7f3c", "master", ""),
             strings(&["claude", "-n", "master"])
+        );
+    }
+
+    #[test]
+    fn passes_placeholders_in_a_request_on_as_written() {
+        let agent = Agent {
+            command: strings(&["claude", "-n", "{name}", "{prompt}"]),
+            prompt: Some("/ship-feature {request}".into()),
+            adapter: None,
+            resume: None,
+        };
+        let request = "fix {request} {request} for {name} in {prompt}";
+
+        assert_eq!(
+            agent_argv(&agent, "7f3c", "shop-217", request),
+            strings(&[
+                "claude",
+                "-n",
+                "shop-217",
+                "/ship-feature fix {request} {request} for {name} in {prompt}"
+            ])
         );
     }
 
