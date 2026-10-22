@@ -13,7 +13,7 @@ use git::common_dir;
 use process::run;
 
 #[cfg(test)]
-mod fixtures;
+pub(crate) mod fixtures;
 pub mod git;
 pub mod hooks;
 pub mod process;

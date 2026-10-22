@@ -8,10 +8,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::launch::worktree::repo_of;
 use crate::private::{self, write_atomic};
 use crate::registry::{Registry, fnv1a};
-use crate::view::Workspace;
 
 /// The repositories the person trusts, one file each in the shared folder: trusted/<hash of the
 /// path> holding the path, so every store and project sees the same answer.
@@ -75,11 +73,6 @@ impl Trust {
     }
 }
 
-/// The folder trust is kept for: a worktree's repository, a plain session's own folder.
-pub fn root_of(space: &Workspace) -> PathBuf {
-    repo_of(space).unwrap_or_else(|| PathBuf::from(&space.path))
-}
-
 fn line_of(repo: &Path) -> Vec<u8> {
     let mut line = repo.as_os_str().as_bytes().to_vec();
     line.push(b'\n');
@@ -91,7 +84,6 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::launch::worktree::{folder_workspace, workspace_for};
 
     #[test]
     fn grants_and_revokes_one_repository_at_a_time() {
@@ -122,15 +114,5 @@ mod tests {
         assert!(!trust.covers(Path::new("/shop")));
         assert!(trust.repos().is_empty());
         assert!(!trust.revoke(Path::new("/shop")).unwrap());
-    }
-
-    #[test]
-    fn keeps_trust_for_a_worktrees_repository_and_a_plain_folder() {
-        let repo = Path::new("/Users/jan/projects/shop");
-        let worktree = workspace_for(repo, "shop-217", "flow/shop-217".into(), 1, "claude");
-        let plain = folder_workspace(Path::new("/Users/jan/scratch"), "codex");
-
-        assert_eq!(root_of(&worktree), repo);
-        assert_eq!(root_of(&plain), Path::new("/Users/jan/scratch"));
     }
 }

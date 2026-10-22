@@ -31,7 +31,7 @@ impl Trust {
 }
 
 /// The folder trust is kept for: a worktree's repository, a plain session's own folder.
-pub fn root_of(space: &Workspace) -> PathBuf;
+// root_of moved to server/panes.rs as trust_root during review
 ```
 
 `src/workspace/hooks.rs` (modified):
@@ -161,6 +161,23 @@ was re-read by the same reviewer, not reviewed independently.
 - A plain Codex session in a subfolder of a trusted repository is not trusted (`root_of` keeps the
   folder itself, `saaio trust` the repository root); Codex then asks in its pane. Safe direction;
   recommendation: leave, or use `git::root_or_folder` in `root_of` for plain sessions.
+
+### Decided
+
+Following the recommendation at each decision, as the request asked:
+
+1. Resume that cannot run: built. `pause_idle` appends `ResumeFailed` (or `PauseFailed` for a
+   Pausing left over) with the reason while the flow's tool calls wait; server test
+   `a_resume_that_cannot_run_fails_so_tool_calls_stop_waiting`.
+2. Ctrl-C during setup: accepted for now.
+3. Trust by path, not contents: kept for 0.1.x.
+4. `Env::is_person` as the guard: accepted, not described in public docs.
+5. Plain session in a subfolder: built. `trust::root_of` moved to the server as
+   `panes::trust_root`, which looks up the repository a plain session's folder is in
+   (`git::root_or_folder`), as `saaio trust` records it.
+
+- [x] Fail a resume or pause that cannot run while tool calls wait for it
+- [x] Plain sessions use the repository root their folder is in for Codex trust
 
 ### Where to look
 
