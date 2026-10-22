@@ -6,6 +6,13 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-22
+
+Updating from 0.1.0, which has no `saaio update`: run the install line once
+(`curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | sh`),
+run `saaio trust` once in each repository with `.saaio` scripts, and run `saaio --stop` so the
+server starts again on the new version.
+
 ### Added
 
 - The UI names a newer release in its title row (`0.1.1 is out: saaio update`), looking once a
