@@ -126,3 +126,56 @@ Symlinked `.saaio/worktrees`: start -> workspace::create_worktree -> refuse_link
 - [x] saaio ui asks: `Confirmed`, `Effect::Trust`, `UiEnv::trust`; app tests
 - [x] Docs (cli.md, repository.md, flows.md, troubleshooting.md, README where hooks are described), CHANGELOG Unreleased lines, CLAUDE.md architecture lines for trust.rs and the trust command
 - [x] End to end: scratch SAAIO_HOME repo with setup/teardown: start refused, `saaio trust` in a PTY, start runs setup, hanging hook killed with its children, symlinked `.saaio/worktrees` refused, remove, `--revoke`; server stopped, nothing left on disk
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and the diff from main. The one fix
+was re-read by the same reviewer, not reviewed independently.
+
+### Fixed
+
+- `saaio trust --revoke <folder>` failed with "cannot open" once the folder was deleted, so a
+  removed repository kept its trust and a later clone at that path inherited it. Revoke now takes
+  the path as given when it no longer exists (CLI test `revokes_the_trust_of_a_folder_that_is_gone`,
+  docs/cli.md). Commit cdb13d8.
+
+### Open
+
+- A flow whose services are paused when its repository loses trust (or its resume script is
+  deleted) never resumes: `pause_idle` skips it without an event, services stay `paused`, and every
+  tool call of the worker waits PICKUP_WAIT (2 s) before it runs. From reading
+  `server/pause_watch.rs` and `cli/commands/hook.rs`, not reproduced. Recommendation: when a
+  Resume is due and `scripted_repo` is None, append `ResumeFailed` with the reason
+  ("<repo> is not trusted"), so tool calls stop waiting and the board says why.
+- Hooks now run in their own process group, so Ctrl-C on `saaio start` during a long setup no
+  longer reaches the setup: saaio exits and the script keeps running detached. Recommendation:
+  accept for now (setup is short in practice), or forward SIGINT/SIGTERM to the group in
+  `finish_within` later.
+- Trust is a path, not the scripts' contents: a `git pull` that changes `.saaio/setup`, or a
+  different repository cloned to a trusted path, runs without asking (stated in the plan's
+  assumptions and docs). Recommendation: keep for 0.1.x; consider pinning a hash of the scripts
+  and asking again on change.
+- `Env::is_person` stops an agent that follows a help line, not one that unsets its markers and
+  runs `saaio trust` in a PTY, or writes the trust file itself. Recommendation: accept; the guard is
+  against repository code running unasked, not a hostile agent. Do not describe this in public docs.
+- A plain Codex session in a subfolder of a trusted repository is not trusted (`root_of` keeps the
+  folder itself, `saaio trust` the repository root); Codex then asks in its pane. Safe direction;
+  recommendation: leave, or use `git::root_or_folder` in `root_of` for plain sessions.
+
+### Where to look
+
+1. `src/cli/commands/start.rs` `refuse_untrusted` then `src/workspace/hooks.rs` `run_within`:
+   the gate before anything is created, and the second check at the cause.
+2. `src/trust.rs` with `src/cli/commands/trust.rs`: how the path is keyed (git toplevel,
+   canonical) and that it matches `trust::root_of` the server uses for Codex.
+3. `src/workspace/process.rs` `finish_within`: process group and kill on timeout; it now applies
+   to gh, glab and curl too.
+4. `src/ui/app/messages.rs` `on_ran` and `keys.rs` Confirm: the Untrusted refusal turned into a
+   question, yes giving `Effect::Trust` then the start again.
+
+Routine, skim: the `Option<&Path>` wiring through adapter, pane and reconcile; `Teardown` in
+remove and clear output; docs and CHANGELOG.
+
+### Checks
+
+`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` pass at cdb13d8.
