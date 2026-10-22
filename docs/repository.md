@@ -101,7 +101,7 @@ asked about again. The trust holds for the repository's folder, in every store.
 | `saaio start` in a repository not trusted yet | refuses and creates nothing. The error names the scripts that would run. |
 | the new-flow dialog in `saaio` | asks you, then starts the flow |
 | `saaio remove` or `saaio clear` in a repository no longer trusted | the worktree goes, the teardown does not run (`teardown: not run, the repository is not trusted`) |
-| a resting flow in a repository no longer trusted | its services are not paused |
+| a resting flow in a repository no longer trusted | its services are not paused. Paused ones are not resumed: the resume fails with `the repository is not trusted`, and its tool calls stop waiting. |
 
 ```
 $ saaio start "SHOP-240 export"

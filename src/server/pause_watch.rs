@@ -58,18 +58,28 @@ impl PauseWatch {
 
 impl Server {
     /// Each tick: starts the jobs due, for flows whose trusted repo has both scripts; appends
-    /// pausing or resuming before the thread starts.
+    /// pausing or resuming before the thread starts. A job that cannot run while the flow's tool
+    /// calls wait for it fails with why, so they stop waiting.
     pub(super) fn pause_idle(&mut self) {
         let now = (self.clock)();
         let after = self.config.services.pause_after();
         for (flow, job) in self.pauses.due(&self.board.flows, now, after) {
-            let Some((repo, trust)) = self
-                .trust
-                .as_ref()
-                .and_then(|trust| Some((scripted_repo(&flow, trust)?, trust.clone())))
-            else {
-                self.pauses.done(&flow.id);
-                continue;
+            let (repo, trust) = match (scripted_repo(&flow, self.trust.as_ref(), job), &self.trust)
+            {
+                (Ok(repo), Some(trust)) => (repo, trust.clone()),
+                (Err(reason), _) if pause::holds_tools(&flow) => {
+                    let status = match job {
+                        Job::Pause => ServiceStatus::PauseFailed,
+                        Job::Resume => ServiceStatus::ResumeFailed,
+                    };
+                    self.append_services(&flow.id, now, status, Some(reason));
+                    self.pauses.done(&flow.id);
+                    continue;
+                }
+                _ => {
+                    self.pauses.done(&flow.id);
+                    continue;
+                }
             };
             let status = match job {
                 Job::Pause => ServiceStatus::Pausing,
@@ -114,23 +124,39 @@ impl Server {
                 &format!("{job} the services of {name} failed: {reason}"),
             );
         }
+        self.append_services(&finished.id, now, status, reason);
+    }
+
+    fn append_services(&self, id: &str, now: u64, status: ServiceStatus, reason: Option<String>) {
         let kind = EventKind::Services { status, reason };
-        if let Err(error) = self.store.append(&finished.id, &LogEvent::new(now, kind)) {
+        if let Err(error) = self.store.append(id, &LogEvent::new(now, kind)) {
             server_log::write(now, &format!("{error:#}"));
         }
     }
 }
 
 /// The repository of a flow whose worktree is there and whose repo, trusted, has both .saaio/pause
-/// and .saaio/resume; None when either is missing or trust does not cover it.
-fn scripted_repo(flow: &FlowView, trust: &Trust) -> Option<PathBuf> {
-    let space = flow.workspace.as_ref()?;
-    let repo = worktree::repo_of(space)?;
-    let scripted = Path::new(&space.path).is_dir()
-        && trust.covers(&repo)
-        && hooks::exists(&repo, Hook::Pause)
-        && hooks::exists(&repo, Hook::Resume);
-    scripted.then_some(repo)
+/// and .saaio/resume; else why `job`'s script cannot run.
+fn scripted_repo(flow: &FlowView, trust: Option<&Trust>, job: Job) -> Result<PathBuf, String> {
+    let hook = match job {
+        Job::Pause => Hook::Pause,
+        Job::Resume => Hook::Resume,
+    };
+    let space = flow.workspace.as_ref().ok_or("the flow has no worktree")?;
+    let repo = worktree::repo_of(space).ok_or("the flow has no worktree")?;
+    if !Path::new(&space.path).is_dir() {
+        return Err("its worktree is gone".to_string());
+    }
+    if !hooks::exists(&repo, Hook::Pause) || !hooks::exists(&repo, Hook::Resume) {
+        return Err(format!(".saaio/{} is gone", hook.name()));
+    }
+    if !trust.is_some_and(|trust| trust.covers(&repo)) {
+        return Err(format!(
+            "the repository is not trusted, so .saaio/{} did not run",
+            hook.name()
+        ));
+    }
+    Ok(repo)
 }
 
 /// The script on a thread of its own; Event::Paused(Finished) when it ends.

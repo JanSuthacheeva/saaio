@@ -1639,3 +1639,54 @@ fn pauses_an_idle_flows_services_and_resumes_them_when_it_works() {
     assert!(services(&store, &stranger).is_empty(), "a repo not trusted");
     stop(&paths, handle);
 }
+
+#[test]
+fn a_resume_that_cannot_run_fails_so_tool_calls_stop_waiting() {
+    use crate::event::ServiceStatus::{Paused, ResumeFailed};
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let repo = dir.path().join("shop");
+    for name in ["pause", "resume"] {
+        let script = repo.join(".saaio").join(name);
+        fs::create_dir_all(script.parent().unwrap()).unwrap();
+        executable(&script, "#!/bin/sh\nexit 0\n");
+    }
+    let trust = trust_in(dir.path());
+    trust.grant(&repo).unwrap();
+    let id = idle_flow(&store, &repo, "csv");
+    let (paths, handle) = start_at(
+        dir.path(),
+        BTreeMap::from([(
+            "claude".to_string(),
+            Agent {
+                command: vec!["cat".into()],
+                prompt: None,
+                adapter: None,
+                resume: Some(vec!["cat".into()]),
+            },
+        )]),
+        now,
+    );
+    wait_for_services(&store, &id, Paused);
+
+    trust.revoke(&repo).unwrap();
+    store
+        .append(&id, &LogEvent::new(now(), EventKind::Working))
+        .unwrap();
+
+    wait_for_services(&store, &id, ResumeFailed);
+    let reason = store
+        .events(&id)
+        .unwrap()
+        .into_iter()
+        .rev()
+        .find_map(|event| match event.kind {
+            EventKind::Services { reason, .. } => reason,
+            _ => None,
+        });
+    assert_eq!(
+        reason.as_deref(),
+        Some("the repository is not trusted, so .saaio/resume did not run")
+    );
+    stop(&paths, handle);
+}
