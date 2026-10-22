@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::launch::worktree::{WORKTREES_DIR, add_argv, remove_argv};
 use crate::view::Workspace;
@@ -18,10 +18,22 @@ pub mod git;
 pub mod hooks;
 pub mod process;
 
-/// Creates the worktree and branch; adds .saaio/worktrees/ to .git/info/exclude once.
+/// Creates the worktree and branch; adds .saaio/worktrees/ to .git/info/exclude once. Refuses a
+/// repo whose .saaio or .saaio/worktrees is a link, which would place the worktree anywhere.
 pub fn create_worktree(repo: &Path, workspace: &Workspace) -> Result<()> {
+    refuse_links(repo)?;
     run(&add_argv(repo, workspace))?;
     exclude_worktrees(repo)
+}
+
+/// Fails when <repo>/.saaio or <repo>/.saaio/worktrees is a symbolic link.
+fn refuse_links(repo: &Path) -> Result<()> {
+    for folder in [repo.join(".saaio"), repo.join(WORKTREES_DIR)] {
+        if fs::symlink_metadata(&folder).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            bail!("{} is a symbolic link", folder.display());
+        }
+    }
+    Ok(())
 }
 
 /// Removes a worktree; without force Ok(false) when git refuses (uncommitted work).
@@ -66,6 +78,8 @@ fn exclude_worktrees(repo: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use tempfile::TempDir;
+
     use super::*;
     use crate::launch::worktree::workspace_for;
     use crate::workspace::fixtures::repo;
@@ -108,5 +122,39 @@ mod tests {
         assert!(!Path::new(&clean.path).exists());
         assert!(!remove_worktree(&repo, &dirty, false).unwrap());
         assert!(remove_worktree(&repo, &dirty, true).unwrap());
+    }
+
+    #[test]
+    fn refuses_a_saaio_folder_that_is_a_link() {
+        let (_dir, repo) = repo();
+        let elsewhere = TempDir::new().unwrap();
+        std::os::unix::fs::symlink(elsewhere.path(), repo.join(".saaio")).unwrap();
+        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+
+        let error = create_worktree(&repo, &workspace).unwrap_err();
+
+        assert_eq!(
+            format!("{error:#}"),
+            format!("{} is a symbolic link", repo.join(".saaio").display())
+        );
+        assert_eq!(fs::read_dir(elsewhere.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn refuses_a_worktrees_folder_that_is_a_link() {
+        let (_dir, repo) = repo();
+        let elsewhere = TempDir::new().unwrap();
+        fs::create_dir(repo.join(".saaio")).unwrap();
+        std::os::unix::fs::symlink(elsewhere.path(), repo.join(WORKTREES_DIR)).unwrap();
+        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+
+        let error = create_worktree(&repo, &workspace).unwrap_err();
+
+        assert_eq!(
+            format!("{error:#}"),
+            format!("{} is a symbolic link", repo.join(WORKTREES_DIR).display())
+        );
+        assert_eq!(fs::read_dir(elsewhere.path()).unwrap().count(), 0);
+        assert!(!git::branch_exists(&repo, "flow/shop-217"));
     }
 }

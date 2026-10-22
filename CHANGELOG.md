@@ -19,6 +19,8 @@ All notable changes to saaio are listed here. The format follows
 - A `.saaio` script stopped for running too long now takes what it started with it (a
   `docker compose up` it began, a dev server): it runs in a process group of its own, and the
   whole group is stopped.
+- `saaio start` refuses a repository whose `.saaio` or `.saaio/worktrees` folder is a symbolic
+  link, so a worktree is never created outside the repository.
 
 ## [0.1.0] - 2026-10-21
 

@@ -474,6 +474,30 @@ fn a_failing_setup_marks_the_flow_blocked_but_still_records_the_worker() {
 }
 
 #[test]
+fn start_refuses_a_worktrees_folder_that_links_elsewhere() {
+    let lab = Lab::new();
+    let elsewhere = TempDir::new().unwrap();
+    fs::create_dir(lab.repo.join(".saaio")).unwrap();
+    std::os::unix::fs::symlink(elsewhere.path(), lab.repo.join(".saaio/worktrees")).unwrap();
+
+    let output = lab.start(&["SHOP-217 add CSV export"]);
+
+    let text = stdout(&output);
+    assert_eq!(output.status.code(), Some(1), "{text}");
+    assert!(
+        text.contains(&format!(
+            "{} is a symbolic link",
+            lab.repo.join(".saaio/worktrees").display()
+        )),
+        "{text}"
+    );
+    assert_eq!(fs::read_dir(elsewhere.path()).unwrap().count(), 0);
+    assert!(lab.branches().is_empty());
+    let board = stdout(&saaio(&lab.home, &["status"]));
+    assert!(!board.contains("shop-217"), "{board}");
+}
+
+#[test]
 fn start_says_when_every_slot_is_taken() {
     let lab = Lab::new();
     for slot in 1..=20 {

@@ -115,8 +115,8 @@ Symlinked `.saaio/worktrees`: start -> workspace::create_worktree -> refuse_link
 
 ## Tasks
 
-- [ ] Process group: `finish_within` runs its command in its own process group and kills the group past the limit; unit test that a hung command's background child is gone after the timeout; remove the ROADMAP row
-- [ ] Symlinks: `refuse_links` in `create_worktree` with unit tests for `.saaio` and `.saaio/worktrees` links; CLI test that `saaio start` refuses and creates nothing at the target
+- [x] Process group: `finish_within` runs its command in its own process group and kills the group past the limit; unit test that a hung command's background child is gone after the timeout; remove the ROADMAP row
+- [x] Symlinks: `refuse_links` in `create_worktree` with unit tests for `.saaio` and `.saaio/worktrees` links; CLI test that `saaio start` refuses and creates nothing at the target
 - [ ] `src/trust.rs`: `Trust` (at, covers, grant, revoke, repos) and `root_of`, with unit tests
 - [ ] Hooks: `Hook::limit`, `Hook::name`, `hooks::present`, trust-checked `run`/`run_within`; callers in start, retire and pause_watch pass the trust (start refuses untrusted via `refuse_untrusted` and `Refusal::Untrusted`; retire returns `Teardown`; pause watch skips untrusted); unit and CLI tests
 - [ ] `saaio trust` command (grant in a person's terminal, `--revoke`, `--list`) with output documents and CLI tests (PTY grant, refused without a terminal)
