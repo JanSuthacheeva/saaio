@@ -3,7 +3,7 @@
 use std::fmt::Write as _;
 use std::mem;
 
-use super::{App, Effect, Job, Removal, View};
+use super::{App, Confirmed, Effect, Job, Removal, View};
 use crate::proto::{ClientMsg, PaneKey};
 use crate::text::plural;
 use crate::ui::board::BoardState;
@@ -126,13 +126,17 @@ impl App {
                     vec![]
                 }
                 FormAction::Cancel => vec![],
-                FormAction::Submit => {
-                    self.notice = Some("starting the flow…".to_string());
-                    vec![Effect::Run(Job::Start(form))]
-                }
+                FormAction::Submit => self.start(form),
             },
             View::Stop(unfinished) => self.on_stop_key(unfinished, key),
-            View::Confirm { then, .. } if key == Key::Char('y') => self.remove(then),
+            View::Confirm { then, .. } if key == Key::Char('y') => match then {
+                Confirmed::Remove(removal) => self.remove(removal),
+                Confirmed::Trust(form) => {
+                    let mut effects = vec![Effect::Trust(form.repo.clone())];
+                    effects.extend(self.start(form));
+                    effects
+                }
+            },
             View::Confirm { .. } | View::Help | View::Panes => vec![],
         }
     }
@@ -264,6 +268,11 @@ impl App {
     }
 
     /// Runs `saaio remove` in the background; what it refuses comes back as a question (on_ran).
+    fn start(&mut self, form: NewFlowForm) -> Vec<Effect> {
+        self.notice = Some("starting the flow…".to_string());
+        vec![Effect::Run(Job::Start(form))]
+    }
+
     pub(super) fn remove(&mut self, removal: Removal) -> Vec<Effect> {
         self.notice = Some(format!("cleaning up {}…", removal.name));
         vec![Effect::Run(Job::Remove(removal))]

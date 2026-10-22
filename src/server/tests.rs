@@ -17,7 +17,9 @@ use crate::fixtures::{self, executable};
 use crate::identity;
 use crate::launch::pane::HOSTED;
 use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
+use crate::registry::Registry;
 use crate::store::{Busy, Waiter};
+use crate::trust::Trust;
 use crate::view::{MasterTurn, State, Workspace};
 
 /// A server whose master is `cat`, run on its own thread.
@@ -96,6 +98,7 @@ fn start_timed(
         config: Some(dir.join("config/config.toml")),
         theme: Some(dir.join("config/theme.toml")),
         cwd: std::env::current_dir().unwrap(),
+        trust: Some(trust_in(dir)),
     };
     let thread_paths = paths.clone();
     let store = Store::at(dir.to_path_buf());
@@ -1627,6 +1630,11 @@ fn now() -> u64 {
 }
 
 /// A flow idle for ten minutes in a worktree of `repo`.
+/// The trust the test server at `dir` keeps.
+fn trust_in(dir: &Path) -> Trust {
+    Trust::at(&Registry::at(dir.join("state")))
+}
+
 fn idle_flow(store: &Store, repo: &Path, name: &str) -> String {
     let id = store
         .create(&LogEvent::new(
@@ -1684,8 +1692,12 @@ fn pauses_an_idle_flows_services_and_resumes_them_when_it_works() {
     let dir = TempDir::new().unwrap();
     let store = Store::at(dir.path().to_path_buf());
     let repo = dir.path().join("shop");
+    let untrusted = dir.path().join("cloned");
     let ran = dir.path().join("ran.txt");
-    for name in ["pause", "resume"] {
+    for (repo, name) in [&repo, &untrusted]
+        .into_iter()
+        .flat_map(|repo| [(repo, "pause"), (repo, "resume")])
+    {
         let script = repo.join(".saaio").join(name);
         fs::create_dir_all(script.parent().unwrap()).unwrap();
         let body = format!(
@@ -1694,8 +1706,10 @@ fn pauses_an_idle_flows_services_and_resumes_them_when_it_works() {
         );
         executable(&script, &body);
     }
+    trust_in(dir.path()).grant(&repo).unwrap();
     let id = idle_flow(&store, &repo, "csv");
     let bare = idle_flow(&store, &dir.path().join("plain-repo"), "pdf");
+    let stranger = idle_flow(&store, &untrusted, "zip");
     let (paths, handle) = start_at(
         dir.path(),
         BTreeMap::from([(
@@ -1723,5 +1737,57 @@ fn pauses_an_idle_flows_services_and_resumes_them_when_it_works() {
         "pause 4 csv\nresume 4 csv\n"
     );
     assert!(services(&store, &bare).is_empty(), "a repo without scripts");
+    assert!(services(&store, &stranger).is_empty(), "a repo not trusted");
+    stop(&paths, handle);
+}
+
+#[test]
+fn a_resume_that_cannot_run_fails_so_tool_calls_stop_waiting() {
+    use crate::event::ServiceStatus::{Paused, ResumeFailed};
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let repo = dir.path().join("shop");
+    for name in ["pause", "resume"] {
+        let script = repo.join(".saaio").join(name);
+        fs::create_dir_all(script.parent().unwrap()).unwrap();
+        executable(&script, "#!/bin/sh\nexit 0\n");
+    }
+    let trust = trust_in(dir.path());
+    trust.grant(&repo).unwrap();
+    let id = idle_flow(&store, &repo, "csv");
+    let (paths, handle) = start_at(
+        dir.path(),
+        BTreeMap::from([(
+            "claude".to_string(),
+            Agent {
+                command: vec!["cat".into()],
+                prompt: None,
+                adapter: None,
+                resume: Some(vec!["cat".into()]),
+            },
+        )]),
+        now,
+    );
+    wait_for_services(&store, &id, Paused);
+
+    trust.revoke(&repo).unwrap();
+    store
+        .append(&id, &LogEvent::new(now(), EventKind::Working))
+        .unwrap();
+
+    wait_for_services(&store, &id, ResumeFailed);
+    let reason = store
+        .events(&id)
+        .unwrap()
+        .into_iter()
+        .rev()
+        .find_map(|event| match event.kind {
+            EventKind::Services { reason, .. } => reason,
+            _ => None,
+        });
+    assert_eq!(
+        reason.as_deref(),
+        Some("the repository is not trusted, so .saaio/resume did not run")
+    );
     stop(&paths, handle);
 }

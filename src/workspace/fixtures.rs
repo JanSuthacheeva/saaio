@@ -23,7 +23,7 @@ pub(super) fn git(dir: &Path, args: &[&str]) {
     assert!(status.success(), "git {args:?}");
 }
 
-pub(super) fn repo() -> (TempDir, PathBuf) {
+pub(crate) fn repo() -> (TempDir, PathBuf) {
     let dir = TempDir::new().unwrap();
     let repo = dir.path().canonicalize().unwrap();
     git(&repo, &["init", "-q", "-b", "main"]);

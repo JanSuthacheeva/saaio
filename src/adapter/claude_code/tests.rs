@@ -357,7 +357,7 @@ fn a_plain_session_reports_but_neither_waits_nor_hears_of_the_master() {
         );
     }
     assert_eq!(
-        Adapter::ClaudeCode.plain_wiring(Path::new("/bin/saaio"), Path::new("/worktree")),
+        Adapter::ClaudeCode.plain_wiring(Path::new("/bin/saaio"), Some(Path::new("/worktree"))),
         [
             "--settings".to_string(),
             plain_settings(Path::new("/bin/saaio"))

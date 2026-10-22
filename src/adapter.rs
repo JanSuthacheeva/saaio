@@ -86,8 +86,9 @@ impl Adapter {
     }
 
     /// The arguments that make the harness report to `<flow_exe> hook <name>` and wait for the
-    /// master's messages, inserted right after the program in the agent's argv, fresh and resumed.
-    pub fn wiring(self, flow_exe: &Path, folder: &Path) -> Vec<String> {
+    /// master's messages, inserted right after the program in the agent's argv, fresh and resumed;
+    /// with `trusted`, Codex trusts that folder (else it asks in its pane).
+    pub fn wiring(self, flow_exe: &Path, trusted: Option<&Path>) -> Vec<String> {
         match self {
             Adapter::ClaudeCode => vec!["--settings".to_string(), claude_code::settings(flow_exe)]
                 .into_iter()
@@ -95,15 +96,15 @@ impl Adapter {
                 .collect(),
             Adapter::Codex => codex::hooks(flow_exe)
                 .into_iter()
-                .chain(codex::trusted_folder(folder))
+                .chain(trusted.map(codex::trusted_folder).unwrap_or_default())
                 .chain(self.instruct(&format!("{WORKER_PROMPT} {CODEX_PHASE_PROMPT}")))
                 .collect(),
         }
     }
 
     /// The arguments that make a plain session report to `<flow_exe> hook <name>`: no master
-    /// waiter, no worker prompt, since it is the user's own.
-    pub fn plain_wiring(self, flow_exe: &Path, folder: &Path) -> Vec<String> {
+    /// waiter, no worker prompt, since it is the user's own; `trusted` as for `wiring`.
+    pub fn plain_wiring(self, flow_exe: &Path, trusted: Option<&Path>) -> Vec<String> {
         match self {
             Adapter::ClaudeCode => vec![
                 "--settings".to_string(),
@@ -111,7 +112,7 @@ impl Adapter {
             ],
             Adapter::Codex => codex::hooks(flow_exe)
                 .into_iter()
-                .chain(codex::trusted_folder(folder))
+                .chain(trusted.map(codex::trusted_folder).unwrap_or_default())
                 .collect(),
         }
     }
@@ -254,7 +255,8 @@ mod tests {
             !WORKER_PROMPT.contains("Claude"),
             "the prompt names no harness"
         );
-        let wiring = Adapter::ClaudeCode.wiring(Path::new("/bin/saaio"), Path::new("/worktree"));
+        let wiring =
+            Adapter::ClaudeCode.wiring(Path::new("/bin/saaio"), Some(Path::new("/worktree")));
         assert_eq!(wiring[0], "--settings");
         assert_eq!(wiring[2..], ["--append-system-prompt", WORKER_PROMPT]);
     }
@@ -279,7 +281,7 @@ mod tests {
         );
 
         let folder = Path::new("/worktree");
-        let worker = Adapter::Codex.wiring(exe, folder);
+        let worker = Adapter::Codex.wiring(exe, Some(folder));
         let worker_prompt: toml::Table = toml::from_str(&worker[worker.len() - 1]).unwrap();
         let prompt = worker_prompt["developer_instructions"].as_str().unwrap();
         assert!(prompt.contains("read its SKILL.md only when you begin working on that skill"));
@@ -295,12 +297,16 @@ mod tests {
             Adapter::Codex.instruct(&format!("{WORKER_PROMPT} {CODEX_PHASE_PROMPT}"))
         );
         assert_eq!(
-            Adapter::Codex.plain_wiring(exe, folder),
+            Adapter::Codex.plain_wiring(exe, Some(folder)),
             codex::hooks(exe)
                 .into_iter()
                 .chain(codex::trusted_folder(folder))
                 .collect::<Vec<_>>()
         );
+        let untrusted = Adapter::Codex.wiring(exe, None);
+        assert!(!untrusted.iter().any(|arg| arg.starts_with("projects=")));
+        assert_eq!(untrusted.len(), worker.len() - 2);
+        assert_eq!(Adapter::Codex.plain_wiring(exe, None), codex::hooks(exe));
         assert!(!Adapter::Codex.wakes_itself());
         assert!(Adapter::ClaudeCode.wakes_itself());
     }

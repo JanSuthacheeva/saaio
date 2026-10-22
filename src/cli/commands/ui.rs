@@ -7,6 +7,7 @@ use crate::cli::output::{Document, Failure};
 use crate::client;
 use crate::server_log;
 use crate::store::Store;
+use crate::trust::Trust;
 use crate::ui;
 use crate::update::UpdateCheck;
 
@@ -47,6 +48,7 @@ fn attach(store: &Store, env: &Env, log: PathBuf, clock: fn() -> u64) -> anyhow:
             .registry()
             .map(|registry| UpdateCheck::in_folder(registry.root())),
         releases: env.releases(),
+        trust: env.registry().as_ref().map(Trust::at),
     };
     ui::run(&socket, ui_env, clock)
 }

@@ -3,7 +3,8 @@
 use std::path::Path;
 
 use super::{
-    App, CHANGE_SHOWN_MS, Effect, Job, JobError, OVERVIEW_EVERY_MS, Removal, TICKS_PER_AGE, View,
+    App, CHANGE_SHOWN_MS, Confirmed, Effect, Job, JobError, OVERVIEW_EVERY_MS, Removal,
+    TICKS_PER_AGE, View,
 };
 use crate::branching::Branching;
 use crate::proto::{ClientMsg, PaneKey, ServerMsg, Size};
@@ -91,6 +92,14 @@ impl App {
                 }
             }
             (Job::Start(_) | Job::Remove(_), Ok(_)) => {}
+            (Job::Start(form), Err(error)) if error.refusal == Some(Refusal::Untrusted) => {
+                let repo = form.repo.display().to_string();
+                let message = error.message.replacen(&repo, &self.tilde(&repo), 1);
+                self.view = View::Confirm {
+                    question: format!("{message}. Trust it?"),
+                    then: Confirmed::Trust(form),
+                };
+            }
             (Job::Start(mut form), Err(error)) => {
                 form.error = Some(error.message);
                 self.view = View::NewFlow(form);
@@ -98,19 +107,19 @@ impl App {
             (Job::Remove(removal), Err(error)) if error.refusal == Some(Refusal::Uncommitted) => {
                 self.view = View::Confirm {
                     question: format!("{} has uncommitted changes. Discard them?", removal.name),
-                    then: Removal {
+                    then: Confirmed::Remove(Removal {
                         force: true,
                         ..removal
-                    },
+                    }),
                 };
             }
             (Job::Remove(removal), Err(error)) if error.refusal == Some(Refusal::Unmerged) => {
                 self.view = View::Confirm {
                     question: format!("{}. Delete it anyway?", error.message),
-                    then: Removal {
+                    then: Confirmed::Remove(Removal {
                         delete_unmerged: true,
                         ..removal
-                    },
+                    }),
                 };
             }
             (Job::Remove(_), Err(error)) => self.notice = Some(error.message),

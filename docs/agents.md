@@ -5,11 +5,11 @@ Reference for workers run by saaio. Verified with Codex CLI 0.163.0 and Claude C
 
 | Harness | saaio supplies on each launch and resume | Configure separately |
 | --- | --- | --- |
-| Codex | Eight reporting hooks and trust for those exact hooks through `-c`, plus trust for the worker's worktree and no update check at startup. The worker also receives instructions for talking to the master and reading workflow skills only when it begins them. | Approval handling, command rules, sandbox network access, and reasoning effort. |
+| Codex | Eight reporting hooks and trust for those exact hooks through `-c`, plus trust for the worker's worktree once you [trusted](repository.md#trust) the repository, and no update check at startup. The worker also receives instructions for talking to the master and reading workflow skills only when it begins them. | Approval handling, command rules, sandbox network access, and reasoning effort. |
 | Claude Code | Reporting and wait hooks in a `--settings` JSON argument, plus worker instructions through `--append-system-prompt`. | Permission mode and allow rules. |
 
 saaio does not edit `~/.codex` or `~/.claude`. The Codex trust passed by saaio covers its own hooks
-and the worker's worktree. Other hooks still follow Codex's normal trust review. See
+and, in a trusted repository, the worker's worktree. Other hooks still follow Codex's normal trust review. See
 [Flows](flows.md#how-a-worker-reports) for what the hooks report.
 
 ## Codex
