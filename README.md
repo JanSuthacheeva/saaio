@@ -25,7 +25,7 @@ curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/inst
 Installs the prebuilt binary to `~/.local/bin`. From source, with Rust 1.95+:
 
 ```sh
-cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.1.0
+cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.1.1
 ```
 
 More: [docs/install.md](docs/install.md).
