@@ -47,6 +47,7 @@ fn env() -> Env {
         saaio_config: path("SAAIO_CONFIG"),
         flow_id: env::var("SAAIO_FLOW_ID").ok(),
         saaio_master: env::var("SAAIO_MASTER").is_ok_and(|value| value == "1"),
+        saaio_key: env::var("SAAIO_KEY").ok(),
         home: path("HOME"),
         xdg_state_home: path("XDG_STATE_HOME"),
         xdg_config_home: path("XDG_CONFIG_HOME"),

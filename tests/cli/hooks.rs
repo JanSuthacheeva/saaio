@@ -357,6 +357,7 @@ fn a_codex_master_records_its_session_and_reports_nothing() {
     command
         .args(["hook", "codex"])
         .env("SAAIO_MASTER", "1")
+        .env("SAAIO_KEY", key(home.path(), "master"))
         .env("SAAIO_FLOW_ID", &id);
     let output = feed(command, prompt);
 
@@ -376,7 +377,9 @@ fn a_codex_master_records_its_session_and_reports_nothing() {
 /// Runs `saaio hook claude-code` as the master's pane does.
 fn master_hook(home: &Path, payload: &str) -> Output {
     let mut command = hook_command(home, &["claude-code"], None);
-    command.env("SAAIO_MASTER", "1");
+    command
+        .env("SAAIO_MASTER", "1")
+        .env("SAAIO_KEY", key(home, "master"));
     feed(command, payload)
 }
 

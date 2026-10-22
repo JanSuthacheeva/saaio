@@ -1657,6 +1657,7 @@ dependencies = [
  "base64",
  "clap",
  "clap_complete",
+ "getrandom 0.4.3",
  "jiff",
  "nix 0.28.0",
  "portable-pty",

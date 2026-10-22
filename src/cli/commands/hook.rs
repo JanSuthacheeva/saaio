@@ -1,5 +1,6 @@
 //! `saaio hook`: one harness event into its flow or the master's turn, news handed over at Stop
 
+use std::fmt;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -17,6 +18,7 @@ use crate::config::Config;
 use crate::deliver::{self, WorkerNews};
 use crate::event::{Event, EventKind, ServiceStatus, is_uuid};
 use crate::fold;
+use crate::identity;
 use crate::pause;
 use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
@@ -36,6 +38,28 @@ enum Hooked {
     Flow(String),
     Master,
     Nobody,
+}
+
+impl Hooked {
+    /// The session it claims to be, None for Nobody.
+    fn waiter(&self) -> Option<Waiter> {
+        match self {
+            Hooked::Flow(id) => Some(Waiter::Flow(id.clone())),
+            Hooked::Master => Some(Waiter::Master),
+            Hooked::Nobody => None,
+        }
+    }
+}
+
+/// the master, flow 7f3c, nobody
+impl fmt::Display for Hooked {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Hooked::Flow(id) => write!(f, "flow {id}"),
+            Hooked::Master => f.write_str("the master"),
+            Hooked::Nobody => f.write_str("nobody"),
+        }
+    }
 }
 
 /// `saaio hook`: never prints to stdout (a hook's stdout can reach the model) and never fails (a
@@ -58,6 +82,12 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
         None => Hooked::Nobody,
     };
     let log = Log::new(&store, &args.adapter, &hooked, clock);
+    if let Some(claimed) = hooked.waiter()
+        && !identity::proves(&store, &claimed, env.key())
+    {
+        log.error(&format!("SAAIO_KEY does not prove {hooked}"));
+        return Document::Silent;
+    }
     // A broken config must not stop running workers from reporting; the server logs it, start and
     // ui say it loudly.
     let config = env.config().unwrap_or_else(|_| Config::builtin());

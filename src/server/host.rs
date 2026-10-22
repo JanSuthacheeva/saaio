@@ -75,9 +75,7 @@ impl Host {
 
     /// Spawns the child in a new PTY with a reader and a waiter thread; on Err the pane is kept as Failed.
     pub fn open(&mut self, spec: PaneSpec) -> Result<()> {
-        if let Some(pane) = self.panes.get(&spec.key)
-            && pane.status == PaneStatus::Running
-        {
+        if self.is_running(&spec.key) {
             bail!("{} is already running", spec.key);
         }
         let key = spec.key.clone();
@@ -99,6 +97,12 @@ impl Host {
                 Err(error)
             }
         }
+    }
+
+    pub fn is_running(&self, key: &PaneKey) -> bool {
+        self.panes
+            .get(key)
+            .is_some_and(|pane| pane.status == PaneStatus::Running)
     }
 
     /// Keeps a pane that could not be opened, with the reason shown in it.

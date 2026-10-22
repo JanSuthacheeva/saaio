@@ -40,6 +40,7 @@ use signal_hook::iterator::Signals;
 use crate::branching::Branching;
 use crate::client::Client;
 use crate::config::prefix::Prefix;
+use crate::launch::pane;
 use crate::proto::{Role, ServerMsg};
 use crate::release::source::Releases;
 use crate::release::{Build, Tag};
@@ -313,6 +314,7 @@ fn run_job(exe: &Path, job: Job, events: Sender<Event>) {
     command
         .args(job.args())
         .env_remove("SAAIO_FLOW_ID")
+        .env_remove(pane::KEY_ENV)
         .stdin(std::process::Stdio::null());
     if let Some(dir) = job.dir() {
         command.current_dir(dir);

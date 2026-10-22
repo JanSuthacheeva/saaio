@@ -247,12 +247,15 @@ fn socket_path_for(root: &Path, tmp: &Path) -> PathBuf {
     ))
 }
 
-/// `<exe> server` with `env` and without the hook variables or SAAIO_MASTER of the session it starts
-/// from, so a saaio ui opened inside a worker or the master gives its panes none of that identity.
+/// `<exe> server` with `env` and without the hook variables, SAAIO_MASTER or SAAIO_KEY of the session
+/// it starts from, so a saaio ui opened inside a worker or the master gives its panes none of that identity.
 fn server_command(exe: &Path, env: &[(String, String)]) -> Command {
     let mut command = Command::new(exe);
     command.arg("server");
-    for var in worktree::HOOK_VARS.iter().chain(&[pane::MASTER_ENV]) {
+    for var in worktree::HOOK_VARS
+        .iter()
+        .chain(&[pane::MASTER_ENV, pane::KEY_ENV])
+    {
         command.env_remove(var);
     }
     command.envs(env.iter().map(|(key, value)| (key, value)));
@@ -497,7 +500,10 @@ mod tests {
             })
             .collect();
 
-        for var in worktree::HOOK_VARS.iter().chain(&[pane::MASTER_ENV]) {
+        for var in worktree::HOOK_VARS
+            .iter()
+            .chain(&[pane::MASTER_ENV, pane::KEY_ENV])
+        {
             assert!(
                 envs.contains(&(var.to_string(), None)),
                 "{var} removed: {envs:?}"

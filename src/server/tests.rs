@@ -14,6 +14,7 @@ use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
 use crate::fixtures::{self, executable};
+use crate::identity;
 use crate::launch::pane::HOSTED;
 use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
 use crate::store::{Busy, Waiter};
@@ -1021,6 +1022,41 @@ fn stop(paths: &ServerPaths, handle: thread::JoinHandle<Result<()>>) {
     assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
     proto::write_msg(&mut control, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
+}
+
+#[test]
+fn hands_each_pane_a_key_only_the_store_digest_proves() {
+    let dir = TempDir::new().unwrap();
+    let script = dir.path().join("master");
+    let seen = dir.path().join("key");
+    executable(
+        &script,
+        &format!(
+            "#!/bin/sh\nprintf %s \"$SAAIO_KEY\" > '{}'\nexec cat\n",
+            seen.display()
+        ),
+    );
+    let master = Agent {
+        command: vec![script.display().to_string()],
+        prompt: None,
+        adapter: None,
+        resume: Some(vec![script.display().to_string()]),
+    };
+    let (paths, handle) = start_with(dir.path(), master);
+
+    wait_until("the master did not write its key", || {
+        fs::read_to_string(&seen).is_ok_and(|key| !key.is_empty())
+    });
+    let key = fs::read_to_string(&seen).unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    assert!(identity::proves(&store, &Waiter::Master, Some(&key)));
+    assert_ne!(store.key(&Waiter::Master).unwrap(), key, "only its digest");
+    let mode = fs::metadata(dir.path().join("waits/master.key"))
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600);
+    stop(&paths, handle);
 }
 
 #[test]

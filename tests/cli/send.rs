@@ -51,11 +51,11 @@ fn sends_after_pr_until_worker_ends() {
     assert_eq!(flow["state"], "waiting");
     assert_eq!(flow["mergeRequest"], "https://github.com/probe/repo/pull/7");
 
-    let sent = saaio(
+    let sent = as_master(
         home.path(),
         &["send", "slot-reclaim", "Fix the race first."],
     );
-    let typed = saaio(home.path(), &["send", "--type", "slot-reclaim", "/review"]);
+    let typed = as_master(home.path(), &["send", "--type", "slot-reclaim", "/review"]);
     assert!(sent.status.success(), "{}", stdout(&sent));
     assert!(typed.status.success(), "{}", stdout(&typed));
     let log = fs::read_to_string(
@@ -76,7 +76,7 @@ fn sends_after_pr_until_worker_ends() {
         vec!["send", "slot-reclaim", "late"],
         vec!["send", "--type", "slot-reclaim", "/review"],
     ] {
-        let output = saaio(home.path(), &args);
+        let output = as_master(home.path(), &args);
         assert_eq!(output.status.code(), Some(1));
         assert!(stdout(&output).contains("slot-reclaim is finished"));
     }
@@ -85,7 +85,7 @@ fn sends_after_pr_until_worker_ends() {
             .join("flows/7f3c0000-0000-4000-8000-000000000000.jsonl"),
     )
     .unwrap();
-    let removed = saaio(
+    let removed = as_master(
         home.path(),
         &["send", "7f3c0000-0000-4000-8000-000000000000", "late"],
     );
@@ -103,7 +103,7 @@ fn send_puts_the_masters_message_into_the_flows_log() {
         r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
     );
 
-    let output = saaio(home.path(), &["send", "shop-217", "Semicolons."]);
+    let output = as_master(home.path(), &["send", "shop-217", "Semicolons."]);
 
     assert!(output.status.success(), "{}", stdout(&output));
     assert!(stdout(&output).starts_with("sent: shop-217\nstate: waiting\n"));
@@ -157,7 +157,7 @@ fn send_to_a_flow_on_a_dialog_says_saaio_closes_it() {
         DIALOG,
     );
 
-    let output = saaio(
+    let output = as_master(
         home.path(),
         &["send", "ask", "The user says: Red; Cheese and Olives"],
     );
@@ -194,7 +194,7 @@ fn send_refuses_what_has_no_worker_to_read_it() {
     let refused = |args: &[&str], from: Option<&str>| {
         let output = match from {
             Some(id) => saaio_in(home.path(), id, args),
-            None => saaio(home.path(), args),
+            None => as_master(home.path(), args),
         };
         assert_eq!(
             output.status.code(),
@@ -241,8 +241,8 @@ fn send_takes_a_message_while_config_toml_is_broken() {
     );
     fs::write(home.path().join("no-config.toml"), "agent = [\n").unwrap();
 
-    let sent = saaio(home.path(), &["send", "shop-217", "Tabs."]);
-    let typed = saaio(home.path(), &["send", "--type", "shop-217", "/compact"]);
+    let sent = as_master(home.path(), &["send", "shop-217", "Tabs."]);
+    let typed = as_master(home.path(), &["send", "--type", "shop-217", "/compact"]);
 
     assert!(sent.status.success(), "{}", stdout(&sent));
     assert_eq!(typed.status.code(), Some(1), "{}", stdout(&typed));
@@ -263,8 +263,8 @@ fn send_type_queues_lines_in_order_in_the_flows_log() {
         r#"{"v":1,"at":2000,"kind":"idle","note":"plan done"}"#,
     );
 
-    let first = saaio(home.path(), &["send", "--type", "shop-217", "/compact"]);
-    let second = saaio(
+    let first = as_master(home.path(), &["send", "--type", "shop-217", "/compact"]);
+    let second = as_master(
         home.path(),
         &["send", "--type", "shop-217", "continue shipping"],
     );
@@ -298,7 +298,7 @@ fn send_type_queues_lines_in_order_in_the_flows_log() {
         "2",
     )
     .unwrap();
-    let after = saaio(home.path(), &["send", "--type", "shop-217", "/review"]);
+    let after = as_master(home.path(), &["send", "--type", "shop-217", "/review"]);
     assert!(stdout(&after).contains("ahead: 0"), "{}", stdout(&after));
 }
 
@@ -328,6 +328,7 @@ fn send_type_refuses_more_than_one_line_and_an_agent_without_turns() {
     let refused = |args: &[&str]| {
         let output = saaio_command(home.path())
             .args(args)
+            .env("SAAIO_KEY", key(home.path(), "master"))
             .env("SAAIO_CONFIG", &config)
             .output()
             .unwrap();

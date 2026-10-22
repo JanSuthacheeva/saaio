@@ -23,6 +23,8 @@ pub struct Env {
     pub flow_id: Option<String>,
     /// $SAAIO_MASTER is 1: the master's pane, whose hooks report no flow.
     pub saaio_master: bool,
+    /// $SAAIO_KEY: the key the server handed this session's pane.
+    pub saaio_key: Option<String>,
     pub home: Option<PathBuf>,
     pub xdg_state_home: Option<PathBuf>,
     pub xdg_config_home: Option<PathBuf>,
@@ -119,6 +121,11 @@ impl Env {
     /// $SAAIO_FLOW_ID, unless it is empty: set in a worker's session, not in the master's.
     pub(crate) fn flow_id(&self) -> Option<&str> {
         self.flow_id.as_deref().filter(|id| !id.is_empty())
+    }
+
+    /// $SAAIO_KEY, unless it is empty.
+    pub(crate) fn key(&self) -> Option<&str> {
+        self.saaio_key.as_deref().filter(|key| !key.is_empty())
     }
 
     /// True when a person runs flow at a terminal: not in a flow's session, the master's, or an

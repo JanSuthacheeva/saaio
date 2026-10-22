@@ -24,7 +24,7 @@ fn a_workers_wait_ends_with_the_masters_message_once() {
     );
     assert!(ended(&mut first, short).is_none(), "nothing to deliver yet");
 
-    saaio(home.path(), &["send", "shop-217", "Semicolons."]);
+    as_master(home.path(), &["send", "shop-217", "Semicolons."]);
 
     let (code, out, err) = ended(&mut first, PATIENCE).expect("woken");
     assert_eq!(code, 2);

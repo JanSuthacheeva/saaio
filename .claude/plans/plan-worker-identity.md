@@ -211,9 +211,9 @@ Hello -> sets role and peer.
 
 ## Tasks
 
-- [ ] identity: `identity::new_key`, `digest`, `proves`; `Store::set_key`, `key`, remove deletes it; `KEY_ENV`; getrandom dependency; unit tests
-- [ ] Server hands keys: `Host::is_running`, `Server::hand_key` in `open_pane`; `server_command` and `run_job` drop SAAIO_KEY; server test that a pane gets a key whose digest is stored
-- [ ] Commands prove: `Env::saaio_key`/`key`, main reads SAAIO_KEY; hook, send, wait refuse the unproven; CLI tests (forged flow, forged master, send, wait) failing before; existing tests pass the key
+- [x] identity: `identity::new_key`, `digest`, `proves`; `Store::set_key`, `key`, remove deletes it; `KEY_ENV`; getrandom dependency; unit tests
+- [x] Server hands keys: `Host::is_running`, `Server::hand_key` in `open_pane`; `server_command` and `run_job` drop SAAIO_KEY; server test that a pane gets a key whose digest is stored
+- [x] Commands prove: `Env::saaio_key`/`key`, main reads SAAIO_KEY; hook, send, wait refuse the unproven; CLI tests (forged flow, forged master, send, wait) failing before; existing tests pass the key
 - [ ] `private::verify_dir` with unit tests
 - [ ] Socket location: `Env::xdg_runtime_dir`/`tmpdir`, `client::socket_path(store, temp)`, `earlier_socket`, `Env::socket`/`server_log`; call sites; unit tests
 - [ ] Checked connect and bind: dial verifies the folder and the server's uid; ensure_server and bind verify after create; `proto::peer_uid`; server accept refuses another uid; tests
