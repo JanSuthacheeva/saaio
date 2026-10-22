@@ -122,7 +122,7 @@ Symlinked `.saaio/worktrees`: start -> workspace::create_worktree -> refuse_link
 - [x] `src/trust.rs`: `Trust` (at, covers, grant, revoke, repos) and `root_of`, with unit tests
 - [x] Hooks: `Hook::limit`, `Hook::name`, `hooks::present`, trust-checked `run`/`run_within`; callers in start, retire and pause_watch pass the trust (start refuses untrusted via `refuse_untrusted` and `Refusal::Untrusted`; retire returns `Teardown`; pause watch skips untrusted); unit and CLI tests
 - [x] `saaio trust` command (grant in a person's terminal, `--revoke`, `--list`) with output documents and CLI tests (PTY grant, refused without a terminal)
-- [ ] Codex folder trust only when trusted: `wiring`/`plain_wiring` take `Option<&Path>`, `worker_spec` takes `trusted`, the server computes it; tests
+- [x] Codex folder trust only when trusted: `wiring`/`plain_wiring` take `Option<&Path>`, `worker_spec` takes `trusted`, the server computes it; tests
 - [ ] saaio ui asks: `Confirmed`, `Effect::Trust`, `UiEnv::trust`; app tests
 - [ ] Docs (cli.md, repository.md, flows.md, troubleshooting.md, README where hooks are described), CHANGELOG Unreleased lines, CLAUDE.md architecture lines for trust.rs and the trust command
 - [ ] End to end: scratch SAAIO_HOME repo with setup/teardown: start refused, `saaio trust` in a PTY, start runs setup, hanging hook killed with its children, symlinked `.saaio/worktrees` refused, remove, `--revoke`; server stopped, nothing left on disk

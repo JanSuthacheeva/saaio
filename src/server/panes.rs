@@ -16,9 +16,17 @@ use crate::launch::pane::{self, HOSTED, PaneSpec};
 use crate::proto::{PaneKey, PaneStatus, ServerMsg};
 use crate::server_log;
 use crate::store::{Busy, Waiter};
+use crate::trust;
 use crate::view::{FlowView, Workspace};
 
 impl Server {
+    /// Whether the person trusts the repository of a flow's workspace, so Codex may trust it too.
+    fn trusts(&self, space: &Workspace) -> bool {
+        self.trust
+            .as_ref()
+            .is_some_and(|trust| trust.covers(&trust::root_of(space)))
+    }
+
     /// Re-folds when the store changed, reconciles, sends Board and Panes to the attached UI.
     pub(super) fn refresh(&mut self) {
         self.refreshed_at = Instant::now();
@@ -48,6 +56,7 @@ impl Server {
             &self.known,
             &self.config,
             &self.env,
+            &|space| self.trusts(space),
         );
         let panes_change = wanted != Wanted::default();
         self.apply(wanted);
@@ -240,7 +249,7 @@ impl Server {
                 .fail(key, format!("no agent named {}", space.agent));
             return;
         };
-        match pane::worker_spec(&flow, agent, &self.env) {
+        match pane::worker_spec(&flow, agent, &self.env, self.trusts(space)) {
             Some(spec) => self.open_worker(spec),
             None => self.host.fail(key, reconcile::unopenable(name)),
         }
@@ -276,10 +285,11 @@ impl Server {
             return;
         };
         space.window = None;
+        let trusted = self.trusts(space);
         let spec = self
             .config
             .agent(Some(&space.agent))
-            .and_then(|(_, agent)| pane::worker_spec(&flow, agent, &self.env));
+            .and_then(|(_, agent)| pane::worker_spec(&flow, agent, &self.env, trusted));
         if let Some(spec) = spec
             && let Err(error) = self.open_pane(spec)
         {

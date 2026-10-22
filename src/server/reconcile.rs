@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use crate::config::Config;
 use crate::launch::pane::{self, LaunchEnv, PaneSpec};
 use crate::proto::PaneKey;
-use crate::view::FlowView;
+use crate::view::{FlowView, Workspace};
 
 /// What the server should open and close to match the flows on the board.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -22,12 +22,14 @@ pub fn unopenable(name: &str) -> String {
 
 /// Opens every unfinished flow with a workspace not in known; closes worker panes whose flow is gone;
 /// failed: flows it cannot build a spec for (unknown agent, no resume template), with the reason.
+/// `trusted` says whether the person trusts a workspace's repository.
 pub fn reconcile(
     flows: &[FlowView],
     open: &[PaneKey],
     known: &HashSet<String>,
     config: &Config,
     env: &LaunchEnv,
+    trusted: &dyn Fn(&Workspace) -> bool,
 ) -> Wanted {
     let mut wanted = Wanted::default();
     for flow in flows {
@@ -44,7 +46,7 @@ pub fn reconcile(
                 .push((key, format!("no agent named {}", space.agent)));
             continue;
         };
-        match pane::worker_spec(flow, agent, env) {
+        match pane::worker_spec(flow, agent, env, trusted(space)) {
             Some(spec) => wanted.open.push(spec),
             None => wanted.failed.push((key, unopenable(name))),
         }
@@ -125,6 +127,7 @@ mod tests {
             &HashSet::new(),
             &config(),
             &LaunchEnv::default(),
+            &|_| true,
         );
 
         assert_eq!(keys(&wanted), vec![worker("new"), worker("hosted")]);
@@ -144,6 +147,7 @@ mod tests {
             &HashSet::new(),
             &config(),
             &LaunchEnv::default(),
+            &|_| true,
         );
         assert_eq!(keys(&wanted), vec![worker("pr")]);
     }
@@ -162,6 +166,7 @@ mod tests {
             &known,
             &config(),
             &LaunchEnv::default(),
+            &|_| true,
         );
 
         assert_eq!(wanted, Wanted::default());
@@ -177,6 +182,7 @@ mod tests {
             &HashSet::from(["kept".to_string(), "removed".to_string()]),
             &config(),
             &LaunchEnv::default(),
+            &|_| true,
         );
 
         assert_eq!(wanted.close, vec![worker("removed")]);
@@ -197,6 +203,7 @@ mod tests {
             &HashSet::new(),
             &config(),
             &LaunchEnv::default(),
+            &|_| true,
         );
 
         assert_eq!(keys(&wanted), vec![worker("fresh-aider")]);
