@@ -89,7 +89,7 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
     if let Some(claimed) = hooked.waiter()
         && !identity::proves(&store, &claimed, env.key())
     {
-        log.error(&format!("SAAIO_KEY does not prove {hooked}"));
+        log.error(&format!("SAAIO_PROOF does not prove {hooked}"));
         return Document::Silent;
     }
     // A broken config must not stop running workers from reporting; the server logs it, start and

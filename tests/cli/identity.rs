@@ -36,10 +36,10 @@ fn a_hook_reports_into_a_flow_only_with_that_flows_key() {
 
     for vars in [
         vec![("SAAIO_FLOW_ID", victim.as_str())],
-        vec![("SAAIO_FLOW_ID", victim.as_str()), ("SAAIO_KEY", "guess")],
+        vec![("SAAIO_FLOW_ID", victim.as_str()), ("SAAIO_PROOF", "guess")],
         vec![
             ("SAAIO_FLOW_ID", victim.as_str()),
-            ("SAAIO_KEY", other_key.as_str()),
+            ("SAAIO_PROOF", other_key.as_str()),
         ],
     ] {
         let output = feed(claiming(home.path(), &["hook", "claude-code"], &vars), stop);
@@ -50,7 +50,7 @@ fn a_hook_reports_into_a_flow_only_with_that_flows_key() {
     assert_eq!(flow_log(home.path(), &victim), before);
     let log = server_log(home.path());
     assert_eq!(
-        log.matches(&format!("SAAIO_KEY does not prove flow {victim}"))
+        log.matches(&format!("SAAIO_PROOF does not prove flow {victim}"))
             .count(),
         3,
         "{log}"
@@ -58,7 +58,7 @@ fn a_hook_reports_into_a_flow_only_with_that_flows_key() {
     let own_key = key(home.path(), &victim);
     let vars = [
         ("SAAIO_FLOW_ID", victim.as_str()),
-        ("SAAIO_KEY", own_key.as_str()),
+        ("SAAIO_PROOF", own_key.as_str()),
     ];
     feed(claiming(home.path(), &["hook", "claude-code"], &vars), stop);
     assert!(flow_log(home.path(), &victim).contains("forged"));
@@ -73,7 +73,7 @@ fn a_hook_is_the_masters_only_with_the_masters_key() {
 
     for vars in [
         vec![("SAAIO_MASTER", "1")],
-        vec![("SAAIO_MASTER", "1"), ("SAAIO_KEY", worker_key.as_str())],
+        vec![("SAAIO_MASTER", "1"), ("SAAIO_PROOF", worker_key.as_str())],
     ] {
         let output = feed(
             claiming(home.path(), &["hook", "claude-code"], &vars),
@@ -86,7 +86,7 @@ fn a_hook_is_the_masters_only_with_the_masters_key() {
     assert!(!home.path().join("waits/master.busy").exists());
     let log = server_log(home.path());
     assert_eq!(
-        log.matches("SAAIO_KEY does not prove the master").count(),
+        log.matches("SAAIO_PROOF does not prove the master").count(),
         2,
         "{log}"
     );
@@ -103,7 +103,7 @@ fn only_the_masters_key_sends() {
     );
     let worker_key = key(home.path(), WORKER);
 
-    for vars in [vec![], vec![("SAAIO_KEY", worker_key.as_str())]] {
+    for vars in [vec![], vec![("SAAIO_PROOF", worker_key.as_str())]] {
         let output = claiming(home.path(), &["send", "shop-217", "forged"], &vars)
             .output()
             .unwrap();
@@ -151,4 +151,15 @@ fn a_wait_without_the_sessions_key_takes_no_news() {
     assert_eq!(master, (0, String::new()));
     assert!(!home.path().join(format!("waits/{WORKER}.pid")).exists());
     assert!(!home.path().join("waits/master.pid").exists());
+    let log = server_log(home.path());
+    assert!(
+        log.contains(&format!(
+            "wait flow {WORKER}: SAAIO_PROOF does not prove flow {WORKER}"
+        )),
+        "{log}"
+    );
+    assert!(
+        log.contains("wait master: SAAIO_PROOF does not prove the master"),
+        "{log}"
+    );
 }

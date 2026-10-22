@@ -44,7 +44,7 @@ pub fn saaio_in(home: &Path, flow_id: &str, args: &[&str]) -> Output {
     saaio_command(home)
         .args(args)
         .env("SAAIO_FLOW_ID", flow_id)
-        .env("SAAIO_KEY", key(home, flow_id))
+        .env("SAAIO_PROOF", key(home, flow_id))
         .output()
         .expect("the saaio binary runs")
 }
@@ -53,7 +53,7 @@ pub fn saaio_in(home: &Path, flow_id: &str, args: &[&str]) -> Output {
 pub fn as_master(home: &Path, args: &[&str]) -> Output {
     saaio_command(home)
         .args(args)
-        .env("SAAIO_KEY", key(home, "master"))
+        .env("SAAIO_PROOF", key(home, "master"))
         .output()
         .expect("the saaio binary runs")
 }
@@ -415,7 +415,7 @@ pub fn hook_command(home: &Path, args: &[&str], flow_id: Option<&str>) -> Comman
     if let Some(id) = flow_id {
         command
             .env("SAAIO_FLOW_ID", id)
-            .env("SAAIO_KEY", key(home, id));
+            .env("SAAIO_PROOF", key(home, id));
     }
     command
 }
@@ -456,10 +456,10 @@ pub fn waiter(home: &Path, flow_id: Option<&str>, args: &[&str]) -> Running {
     if let Some(id) = flow_id {
         command
             .env("SAAIO_FLOW_ID", id)
-            .env("SAAIO_KEY", key(home, id));
+            .env("SAAIO_PROOF", key(home, id));
     }
     if args.contains(&"--master") {
-        command.env("SAAIO_KEY", key(home, "master"));
+        command.env("SAAIO_PROOF", key(home, "master"));
     }
     Running(command.spawn().expect("the saaio binary runs"))
 }

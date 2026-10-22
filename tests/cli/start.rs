@@ -685,13 +685,13 @@ fn setup_gets_no_key_of_the_session_that_started_the_flow() {
     let lab = Lab::new();
     lab.hook(
         "setup",
-        "#!/bin/sh\nprintf '%s' \"${SAAIO_KEY-none}\" > setup-key\n",
+        "#!/bin/sh\nprintf '%s' \"${SAAIO_PROOF-none}\" > setup-key\n",
     );
 
     let output = saaio_command(&lab.home)
         .args(["start", "SHOP-217 add CSV export"])
         .current_dir(&lab.repo)
-        .env("SAAIO_KEY", "the-masters-key")
+        .env("SAAIO_PROOF", "the-masters-key")
         .output()
         .unwrap();
 

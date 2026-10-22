@@ -1101,7 +1101,7 @@ fn hands_each_pane_a_key_only_the_store_digest_proves() {
     executable(
         &script,
         &format!(
-            "#!/bin/sh\nprintf %s \"$SAAIO_KEY\" > '{}'\nexec cat\n",
+            "#!/bin/sh\nprintf %s \"$SAAIO_PROOF\" > '{}'\nexec cat\n",
             seen.display()
         ),
     );

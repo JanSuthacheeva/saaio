@@ -13,7 +13,7 @@ use super::{ConnId, Event, Server, spawn_named};
 use crate::event::{Event as LogEvent, EventKind};
 use crate::fold;
 use crate::identity;
-use crate::launch::pane::{self, HOSTED, KEY_ENV, PaneSpec};
+use crate::launch::pane::{self, HOSTED, PROOF_ENV, PaneSpec};
 use crate::proto::{PaneKey, PaneStatus, ServerMsg};
 use crate::server_log;
 use crate::store::{Busy, Waiter};
@@ -169,7 +169,7 @@ impl Server {
         let key = identity::new_key().context("could not make a key for the pane")?;
         self.store
             .set_key(&waiter_of(&spec.key), &identity::digest(&key))?;
-        spec.env.push((KEY_ENV.to_string(), key));
+        spec.env.push((PROOF_ENV.to_string(), key));
         Ok(())
     }
 

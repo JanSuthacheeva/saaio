@@ -1,4 +1,4 @@
-//! Who a session is: the key the server hands each pane (SAAIO_KEY) and its proof
+//! Who a session is: the key the server hands each pane (SAAIO_PROOF) and its proof
 
 use std::fmt::Write;
 use std::io;

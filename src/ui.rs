@@ -314,7 +314,7 @@ fn run_job(exe: &Path, job: Job, events: Sender<Event>) {
     command
         .args(job.args())
         .env_remove("SAAIO_FLOW_ID")
-        .env_remove(pane::KEY_ENV)
+        .env_remove(pane::PROOF_ENV)
         .stdin(std::process::Stdio::null());
     if let Some(dir) = job.dir() {
         command.current_dir(dir);

@@ -291,14 +291,14 @@ fn private_socket(root: &Path, dir: &Path) -> PathBuf {
     ))
 }
 
-/// `<exe> server` with `env` and without the hook variables, SAAIO_MASTER or SAAIO_KEY of the session
+/// `<exe> server` with `env` and without the hook variables, SAAIO_MASTER or SAAIO_PROOF of the session
 /// it starts from, so a saaio ui opened inside a worker or the master gives its panes none of that identity.
 fn server_command(exe: &Path, env: &[(String, String)]) -> Command {
     let mut command = Command::new(exe);
     command.arg("server");
     for var in worktree::HOOK_VARS
         .iter()
-        .chain(&[pane::MASTER_ENV, pane::KEY_ENV])
+        .chain(&[pane::MASTER_ENV, pane::PROOF_ENV])
     {
         command.env_remove(var);
     }
@@ -606,7 +606,7 @@ mod tests {
 
         for var in worktree::HOOK_VARS
             .iter()
-            .chain(&[pane::MASTER_ENV, pane::KEY_ENV])
+            .chain(&[pane::MASTER_ENV, pane::PROOF_ENV])
         {
             assert!(
                 envs.contains(&(var.to_string(), None)),

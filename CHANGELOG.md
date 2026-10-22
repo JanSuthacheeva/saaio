@@ -21,7 +21,7 @@ All notable changes to saaio are listed here. The format follows
 ### Fixed
 
 - `saaio hook`, `saaio wait` and `saaio send` act only for the session the server opened: each
-  session gets its own key in `SAAIO_KEY`. Setting `SAAIO_FLOW_ID` or `SAAIO_MASTER` no longer
+  session gets its own key in `SAAIO_PROOF`. Setting `SAAIO_FLOW_ID` or `SAAIO_MASTER` no longer
   reports into another flow, takes the master's news or sends as the master.
 - saaio uses the socket's folder only when it belongs to you and is closed to others, and the UI
   and the server talk only to processes of your own user.

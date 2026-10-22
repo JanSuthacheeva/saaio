@@ -545,7 +545,7 @@ Read by saaio:
 | `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `HOME` | base of the defaults above |
 | `SAAIO_FLOW_ID` | the flow `saaio report`, `saaio hook` and `saaio wait` act for. Set in every worker. While it is set, `saaio` prints the flows instead of opening the UI. |
 | `SAAIO_MASTER` | `1` in the master's session, whose hooks report no flow |
-| `SAAIO_KEY` | the key the server hands each session it opens. `saaio hook` and `saaio wait` act for `SAAIO_FLOW_ID` or `SAAIO_MASTER` only with that session's key, and `saaio send` only with the master's. |
+| `SAAIO_PROOF` | the key the server hands each session it opens. `saaio hook` and `saaio wait` act for `SAAIO_FLOW_ID` or `SAAIO_MASTER` only with that session's key, and `saaio send` only with the master's. |
 | `XDG_RUNTIME_DIR`, `TMPDIR` | where the socket goes when the store's path is too long for one ([files.md](files.md#the-store)) |
 | `CLAUDECODE`, `CODEX_THREAD_ID` | set by Claude Code or Codex. `saaio` prints the flows instead of opening the UI. |
 | `SSH_CONNECTION`, `SSH_TTY`, `WAYLAND_DISPLAY`, `DISPLAY` | how the UI copies: OSC 52 only over SSH, else also `pbcopy`, `wl-copy` or `xclip` ([ui.md](ui.md#copying)) |
@@ -563,7 +563,7 @@ Set by saaio in every worker's session and in the setup, teardown, pause and res
 | `SAAIO_REPO` | the repository's path |
 
 - A plain session gets only `SAAIO_FLOW_ID`.
-- Every session, the master's too, gets its own `SAAIO_KEY`. Hooks get none.
+- Every session, the master's too, gets its own `SAAIO_PROOF`. Hooks get none.
 - Every session also gets `SAAIO_HOME` (the store of the UI that opened it), `TERM=xterm-256color`
   and `COLORTERM=truecolor`.
 

@@ -9,7 +9,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 
 use super::process::{finish_within, last_line};
-use crate::launch::pane::KEY_ENV;
+use crate::launch::pane::PROOF_ENV;
 use crate::view::Workspace;
 
 /// The repo's own hooks: .saaio/setup after the worktree exists, .saaio/teardown before it goes,
@@ -68,7 +68,7 @@ fn command(file: &Path, workspace: &Workspace, env: &[(String, String)]) -> Comm
     let mut command = Command::new(file);
     command
         .current_dir(&workspace.path)
-        .env_remove(KEY_ENV)
+        .env_remove(PROOF_ENV)
         .envs(env.iter().map(|(key, value)| (key, value)));
     command
 }

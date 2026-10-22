@@ -328,7 +328,7 @@ fn send_type_refuses_more_than_one_line_and_an_agent_without_turns() {
     let refused = |args: &[&str]| {
         let output = saaio_command(home.path())
             .args(args)
-            .env("SAAIO_KEY", key(home.path(), "master"))
+            .env("SAAIO_PROOF", key(home.path(), "master"))
             .env("SAAIO_CONFIG", &config)
             .output()
             .unwrap();
