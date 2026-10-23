@@ -53,7 +53,15 @@ impl Server {
                 version,
                 role,
                 peer,
-            } => self.hello(conn, version, role, peer.printable()),
+            } => {
+                let role = match role {
+                    Role::Attach { size } => Role::Attach {
+                        size: size.clamped(),
+                    },
+                    Role::Control => Role::Control,
+                };
+                self.hello(conn, version, role, peer.printable());
+            }
             ClientMsg::Focus(key) => {
                 self.focus = key;
                 self.history = None;
@@ -67,7 +75,7 @@ impl Server {
                 }
             }
             ClientMsg::Resize(size) => {
-                self.host.resize(size);
+                self.host.resize(size.clamped());
                 self.send_full_frame();
             }
             ClientMsg::History(history) => {

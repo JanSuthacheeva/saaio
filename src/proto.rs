@@ -19,6 +19,11 @@ pub const PROTOCOL_VERSION: u32 = 8;
 /// This binary: `0.1.0 (2904734)`, the commit from build.rs, `unknown` outside a git checkout.
 pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("SAAIO_COMMIT"), ")");
 pub const MAX_MESSAGE: usize = 8 << 20;
+/// The widest and tallest pane the server makes: past it a terminal's cells cost too much.
+pub const MAX_SIZE: Size = Size {
+    cols: 1000,
+    rows: 500,
+};
 
 /// The process at the other end: what the log and a dropped UI say about it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -95,6 +100,16 @@ impl fmt::Display for PaneKey {
 pub struct Size {
     pub cols: u16,
     pub rows: u16,
+}
+
+impl Size {
+    /// This size within 1..=MAX_SIZE.cols by 1..=MAX_SIZE.rows.
+    pub fn clamped(self) -> Size {
+        Size {
+            cols: self.cols.clamp(1, MAX_SIZE.cols),
+            rows: self.rows.clamp(1, MAX_SIZE.rows),
+        }
+    }
 }
 
 /// Attach draws the panes; Control sends one request (saaio remove, saaio clear).
@@ -579,6 +594,15 @@ mod tests {
                 "{message:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_clamped_size_is_at_least_one_cell_and_at_most_the_largest() {
+        let size = |cols, rows| Size { cols, rows };
+
+        assert_eq!(size(0, 0).clamped(), size(1, 1));
+        assert_eq!(size(80, 24).clamped(), size(80, 24));
+        assert_eq!(size(u16::MAX, u16::MAX).clamped(), MAX_SIZE);
     }
 
     #[test]

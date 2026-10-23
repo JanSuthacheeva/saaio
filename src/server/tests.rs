@@ -944,6 +944,34 @@ fn closes_a_connection_that_says_no_hello_in_time() {
 }
 
 #[test]
+fn makes_no_pane_larger_than_the_largest_size() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+    let huge = Size {
+        cols: 3000,
+        rows: 2000,
+    };
+
+    let mut ui = connect(&paths.socket, Role::Attach { size: huge });
+    proto::write_msg(&mut ui, &ClientMsg::Resize(huge)).unwrap();
+
+    let mut frames = 0;
+    recv_until(&mut ui, "no second full frame", |message| {
+        if let ServerMsg::Frame(frame) = message
+            && frame.full
+        {
+            assert!(frame.rows.len() <= 500, "{} rows", frame.rows.len());
+            for (_, cells) in &frame.rows {
+                assert!(cells.len() <= 1000, "{} columns", cells.len());
+            }
+            frames += 1;
+        }
+        frames == 2
+    });
+    stop(&paths, handle);
+}
+
+#[test]
 fn takes_at_most_16_connections_at_once() {
     let dir = TempDir::new().unwrap();
     let patient = Timing {
