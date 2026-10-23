@@ -243,7 +243,9 @@ saaio hook reads an event
   closed; trickled hello (one byte per 100 ms, hello 300 ms) closed (fails today); Input before
   Hello closed, nothing typed into the master; seeded fuzz of random frames before and after a
   hello, no panic, the server still serves; Resize past MAX_SIZE gives frames of at most 500
-  rows (fails today); a hello with a 1 MiB folder gives a cut server.log line (fails today).
+  rows (fails today); a hello with a 1 MiB folder and build gives the UI it replaces a
+  Detached naming 4096 chars of each (fails today; server tests cannot read the server's stderr,
+  and the log line prints the same cut peer).
 - proto.rs: read_msg of a big length with few bytes never hands the reader a buffer over
   64 KiB (fails today); 2000 seeded random byte strings decode or err, never panic;
   `Size::clamped`.
@@ -277,7 +279,7 @@ saaio hook reads an event
 
 - [x] `proto::encode`, `write_msg` through it, and `read_msg` growing its buffer with the bytes (unit test: a big length never hands the reader a buffer over 64 KiB, failing first); seeded decoder fuzz unit test
 - [x] `Size::clamped` and `MAX_SIZE`, clamped in `Server::message` for Hello and Resize (server test: Resize past MAX_SIZE gives frames of at most 500 rows, failing first)
-- [ ] `Peer::printable` cuts to PEER_TEXT_LIMIT (unit test, and server test: a hello with a 1 MiB folder gives a cut server.log line, failing first)
+- [x] `Peer::printable` cuts to PEER_TEXT_LIMIT (unit test, and server test: a hello with a 1 MiB folder gives a cut Detached peer, failing first)
 
 ### Connections
 

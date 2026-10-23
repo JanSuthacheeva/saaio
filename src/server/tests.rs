@@ -972,6 +972,38 @@ fn makes_no_pane_larger_than_the_largest_size() {
 }
 
 #[test]
+fn cuts_the_folder_and_build_a_ui_claims() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+    let size = Size { cols: 20, rows: 4 };
+    let mut first = connect(&paths.socket, Role::Attach { size });
+    assert!(matches!(recv(&mut first), ServerMsg::Welcome { .. }));
+    let told = thread::spawn(move || {
+        let mut by = None;
+        while let Ok(Some(message)) = proto::read_msg::<_, ServerMsg>(&mut first) {
+            if let ServerMsg::Detached { by: peer } = message {
+                by = Some(peer);
+            }
+        }
+        by
+    });
+
+    let boasting = Peer {
+        pid: 2,
+        cwd: "/".repeat(1 << 20).into(),
+        build: "b".repeat(1 << 20),
+    };
+    let mut second = connect_as(&paths.socket, Role::Attach { size }, boasting);
+    assert!(matches!(recv(&mut second), ServerMsg::Welcome { .. }));
+
+    let by = told.join().unwrap().expect("told who took over");
+    assert_eq!(by.cwd.as_os_str().len(), 4096);
+    assert_eq!(by.build.len(), 4096);
+    drop(second);
+    stop(&paths, handle);
+}
+
+#[test]
 fn takes_at_most_16_connections_at_once() {
     let dir = TempDir::new().unwrap();
     let patient = Timing {

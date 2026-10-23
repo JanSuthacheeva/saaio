@@ -24,6 +24,8 @@ pub const MAX_SIZE: Size = Size {
     cols: 1000,
     rows: 500,
 };
+/// The longest folder or build a peer keeps, in chars.
+const PEER_TEXT_LIMIT: usize = 4096;
 
 /// The process at the other end: what the log and a dropped UI say about it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,13 +36,20 @@ pub struct Peer {
 }
 
 impl Peer {
-    /// This peer with its folder and build stripped of control characters: what a client claims
-    /// about itself, safe for server.log and another UI's terminal.
+    /// This peer with its folder and build stripped of control characters and cut to
+    /// PEER_TEXT_LIMIT chars: what a client claims about itself, safe for server.log and another
+    /// UI's terminal.
     pub fn printable(self) -> Peer {
+        let clean = |text: &str| -> String {
+            text::printable(text)
+                .chars()
+                .take(PEER_TEXT_LIMIT)
+                .collect()
+        };
         Peer {
             pid: self.pid,
-            cwd: PathBuf::from(text::printable(&self.cwd.to_string_lossy())),
-            build: text::printable(&self.build),
+            cwd: PathBuf::from(clean(&self.cwd.to_string_lossy())),
+            build: clean(&self.build),
         }
     }
 
@@ -367,6 +376,20 @@ mod tests {
         assert_eq!(clean.pid, 7);
         assert_eq!(clean.cwd, Path::new("/tmp/]52;c;aGk=x"));
         assert_eq!(clean.build, "0.1.02J");
+    }
+
+    #[test]
+    fn a_printable_peer_keeps_at_most_4096_chars_of_each_text() {
+        let peer = Peer {
+            pid: 7,
+            cwd: "/".to_string().repeat(5000).into(),
+            build: "界".repeat(5000),
+        };
+
+        let clean = peer.printable();
+
+        assert_eq!(clean.cwd.as_os_str().len(), 4096);
+        assert_eq!(clean.build.chars().count(), 4096);
     }
 
     /// A flow whose harness picked its own session, as a Codex worker's does.
