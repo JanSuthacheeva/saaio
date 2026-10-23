@@ -66,26 +66,37 @@ pub(crate) fn reported(flow: &FlowView) -> Document {
 }
 
 /// sent, the flow's state, and who wakes whom now; for a flow on a question dialog, that saaio
-/// closes it.
+/// closes it; for one on a permission prompt, what it asks and that the worker reads the message
+/// once it is answered.
 pub(crate) fn sent(flow: &FlowView) -> Document {
     #[derive(Serialize)]
     struct Sent<'a> {
         sent: &'a str,
         state: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        prompt: Option<&'a str>,
         help: [String; 2],
     }
+    let prompt = flow.blocker.as_deref().filter(|_| flow.permission);
+    let reads = if prompt.is_some() {
+        format!(
+            "{}'s permission prompt is open in its pane. Its worker reads this once the user answers the prompt there",
+            flow.name
+        )
+    } else if flow.questions.is_empty() {
+        "saaio wakes its worker with it now, or once its session runs again".to_string()
+    } else {
+        format!(
+            "saaio closes {}'s question dialog and its worker reads this as the answer to every question in it",
+            flow.name
+        )
+    };
     Document::Toon(toon(&Sent {
         sent: &flow.name,
         state: flow.state.name(),
+        prompt,
         help: [
-            if flow.questions.is_empty() {
-                "saaio wakes its worker with it now, or once its session runs again".to_string()
-            } else {
-                format!(
-                    "saaio closes {}'s question dialog and its worker reads this as the answer to every question in it",
-                    flow.name
-                )
-            },
+            reads,
             format!("saaio wakes you when {} changes again", flow.name),
         ],
     }))
@@ -248,6 +259,30 @@ mod tests {
                 "sent: ask",
                 "state: waiting",
                 "help[2]: saaio closes ask's question dialog and its worker reads this as the answer to every question in it,saaio wakes you when ask changes again",
+            ]
+            .join("\n")
+        );
+    }
+
+    #[test]
+    fn says_the_worker_reads_it_once_its_permission_prompt_is_answered() {
+        let asked = flow(
+            "ask",
+            vec![EventKind::Waiting {
+                question: "permission: Bash(curl -sI https://example.org)".into(),
+                questions: Vec::new(),
+                permission: true,
+            }],
+            10 * MIN,
+        );
+
+        assert_eq!(
+            sent(&asked).text(),
+            [
+                "sent: ask",
+                "state: waiting",
+                "prompt: \"permission: Bash(curl -sI https://example.org)\"",
+                "help[2]: ask's permission prompt is open in its pane. Its worker reads this once the user answers the prompt there,saaio wakes you when ask changes again",
             ]
             .join("\n")
         );
