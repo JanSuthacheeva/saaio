@@ -170,7 +170,7 @@ Store lookup and register:
 
 ## Tasks
 
-- [ ] Registry: `register` closes the root before its early return; `project_store` never takes over a store, `claim` loses `free`; tests for an open root with the entry present, a gone owner and an unreadable repo file; files.md on a moved repository's store
+- [x] Registry: `register` closes the root before its early return; `project_store` never takes over a store, `claim` loses `free`; tests for an open root with the entry present, a gone owner and an unreadable repo file; files.md on a moved repository's store
 - [ ] Bug report: `REPORTS_DIR` in the shared folder, the failure without one, the new help line; tests/cli bug-report test that the file lands in reports/ and nothing in the repo; cli.md, troubleshooting.md, files.md
 - [ ] Codex home: `Env.codex_home` from `CODEX_HOME`, `Env::codex_home()` with tests; `UiEnv.codex_home`
 - [ ] Peek: `codex::rollout` and `transcript_of`/`PeekCache` taking the codex home, with tests for inside, outside, `..` and a link out; files.md row on the Codex transcript

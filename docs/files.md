@@ -28,8 +28,9 @@ Location, the first that applies:
 3. the shared folder itself (`$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`)
 
 `<repository>` is the repository's folder name. A second repository with the same folder name gets
-`<repository>-2`, a third `-3`. A name whose repository no longer exists goes to the next
-repository of that name.
+`<repository>-2`, a third `-3`. A store stays with its repository even once that repository is
+gone: a repository moved to another folder starts with a new store, and its earlier flows stay
+readable with `SAAIO_HOME=~/.local/state/saaio/projects/<repository>`.
 
 The UI passes its store to every session it opens as `SAAIO_HOME`, so a worker reports into its
 flow's store from any folder.
