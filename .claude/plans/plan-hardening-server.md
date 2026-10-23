@@ -104,6 +104,9 @@ impl Read for Until<'_> { ... } // sets the read timeout to what is left before 
   (Changed in the build: a deadline kept by the server tick refused real hellos still queued
   behind a busy loop.)
 
+`src/server/panes.rs` (modified, found by the fuzz): `reopen_worker` acts only on a flow on the
+board; any other id (a typo, `../x`) no longer leaves a Failed pane behind per message.
+
 `src/server.rs` (modified)
 
 ```rust
@@ -272,6 +275,9 @@ saaio hook reads an event
   rows (fails today); a hello with a 1 MiB folder and build gives the UI it replaces a
   Detached naming 4096 chars of each (fails today; server tests cannot read the server's stderr,
   and the log line prints the same cut peer).
+- server/tests.rs: Reopen of an id not on the board (`7f3c`, `../7f3c`) adds no pane (fails
+  today; found by the fuzz). The fuzz mutates encoded real messages as well as pure noise, so
+  about a fifth of its cases decode.
 - proto.rs: read_msg of a big length with few bytes never hands the reader a buffer over
   64 KiB (fails today); 2000 seeded random byte strings decode or err, never panic;
   `Size::clamped`.
@@ -313,7 +319,7 @@ saaio hook reads an event
 - [x] `server/outbox.rs` `Outbox::start`/`send` with unit tests (never blocks, errs past MAX_QUEUED, delivers what it queued when dropped)
 - [x] `Conn` writes through its Outbox: `send_to`, `drop_conn`, `accept` (server test: a UI that never reads while its pane floods does not delay a control connection's CloseFlow and is dropped, failing first)
 - [x] Pane output that outruns the server no longer starves the event loop (server test: a pane running `yes` does not delay a control connection's CloseFlow, failing first)
-- [ ] Protocol robustness tests in server/tests.rs: 4 GiB prefix, Input before Hello types nothing, seeded fuzz before and after a hello; fix whatever they find
+- [x] Protocol robustness tests in server/tests.rs: 4 GiB prefix, Input before Hello types nothing, seeded fuzz before and after a hello; fix whatever they find
 
 ### Log
 

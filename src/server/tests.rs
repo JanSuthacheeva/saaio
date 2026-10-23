@@ -1107,6 +1107,151 @@ fn a_pane_that_prints_without_pause_slows_nobody() {
 }
 
 #[test]
+fn refuses_a_length_of_4_gib_and_still_takes_a_ui() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+
+    let mut huge = UnixStream::connect(&paths.socket).unwrap();
+    huge.set_read_timeout(Some(PATIENCE)).unwrap();
+    huge.write_all(&u32::MAX.to_le_bytes()).unwrap();
+    huge.write_all(&[0; 1024]).unwrap();
+
+    assert!(matches!(recv(&mut huge), ServerMsg::Refused { .. }));
+    assert!(closed(&mut huge));
+    stop(&paths, handle);
+}
+
+#[test]
+fn types_nothing_a_connection_sends_before_its_hello() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+
+    let mut early = UnixStream::connect(&paths.socket).unwrap();
+    early.set_read_timeout(Some(PATIENCE)).unwrap();
+    proto::write_msg(&mut early, &ClientMsg::Input(b"early\r".to_vec())).unwrap();
+    assert!(closed(&mut early));
+
+    let size = Size { cols: 30, rows: 6 };
+    let mut ui = connect(&paths.socket, Role::Attach { size });
+    proto::write_msg(&mut ui, &ClientMsg::Input(b"later\r".to_vec())).unwrap();
+    let mut screen = BTreeMap::new();
+    recv_until(&mut ui, "the ui never saw what it typed", |message| {
+        if let ServerMsg::Frame(frame) = message {
+            for row in 0..6 {
+                if frame.full || frame.rows.iter().any(|(index, _)| *index == row) {
+                    screen.insert(row, text(&frame, row));
+                }
+            }
+        }
+        screen.values().any(|line| line.contains("later"))
+    });
+    assert!(
+        !screen.values().any(|line| line.contains("early")),
+        "{screen:?}"
+    );
+    stop(&paths, handle);
+}
+
+#[test]
+fn reopens_only_a_flow_on_the_board() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+    let size = Size { cols: 20, rows: 4 };
+    let mut ui = connect(&paths.socket, Role::Attach { size });
+    assert!(matches!(recv(&mut ui), ServerMsg::Welcome { .. }));
+
+    for id in ["7f3c", "../7f3c"] {
+        proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id.into()))).unwrap();
+        proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Master)).unwrap();
+        recv_until(&mut ui, "no panes after the reopen", |message| {
+            let ServerMsg::Panes(panes) = message else {
+                return false;
+            };
+            assert_eq!(panes.len(), 1, "{panes:?}");
+            true
+        });
+    }
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
+    assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+    stop(&paths, handle);
+}
+
+/// Whether `bytes` are a message that would end the test server's flows or the server itself.
+fn ends_something(bytes: &[u8]) -> bool {
+    matches!(
+        postcard::from_bytes::<ClientMsg>(bytes),
+        Ok(ClientMsg::StopServer | ClientMsg::EndFlows)
+    )
+}
+
+/// Sends `bytes`, framed with their length when `framed`, then ends the stream; waits until the
+/// server closed it.
+fn send_noise(stream: &mut UnixStream, bytes: &[u8], framed: bool) {
+    if framed {
+        let len = u32::try_from(bytes.len()).unwrap();
+        let _ = stream.write_all(&len.to_le_bytes());
+    }
+    let _ = stream.write_all(bytes);
+    let _ = stream.shutdown(std::net::Shutdown::Write);
+    while let Ok(Some(_)) = proto::read_msg::<_, ServerMsg>(stream) {}
+}
+
+#[test]
+fn random_frames_before_and_after_a_hello_never_hurt_the_server() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+    let mut noise = fixtures::Noise::new(0x5aa10);
+    let size = Size { cols: 20, rows: 4 };
+    let seeds: Vec<Vec<u8>> = [
+        ClientMsg::Hello {
+            version: PROTOCOL_VERSION,
+            role: Role::Attach { size },
+            peer: peer(9),
+        },
+        ClientMsg::Focus(PaneKey::Flow("7f3c".into())),
+        ClientMsg::Input(b"noise".to_vec()),
+        ClientMsg::Resize(size),
+        ClientMsg::History(Some(3)),
+        ClientMsg::Reopen(PaneKey::Flow("7f3c".into())),
+        ClientMsg::CloseFlow("7f3c".into()),
+    ]
+    .iter()
+    .map(|message| postcard::to_stdvec(message).unwrap())
+    .collect();
+
+    for case in 0..300 {
+        let bytes = match case % 3 {
+            0 => noise.bytes(48),
+            _ => noise.mutate(&seeds[case % seeds.len()]),
+        };
+        if ends_something(&bytes) {
+            continue;
+        }
+        let framed = case % 5 != 0;
+        if case % 2 == 0 {
+            let mut stream = UnixStream::connect(&paths.socket).unwrap();
+            stream.set_read_timeout(Some(PATIENCE)).unwrap();
+            send_noise(&mut stream, &bytes, framed);
+        } else {
+            let mut ui = connect(&paths.socket, Role::Attach { size });
+            assert!(
+                matches!(recv(&mut ui), ServerMsg::Welcome { .. }),
+                "case {case}"
+            );
+            send_noise(&mut ui, &bytes, framed);
+        }
+    }
+
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
+    assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+    stop(&paths, handle);
+}
+
+#[test]
 fn takes_at_most_16_connections_at_once() {
     let dir = TempDir::new().unwrap();
     let patient = Timing {

@@ -234,10 +234,11 @@ impl Server {
         }
     }
 
-    /// Resumes an unfinished worker whose pane exited or never opened.
+    /// Resumes an unfinished worker on the board whose pane exited or never opened.
     pub(super) fn reopen_worker(&mut self, id: &str) {
         let key = PaneKey::Flow(id.to_string());
-        if self.host.status(&key) == Some(&PaneStatus::Running) {
+        let on_board = self.board.flows.iter().any(|flow| flow.id == id);
+        if !on_board || self.host.status(&key) == Some(&PaneStatus::Running) {
             return;
         }
         let flow = match self.current_flow(id) {

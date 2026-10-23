@@ -78,6 +78,23 @@ impl Noise {
         let len = self.next() as usize % (max + 1);
         (0..len).map(|_| self.next() as u8).collect()
     }
+
+    /// `bytes` with up to four of them changed, then cut or grown by a few.
+    pub fn mutate(&mut self, bytes: &[u8]) -> Vec<u8> {
+        let mut out = bytes.to_vec();
+        for _ in 0..self.next() % 5 {
+            if !out.is_empty() {
+                let at = self.next() as usize % out.len();
+                out[at] = self.next() as u8;
+            }
+        }
+        match self.next() % 4 {
+            0 => out.truncate(self.next() as usize % (out.len() + 1)),
+            1 => out.extend(self.bytes(8)),
+            _ => {}
+        }
+        out
+    }
 }
 
 #[cfg(test)]

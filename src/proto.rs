@@ -693,8 +693,15 @@ mod tests {
     #[test]
     fn random_bytes_decode_or_fail_but_never_panic() {
         let mut noise = crate::fixtures::Noise::new(0x5aa10);
-        for _ in 0..2000 {
-            let bytes = noise.bytes(64);
+        let seeds: Vec<Vec<u8>> = client_messages()
+            .iter()
+            .map(|message| postcard::to_stdvec(message).unwrap())
+            .collect();
+        for case in 0..2000 {
+            let bytes = match case % 3 {
+                0 => noise.bytes(64),
+                _ => noise.mutate(&seeds[case % seeds.len()]),
+            };
             let mut wire = u32::try_from(bytes.len()).unwrap().to_le_bytes().to_vec();
             wire.extend(&bytes);
             let _ = read_msg::<_, ClientMsg>(&mut Cursor::new(&wire));
