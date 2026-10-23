@@ -11,13 +11,12 @@ Implementation page: https://claude.ai/artifact/2kpw3qywYiVznKS2fctZpH
 - 2A: every appender opens server.log through `server_log::open`, which rotates under an flock; the
   server re-points its stdout and stderr at the fresh log on its 500 ms tick with rustix
   `dup2_stdout`/`dup2_stderr` (feature `stdio`; `unsafe_code` stays forbidden).
-- The findings from reading the code are fixed too, each proven by a test that fails first:
-  hello deadline for the whole hello, read_msg buffer growing with the bytes, sizes clamped,
-  peer texts cut, merge request URLs only `/pull/<n>` and `/-/merge_requests/<n>`, report texts
+- Further hardening found while reading the code, each with a test that fails first: one
+  deadline for the whole hello, read_msg's buffer growing with the bytes, pane sizes clamped,
+  peer texts cut, merge request URLs only `/pull/<n>` and `/-/merge_requests/<n>`, event texts
   printable, at most 8 questions and options, hook stdin capped at 16 MiB.
 - No stored format changes: event log, `--json` view and `PROTOCOL_VERSION` unchanged.
-- These are unannounced security fixes: CHANGELOG lines are plain user-facing fixes, no audit
-  ids, no exploit detail; nothing from ROADMAP.internal.md goes into commits or the PR.
+- CHANGELOG lines are plain user-facing fixes.
 
 ## Units
 
@@ -46,8 +45,8 @@ impl Outbox {
 }
 ```
 
-`src/server/backlog.rs` (new, added in the build: a pane running `yes` filled the event channel
-faster than the loop fed it, so every other event waited behind it)
+`src/server/backlog.rs` (new, added in the build: pane output read faster than the server fed it
+held up every other event)
 
 ```rust
 /// Past this many bytes waiting for the server, every pane's reader waits for it.
@@ -68,9 +67,8 @@ impl Backlog {
 - `Host` keeps an `Arc<Backlog>`; each pane's output thread `add`s what it read before sending
   it, `Host::feed` takes it off; `Server::stop` feeds the output it drains.
 
-`src/server/pane_input.rs` (new, added in the review: with the Backlog, a pane that prints for
-every line it reads deadlocked the server, which waited in a PTY write while the pane's reader
-waited on the server)
+`src/server/pane_input.rs` (new, added in the review: with the Backlog in place, the server's
+own writes to a pane and that pane's reader could end up waiting on each other)
 
 ```rust
 /// Past this many bytes queued for one pane, more input is refused: its program stopped reading.
@@ -120,13 +118,13 @@ impl Read for Until<'_> { ... } // sets the read timeout to what is left before 
 - `message()` clamps the size of `Hello { role: Attach { size } }` and `Resize` with
   `Size::clamped` before Host sees it.
 - `accept()` starts the Outbox; no write timeout on the server's own stream.
-- `read_in_background` reads the first message through `Until` (accepted + timing.hello), so a
-  hello trickled a byte at a time still meets one deadline; past it, Unreadable as before.
-  (Changed in the build: a deadline kept by the server tick refused real hellos still queued
-  behind a busy loop.)
+- `read_in_background` reads the first message through `Until` (accepted + timing.hello): one
+  deadline for the whole first message; past it, Unreadable as before. (Changed in the build: a
+  deadline kept by the server tick could refuse a real hello still queued behind a busy loop.)
 
-`src/server/panes.rs` (modified, found by the fuzz): `reopen_worker` acts only on a flow on the
-board; any other id (a typo, `../x`) no longer leaves a Failed pane behind per message.
+`src/server/panes.rs` (modified, found by the fuzz and the review of it): `reopen_worker` acts
+only on a flow on the board, and `close_flow` only on a flow on the board or one whose log is in
+the store (a UUID); any other id is answered NotOpen and leaves nothing behind.
 
 `src/server.rs` (modified)
 
@@ -220,15 +218,9 @@ fn clean_texts(&mut self); // was cut_texts: text::printable_lines, then cut; qu
 pub fn printable_lines(text: &str) -> String;
 ```
 
-`src/adapter.rs`, `adapter/calls.rs`, `adapter/claude_code.rs`, `adapter/codex.rs` (modified)
+`src/adapter/calls.rs` (modified)
 
 ```rust
-// adapter.rs - changed: text::printable, then REPORT_TEXT_LIMIT chars.
-pub fn cut(text: &str) -> String;
-/// The most questions, and options per question, an event keeps.
-pub const MAX_QUESTIONS: usize = 8;
-
-// calls.rs
 /// `word` when it is an http(s) URL of printable ASCII whose path ends in /pull/<n> or
 /// /-/merge_requests/<n>, n digits.
 fn merge_request(word: &str) -> Option<&str>;
@@ -236,9 +228,6 @@ fn merge_request(word: &str) -> Option<&str>;
 
 - `created_merge_request` takes the last word `merge_request` accepts.
 - `in_repo` requires the rest after the repo path to be `pull/<n>` or `-/merge_requests/<n>`.
-- claude_code / codex: every header, question, label and description passes through `cut`; at
-  most MAX_QUESTIONS questions and options each. Audit: every other payload text that reaches an
-  event goes through `cut`.
 
 ## Data
 
@@ -301,8 +290,8 @@ saaio hook reads an event
 1. `hook::run -> read_event(io::stdin().lock()): Result<String>` (`take(MAX_EVENT + 1)`, then the
    length decides)
 2. `serde_json::from_str(&text)` (its recursion limit refuses deep nesting) `-> hook(...)`
-3. adapters translate; every text through `adapter::cut`; a merge request only from
-   `calls::merge_request`.
+3. adapters translate (a merge request only from `calls::merge_request`); `Event::new` cleans and
+   cuts every text.
 
 - Over 16 MiB, not UTF-8, unreadable, not JSON: logged to server.log ("the event is over
   16 MiB" or the error), exit 0, nothing on stdout or stderr.
@@ -311,18 +300,19 @@ saaio hook reads an event
 
 - outbox.rs: socketpair whose far end never reads: `send` never blocks and errs once 16 MiB are
   queued; a dropped Outbox still delivers what it queued.
-- server/tests.rs: a UI that never reads while its pane floods output: a control connection's
-  CloseFlow is still answered at once and the UI is dropped (fails today).
+- server/tests.rs: a UI that never reads while its pane prints: a control connection's
+  CloseFlow is still answered at once and the UI is dropped (fails today); a pane that prints
+  without pause delays no CloseFlow (fails today).
 - server/tests.rs: 4 GiB prefix (Refused, closed, server still takes a UI); silent client
-  closed; trickled hello (one byte per 100 ms, hello 300 ms) closed (fails today); Input before
-  Hello closed, nothing typed into the master; seeded fuzz of random frames before and after a
-  hello, no panic, the server still serves; Resize past MAX_SIZE gives frames of at most 500
+  closed; a hello not whole by the deadline closed (fails today); Input before Hello closed,
+  nothing typed into the master; seeded fuzz of frames before and after a hello, no panic, the
+  server still serves; Resize past MAX_SIZE gives frames of at most 500
   rows (fails today); a hello with a 1 MiB folder and build gives the UI it replaces a
   Detached naming 4096 chars of each (fails today; server tests cannot read the server's stderr,
   and the log line prints the same cut peer).
-- server/tests.rs: Reopen of an id not on the board (`7f3c`, `../7f3c`) adds no pane (fails
-  today; found by the fuzz). The fuzz mutates encoded real messages as well as pure noise, so
-  about a fifth of its cases decode.
+- server/tests.rs: Reopen of an id that is no flow adds no pane, and CloseFlow of one does not
+  keep a flow of that id from opening later (both fail today). The fuzz mutates encoded real
+  messages as well as noise, so about a fifth of its cases decode.
 - proto.rs: read_msg of a big length with few bytes never hands the reader a buffer over
   64 KiB (fails today); 2000 seeded random byte strings decode or err, never panic;
   `Size::clamped`.
@@ -332,9 +322,10 @@ saaio hook reads an event
   rotates it; the server's next line lands in the new server.log (fails today).
 - tests/cli/hooks.rs: 17 MiB payload, binary, malformed JSON, 10 000-deep nesting: exit 0,
   stdout and stderr empty, server.log names why (the size case fails today).
-- calls.rs, claude_code, codex: URL with control characters or text after the number gives no
-  merge request (fails today); questions with ESC and 50 options are cleaned and cut (fails
-  today).
+- calls.rs: a URL with control characters or text after the number gives no merge request
+  (fails today).
+- event.rs: control characters leave every text, newlines and tabs stay; 20 questions of 50
+  options keep 8 of 8 (fails today).
 
 ## Assumptions (approved)
 
@@ -346,9 +337,10 @@ saaio hook reads an event
 5. A hello-less connection is closed at its deadline, by its reader thread.
 6. A hook event over the limit is skipped whole, a PreToolUse included.
 7. 16 idle Control connections that said hello still fill the slots; unchanged.
-8. CHANGELOG under Unreleased, Fixed, four plain lines: hook events over 16 MiB are ignored; a
-   UI that stops reading no longer slows the server; server.log stays bounded while the server
-   runs; the server copes with very large windows and malformed messages.
+8. CHANGELOG under Unreleased, Fixed, four plain lines: hook events over 16 MiB are skipped; a
+   UI that stops reading, or a session that prints without pause, no longer slows the server;
+   server.log stays bounded while the server runs; the server copes with very large windows and
+   malformed messages.
 
 ## Tasks
 
@@ -360,11 +352,12 @@ saaio hook reads an event
 
 ### Connections
 
-- [x] One hello deadline across every read of the first message, `Until` in conn.rs (server test: trickled hello closed, failing first; silent client still closed)
+- [x] One hello deadline across every read of the first message, `Until` in conn.rs (server test: a hello not whole by the deadline is closed, failing first; silent client still closed)
 - [x] `server/outbox.rs` `Outbox::start`/`send` with unit tests (never blocks, errs past MAX_QUEUED, delivers what it queued when dropped)
-- [x] `Conn` writes through its Outbox: `send_to`, `drop_conn`, `accept` (server test: a UI that never reads while its pane floods does not delay a control connection's CloseFlow and is dropped, failing first)
-- [x] Pane output that outruns the server no longer starves the event loop (server test: a pane running `yes` does not delay a control connection's CloseFlow, failing first)
-- [x] Protocol robustness tests in server/tests.rs: 4 GiB prefix, Input before Hello types nothing, seeded fuzz before and after a hello; fix whatever they find
+- [x] `Conn` writes through its Outbox: `send_to`, `drop_conn`, `accept` (server test: a UI that never reads while its pane prints does not delay a control connection's CloseFlow and is dropped, failing first)
+- [x] Pane output that outruns the server no longer holds up the event loop, `server/backlog.rs` (server test: a pane that prints without pause does not delay a control connection's CloseFlow, failing first)
+- [x] Protocol robustness tests in server/tests.rs: 4 GiB prefix, Input before Hello types nothing, seeded fuzz before and after a hello; fix whatever they find (Reopen only of a flow on the board)
+- [x] CloseFlow only of a flow on the board or in the store (server test: a CloseFlow of an id that is no flow yet does not keep it from opening, failing first)
 
 ### Log
 
@@ -375,7 +368,7 @@ saaio hook reads an event
 
 - [x] `hook::read_event` with MAX_EVENT (tests/cli/hooks.rs: 17 MiB payload logged and silent, failing first; binary, malformed JSON, 10 000-deep nesting)
 - [x] `calls::merge_request` for `created_merge_request` and `in_repo` (unit tests: control characters or text after the number, failing first)
-- [x] `adapter::cut` through `text::printable`; questions and options cut and capped at MAX_QUESTIONS in claude_code and codex; audit the other payload texts (unit tests, failing first)
+- [x] Every event text without control characters (newlines and tabs kept) and at most MAX_QUESTIONS questions and options, in `Event::new` (unit tests, failing first)
 
 ### Finish
 
@@ -388,13 +381,12 @@ Isolated review of `main..flow/hardening-server` against this plan.
 
 **Fixed**
 
-- The Backlog could deadlock the whole server for good: the server thread wrote input to a PTY
-  synchronously, so a pane that prints for every line it reads (a paste into a busy agent) left
-  the server waiting in the write while the pane's reader waited on the server. Shown by
+- With the Backlog, the server thread's synchronous writes to a pane and that pane's reader could
+  wait on each other and stall the server. Shown by
   `a_pane_that_prints_for_every_line_typed_never_stalls_the_server` (stalls past 30 s before,
   about 2 s after). Fixed by `server/pane_input.rs`: each pane's input is queued for a writer
-  thread of its own, refused past 16 MiB, so the server thread never writes to a PTY. This also
-  ends the older stall where a paste into a pane that does not read held the server. Commit
+  thread of its own, refused past 16 MiB, so the server thread never writes to a PTY, also when
+  a pane does not read its input. Commit
   `server: host: write a pane's input on a thread of its own`. Its fix was reviewed by a
   separate agent: no proven problem.
 

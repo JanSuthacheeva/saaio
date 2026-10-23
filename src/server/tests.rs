@@ -1043,7 +1043,7 @@ fn cuts_the_folder_and_build_a_ui_claims() {
 }
 
 #[test]
-fn closes_a_connection_that_trickles_its_hello_past_the_deadline() {
+fn closes_a_connection_whose_hello_is_not_whole_by_the_deadline() {
     let dir = TempDir::new().unwrap();
     let (paths, handle) = start(dir.path());
     let slow = Peer {
@@ -1057,17 +1057,17 @@ fn closes_a_connection_that_trickles_its_hello_past_the_deadline() {
     })
     .unwrap();
 
-    let mut trickle = UnixStream::connect(&paths.socket).unwrap();
-    trickle
+    let mut slow_hello = UnixStream::connect(&paths.socket).unwrap();
+    slow_hello
         .set_read_timeout(Some(Duration::from_millis(50)))
         .unwrap();
     let started = Instant::now();
     let shut = hello[..hello.len() - 1].iter().any(|byte| {
-        if trickle.write_all(&[*byte]).is_err() {
+        if slow_hello.write_all(&[*byte]).is_err() {
             return true;
         }
         let mut answer = [0u8; 1];
-        !matches!(trickle.read(&mut answer), Err(error) if error.kind() == ErrorKind::WouldBlock)
+        !matches!(slow_hello.read(&mut answer), Err(error) if error.kind() == ErrorKind::WouldBlock)
     });
 
     assert!(shut, "the hello took {:?}", started.elapsed());
