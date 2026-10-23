@@ -21,13 +21,19 @@ pub fn path(socket: &Path) -> PathBuf {
 }
 
 /// Opens `log` to append, first moving it to `<log>.1` when it is past `cap` (one that cannot be
-/// moved is only longer). Under an flock on the log, and again when another writer moved it
-/// meanwhile, so racing writers move it once. The lock is let go before it returns: the file may
-/// become a server's stderr, which would hold it for good.
+/// moved is only longer). Under an flock on the log (none where the file system refuses one), and
+/// again when another writer moved it meanwhile, so racing writers move it once. The lock is let
+/// go before it returns: the file may become a server's stderr, which would hold it for good.
 pub fn open(log: &Path, cap: u64) -> io::Result<File> {
+    open_with(log, cap, File::lock)
+}
+
+/// `open`, taking the lock with `lock`.
+fn open_with(log: &Path, cap: u64, lock: impl Fn(&File) -> io::Result<()>) -> io::Result<File> {
     loop {
         let file = private::options().create(true).append(true).open(log)?;
-        file.lock()?;
+        // A lock the file system refuses is no lock: it only keeps writers from rotating twice.
+        let locked = lock(&file).is_ok();
         let meta = file.metadata()?;
         let moved = match fs::metadata(log) {
             Ok(now) => (now.dev(), now.ino()) != (meta.dev(), meta.ino()),
@@ -39,7 +45,9 @@ pub fn open(log: &Path, cap: u64) -> io::Result<File> {
         }
         // A log that cannot be moved aside is only longer.
         if meta.len() <= cap || fs::rename(log, older(log)).is_err() {
-            file.unlock()?;
+            if locked {
+                file.unlock()?;
+            }
             return Ok(file);
         }
     }
@@ -154,6 +162,22 @@ mod tests {
 
         writeln!(open(&log, 10).unwrap(), "fresh").unwrap();
         assert_eq!(fs::read_to_string(&old).unwrap(), "short\nmore\n");
+        assert_eq!(fs::read_to_string(&log).unwrap(), "fresh\n");
+    }
+
+    #[test]
+    fn a_lock_the_file_system_refuses_is_no_lock() {
+        let dir = TempDir::new().unwrap();
+        let log = dir.path().join("server.log");
+        let refused = |_: &File| Err(io::Error::from(io::ErrorKind::Unsupported));
+        fs::write(&log, "x".repeat(11)).unwrap();
+
+        writeln!(open_with(&log, 10, refused).unwrap(), "fresh").unwrap();
+
+        assert_eq!(
+            fs::read_to_string(dir.path().join("server.log.1")).unwrap(),
+            "x".repeat(11)
+        );
         assert_eq!(fs::read_to_string(&log).unwrap(), "fresh\n");
     }
 

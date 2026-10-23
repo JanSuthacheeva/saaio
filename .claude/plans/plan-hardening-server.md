@@ -370,6 +370,11 @@ saaio hook reads an event
 - [x] `calls::merge_request` for `created_merge_request` and `in_repo` (unit tests: control characters or text after the number, failing first)
 - [x] Every event text without control characters (newlines and tabs kept) and at most MAX_QUESTIONS questions and options, in `Event::new` (unit tests, failing first)
 
+### After the review
+
+- [x] A merge request URL with a trailing `/`, `?query`, `#fragment` or a known page (`/files`, `/commits`, `/diffs` ...) is kept as `.../pull/<n>` or `.../-/merge_requests/<n>` (`calls::canonical_merge_request`), in `saaio report merge-request` and the hook; anything else is refused with a message naming the form (unit and CLI tests, failing first)
+- [x] `server_log::open` treats a lock the file system refuses as no lock (unit test, failing first)
+
 ### Finish
 
 - [x] CHANGELOG four lines under Unreleased, Fixed; CLAUDE.md Architecture line for outbox.rs and the server_log changes
@@ -403,6 +408,14 @@ Isolated review of `main..flow/hardening-server` against this plan.
   died at that moment. Low severity; recommendation: leave it.
 - Event texts now lose control characters for every kind (`Typed` and `Message` included);
   `\r\n` becomes `\n`. Meant by the plan; mentioned because `saaio send` text changes.
+
+**Decided**
+
+- Merge request URLs: kept in their canonical form rather than refused (see the tasks after the
+  review); anything else is refused with a message naming the form.
+- A refused flock: no lock.
+- A write one step late to a pane that just died, and the cleaned `saaio send` texts: left as
+  they are.
 
 **Where to look**
 
