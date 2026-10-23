@@ -185,3 +185,26 @@ Store lookup and register:
 - [x] Hooks: `git::registered_git_dir` public, `Hook::pins_git`, `command` with GIT_DIR and GIT_WORK_TREE; tests with a tampered worktree `.git` for teardown, pause and resume, setup unpinned, an unregistered worktree failing; repository.md on the hooks' git variables
 - [x] CHANGELOG lines under Unreleased, Fixed
 - [x] E2E: built binary on a scratch store: `saaio bug-report` in a repo, a moved-repo store, and `saaio start` then a tampered worktree `.git` then `saaio remove` whose teardown never reads the decoy
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and the code the diff calls (`retire.rs`, `pause_watch.rs`, `pause.rs`, `private.rs`, `git.rs`).
+
+**Fixed** - nothing. No finding could be shown wrong by a test or a run.
+
+**Open**
+
+- Teardown no longer runs when git does not list the worktree (its folder is there, its entry in `.git/worktrees/` is not). Before, it ran and stopped the flow's services; now `saaio remove` prints `teardown: failed: ... is no worktree of ...` and services may stay up. Only reachable by pruning or editing `.git/worktrees/` by hand. Recommendation: keep, as the plan's assumption says; the message names the cause.
+- Existing teardown, pause and resume scripts that run `git -C "$SAAIO_REPO" ...` now act on the worktree. Documented in repository.md and the CHANGELOG. Recommendation: keep; mention it in the release notes for 0.1.2.
+- The peek reads `CODEX_HOME` from the UI's environment, while Codex workers run with the server's. They differ only when the server was started from a shell with another `CODEX_HOME`; then the peek of a Codex worker stays empty. Recommendation: accept for 0.1.2.
+- `saaio bug-report` now fails when neither `HOME` nor `XDG_STATE_HOME` is set, even with `SAAIO_HOME` set. Documented in cli.md. Recommendation: keep.
+
+**Where to look**
+
+1. `src/workspace/hooks.rs` `run_within` to `command`: which hooks get `GIT_DIR`/`GIT_WORK_TREE`, and that a missing registration stops the script before it runs.
+2. `src/registry.rs` `project_store` and `claim`: a store is never claimed over an existing `repo` file; a moved repository gets `<name>-2`.
+3. `src/ui/peek/codex.rs` `rollout`: both sides canonicalized before `starts_with`.
+
+Routine, skim: `Env::codex_home` and its plumbing into `UiEnv`/`PeekCache`, the bug-report folder change and its tests, `server/tests.rs` `idle_flow` making a real worktree, docs and CHANGELOG.
+
+**Checks** - `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` passed at 2d7ea0c; later commits touch only CHANGELOG.md, docs and this plan.
