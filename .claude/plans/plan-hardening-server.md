@@ -283,7 +283,7 @@ saaio hook reads an event
 
 ### Connections
 
-- [ ] `Conn.opened` and `Server::close_silent` on the tick, per-read hello timeout removed, `refuse_unreadable` ignores a gone conn (server test: trickled hello closed, failing first; silent client still closed)
+- [x] `Conn.opened` and `Server::close_silent` on the tick, per-read hello timeout removed, `refuse_unreadable` ignores a gone conn (server test: trickled hello closed, failing first; silent client still closed)
 - [ ] `server/outbox.rs` `Outbox::start`/`send` with unit tests (never blocks, errs past MAX_QUEUED, delivers what it queued when dropped)
 - [ ] `Conn` writes through its Outbox: `send_to`, `drop_conn`, `accept` (server test: a UI that never reads while its pane floods does not delay a control connection's CloseFlow and is dropped, failing first)
 - [ ] Protocol robustness tests in server/tests.rs: 4 GiB prefix, Input before Hello types nothing, seeded fuzz before and after a hello; fix whatever they find

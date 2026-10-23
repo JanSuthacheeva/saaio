@@ -23,11 +23,14 @@ const ACCEPT_PAUSE: Duration = Duration::from_millis(100);
 use crate::private;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, Role, ServerMsg};
 use crate::server_log;
+use crate::text;
 
 /// One connection: its socket, and who it said it is and in which role once its hello came.
 #[derive(Debug)]
 pub(super) struct Conn {
     stream: UnixStream,
+    /// When it was accepted, for the hello deadline.
+    opened: Instant,
     peer: Option<Peer>,
     role: Option<Role>,
 }
@@ -187,21 +190,46 @@ impl Server {
             conn,
             Conn {
                 stream,
+                opened: Instant::now(),
                 peer: None,
                 role: None,
             },
         );
-        if let Err(error) = read_in_background(conn, reader, self.timing.hello, self.events.clone())
-        {
+        if let Err(error) = read_in_background(conn, reader, self.events.clone()) {
             let line = format!("dropped a connection: {error}");
             server_log::write((self.clock)(), &line);
             self.drop_conn(conn);
         }
     }
 
+    /// Refuses every connection without a hello opened more than timing.hello ago.
+    pub(super) fn close_silent(&mut self) {
+        let silent: Vec<ConnId> = self
+            .conns
+            .iter()
+            .filter(|(_, open)| open.role.is_none() && open.opened.elapsed() >= self.timing.hello)
+            .map(|(conn, _)| *conn)
+            .collect();
+        for conn in silent {
+            let wait = text::short_duration(self.timing.hello.as_millis() as u64);
+            let line = format!("closed a connection that said no hello in {wait}");
+            server_log::write((self.clock)(), &line);
+            self.send_to(
+                conn,
+                &ServerMsg::Refused {
+                    reason: format!("saaio server heard no hello in {wait}"),
+                },
+            );
+            self.drop_conn(conn);
+        }
+    }
+
     /// Refuses a connection whose first message could not be read: a flow of an older protocol,
-    /// which then says to run saaio --stop.
+    /// which then says to run saaio --stop. One already dropped (close_silent) is let go.
     pub(super) fn refuse_unreadable(&mut self, conn: ConnId) {
+        if !self.conns.contains_key(&conn) {
+            return;
+        }
         server_log::write((self.clock)(), "refused an unreadable hello");
         self.send_to(
             conn,
@@ -395,24 +423,18 @@ fn accept_pause(error: &io::Error) -> Option<Duration> {
     }
 }
 
-/// Reads a connection's messages into `events`; one whose hello does not come within `hello`, or
-/// cannot be read, is Unreadable.
+/// Reads a connection's messages into `events`; one whose first message cannot be read is
+/// Unreadable. The hello deadline is close_silent's.
 fn read_in_background(
     conn: ConnId,
     mut stream: UnixStream,
-    hello: Duration,
     events: Sender<Event>,
 ) -> io::Result<()> {
     spawn_named(format!("conn {conn}"), move || {
         let mut first = true;
-        // macOS refuses socket options once the client hung up (EINVAL); the read says so.
-        let _ = stream.set_read_timeout(Some(hello));
         loop {
             match proto::read_msg::<_, ClientMsg>(&mut stream) {
                 Ok(Some(message)) => {
-                    if first {
-                        let _ = stream.set_read_timeout(None);
-                    }
                     first = false;
                     if events.send(Event::Message(conn, message)).is_err() {
                         return;

@@ -292,6 +292,7 @@ impl Server {
                 self.pause_idle();
                 self.type_lines();
                 self.dismiss_dialogs();
+                self.close_silent();
             }
             self.flush();
         }

@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
 use std::path::Path;
@@ -1000,6 +1001,38 @@ fn cuts_the_folder_and_build_a_ui_claims() {
     assert_eq!(by.cwd.as_os_str().len(), 4096);
     assert_eq!(by.build.len(), 4096);
     drop(second);
+    stop(&paths, handle);
+}
+
+#[test]
+fn closes_a_connection_that_trickles_its_hello_past_the_deadline() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+    let slow = Peer {
+        cwd: "/w".repeat(100).into(),
+        ..peer(1)
+    };
+    let hello = proto::encode(&ClientMsg::Hello {
+        version: PROTOCOL_VERSION,
+        role: Role::Control,
+        peer: slow,
+    })
+    .unwrap();
+
+    let mut trickle = UnixStream::connect(&paths.socket).unwrap();
+    trickle
+        .set_read_timeout(Some(Duration::from_millis(50)))
+        .unwrap();
+    let started = Instant::now();
+    let shut = hello[..hello.len() - 1].iter().any(|byte| {
+        if trickle.write_all(&[*byte]).is_err() {
+            return true;
+        }
+        let mut answer = [0u8; 1];
+        !matches!(trickle.read(&mut answer), Err(error) if error.kind() == ErrorKind::WouldBlock)
+    });
+
+    assert!(shut, "the hello took {:?}", started.elapsed());
     stop(&paths, handle);
 }
 
