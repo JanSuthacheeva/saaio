@@ -547,7 +547,7 @@ Not listed in `saaio --help`. Not for manual use.
 | Command | Run by |
 | --- | --- |
 | `saaio server` | `saaio`, when it opens the UI and no server runs. Owns every session. Log: `server.log` ([files.md](files.md)). |
-| `saaio hook claude-code`, `saaio hook codex` | the hooks saaio adds to each worker. Reads the hook's event on stdin and reports what changes the flow. Never prints to stdout, never fails a worker's turn. Its errors go to `server.log`. For Codex, exits 2 at Stop to hand over news. |
+| `saaio hook claude-code`, `saaio hook codex` | the hooks saaio adds to each worker. Reads the hook's event on stdin (an event over 16 MiB is skipped) and reports what changes the flow. Never prints to stdout, never fails a worker's turn. Its errors go to `server.log`. For Codex, exits 2 at Stop to hand over news. |
 | `saaio wait [--master]` | Claude Code sessions, as a background hook. Sleeps until there is news for the session, prints it to stderr and exits 2, which wakes the session. `--master` waits for the master's news. |
 
 ## Output, errors and exit codes

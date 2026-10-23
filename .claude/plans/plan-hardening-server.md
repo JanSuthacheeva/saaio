@@ -358,5 +358,5 @@ saaio hook reads an event
 
 ### Finish
 
-- [ ] CHANGELOG four lines under Unreleased, Fixed; CLAUDE.md Architecture line for outbox.rs and the server_log changes
+- [x] CHANGELOG four lines under Unreleased, Fixed; CLAUDE.md Architecture line for outbox.rs and the server_log changes
 - [ ] End-to-end check: scratch SAAIO_HOME, real server and UI in a PTY, a UI that stops reading (SIGSTOP) while the master prints, a second UI attaches at once; server.log rotation by hook appends; a huge hook payload; `saaio --stop` at the end

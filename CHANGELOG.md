@@ -6,6 +6,15 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `saaio hook` skips an event over 16 MiB and notes it in server.log.
+- A UI that stops reading, or a session that prints without pause, no longer slows the server
+  for other UIs and commands.
+- server.log stays bounded while the server runs: past 1 MiB it moves to server.log.1 whoever
+  writes to it.
+- The server copes with very large windows and malformed messages.
+
 ## [0.1.1] - 2026-10-22
 
 Updating from 0.1.0, which has no `saaio update`: run the install line once
