@@ -677,6 +677,44 @@ fn closes_a_flow_pane_on_request_and_says_when_there_is_none() {
     );
 }
 
+#[test]
+fn closing_a_flow_that_does_not_exist_yet_never_keeps_it_from_opening() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let (paths, handle) = start(dir.path());
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    let id = "0b5e4000-0000-4000-8000-0000000000c1";
+
+    for unknown in [id, "../7f3c", "7f3c"] {
+        assert_eq!(
+            crate::client::close_flow(&paths.socket, unknown, PATIENCE).unwrap(),
+            crate::client::Closing::NoPane
+        );
+    }
+    fs::create_dir_all(dir.path().join("flows")).unwrap();
+    let started = fixtures::started("csv", "x").to_line();
+    fs::write(dir.path().join(format!("flows/{id}.jsonl")), started + "\n").unwrap();
+    let path = dir.path().join("csv");
+    fs::create_dir_all(&path).unwrap();
+    let workspace = Workspace {
+        path: path.display().to_string(),
+        ..fixtures::workspace("csv", "claude")
+    };
+    store
+        .append(id, &LogEvent::new(1, workspace.into()))
+        .unwrap();
+
+    let mut panes = Vec::new();
+    wait_for(&mut ui, &mut panes, id, Some(&PaneStatus::Running));
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
 /// Reads messages until the UI's pane list shows `want` for the flow.
 fn wait_for(
     ui: &mut UnixStream,

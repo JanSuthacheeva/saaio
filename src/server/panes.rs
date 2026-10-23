@@ -11,7 +11,7 @@ use super::host::HostEvent;
 use super::master::{Instructions, Start};
 use super::reconcile::{self, Wanted};
 use super::{ConnId, Event, Server, spawn_named};
-use crate::event::{Event as LogEvent, EventKind};
+use crate::event::{Event as LogEvent, EventKind, is_uuid};
 use crate::fold;
 use crate::identity;
 use crate::launch::pane::{self, HOSTED, PROOF_ENV, PaneSpec};
@@ -313,8 +313,15 @@ impl Server {
     }
 
     /// Hangs up a flow's pane for `saaio remove` or `saaio clear`; the connection hears Closed once
-    /// it exited, NotOpen when there is no pane.
+    /// it exited, NotOpen when there is no pane. Only a flow on the board, or one whose log was
+    /// written since the last refresh, is kept from opening again; any other id is let go.
     pub(super) fn close_flow(&mut self, conn: ConnId, id: String) {
+        let on_board = self.board.flows.iter().any(|flow| flow.id == id);
+        let logged = is_uuid(&id) && self.store.events(&id).is_ok();
+        if !on_board && !logged {
+            self.send_to(conn, &ServerMsg::NotOpen(id));
+            return;
+        }
         let key = PaneKey::Flow(id.clone());
         self.known.insert(id.clone());
         let Some(running) = self
