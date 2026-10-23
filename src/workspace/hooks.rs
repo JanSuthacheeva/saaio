@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use anyhow::{Result, bail};
 
+use super::git;
 use super::process::finish_within;
 use crate::launch::pane::PROOF_ENV;
 use crate::trust::Trust;
@@ -26,7 +27,7 @@ pub enum Hook {
 /// Runs <repo>/.saaio/<hook> in the worktree with env and no stdin when it exists and is
 /// executable, killed with what it started and failed past `hook.limit()`; Ok(false) when there is
 /// none. A non-zero exit is an Err with the last stderr line; a repo trust does not cover, an Err
-/// naming it.
+/// naming it. Git in a hook that `pins_git` acts on the worktree's registered git dir.
 pub fn run(
     trust: &Trust,
     repo: &Path,
@@ -37,7 +38,7 @@ pub fn run(
     run_within(trust, repo, hook, workspace, env, hook.limit())
 }
 
-/// `run` with a limit of its own.
+/// `run` with a limit of its own. Err when a pinned hook's worktree has no registered git dir.
 pub fn run_within(
     trust: &Trust,
     repo: &Path,
@@ -53,21 +54,37 @@ pub fn run_within(
     if !trust.covers(repo) {
         bail!("{} is not trusted", repo.display());
     }
+    let git_dir = if hook.pins_git() {
+        Some(git::registered_git_dir(repo, Path::new(&workspace.path))?)
+    } else {
+        None
+    };
     finish_within(
-        command(&file, workspace, env),
+        command(&file, workspace, env, git_dir.as_deref()),
         &file.display().to_string(),
         limit,
     )?;
     Ok(true)
 }
 
-/// The hook in the worktree with `env`, without the key of the session that runs it.
-fn command(file: &Path, workspace: &Workspace, env: &[(String, String)]) -> Command {
+/// The hook in the worktree with `env`, without the key of the session that runs it, and with
+/// GIT_DIR and GIT_WORK_TREE when `git_dir` is given.
+fn command(
+    file: &Path,
+    workspace: &Workspace,
+    env: &[(String, String)],
+    git_dir: Option<&Path>,
+) -> Command {
     let mut command = Command::new(file);
     command
         .current_dir(&workspace.path)
         .env_remove(PROOF_ENV)
         .envs(env.iter().map(|(key, value)| (key, value)));
+    if let Some(git_dir) = git_dir {
+        command
+            .env("GIT_DIR", git_dir)
+            .env("GIT_WORK_TREE", &workspace.path);
+    }
     command
 }
 
@@ -92,6 +109,12 @@ impl Hook {
             Hook::Teardown => Duration::from_mins(2),
             Hook::Pause | Hook::Resume => Duration::from_mins(5),
         }
+    }
+
+    /// Whether git in it is pinned to the worktree's registered git dir: every hook that runs
+    /// after the worker had the worktree (teardown, pause, resume), not setup.
+    pub fn pins_git(self) -> bool {
+        !matches!(self, Hook::Setup)
     }
 
     /// Its file under .saaio: setup, teardown, pause, resume.
@@ -270,5 +293,105 @@ touch ran.txt
 
         assert!(started.elapsed() < SOON, "{:?}", started.elapsed());
         assert_eq!(format!("{error:#}"), "docker is not running");
+    }
+
+    /// Points the worktree's .git at a decoy repository whose config runs a script leaving
+    /// `marker` when git reads it; returns the decoy's git dir and the marker.
+    fn tamper(workspace: &Workspace) -> (TempDir, PathBuf, PathBuf) {
+        let decoy = TempDir::new().unwrap();
+        let root = decoy.path().canonicalize().unwrap();
+        crate::workspace::fixtures::git(&root, &["init", "-q"]);
+        let marker = root.join("marker");
+        let monitor = root.join("monitor");
+        crate::fixtures::executable(
+            &monitor,
+            &format!(
+                "#!/bin/sh
+touch {}
+",
+                marker.display()
+            ),
+        );
+        crate::workspace::fixtures::git(
+            &root,
+            &["config", "core.fsmonitor", &monitor.to_string_lossy()],
+        );
+        let git_dir = root.join(".git");
+        fs::write(
+            Path::new(&workspace.path).join(".git"),
+            format!("gitdir: {}\n", git_dir.display()),
+        )
+        .unwrap();
+        (decoy, git_dir, marker)
+    }
+
+    const GIT_SCRIPT: &str = "#!/bin/sh
+git status >/dev/null 2>&1
+git rev-parse --absolute-git-dir > git-dir.txt
+";
+
+    #[test]
+    fn pins_git_to_the_registered_worktree_in_teardown_pause_and_resume() {
+        let (_dir, repo) = repo();
+        let (_state, trust) = trusted(&repo);
+        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        create_worktree(&repo, &workspace).unwrap();
+        let registered = repo.join(".git/worktrees/shop-217");
+        let (_decoy, _git_dir, marker) = tamper(&workspace);
+
+        for pinned in [Hook::Teardown, Hook::Pause, Hook::Resume] {
+            hook(&repo, pinned.name(), GIT_SCRIPT);
+
+            assert!(pinned.pins_git());
+            assert!(run_within(&trust, &repo, pinned, &workspace, &[], LIMIT).unwrap());
+            let git_dir = fs::read_to_string(Path::new(&workspace.path).join("git-dir.txt"));
+            assert_eq!(
+                git_dir.unwrap().trim(),
+                registered.to_string_lossy(),
+                "{}",
+                pinned.name()
+            );
+            assert!(!marker.exists(), "{} read the decoy", pinned.name());
+        }
+    }
+
+    #[test]
+    fn leaves_git_in_setup_to_the_worktree() {
+        let (_dir, repo) = repo();
+        let (_state, trust) = trusted(&repo);
+        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        create_worktree(&repo, &workspace).unwrap();
+        let (_decoy, git_dir, marker) = tamper(&workspace);
+        hook(&repo, "setup", GIT_SCRIPT);
+
+        assert!(!Hook::Setup.pins_git());
+        assert!(run(&trust, &repo, Hook::Setup, &workspace, &[]).unwrap());
+
+        let found = fs::read_to_string(Path::new(&workspace.path).join("git-dir.txt")).unwrap();
+        assert_eq!(found.trim(), git_dir.to_string_lossy());
+        assert!(marker.exists(), "the decoy proves itself");
+    }
+
+    #[test]
+    fn runs_no_pinned_hook_in_a_folder_that_is_no_worktree() {
+        let (_dir, repo) = repo();
+        let (_state, trust) = trusted(&repo);
+        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        fs::create_dir_all(&workspace.path).unwrap();
+        hook(
+            &repo,
+            "teardown",
+            "#!/bin/sh
+touch ran.txt
+",
+        );
+
+        let error = run(&trust, &repo, Hook::Teardown, &workspace, &[]).unwrap_err();
+
+        assert!(
+            format!("{error:#}").ends_with(&format!("is no worktree of {}", repo.display())),
+            "{error:#}"
+        );
+        assert!(!Path::new(&workspace.path).join("ran.txt").exists());
     }
 }
