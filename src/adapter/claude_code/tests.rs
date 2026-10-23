@@ -26,6 +26,14 @@ fn waiting(question: &str) -> EventKind {
     EventKind::waiting(question)
 }
 
+fn permission(question: &str) -> EventKind {
+    EventKind::Waiting {
+        question: question.into(),
+        questions: Vec::new(),
+        permission: true,
+    }
+}
+
 #[test]
 fn a_prompt_means_working_and_a_typed_skill_its_phase() {
     assert_eq!(events("user_prompt"), vec![EventKind::Working]);
@@ -149,7 +157,7 @@ fn a_question_or_a_permission_waits_for_you() {
     );
     assert_eq!(
         events("permission_bash"),
-        vec![waiting("permission: Bash(rm -rf build)")]
+        vec![permission("permission: Bash(rm -rf build)")]
     );
 }
 
@@ -221,12 +229,12 @@ fn names_a_file_inside_the_session_folder_by_its_relative_path() {
 
     assert_eq!(
         translate(&payload, &phases()),
-        vec![waiting("permission: Write(src/export.rs)")]
+        vec![permission("permission: Write(src/export.rs)")]
     );
     payload["tool_input"] = json!({"file_path": "/etc/hosts"});
     assert_eq!(
         translate(&payload, &phases()),
-        vec![waiting("permission: Write(/etc/hosts)")]
+        vec![permission("permission: Write(/etc/hosts)")]
     );
 }
 
