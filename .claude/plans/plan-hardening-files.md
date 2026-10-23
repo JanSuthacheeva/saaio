@@ -172,8 +172,8 @@ Store lookup and register:
 
 - [x] Registry: `register` closes the root before its early return; `project_store` never takes over a store, `claim` loses `free`; tests for an open root with the entry present, a gone owner and an unreadable repo file; files.md on a moved repository's store
 - [x] Bug report: `REPORTS_DIR` in the shared folder, the failure without one, the new help line; tests/cli bug-report test that the file lands in reports/ and nothing in the repo; cli.md, troubleshooting.md, files.md
-- [ ] Codex home: `Env.codex_home` from `CODEX_HOME`, `Env::codex_home()` with tests; `UiEnv.codex_home`
-- [ ] Peek: `codex::rollout` and `transcript_of`/`PeekCache` taking the codex home, with tests for inside, outside, `..` and a link out; files.md row on the Codex transcript
+- [x] Codex home: `Env.codex_home` from `CODEX_HOME`, `Env::codex_home()` with tests; `UiEnv.codex_home`
+- [x] Peek: `codex::rollout` and `transcript_of`/`PeekCache` taking the codex home, with tests for inside, outside, `..` and a link out; files.md row on the Codex transcript
 - [ ] Hooks: `git::registered_git_dir` public, `Hook::pins_git`, `command` with GIT_DIR and GIT_WORK_TREE; tests with a tampered worktree `.git` for teardown, pause and resume, setup unpinned, an unregistered worktree failing; repository.md on the hooks' git variables
 - [ ] CHANGELOG lines under Unreleased, Fixed
 - [ ] E2E: built binary on a scratch store: `saaio bug-report` in a repo, a moved-repo store, and `saaio start` then a tampered worktree `.git` then `saaio remove` whose teardown never reads the decoy

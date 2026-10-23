@@ -76,7 +76,7 @@ the store outside a repository.
 | File | Purpose |
 | --- | --- |
 | `~/.claude/projects/...` (or under `$CLAUDE_CONFIG_DIR`) | a Claude Code worker's transcript, for the peek |
-| the transcript Codex reports | a Codex worker's transcript, for the peek |
+| `~/.codex/sessions/...` (or under `$CODEX_HOME`) | a Codex worker's transcript, the one its hooks name, for the peek. A file elsewhere is not read. |
 
 saaio writes nothing to `~/.claude` or `~/.codex`. Hooks are passed on each agent's command line.
 

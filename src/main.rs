@@ -54,6 +54,7 @@ fn env() -> Env {
         xdg_runtime_dir: path("XDG_RUNTIME_DIR"),
         tmpdir: path("TMPDIR"),
         claude_config_dir: path("CLAUDE_CONFIG_DIR"),
+        codex_home: path("CODEX_HOME"),
         saaio_releases_url: env::var("SAAIO_RELEASES_URL").ok(),
         terminal: io::stdin().is_terminal() && io::stdout().is_terminal(),
         agent_shell: env::var_os("CLAUDECODE").is_some()
