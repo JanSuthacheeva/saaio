@@ -1,7 +1,7 @@
 //! UI connections (`Conn`): the socket, hello, messages, and the frames, board and panes sent
 
 use std::fs;
-use std::io::{self, ErrorKind};
+use std::io::{self, ErrorKind, Read};
 use std::ops::ControlFlow;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -14,7 +14,8 @@ use anyhow::{Context, Result, bail};
 use rustix::io::Errno;
 
 use super::master::Start;
-use super::{ConnId, Event, FRAME_EVERY, Server, Stop, WRITE_TIMEOUT, spawn_named};
+use super::outbox::Outbox;
+use super::{ConnId, Event, FRAME_EVERY, Server, Stop, spawn_named};
 
 /// At most this many connections at once; one more is closed.
 const MAX_CONNS: usize = 16;
@@ -23,14 +24,14 @@ const ACCEPT_PAUSE: Duration = Duration::from_millis(100);
 use crate::private;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, Role, ServerMsg};
 use crate::server_log;
-use crate::text;
 
-/// One connection: its socket, and who it said it is and in which role once its hello came.
+/// One connection: its socket, the queue its messages leave by, and who it said it is and in
+/// which role once its hello came.
 #[derive(Debug)]
 pub(super) struct Conn {
+    /// Kept to shut its reading side when the connection is dropped.
     stream: UnixStream,
-    /// When it was accepted, for the hello deadline.
-    opened: Instant,
+    outbox: Outbox,
     peer: Option<Peer>,
     role: Option<Role>,
 }
@@ -182,54 +183,37 @@ impl Server {
         }
         let conn = self.next_conn;
         self.next_conn += 1;
-        let Ok(reader) = stream.try_clone() else {
+        let (Ok(reader), Ok(writer)) = (stream.try_clone(), stream.try_clone()) else {
             return;
         };
-        let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
+        let outbox = match Outbox::start(conn, writer, self.events.clone()) {
+            Ok(outbox) => outbox,
+            Err(error) => {
+                let line = format!("dropped a connection: {error}");
+                server_log::write((self.clock)(), &line);
+                return;
+            }
+        };
         self.conns.insert(
             conn,
             Conn {
                 stream,
-                opened: Instant::now(),
+                outbox,
                 peer: None,
                 role: None,
             },
         );
-        if let Err(error) = read_in_background(conn, reader, self.events.clone()) {
+        if let Err(error) = read_in_background(conn, reader, self.timing.hello, self.events.clone())
+        {
             let line = format!("dropped a connection: {error}");
             server_log::write((self.clock)(), &line);
             self.drop_conn(conn);
         }
     }
 
-    /// Refuses every connection without a hello opened more than timing.hello ago.
-    pub(super) fn close_silent(&mut self) {
-        let silent: Vec<ConnId> = self
-            .conns
-            .iter()
-            .filter(|(_, open)| open.role.is_none() && open.opened.elapsed() >= self.timing.hello)
-            .map(|(conn, _)| *conn)
-            .collect();
-        for conn in silent {
-            let wait = text::short_duration(self.timing.hello.as_millis() as u64);
-            let line = format!("closed a connection that said no hello in {wait}");
-            server_log::write((self.clock)(), &line);
-            self.send_to(
-                conn,
-                &ServerMsg::Refused {
-                    reason: format!("saaio server heard no hello in {wait}"),
-                },
-            );
-            self.drop_conn(conn);
-        }
-    }
-
     /// Refuses a connection whose first message could not be read: a flow of an older protocol,
-    /// which then says to run saaio --stop. One already dropped (close_silent) is let go.
+    /// which then says to run saaio --stop.
     pub(super) fn refuse_unreadable(&mut self, conn: ConnId) {
-        if !self.conns.contains_key(&conn) {
-            return;
-        }
         server_log::write((self.clock)(), "refused an unreadable hello");
         self.send_to(
             conn,
@@ -242,11 +226,12 @@ impl Server {
         self.drop_conn(conn);
     }
 
-    /// Closes a connection and forgets it; the attached UI leaving is logged.
+    /// Forgets a connection and shuts its reading side; its Outbox still writes what was queued
+    /// before (Refused, Detached), then closes it. The attached UI leaving is logged.
     pub(super) fn drop_conn(&mut self, conn: ConnId) {
         let gone = self.conns.remove(&conn);
         if let Some(gone) = &gone {
-            let _ = gone.stream.shutdown(std::net::Shutdown::Both);
+            let _ = gone.stream.shutdown(std::net::Shutdown::Read);
         }
         let peer = gone.and_then(|gone| gone.peer);
         if self.attached == Some(conn) {
@@ -256,12 +241,17 @@ impl Server {
         }
     }
 
-    /// Writes one message; a connection that cannot take it is dropped.
+    /// Queues one message; a connection that cannot take it is logged and dropped.
     pub(super) fn send_to(&mut self, conn: ConnId, message: &ServerMsg) {
-        let Some(open) = self.conns.get_mut(&conn) else {
+        let Some(open) = self.conns.get(&conn) else {
             return;
         };
-        if proto::write_msg(&mut open.stream, message).is_err() {
+        if let Err(error) = open.outbox.send(message) {
+            let who = open
+                .peer
+                .as_ref()
+                .map_or_else(|| "a connection".to_string(), ToString::to_string);
+            server_log::write((self.clock)(), &format!("dropped {who}: {error:#}"));
             self.drop_conn(conn);
         }
     }
@@ -423,32 +413,61 @@ fn accept_pause(error: &io::Error) -> Option<Duration> {
     }
 }
 
-/// Reads a connection's messages into `events`; one whose first message cannot be read is
-/// Unreadable. The hello deadline is close_silent's.
+/// Reads a connection's messages into `events`; one whose hello does not come within `hello`, or
+/// cannot be read, is Unreadable.
 fn read_in_background(
     conn: ConnId,
     mut stream: UnixStream,
+    hello: Duration,
     events: Sender<Event>,
 ) -> io::Result<()> {
     spawn_named(format!("conn {conn}"), move || {
-        let mut first = true;
+        let deadline = Instant::now() + hello;
+        let first = proto::read_msg::<_, ClientMsg>(&mut Until {
+            stream: &mut stream,
+            deadline,
+        });
+        // macOS refuses socket options once the client hung up (EINVAL); the read says so.
+        let _ = stream.set_read_timeout(None);
+        let mut next = match first {
+            Ok(Some(message)) => message,
+            Ok(None) => {
+                let _ = events.send(Event::Gone(conn));
+                return;
+            }
+            Err(_) => {
+                let _ = events.send(Event::Unreadable(conn));
+                return;
+            }
+        };
         loop {
+            if events.send(Event::Message(conn, next)).is_err() {
+                return;
+            }
             match proto::read_msg::<_, ClientMsg>(&mut stream) {
-                Ok(Some(message)) => {
-                    first = false;
-                    if events.send(Event::Message(conn, message)).is_err() {
-                        return;
-                    }
-                }
-                Err(_) if first => {
-                    let _ = events.send(Event::Unreadable(conn));
-                    return;
-                }
+                Ok(Some(message)) => next = message,
                 Ok(None) | Err(_) => break,
             }
         }
         let _ = events.send(Event::Gone(conn));
     })
+}
+
+/// A stream whose reads time out at one deadline, however slowly its bytes come.
+struct Until<'a> {
+    stream: &'a mut UnixStream,
+    deadline: Instant,
+}
+
+impl Read for Until<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let left = self.deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(ErrorKind::TimedOut.into());
+        }
+        let _ = self.stream.set_read_timeout(Some(left));
+        self.stream.read(buf)
+    }
 }
 
 #[cfg(test)]

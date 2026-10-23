@@ -1037,6 +1037,46 @@ fn closes_a_connection_that_trickles_its_hello_past_the_deadline() {
 }
 
 #[test]
+fn a_ui_that_stops_reading_slows_nobody_and_is_dropped() {
+    let dir = TempDir::new().unwrap();
+    let scroll = "while :; do seq 1 300; sleep 0.05; done";
+    let flood = vec!["sh".into(), "-c".into(), scroll.into()];
+    let (paths, handle) = start_with(
+        dir.path(),
+        Agent {
+            command: flood.clone(),
+            prompt: None,
+            adapter: None,
+            resume: Some(flood),
+        },
+    );
+    let size = Size {
+        cols: 200,
+        rows: 100,
+    };
+    let mut stuck = connect(&paths.socket, Role::Attach { size });
+
+    for _ in 0..5 {
+        let mut control = connect(&paths.socket, Role::Control);
+        let asked = Instant::now();
+        assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+        proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
+        assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+        assert!(
+            asked.elapsed() < Duration::from_millis(500),
+            "answered after {:?}",
+            asked.elapsed()
+        );
+        thread::sleep(Duration::from_millis(300));
+    }
+
+    wait_until("the stuck ui was never dropped", || {
+        proto::write_msg(&mut stuck, &ClientMsg::History(None)).is_err()
+    });
+    stop(&paths, handle);
+}
+
+#[test]
 fn takes_at_most_16_connections_at_once() {
     let dir = TempDir::new().unwrap();
     let patient = Timing {

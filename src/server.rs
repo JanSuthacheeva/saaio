@@ -10,6 +10,7 @@ mod conn;
 mod dismiss;
 mod forge_watch;
 mod news;
+mod outbox;
 mod pane_state;
 mod panes;
 mod pause_watch;
@@ -62,7 +63,7 @@ pub use timing::Timing;
 const FRAME_EVERY: Duration = Duration::from_millis(16);
 /// How long a stop waits for the panes to exit.
 const STOP_WAIT: Duration = Duration::from_millis(3500);
-/// A UI that does not take a frame within this time is dropped, so it cannot stall the server.
+/// A connection's writer thread gives up on a client that takes no bytes for this long.
 const WRITE_TIMEOUT: Duration = Duration::from_secs(2);
 /// A resumed pane that fails within this time is started fresh instead: its agent never saved
 /// the session (Claude Code saves one only after the first message).
@@ -292,7 +293,6 @@ impl Server {
                 self.pause_idle();
                 self.type_lines();
                 self.dismiss_dialogs();
-                self.close_silent();
             }
             self.flush();
         }

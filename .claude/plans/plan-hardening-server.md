@@ -53,8 +53,6 @@ pub(super) struct Conn {
     /// Kept to shut its reading side when the connection is dropped.
     stream: UnixStream,
     outbox: Outbox,
-    /// When it was accepted, for the hello deadline.
-    opened: Instant,
     peer: Option<Peer>,
     role: Option<Role>,
 }
@@ -66,17 +64,23 @@ impl Server {
     // changed: shuts only the reading side and drops the Conn, so its Outbox still writes a
     // Refused or Detached queued before it.
     pub(super) fn drop_conn(&mut self, conn: ConnId);
-    /// Refuses every connection without a hello opened more than timing.hello ago.
-    pub(super) fn close_silent(&mut self);
-    // changed: a connection already dropped (by close_silent) is let go silently.
-    pub(super) fn refuse_unreadable(&mut self, conn: ConnId);
 }
+
+/// A stream whose reads time out at one deadline, however slowly its bytes come.
+struct Until<'a> {
+    stream: &'a mut UnixStream,
+    deadline: Instant,
+}
+impl Read for Until<'_> { ... } // sets the read timeout to what is left before each read
 ```
 
 - `message()` clamps the size of `Hello { role: Attach { size } }` and `Resize` with
   `Size::clamped` before Host sees it.
 - `accept()` starts the Outbox; no write timeout on the server's own stream.
-- `read_in_background` drops its per-read hello timeout; `close_silent` keeps the deadline.
+- `read_in_background` reads the first message through `Until` (accepted + timing.hello), so a
+  hello trickled a byte at a time still meets one deadline; past it, Unreadable as before.
+  (Changed in the build: a deadline kept by the server tick refused real hellos still queued
+  behind a busy loop.)
 
 `src/server.rs` (modified)
 
@@ -88,8 +92,8 @@ struct Server {
 }
 ```
 
-- `serve()`: on each WATCH_EVERY tick also `self.close_silent()` and
-  `server_log::follow(&self.log, server_log::CAP)` (an error is let go: it cannot be logged).
+- `serve()`: on each WATCH_EVERY tick also `server_log::follow(&self.log, server_log::CAP)` (an
+  error is let go: it cannot be logged).
 - WRITE_TIMEOUT is the Outbox writer's; its doc says so.
 
 `src/proto.rs` (modified)
@@ -170,7 +174,7 @@ fn merge_request(word: &str) -> Option<&str>;
 
 - `Outbox`: `Vec<u8>` frames (length prefix included) over an mpsc channel, server thread ->
   writer thread; `queued` counts bytes across both.
-- `Conn.opened: Instant`, `Server.log: PathBuf`.
+- `Server.log: PathBuf`.
 - Constants: MAX_QUEUED 16 MiB, MAX_EVENT 16 MiB, MAX_SIZE 1000 x 500, PEER_TEXT_LIMIT 4096,
   MAX_QUESTIONS 8.
 
@@ -197,9 +201,9 @@ A connection closed with a last message (Refused, Detached)
 
 The hello deadline
 
-1. `Server::serve` tick (WATCH_EVERY) `-> Server::close_silent()`
-2. each Conn with `role == None` and `opened.elapsed() >= timing.hello`: log "closed a
-   connection that said no hello in 5 s", `send_to(Refused)`, `drop_conn`.
+1. `read_in_background -> proto::read_msg(&mut Until { stream, deadline: accepted + hello })`
+2. each read: what is left before the deadline is the read timeout; none left: TimedOut
+3. Err -> `Event::Unreadable(conn) -> refuse_unreadable` (Refused, dropped), as before
 
 - Undecodable first message: unchanged, `Event::Unreadable -> refuse_unreadable`. A message
   before the hello: unchanged, `proto::allowed` refuses it, the connection is dropped.
@@ -266,7 +270,7 @@ saaio hook reads an event
 2. A UI past the queue limit is closed, never sent a partial stream.
 3. The 2 s write timeout stays, on the writer thread.
 4. The server's log may run up to one 500 ms tick past its cap.
-5. A hello-less connection is closed within half a second after its deadline (the tick).
+5. A hello-less connection is closed at its deadline, by its reader thread.
 6. A hook event over the limit is skipped whole, a PreToolUse included.
 7. 16 idle Control connections that said hello still fill the slots; unchanged.
 8. CHANGELOG under Unreleased, Fixed, four plain lines: hook events over 16 MiB are ignored; a
@@ -283,9 +287,10 @@ saaio hook reads an event
 
 ### Connections
 
-- [x] `Conn.opened` and `Server::close_silent` on the tick, per-read hello timeout removed, `refuse_unreadable` ignores a gone conn (server test: trickled hello closed, failing first; silent client still closed)
-- [ ] `server/outbox.rs` `Outbox::start`/`send` with unit tests (never blocks, errs past MAX_QUEUED, delivers what it queued when dropped)
-- [ ] `Conn` writes through its Outbox: `send_to`, `drop_conn`, `accept` (server test: a UI that never reads while its pane floods does not delay a control connection's CloseFlow and is dropped, failing first)
+- [x] One hello deadline across every read of the first message, `Until` in conn.rs (server test: trickled hello closed, failing first; silent client still closed)
+- [x] `server/outbox.rs` `Outbox::start`/`send` with unit tests (never blocks, errs past MAX_QUEUED, delivers what it queued when dropped)
+- [x] `Conn` writes through its Outbox: `send_to`, `drop_conn`, `accept` (server test: a UI that never reads while its pane floods does not delay a control connection's CloseFlow and is dropped, failing first)
+- [ ] Pane output that outruns the server no longer starves the event loop (server test: a pane running `yes` does not delay a control connection's CloseFlow, failing first)
 - [ ] Protocol robustness tests in server/tests.rs: 4 GiB prefix, Input before Hello types nothing, seeded fuzz before and after a hello; fix whatever they find
 
 ### Log
