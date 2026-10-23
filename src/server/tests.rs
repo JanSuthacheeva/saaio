@@ -2099,3 +2099,41 @@ fn a_resume_that_cannot_run_fails_so_tool_calls_stop_waiting() {
     );
     stop(&paths, handle);
 }
+
+#[test]
+fn a_pane_that_prints_for_every_line_typed_never_stalls_the_server() {
+    let dir = TempDir::new().unwrap();
+    let lines = dir.path().join("lines");
+    let script = format!(
+        "stty raw -echo; while IFS= read -r line; do printf '%200s' x; echo >> {}; done",
+        lines.display()
+    );
+    let chatty = vec!["sh".into(), "-c".into(), script];
+    let (paths, handle) = start_with(
+        dir.path(),
+        Agent {
+            command: chatty.clone(),
+            prompt: None,
+            adapter: None,
+            resume: Some(chatty),
+        },
+    );
+    let size = Size { cols: 80, rows: 24 };
+    let mut ui = connect(&paths.socket, Role::Attach { size });
+    assert!(matches!(recv(&mut ui), ServerMsg::Welcome { .. }));
+    let mut typist = ui.try_clone().unwrap();
+    let reader =
+        thread::spawn(move || while let Ok(Some(_)) = proto::read_msg::<_, ServerMsg>(&mut ui) {});
+
+    proto::write_msg(&mut typist, &ClientMsg::Input(b"y\n".repeat(32 << 10))).unwrap();
+    wait_until("the pane read no line", || {
+        fs::metadata(&lines).is_ok_and(|meta| meta.len() > 0)
+    });
+
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
+    assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+    stop(&paths, handle);
+    reader.join().unwrap();
+}

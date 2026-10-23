@@ -12,6 +12,7 @@ mod dismiss;
 mod forge_watch;
 mod news;
 mod outbox;
+mod pane_input;
 mod pane_state;
 mod panes;
 mod pause_watch;

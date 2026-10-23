@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::io::{ErrorKind, Read, Write};
+use std::io::{ErrorKind, Read};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
@@ -14,6 +14,7 @@ use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use rustix::process::{Pid, Signal, kill_process_group};
 
 use super::backlog::Backlog;
+use super::pane_input::PaneInput;
 use crate::launch::pane::PaneSpec;
 use crate::proto::{Frame, PaneInfo, PaneKey, PaneStatus, Size};
 use crate::server::spawn_named;
@@ -60,7 +61,7 @@ struct Pane {
 
 struct Process {
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    input: PaneInput,
     pid: Pid,
     exited: Arc<AtomicBool>,
 }
@@ -141,7 +142,7 @@ impl Host {
         if let Some(process) = pane.process.as_mut()
             && !replies.is_empty()
         {
-            let _ = process.writer.write_all(&replies);
+            let _ = process.input.send(&replies);
         }
         pane.term.copied()
     }
@@ -156,8 +157,8 @@ impl Host {
         }
         if let Some(process) = pane.process.as_mut() {
             process
-                .writer
-                .write_all(bytes)
+                .input
+                .send(bytes)
                 .with_context(|| format!("could not write to {key}"))?;
         }
         Ok(())
@@ -306,7 +307,13 @@ impl Host {
             .and_then(Pid::from_raw)
             .with_context(|| format!("pid {id} is out of range"))?;
         let mut reader = pair.master.try_clone_reader()?;
-        let writer = pair.master.take_writer()?;
+        let input = match PaneInput::start(&spec.key, pair.master.take_writer()?) {
+            Ok(input) => input,
+            Err(error) => {
+                let _ = child.kill();
+                return Err(error).context("could not start the thread that writes to the pane");
+            }
+        };
         let exited = Arc::new(AtomicBool::new(false));
 
         let (drained_tx, drained_rx) = mpsc::channel::<()>();
@@ -353,7 +360,7 @@ impl Host {
 
         Ok(Process {
             master: pair.master,
-            writer,
+            input,
             pid,
             exited,
         })

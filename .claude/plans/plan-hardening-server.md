@@ -68,6 +68,27 @@ impl Backlog {
 - `Host` keeps an `Arc<Backlog>`; each pane's output thread `add`s what it read before sending
   it, `Host::feed` takes it off; `Server::stop` feeds the output it drains.
 
+`src/server/pane_input.rs` (new, added in the review: with the Backlog, a pane that prints for
+every line it reads deadlocked the server, which waited in a PTY write while the pane's reader
+waited on the server)
+
+```rust
+/// Past this many bytes queued for one pane, more input is refused: its program stopped reading.
+const MAX_QUEUED: usize = 16 << 20;
+
+pub(super) struct PaneInput { bytes: Sender<Vec<u8>>, queued: Arc<AtomicUsize> }
+
+impl PaneInput {
+    /// Starts the "pane <key> input" thread on `writer`; a write that fails ends it.
+    pub(super) fn start(key: &PaneKey, writer: Box<dyn Write + Send>) -> io::Result<PaneInput>;
+    /// Queues `bytes`; Err when the thread ended or more than MAX_QUEUED bytes would wait.
+    pub(super) fn send(&self, bytes: &[u8]) -> Result<()>;
+}
+```
+
+- `Process` keeps a `PaneInput` in place of its writer; `Host::write` and the Terminal's replies
+  in `Host::feed` queue through it, so the server thread never writes to a PTY.
+
 `src/server/conn.rs` (modified)
 
 ```rust
