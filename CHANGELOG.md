@@ -6,6 +6,12 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `saaio report merge-request` keeps a merge request URL as `.../pull/<n>` or
+  `.../-/merge_requests/<n>`, dropping a trailing `/`, `?query`, `#fragment` or a page such as
+  `/files`, and names that form when it refuses a URL.
+
 ### Fixed
 
 - `saaio hook` skips an event over 16 MiB and notes it in server.log.
