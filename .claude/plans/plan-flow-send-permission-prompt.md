@@ -130,6 +130,6 @@ prompt: the next `Working` clears `permission`.
 - [x] Mark Claude Code's `PermissionRequest` waiting with `permission: true`, with claude_code tests on `permission_bash.json` and `permission_ask.json`
 - [x] Add `FlowView.permission` and fold it (Waiting, cleanup, matured `PermissionPending`), with fold tests
 - [x] `output::flow::sent`: `prompt` and the permission help line, with exact-text tests
-- [ ] `tests/cli/send.rs`: Claude Code and Codex permission requests through `saaio hook`, then `saaio send` and `status --json`
+- [x] `tests/cli/send.rs`: Claude Code and Codex permission requests through `saaio hook`, then `saaio send` and `status --json`
 - [ ] Docs: `docs/cli.md`, `docs/json.md`, `docs/flows.md`; ROADMAP narrowed; CHANGELOG Unreleased
 - [ ] E2E: scratch store, real UI, guided Claude Code worker at a permission prompt, master's `saaio send` prints the prompt; answer it in the pane and see the worker read the message
