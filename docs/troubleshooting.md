@@ -20,12 +20,14 @@ version and commit, the OS and the versions of `claude`, `codex`, `gh` and `glab
 1. Run `saaio bug-report` in the repository where the problem happened.
 2. Check the file it names before uploading it. It can hold flow names, requests and paths.
 3. Open an [issue](https://github.com/JanSuthacheeva/saaio/issues/new?template=bug_report.yml)
-   with what happened, what was expected and the steps, and attach the file.
+   with what happened, what was expected and the steps, and attach the file. It is in
+   `reports/` of saaio's state folder, never in the repository: paste its path into the file
+   picker (`Cmd+Shift+G` on macOS).
 
 ```
 $ saaio bug-report
-report: /Users/jan/projects/shop/saaio-report-2026-10-18.txt
-help[1]: "Check the file before uploading it: it can hold flow names, requests and paths"
+report: /Users/jan/.local/state/saaio/reports/saaio-report-2026-10-18.txt
+help[2]: "Check the file before uploading it: it can hold flow names, requests and paths","Attach it from there; it is never written into a repository"
 ```
 
 The file holds:

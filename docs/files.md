@@ -59,6 +59,7 @@ the store outside a repository.
 | `slots/<n>` | the flow holding slot `n`. Counts only while that flow is unfinished. |
 | `slots/.lock` | held while a slot is claimed, so two starts never get the same slot |
 | `trusted/<hash>` | one repository you trusted with `saaio trust` or in the new-flow dialog ([repository.md](repository.md#trust)) |
+| `reports/` | the files `saaio bug-report` writes ([troubleshooting.md](troubleshooting.md#reporting-a-bug)) |
 | `update.json` | when the UI last looked for a newer release, and the latest it found ([configuration.md](configuration.md#ui)) |
 
 ## In a repository

@@ -1,12 +1,18 @@
-//! Tests of `saaio bug-report`: the file it writes, never through a link, without a store
+//! Tests of `saaio bug-report`: the file it writes in the shared folder, never through a link,
+//! without a store
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
 
 use crate::support::*;
+
+/// Where the reports of a test's home go: reports/ in its shared folder.
+fn reports(home: &Path) -> PathBuf {
+    shared(home).join("saaio/reports")
+}
 
 #[test]
 fn bug_report_writes_one_file_with_versions_settings_and_the_logs() {
@@ -27,7 +33,8 @@ fn bug_report_writes_one_file_with_versions_settings_and_the_logs() {
         .unwrap();
 
     assert!(output.status.success(), "{}", stdout(&output));
-    let written: Vec<_> = fs::read_dir(cwd.path())
+    assert_eq!(fs::read_dir(cwd.path()).unwrap().count(), 0);
+    let written: Vec<_> = fs::read_dir(reports(home.path()))
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect();
@@ -40,16 +47,13 @@ fn bug_report_writes_one_file_with_versions_settings_and_the_logs() {
         "{name}"
     );
     let said = stdout(&output);
-    // The current folder as the process reads it: /private/var/... for /var/... on macOS.
     let printed = said.lines().next().unwrap_or_default();
-    assert!(
-        printed.starts_with("report: /") && printed.ends_with(&format!("/{name}")),
-        "{said}"
-    );
+    assert_eq!(printed, format!("report: {}", file.display()), "{said}");
     assert!(
         said.contains("Check the file before uploading it"),
         "{said}"
     );
+    assert!(said.contains("never written into a repository"), "{said}");
 
     let report = fs::read_to_string(file).unwrap();
     assert!(report.starts_with("saaio bug report, 20"), "{report}");
@@ -108,7 +112,11 @@ fn bug_report_writes_a_linked_home_as_a_tilde_in_every_form_a_log_names_it() {
         .unwrap();
 
     assert!(output.status.success(), "{}", stdout(&output));
-    let file = fs::read_dir(cwd.path()).unwrap().next().unwrap().unwrap();
+    let file = fs::read_dir(reports(&home))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
     let report = fs::read_to_string(file.path()).unwrap();
     assert!(
         report.contains(
@@ -141,10 +149,11 @@ fn bug_report_never_writes_through_what_is_already_there() {
         PathBuf::from(path).file_name().unwrap().to_owned()
     };
     let first = report();
+    let reports = reports(home.path());
     let target = home.path().join("target");
     fs::write(&target, "mine").unwrap();
-    fs::remove_file(cwd.path().join(&first)).unwrap();
-    std::os::unix::fs::symlink(&target, cwd.path().join(&first)).unwrap();
+    fs::remove_file(reports.join(&first)).unwrap();
+    std::os::unix::fs::symlink(&target, reports.join(&first)).unwrap();
 
     let second = report();
 
@@ -155,15 +164,39 @@ fn bug_report_never_writes_through_what_is_already_there() {
         first.replace(".txt", "-2.txt"),
         "the next name, beside the link"
     );
-    let mode = fs::metadata(cwd.path().join(&second))
+    let mode = fs::metadata(reports.join(&second))
         .unwrap()
         .permissions()
         .mode();
     assert_eq!(mode & 0o777, 0o600);
+    let mode = fs::metadata(&reports).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o700);
 }
 
 #[test]
-fn bug_report_says_when_there_is_no_store() {
+fn bug_report_writes_nothing_into_the_repository_it_runs_in() {
+    let home = TempDir::new().unwrap();
+    let repo = TempDir::new().unwrap();
+    git(repo.path(), &["init", "-q"]);
+
+    let output = saaio_command(home.path())
+        .arg("bug-report")
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", stdout(&output));
+    let status = std::process::Command::new("git")
+        .args(["status", "--porcelain", "--ignored"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert_eq!(stdout(&status), "");
+    assert_eq!(fs::read_dir(reports(home.path())).unwrap().count(), 1);
+}
+
+#[test]
+fn bug_report_says_when_there_is_no_state_directory() {
     let home = TempDir::new().unwrap();
     let cwd = TempDir::new().unwrap();
 
@@ -176,25 +209,9 @@ fn bug_report_says_when_there_is_no_store() {
         .output()
         .unwrap();
 
-    assert!(output.status.success(), "{}", stdout(&output));
-    // On the Linux runner a folder lands here too once HOME is unset.
-    let written: Vec<_> = fs::read_dir(cwd.path())
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .collect();
-    let file = written
-        .iter()
-        .find(|path| {
-            path.file_name()
-                .unwrap()
-                .to_string_lossy()
-                .starts_with("saaio-report-")
-        })
-        .unwrap_or_else(|| panic!("no report among {written:?}"));
-    let report = fs::read_to_string(file).unwrap();
-    assert!(
-        report.contains("\nstore        cannot be opened: cannot find a state directory\n"),
-        "{report}"
-    );
-    assert!(!report.contains("== "), "{report}");
+    assert_eq!(output.status.code(), Some(1), "{}", stdout(&output));
+    let said = stdout(&output);
+    assert!(said.contains("cannot find a state directory"), "{said}");
+    assert!(said.contains("Set HOME or XDG_STATE_HOME"), "{said}");
+    assert_eq!(fs::read_dir(cwd.path()).unwrap().count(), 0);
 }

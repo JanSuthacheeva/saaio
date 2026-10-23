@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use super::{Document, toon};
 
-/// report: <path>, help: check the file before uploading it.
+/// report: <path>, help: check the file before uploading it, attach it from where it is.
 pub(crate) fn written(path: &Path) -> Document {
     #[derive(Serialize)]
     struct Written {
@@ -18,6 +18,7 @@ pub(crate) fn written(path: &Path) -> Document {
         help: vec![
             "Check the file before uploading it: it can hold flow names, requests and paths"
                 .to_string(),
+            "Attach it from there; it is never written into a repository".to_string(),
         ],
     }))
 }
