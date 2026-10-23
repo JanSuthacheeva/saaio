@@ -215,15 +215,7 @@ fn names_the_state_of_a_flow_that_has_no_phase_yet() {
     let mut app = App::new(FLEET);
     let flows = vec![
         worker("fresh", Auto, 1, vec![]),
-        worker(
-            "asks",
-            Auto,
-            2,
-            vec![EventKind::Waiting {
-                question: "ready".into(),
-                questions: Vec::new(),
-            }],
-        ),
+        worker("asks", Auto, 2, vec![EventKind::waiting("ready")]),
     ];
     app.on_server(ServerMsg::Board(fold::board(flows, NOW)));
     app.on_tick(NOW);

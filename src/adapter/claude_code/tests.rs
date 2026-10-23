@@ -23,10 +23,7 @@ fn events(name: &str) -> Vec<EventKind> {
 }
 
 fn waiting(question: &str) -> EventKind {
-    EventKind::Waiting {
-        question: question.into(),
-        questions: Vec::new(),
-    }
+    EventKind::waiting(question)
 }
 
 #[test]
@@ -142,6 +139,7 @@ fn a_question_or_a_permission_waits_for_you() {
                 &[("Red", "Choose red"), ("Blue", "Choose blue")],
                 false
             )],
+            permission: false,
         }]
     );
     assert_eq!(
@@ -161,6 +159,7 @@ fn a_dialog_keeps_every_question_with_its_options() {
         EventKind::Waiting {
             question: first,
             questions,
+            ..
         },
     ] = &events("pre_ask_two")[..]
     else {

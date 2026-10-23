@@ -150,6 +150,7 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
                     vec![EventKind::Waiting {
                         question: cut(question),
                         questions: questions(input),
+                        permission: false,
                     }]
                 })
                 .unwrap_or_default(),
@@ -172,10 +173,10 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
         }
         "PermissionRequest" if tool != "AskUserQuestion" && !tool.is_empty() => {
             let cwd = payload["cwd"].as_str().unwrap_or("");
-            vec![EventKind::Waiting {
-                question: cut(&format!("permission: {}", tool_call(tool, input, cwd))),
-                questions: Vec::new(),
-            }]
+            vec![EventKind::waiting(cut(&format!(
+                "permission: {}",
+                tool_call(tool, input, cwd)
+            )))]
         }
         "Stop" => {
             let answer = payload["last_assistant_message"].as_str().unwrap_or("");

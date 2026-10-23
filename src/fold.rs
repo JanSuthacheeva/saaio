@@ -265,6 +265,7 @@ impl Folding {
             EventKind::Waiting {
                 question,
                 questions,
+                ..
             } => {
                 self.pending_permission = None;
                 self.view.questions.clone_from(questions);

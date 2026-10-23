@@ -176,14 +176,7 @@ mod tests {
             .join("\n")
         );
 
-        let waiting = flow(
-            "shop-221",
-            vec![EventKind::Waiting {
-                question: "ok?".into(),
-                questions: Vec::new(),
-            }],
-            MIN,
-        );
+        let waiting = flow("shop-221", vec![EventKind::waiting("ok?")], MIN);
         assert!(
             reported(&waiting)
                 .text()
@@ -222,10 +215,7 @@ mod tests {
     fn says_a_message_was_sent_and_who_wakes_whom() {
         let asked = flow(
             "shop-217",
-            vec![EventKind::Waiting {
-                question: "Which delimiter?".into(),
-                questions: Vec::new(),
-            }],
+            vec![EventKind::waiting("Which delimiter?")],
             10 * MIN,
         );
 
@@ -247,6 +237,7 @@ mod tests {
             vec![EventKind::Waiting {
                 question: "Which color?".into(),
                 questions: vec![Question::of("Which color?", &["Red", "Blue"], false)],
+                permission: false,
             }],
             10 * MIN,
         );

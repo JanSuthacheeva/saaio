@@ -76,13 +76,7 @@ impl Server {
             .map(|flow| flow.id.clone())
             .collect();
         for id in ids {
-            let event = LogEvent::new(
-                (self.clock)(),
-                EventKind::Waiting {
-                    question: STALLED_START.to_string(),
-                    questions: Vec::new(),
-                },
-            );
+            let event = LogEvent::new((self.clock)(), EventKind::waiting(STALLED_START));
             if let Err(error) = self.store.append(&id, &event) {
                 server_log::write((self.clock)(), &format!("{error:#}"));
             }
