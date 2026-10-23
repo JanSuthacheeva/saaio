@@ -3,16 +3,43 @@
 use serde_json::Value;
 
 /// The merge request a shell command created: when one of its simple commands runs `gh pr create`
-/// or `glab mr create` (`mr new`), the last merge request URL in its output. Words that only appear
-/// inside a quoted string or as another program's arguments create nothing.
+/// or `glab mr create` (`mr new`), the last merge request URL in its output, in its canonical
+/// form. Words that only appear inside a quoted string or as another program's arguments create
+/// nothing.
 pub fn created_merge_request(command: &str, output: &str) -> Option<String> {
     if !simple_commands(command).iter().any(|words| creates(words)) {
         return None;
     }
     output
         .split_whitespace()
-        .filter_map(merge_request)
+        .filter_map(canonical_merge_request)
         .next_back()
+}
+
+/// The pages of a merge request a URL may name after its number, on GitHub and GitLab.
+const REQUEST_PAGES: [&str; 6] = [
+    "files",
+    "commits",
+    "checks",
+    "changes",
+    "diffs",
+    "pipelines",
+];
+
+/// A merge request URL as .../pull/<n> or .../-/merge_requests/<n>, without the #fragment,
+/// ?query, trailing slash or page of REQUEST_PAGES it may have after the number; None for any
+/// other text.
+pub fn canonical_merge_request(url: &str) -> Option<String> {
+    let url = url.split(['#', '?']).next()?;
+    let url = url.strip_suffix('/').unwrap_or(url);
+    if let Some(request) = merge_request(url) {
+        return Some(request.to_string());
+    }
+    let (request, page) = url.rsplit_once('/')?;
+    REQUEST_PAGES
+        .contains(&page)
+        .then(|| merge_request(request))
+        .flatten()
         .map(String::from)
 }
 
@@ -24,7 +51,8 @@ fn merge_request(word: &str) -> Option<&str> {
         .or_else(|| word.strip_prefix("http://"))?;
     let (_, path) = rest.split_once('/')?;
     let plain = word.chars().all(|c| c.is_ascii_graphic());
-    (plain && ends_in_request(path)).then_some(word)
+    let dotted = path.split('/').any(|segment| matches!(segment, "." | ".."));
+    (plain && !dotted && ends_in_request(path)).then_some(word)
 }
 
 /// Whether `path` is or ends in pull/<n> or -/merge_requests/<n>.
@@ -300,8 +328,6 @@ mod tests {
             "https://github.com/a/b/pull/12\x1b]52;c;aGk=\x07",
             "https://github.com/a/b/pull/12\u{9b}2J",
             "https://github.com/a/b/pull/12/../../evil",
-            "https://github.com/a/b/pull/12?x=1",
-            "https://github.com/a/b/pull/12#top",
             "https://github.com/a/b/pull/",
             "https://github.com/a/b/pull/twelve",
             "https://gitlab.com/g/r/-/merge_requests/7x",
@@ -312,6 +338,65 @@ mod tests {
             created("https://github.com/a/b/pull/12 https://github.com/a/b/pull/9\x07"),
             Some("https://github.com/a/b/pull/12".into()),
             "the last one that is plain"
+        );
+    }
+
+    #[test]
+    fn a_merge_request_url_reads_as_its_canonical_form() {
+        for (url, canonical) in [
+            (
+                "https://github.com/a/b/pull/12",
+                "https://github.com/a/b/pull/12",
+            ),
+            (
+                "https://github.com/a/b/pull/12/",
+                "https://github.com/a/b/pull/12",
+            ),
+            (
+                "https://github.com/a/b/pull/12/files",
+                "https://github.com/a/b/pull/12",
+            ),
+            (
+                "https://github.com/a/b/pull/12/commits/",
+                "https://github.com/a/b/pull/12",
+            ),
+            (
+                "https://github.com/a/b/pull/12?w=1",
+                "https://github.com/a/b/pull/12",
+            ),
+            (
+                "https://github.com/a/b/pull/12#issuecomment-1",
+                "https://github.com/a/b/pull/12",
+            ),
+            (
+                "https://gitlab.com/g/r/-/merge_requests/7/diffs?view=inline",
+                "https://gitlab.com/g/r/-/merge_requests/7",
+            ),
+            (
+                "http://gitlab.example/g/r/-/merge_requests/7/pipelines",
+                "http://gitlab.example/g/r/-/merge_requests/7",
+            ),
+        ] {
+            assert_eq!(
+                canonical_merge_request(url).as_deref(),
+                Some(canonical),
+                "{url}"
+            );
+        }
+        for url in [
+            "https://github.com/a/b/pull/12/../../c/d/pull/1",
+            "https://github.com/a/b/pull/12/files/extra",
+            "https://github.com/a/b/pull/12/settings",
+            "https://github.com/a/b/issues/12",
+            "https://github.com/a/b/pull/12\x07",
+            "--web",
+            "ftp://github.com/a/b/pull/12",
+        ] {
+            assert_eq!(canonical_merge_request(url), None, "{url}");
+        }
+        assert_eq!(
+            created_merge_request("gh pr create", "https://github.com/a/b/pull/12/files\n"),
+            Some("https://github.com/a/b/pull/12".into())
         );
     }
 

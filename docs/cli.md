@@ -345,7 +345,7 @@ help[1]: Set SAAIO_FLOW_ID or pass --flow <name>
 | `decision <text>` | a decision made on your behalf |
 | `tasks <done> <total>` | how many of the plan's tasks are done |
 | `review --fixed <n> --open <n>` | review findings fixed and still open |
-| `merge-request <url>` | the merge request is open. The flow shows `done` until its worker reports more activity; the session remains reachable. A URL that is no merge request of the flow's repository, by any of its remotes, is refused. |
+| `merge-request <url>` | the merge request is open. The flow shows `done` until its worker reports more activity; the session remains reachable. saaio keeps it as `.../pull/<n>` or `.../-/merge_requests/<n>`, without a trailing `/`, `?query`, `#fragment` or a page such as `/files`. Any other URL, or a merge request of another repository than any of the flow's remotes, is refused. |
 | `ended` | the worker's session ended. The UI does not reopen it. |
 | `heartbeat` | the worker is alive. Adds no event (see `not-responding` in [flows.md](flows.md#states)). |
 
