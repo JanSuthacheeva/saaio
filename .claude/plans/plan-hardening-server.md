@@ -275,7 +275,7 @@ saaio hook reads an event
 
 ### Protocol
 
-- [ ] `proto::encode`, `write_msg` through it, and `read_msg` growing its buffer with the bytes (unit test: a big length never hands the reader a buffer over 64 KiB, failing first); seeded decoder fuzz unit test
+- [x] `proto::encode`, `write_msg` through it, and `read_msg` growing its buffer with the bytes (unit test: a big length never hands the reader a buffer over 64 KiB, failing first); seeded decoder fuzz unit test
 - [ ] `Size::clamped` and `MAX_SIZE`, clamped in `Server::message` for Hello and Resize (server test: Resize past MAX_SIZE gives frames of at most 500 rows, failing first)
 - [ ] `Peer::printable` cuts to PEER_TEXT_LIMIT (unit test, and server test: a hello with a 1 MiB folder gives a cut server.log line, failing first)
 

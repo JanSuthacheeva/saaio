@@ -274,20 +274,28 @@ pub enum Mouse {
     Motion,
 }
 
+/// A message as its u32 length and postcard bytes, ready to write; Err past MAX_MESSAGE.
+pub fn encode<T: Serialize>(message: &T) -> Result<Vec<u8>> {
+    let body = postcard::to_stdvec(message).context("could not encode a message")?;
+    if body.len() > MAX_MESSAGE {
+        bail!("message of {} bytes is over the limit", body.len());
+    }
+    let len = u32::try_from(body.len()).expect("MAX_MESSAGE fits in u32");
+    let mut bytes = Vec::with_capacity(4 + body.len());
+    bytes.extend(len.to_le_bytes());
+    bytes.extend(body);
+    Ok(bytes)
+}
+
 /// Each message as a u32 length followed by its postcard bytes.
 pub fn write_msg<W: Write, T: Serialize>(writer: &mut W, message: &T) -> Result<()> {
-    let bytes = postcard::to_stdvec(message).context("could not encode a message")?;
-    if bytes.len() > MAX_MESSAGE {
-        bail!("message of {} bytes is over the limit", bytes.len());
-    }
-    let len = u32::try_from(bytes.len()).expect("MAX_MESSAGE fits in u32");
-    writer.write_all(&len.to_le_bytes())?;
-    writer.write_all(&bytes)?;
+    writer.write_all(&encode(message)?)?;
     writer.flush()?;
     Ok(())
 }
 
 /// The next message; None on a clean end of stream; Err on a message over MAX_MESSAGE or bytes that do not decode.
+/// The buffer grows with the bytes that arrive, so a length alone allocates nothing.
 pub fn read_msg<R: Read, T: DeserializeOwned>(reader: &mut R) -> Result<Option<T>> {
     let mut len = [0u8; 4];
     if !read_full(reader, &mut len)? {
@@ -297,8 +305,9 @@ pub fn read_msg<R: Read, T: DeserializeOwned>(reader: &mut R) -> Result<Option<T
     if len > MAX_MESSAGE {
         bail!("message of {len} bytes is over the limit");
     }
-    let mut bytes = vec![0u8; len];
-    if !read_full(reader, &mut bytes)? && len > 0 {
+    let mut bytes = Vec::new();
+    reader.take(len as u64).read_to_end(&mut bytes)?;
+    if bytes.len() < len {
         bail!("the stream ended inside a message");
     }
     let message = postcard::from_bytes(&bytes).context("could not decode a message")?;
@@ -603,6 +612,47 @@ mod tests {
 
         assert!(read_msg::<_, ClientMsg>(&mut Cursor::new(wire)).is_err());
         assert!(read_msg::<_, ClientMsg>(&mut Cursor::new(vec![9, 0])).is_err());
+    }
+
+    /// Ends after `left` bytes, remembering the largest buffer it was handed.
+    struct Short {
+        left: usize,
+        largest: usize,
+    }
+
+    impl Read for Short {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.largest = self.largest.max(buf.len());
+            let read = buf.len().min(self.left);
+            buf[..read].fill(0);
+            self.left -= read;
+            Ok(read)
+        }
+    }
+
+    #[test]
+    fn a_length_alone_allocates_nothing_near_it() {
+        let mut wire =
+            Cursor::new(((MAX_MESSAGE - 1) as u32).to_le_bytes().to_vec()).chain(Short {
+                left: 10,
+                largest: 0,
+            });
+
+        assert!(read_msg::<_, ClientMsg>(&mut wire).is_err());
+        let (_, short) = wire.into_inner();
+        assert!(short.largest <= 64 << 10, "{}", short.largest);
+    }
+
+    #[test]
+    fn random_bytes_decode_or_fail_but_never_panic() {
+        let mut noise = crate::fixtures::Noise::new(0x5aa10);
+        for _ in 0..2000 {
+            let bytes = noise.bytes(64);
+            let mut wire = u32::try_from(bytes.len()).unwrap().to_le_bytes().to_vec();
+            wire.extend(&bytes);
+            let _ = read_msg::<_, ClientMsg>(&mut Cursor::new(&wire));
+            let _ = read_msg::<_, ClientMsg>(&mut Cursor::new(&bytes));
+        }
     }
 
     #[test]
