@@ -175,5 +175,5 @@ Store lookup and register:
 - [x] Codex home: `Env.codex_home` from `CODEX_HOME`, `Env::codex_home()` with tests; `UiEnv.codex_home`
 - [x] Peek: `codex::rollout` and `transcript_of`/`PeekCache` taking the codex home, with tests for inside, outside, `..` and a link out; files.md row on the Codex transcript
 - [x] Hooks: `git::registered_git_dir` public, `Hook::pins_git`, `command` with GIT_DIR and GIT_WORK_TREE; tests with a tampered worktree `.git` for teardown, pause and resume, setup unpinned, an unregistered worktree failing; repository.md on the hooks' git variables
-- [ ] CHANGELOG lines under Unreleased, Fixed
+- [x] CHANGELOG lines under Unreleased, Fixed
 - [ ] E2E: built binary on a scratch store: `saaio bug-report` in a repo, a moved-repo store, and `saaio start` then a tampered worktree `.git` then `saaio remove` whose teardown never reads the decoy
