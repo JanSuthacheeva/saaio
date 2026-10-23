@@ -168,6 +168,14 @@ Store lookup and register:
 - Existing `saaio-report-*.txt` files in repositories are left alone.
 - CHANGELOG: plain user-facing lines under Unreleased, Fixed; no audit ids.
 
+## Build notes
+
+- Codex home and Peek were built in one commit: `Env::codex_home` and `UiEnv.codex_home` have no reader before the peek takes them, which clippy rejects as dead code.
+- `git::registered_git_dir` also answers "<worktree> is no worktree of <repo>" when the folder is gone or the repository has no `worktrees/`, instead of a bare io error a failed teardown would show.
+- `server/tests.rs` `idle_flow` makes a real worktree (new `workspace::fixtures::init`), since pause and resume now need one.
+- `.github/ISSUE_TEMPLATE/bug_report.yml` names the new report folder too.
+- E2E: `git worktree remove` refuses a worktree whose `.git` was changed, so `saaio remove` keeps it (`worktree: kept`), as before this change.
+
 ## Tasks
 
 - [x] Registry: `register` closes the root before its early return; `project_store` never takes over a store, `claim` loses `free`; tests for an open root with the entry present, a gone owner and an unreadable repo file; files.md on a moved repository's store
@@ -176,4 +184,4 @@ Store lookup and register:
 - [x] Peek: `codex::rollout` and `transcript_of`/`PeekCache` taking the codex home, with tests for inside, outside, `..` and a link out; files.md row on the Codex transcript
 - [x] Hooks: `git::registered_git_dir` public, `Hook::pins_git`, `command` with GIT_DIR and GIT_WORK_TREE; tests with a tampered worktree `.git` for teardown, pause and resume, setup unpinned, an unregistered worktree failing; repository.md on the hooks' git variables
 - [x] CHANGELOG lines under Unreleased, Fixed
-- [ ] E2E: built binary on a scratch store: `saaio bug-report` in a repo, a moved-repo store, and `saaio start` then a tampered worktree `.git` then `saaio remove` whose teardown never reads the decoy
+- [x] E2E: built binary on a scratch store: `saaio bug-report` in a repo, a moved-repo store, and `saaio start` then a tampered worktree `.git` then `saaio remove` whose teardown never reads the decoy

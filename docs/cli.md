@@ -489,7 +489,7 @@ project names (`-Users-you-...`). Works without a store, and then says why there
 ```
 $ saaio bug-report
 report: /Users/jan/.local/state/saaio/reports/saaio-report-2026-10-18.txt
-help[2]: "Check the file before uploading it: it can hold flow names, requests and paths","Attach it from there; it is never written into a repository"
+help[2]: "Check the file before uploading it: it can hold flow names, requests and paths",Attach it from there; it is never written into a repository
 ```
 
 How to report a bug: [troubleshooting.md](troubleshooting.md#reporting-a-bug).
