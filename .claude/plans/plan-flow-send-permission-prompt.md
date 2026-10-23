@@ -133,3 +133,34 @@ prompt: the next `Working` clears `permission`.
 - [x] `tests/cli/send.rs`: Claude Code and Codex permission requests through `saaio hook`, then `saaio send` and `status --json`
 - [x] Docs: `docs/cli.md`, `docs/json.md`, `docs/flows.md`; ROADMAP narrowed; CHANGELOG Unreleased
 - [x] E2E: scratch store, real UI, guided Claude Code worker at a permission prompt, master's `saaio send` prints the prompt; answer it in the pane and see the worker read the message
+
+## Review
+
+Isolated review of `main..28f2de5` against this plan. No findings to fix: every unit, call chain,
+log line, `--json` key, TOON text and doc change matches the plan, and each test seam fails
+without its code.
+
+**Fixed** - nothing.
+
+**Open**
+
+- A Claude Code permission denied in the pane (Esc / "No") fires no hook saaio translates, so the
+  flow keeps `waiting permission: …` and `permission: true` until the next turn starts, and
+  `saaio send` then says the prompt is open. This predates the branch (the blocker stayed the same
+  before); the new text only repeats it. Not proven E2E. Recommendation: leave it, note it with the
+  roadmap item "The master answers permission prompts".
+- `saaio send --type` to a pane on a permission prompt is unchanged, as the plan's assumptions say;
+  whether its typed line can land in the prompt is outside this branch and was not checked.
+
+**Where to look**
+
+1. `src/fold.rs` `apply` `Waiting` arm, the cleanup after the match, and `finish`'s matured
+   `PermissionPending`: where `permission` is set and cleared.
+2. `src/cli/output/flow.rs` `sent`: the `prompt` key and the three help lines.
+3. `tests/cli/send.rs` `send_to_a_flow_on_a_permission_prompt_says_what_it_asks`: both harnesses
+   end to end through `saaio hook`.
+
+Routine, skim: the `EventKind::waiting` helper replacing worded-waiting literals across tests,
+`permission: false` at dialog sites, and the docs.
+
+**Checks** - fmt, clippy, test and deny passed at 28f2de5; this review changed only this plan.
