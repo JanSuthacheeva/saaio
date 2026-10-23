@@ -128,7 +128,7 @@ prompt: the next `Working` clears `permission`.
 
 - [x] Add `EventKind::Waiting.permission` and `EventKind::waiting(question)`; move worded-waiting sites to the helper and dialog sites to `permission: false`; event.rs tests for missing, false and true
 - [x] Mark Claude Code's `PermissionRequest` waiting with `permission: true`, with claude_code tests on `permission_bash.json` and `permission_ask.json`
-- [ ] Add `FlowView.permission` and fold it (Waiting, cleanup, matured `PermissionPending`), with fold tests
+- [x] Add `FlowView.permission` and fold it (Waiting, cleanup, matured `PermissionPending`), with fold tests
 - [ ] `output::flow::sent`: `prompt` and the permission help line, with exact-text tests
 - [ ] `tests/cli/send.rs`: Claude Code and Codex permission requests through `saaio hook`, then `saaio send` and `status --json`
 - [ ] Docs: `docs/cli.md`, `docs/json.md`, `docs/flows.md`; ROADMAP narrowed; CHANGELOG Unreleased

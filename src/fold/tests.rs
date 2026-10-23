@@ -26,6 +26,8 @@ fn codex_permission_waits_after_a_grace_period_and_completion_cancels_it() {
         Some("permission: Bash(touch notes.txt)")
     );
     assert_eq!(waiting.changed_at, 4_000);
+    assert!(waiting.permission);
+    assert!(!view(&events, 3_999).permission, "inside its grace");
     assert!(changes("x", &events, &EventKind::Working, 2_000));
     let completed = [
         events[0].clone(),
@@ -568,6 +570,34 @@ fn a_dialog_shows_its_questions_until_the_flow_leaves_waiting() {
         asked,
         "a message leaves it open"
     );
+}
+
+#[test]
+fn a_permission_prompt_shows_until_the_flow_leaves_waiting() {
+    let asked = EventKind::Waiting {
+        question: "permission: Bash(curl -sI https://example.org)".into(),
+        questions: Vec::new(),
+        permission: true,
+    };
+    let events = vec![started(0), at(1, asked)];
+
+    let flow = view(&events, 2);
+    assert_eq!(flow.state, State::Waiting);
+    assert!(flow.permission);
+    assert!(!view(&[started(0), at(1, EventKind::waiting("Ship it?"))], 2).permission);
+
+    for next in [
+        EventKind::Working,
+        EventKind::waiting("Ship it?"),
+        EventKind::Ended,
+    ] {
+        let mut after = events.clone();
+        after.push(at(3, next.clone()));
+        assert!(!view(&after, 4).permission, "{next:?}");
+    }
+    let mut messaged = events.clone();
+    messaged.push(at(3, EventKind::Message { text: "Hi".into() }));
+    assert!(view(&messaged, 4).permission, "a message leaves it open");
 }
 
 #[test]
