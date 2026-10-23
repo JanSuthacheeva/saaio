@@ -381,3 +381,50 @@ saaio hook reads an event
 
 - [x] CHANGELOG four lines under Unreleased, Fixed; CLAUDE.md Architecture line for outbox.rs and the server_log changes
 - [x] End-to-end check: scratch SAAIO_HOME, real server and UI in a PTY, a UI that stops reading (SIGSTOP) while the master prints, a second UI attaches at once; server.log rotation by hook appends; a huge hook payload; `saaio --stop` at the end
+
+## Review
+
+Isolated review of `main..flow/hardening-server` against this plan.
+
+**Fixed**
+
+- The Backlog could deadlock the whole server for good: the server thread wrote input to a PTY
+  synchronously, so a pane that prints for every line it reads (a paste into a busy agent) left
+  the server waiting in the write while the pane's reader waited on the server. Shown by
+  `a_pane_that_prints_for_every_line_typed_never_stalls_the_server` (stalls past 30 s before,
+  about 2 s after). Fixed by `server/pane_input.rs`: each pane's input is queued for a writer
+  thread of its own, refused past 16 MiB, so the server thread never writes to a PTY. This also
+  ends the older stall where a paste into a pane that does not read held the server. Commit
+  `server: host: write a pane's input on a thread of its own`. Its fix was reviewed by a
+  separate agent: no proven problem.
+
+**Open**
+
+- `saaio report merge-request` now refuses a URL with anything after the number (`/files`,
+  a trailing `/`, `?query`), with "is not a merge request of ...'s repository". Recommendation:
+  keep the strict check; consider naming the expected form (`.../pull/<n>`) in that message.
+- `server_log::open` fails when the log's file system refuses `flock`, and `ensure_server` then
+  cannot start the server (before, no lock was taken). Not proven on a real file system.
+  Recommendation: treat a failed lock as no lock, since it only orders rotations.
+- A write to a pane now fails only on the next write after the pane stopped taking input, so
+  `type_into` and the dialog dismissal can count one line or Esc as delivered to a pane that
+  died at that moment. Low severity; recommendation: leave it.
+- Event texts now lose control characters for every kind (`Typed` and `Message` included);
+  `\r\n` becomes `\n`. Meant by the plan; mentioned because `saaio send` text changes.
+
+**Where to look**
+
+1. `src/server/host.rs` `spawn` -> `server/pane_input.rs` and `server/backlog.rs`: the two
+   threads per pane, and that only pane threads ever wait.
+2. `src/server/conn.rs` `drop_conn` / `send_to` with `server/outbox.rs`: a dropped connection
+   now closes when its writer thread finishes, not at once.
+3. `src/server_log.rs` `open` and `follow`: the flock and moved-file loop, and the dup2 onto
+   stdout and stderr.
+
+Routine and skimmable: `proto.rs` clamps and cuts, `hook.rs` `read_event`, `calls.rs` URL
+parsing, `event.rs` `clean_texts`, the docs and CHANGELOG lines.
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt` pass at the fix
+commit.
