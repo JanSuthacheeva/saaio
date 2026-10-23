@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use anyhow::{Context, Result, anyhow, bail};
 use serde_json::Value;
 
 use super::{of_own_repo, repo_dir, views};
@@ -98,11 +99,13 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
         log.error(&format!("no adapter named {}", args.adapter));
         return Document::Silent;
     };
-    let mut text = String::new();
-    if let Err(error) = std::io::stdin().read_to_string(&mut text) {
-        log.error(&format!("could not read the event: {error}"));
-        return Document::Silent;
-    }
+    let text = match read_event(std::io::stdin().lock()) {
+        Ok(text) => text,
+        Err(error) => {
+            log.error(&format!("{error:#}"));
+            return Document::Silent;
+        }
+    };
     let payload: Value = match serde_json::from_str(&text) {
         Ok(payload) => payload,
         Err(error) => {
@@ -120,6 +123,22 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
         Some(news) => Document::Wake(news),
         None => Document::Silent,
     }
+}
+
+/// The most of an event saaio hook reads.
+const MAX_EVENT: u64 = 16 << 20;
+
+/// The event `input` carries; Err when it is past MAX_EVENT, not UTF-8, or cannot be read.
+fn read_event(input: impl Read) -> Result<String> {
+    let mut bytes = Vec::new();
+    input
+        .take(MAX_EVENT + 1)
+        .read_to_end(&mut bytes)
+        .context("could not read the event")?;
+    if bytes.len() as u64 > MAX_EVENT {
+        bail!("the event is over {} MiB", MAX_EVENT >> 20);
+    }
+    String::from_utf8(bytes).map_err(|_| anyhow!("the event is not UTF-8"))
 }
 
 /// How long a tool call waits for services to come back.

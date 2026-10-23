@@ -336,7 +336,7 @@ saaio hook reads an event
 
 ### Hook
 
-- [ ] `hook::read_event` with MAX_EVENT (tests/cli/hooks.rs: 17 MiB payload logged and silent, failing first; binary, malformed JSON, 10 000-deep nesting)
+- [x] `hook::read_event` with MAX_EVENT (tests/cli/hooks.rs: 17 MiB payload logged and silent, failing first; binary, malformed JSON, 10 000-deep nesting)
 - [ ] `calls::merge_request` for `created_merge_request` and `in_repo` (unit tests: control characters or text after the number, failing first)
 - [ ] `adapter::cut` through `text::printable`; questions and options cut and capped at MAX_QUESTIONS in claude_code and codex; audit the other payload texts (unit tests, failing first)
 
