@@ -156,6 +156,9 @@ pub fn open(log: &Path, cap: u64) -> io::Result<File>;
 pub fn follow(log: &Path, cap: u64) -> io::Result<()>;
 ```
 
+- `open` lets the lock go before it returns (changed in the build): flock belongs to the open
+  file, which ensure_server hands the server as stderr and follow dup2s onto it, so a lock kept
+  with it would never be let go. A log that cannot be moved aside is opened as it is.
 - `append` writes through `open(log, CAP)`.
 - `rotate` is removed, folded into `open`.
 
@@ -239,7 +242,7 @@ A hook appends to server.log
 2. `append -> server_log::open(path, CAP): File`: open 0600 append, flock exclusive; when the
    file at `path` is no longer this one, open again; when past CAP, `rename(path, path.1)` and
    open again.
-3. `append -> file.write_all(line)`; the lock goes with the File.
+3. `append -> file.write_all(line)` (O_APPEND, unlocked).
 
 - Any io error: returned; callers let it go as today.
 
@@ -323,7 +326,7 @@ saaio hook reads an event
 
 ### Log
 
-- [ ] `server_log::open` (flock, rotation, moved-file reopen) replacing `rotate`; `append` and `ensure_server` through it (unit tests: rotates past cap, racing writers rotate once)
+- [x] `server_log::open` (flock, rotation, moved-file reopen) replacing `rotate`; `append` and `ensure_server` through it (unit tests: rotates past cap, racing writers rotate once)
 - [ ] `server_log::follow` with rustix `stdio`, `Server.log`, called on the tick (tests/cli/server.rs E2E: after a hook append rotates, the server's next line lands in the new server.log, failing first)
 
 ### Hook

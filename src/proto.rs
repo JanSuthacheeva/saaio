@@ -318,8 +318,9 @@ pub fn write_msg<W: Write, T: Serialize>(writer: &mut W, message: &T) -> Result<
     Ok(())
 }
 
-/// The next message; None on a clean end of stream; Err on a message over MAX_MESSAGE or bytes that do not decode.
-/// The buffer grows with the bytes that arrive, so a length alone allocates nothing.
+/// The next message; None on a clean end of stream; Err on a message over MAX_MESSAGE or bytes
+/// that do not decode. The buffer grows with the bytes that arrive, so a length alone allocates
+/// nothing.
 pub fn read_msg<R: Read, T: DeserializeOwned>(reader: &mut R) -> Result<Option<T>> {
     let mut len = [0u8; 4];
     if !read_full(reader, &mut len)? {
