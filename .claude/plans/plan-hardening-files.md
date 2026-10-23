@@ -152,7 +152,7 @@ Store lookup and register:
 
 ## Test seams
 
-- `hooks.rs`: real repo and worktree; the worktree's `.git` rewritten to a decoy git dir whose config sets `core.fsmonitor` to a marker script; teardown runs `git status` and `git rev-parse --git-dir`: marker absent, git dir is the registered one. Setup unpinned. Unregistered worktree -> Err.
+- `hooks.rs`: real repo and worktree whose `.git` names another repository; teardown, pause and resume run git and see the registered git dir, never the other repository. Setup unpinned. Unregistered worktree -> Err.
 - `peek/codex.rs`: `rollout` with a file under sessions, outside it, a `..` path, a link from sessions to outside.
 - `peek.rs`: `transcript_of` with a foreign path -> None.
 - `registry.rs`: root 0755 with the entry present -> 0700 after register; gone owner -> `shop-2`, old repo file untouched; unreadable repo file -> next number.
@@ -198,6 +198,8 @@ Reviewed in an isolated context against this plan, CLAUDE.md and the code the di
 - Existing teardown, pause and resume scripts that run `git -C "$SAAIO_REPO" ...` now act on the worktree. Documented in repository.md and the CHANGELOG. Recommendation: keep; mention it in the release notes for 0.1.2.
 - The peek reads `CODEX_HOME` from the UI's environment, while Codex workers run with the server's. They differ only when the server was started from a shell with another `CODEX_HOME`; then the peek of a Codex worker stays empty. Recommendation: accept for 0.1.2.
 - `saaio bug-report` now fails when neither `HOME` nor `XDG_STATE_HOME` is set, even with `SAAIO_HOME` set. Documented in cli.md. Recommendation: keep.
+
+Decided (master, 2026-10-23): keep the first, second and fourth as they are, accept the third for 0.1.2.
 
 **Where to look**
 

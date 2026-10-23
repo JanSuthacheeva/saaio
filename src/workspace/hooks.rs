@@ -295,8 +295,8 @@ touch ran.txt
         assert_eq!(format!("{error:#}"), "docker is not running");
     }
 
-    /// Points the worktree's .git at a decoy repository whose config runs a script leaving
-    /// `marker` when git reads it; returns the decoy's git dir and the marker.
+    /// Points the worktree's .git at another repository, which leaves `marker` once git uses it;
+    /// returns that repository's git dir and the marker.
     fn tamper(workspace: &Workspace) -> (TempDir, PathBuf, PathBuf) {
         let decoy = TempDir::new().unwrap();
         let root = decoy.path().canonicalize().unwrap();
