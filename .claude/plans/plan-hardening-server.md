@@ -183,6 +183,22 @@ fn read_event(input: impl Read) -> Result<String>;
 
 - `run`: `read_event(io::stdin().lock())` replaces `read_to_string`; an Err is logged, Silent.
 
+`src/event.rs`, `src/text.rs` (modified; changed in the build from `adapter::cut`): every event
+text is already cut at `Event::new` (`cut_texts`, 500 and 4000 chars), so the control
+characters and the question cap go there too, for every source (hooks, `saaio report`,
+`saaio send`), not only the adapters. Newlines and tabs stay: a Blocked reason carries a worker's
+last output lines, an answer is Markdown. `adapter::cut` is unchanged.
+
+```rust
+// event.rs
+/// The most questions of a dialog, and options of a question, an event keeps.
+pub const MAX_QUESTIONS: usize = 8;
+fn clean_texts(&mut self); // was cut_texts: text::printable_lines, then cut; questions and options truncated
+// text.rs
+/// `text` without control characters but its newlines and tabs.
+pub fn printable_lines(text: &str) -> String;
+```
+
 `src/adapter.rs`, `adapter/calls.rs`, `adapter/claude_code.rs`, `adapter/codex.rs` (modified)
 
 ```rust
@@ -338,7 +354,7 @@ saaio hook reads an event
 
 - [x] `hook::read_event` with MAX_EVENT (tests/cli/hooks.rs: 17 MiB payload logged and silent, failing first; binary, malformed JSON, 10 000-deep nesting)
 - [x] `calls::merge_request` for `created_merge_request` and `in_repo` (unit tests: control characters or text after the number, failing first)
-- [ ] `adapter::cut` through `text::printable`; questions and options cut and capped at MAX_QUESTIONS in claude_code and codex; audit the other payload texts (unit tests, failing first)
+- [x] `adapter::cut` through `text::printable`; questions and options cut and capped at MAX_QUESTIONS in claude_code and codex; audit the other payload texts (unit tests, failing first)
 
 ### Finish
 
