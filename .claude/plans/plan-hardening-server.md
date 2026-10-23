@@ -112,13 +112,15 @@ board; any other id (a typo, `../x`) no longer leaves a Failed pane behind per m
 ```rust
 struct Server {
     // ...
-    /// server.log beside the socket, which stderr writes to in a server ensure_server started.
-    log: PathBuf,
+    /// server.log beside the socket while stderr writes to it, as in a server ensure_server
+    /// started; None for one run in a terminal (or a server test inside cargo test, whose
+    /// stderr may be a file of the test run's).
+    log: Option<PathBuf>,
 }
 ```
 
-- `serve()`: on each WATCH_EVERY tick also `server_log::follow(&self.log, server_log::CAP)` (an
-  error is let go: it cannot be logged).
+- `serve()`: on each WATCH_EVERY tick, when `self.log` is Some, also
+  `server_log::follow(log, server_log::CAP)` (an error is let go: it cannot be logged).
 - WRITE_TIMEOUT is the Outbox writer's; its doc says so.
 
 `src/proto.rs` (modified)
@@ -154,6 +156,9 @@ pub fn open(log: &Path, cap: u64) -> io::Result<File>;
 /// a file that is no longer the one at `log` (a writer moved it to `<log>.1`) or is past
 /// `cap`. Nothing when stderr is not a regular file, as for a server run in a terminal.
 pub fn follow(log: &Path, cap: u64) -> io::Result<()>;
+
+/// Whether stderr is the file at `log`: a server ensure_server started, not one in a terminal.
+pub fn is_stderr(log: &Path) -> bool;
 ```
 
 - `open` lets the lock go before it returns (changed in the build): flock belongs to the open
@@ -202,7 +207,7 @@ fn merge_request(word: &str) -> Option<&str>;
 
 - `Outbox`: `Vec<u8>` frames (length prefix included) over an mpsc channel, server thread ->
   writer thread; `queued` counts bytes across both.
-- `Server.log: PathBuf`.
+- `Server.log: Option<PathBuf>`.
 - Constants: MAX_QUEUED 16 MiB, MAX_EVENT 16 MiB, MAX_SIZE 1000 x 500, PEER_TEXT_LIMIT 4096,
   MAX_QUESTIONS 8.
 
@@ -327,7 +332,7 @@ saaio hook reads an event
 ### Log
 
 - [x] `server_log::open` (flock, rotation, moved-file reopen) replacing `rotate`; `append` and `ensure_server` through it (unit tests: rotates past cap, racing writers rotate once)
-- [ ] `server_log::follow` with rustix `stdio`, `Server.log`, called on the tick (tests/cli/server.rs E2E: after a hook append rotates, the server's next line lands in the new server.log, failing first)
+- [x] `server_log::follow` with rustix `stdio`, `Server.log`, called on the tick (tests/cli/server.rs E2E: after a hook append rotates, the server's next line lands in the new server.log, failing first)
 
 ### Hook
 

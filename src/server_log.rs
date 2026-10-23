@@ -3,6 +3,7 @@
 use std::backtrace::Backtrace;
 use std::fs::{self, File};
 use std::io::{self, Write};
+use std::os::fd::AsFd;
 use std::os::unix::fs::MetadataExt;
 use std::panic::Location;
 use std::path::{Path, PathBuf};
@@ -42,6 +43,33 @@ pub fn open(log: &Path, cap: u64) -> io::Result<File> {
             return Ok(file);
         }
     }
+}
+
+/// Whether stderr is the file at `log`: a server ensure_server started, not one in a terminal.
+pub fn is_stderr(log: &Path) -> bool {
+    let (Ok(stderr), Ok(file)) = (stderr_meta(), fs::metadata(log)) else {
+        return false;
+    };
+    (stderr.dev(), stderr.ino()) == (file.dev(), file.ino())
+}
+
+/// Points stdout and stderr at `log` (through open, so past `cap` it moves aside first) once
+/// stderr is a file no longer at `log` (another writer moved it to `<log>.1`) or past `cap`.
+/// Nothing when stderr is not a regular file.
+pub fn follow(log: &Path, cap: u64) -> io::Result<()> {
+    let stderr = stderr_meta()?;
+    if !stderr.is_file() || (is_stderr(log) && stderr.len() <= cap) {
+        return Ok(());
+    }
+    let file = open(log, cap)?;
+    rustix::stdio::dup2_stdout(&file)?;
+    rustix::stdio::dup2_stderr(&file)?;
+    Ok(())
+}
+
+/// What stderr is: a file, a terminal, a pipe.
+fn stderr_meta() -> io::Result<fs::Metadata> {
+    File::from(io::stderr().as_fd().try_clone_to_owned()?).metadata()
 }
 
 /// `<log>.1`, where a log past its cap goes.
@@ -149,6 +177,16 @@ mod tests {
             assert_eq!(fs::read_to_string(&old).unwrap(), full);
             assert_eq!(fs::read_to_string(&log).unwrap(), "line\n".repeat(4));
         }
+    }
+
+    #[test]
+    fn knows_a_file_that_is_not_stderr() {
+        let dir = TempDir::new().unwrap();
+        let log = dir.path().join("server.log");
+
+        assert!(!is_stderr(&log));
+        fs::write(&log, "").unwrap();
+        assert!(!is_stderr(&log));
     }
 
     #[test]

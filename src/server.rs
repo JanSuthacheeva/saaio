@@ -174,6 +174,9 @@ struct Server {
     /// The flows whose services a pause or resume runs for.
     pauses: PauseWatch,
     trust: Option<Trust>,
+    /// server.log beside the socket while stderr writes to it, as in a server ensure_server
+    /// started; None for one run in a terminal.
+    log: Option<PathBuf>,
 }
 
 /// Writes master.md and, when missing, the example config.toml and theme.toml; logs what fails.
@@ -253,6 +256,7 @@ pub fn run(
         forges: ForgeWatch::default(),
         pauses: PauseWatch::default(),
         trust: paths.trust.clone(),
+        log: Some(server_log::path(&paths.socket)).filter(|log| server_log::is_stderr(log)),
     };
     server.open_master(start);
     server.refresh();
@@ -287,6 +291,10 @@ impl Server {
                 Err(RecvTimeoutError::Disconnected) => bail!("the server lost its event channel"),
             }
             if self.refreshed_at.elapsed() >= WATCH_EVERY {
+                if let Some(log) = &self.log {
+                    // An error cannot be logged; the next tick tries again.
+                    let _ = server_log::follow(log, server_log::CAP);
+                }
                 self.deliver_news();
                 self.refresh();
                 self.notice_stalled_starts();
