@@ -46,6 +46,28 @@ impl Outbox {
 }
 ```
 
+`src/server/backlog.rs` (new, added in the build: a pane running `yes` filled the event channel
+faster than the loop fed it, so every other event waited behind it)
+
+```rust
+/// Past this many bytes waiting for the server, every pane's reader waits for it.
+const MAX_BACKLOG: usize = 256 << 10;
+
+pub(super) struct Backlog { state: Mutex<State>, changed: Condvar }
+
+impl Backlog {
+    /// Counts `bytes` read from a pane, first waiting while the backlog is past MAX_BACKLOG.
+    pub(super) fn add(&self, bytes: usize);
+    /// Counts `bytes` fed to a terminal off the backlog.
+    pub(super) fn fed(&self, bytes: usize);
+    /// Lets every reader go on without waiting, for good (Host's Drop).
+    pub(super) fn close(&self);
+}
+```
+
+- `Host` keeps an `Arc<Backlog>`; each pane's output thread `add`s what it read before sending
+  it, `Host::feed` takes it off; `Server::stop` feeds the output it drains.
+
 `src/server/conn.rs` (modified)
 
 ```rust
@@ -290,7 +312,7 @@ saaio hook reads an event
 - [x] One hello deadline across every read of the first message, `Until` in conn.rs (server test: trickled hello closed, failing first; silent client still closed)
 - [x] `server/outbox.rs` `Outbox::start`/`send` with unit tests (never blocks, errs past MAX_QUEUED, delivers what it queued when dropped)
 - [x] `Conn` writes through its Outbox: `send_to`, `drop_conn`, `accept` (server test: a UI that never reads while its pane floods does not delay a control connection's CloseFlow and is dropped, failing first)
-- [ ] Pane output that outruns the server no longer starves the event loop (server test: a pane running `yes` does not delay a control connection's CloseFlow, failing first)
+- [x] Pane output that outruns the server no longer starves the event loop (server test: a pane running `yes` does not delay a control connection's CloseFlow, failing first)
 - [ ] Protocol robustness tests in server/tests.rs: 4 GiB prefix, Input before Hello types nothing, seeded fuzz before and after a hello; fix whatever they find
 
 ### Log

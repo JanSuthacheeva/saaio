@@ -1077,6 +1077,36 @@ fn a_ui_that_stops_reading_slows_nobody_and_is_dropped() {
 }
 
 #[test]
+fn a_pane_that_prints_without_pause_slows_nobody() {
+    let dir = TempDir::new().unwrap();
+    let flood = vec!["sh".into(), "-c".into(), "exec yes 0123456789abcdef".into()];
+    let (paths, handle) = start_with(
+        dir.path(),
+        Agent {
+            command: flood.clone(),
+            prompt: None,
+            adapter: None,
+            resume: Some(flood),
+        },
+    );
+
+    for _ in 0..5 {
+        thread::sleep(Duration::from_millis(300));
+        let mut control = connect(&paths.socket, Role::Control);
+        let asked = Instant::now();
+        assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+        proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
+        assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+        assert!(
+            asked.elapsed() < Duration::from_millis(500),
+            "answered after {:?}",
+            asked.elapsed()
+        );
+    }
+    stop(&paths, handle);
+}
+
+#[test]
 fn takes_at_most_16_connections_at_once() {
     let dir = TempDir::new().unwrap();
     let patient = Timing {

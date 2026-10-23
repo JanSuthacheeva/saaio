@@ -13,6 +13,7 @@ use anyhow::{Context, Result, bail};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use rustix::process::{Pid, Signal, kill_process_group};
 
+use super::backlog::Backlog;
 use crate::launch::pane::PaneSpec;
 use crate::proto::{Frame, PaneInfo, PaneKey, PaneStatus, Size};
 use crate::server::spawn_named;
@@ -38,6 +39,15 @@ pub struct Host {
     panes: BTreeMap<PaneKey, Pane>,
     size: Size,
     events: Sender<HostEvent>,
+    /// Output the panes' readers sent and feed has not taken yet.
+    backlog: Arc<Backlog>,
+}
+
+/// No reader waits on a Host that will feed nothing more.
+impl Drop for Host {
+    fn drop(&mut self) {
+        self.backlog.close();
+    }
 }
 
 #[derive(Debug)]
@@ -70,6 +80,7 @@ impl Host {
             panes: BTreeMap::new(),
             size,
             events,
+            backlog: Arc::default(),
         }
     }
 
@@ -123,6 +134,7 @@ impl Host {
     /// Feeds output into the pane's Terminal and writes the Terminal's replies (DA, DSR) back to
     /// the PTY; the text the program copied (OSC 52), if it did.
     pub fn feed(&mut self, key: &PaneKey, bytes: &[u8]) -> Option<String> {
+        self.backlog.fed(bytes.len());
         let pane = self.panes.get_mut(key)?;
         pane.term.feed(bytes);
         let replies = pane.term.replies();
@@ -299,6 +311,7 @@ impl Host {
 
         let (drained_tx, drained_rx) = mpsc::channel::<()>();
         let events = self.events.clone();
+        let backlog = Arc::clone(&self.backlog);
         let key = spec.key.clone();
         let output = spawn_named(format!("pane {key} output"), move || {
             let mut buf = vec![0u8; 64 * 1024];
@@ -307,6 +320,7 @@ impl Host {
                     Err(error) if error.kind() == ErrorKind::Interrupted => {}
                     Ok(0) | Err(_) => break,
                     Ok(read) => {
+                        backlog.add(read);
                         if events
                             .send(HostEvent::Output(key.clone(), buf[..read].to_vec()))
                             .is_err()

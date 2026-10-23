@@ -6,6 +6,7 @@ pub mod reconcile;
 pub mod terminal;
 pub mod watch;
 
+mod backlog;
 mod conn;
 mod dismiss;
 mod forge_watch;
@@ -361,6 +362,9 @@ impl Server {
             };
             match inbox.recv_timeout(left) {
                 Ok(Event::Host(HostEvent::Exited(key, code))) => self.host.exited(&key, code),
+                Ok(Event::Host(HostEvent::Output(key, bytes))) => {
+                    self.host.feed(&key, &bytes);
+                }
                 Ok(_) => {}
                 Err(_) => break,
             }
