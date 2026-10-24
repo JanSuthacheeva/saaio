@@ -489,17 +489,19 @@ help[1]: Run `saaio trust --revoke ~/projects/shop` to take it back
 saaio bug-report
 ```
 
-Writes `saaio-report-<date>.txt` in the current folder, or `saaio-report-<date>-2.txt` and on
-when that name is taken, readable only by you: the
+Writes `saaio-report-<date>.txt` in `reports/` of the shared folder
+([files.md](files.md#the-shared-folder)), or `saaio-report-<date>-2.txt` and on when that name is
+taken, readable only by you, never into the current folder or a repository: the
 versions of saaio, the OS, `claude`, `codex`, `gh` and `glab`, the store's path, whether
 `config.toml` and `theme.toml` load, and the last 300 lines of `server.log` and `server.log.1`.
 The home folder is written `~`, also as the real path a linked home leads to and in Claude Code's
-project names (`-Users-you-...`). Works without a store, and then says why there is none.
+project names (`-Users-you-...`). Works without a store, and then says why there is none. Without
+`HOME` and `XDG_STATE_HOME` it fails: `cannot find a state directory`.
 
 ```
 $ saaio bug-report
-report: /Users/jan/projects/shop/saaio-report-2026-10-18.txt
-help[1]: "Check the file before uploading it: it can hold flow names, requests and paths"
+report: /Users/jan/.local/state/saaio/reports/saaio-report-2026-10-18.txt
+help[2]: "Check the file before uploading it: it can hold flow names, requests and paths",Attach it from there; it is never written into a repository
 ```
 
 How to report a bug: [troubleshooting.md](troubleshooting.md#reporting-a-bug).
@@ -594,6 +596,7 @@ Read by saaio:
 | `CLAUDECODE`, `CODEX_THREAD_ID` | set by Claude Code or Codex. `saaio` prints the flows instead of opening the UI. |
 | `SSH_CONNECTION`, `SSH_TTY`, `WAYLAND_DISPLAY`, `DISPLAY` | how the UI copies: OSC 52 only over SSH, else also `pbcopy`, `wl-copy` or `xclip` ([ui.md](ui.md#copying)) |
 | `CLAUDE_CONFIG_DIR` | Claude Code's folder, where the UI reads a worker's transcript for the peek. Default: `~/.claude`. |
+| `CODEX_HOME` | Codex's folder. The UI reads a Codex worker's transcript for the peek only from its `sessions` folder. Default: `~/.codex`. |
 | `SAAIO_RELEASES_URL` | a mirror of the [releases page](https://github.com/JanSuthacheeva/saaio/releases), laid out like it (`latest/download/VERSION`, `download/<tag>/...`; `file://` works). Read by the UI's update check and `saaio update`. |
 
 Set by saaio in every worker's session and in the setup, teardown, pause and resume hooks:

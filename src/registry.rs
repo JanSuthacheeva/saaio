@@ -21,8 +21,8 @@ const PROJECTS_DIR: &str = "projects";
 enum Owner {
     /// No repo file.
     Free,
-    /// The git dir the file names; empty when it names nothing or cannot be read, so it is taken
-    /// over like a repository that is gone.
+    /// The git dir the file names; empty when it names nothing or cannot be read, so it belongs
+    /// to no repository that asks.
     Repo(PathBuf),
 }
 
@@ -56,8 +56,11 @@ impl Registry {
         &self.root
     }
 
-    /// Writes stores/<hash of the store's root> when it is missing; cheap enough for every command.
+    /// Closes the shared folder (0700), then writes stores/<hash of the store's root> when it is
+    /// missing; cheap enough for every command.
     pub fn register(&self, store: &Store) -> Result<()> {
+        private::create_dir(&self.root)
+            .with_context(|| format!("could not create {}", self.root.display()))?;
         let entry = self.entry(store.root());
         if entry.exists() {
             return Ok(());
@@ -96,8 +99,8 @@ impl Registry {
     }
 
     /// The store of the repository whose git dir is `git_dir`: projects/<name>, or <name>-<n> when
-    /// another repository that still exists owns that name. Writes the repo file when the store
-    /// has none or names a repository that is gone.
+    /// another repository owns that name, whether it still exists or not. Writes the repo file only
+    /// into a store that has none.
     pub fn project_store(&self, git_dir: &Path) -> Result<Store> {
         let base = repo_name(git_dir)
             .with_context(|| format!("no project name in {}", git_dir.display()))?;
@@ -110,12 +113,11 @@ impl Registry {
             let root = self.root.join(PROJECTS_DIR).join(name);
             let claimed = match owner(&root) {
                 Owner::Repo(repo) if repo == git_dir => return Ok(Store::at(root)),
-                Owner::Repo(repo) if repo.exists() => {
+                Owner::Repo(_) => {
                     number += 1;
                     continue;
                 }
-                Owner::Repo(_) => claim(&root, git_dir, false),
-                Owner::Free => claim(&root, git_dir, true),
+                Owner::Free => claim(&root, git_dir),
             };
             match claimed {
                 Ok(()) => return Ok(Store::at(root)),
@@ -161,16 +163,12 @@ fn owner(store: &Path) -> Owner {
     }
 }
 
-/// Writes the repo file: linked into place whole for a free store (Err AlreadyExists when another
-/// process won the race), write_atomic over a gone owner.
-fn claim(store: &Path, git_dir: &Path, free: bool) -> io::Result<()> {
+/// Links the repo file into place whole; Err AlreadyExists when another process won the race.
+fn claim(store: &Path, git_dir: &Path) -> io::Result<()> {
     private::create_dir(store)?;
     let mut line = git_dir.as_os_str().as_bytes().to_vec();
     line.push(b'\n');
     let file = store.join(OWNER_FILE);
-    if !free {
-        return write_atomic(&file, &line);
-    }
     let partial = store.join(format!(".{OWNER_FILE}.{}", std::process::id()));
     let _ = fs::remove_file(&partial);
     private::write_new(&partial, &line)?;
@@ -208,6 +206,8 @@ pub fn fnv1a(bytes: &[u8]) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
     use tempfile::TempDir;
 
     use super::*;
@@ -399,18 +399,33 @@ mod tests {
     }
 
     #[test]
-    fn takes_over_a_store_whose_repo_file_names_nothing() {
+    fn leaves_a_store_whose_repo_file_names_nothing() {
         let dir = TempDir::new().unwrap();
         let registry = registry(&dir);
         let existing = store(&dir, "shop");
         fs::write(existing.root().join("repo"), "").unwrap();
         let shop = git_dir(&dir, "code/shop");
 
-        assert_eq!(project_store(&registry, &shop), existing.root());
         assert_eq!(
-            fs::read(existing.root().join("repo")).unwrap(),
-            format!("{}\n", shop.display()).into_bytes()
+            project_store(&registry, &shop),
+            registry.root().join("projects/shop-2")
         );
+        assert_eq!(fs::read(existing.root().join("repo")).unwrap(), b"");
+    }
+
+    #[test]
+    fn leaves_a_store_whose_repo_file_cannot_be_read() {
+        let dir = TempDir::new().unwrap();
+        let registry = registry(&dir);
+        let existing = store(&dir, "shop");
+        fs::create_dir(existing.root().join("repo")).unwrap();
+        let shop = git_dir(&dir, "code/shop");
+
+        assert_eq!(
+            project_store(&registry, &shop),
+            registry.root().join("projects/shop-2")
+        );
+        assert!(existing.root().join("repo").is_dir());
     }
 
     #[test]
@@ -430,7 +445,7 @@ mod tests {
     }
 
     #[test]
-    fn takes_over_a_store_whose_repository_is_gone() {
+    fn keeps_a_store_whose_repository_is_gone_with_its_owner() {
         let dir = TempDir::new().unwrap();
         let registry = registry(&dir);
         let moved = git_dir(&dir, "old/shop");
@@ -440,11 +455,29 @@ mod tests {
 
         assert_eq!(
             project_store(&registry, &shop),
-            registry.root().join("projects/shop")
+            registry.root().join("projects/shop-2")
         );
         assert_eq!(
             project_store(&registry, &shop),
-            registry.root().join("projects/shop")
+            registry.root().join("projects/shop-2")
         );
+        assert_eq!(
+            fs::read(registry.root().join("projects/shop/repo")).unwrap(),
+            format!("{}\n", moved.display()).into_bytes()
+        );
+    }
+
+    #[test]
+    fn closes_a_shared_folder_an_earlier_version_left_open() {
+        let dir = TempDir::new().unwrap();
+        let registry = registry(&dir);
+        let shop = store(&dir, "shop");
+        registry.register(&shop).unwrap();
+        fs::set_permissions(registry.root(), fs::Permissions::from_mode(0o755)).unwrap();
+
+        registry.register(&shop).unwrap();
+
+        let mode = fs::metadata(registry.root()).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o700);
     }
 }

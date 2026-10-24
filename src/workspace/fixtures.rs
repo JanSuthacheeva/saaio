@@ -26,9 +26,15 @@ pub(super) fn git(dir: &Path, args: &[&str]) {
 pub(crate) fn repo() -> (TempDir, PathBuf) {
     let dir = TempDir::new().unwrap();
     let repo = dir.path().canonicalize().unwrap();
-    git(&repo, &["init", "-q", "-b", "main"]);
+    init(&repo);
+    (dir, repo)
+}
+
+/// A git repository with one empty commit on main, in `repo`.
+pub(crate) fn init(repo: &Path) {
+    git(repo, &["init", "-q", "-b", "main"]);
     git(
-        &repo,
+        repo,
         &[
             "-c",
             "user.email=t@t",
@@ -41,7 +47,6 @@ pub(crate) fn repo() -> (TempDir, PathBuf) {
             "init",
         ],
     );
-    (dir, repo)
 }
 
 pub(super) fn hook(repo: &Path, name: &str, script: &str) {

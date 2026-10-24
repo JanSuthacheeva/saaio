@@ -17,6 +17,21 @@ All notable changes to saaio are listed here. The format follows
   reads the message once the prompt is answered in its pane. Before, it said the worker would be
   woken with it now.
 
+### Fixed
+
+- `saaio bug-report` writes its file into `reports/` of saaio's state folder
+  (`~/.local/state/saaio/reports`), never into the current folder, so it no longer lands in a
+  repository.
+- The peek reads a Codex worker's transcript only from Codex's sessions folder
+  (`~/.codex/sessions`, or under `$CODEX_HOME`).
+- saaio's state folder is closed to other users (`0700`) also when an earlier version created it.
+- A repository no longer takes over the store of a removed repository with the same folder name:
+  it gets a store of its own (`<name>-2`). A repository moved to another folder starts with a new
+  store; [files.md](docs/files.md#the-store) says how to read its earlier flows.
+- Git in `.saaio/teardown`, `.saaio/pause` and `.saaio/resume` always acts on the flow's own
+  worktree: they run with `GIT_DIR` and `GIT_WORK_TREE` set. A script that wants git on the main
+  checkout clears them ([repository.md](docs/repository.md#setup-and-teardown)).
+
 ## [0.1.1] - 2026-10-22
 
 Updating from 0.1.0, which has no `saaio update`: run the install line once

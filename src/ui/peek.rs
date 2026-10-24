@@ -48,15 +48,19 @@ pub enum Format {
     Codex,
 }
 
-/// The flow's transcript: the one its harness reported (Codex's rollout), else Claude Code's,
-/// found by the flow id it runs as.
-pub fn transcript_of(flow: &FlowView, claude_home: &Path) -> Option<(PathBuf, Format)> {
+/// The flow's transcript: the rollout its harness reported when it lies in Codex's sessions
+/// folder, else Claude Code's, found by the flow id it runs as.
+pub fn transcript_of(
+    flow: &FlowView,
+    claude_home: &Path,
+    codex_home: &Path,
+) -> Option<(PathBuf, Format)> {
     let reported = flow
         .session
         .as_ref()
         .and_then(|session| session.transcript.as_ref());
     match reported {
-        Some(path) => Some((PathBuf::from(path), Format::Codex)),
+        Some(path) => codex::rollout(codex_home, path).map(|file| (file, Format::Codex)),
         None => claude::transcript(claude_home, &flow.id).map(|file| (file, Format::Claude)),
     }
 }
@@ -167,6 +171,7 @@ fn first_line(content: &Value) -> Option<String> {
 #[derive(Debug)]
 pub struct PeekCache {
     claude_home: PathBuf,
+    codex_home: PathBuf,
     flow: Option<String>,
     file: Option<(PathBuf, Format)>,
     /// The transcript's length when last read; None to read it again.
@@ -175,9 +180,10 @@ pub struct PeekCache {
 }
 
 impl PeekCache {
-    pub fn new(claude_home: PathBuf) -> PeekCache {
+    pub fn new(claude_home: PathBuf, codex_home: PathBuf) -> PeekCache {
         PeekCache {
             claude_home,
+            codex_home,
             flow: None,
             file: None,
             len: None,
@@ -199,7 +205,7 @@ impl PeekCache {
             self.len = None;
         }
         if self.file.is_none() {
-            self.file = transcript_of(flow, &self.claude_home);
+            self.file = transcript_of(flow, &self.claude_home, &self.codex_home);
         }
         let len = self
             .file
@@ -382,9 +388,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn reads_a_codex_worker_from_the_rollout_its_hooks_named() {
-        let dir = TempDir::new().unwrap();
+    /// The folded flow of a Codex worker whose hooks reported `transcript`.
+    fn codex_worker(transcript: &Path) -> FlowView {
         let events = [
             crate::event::Event::new(
                 0,
@@ -399,24 +404,51 @@ mod tests {
                 1,
                 crate::event::EventKind::Session {
                     id: "01a1".into(),
-                    transcript: Some("/home/dev/.codex/sessions/rollout-01a1.jsonl".into()),
+                    transcript: Some(transcript.to_string_lossy().into_owned()),
                 },
             ),
         ];
-        let codex = crate::fold::fold("7f3c", &events, None, 2).unwrap();
-        let claude = crate::fold::fold("7f3c", &events[..1], None, 2).unwrap();
+        crate::fold::fold("7f3c", &events, None, 2).unwrap()
+    }
+
+    #[test]
+    fn reads_a_codex_worker_from_the_rollout_its_hooks_named() {
+        let dir = TempDir::new().unwrap();
+        let codex_home = dir.path().join("codex");
+        let sessions = codex_home.join("sessions");
+        fs::create_dir_all(&sessions).unwrap();
+        let rollout = write(&sessions, &[]);
+        let codex = codex_worker(&rollout);
+        let mut claude = codex.clone();
+        claude.session = None;
 
         assert_eq!(
-            transcript_of(&codex, dir.path()),
-            Some((
-                PathBuf::from("/home/dev/.codex/sessions/rollout-01a1.jsonl"),
-                Format::Codex
-            ))
+            transcript_of(&codex, dir.path(), &codex_home),
+            Some((fs::canonicalize(&rollout).unwrap(), Format::Codex))
         );
         assert_eq!(
-            transcript_of(&claude, dir.path()),
+            transcript_of(&claude, dir.path(), &codex_home),
             None,
             "no Claude transcript yet"
         );
+    }
+
+    #[test]
+    fn reads_no_transcript_a_codex_worker_named_outside_its_sessions() {
+        let dir = TempDir::new().unwrap();
+        let codex_home = dir.path().join("codex");
+        fs::create_dir_all(codex_home.join("sessions")).unwrap();
+        let elsewhere = dir.path().join("rollout.jsonl");
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/peek/fixtures/codex-rollout.jsonl"),
+            &elsewhere,
+        )
+        .unwrap();
+        let flow = codex_worker(&elsewhere);
+
+        assert_eq!(transcript_of(&flow, dir.path(), &codex_home), None);
+        let mut peek = PeekCache::new(dir.path().to_path_buf(), codex_home);
+        peek.refresh(Some(&flow));
+        assert_eq!(peek.lines(), &[]);
     }
 }
