@@ -6,6 +6,13 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-24
+
+Updating from 0.1.1: run `saaio update`, then `saaio --stop` so the server starts again on the
+new version. A `.saaio/teardown`, `.saaio/pause` or `.saaio/resume` script that runs git on the
+main checkout (`git -C "$SAAIO_REPO" ...`) now acts on the worktree instead: run it as
+`env -u GIT_DIR -u GIT_WORK_TREE git -C "$SAAIO_REPO" ...`.
+
 ### Added
 
 - `saaio status --json` gives each flow `permission`: true while it waits on a permission prompt
