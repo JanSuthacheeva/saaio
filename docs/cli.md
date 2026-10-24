@@ -357,7 +357,7 @@ help[1]: Set SAAIO_FLOW_ID or pass --flow <name>
 | `decision <text>` | a decision made on your behalf |
 | `tasks <done> <total>` | how many of the plan's tasks are done |
 | `review --fixed <n> --open <n>` | review findings fixed and still open |
-| `merge-request <url>` | the merge request is open. The flow shows `done` until its worker reports more activity; the session remains reachable. A URL that is no merge request of the flow's repository, by any of its remotes, is refused. |
+| `merge-request <url>` | the merge request is open. The flow shows `done` until its worker reports more activity; the session remains reachable. saaio keeps it as `.../pull/<n>` or `.../-/merge_requests/<n>`, without a trailing `/`, `?query`, `#fragment` or a page such as `/files`. Any other URL, or a merge request of another repository than any of the flow's remotes, is refused. |
 | `ended` | the worker's session ended. The UI does not reopen it. |
 | `heartbeat` | the worker is alive. Adds no event (see `not-responding` in [flows.md](flows.md#states)). |
 
@@ -561,7 +561,7 @@ Not listed in `saaio --help`. Not for manual use.
 | Command | Run by |
 | --- | --- |
 | `saaio server` | `saaio`, when it opens the UI and no server runs. Owns every session. Log: `server.log` ([files.md](files.md)). |
-| `saaio hook claude-code`, `saaio hook codex` | the hooks saaio adds to each worker. Reads the hook's event on stdin and reports what changes the flow. Never prints to stdout, never fails a worker's turn. Its errors go to `server.log`. For Codex, exits 2 at Stop to hand over news. |
+| `saaio hook claude-code`, `saaio hook codex` | the hooks saaio adds to each worker. Reads the hook's event on stdin (an event over 16 MiB is skipped) and reports what changes the flow. Never prints to stdout, never fails a worker's turn. Its errors go to `server.log`. For Codex, exits 2 at Stop to hand over news. |
 | `saaio wait [--master]` | Claude Code sessions, as a background hook. Sleeps until there is news for the session, prints it to stderr and exits 2, which wakes the session. `--master` waits for the master's news. |
 
 ## Output, errors and exit codes

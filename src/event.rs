@@ -6,10 +6,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
+use crate::text;
+
 pub const EVENT_VERSION: u32 = 1;
 pub const TEXT_LIMIT: usize = 500;
 /// The longest message or answer: what the master tells a worker, a turn's whole closing message.
 pub const LONG_TEXT_LIMIT: usize = 4000;
+/// The most questions of a dialog, and options of a question, an event keeps.
+pub const MAX_QUESTIONS: usize = 8;
 /// The longest request saaio start and saaio new take; past it they refuse. Kept whole, since it
 /// becomes the worker's prompt, one argv string (Linux refuses one over 128 KiB).
 pub const REQUEST_LIMIT: usize = 20_000;
@@ -182,10 +186,12 @@ pub fn is_uuid(text: &str) -> bool {
 }
 
 impl Event {
-    /// An event of the current version at `at` (Unix ms), each text cut to its limit, except a
-    /// Started request: it is the worker's prompt, kept whole (its command checks REQUEST_LIMIT).
+    /// An event of the current version at `at` (Unix ms), each text without control characters
+    /// but its newlines and tabs and cut to its limit, at most
+    /// MAX_QUESTIONS questions and options; except a Started request: it is the worker's prompt,
+    /// kept whole (its command checks REQUEST_LIMIT).
     pub fn new(at: u64, mut kind: EventKind) -> Event {
-        kind.cut_texts();
+        kind.clean_texts();
         Event {
             v: EVENT_VERSION,
             at,
@@ -217,7 +223,7 @@ impl EventKind {
         }
     }
 
-    fn cut_texts(&mut self) {
+    fn clean_texts(&mut self) {
         match self {
             EventKind::Started { name: text, .. }
             | EventKind::Delegated { description: text }
@@ -230,20 +236,19 @@ impl EventKind {
             | EventKind::MergeRequestClosed { url: text }
             | EventKind::Services {
                 reason: Some(text), ..
-            } => cut_to(text, TEXT_LIMIT),
+            } => clean(text, TEXT_LIMIT),
             EventKind::Message { text }
             | EventKind::Typed { text }
-            | EventKind::Answer { text } => {
-                cut_to(text, LONG_TEXT_LIMIT);
-            }
+            | EventKind::Answer { text } => clean(text, LONG_TEXT_LIMIT),
             EventKind::Waiting {
                 question,
                 questions,
                 ..
             } => {
-                cut_to(question, TEXT_LIMIT);
+                clean(question, TEXT_LIMIT);
+                questions.truncate(MAX_QUESTIONS);
                 for asked in questions {
-                    asked.cut_texts();
+                    asked.clean_texts();
                 }
             }
             _ => {}
@@ -271,14 +276,21 @@ impl Question {
 }
 
 impl Question {
-    fn cut_texts(&mut self) {
-        cut_to(&mut self.header, TEXT_LIMIT);
-        cut_to(&mut self.question, TEXT_LIMIT);
+    fn clean_texts(&mut self) {
+        clean(&mut self.header, TEXT_LIMIT);
+        clean(&mut self.question, TEXT_LIMIT);
+        self.options.truncate(MAX_QUESTIONS);
         for choice in &mut self.options {
-            cut_to(&mut choice.label, TEXT_LIMIT);
-            cut_to(&mut choice.description, TEXT_LIMIT);
+            clean(&mut choice.label, TEXT_LIMIT);
+            clean(&mut choice.description, TEXT_LIMIT);
         }
     }
+}
+
+/// `text` without control characters but its newlines and tabs, cut to `limit` chars.
+fn clean(text: &mut String, limit: usize) {
+    *text = text::printable_lines(text);
+    cut_to(text, limit);
 }
 
 fn cut_to(text: &mut String, limit: usize) {
@@ -647,6 +659,85 @@ mod tests {
         ] {
             assert_eq!(text.chars().count(), TEXT_LIMIT);
         }
+    }
+
+    #[test]
+    fn keeps_no_control_character_and_at_most_8_questions_of_8_options() {
+        let dirty = "a\x1b[2Jb\u{9b}c\x07\r\nd";
+        let asked = Question {
+            header: dirty.into(),
+            question: dirty.into(),
+            options: (0..50)
+                .map(|_| Choice {
+                    label: dirty.into(),
+                    description: dirty.into(),
+                })
+                .collect(),
+            multi_select: false,
+        };
+
+        let event = Event::new(
+            0,
+            EventKind::Waiting {
+                question: dirty.into(),
+                questions: vec![asked; 20],
+                permission: false,
+            },
+        );
+
+        let EventKind::Waiting {
+            question,
+            questions,
+            ..
+        } = event.kind
+        else {
+            panic!("kind changed");
+        };
+        assert_eq!(question, "a[2Jbc\nd");
+        assert_eq!(questions.len(), MAX_QUESTIONS);
+        for asked in &questions {
+            assert_eq!(asked.options.len(), MAX_QUESTIONS);
+            assert_eq!(
+                (asked.header.as_str(), asked.question.as_str()),
+                ("a[2Jbc\nd", "a[2Jbc\nd")
+            );
+            for choice in &asked.options {
+                assert_eq!(
+                    (choice.label.as_str(), choice.description.as_str()),
+                    ("a[2Jbc\nd", "a[2Jbc\nd")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_text_keeps_its_lines_and_tabs_but_no_other_control_character() {
+        let dirty = "Done.\n\n\tcode\x1b[31m red\u{9b}2J\r\n- next\x07";
+
+        for kind in [
+            EventKind::Answer { text: dirty.into() },
+            EventKind::Message { text: dirty.into() },
+            EventKind::Typed { text: dirty.into() },
+        ] {
+            let (EventKind::Answer { text }
+            | EventKind::Message { text }
+            | EventKind::Typed { text }) = Event::new(0, kind).kind
+            else {
+                panic!("kind changed");
+            };
+            assert_eq!(text, "Done.\n\n\tcode[31m red2J\n- next");
+        }
+        let EventKind::Blocked { reason } = Event::new(
+            0,
+            EventKind::Blocked {
+                reason: dirty.into(),
+            },
+        )
+        .kind
+        else {
+            panic!("kind changed");
+        };
+        assert_eq!(reason, "Done.\n\n\tcode[31m red2J\n- next");
     }
 
     #[test]

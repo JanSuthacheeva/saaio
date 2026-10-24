@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::io::{ErrorKind, Read, Write};
+use std::io::{ErrorKind, Read};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
@@ -13,6 +13,8 @@ use anyhow::{Context, Result, bail};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use rustix::process::{Pid, Signal, kill_process_group};
 
+use super::backlog::Backlog;
+use super::pane_input::PaneInput;
 use crate::launch::pane::PaneSpec;
 use crate::proto::{Frame, PaneInfo, PaneKey, PaneStatus, Size};
 use crate::server::spawn_named;
@@ -38,6 +40,15 @@ pub struct Host {
     panes: BTreeMap<PaneKey, Pane>,
     size: Size,
     events: Sender<HostEvent>,
+    /// Output the panes' readers sent and feed has not taken yet.
+    backlog: Arc<Backlog>,
+}
+
+/// No reader waits on a Host that will feed nothing more.
+impl Drop for Host {
+    fn drop(&mut self) {
+        self.backlog.close();
+    }
 }
 
 #[derive(Debug)]
@@ -50,7 +61,7 @@ struct Pane {
 
 struct Process {
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    input: PaneInput,
     pid: Pid,
     exited: Arc<AtomicBool>,
 }
@@ -70,6 +81,7 @@ impl Host {
             panes: BTreeMap::new(),
             size,
             events,
+            backlog: Arc::default(),
         }
     }
 
@@ -123,13 +135,14 @@ impl Host {
     /// Feeds output into the pane's Terminal and writes the Terminal's replies (DA, DSR) back to
     /// the PTY; the text the program copied (OSC 52), if it did.
     pub fn feed(&mut self, key: &PaneKey, bytes: &[u8]) -> Option<String> {
+        self.backlog.fed(bytes.len());
         let pane = self.panes.get_mut(key)?;
         pane.term.feed(bytes);
         let replies = pane.term.replies();
         if let Some(process) = pane.process.as_mut()
             && !replies.is_empty()
         {
-            let _ = process.writer.write_all(&replies);
+            let _ = process.input.send(&replies);
         }
         pane.term.copied()
     }
@@ -144,8 +157,8 @@ impl Host {
         }
         if let Some(process) = pane.process.as_mut() {
             process
-                .writer
-                .write_all(bytes)
+                .input
+                .send(bytes)
                 .with_context(|| format!("could not write to {key}"))?;
         }
         Ok(())
@@ -294,11 +307,18 @@ impl Host {
             .and_then(Pid::from_raw)
             .with_context(|| format!("pid {id} is out of range"))?;
         let mut reader = pair.master.try_clone_reader()?;
-        let writer = pair.master.take_writer()?;
+        let input = match PaneInput::start(&spec.key, pair.master.take_writer()?) {
+            Ok(input) => input,
+            Err(error) => {
+                let _ = child.kill();
+                return Err(error).context("could not start the thread that writes to the pane");
+            }
+        };
         let exited = Arc::new(AtomicBool::new(false));
 
         let (drained_tx, drained_rx) = mpsc::channel::<()>();
         let events = self.events.clone();
+        let backlog = Arc::clone(&self.backlog);
         let key = spec.key.clone();
         let output = spawn_named(format!("pane {key} output"), move || {
             let mut buf = vec![0u8; 64 * 1024];
@@ -307,6 +327,7 @@ impl Host {
                     Err(error) if error.kind() == ErrorKind::Interrupted => {}
                     Ok(0) | Err(_) => break,
                     Ok(read) => {
+                        backlog.add(read);
                         if events
                             .send(HostEvent::Output(key.clone(), buf[..read].to_vec()))
                             .is_err()
@@ -339,7 +360,7 @@ impl Host {
 
         Ok(Process {
             master: pair.master,
-            writer,
+            input,
             pid,
             exited,
         })

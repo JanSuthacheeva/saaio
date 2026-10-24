@@ -441,13 +441,13 @@ pub fn hook_command(home: &Path, args: &[&str], flow_id: Option<&str>) -> Comman
 }
 
 /// Runs `command` with `payload` on stdin.
-pub fn feed(mut command: Command, payload: &str) -> Output {
+pub fn feed(mut command: Command, payload: impl AsRef<[u8]>) -> Output {
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = command.spawn().unwrap();
-    let written = child.stdin.take().unwrap().write_all(payload.as_bytes());
+    let written = child.stdin.take().unwrap().write_all(payload.as_ref());
     // A hook that refuses before it reads may exit before the payload is written.
     if let Err(error) = written {
         assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe, "{error}");

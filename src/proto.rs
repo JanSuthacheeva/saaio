@@ -19,6 +19,13 @@ pub const PROTOCOL_VERSION: u32 = 8;
 /// This binary: `0.1.0 (2904734)`, the commit from build.rs, `unknown` outside a git checkout.
 pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("SAAIO_COMMIT"), ")");
 pub const MAX_MESSAGE: usize = 8 << 20;
+/// The widest and tallest pane the server makes: past it a terminal's cells cost too much.
+pub const MAX_SIZE: Size = Size {
+    cols: 1000,
+    rows: 500,
+};
+/// The longest folder or build a peer keeps, in chars.
+const PEER_TEXT_LIMIT: usize = 4096;
 
 /// The process at the other end: what the log and a dropped UI say about it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,13 +36,20 @@ pub struct Peer {
 }
 
 impl Peer {
-    /// This peer with its folder and build stripped of control characters: what a client claims
-    /// about itself, safe for server.log and another UI's terminal.
+    /// This peer with its folder and build stripped of control characters and cut to
+    /// PEER_TEXT_LIMIT chars: what a client claims about itself, safe for server.log and another
+    /// UI's terminal.
     pub fn printable(self) -> Peer {
+        let clean = |text: &str| -> String {
+            text::printable(text)
+                .chars()
+                .take(PEER_TEXT_LIMIT)
+                .collect()
+        };
         Peer {
             pid: self.pid,
-            cwd: PathBuf::from(text::printable(&self.cwd.to_string_lossy())),
-            build: text::printable(&self.build),
+            cwd: PathBuf::from(clean(&self.cwd.to_string_lossy())),
+            build: clean(&self.build),
         }
     }
 
@@ -95,6 +109,16 @@ impl fmt::Display for PaneKey {
 pub struct Size {
     pub cols: u16,
     pub rows: u16,
+}
+
+impl Size {
+    /// This size within 1..=MAX_SIZE.cols by 1..=MAX_SIZE.rows.
+    pub fn clamped(self) -> Size {
+        Size {
+            cols: self.cols.clamp(1, MAX_SIZE.cols),
+            rows: self.rows.clamp(1, MAX_SIZE.rows),
+        }
+    }
 }
 
 /// Attach draws the panes; Control sends one request (saaio remove, saaio clear).
@@ -274,20 +298,29 @@ pub enum Mouse {
     Motion,
 }
 
+/// A message as its u32 length and postcard bytes, ready to write; Err past MAX_MESSAGE.
+pub fn encode<T: Serialize>(message: &T) -> Result<Vec<u8>> {
+    let body = postcard::to_stdvec(message).context("could not encode a message")?;
+    if body.len() > MAX_MESSAGE {
+        bail!("message of {} bytes is over the limit", body.len());
+    }
+    let len = u32::try_from(body.len()).expect("MAX_MESSAGE fits in u32");
+    let mut bytes = Vec::with_capacity(4 + body.len());
+    bytes.extend(len.to_le_bytes());
+    bytes.extend(body);
+    Ok(bytes)
+}
+
 /// Each message as a u32 length followed by its postcard bytes.
 pub fn write_msg<W: Write, T: Serialize>(writer: &mut W, message: &T) -> Result<()> {
-    let bytes = postcard::to_stdvec(message).context("could not encode a message")?;
-    if bytes.len() > MAX_MESSAGE {
-        bail!("message of {} bytes is over the limit", bytes.len());
-    }
-    let len = u32::try_from(bytes.len()).expect("MAX_MESSAGE fits in u32");
-    writer.write_all(&len.to_le_bytes())?;
-    writer.write_all(&bytes)?;
+    writer.write_all(&encode(message)?)?;
     writer.flush()?;
     Ok(())
 }
 
-/// The next message; None on a clean end of stream; Err on a message over MAX_MESSAGE or bytes that do not decode.
+/// The next message; None on a clean end of stream; Err on a message over MAX_MESSAGE or bytes
+/// that do not decode. The buffer grows with the bytes that arrive, so a length alone allocates
+/// nothing.
 pub fn read_msg<R: Read, T: DeserializeOwned>(reader: &mut R) -> Result<Option<T>> {
     let mut len = [0u8; 4];
     if !read_full(reader, &mut len)? {
@@ -297,8 +330,9 @@ pub fn read_msg<R: Read, T: DeserializeOwned>(reader: &mut R) -> Result<Option<T
     if len > MAX_MESSAGE {
         bail!("message of {len} bytes is over the limit");
     }
-    let mut bytes = vec![0u8; len];
-    if !read_full(reader, &mut bytes)? && len > 0 {
+    let mut bytes = Vec::new();
+    reader.take(len as u64).read_to_end(&mut bytes)?;
+    if bytes.len() < len {
         bail!("the stream ended inside a message");
     }
     let message = postcard::from_bytes(&bytes).context("could not decode a message")?;
@@ -343,6 +377,20 @@ mod tests {
         assert_eq!(clean.pid, 7);
         assert_eq!(clean.cwd, Path::new("/tmp/]52;c;aGk=x"));
         assert_eq!(clean.build, "0.1.02J");
+    }
+
+    #[test]
+    fn a_printable_peer_keeps_at_most_4096_chars_of_each_text() {
+        let peer = Peer {
+            pid: 7,
+            cwd: "/".to_string().repeat(5000).into(),
+            build: "界".repeat(5000),
+        };
+
+        let clean = peer.printable();
+
+        assert_eq!(clean.cwd.as_os_str().len(), 4096);
+        assert_eq!(clean.build.chars().count(), 4096);
     }
 
     /// A flow whose harness picked its own session, as a Codex worker's does.
@@ -573,6 +621,15 @@ mod tests {
     }
 
     #[test]
+    fn a_clamped_size_is_at_least_one_cell_and_at_most_the_largest() {
+        let size = |cols, rows| Size { cols, rows };
+
+        assert_eq!(size(0, 0).clamped(), size(1, 1));
+        assert_eq!(size(80, 24).clamped(), size(80, 24));
+        assert_eq!(size(u16::MAX, u16::MAX).clamped(), MAX_SIZE);
+    }
+
+    #[test]
     fn knows_the_uid_at_the_other_end_of_a_socket() {
         let (ours, _theirs) = UnixStream::pair().unwrap();
 
@@ -603,6 +660,54 @@ mod tests {
 
         assert!(read_msg::<_, ClientMsg>(&mut Cursor::new(wire)).is_err());
         assert!(read_msg::<_, ClientMsg>(&mut Cursor::new(vec![9, 0])).is_err());
+    }
+
+    /// Ends after `left` bytes, remembering the largest buffer it was handed.
+    struct Short {
+        left: usize,
+        largest: usize,
+    }
+
+    impl Read for Short {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.largest = self.largest.max(buf.len());
+            let read = buf.len().min(self.left);
+            buf[..read].fill(0);
+            self.left -= read;
+            Ok(read)
+        }
+    }
+
+    #[test]
+    fn a_length_alone_allocates_nothing_near_it() {
+        let mut wire =
+            Cursor::new(((MAX_MESSAGE - 1) as u32).to_le_bytes().to_vec()).chain(Short {
+                left: 10,
+                largest: 0,
+            });
+
+        assert!(read_msg::<_, ClientMsg>(&mut wire).is_err());
+        let (_, short) = wire.into_inner();
+        assert!(short.largest <= 64 << 10, "{}", short.largest);
+    }
+
+    #[test]
+    fn random_bytes_decode_or_fail_but_never_panic() {
+        let mut noise = crate::fixtures::Noise::new(0x5aa10);
+        let seeds: Vec<Vec<u8>> = client_messages()
+            .iter()
+            .map(|message| postcard::to_stdvec(message).unwrap())
+            .collect();
+        for case in 0..2000 {
+            let bytes = match case % 3 {
+                0 => noise.bytes(64),
+                _ => noise.mutate(&seeds[case % seeds.len()]),
+            };
+            let mut wire = u32::try_from(bytes.len()).unwrap().to_le_bytes().to_vec();
+            wire.extend(&bytes);
+            let _ = read_msg::<_, ClientMsg>(&mut Cursor::new(&wire));
+            let _ = read_msg::<_, ClientMsg>(&mut Cursor::new(&bytes));
+        }
     }
 
     #[test]

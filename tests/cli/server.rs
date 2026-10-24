@@ -1,7 +1,9 @@
 //! Tests of `saaio server` and `saaio --stop`: stopping, its own session, the UI's prefix check
 
 use std::fs;
+use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::net::UnixStream;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, Stdio};
 use std::thread;
@@ -69,6 +71,52 @@ fn stop_ends_a_running_server_and_says_when_none_runs() {
         "{lines}"
     );
     assert!(said("] stopped").contains(&server_said));
+}
+
+#[test]
+fn the_server_writes_to_the_new_log_once_another_process_moved_it_aside() {
+    let home = TempDir::new().unwrap();
+    let config = cat_agents(home.path());
+    let socket = home.path().join("server.sock");
+    let log = home.path().join("server.log");
+    let open_log = || {
+        fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log)
+            .unwrap()
+    };
+    let server = saaio_command(home.path())
+        .arg("server")
+        .stdout(open_log())
+        .stderr(open_log())
+        .env("SAAIO_CONFIG", &config)
+        .spawn()
+        .unwrap();
+    let mut server = Running(server);
+    wait_for_socket(&socket);
+    open_log().write_all(&vec![b'x'; 1 << 20]).unwrap();
+
+    let hook = saaio_command(home.path())
+        .args(["hook", "claude-code"])
+        .env("SAAIO_FLOW_ID", "nope")
+        .output()
+        .unwrap();
+    assert!(hook.status.success());
+    assert!(home.path().join("server.log.1").exists());
+    assert!(fs::read_to_string(&log).unwrap().contains("is no flow id"));
+
+    wait_until("the server never wrote to the new server.log", || {
+        let mut unreadable = UnixStream::connect(&socket).unwrap();
+        let _ = unreadable.write_all(&[3, 0, 0, 0, 0xff, 0xff, 0xff]);
+        let _ = std::io::Read::read(&mut unreadable, &mut [0; 64]);
+        fs::read_to_string(&log)
+            .unwrap()
+            .contains("refused an unreadable hello")
+    });
+    assert!(saaio(home.path(), &["--stop"]).status.success());
+    assert!(server.wait().unwrap().success());
+    assert!(fs::read_to_string(&log).unwrap().contains("] stopped"));
 }
 
 #[test]

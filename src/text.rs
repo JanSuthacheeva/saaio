@@ -130,6 +130,14 @@ pub fn printable(text: &str) -> String {
     text.chars().filter(|c| !c.is_control()).collect()
 }
 
+/// `text` without control characters but its newlines and tabs: a message or answer that keeps
+/// its lines.
+pub fn printable_lines(text: &str) -> String {
+    text.chars()
+        .filter(|c| !c.is_control() || matches!(c, '\n' | '\t'))
+        .collect()
+}
+
 /// `template` with each `{key}` of `values` replaced by its value in one pass: a value is never
 /// read for placeholders again; an unknown `{...}` stays as written.
 pub fn fill(template: &str, values: &[(&str, &str)]) -> String {

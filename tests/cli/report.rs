@@ -196,6 +196,23 @@ fn report_takes_only_a_merge_request_of_the_flows_repository() {
 
     for url in [
         "--web",
+        "https://github.com/acme/shop/pull/7/../8",
+        "https://github.com/acme/shop/issues/7",
+    ] {
+        let refused = report(url);
+        assert_eq!(refused.status.code(), Some(1), "{url}");
+        let said = stdout(&refused);
+        assert!(
+            said.contains(&format!("error: \"{url} is no merge request URL\"")),
+            "{said}"
+        );
+        assert!(
+            said.contains("https://<host>/<owner>/<repo>/pull/<n>")
+                && said.contains("/-/merge_requests/<n>"),
+            "{said}"
+        );
+    }
+    for url in [
         "https://example.com/acme/shop/pull/7",
         "https://github.com/other/shop/pull/7",
     ] {
@@ -209,7 +226,7 @@ fn report_takes_only_a_merge_request_of_the_flows_repository() {
             "{said}"
         );
     }
-    let opened = report("https://github.com/acme/shop/pull/7");
+    let opened = report("https://github.com/acme/shop/pull/7/files?w=1");
 
     assert!(opened.status.success(), "{}", stdout(&opened));
     let board: serde_json::Value =

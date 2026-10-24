@@ -3,23 +3,84 @@
 use serde_json::Value;
 
 /// The merge request a shell command created: when one of its simple commands runs `gh pr create`
-/// or `glab mr create` (`mr new`), the last merge request URL in its output. Words that only appear
-/// inside a quoted string or as another program's arguments create nothing.
+/// or `glab mr create` (`mr new`), the last merge request URL in its output, in its canonical
+/// form. Words that only appear inside a quoted string or as another program's arguments create
+/// nothing.
 pub fn created_merge_request(command: &str, output: &str) -> Option<String> {
     if !simple_commands(command).iter().any(|words| creates(words)) {
         return None;
     }
     output
         .split_whitespace()
-        .filter(|word| word.starts_with("https://") || word.starts_with("http://"))
-        .rfind(|url| url.contains("/pull/") || url.contains("/-/merge_requests/"))
+        .filter_map(canonical_merge_request)
+        .next_back()
+}
+
+/// The pages of a merge request a URL may name after its number, on GitHub and GitLab.
+const REQUEST_PAGES: [&str; 6] = [
+    "files",
+    "commits",
+    "checks",
+    "changes",
+    "diffs",
+    "pipelines",
+];
+
+/// A merge request URL as .../pull/<n> or .../-/merge_requests/<n>, without the #fragment,
+/// ?query, trailing slash or page of REQUEST_PAGES it may have after the number; None for any
+/// other text.
+pub fn canonical_merge_request(url: &str) -> Option<String> {
+    let url = url.split(['#', '?']).next()?;
+    let url = url.strip_suffix('/').unwrap_or(url);
+    if let Some(request) = merge_request(url) {
+        return Some(request.to_string());
+    }
+    let (request, page) = url.rsplit_once('/')?;
+    REQUEST_PAGES
+        .contains(&page)
+        .then(|| merge_request(request))
+        .flatten()
         .map(String::from)
+}
+
+/// `word` when it is an http(s) URL of printable ASCII whose path ends in /pull/<n> or
+/// /-/merge_requests/<n>, n digits.
+fn merge_request(word: &str) -> Option<&str> {
+    let rest = word
+        .strip_prefix("https://")
+        .or_else(|| word.strip_prefix("http://"))?;
+    let (_, path) = rest.split_once('/')?;
+    let plain = word.chars().all(|c| c.is_ascii_graphic());
+    let dotted = path.split('/').any(|segment| matches!(segment, "." | ".."));
+    (plain && !dotted && ends_in_request(path)).then_some(word)
+}
+
+/// Whether `path` is or ends in pull/<n> or -/merge_requests/<n>.
+fn ends_in_request(path: &str) -> bool {
+    let Some((before, number)) = path.rsplit_once('/') else {
+        return false;
+    };
+    let kind = ["pull", "-/merge_requests"]
+        .iter()
+        .any(|kind| before == *kind || before.ends_with(&format!("/{kind}")));
+    kind && is_number(number)
+}
+
+/// Whether `rest` is exactly pull/<n> or -/merge_requests/<n>.
+fn is_request(rest: &str) -> bool {
+    rest.strip_prefix("pull/")
+        .or_else(|| rest.strip_prefix("-/merge_requests/"))
+        .is_some_and(is_number)
+}
+
+fn is_number(text: &str) -> bool {
+    !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 /// True when `url` is a merge request of the repo `remote` (a remote URL in any form git takes:
 /// git@host:path.git, https://host/path, ssh://user@host:port/path) points to: same host, its path
-/// followed by /pull/ or /-/merge_requests/. An SSH remote's host may be an alias from the ssh
-/// config: when only the host differs, `real_host` names the host it stands for.
+/// followed by exactly /pull/<n> or /-/merge_requests/<n>. An SSH remote's host may be an alias
+/// from the ssh config: when only the host differs, `real_host` names the host it stands for.
 pub fn in_repo(url: &str, remote: &str, real_host: impl Fn(&str) -> Option<String>) -> bool {
     let (Some((host, path)), Some((repo_host, repo_path))) =
         (host_and_path(url), host_and_path(remote))
@@ -30,8 +91,7 @@ pub fn in_repo(url: &str, remote: &str, real_host: impl Fn(&str) -> Option<Strin
         .strip_prefix(&repo_path)
         .and_then(|rest| rest.strip_prefix('/'));
     let same_repo = !repo_path.is_empty()
-        && rest
-            .is_some_and(|rest| rest.starts_with("pull/") || rest.starts_with("-/merge_requests/"));
+        && rest.is_some_and(|rest| is_request(rest) && merge_request(url).is_some());
     same_repo
         && (host == repo_host
             || is_ssh(remote) && web_host_of(remote, real_host).is_some_and(|real| real == host))
@@ -258,6 +318,101 @@ mod tests {
 
     fn never_asked(host: &str) -> Option<String> {
         panic!("asked ssh for {host}")
+    }
+
+    #[test]
+    fn takes_only_a_plain_merge_request_url_from_the_output() {
+        let created = |output| created_merge_request("gh pr create", output);
+
+        for output in [
+            "https://github.com/a/b/pull/12\x1b]52;c;aGk=\x07",
+            "https://github.com/a/b/pull/12\u{9b}2J",
+            "https://github.com/a/b/pull/12/../../evil",
+            "https://github.com/a/b/pull/",
+            "https://github.com/a/b/pull/twelve",
+            "https://gitlab.com/g/r/-/merge_requests/7x",
+        ] {
+            assert_eq!(created(output), None, "{output:?}");
+        }
+        assert_eq!(
+            created("https://github.com/a/b/pull/12 https://github.com/a/b/pull/9\x07"),
+            Some("https://github.com/a/b/pull/12".into()),
+            "the last one that is plain"
+        );
+    }
+
+    #[test]
+    fn a_merge_request_url_reads_as_its_canonical_form() {
+        for (url, canonical) in [
+            (
+                "https://github.com/a/b/pull/12",
+                "https://github.com/a/b/pull/12",
+            ),
+            (
+                "https://github.com/a/b/pull/12/",
+                "https://github.com/a/b/pull/12",
+            ),
+            (
+                "https://github.com/a/b/pull/12/files",
+                "https://github.com/a/b/pull/12",
+            ),
+            (
+                "https://github.com/a/b/pull/12/commits/",
+                "https://github.com/a/b/pull/12",
+            ),
+            (
+                "https://github.com/a/b/pull/12?w=1",
+                "https://github.com/a/b/pull/12",
+            ),
+            (
+                "https://github.com/a/b/pull/12#issuecomment-1",
+                "https://github.com/a/b/pull/12",
+            ),
+            (
+                "https://gitlab.com/g/r/-/merge_requests/7/diffs?view=inline",
+                "https://gitlab.com/g/r/-/merge_requests/7",
+            ),
+            (
+                "http://gitlab.example/g/r/-/merge_requests/7/pipelines",
+                "http://gitlab.example/g/r/-/merge_requests/7",
+            ),
+        ] {
+            assert_eq!(
+                canonical_merge_request(url).as_deref(),
+                Some(canonical),
+                "{url}"
+            );
+        }
+        for url in [
+            "https://github.com/a/b/pull/12/../../c/d/pull/1",
+            "https://github.com/a/b/pull/12/files/extra",
+            "https://github.com/a/b/pull/12/settings",
+            "https://github.com/a/b/issues/12",
+            "https://github.com/a/b/pull/12\x07",
+            "--web",
+            "ftp://github.com/a/b/pull/12",
+        ] {
+            assert_eq!(canonical_merge_request(url), None, "{url}");
+        }
+        assert_eq!(
+            created_merge_request("gh pr create", "https://github.com/a/b/pull/12/files\n"),
+            Some("https://github.com/a/b/pull/12".into())
+        );
+    }
+
+    #[test]
+    fn a_merge_request_of_the_repo_ends_at_its_number() {
+        let remote = "git@github.com:shop/app.git";
+
+        for url in [
+            "https://github.com/shop/app/pull/12/../../../probe/repo",
+            "https://github.com/shop/app/pull/12\x07",
+            "https://github.com/shop/app/pull/12/files",
+            "https://github.com/shop/app/pull/",
+            "https://gitlab.com/shop/app/-/merge_requests/7?x",
+        ] {
+            assert!(!in_repo(url, remote, no_alias), "{url:?}");
+        }
     }
 
     #[test]

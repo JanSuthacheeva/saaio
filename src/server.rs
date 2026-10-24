@@ -6,10 +6,13 @@ pub mod reconcile;
 pub mod terminal;
 pub mod watch;
 
+mod backlog;
 mod conn;
 mod dismiss;
 mod forge_watch;
 mod news;
+mod outbox;
+mod pane_input;
 mod pane_state;
 mod panes;
 mod pause_watch;
@@ -62,7 +65,7 @@ pub use timing::Timing;
 const FRAME_EVERY: Duration = Duration::from_millis(16);
 /// How long a stop waits for the panes to exit.
 const STOP_WAIT: Duration = Duration::from_millis(3500);
-/// A UI that does not take a frame within this time is dropped, so it cannot stall the server.
+/// A connection's writer thread gives up on a client that takes no bytes for this long.
 const WRITE_TIMEOUT: Duration = Duration::from_secs(2);
 /// A resumed pane that fails within this time is started fresh instead: its agent never saved
 /// the session (Claude Code saves one only after the first message).
@@ -172,6 +175,9 @@ struct Server {
     /// The flows whose services a pause or resume runs for.
     pauses: PauseWatch,
     trust: Option<Trust>,
+    /// server.log beside the socket while stderr writes to it, as in a server ensure_server
+    /// started; None for one run in a terminal.
+    log: Option<PathBuf>,
 }
 
 /// Writes master.md and, when missing, the example config.toml and theme.toml; logs what fails.
@@ -251,6 +257,7 @@ pub fn run(
         forges: ForgeWatch::default(),
         pauses: PauseWatch::default(),
         trust: paths.trust.clone(),
+        log: Some(server_log::path(&paths.socket)).filter(|log| server_log::is_stderr(log)),
     };
     server.open_master(start);
     server.refresh();
@@ -285,6 +292,10 @@ impl Server {
                 Err(RecvTimeoutError::Disconnected) => bail!("the server lost its event channel"),
             }
             if self.refreshed_at.elapsed() >= WATCH_EVERY {
+                if let Some(log) = &self.log {
+                    // An error cannot be logged; the next tick tries again.
+                    let _ = server_log::follow(log, server_log::CAP);
+                }
                 self.deliver_news();
                 self.refresh();
                 self.notice_stalled_starts();
@@ -360,6 +371,9 @@ impl Server {
             };
             match inbox.recv_timeout(left) {
                 Ok(Event::Host(HostEvent::Exited(key, code))) => self.host.exited(&key, code),
+                Ok(Event::Host(HostEvent::Output(key, bytes))) => {
+                    self.host.feed(&key, &bytes);
+                }
                 Ok(_) => {}
                 Err(_) => break,
             }

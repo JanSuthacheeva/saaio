@@ -3,6 +3,7 @@
 use clap::Subcommand;
 
 use super::{no_flow, of_own_repo, repo_dir, views};
+use crate::adapter::calls;
 use crate::cli::output::{Document, Failure, flow};
 use crate::event::{Event, EventKind, Phase};
 use crate::fold;
@@ -88,6 +89,20 @@ fn no_phase(flow: &FlowView, phase: &Phase) -> Failure {
     )
 }
 
+/// The failure for a text that is no merge request URL; the help names the form one has.
+fn no_merge_request(url: &str) -> Failure {
+    Failure::error(
+        format!("{url} is no merge request URL"),
+        vec![
+            concat!(
+                "Report it as https://<host>/<owner>/<repo>/pull/<n> ",
+                "or https://<host>/<group>/<repo>/-/merge_requests/<n>"
+            )
+            .to_string(),
+        ],
+    )
+}
+
 /// The failure for a URL that is no merge request of the flow's repository.
 fn foreign_merge_request(flow: &FlowView, url: &str) -> Failure {
     Failure::error(
@@ -97,9 +112,9 @@ fn foreign_merge_request(flow: &FlowView, url: &str) -> Failure {
 }
 
 /// Appends one event to a flow; skipped without a flow, so an agent outside saaio can report. A
-/// merge request must be one of the flow's repository, its remotes read in its main checkout, else
-/// in the current folder for a flow without one.
-pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
+/// merge request is kept in its canonical form and must be one of the flow's repository, its
+/// remotes read in its main checkout, else in the current folder for a flow without one.
+pub fn run(mut args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
     let Some(name) = args.flow.filter(|name| !name.is_empty()) else {
         return Ok(flow::skipped());
     };
@@ -110,14 +125,18 @@ pub fn run(args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
     {
         return Err(no_phase(flow, phase));
     }
-    if let ReportEvent::MergeRequest { url } = &args.event {
+    if let ReportEvent::MergeRequest { url } = &mut args.event {
+        let Some(canonical) = calls::canonical_merge_request(url) else {
+            return Err(no_merge_request(url));
+        };
         let dir = match repo_dir(flow) {
             Some(dir) => dir,
             None => std::env::current_dir()?,
         };
-        if !of_own_repo(&dir, url) {
+        if !of_own_repo(&dir, &canonical) {
             return Err(foreign_merge_request(flow, url));
         }
+        *url = canonical;
     }
     let id = flow.id.clone();
     match args.event.into_kind() {

@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
 use std::path::Path;
@@ -677,6 +678,44 @@ fn closes_a_flow_pane_on_request_and_says_when_there_is_none() {
     );
 }
 
+#[test]
+fn closing_a_flow_that_does_not_exist_yet_never_keeps_it_from_opening() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let (paths, handle) = start(dir.path());
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 4 },
+        },
+    );
+    let id = "0b5e4000-0000-4000-8000-0000000000c1";
+
+    for unknown in [id, "../7f3c", "7f3c"] {
+        assert_eq!(
+            crate::client::close_flow(&paths.socket, unknown, PATIENCE).unwrap(),
+            crate::client::Closing::NoPane
+        );
+    }
+    fs::create_dir_all(dir.path().join("flows")).unwrap();
+    let started = fixtures::started("csv", "x").to_line();
+    fs::write(dir.path().join(format!("flows/{id}.jsonl")), started + "\n").unwrap();
+    let path = dir.path().join("csv");
+    fs::create_dir_all(&path).unwrap();
+    let workspace = Workspace {
+        path: path.display().to_string(),
+        ..fixtures::workspace("csv", "claude")
+    };
+    store
+        .append(id, &LogEvent::new(1, workspace.into()))
+        .unwrap();
+
+    let mut panes = Vec::new();
+    wait_for(&mut ui, &mut panes, id, Some(&PaneStatus::Running));
+    proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
+    handle.join().unwrap().unwrap();
+}
+
 /// Reads messages until the UI's pane list shows `want` for the flow.
 fn wait_for(
     ui: &mut UnixStream,
@@ -941,6 +980,313 @@ fn closes_a_connection_that_says_no_hello_in_time() {
         proto::read_msg::<_, ServerMsg>(&mut silent),
         Ok(Some(ServerMsg::Refused { .. }) | None)
     ));
+    stop(&paths, handle);
+}
+
+#[test]
+fn makes_no_pane_larger_than_the_largest_size() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+    let huge = Size {
+        cols: 3000,
+        rows: 2000,
+    };
+
+    let mut ui = connect(&paths.socket, Role::Attach { size: huge });
+    proto::write_msg(&mut ui, &ClientMsg::Resize(huge)).unwrap();
+
+    let mut frames = 0;
+    recv_until(&mut ui, "no second full frame", |message| {
+        if let ServerMsg::Frame(frame) = message
+            && frame.full
+        {
+            assert!(frame.rows.len() <= 500, "{} rows", frame.rows.len());
+            for (_, cells) in &frame.rows {
+                assert!(cells.len() <= 1000, "{} columns", cells.len());
+            }
+            frames += 1;
+        }
+        frames == 2
+    });
+    stop(&paths, handle);
+}
+
+#[test]
+fn cuts_the_folder_and_build_a_ui_claims() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+    let size = Size { cols: 20, rows: 4 };
+    let mut first = connect(&paths.socket, Role::Attach { size });
+    assert!(matches!(recv(&mut first), ServerMsg::Welcome { .. }));
+    let told = thread::spawn(move || {
+        let mut by = None;
+        while let Ok(Some(message)) = proto::read_msg::<_, ServerMsg>(&mut first) {
+            if let ServerMsg::Detached { by: peer } = message {
+                by = Some(peer);
+            }
+        }
+        by
+    });
+
+    let boasting = Peer {
+        pid: 2,
+        cwd: "/".repeat(1 << 20).into(),
+        build: "b".repeat(1 << 20),
+    };
+    let mut second = connect_as(&paths.socket, Role::Attach { size }, boasting);
+    assert!(matches!(recv(&mut second), ServerMsg::Welcome { .. }));
+
+    let by = told.join().unwrap().expect("told who took over");
+    assert_eq!(by.cwd.as_os_str().len(), 4096);
+    assert_eq!(by.build.len(), 4096);
+    drop(second);
+    stop(&paths, handle);
+}
+
+#[test]
+fn closes_a_connection_whose_hello_is_not_whole_by_the_deadline() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+    let slow = Peer {
+        cwd: "/w".repeat(100).into(),
+        ..peer(1)
+    };
+    let hello = proto::encode(&ClientMsg::Hello {
+        version: PROTOCOL_VERSION,
+        role: Role::Control,
+        peer: slow,
+    })
+    .unwrap();
+
+    let mut slow_hello = UnixStream::connect(&paths.socket).unwrap();
+    slow_hello
+        .set_read_timeout(Some(Duration::from_millis(50)))
+        .unwrap();
+    let started = Instant::now();
+    let shut = hello[..hello.len() - 1].iter().any(|byte| {
+        if slow_hello.write_all(&[*byte]).is_err() {
+            return true;
+        }
+        let mut answer = [0u8; 1];
+        !matches!(slow_hello.read(&mut answer), Err(error) if error.kind() == ErrorKind::WouldBlock)
+    });
+
+    assert!(shut, "the hello took {:?}", started.elapsed());
+    stop(&paths, handle);
+}
+
+#[test]
+fn a_ui_that_stops_reading_slows_nobody_and_is_dropped() {
+    let dir = TempDir::new().unwrap();
+    let scroll = "while :; do seq 1 300; sleep 0.05; done";
+    let flood = vec!["sh".into(), "-c".into(), scroll.into()];
+    let (paths, handle) = start_with(
+        dir.path(),
+        Agent {
+            command: flood.clone(),
+            prompt: None,
+            adapter: None,
+            resume: Some(flood),
+        },
+    );
+    let size = Size {
+        cols: 200,
+        rows: 100,
+    };
+    let mut stuck = connect(&paths.socket, Role::Attach { size });
+
+    for _ in 0..5 {
+        let mut control = connect(&paths.socket, Role::Control);
+        let asked = Instant::now();
+        assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+        proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
+        assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+        assert!(
+            asked.elapsed() < Duration::from_millis(500),
+            "answered after {:?}",
+            asked.elapsed()
+        );
+        thread::sleep(Duration::from_millis(300));
+    }
+
+    wait_until("the stuck ui was never dropped", || {
+        proto::write_msg(&mut stuck, &ClientMsg::History(None)).is_err()
+    });
+    stop(&paths, handle);
+}
+
+#[test]
+fn a_pane_that_prints_without_pause_slows_nobody() {
+    let dir = TempDir::new().unwrap();
+    let flood = vec!["sh".into(), "-c".into(), "exec yes 0123456789abcdef".into()];
+    let (paths, handle) = start_with(
+        dir.path(),
+        Agent {
+            command: flood.clone(),
+            prompt: None,
+            adapter: None,
+            resume: Some(flood),
+        },
+    );
+
+    for _ in 0..5 {
+        thread::sleep(Duration::from_millis(300));
+        let mut control = connect(&paths.socket, Role::Control);
+        let asked = Instant::now();
+        assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+        proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
+        assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+        assert!(
+            asked.elapsed() < Duration::from_millis(500),
+            "answered after {:?}",
+            asked.elapsed()
+        );
+    }
+    stop(&paths, handle);
+}
+
+#[test]
+fn refuses_a_length_of_4_gib_and_still_takes_a_ui() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+
+    let mut huge = UnixStream::connect(&paths.socket).unwrap();
+    huge.set_read_timeout(Some(PATIENCE)).unwrap();
+    huge.write_all(&u32::MAX.to_le_bytes()).unwrap();
+    huge.write_all(&[0; 1024]).unwrap();
+
+    assert!(matches!(recv(&mut huge), ServerMsg::Refused { .. }));
+    assert!(closed(&mut huge));
+    stop(&paths, handle);
+}
+
+#[test]
+fn types_nothing_a_connection_sends_before_its_hello() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+
+    let mut early = UnixStream::connect(&paths.socket).unwrap();
+    early.set_read_timeout(Some(PATIENCE)).unwrap();
+    proto::write_msg(&mut early, &ClientMsg::Input(b"early\r".to_vec())).unwrap();
+    assert!(closed(&mut early));
+
+    let size = Size { cols: 30, rows: 6 };
+    let mut ui = connect(&paths.socket, Role::Attach { size });
+    proto::write_msg(&mut ui, &ClientMsg::Input(b"later\r".to_vec())).unwrap();
+    let mut screen = BTreeMap::new();
+    recv_until(&mut ui, "the ui never saw what it typed", |message| {
+        if let ServerMsg::Frame(frame) = message {
+            for row in 0..6 {
+                if frame.full || frame.rows.iter().any(|(index, _)| *index == row) {
+                    screen.insert(row, text(&frame, row));
+                }
+            }
+        }
+        screen.values().any(|line| line.contains("later"))
+    });
+    assert!(
+        !screen.values().any(|line| line.contains("early")),
+        "{screen:?}"
+    );
+    stop(&paths, handle);
+}
+
+#[test]
+fn reopens_only_a_flow_on_the_board() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+    let size = Size { cols: 20, rows: 4 };
+    let mut ui = connect(&paths.socket, Role::Attach { size });
+    assert!(matches!(recv(&mut ui), ServerMsg::Welcome { .. }));
+
+    for id in ["7f3c", "../7f3c"] {
+        proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id.into()))).unwrap();
+        proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Master)).unwrap();
+        recv_until(&mut ui, "no panes after the reopen", |message| {
+            let ServerMsg::Panes(panes) = message else {
+                return false;
+            };
+            assert_eq!(panes.len(), 1, "{panes:?}");
+            true
+        });
+    }
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
+    assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+    stop(&paths, handle);
+}
+
+/// Whether `bytes` are a message that would end the test server's flows or the server itself.
+fn ends_something(bytes: &[u8]) -> bool {
+    matches!(
+        postcard::from_bytes::<ClientMsg>(bytes),
+        Ok(ClientMsg::StopServer | ClientMsg::EndFlows)
+    )
+}
+
+/// Sends `bytes`, framed with their length when `framed`, then ends the stream; waits until the
+/// server closed it.
+fn send_noise(stream: &mut UnixStream, bytes: &[u8], framed: bool) {
+    if framed {
+        let len = u32::try_from(bytes.len()).unwrap();
+        let _ = stream.write_all(&len.to_le_bytes());
+    }
+    let _ = stream.write_all(bytes);
+    let _ = stream.shutdown(std::net::Shutdown::Write);
+    while let Ok(Some(_)) = proto::read_msg::<_, ServerMsg>(stream) {}
+}
+
+#[test]
+fn random_frames_before_and_after_a_hello_never_hurt_the_server() {
+    let dir = TempDir::new().unwrap();
+    let (paths, handle) = start(dir.path());
+    let mut noise = fixtures::Noise::new(0x5aa10);
+    let size = Size { cols: 20, rows: 4 };
+    let seeds: Vec<Vec<u8>> = [
+        ClientMsg::Hello {
+            version: PROTOCOL_VERSION,
+            role: Role::Attach { size },
+            peer: peer(9),
+        },
+        ClientMsg::Focus(PaneKey::Flow("7f3c".into())),
+        ClientMsg::Input(b"noise".to_vec()),
+        ClientMsg::Resize(size),
+        ClientMsg::History(Some(3)),
+        ClientMsg::Reopen(PaneKey::Flow("7f3c".into())),
+        ClientMsg::CloseFlow("7f3c".into()),
+    ]
+    .iter()
+    .map(|message| postcard::to_stdvec(message).unwrap())
+    .collect();
+
+    for case in 0..300 {
+        let bytes = match case % 3 {
+            0 => noise.bytes(48),
+            _ => noise.mutate(&seeds[case % seeds.len()]),
+        };
+        if ends_something(&bytes) {
+            continue;
+        }
+        let framed = case % 5 != 0;
+        if case % 2 == 0 {
+            let mut stream = UnixStream::connect(&paths.socket).unwrap();
+            stream.set_read_timeout(Some(PATIENCE)).unwrap();
+            send_noise(&mut stream, &bytes, framed);
+        } else {
+            let mut ui = connect(&paths.socket, Role::Attach { size });
+            assert!(
+                matches!(recv(&mut ui), ServerMsg::Welcome { .. }),
+                "case {case}"
+            );
+            send_noise(&mut ui, &bytes, framed);
+        }
+    }
+
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
+    assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
     stop(&paths, handle);
 }
 
@@ -1797,4 +2143,42 @@ fn a_resume_that_cannot_run_fails_so_tool_calls_stop_waiting() {
         Some("the repository is not trusted, so .saaio/resume did not run")
     );
     stop(&paths, handle);
+}
+
+#[test]
+fn a_pane_that_prints_for_every_line_typed_never_stalls_the_server() {
+    let dir = TempDir::new().unwrap();
+    let lines = dir.path().join("lines");
+    let script = format!(
+        "stty raw -echo; while IFS= read -r line; do printf '%200s' x; echo >> {}; done",
+        lines.display()
+    );
+    let chatty = vec!["sh".into(), "-c".into(), script];
+    let (paths, handle) = start_with(
+        dir.path(),
+        Agent {
+            command: chatty.clone(),
+            prompt: None,
+            adapter: None,
+            resume: Some(chatty),
+        },
+    );
+    let size = Size { cols: 80, rows: 24 };
+    let mut ui = connect(&paths.socket, Role::Attach { size });
+    assert!(matches!(recv(&mut ui), ServerMsg::Welcome { .. }));
+    let mut typist = ui.try_clone().unwrap();
+    let reader =
+        thread::spawn(move || while let Ok(Some(_)) = proto::read_msg::<_, ServerMsg>(&mut ui) {});
+
+    proto::write_msg(&mut typist, &ClientMsg::Input(b"y\n".repeat(32 << 10))).unwrap();
+    wait_until("the pane read no line", || {
+        fs::metadata(&lines).is_ok_and(|meta| meta.len() > 0)
+    });
+
+    let mut control = connect(&paths.socket, Role::Control);
+    assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
+    proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
+    assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+    stop(&paths, handle);
+    reader.join().unwrap();
 }

@@ -654,6 +654,46 @@ fn a_hook_never_fails_or_prints_whatever_it_gets() {
     assert!(!list.contains("waiting"), "{list}");
 }
 
+#[test]
+fn a_hook_skips_an_event_too_large_binary_or_too_deep_and_says_why() {
+    let home = TempDir::new().unwrap();
+    let id = new_flow(home.path(), "shop-221");
+    let before = stdout(&saaio(home.path(), &["status"]));
+    let huge = format!(
+        r#"{{"hook_event_name":"Stop","last_assistant_message":"{}"}}"#,
+        "x".repeat(17 << 20)
+    );
+    let deep = format!("{}{}", "[".repeat(10_000), "]".repeat(10_000));
+    let binary: Vec<u8> = (0..=255).cycle().take(4096).collect();
+
+    let cases = [
+        feed(hook_command(home.path(), &["claude-code"], Some(&id)), huge),
+        feed(
+            hook_command(home.path(), &["claude-code"], Some(&id)),
+            binary,
+        ),
+        hook(home.path(), Some(&id), &deep),
+        hook(home.path(), Some(&id), r#"{"hook_event_name":"#),
+    ];
+
+    for output in &cases {
+        assert!(output.status.success(), "{:?}", output.status);
+        assert!(output.stdout.is_empty(), "{}", stdout(output));
+        assert!(output.stderr.is_empty(), "{}", stderr(output));
+    }
+    let log = fs::read_to_string(home.path().join("server.log")).unwrap();
+    let flow = format!("] hook claude-code flow {id}: ");
+    for why in [
+        "the event is over 16 MiB",
+        "the event is not UTF-8",
+        "the event is not JSON: recursion limit exceeded",
+        "the event is not JSON: EOF",
+    ] {
+        assert!(log.contains(&format!("{flow}{why}")), "{why} in\n{log}");
+    }
+    assert_eq!(stdout(&saaio(home.path(), &["status"])), before);
+}
+
 const MISSING: &str = "0b5e4000-0000-4000-8000-000000000000";
 
 #[test]

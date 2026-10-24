@@ -1,0 +1,435 @@
+# Hardening the server and hooks (0.1.2)
+
+Implementation page: https://claude.ai/artifact/2kpw3qywYiVznKS2fctZpH
+(approaches: https://claude.ai/artifact/3dtRcAwRgtxHATrWdHF3qF)
+
+## Decision
+
+- 1A: each connection gets an `Outbox`, a queue written by a thread of its own. The server thread
+  never writes to a socket; a connection with more than 16 MiB queued is closed. The 2 s write
+  timeout stays, on the writer thread.
+- 2A: every appender opens server.log through `server_log::open`, which rotates under an flock; the
+  server re-points its stdout and stderr at the fresh log on its 500 ms tick with rustix
+  `dup2_stdout`/`dup2_stderr` (feature `stdio`; `unsafe_code` stays forbidden).
+- Further hardening found while reading the code, each with a test that fails first: one
+  deadline for the whole hello, read_msg's buffer growing with the bytes, pane sizes clamped,
+  peer texts cut, merge request URLs only `/pull/<n>` and `/-/merge_requests/<n>`, event texts
+  printable, at most 8 questions and options, hook stdin capped at 16 MiB.
+- No stored format changes: event log, `--json` view and `PROTOCOL_VERSION` unchanged.
+- CHANGELOG lines are plain user-facing fixes.
+
+## Units
+
+`src/server/outbox.rs` (new; `mod outbox;` in server.rs, a line in CLAUDE.md's Architecture)
+
+```rust
+/// Past this many bytes queued for one connection it is closed: its client stopped reading.
+pub(super) const MAX_QUEUED: usize = 2 * proto::MAX_MESSAGE;
+
+#[derive(Debug)]
+pub(super) struct Outbox {
+    frames: Sender<Vec<u8>>,
+    /// Bytes sent to the writer and not yet written.
+    queued: Arc<AtomicUsize>,
+}
+
+impl Outbox {
+    /// Starts the "conn <n> writer" thread on `stream`, whose writes time out after
+    /// WRITE_TIMEOUT; a write that fails sends Event::Gone(conn) and ends it. Dropped, the
+    /// Outbox lets the thread write what is queued, then shut the stream down.
+    pub(super) fn start(conn: ConnId, stream: UnixStream, events: Sender<Event>) -> io::Result<Outbox>;
+
+    /// Queues `message`; Err when it cannot be encoded or would put more than MAX_QUEUED
+    /// bytes in the queue ("stopped reading: 16 MiB queued").
+    pub(super) fn send(&self, message: &ServerMsg) -> Result<()>;
+}
+```
+
+`src/server/backlog.rs` (new, added in the build: pane output read faster than the server fed it
+held up every other event)
+
+```rust
+/// Past this many bytes waiting for the server, every pane's reader waits for it.
+const MAX_BACKLOG: usize = 256 << 10;
+
+pub(super) struct Backlog { state: Mutex<State>, changed: Condvar }
+
+impl Backlog {
+    /// Counts `bytes` read from a pane, first waiting while the backlog is past MAX_BACKLOG.
+    pub(super) fn add(&self, bytes: usize);
+    /// Counts `bytes` fed to a terminal off the backlog.
+    pub(super) fn fed(&self, bytes: usize);
+    /// Lets every reader go on without waiting, for good (Host's Drop).
+    pub(super) fn close(&self);
+}
+```
+
+- `Host` keeps an `Arc<Backlog>`; each pane's output thread `add`s what it read before sending
+  it, `Host::feed` takes it off; `Server::stop` feeds the output it drains.
+
+`src/server/pane_input.rs` (new, added in the review: with the Backlog in place, the server's
+own writes to a pane and that pane's reader could end up waiting on each other)
+
+```rust
+/// Past this many bytes queued for one pane, more input is refused: its program stopped reading.
+const MAX_QUEUED: usize = 16 << 20;
+
+pub(super) struct PaneInput { bytes: Sender<Vec<u8>>, queued: Arc<AtomicUsize> }
+
+impl PaneInput {
+    /// Starts the "pane <key> input" thread on `writer`; a write that fails ends it.
+    pub(super) fn start(key: &PaneKey, writer: Box<dyn Write + Send>) -> io::Result<PaneInput>;
+    /// Queues `bytes`; Err when the thread ended or more than MAX_QUEUED bytes would wait.
+    pub(super) fn send(&self, bytes: &[u8]) -> Result<()>;
+}
+```
+
+- `Process` keeps a `PaneInput` in place of its writer; `Host::write` and the Terminal's replies
+  in `Host::feed` queue through it, so the server thread never writes to a PTY.
+
+`src/server/conn.rs` (modified)
+
+```rust
+pub(super) struct Conn {
+    /// Kept to shut its reading side when the connection is dropped.
+    stream: UnixStream,
+    outbox: Outbox,
+    peer: Option<Peer>,
+    role: Option<Role>,
+}
+
+impl Server {
+    // changed: queues through the Outbox; a connection it cannot take is logged
+    // ("dropped <peer>: stopped reading: 16 MiB queued") and dropped.
+    pub(super) fn send_to(&mut self, conn: ConnId, message: &ServerMsg);
+    // changed: shuts only the reading side and drops the Conn, so its Outbox still writes a
+    // Refused or Detached queued before it.
+    pub(super) fn drop_conn(&mut self, conn: ConnId);
+}
+
+/// A stream whose reads time out at one deadline, however slowly its bytes come.
+struct Until<'a> {
+    stream: &'a mut UnixStream,
+    deadline: Instant,
+}
+impl Read for Until<'_> { ... } // sets the read timeout to what is left before each read
+```
+
+- `message()` clamps the size of `Hello { role: Attach { size } }` and `Resize` with
+  `Size::clamped` before Host sees it.
+- `accept()` starts the Outbox; no write timeout on the server's own stream.
+- `read_in_background` reads the first message through `Until` (accepted + timing.hello): one
+  deadline for the whole first message; past it, Unreadable as before. (Changed in the build: a
+  deadline kept by the server tick could refuse a real hello still queued behind a busy loop.)
+
+`src/server/panes.rs` (modified, found by the fuzz and the review of it): `reopen_worker` acts
+only on a flow on the board, and `close_flow` only on a flow on the board or one whose log is in
+the store (a UUID); any other id is answered NotOpen and leaves nothing behind.
+
+`src/server.rs` (modified)
+
+```rust
+struct Server {
+    // ...
+    /// server.log beside the socket while stderr writes to it, as in a server ensure_server
+    /// started; None for one run in a terminal (or a server test inside cargo test, whose
+    /// stderr may be a file of the test run's).
+    log: Option<PathBuf>,
+}
+```
+
+- `serve()`: on each WATCH_EVERY tick, when `self.log` is Some, also
+  `server_log::follow(log, server_log::CAP)` (an error is let go: it cannot be logged).
+- WRITE_TIMEOUT is the Outbox writer's; its doc says so.
+
+`src/proto.rs` (modified)
+
+```rust
+/// The widest and tallest pane the server makes: past it a terminal's cells cost too much.
+pub const MAX_SIZE: Size = Size { cols: 1000, rows: 500 };
+/// The longest folder or build a peer keeps, in chars.
+const PEER_TEXT_LIMIT: usize = 4096;
+
+/// A message as its u32 length and postcard bytes, ready to write; Err past MAX_MESSAGE.
+pub fn encode<T: Serialize>(message: &T) -> Result<Vec<u8>>;
+
+impl Size {
+    /// This size within 1..=MAX_SIZE.cols by 1..=MAX_SIZE.rows.
+    pub fn clamped(self) -> Size;
+}
+```
+
+- `write_msg` writes `encode(message)`.
+- `read_msg` grows its buffer with the bytes that arrive (`reader.take(len)`), so a length alone
+  never allocates.
+- `Peer::printable` also cuts cwd and build to PEER_TEXT_LIMIT chars.
+
+`src/server_log.rs` (modified)
+
+```rust
+/// Opens `log` to append, first moving it to `<log>.1` when it is past `cap`; under an flock
+/// on the log, and again when another writer moved it meanwhile, so racing writers rotate once.
+pub fn open(log: &Path, cap: u64) -> io::Result<File>;
+
+/// Points stdout and stderr at `log` (through open, so past `cap` it rotates) once stderr is
+/// a file that is no longer the one at `log` (a writer moved it to `<log>.1`) or is past
+/// `cap`. Nothing when stderr is not a regular file, as for a server run in a terminal.
+pub fn follow(log: &Path, cap: u64) -> io::Result<()>;
+
+/// Whether stderr is the file at `log`: a server ensure_server started, not one in a terminal.
+pub fn is_stderr(log: &Path) -> bool;
+```
+
+- `open` lets the lock go before it returns (changed in the build): flock belongs to the open
+  file, which ensure_server hands the server as stderr and follow dup2s onto it, so a lock kept
+  with it would never be let go. A log that cannot be moved aside is opened as it is.
+- `append` writes through `open(log, CAP)`.
+- `rotate` is removed, folded into `open`.
+
+`src/client.rs` (modified): `ensure_server` opens the log with `server_log::open(&log_path, CAP)`
+instead of `rotate` + `private::options().open`.
+
+`src/cli/commands/hook.rs` (modified)
+
+```rust
+/// The most of an event saaio hook reads.
+const MAX_EVENT: u64 = 16 << 20;
+
+/// The event `input` carries; Err when it is past MAX_EVENT ("the event is over 16 MiB"),
+/// not UTF-8, or cannot be read.
+fn read_event(input: impl Read) -> Result<String>;
+```
+
+- `run`: `read_event(io::stdin().lock())` replaces `read_to_string`; an Err is logged, Silent.
+
+`src/event.rs`, `src/text.rs` (modified; changed in the build from `adapter::cut`): every event
+text is already cut at `Event::new` (`cut_texts`, 500 and 4000 chars), so the control
+characters and the question cap go there too, for every source (hooks, `saaio report`,
+`saaio send`), not only the adapters. Newlines and tabs stay: a Blocked reason carries a worker's
+last output lines, an answer is Markdown. `adapter::cut` is unchanged.
+
+```rust
+// event.rs
+/// The most questions of a dialog, and options of a question, an event keeps.
+pub const MAX_QUESTIONS: usize = 8;
+fn clean_texts(&mut self); // was cut_texts: text::printable_lines, then cut; questions and options truncated
+// text.rs
+/// `text` without control characters but its newlines and tabs.
+pub fn printable_lines(text: &str) -> String;
+```
+
+`src/adapter/calls.rs` (modified)
+
+```rust
+/// `word` when it is an http(s) URL of printable ASCII whose path ends in /pull/<n> or
+/// /-/merge_requests/<n>, n digits.
+fn merge_request(word: &str) -> Option<&str>;
+```
+
+- `created_merge_request` takes the last word `merge_request` accepts.
+- `in_repo` requires the rest after the repo path to be `pull/<n>` or `-/merge_requests/<n>`.
+
+## Data
+
+- `Outbox`: `Vec<u8>` frames (length prefix included) over an mpsc channel, server thread ->
+  writer thread; `queued` counts bytes across both.
+- `Server.log: Option<PathBuf>`.
+- Constants: MAX_QUEUED 16 MiB, MAX_EVENT 16 MiB, MAX_SIZE 1000 x 500, PEER_TEXT_LIMIT 4096,
+  MAX_QUESTIONS 8.
+
+## Call chains
+
+A frame to a UI
+
+1. `Server::flush -> Server::send_to(conn, &ServerMsg::Frame(frame))`
+2. `send_to -> Outbox::send(&message): Result<()>`
+3. `Outbox::send -> proto::encode(message): Result<Vec<u8>>`, `queued += len`, `frames.send(bytes)`
+4. writer thread: `frames.recv() -> stream.write_all(&bytes)`, `queued -= len`
+
+- Queue would pass 16 MiB, or the message does not encode: `send` Err -> `send_to` logs
+  "dropped <peer>: stopped reading: 16 MiB queued" -> `drop_conn`. The UI sees its connection
+  end, as after a write timeout today.
+- A write fails or times out (2 s): writer sends `Event::Gone(conn)`, ends -> `Server::drop_conn`.
+
+A connection closed with a last message (Refused, Detached)
+
+1. `Server::hello -> send_to(old, &ServerMsg::Detached { by }) -> drop_conn(old)`
+2. `drop_conn -> conn.stream.shutdown(Read)`; the Conn and its Outbox are dropped; the reader
+   thread ends with Ok(None) -> `Event::Gone` for a conn already gone: nothing.
+3. writer thread: writes what is queued until the channel ends, then `shutdown(Both)`.
+
+The hello deadline
+
+1. `read_in_background -> proto::read_msg(&mut Until { stream, deadline: accepted + hello })`
+2. each read: what is left before the deadline is the read timeout; none left: TimedOut
+3. Err -> `Event::Unreadable(conn) -> refuse_unreadable` (Refused, dropped), as before
+
+- Undecodable first message: unchanged, `Event::Unreadable -> refuse_unreadable`. A message
+  before the hello: unchanged, `proto::allowed` refuses it, the connection is dropped.
+
+A hook appends to server.log
+
+1. `hook::Log::error -> server_log::append(path, now, line)`
+2. `append -> server_log::open(path, CAP): File`: open 0600 append, flock exclusive; when the
+   file at `path` is no longer this one, open again; when past CAP, `rename(path, path.1)` and
+   open again.
+3. `append -> file.write_all(line)` (O_APPEND, unlocked).
+
+- Any io error: returned; callers let it go as today.
+
+The server's own log follows a rotation
+
+1. `Server::serve` tick `-> server_log::follow(&self.log, CAP)`
+2. `follow`: fstat(stderr); not a regular file -> Ok. Same file as `log` and under cap -> Ok.
+3. else `server_log::open(log, cap) -> rustix::stdio::dup2_stdout(&file), dup2_stderr(&file)`
+
+- Err: the server keeps its old stderr and tries again next tick.
+
+saaio hook reads an event
+
+1. `hook::run -> read_event(io::stdin().lock()): Result<String>` (`take(MAX_EVENT + 1)`, then the
+   length decides)
+2. `serde_json::from_str(&text)` (its recursion limit refuses deep nesting) `-> hook(...)`
+3. adapters translate (a merge request only from `calls::merge_request`); `Event::new` cleans and
+   cuts every text.
+
+- Over 16 MiB, not UTF-8, unreadable, not JSON: logged to server.log ("the event is over
+  16 MiB" or the error), exit 0, nothing on stdout or stderr.
+
+## Test seams
+
+- outbox.rs: socketpair whose far end never reads: `send` never blocks and errs once 16 MiB are
+  queued; a dropped Outbox still delivers what it queued.
+- server/tests.rs: a UI that never reads while its pane prints: a control connection's
+  CloseFlow is still answered at once and the UI is dropped (fails today); a pane that prints
+  without pause delays no CloseFlow (fails today).
+- server/tests.rs: 4 GiB prefix (Refused, closed, server still takes a UI); silent client
+  closed; a hello not whole by the deadline closed (fails today); Input before Hello closed,
+  nothing typed into the master; seeded fuzz of frames before and after a hello, no panic, the
+  server still serves; Resize past MAX_SIZE gives frames of at most 500
+  rows (fails today); a hello with a 1 MiB folder and build gives the UI it replaces a
+  Detached naming 4096 chars of each (fails today; server tests cannot read the server's stderr,
+  and the log line prints the same cut peer).
+- server/tests.rs: Reopen of an id that is no flow adds no pane, and CloseFlow of one does not
+  keep a flow of that id from opening later (both fail today). The fuzz mutates encoded real
+  messages as well as noise, so about a fifth of its cases decode.
+- proto.rs: read_msg of a big length with few bytes never hands the reader a buffer over
+  64 KiB (fails today); 2000 seeded random byte strings decode or err, never panic;
+  `Size::clamped`.
+- server_log.rs: `open` rotates past cap, keeps under it; two threads racing past cap rotate
+  once (server.log.1 keeps the big log).
+- tests/cli/server.rs: E2E, a running server, server.log filled past 1 MiB, a hook append
+  rotates it; the server's next line lands in the new server.log (fails today).
+- tests/cli/hooks.rs: 17 MiB payload, binary, malformed JSON, 10 000-deep nesting: exit 0,
+  stdout and stderr empty, server.log names why (the size case fails today).
+- calls.rs: a URL with control characters or text after the number gives no merge request
+  (fails today).
+- event.rs: control characters leave every text, newlines and tabs stay; 20 questions of 50
+  options keep 8 of 8 (fails today).
+
+## Assumptions (approved)
+
+1. Limits: 16 MiB per hook event, 16 MiB queued per connection, panes at most 1000 x 500, peer
+   texts 4096 chars, at most 8 questions and 8 options.
+2. A UI past the queue limit is closed, never sent a partial stream.
+3. The 2 s write timeout stays, on the writer thread.
+4. The server's log may run up to one 500 ms tick past its cap.
+5. A hello-less connection is closed at its deadline, by its reader thread.
+6. A hook event over the limit is skipped whole, a PreToolUse included.
+7. 16 idle Control connections that said hello still fill the slots; unchanged.
+8. CHANGELOG under Unreleased, Fixed, four plain lines: hook events over 16 MiB are skipped; a
+   UI that stops reading, or a session that prints without pause, no longer slows the server;
+   server.log stays bounded while the server runs; the server copes with very large windows and
+   malformed messages.
+
+## Tasks
+
+### Protocol
+
+- [x] `proto::encode`, `write_msg` through it, and `read_msg` growing its buffer with the bytes (unit test: a big length never hands the reader a buffer over 64 KiB, failing first); seeded decoder fuzz unit test
+- [x] `Size::clamped` and `MAX_SIZE`, clamped in `Server::message` for Hello and Resize (server test: Resize past MAX_SIZE gives frames of at most 500 rows, failing first)
+- [x] `Peer::printable` cuts to PEER_TEXT_LIMIT (unit test, and server test: a hello with a 1 MiB folder gives a cut Detached peer, failing first)
+
+### Connections
+
+- [x] One hello deadline across every read of the first message, `Until` in conn.rs (server test: a hello not whole by the deadline is closed, failing first; silent client still closed)
+- [x] `server/outbox.rs` `Outbox::start`/`send` with unit tests (never blocks, errs past MAX_QUEUED, delivers what it queued when dropped)
+- [x] `Conn` writes through its Outbox: `send_to`, `drop_conn`, `accept` (server test: a UI that never reads while its pane prints does not delay a control connection's CloseFlow and is dropped, failing first)
+- [x] Pane output that outruns the server no longer holds up the event loop, `server/backlog.rs` (server test: a pane that prints without pause does not delay a control connection's CloseFlow, failing first)
+- [x] Protocol robustness tests in server/tests.rs: 4 GiB prefix, Input before Hello types nothing, seeded fuzz before and after a hello; fix whatever they find (Reopen only of a flow on the board)
+- [x] CloseFlow only of a flow on the board or in the store (server test: a CloseFlow of an id that is no flow yet does not keep it from opening, failing first)
+
+### Log
+
+- [x] `server_log::open` (flock, rotation, moved-file reopen) replacing `rotate`; `append` and `ensure_server` through it (unit tests: rotates past cap, racing writers rotate once)
+- [x] `server_log::follow` with rustix `stdio`, `Server.log`, called on the tick (tests/cli/server.rs E2E: after a hook append rotates, the server's next line lands in the new server.log, failing first)
+
+### Hook
+
+- [x] `hook::read_event` with MAX_EVENT (tests/cli/hooks.rs: 17 MiB payload logged and silent, failing first; binary, malformed JSON, 10 000-deep nesting)
+- [x] `calls::merge_request` for `created_merge_request` and `in_repo` (unit tests: control characters or text after the number, failing first)
+- [x] Every event text without control characters (newlines and tabs kept) and at most MAX_QUESTIONS questions and options, in `Event::new` (unit tests, failing first)
+
+### After the review
+
+- [x] A merge request URL with a trailing `/`, `?query`, `#fragment` or a known page (`/files`, `/commits`, `/diffs` ...) is kept as `.../pull/<n>` or `.../-/merge_requests/<n>` (`calls::canonical_merge_request`), in `saaio report merge-request` and the hook; anything else is refused with a message naming the form (unit and CLI tests, failing first)
+- [x] `server_log::open` treats a lock the file system refuses as no lock (unit test, failing first)
+
+### Finish
+
+- [x] CHANGELOG four lines under Unreleased, Fixed; CLAUDE.md Architecture line for outbox.rs and the server_log changes
+- [x] End-to-end check: scratch SAAIO_HOME, real server and UI in a PTY, a UI that stops reading (SIGSTOP) while the master prints, a second UI attaches at once; server.log rotation by hook appends; a huge hook payload; `saaio --stop` at the end
+
+## Review
+
+Isolated review of `main..flow/hardening-server` against this plan.
+
+**Fixed**
+
+- With the Backlog, the server thread's synchronous writes to a pane and that pane's reader could
+  wait on each other and stall the server. Shown by
+  `a_pane_that_prints_for_every_line_typed_never_stalls_the_server` (stalls past 30 s before,
+  about 2 s after). Fixed by `server/pane_input.rs`: each pane's input is queued for a writer
+  thread of its own, refused past 16 MiB, so the server thread never writes to a PTY, also when
+  a pane does not read its input. Commit
+  `server: host: write a pane's input on a thread of its own`. Its fix was reviewed by a
+  separate agent: no proven problem.
+
+**Open**
+
+- `saaio report merge-request` now refuses a URL with anything after the number (`/files`,
+  a trailing `/`, `?query`), with "is not a merge request of ...'s repository". Recommendation:
+  keep the strict check; consider naming the expected form (`.../pull/<n>`) in that message.
+- `server_log::open` fails when the log's file system refuses `flock`, and `ensure_server` then
+  cannot start the server (before, no lock was taken). Not proven on a real file system.
+  Recommendation: treat a failed lock as no lock, since it only orders rotations.
+- A write to a pane now fails only on the next write after the pane stopped taking input, so
+  `type_into` and the dialog dismissal can count one line or Esc as delivered to a pane that
+  died at that moment. Low severity; recommendation: leave it.
+- Event texts now lose control characters for every kind (`Typed` and `Message` included);
+  `\r\n` becomes `\n`. Meant by the plan; mentioned because `saaio send` text changes.
+
+**Decided**
+
+- Merge request URLs: kept in their canonical form rather than refused (see the tasks after the
+  review); anything else is refused with a message naming the form.
+- A refused flock: no lock.
+- A write one step late to a pane that just died, and the cleaned `saaio send` texts: left as
+  they are.
+
+**Where to look**
+
+1. `src/server/host.rs` `spawn` -> `server/pane_input.rs` and `server/backlog.rs`: the two
+   threads per pane, and that only pane threads ever wait.
+2. `src/server/conn.rs` `drop_conn` / `send_to` with `server/outbox.rs`: a dropped connection
+   now closes when its writer thread finishes, not at once.
+3. `src/server_log.rs` `open` and `follow`: the flock and moved-file loop, and the dup2 onto
+   stdout and stderr.
+
+Routine and skimmable: `proto.rs` clamps and cuts, `hook.rs` `read_event`, `calls.rs` URL
+parsing, `event.rs` `clean_texts`, the docs and CHANGELOG lines.
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt` pass at the fix
+commit.

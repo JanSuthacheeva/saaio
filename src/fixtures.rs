@@ -1,4 +1,4 @@
-//! What tests across the crate share: `executable`, `started`, `workspace` and `flow`
+//! What tests across the crate share: `executable`, `started`, `workspace`, `flow` and `Noise`
 
 use std::io::Write;
 use std::path::Path;
@@ -56,6 +56,45 @@ pub fn flow(id: &str, events: Vec<Event>, now: u64) -> FlowView {
     let mut all = vec![started(id, "x")];
     all.extend(events);
     fold::fold(id, &all, None, now).expect("a started flow folds")
+}
+
+/// Bytes that look random but repeat for a seed (xorshift64), for the decoder fuzz tests.
+pub struct Noise(u64);
+
+impl Noise {
+    pub fn new(seed: u64) -> Noise {
+        Noise(seed | 1)
+    }
+
+    pub fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+
+    /// Up to `max` bytes.
+    pub fn bytes(&mut self, max: usize) -> Vec<u8> {
+        let len = self.next() as usize % (max + 1);
+        (0..len).map(|_| self.next() as u8).collect()
+    }
+
+    /// `bytes` with up to four of them changed, then cut or grown by a few.
+    pub fn mutate(&mut self, bytes: &[u8]) -> Vec<u8> {
+        let mut out = bytes.to_vec();
+        for _ in 0..self.next() % 5 {
+            if !out.is_empty() {
+                let at = self.next() as usize % out.len();
+                out[at] = self.next() as u8;
+            }
+        }
+        match self.next() % 4 {
+            0 => out.truncate(self.next() as usize % (out.len() + 1)),
+            1 => out.extend(self.bytes(8)),
+            _ => {}
+        }
+        out
+    }
 }
 
 #[cfg(test)]

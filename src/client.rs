@@ -317,12 +317,7 @@ pub fn ensure_server(socket: &Path, exe: &Path, env: &[(String, String)]) -> Res
         return Ok(());
     }
     let log_path = server_log::path(socket);
-    // A log that cannot be moved aside is only longer; it never keeps the server from starting.
-    let _ = server_log::rotate(&log_path, server_log::CAP);
-    let log = private::options()
-        .create(true)
-        .append(true)
-        .open(&log_path)
+    let log = server_log::open(&log_path, server_log::CAP)
         .with_context(|| format!("could not open {}", log_path.display()))?;
     let mut command = server_command(exe, env);
     command

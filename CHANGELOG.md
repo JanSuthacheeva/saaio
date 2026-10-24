@@ -16,6 +16,9 @@ All notable changes to saaio are listed here. The format follows
 - `saaio send` to a worker waiting on a permission prompt names the prompt and says the worker
   reads the message once the prompt is answered in its pane. Before, it said the worker would be
   woken with it now.
+- `saaio report merge-request` keeps a merge request URL as `.../pull/<n>` or
+  `.../-/merge_requests/<n>`, dropping a trailing `/`, `?query`, `#fragment` or a page such as
+  `/files`, and names that form when it refuses a URL.
 
 ### Fixed
 
@@ -31,6 +34,12 @@ All notable changes to saaio are listed here. The format follows
 - Git in `.saaio/teardown`, `.saaio/pause` and `.saaio/resume` always acts on the flow's own
   worktree: they run with `GIT_DIR` and `GIT_WORK_TREE` set. A script that wants git on the main
   checkout clears them ([repository.md](docs/repository.md#setup-and-teardown)).
+- `saaio hook` skips an event over 16 MiB and notes it in server.log.
+- A UI that stops reading, or a session that prints without pause, no longer slows the server
+  for other UIs and commands.
+- server.log stays bounded while the server runs: past 1 MiB it moves to server.log.1 whoever
+  writes to it.
+- The server copes with very large windows and malformed messages.
 
 ## [0.1.1] - 2026-10-22
 
