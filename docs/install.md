@@ -12,12 +12,12 @@ not on `PATH`, it prints the line to add.
 
 | Variable | Default | Sets |
 | --- | --- | --- |
-| `SAAIO_VERSION` | the latest release | the tag to install, such as `v0.1.1` |
+| `SAAIO_VERSION` | the latest release | the tag to install, such as `v0.1.2` |
 | `SAAIO_INSTALL_DIR` | `~/.local/bin` | the folder `saaio` is installed to |
 | `SAAIO_DOWNLOAD_URL` | the GitHub release | a folder or mirror holding the release assets (`file://` works). `SHA256SUMS` is read from the same place, so it checks the download, not the source. |
 
 ```sh
-curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | SAAIO_VERSION=v0.1.1 sh
+curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | SAAIO_VERSION=v0.1.2 sh
 ```
 
 | Requirement | Notes |
@@ -65,7 +65,7 @@ For other platforms, or to build it yourself. Requires Rust 1.95+, installed wit
 [rustup](https://rustup.rs).
 
 ```sh
-cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.1.1
+cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.1.2
 ```
 
 Installs `saaio` to `~/.cargo/bin`. `saaio --version` names the commit it was built from, or
