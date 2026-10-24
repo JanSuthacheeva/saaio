@@ -26,6 +26,8 @@ fn codex_permission_waits_after_a_grace_period_and_completion_cancels_it() {
         Some("permission: Bash(touch notes.txt)")
     );
     assert_eq!(waiting.changed_at, 4_000);
+    assert!(waiting.permission);
+    assert!(!view(&events, 3_999).permission, "inside its grace");
     assert!(changes("x", &events, &EventKind::Working, 2_000));
     let completed = [
         events[0].clone(),
@@ -67,13 +69,7 @@ fn an_idle_worker_does_not_need_you_but_shows_its_last_line() {
 fn a_message_is_in_the_timeline_and_leaves_the_state() {
     let events = vec![
         started(0),
-        at(
-            1,
-            EventKind::Waiting {
-                question: "Which delimiter?".into(),
-                questions: Vec::new(),
-            },
-        ),
+        at(1, EventKind::waiting("Which delimiter?")),
         at(
             2,
             EventKind::Message {
@@ -280,13 +276,7 @@ fn says_whether_an_event_changes_what_the_flow_shows() {
             phases: None,
         },
     );
-    let waiting = Event::new(
-        1,
-        EventKind::Waiting {
-            question: "Which?".into(),
-            questions: Vec::new(),
-        },
-    );
+    let waiting = Event::new(1, EventKind::waiting("Which?"));
     let events = vec![started.clone(), waiting.clone()];
 
     assert!(
@@ -485,20 +475,8 @@ fn waiting_and_blocked_set_the_blocker_once_per_question() {
     let waiting = view(
         &[
             started(0),
-            at(
-                1,
-                EventKind::Waiting {
-                    question: "Approve the plan?".into(),
-                    questions: Vec::new(),
-                },
-            ),
-            at(
-                2,
-                EventKind::Waiting {
-                    question: "Approve the plan?".into(),
-                    questions: Vec::new(),
-                },
-            ),
+            at(1, EventKind::waiting("Approve the plan?")),
+            at(2, EventKind::waiting("Approve the plan?")),
         ],
         3,
     );
@@ -551,6 +529,7 @@ fn dialog(at_ms: u64, questions: Vec<Question>) -> Event {
         EventKind::Waiting {
             question,
             questions,
+            permission: false,
         },
     )
 }
@@ -568,10 +547,7 @@ fn a_dialog_shows_its_questions_until_the_flow_leaves_waiting() {
     assert_eq!(flow.blocker.as_deref(), Some("Which color?"));
     assert_eq!(flow.questions, asked);
 
-    let worded = EventKind::Waiting {
-        question: "Ship it?".into(),
-        questions: Vec::new(),
-    };
+    let worded = EventKind::waiting("Ship it?");
     for next in [
         EventKind::Working,
         EventKind::Idle {
@@ -597,13 +573,38 @@ fn a_dialog_shows_its_questions_until_the_flow_leaves_waiting() {
 }
 
 #[test]
+fn a_permission_prompt_shows_until_the_flow_leaves_waiting() {
+    let asked = EventKind::Waiting {
+        question: "permission: Bash(curl -sI https://example.org)".into(),
+        questions: Vec::new(),
+        permission: true,
+    };
+    let events = vec![started(0), at(1, asked)];
+
+    let flow = view(&events, 2);
+    assert_eq!(flow.state, State::Waiting);
+    assert!(flow.permission);
+    assert!(!view(&[started(0), at(1, EventKind::waiting("Ship it?"))], 2).permission);
+
+    for next in [
+        EventKind::Working,
+        EventKind::waiting("Ship it?"),
+        EventKind::Ended,
+    ] {
+        let mut after = events.clone();
+        after.push(at(3, next.clone()));
+        assert!(!view(&after, 4).permission, "{next:?}");
+    }
+    let mut messaged = events.clone();
+    messaged.push(at(3, EventKind::Message { text: "Hi".into() }));
+    assert!(view(&messaged, 4).permission, "a message leaves it open");
+}
+
+#[test]
 fn a_question_or_reason_does_not_outlive_waiting_or_blocked() {
     let asked = at(
         2 * MIN,
-        EventKind::Waiting {
-            question: "Should I also update the README?".into(),
-            questions: Vec::new(),
-        },
+        EventKind::waiting("Should I also update the README?"),
     );
     let stuck = at(
         2 * MIN,
@@ -641,6 +642,7 @@ fn a_new_dialog_with_the_same_first_question_is_a_change() {
     let other = EventKind::Waiting {
         question: "Which color?".into(),
         questions: vec![Question::of("Which color?", &["Red", "Teal"], false)],
+        permission: false,
     };
 
     assert!(!changes("x", &events, &same, 2));
@@ -679,13 +681,7 @@ fn decisions_are_kept_once_and_do_not_change_the_state() {
     let flow = view(
         &[
             started(0),
-            at(
-                1,
-                EventKind::Waiting {
-                    question: "Which approach?".into(),
-                    questions: Vec::new(),
-                },
-            ),
+            at(1, EventKind::waiting("Which approach?")),
             at(
                 2,
                 EventKind::Decision {
@@ -775,13 +771,7 @@ fn a_question_after_pr_is_waiting() {
     let events = [
         started(0),
         opened(MIN, PR),
-        at(
-            2 * MIN,
-            EventKind::Waiting {
-                question: "Ship with the race fix?".into(),
-                questions: Vec::new(),
-            },
-        ),
+        at(2 * MIN, EventKind::waiting("Ship with the race fix?")),
     ];
     let flow = view(&events, 3 * MIN);
     assert_eq!(flow.state, State::Waiting);

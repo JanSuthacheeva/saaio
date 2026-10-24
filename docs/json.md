@@ -59,6 +59,7 @@ saaio status shop-217 --json # a board with just that flow
       "answer": null,
       "session": null,
       "questions": [],
+      "permission": false,
       "services": null
     },
     {
@@ -89,6 +90,7 @@ saaio status shop-217 --json # a board with just that flow
       "answer": null,
       "session": null,
       "questions": [],
+      "permission": false,
       "services": null
     }
   ]
@@ -130,6 +132,7 @@ All times are Unix milliseconds.
 | `answer` | string or null | the worker's last turn's closing message, as its harness reported it, up to 4000 characters |
 | `session` | object or null | `{ "id", "transcript" }`: the session id the harness picked and the path of its transcript (`transcript` may be null). Set for Codex, which picks its own id. Null for Claude Code, which uses the flow's. |
 | `questions` | array | the questions of the dialog a `waiting` flow shows. Empty when it waits on none. See [Questions](#questions). |
+| `permission` | boolean | the flow is `waiting` on a permission prompt in its pane; `blocker` names the tool call. A Codex request counts once it is `waiting`, three seconds in. |
 | `services` | object or null | where the flow's services stand. Null until saaio first pauses them. See [Services](#services). |
 
 ### States

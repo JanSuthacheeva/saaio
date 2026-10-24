@@ -23,9 +23,14 @@ fn events(name: &str) -> Vec<EventKind> {
 }
 
 fn waiting(question: &str) -> EventKind {
+    EventKind::waiting(question)
+}
+
+fn permission(question: &str) -> EventKind {
     EventKind::Waiting {
         question: question.into(),
         questions: Vec::new(),
+        permission: true,
     }
 }
 
@@ -142,6 +147,7 @@ fn a_question_or_a_permission_waits_for_you() {
                 &[("Red", "Choose red"), ("Blue", "Choose blue")],
                 false
             )],
+            permission: false,
         }]
     );
     assert_eq!(
@@ -151,7 +157,7 @@ fn a_question_or_a_permission_waits_for_you() {
     );
     assert_eq!(
         events("permission_bash"),
-        vec![waiting("permission: Bash(rm -rf build)")]
+        vec![permission("permission: Bash(rm -rf build)")]
     );
 }
 
@@ -161,6 +167,7 @@ fn a_dialog_keeps_every_question_with_its_options() {
         EventKind::Waiting {
             question: first,
             questions,
+            ..
         },
     ] = &events("pre_ask_two")[..]
     else {
@@ -222,12 +229,12 @@ fn names_a_file_inside_the_session_folder_by_its_relative_path() {
 
     assert_eq!(
         translate(&payload, &phases()),
-        vec![waiting("permission: Write(src/export.rs)")]
+        vec![permission("permission: Write(src/export.rs)")]
     );
     payload["tool_input"] = json!({"file_path": "/etc/hosts"});
     assert_eq!(
         translate(&payload, &phases()),
-        vec![waiting("permission: Write(/etc/hosts)")]
+        vec![permission("permission: Write(/etc/hosts)")]
     );
 }
 

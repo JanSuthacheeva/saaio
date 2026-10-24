@@ -62,10 +62,7 @@ impl ReportEvent {
             ReportEvent::Phase { phase } => EventKind::Phase { phase },
             ReportEvent::Working => EventKind::Working,
             ReportEvent::Delegated { description } => EventKind::Delegated { description },
-            ReportEvent::Waiting { question } => EventKind::Waiting {
-                question,
-                questions: Vec::new(),
-            },
+            ReportEvent::Waiting { question } => EventKind::waiting(question),
             ReportEvent::Idle { note } => EventKind::Idle { note },
             ReportEvent::Blocked { reason } => EventKind::Blocked { reason },
             ReportEvent::Decision { text } => EventKind::Decision { text },

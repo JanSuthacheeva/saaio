@@ -175,13 +175,6 @@ mod tests {
         fixtures::flow(id, events, 100)
     }
 
-    fn waiting(question: &str) -> EventKind {
-        EventKind::Waiting {
-            question: question.into(),
-            questions: Vec::new(),
-        }
-    }
-
     fn message(text: &str) -> EventKind {
         EventKind::Message { text: text.into() }
     }
@@ -190,6 +183,7 @@ mod tests {
         EventKind::Waiting {
             question: "Which color?".into(),
             questions: vec![Question::of("Which color?", &["Red", "Blue"], false)],
+            permission: false,
         }
     }
 
@@ -214,7 +208,7 @@ mod tests {
             "the dialog closed"
         );
         assert!(
-            !answered(vec![waiting("Ship it?"), message("Yes")]),
+            !answered(vec![EventKind::waiting("Ship it?"), message("Yes")]),
             "a question asked in words"
         );
         assert!(
@@ -253,7 +247,7 @@ mod tests {
     #[test]
     fn wakes_the_master_for_flows_that_stopped_but_not_for_running_ones() {
         let flows = vec![
-            flow("asks", vec![(5, waiting("Which?"))]),
+            flow("asks", vec![(5, EventKind::waiting("Which?"))]),
             flow("works", vec![(3, EventKind::Working)]),
             flow(
                 "rests",
@@ -286,7 +280,7 @@ mod tests {
 
     #[test]
     fn a_flow_the_master_saw_is_news_again_only_once_it_changes() {
-        let asked = vec![flow("asks", vec![(5, waiting("Which?"))])];
+        let asked = vec![flow("asks", vec![(5, EventKind::waiting("Which?"))])];
         let seen = Seen::new();
         let news = changed_flows(&asked, &seen);
         let mut marked = seen.clone();
@@ -297,7 +291,10 @@ mod tests {
 
         let again = vec![flow(
             "asks",
-            vec![(5, waiting("Which?")), (9, waiting("And the header?"))],
+            vec![
+                (5, EventKind::waiting("Which?")),
+                (9, EventKind::waiting("And the header?")),
+            ],
         )];
         assert_eq!(changed_flows(&again, &seen).len(), 1);
 
@@ -312,7 +309,7 @@ mod tests {
 
     #[test]
     fn never_wakes_the_master_for_a_plain_session() {
-        let mut plain = flow("scratch", vec![(5, waiting("Which?"))]);
+        let mut plain = flow("scratch", vec![(5, EventKind::waiting("Which?"))]);
         plain.mode = Mode::Plain;
 
         assert!(changed_flows(&[plain], &Seen::new()).is_empty());
@@ -321,7 +318,7 @@ mod tests {
     #[test]
     fn starts_out_having_seen_every_finished_flow() {
         let flows = vec![
-            flow("asks", vec![(5, waiting("Which?"))]),
+            flow("asks", vec![(5, EventKind::waiting("Which?"))]),
             flow(
                 "shipped",
                 vec![
@@ -365,7 +362,7 @@ mod tests {
                         url: "https://x/1".into(),
                     },
                 ),
-                (3, waiting("What about the race?")),
+                (3, EventKind::waiting("What about the race?")),
             ],
         );
         let mut seen = Seen::new();
@@ -409,7 +406,10 @@ mod tests {
 
     #[test]
     fn tells_the_master_what_changed_and_who_answers_by_mode() {
-        let asked = flow("shop-217", vec![(1, waiting("Which delimiter?"))]);
+        let asked = flow(
+            "shop-217",
+            vec![(1, EventKind::waiting("Which delimiter?"))],
+        );
         let mut ready = flow(
             "shop-220",
             vec![(

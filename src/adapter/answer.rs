@@ -22,10 +22,7 @@ pub fn turn_end(answer: &str) -> EventKind {
         sentence.ends_with('?') || lower.starts_with("let me know") || lower.starts_with("tell me")
     };
     match sentences.iter().rev().find(asks) {
-        Some(question) => EventKind::Waiting {
-            question: cut(question),
-            questions: Vec::new(),
-        },
+        Some(question) => EventKind::waiting(cut(question)),
         None => EventKind::Idle {
             note: cut(sentences.last().map_or(last, |sentence| sentence.as_str())),
         },
@@ -92,20 +89,19 @@ mod tests {
 
     #[test]
     fn waits_for_the_person_only_when_the_last_line_asks() {
-        let waiting = |question: &str| EventKind::Waiting {
-            question: question.into(),
-            questions: Vec::new(),
-        };
         let idle = |note: &str| EventKind::Idle { note: note.into() };
 
         assert_eq!(
             turn_end("Done.\n\n- **Which** approach: `A` or B? I lean A."),
-            waiting("Which approach: A or B?")
+            EventKind::waiting("Which approach: A or B?")
         );
-        assert_eq!(turn_end("1. Shall I go on?"), waiting("Shall I go on?"));
+        assert_eq!(
+            turn_end("1. Shall I go on?"),
+            EventKind::waiting("Shall I go on?")
+        );
         assert_eq!(
             turn_end("Tests pass. Tell me which one to keep."),
-            waiting("Tell me which one to keep.")
+            EventKind::waiting("Tell me which one to keep.")
         );
         assert_eq!(turn_end("All set. Tests pass."), idle("Tests pass."));
         assert_eq!(

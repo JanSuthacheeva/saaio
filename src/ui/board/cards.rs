@@ -533,10 +533,7 @@ mod tests {
                 EventKind::Phase {
                     phase: Phase::of("plan"),
                 },
-                EventKind::Waiting {
-                    question: "Which approach?".into(),
-                    questions: Vec::new(),
-                },
+                EventKind::waiting("Which approach?"),
             ],
         );
 

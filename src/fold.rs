@@ -189,6 +189,7 @@ impl Folding {
             answer: None,
             session: None,
             questions: Vec::new(),
+            permission: false,
             services: None,
         };
         let phases = phases.map_or_else(|| Workflow::builtin().phases(), <[Phase]>::to_vec);
@@ -265,9 +266,11 @@ impl Folding {
             EventKind::Waiting {
                 question,
                 questions,
+                permission,
             } => {
                 self.pending_permission = None;
                 self.view.questions.clone_from(questions);
+                self.view.permission = *permission;
                 self.stop_for(State::Waiting, question, at, "waiting", Tone::Attention);
             }
             EventKind::PermissionPending { question } => {
@@ -401,6 +404,7 @@ impl Folding {
         }
         if self.view.state != State::Waiting {
             self.view.questions.clear();
+            self.view.permission = false;
         }
         if !matches!(self.view.state, State::Waiting | State::Blocked) {
             self.view.blocker = None;
@@ -476,6 +480,7 @@ impl Folding {
         {
             let due = at.saturating_add(PERMISSION_GRACE_MS);
             self.stop_for(State::Waiting, &question, due, "waiting", Tone::Attention);
+            self.view.permission = true;
             self.view.changed_at = due;
         }
         self.close_phase(self.stopped_at.unwrap_or(now));

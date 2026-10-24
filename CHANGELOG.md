@@ -6,8 +6,16 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `saaio status --json` gives each flow `permission`: true while it waits on a permission prompt
+  in its pane.
+
 ### Changed
 
+- `saaio send` to a worker waiting on a permission prompt names the prompt and says the worker
+  reads the message once the prompt is answered in its pane. Before, it said the worker would be
+  woken with it now.
 - `saaio report merge-request` keeps a merge request URL as `.../pull/<n>` or
   `.../-/merge_requests/<n>`, dropping a trailing `/`, `?query`, `#fragment` or a page such as
   `/files`, and names that form when it refuses a URL.

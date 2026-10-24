@@ -271,6 +271,18 @@ state: waiting
 help[2]: saaio closes shop-217's question dialog and its worker reads this as the answer to every question in it,saaio wakes you when shop-217 changes again
 ```
 
+A worker waiting on a permission prompt reads the message only once the prompt is answered in its
+pane. `saaio send` still takes the message and names the prompt in `prompt`. The prompt waits for
+you in the worker's pane: saaio does not answer it.
+
+```
+$ saaio send shop-217 "Check the date header too."
+sent: shop-217
+state: waiting
+prompt: "permission: Bash(curl -sI https://example.org)"
+help[2]: shop-217's permission prompt is open in its pane. Its worker reads this once the user answers the prompt there,saaio wakes you when shop-217 changes again
+```
+
 | Refused | Reason |
 | --- | --- |
 | outside the master's session | `only the master sends`. Workers end their turn with the question. |

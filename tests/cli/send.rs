@@ -171,6 +171,69 @@ fn send_to_a_flow_on_a_dialog_says_saaio_closes_it() {
 }
 
 #[test]
+fn send_to_a_flow_on_a_permission_prompt_says_what_it_asks() {
+    let home = TempDir::new().unwrap();
+    let rollout = home.path().join("rollout.jsonl");
+    fs::write(
+        &rollout,
+        include_str!("../../src/adapter/fixtures/codex/rollout_auto_review.jsonl"),
+    )
+    .unwrap();
+    let mut codex: serde_json::Value = serde_json::from_str(include_str!(
+        "../../src/adapter/fixtures/codex/permission_bash.json"
+    ))
+    .unwrap();
+    codex["transcript_path"] = rollout.to_str().unwrap().into();
+    let codex = codex.to_string();
+    for (id, name, adapter, payload) in [
+        (
+            "7f3c0000-0000-4000-8000-000000000000",
+            "ask",
+            "claude-code",
+            include_str!("../../src/adapter/fixtures/claude-code/permission_bash.json"),
+        ),
+        (
+            "8e4d0000-0000-4000-8000-000000000000",
+            "pick",
+            "codex",
+            codex.as_str(),
+        ),
+    ] {
+        seed_worker(
+            home.path(),
+            id,
+            name,
+            r#"{"v":1,"at":2000,"kind":"working"}"#,
+        );
+        let output = hook_with(home.path(), &[adapter], Some(id), payload);
+        assert!(output.status.success(), "{}", stderr(&output));
+    }
+    let permission = |name: &str| {
+        let json = saaio(home.path(), &["status", name, "--json"]);
+        serde_json::from_slice::<serde_json::Value>(&json.stdout).unwrap()["flows"][0]["permission"]
+            == true
+    };
+    assert!(permission("ask"));
+    wait_until("codex's permission outlasts its grace", || {
+        permission("pick")
+    });
+
+    for name in ["ask", "pick"] {
+        let output = as_master(home.path(), &["send", name, "Use curl instead."]);
+
+        assert!(output.status.success(), "{}", stdout(&output));
+        let text = stdout(&output);
+        assert!(text.contains("\nprompt: \"permission: "), "{text}");
+        assert!(
+            text.contains(&format!(
+                "{name}'s permission prompt is open in its pane. Its worker reads this once the user answers the prompt there"
+            )),
+            "{text}"
+        );
+    }
+}
+
+#[test]
 fn send_refuses_what_has_no_worker_to_read_it() {
     let home = TempDir::new().unwrap();
     seed_worker(

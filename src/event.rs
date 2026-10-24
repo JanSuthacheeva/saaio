@@ -52,6 +52,9 @@ pub enum EventKind {
         /// a question asked in words or a permission prompt.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         questions: Vec<Question>,
+        /// The harness asks permission for a tool call; question names the call.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        permission: bool,
     },
     /// Codex may approve a PermissionRequest itself. It becomes waiting only after a grace period.
     PermissionPending {
@@ -211,6 +214,15 @@ impl Event {
 }
 
 impl EventKind {
+    /// A question asked in words: no dialog, no permission prompt.
+    pub fn waiting(question: impl Into<String>) -> EventKind {
+        EventKind::Waiting {
+            question: question.into(),
+            questions: Vec::new(),
+            permission: false,
+        }
+    }
+
     fn clean_texts(&mut self) {
         match self {
             EventKind::Started { name: text, .. }
@@ -231,6 +243,7 @@ impl EventKind {
             EventKind::Waiting {
                 question,
                 questions,
+                ..
             } => {
                 clean(question, TEXT_LIMIT);
                 questions.truncate(MAX_QUESTIONS);
@@ -431,13 +444,11 @@ mod tests {
             EventKind::Delegated {
                 description: "implement plan".into(),
             },
-            EventKind::Waiting {
-                question: "Approve the plan?".into(),
-                questions: Vec::new(),
-            },
+            EventKind::waiting("Approve the plan?"),
             EventKind::Waiting {
                 question: "Which color?".into(),
                 questions: vec![color()],
+                permission: false,
             },
             EventKind::Blocked {
                 reason: "Task 5: migration needs a default".into(),
@@ -608,20 +619,8 @@ mod tests {
             "the request is the worker's prompt, kept whole"
         );
 
-        let short = Event::new(
-            0,
-            EventKind::Waiting {
-                question: "ok?".into(),
-                questions: Vec::new(),
-            },
-        );
-        assert_eq!(
-            short.kind,
-            EventKind::Waiting {
-                question: "ok?".into(),
-                questions: Vec::new()
-            }
-        );
+        let short = Event::new(0, EventKind::waiting("ok?"));
+        assert_eq!(short.kind, EventKind::waiting("ok?"));
     }
 
     #[test]
@@ -638,12 +637,14 @@ mod tests {
             EventKind::Waiting {
                 question: long,
                 questions: vec![asked],
+                permission: false,
             },
         );
 
         let EventKind::Waiting {
             question,
             questions,
+            ..
         } = event.kind
         else {
             panic!("kind changed");
@@ -680,12 +681,14 @@ mod tests {
             EventKind::Waiting {
                 question: dirty.into(),
                 questions: vec![asked; 20],
+                permission: false,
             },
         );
 
         let EventKind::Waiting {
             question,
             questions,
+            ..
         } = event.kind
         else {
             panic!("kind changed");
@@ -744,6 +747,7 @@ mod tests {
             EventKind::Waiting {
                 question: "Which color?".into(),
                 questions: vec![color()],
+                permission: false,
             },
         )
         .to_line();
@@ -752,14 +756,37 @@ mod tests {
         let old = r#"{"v":1,"at":7,"kind":"waiting","question":"ok?"}"#;
         assert_eq!(
             Event::from_line(old).map(|event| event.kind),
-            Some(EventKind::Waiting {
-                question: "ok?".into(),
-                questions: Vec::new(),
-            })
+            Some(EventKind::waiting("ok?"))
         );
         assert_eq!(
             Event::new(7, Event::from_line(old).unwrap().kind).to_line(),
             old
+        );
+    }
+
+    #[test]
+    fn writes_a_permission_only_when_the_harness_asks_one() {
+        let asked = EventKind::Waiting {
+            question: "permission: Bash(ls)".into(),
+            questions: Vec::new(),
+            permission: true,
+        };
+        let line = Event::new(7, asked.clone()).to_line();
+        assert_eq!(
+            line,
+            r#"{"v":1,"at":7,"kind":"waiting","question":"permission: Bash(ls)","permission":true}"#
+        );
+        assert_eq!(Event::from_line(&line).map(|event| event.kind), Some(asked));
+
+        let worded = Event::new(7, EventKind::waiting("ok?")).to_line();
+        assert_eq!(
+            worded,
+            r#"{"v":1,"at":7,"kind":"waiting","question":"ok?"}"#
+        );
+        let old = r#"{"v":1,"at":7,"kind":"waiting","question":"permission: Bash(ls)"}"#;
+        assert_eq!(
+            Event::from_line(old).map(|event| event.kind),
+            Some(EventKind::waiting("permission: Bash(ls)"))
         );
     }
 

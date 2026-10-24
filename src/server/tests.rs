@@ -1767,6 +1767,7 @@ fn ask(store: &Store, id: &str, questions: Vec<crate::event::Question>) {
     let waiting = EventKind::Waiting {
         question: "Which color?".into(),
         questions,
+        permission: false,
     };
     store.append(id, &LogEvent::new(2, waiting)).unwrap();
 }
@@ -1837,6 +1838,7 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
     let again = EventKind::Waiting {
         question: "Which color?".into(),
         questions: color(),
+        permission: false,
     };
     store.append(&asks, &LogEvent::new(6, again)).unwrap();
     tell(&store, &asks, "The user says: Blue");
