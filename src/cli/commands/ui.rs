@@ -38,6 +38,7 @@ fn attach(store: &Store, env: &Env, log: PathBuf, clock: fn() -> u64) -> anyhow:
     let ui_env = ui::UiEnv {
         exe,
         claude_home: env.claude_home(),
+        codex_home: env.codex_home(),
         home: env.user_home().map(Path::to_path_buf),
         store: store.root().to_path_buf(),
         theme_dir: env.config_dir().unwrap_or_else(|| PathBuf::from(".")),

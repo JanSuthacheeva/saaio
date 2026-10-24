@@ -84,6 +84,7 @@ const TICKS_PER_UPDATE: u32 = 36_000;
 #[derive(Debug)]
 pub struct UiEnv {
     pub claude_home: PathBuf,
+    pub codex_home: PathBuf,
     pub home: Option<PathBuf>,
     /// This flow binary, for the flow commands the UI runs (start, remove, status --all).
     pub exe: PathBuf,
@@ -140,7 +141,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     watch_resize(events.clone())?;
     tick(events);
 
-    let mut peek = PeekCache::new(env.claude_home);
+    let mut peek = PeekCache::new(env.claude_home, env.codex_home);
     let mut ticks: u32 = 0;
     let mut themes = ThemeWatch::new(env.theme_dir);
     let mut theme = Theme::default();

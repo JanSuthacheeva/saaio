@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Run `saaio bug-report` in the repository where the problem happened. It writes `saaio-report-<date>.txt` in the current folder with the versions, the settings and the end of `server.log`. Check the file before uploading it. It can hold flow names, requests and paths.
+        Run `saaio bug-report` in the repository where the problem happened. It writes `saaio-report-<date>.txt` in `~/.local/state/saaio/reports` (or `$XDG_STATE_HOME/saaio/reports`) with the versions, the settings and the end of `server.log`. Check the file before uploading it. It can hold flow names, requests and paths.
   - type: textarea
     id: what-happened
     attributes:

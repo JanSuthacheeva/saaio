@@ -129,6 +129,12 @@ once the repository is [trusted](#trust).
 
 The worker's session gets the same variables.
 
+Teardown, pause and resume also get `GIT_DIR`, the worktree's entry in the main checkout's
+`.git/worktrees/`, and `GIT_WORK_TREE`, the worktree. Git in them always acts on the flow's
+worktree, whatever its `.git` file says. A script that wants git on the main checkout clears them:
+`env -u GIT_DIR -u GIT_WORK_TREE git -C "$SAAIO_REPO" status`. A worktree git no longer lists
+fails these scripts without running them.
+
 | Case | Result |
 | --- | --- |
 | setup runs | `saaio start` waits. Output is not shown. |
@@ -157,8 +163,9 @@ needs them.
 | `.saaio/pause` | the flow rested (idle, waiting, blocked, done or ended) for `pause_after_minutes`, 5 by default ([configuration.md](configuration.md#services)) |
 | `.saaio/resume` | the paused flow's worker works again: a new prompt, or its first tool call after the master woke it |
 
-They run like setup: from the main checkout, in the worktree, with the same variables. A repo
-needs both, executable; with one or neither nothing is paused and nothing shows.
+They run like teardown: from the main checkout, in the worktree, with the same variables and git
+pinned to the worktree. A repo needs both, executable; with one or neither nothing is paused and
+nothing shows.
 
 While services pause, are paused or resume, every tool call of the worker waits for them, up to 2
 minutes. The model's thinking before its first tool call hides most of a resume.

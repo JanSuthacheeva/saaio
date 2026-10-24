@@ -28,8 +28,9 @@ Location, the first that applies:
 3. the shared folder itself (`$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`)
 
 `<repository>` is the repository's folder name. A second repository with the same folder name gets
-`<repository>-2`, a third `-3`. A name whose repository no longer exists goes to the next
-repository of that name.
+`<repository>-2`, a third `-3`. A store stays with its repository even once that repository is
+gone: a repository moved to another folder starts with a new store, and its earlier flows stay
+readable with `SAAIO_HOME=~/.local/state/saaio/projects/<repository>`.
 
 The UI passes its store to every session it opens as `SAAIO_HOME`, so a worker reports into its
 flow's store from any folder.
@@ -58,6 +59,7 @@ the store outside a repository.
 | `slots/<n>` | the flow holding slot `n`. Counts only while that flow is unfinished. |
 | `slots/.lock` | held while a slot is claimed, so two starts never get the same slot |
 | `trusted/<hash>` | one repository you trusted with `saaio trust` or in the new-flow dialog ([repository.md](repository.md#trust)) |
+| `reports/` | the files `saaio bug-report` writes ([troubleshooting.md](troubleshooting.md#reporting-a-bug)) |
 | `update.json` | when the UI last looked for a newer release, and the latest it found ([configuration.md](configuration.md#ui)) |
 
 ## In a repository
@@ -74,7 +76,7 @@ the store outside a repository.
 | File | Purpose |
 | --- | --- |
 | `~/.claude/projects/...` (or under `$CLAUDE_CONFIG_DIR`) | a Claude Code worker's transcript, for the peek |
-| the transcript Codex reports | a Codex worker's transcript, for the peek |
+| `~/.codex/sessions/...` (or under `$CODEX_HOME`) | a Codex worker's transcript, the one its hooks name, for the peek. A file elsewhere is not read. |
 
 saaio writes nothing to `~/.claude` or `~/.codex`. Hooks are passed on each agent's command line.
 

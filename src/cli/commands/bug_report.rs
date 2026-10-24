@@ -1,4 +1,4 @@
-//! `saaio bug-report`: gathers the `Facts` and writes the report file in the current folder
+//! `saaio bug-report`: gathers the `Facts` and writes the report file in the shared folder
 
 use std::fs;
 use std::io::{self, ErrorKind};
@@ -13,9 +13,20 @@ use crate::system::System;
 use crate::text;
 use crate::ui::theme_file;
 
-/// `saaio bug-report`: gathers the Facts, writes bug_report::text to file_name in the current
-/// folder; its path and the check before uploading. Runs without a store.
+/// The folder under the shared folder that holds bug reports.
+const REPORTS_DIR: &str = "reports";
+
+/// `saaio bug-report`: gathers the Facts, writes bug_report::text to file_name in reports/ of the
+/// shared folder, never into a repository; its path and the check before uploading. Runs without
+/// a store.
 pub fn run(env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
+    let Some(registry) = env.registry() else {
+        return Err(Failure::error(
+            "cannot find a state directory",
+            vec!["Set HOME or XDG_STATE_HOME to a directory".to_string()],
+        ));
+    };
+    let dir = registry.root().join(REPORTS_DIR);
     let cwd = std::env::current_dir()?;
     let store = match env.store(Some(&cwd)) {
         Ok(Some(store)) => Ok(store),
@@ -58,12 +69,15 @@ pub fn run(env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
         logs,
     };
     let text = bug_report::text(&facts, &homes(env.user_home()));
-    let path = write(&cwd, now, offset_secs, text.as_bytes()).map_err(|(path, error)| {
+    let could_not = |path: &Path, error: io::Error| {
         Failure::error(
             format!("could not write {}: {error}", path.display()),
-            vec!["Run `saaio bug-report` in a folder you can write to".to_string()],
+            vec![format!("Make {} a folder you can write to", dir.display())],
         )
-    })?;
+    };
+    private::create_dir(&dir).map_err(|error| could_not(&dir, error))?;
+    let path = write(&dir, now, offset_secs, text.as_bytes())
+        .map_err(|(path, error)| could_not(&path, error))?;
     Ok(output::bug_report::written(&path))
 }
 

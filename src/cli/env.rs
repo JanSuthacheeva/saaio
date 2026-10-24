@@ -34,6 +34,7 @@ pub struct Env {
     pub xdg_runtime_dir: Option<PathBuf>,
     pub tmpdir: Option<PathBuf>,
     pub claude_config_dir: Option<PathBuf>,
+    pub codex_home: Option<PathBuf>,
     /// $SAAIO_RELEASES_URL: a mirror of saaio's releases page.
     pub saaio_releases_url: Option<String>,
     /// stdin and stdout are both terminals.
@@ -124,6 +125,15 @@ impl Env {
             .filter(|dir| !dir.as_os_str().is_empty())
             .or_else(|| self.home.as_ref().map(|home| home.join(".claude")))
             .unwrap_or_else(|| PathBuf::from(".claude"))
+    }
+
+    /// Codex's home, for the peek: $CODEX_HOME, else ~/.codex.
+    pub(crate) fn codex_home(&self) -> PathBuf {
+        self.codex_home
+            .clone()
+            .filter(|dir| !dir.as_os_str().is_empty())
+            .or_else(|| self.home.as_ref().map(|home| home.join(".codex")))
+            .unwrap_or_else(|| PathBuf::from(".codex"))
     }
 
     /// $HOME, unless it is empty.
@@ -276,6 +286,23 @@ mod tests {
         assert_eq!(home.claude_home(), PathBuf::from("/home/jan/.claude"));
         assert_eq!(set.claude_home(), PathBuf::from("/claude"));
         assert_eq!(Env::default().claude_home(), PathBuf::from(".claude"));
+    }
+
+    #[test]
+    fn finds_codex_in_its_home_variable_else_in_home() {
+        let home = Env {
+            home: Some(PathBuf::from("/home/jan")),
+            codex_home: Some(PathBuf::new()),
+            ..Env::default()
+        };
+        let set = Env {
+            codex_home: Some(PathBuf::from("/codex")),
+            ..home.clone()
+        };
+
+        assert_eq!(home.codex_home(), PathBuf::from("/home/jan/.codex"));
+        assert_eq!(set.codex_home(), PathBuf::from("/codex"));
+        assert_eq!(Env::default().codex_home(), PathBuf::from(".codex"));
     }
 
     #[test]

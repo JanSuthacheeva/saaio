@@ -171,11 +171,16 @@ fn worktree_git(repo: &Path, worktree: &Path, args: &[&str]) -> Result<String> {
 
 /// The git dir the repository registered for `worktree`: the <common>/worktrees/<n> whose gitdir
 /// file names a .git in that folder (relative to <n> under worktree.useRelativePaths); Err when
-/// none does.
-fn registered_git_dir(repo: &Path, worktree: &Path) -> Result<PathBuf> {
+/// none does, the folder is gone or the repository has no worktrees.
+pub fn registered_git_dir(repo: &Path, worktree: &Path) -> Result<PathBuf> {
     let common = common_dir(repo).context("not a git repository")?;
-    let wanted = worktree.canonicalize()?;
-    for entry in fs::read_dir(common.join("worktrees"))? {
+    let (Ok(wanted), Ok(entries)) = (
+        worktree.canonicalize(),
+        fs::read_dir(common.join("worktrees")),
+    ) else {
+        bail!(no_worktree(repo, worktree));
+    };
+    for entry in entries {
         let dir = entry?.path();
         let Ok(gitdir) = fs::read_to_string(dir.join("gitdir")) else {
             continue;
@@ -185,7 +190,11 @@ fn registered_git_dir(repo: &Path, worktree: &Path) -> Result<PathBuf> {
             return Ok(dir);
         }
     }
-    bail!(
+    bail!(no_worktree(repo, worktree))
+}
+
+fn no_worktree(repo: &Path, worktree: &Path) -> String {
+    format!(
         "{} is no worktree of {}",
         worktree.display(),
         repo.display()
