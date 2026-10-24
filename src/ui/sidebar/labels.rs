@@ -274,13 +274,7 @@ mod tests {
         );
         assert_eq!(last_note(&working), None);
         assert_eq!(last_note(&told).as_deref(), Some("master: Semicolons."));
-        let answered = flow(vec![
-            EventKind::Waiting {
-                question: "Which?".into(),
-                questions: Vec::new(),
-            },
-            EventKind::Working,
-        ]);
+        let answered = flow(vec![EventKind::waiting("Which?"), EventKind::Working]);
         assert_eq!(last_note(&answered), None, "not the old question");
     }
 }

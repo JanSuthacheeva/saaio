@@ -149,10 +149,7 @@ fn fleet() -> Board {
             31,
             vec![
                 phase("plan"),
-                EventKind::Waiting {
-                    question: "Which approach: a channel column or a join table?".into(),
-                    questions: Vec::new(),
-                },
+                EventKind::waiting("Which approach: a channel column or a join table?"),
             ],
         ),
         worker(

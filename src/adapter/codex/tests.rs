@@ -172,10 +172,7 @@ fn a_permission_is_pending_until_codex_decides_and_a_question_waits() {
             EventKind::Answer {
                 text: "Do you prefer tabs or spaces?".into()
             },
-            EventKind::Waiting {
-                question: "Do you prefer tabs or spaces?".into(),
-                questions: Vec::new()
-            }
+            EventKind::waiting("Do you prefer tabs or spaces?")
         ])
     );
 }

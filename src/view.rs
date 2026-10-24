@@ -46,6 +46,8 @@ pub struct FlowView {
     pub session: Option<Session>,
     /// The questions of the dialog the flow waits on; empty when it waits on none.
     pub questions: Vec<Question>,
+    /// The flow waits on a permission prompt in its pane; blocker names the tool call.
+    pub permission: bool,
     /// Where its services stand; None until saaio first pauses them.
     pub services: Option<Services>,
 }
@@ -345,6 +347,7 @@ mod tests {
             answer: None,
             session: None,
             questions: Vec::new(),
+            permission: false,
             services: None,
         }
     }
@@ -379,6 +382,7 @@ mod tests {
         assert_eq!(flow["timeline"][0]["tone"], "neutral");
         assert_eq!(flow["workspace"]["branch"], "flow/shop-221");
         assert_eq!(flow["workspace"]["window"], "@14");
+        assert_eq!(flow["permission"], false);
         assert_eq!(flow["services"], serde_json::Value::Null);
     }
 

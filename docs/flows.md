@@ -131,6 +131,9 @@ pick. `saaio status <name>` lists them. The master answers every question in one
 server closes the dialog in the worker's pane, and the worker reads the message as its answer
 ([cli.md](cli.md#saaio-send)). Answered in the pane, the dialog needs nothing from the master.
 
+A worker on a permission prompt reads a message only once the prompt is answered in its pane.
+`saaio send` says so and names the prompt, so the master can ask the user to answer it.
+
 ### Typing into a worker
 
 ```sh

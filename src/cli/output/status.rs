@@ -663,6 +663,7 @@ mod tests {
                     Question::of("Which color?", &["Red", "Blue"], false),
                     toppings,
                 ],
+                permission: false,
             }],
             2 * MIN,
         );
