@@ -17,6 +17,7 @@ use crate::event::{Event as LogEvent, EventKind};
 use crate::fixtures::{self, executable};
 use crate::identity;
 use crate::launch::pane::HOSTED;
+use crate::launch::worktree::workspace_for;
 use crate::proto::{self, Frame, PROTOCOL_VERSION, PaneStatus, Peer, Role};
 use crate::registry::Registry;
 use crate::store::{Busy, Waiter};
@@ -1993,10 +1994,14 @@ fn idle_flow(store: &Store, repo: &Path, name: &str) -> String {
             },
         ))
         .unwrap();
-    let path = repo.join(".saaio/worktrees").join(name);
-    fs::create_dir_all(&path).unwrap();
+    fs::create_dir_all(repo).unwrap();
+    if !repo.join(".git").exists() {
+        crate::workspace::fixtures::init(repo);
+    }
+    let space = workspace_for(repo, name, format!("flow/{name}"), 4, "claude");
+    crate::workspace::create_worktree(repo, &space).unwrap();
     let workspace = EventKind::Workspace {
-        path: path.display().to_string(),
+        path: space.path,
         branch: Some(format!("flow/{name}")),
         slot: Some(4),
         window: None,

@@ -14,6 +14,18 @@ All notable changes to saaio are listed here. The format follows
 
 ### Fixed
 
+- `saaio bug-report` writes its file into `reports/` of saaio's state folder
+  (`~/.local/state/saaio/reports`), never into the current folder, so it no longer lands in a
+  repository.
+- The peek reads a Codex worker's transcript only from Codex's sessions folder
+  (`~/.codex/sessions`, or under `$CODEX_HOME`).
+- saaio's state folder is closed to other users (`0700`) also when an earlier version created it.
+- A repository no longer takes over the store of a removed repository with the same folder name:
+  it gets a store of its own (`<name>-2`). A repository moved to another folder starts with a new
+  store; [files.md](docs/files.md#the-store) says how to read its earlier flows.
+- Git in `.saaio/teardown`, `.saaio/pause` and `.saaio/resume` always acts on the flow's own
+  worktree: they run with `GIT_DIR` and `GIT_WORK_TREE` set. A script that wants git on the main
+  checkout clears them ([repository.md](docs/repository.md#setup-and-teardown)).
 - `saaio hook` skips an event over 16 MiB and notes it in server.log.
 - A UI that stops reading, or a session that prints without pause, no longer slows the server
   for other UIs and commands.

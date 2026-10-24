@@ -1,8 +1,19 @@
-//! Codex's rollout: the peek lines in it
+//! Codex's rollout: where it may be, the peek lines in it
+
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
 use super::{Lines, PeekLine};
+
+/// The reported rollout's real path when it lies under the real <codex home>/sessions; None for
+/// any other file, or when either cannot be resolved.
+pub(super) fn rollout(codex_home: &Path, reported: &str) -> Option<PathBuf> {
+    let sessions = fs::canonicalize(codex_home.join("sessions")).ok()?;
+    let file = fs::canonicalize(reported).ok()?;
+    file.starts_with(&sessions).then_some(file)
+}
 
 /// The peek lines in a stretch of Codex rollout; `cut` when its first line is the end of a longer
 /// one.
@@ -134,7 +145,7 @@ mod tests {
     use super::*;
     use crate::ui::peek::{Format, tail};
 
-    fn rollout() -> std::path::PathBuf {
+    fn fixture() -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("src/ui/peek/fixtures/codex-rollout.jsonl")
     }
@@ -148,7 +159,7 @@ mod tests {
 
     #[test]
     fn reads_what_codex_said_and_ran_with_each_result() {
-        let peek = tail(&rollout(), 100, Format::Codex).unwrap();
+        let peek = tail(&fixture(), 100, Format::Codex).unwrap();
 
         assert_eq!(
             peek[peek.len() - 5..],
@@ -213,5 +224,59 @@ mod tests {
             parse(&call.to_string(), false),
             [PeekLine::Now("Edit(/w/shop/orders.py)".into())]
         );
+    }
+
+    /// A Codex home with sessions/2026/10/23/rollout-a.jsonl, and outside.jsonl beside it.
+    fn codex_home() -> tempfile::TempDir {
+        let home = tempfile::TempDir::new().unwrap();
+        let day = home.path().join("sessions/2026/10/23");
+        std::fs::create_dir_all(&day).unwrap();
+        std::fs::write(day.join("rollout-a.jsonl"), "").unwrap();
+        std::fs::write(home.path().join("outside.jsonl"), "").unwrap();
+        home
+    }
+
+    #[test]
+    fn takes_a_rollout_in_the_sessions_folder() {
+        let home = codex_home();
+        let file = home.path().join("sessions/2026/10/23/rollout-a.jsonl");
+
+        assert_eq!(
+            rollout(home.path(), &file.to_string_lossy()),
+            Some(std::fs::canonicalize(&file).unwrap())
+        );
+    }
+
+    #[test]
+    fn refuses_a_file_outside_the_sessions_folder() {
+        let home = codex_home();
+        let outside = home.path().join("outside.jsonl");
+        let up = home.path().join("sessions/2026/../../outside.jsonl");
+        let missing = home.path().join("sessions/2026/10/23/rollout-b.jsonl");
+
+        assert_eq!(rollout(home.path(), &outside.to_string_lossy()), None);
+        assert_eq!(rollout(home.path(), &up.to_string_lossy()), None);
+        assert_eq!(rollout(home.path(), &missing.to_string_lossy()), None);
+        assert_eq!(rollout(home.path(), "outside.jsonl"), None);
+    }
+
+    #[test]
+    fn refuses_a_link_in_the_sessions_folder_that_leads_out() {
+        let home = codex_home();
+        let link = home.path().join("sessions/2026/10/23/rollout-c.jsonl");
+        std::os::unix::fs::symlink(home.path().join("outside.jsonl"), &link).unwrap();
+
+        assert_eq!(rollout(home.path(), &link.to_string_lossy()), None);
+    }
+
+    #[test]
+    fn takes_a_rollout_under_a_linked_codex_home() {
+        let home = codex_home();
+        let dir = tempfile::TempDir::new().unwrap();
+        let linked = dir.path().join("codex");
+        std::os::unix::fs::symlink(home.path(), &linked).unwrap();
+        let file = linked.join("sessions/2026/10/23/rollout-a.jsonl");
+
+        assert!(rollout(&linked, &file.to_string_lossy()).is_some());
     }
 }
