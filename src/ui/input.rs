@@ -23,6 +23,8 @@ pub enum Routed {
     View(Vec<Key>),
     /// A mouse event for saaio.
     Pointer(Pointer),
+    /// The real terminal gained (true) or lost focus.
+    Focus(bool),
 }
 
 /// A mouse event saaio handles itself, in terminal cells from 0.
@@ -48,6 +50,8 @@ pub struct Target {
     pub modal: bool,
     pub mouse: Mouse,
     pub sgr: bool,
+    /// The pane asked for focus events (mode 1004).
+    pub focus: bool,
 }
 
 /// Which way the prefix and j / k move the peek cursor.
@@ -118,7 +122,8 @@ impl Router {
     }
 
     /// Splits bytes at the prefix (its byte or its kitty form): the next key is a Command, the
-    /// prefix twice sends one.
+    /// prefix twice sends one. A focus event is saaio's wherever it comes, and the pane's too when
+    /// it asked for them and no view is open over it.
     /// In a modal view every key is decoded for the view instead. A mouse event goes to a pane
     /// that uses the mouse when it asked for it, in pane coordinates; saaio takes the rest.
     pub fn route(&mut self, bytes: &[u8], target: Target) -> Vec<Routed> {
@@ -130,6 +135,15 @@ impl Router {
         let mut at = 0;
         while at < input.len() {
             let rest = &input[at..];
+            if let Some(focused) = focus_event(rest) {
+                if target.focus && !modal {
+                    plain.extend_from_slice(&rest[..FOCUS_LEN]);
+                }
+                flush(&mut plain, modal, &mut routed);
+                routed.push(Routed::Focus(focused));
+                at += FOCUS_LEN;
+                continue;
+            }
             if self.prefixed {
                 self.prefixed = false;
                 let (command, used) = self.command_after_prefix(rest);
@@ -284,6 +298,19 @@ enum AfterPrefix {
     Nothing,
 }
 
+/// How long a focus event is: ESC [ I or ESC [ O.
+const FOCUS_LEN: usize = 3;
+
+/// Whether `bytes` start with a focus event: ESC [ I is Some(true), ESC [ O Some(false), anything
+/// else None.
+fn focus_event(bytes: &[u8]) -> Option<bool> {
+    match bytes.get(..FOCUS_LEN)? {
+        b"\x1b[I" => Some(true),
+        b"\x1b[O" => Some(false),
+        _ => None,
+    }
+}
+
 fn flush(plain: &mut Vec<u8>, modal: bool, routed: &mut Vec<Routed>) {
     if plain.is_empty() {
         return;
@@ -312,6 +339,7 @@ mod tests {
         modal: false,
         mouse: Mouse::Motion,
         sgr: true,
+        focus: false,
     };
 
     const SHELL: Target = Target {
@@ -360,6 +388,73 @@ mod tests {
         );
         assert_eq!(route(&mut router, b"\x00\x00"), vec![Routed::Pane(vec![0])]);
         assert_eq!(route(&mut router, b"\x00x"), vec![]);
+    }
+
+    #[test]
+    fn tells_saaio_when_the_terminal_gains_or_loses_focus() {
+        let mut router = Router::default();
+
+        assert_eq!(
+            route(&mut router, b"a\x1b[Ob\x1b[I"),
+            vec![
+                Routed::Pane(b"a".to_vec()),
+                Routed::Focus(false),
+                Routed::Pane(b"b".to_vec()),
+                Routed::Focus(true),
+            ]
+        );
+    }
+
+    #[test]
+    fn passes_focus_events_unchanged_to_a_pane_that_asked_for_them() {
+        let mut router = Router::default();
+        let reports = Target {
+            focus: true,
+            ..MOUSE_PANE
+        };
+
+        assert_eq!(
+            router.route(b"a\x1b[Ob", reports),
+            vec![
+                Routed::Pane(b"a\x1b[O".to_vec()),
+                Routed::Focus(false),
+                Routed::Pane(b"b".to_vec()),
+            ]
+        );
+    }
+
+    #[test]
+    fn keeps_focus_events_from_a_pane_under_a_dialog() {
+        let mut router = Router::default();
+        let dialog = Target {
+            focus: true,
+            modal: true,
+            ..MOUSE_PANE
+        };
+
+        assert_eq!(router.route(b"\x1b[I", dialog), vec![Routed::Focus(true)]);
+    }
+
+    #[test]
+    fn a_focus_event_between_the_prefix_and_its_key_leaves_the_prefix_waiting() {
+        let mut router = Router::default();
+
+        assert_eq!(
+            route(&mut router, b"\x00\x1b[O"),
+            vec![Routed::Focus(false)]
+        );
+        assert_eq!(
+            route(&mut router, b"d"),
+            vec![Routed::Command(Command::Detach)]
+        );
+    }
+
+    #[test]
+    fn a_focus_event_split_across_reads_still_arrives() {
+        let mut router = Router::default();
+
+        assert_eq!(route(&mut router, b"\x1b["), vec![]);
+        assert_eq!(route(&mut router, b"I"), vec![Routed::Focus(true)]);
     }
 
     #[test]

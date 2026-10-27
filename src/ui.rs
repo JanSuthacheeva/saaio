@@ -172,6 +172,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                         modal: app.is_modal(),
                         mouse: modes.mouse,
                         sgr: modes.sgr_mouse,
+                        focus: modes.focus,
                     };
                     let mut effects = Vec::new();
                     for routed in router.route(&bytes, target) {

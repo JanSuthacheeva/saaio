@@ -28,6 +28,7 @@ impl App {
             Routed::Pane(_) => vec![],
             Routed::View(keys) => self.on_keys(keys),
             Routed::Command(command) => self.on_command(command),
+            Routed::Focus(_) => vec![],
         }
     }
 
