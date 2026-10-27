@@ -120,6 +120,41 @@ fn the_server_writes_to_the_new_log_once_another_process_moved_it_aside() {
 }
 
 #[test]
+fn a_server_whose_log_moved_aside_before_it_looked_writes_to_the_new_log() {
+    let home = TempDir::new().unwrap();
+    let config = cat_agents(home.path());
+    let socket = home.path().join("server.sock");
+    let log = home.path().join("server.log");
+    let stderr = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log)
+        .unwrap();
+    fs::rename(&log, home.path().join("server.log.1")).unwrap();
+
+    let server = saaio_command(home.path())
+        .arg("server")
+        .stdout(Stdio::null())
+        .stderr(stderr)
+        .env("SAAIO_CONFIG", &config)
+        .spawn()
+        .unwrap();
+    let mut server = Running(server);
+    wait_for_socket(&socket);
+
+    wait_until("the server never wrote to the new server.log", || {
+        let mut unreadable = UnixStream::connect(&socket).unwrap();
+        let _ = unreadable.write_all(&[3, 0, 0, 0, 0xff, 0xff, 0xff]);
+        let _ = std::io::Read::read(&mut unreadable, &mut [0; 64]);
+        fs::read_to_string(&log)
+            .unwrap_or_default()
+            .contains("refused an unreadable hello")
+    });
+    assert!(saaio(home.path(), &["--stop"]).status.success());
+    assert!(server.wait().unwrap().success());
+}
+
+#[test]
 fn a_server_stopped_while_it_starts_still_stops_cleanly() {
     let home = TempDir::new().unwrap();
     let config = cat_agents(home.path());

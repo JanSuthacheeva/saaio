@@ -49,6 +49,9 @@ does what its name says: a UI connects after it and is welcomed.
       with a 1 s sleep after the start line it failed every time. Fix: `server_log::writes_to`,
       stderr is the file at `log` or at `<log>.1`; `follow` then reopens server.log on its next
       tick. Forced ordering passes; loop under load 0 of 300. CHANGELOG: Fixed, as users see it.
+      Review: `a_server_whose_log_moved_aside_before_it_looked_writes_to_the_new_log` pins it
+      without timing (the log is renamed before the server starts on it); without `writes_to`'s
+      `<log>.1` it fails every time.
 - [x] `a_ui_that_stops_reading_slows_nobody_and_is_dropped` (master, after #103's CI): its 500 ms
       budget failed on a loaded machine (3 of 3 full runs locally; 77 of 96 runs at 12 copies
       and 10 `yes`), while the regression it guards stalls WRITE_TIMEOUT, 2 s. The write timeout
