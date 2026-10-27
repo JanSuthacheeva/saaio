@@ -257,7 +257,7 @@ pub fn run(
         forges: ForgeWatch::default(),
         pauses: PauseWatch::default(),
         trust: paths.trust.clone(),
-        log: Some(server_log::path(&paths.socket)).filter(|log| server_log::is_stderr(log)),
+        log: Some(server_log::path(&paths.socket)).filter(|log| server_log::writes_to(log)),
     };
     server.open_master(start);
     server.refresh();

@@ -41,6 +41,14 @@ does what its name says: a UI connects after it and is welcomed.
 - [x] Every `assert!(x.is_empty())` and `assert!(!x.is_empty())` clippy 1.99.1 flags rewritten as
       it suggests; `cargo clippy --all-targets -- -D warnings` clean on 1.95.0 and 1.99.1, tests
       green.
+- [x] `the_server_writes_to_the_new_log_once_another_process_moved_it_aside` (CI on #103,
+      macOS): the server decided whether stderr is server.log (`is_stderr`) only after the bind,
+      write_defaults, the master record and the host. A writer that moved the log aside in that
+      window (the test's hook, right after the socket appears) left `log` None: the server wrote
+      to server.log.1 for good. Reproduced on macOS under load (10 `yes`, 12 copies): 4 of 180;
+      with a 1 s sleep after the start line it failed every time. Fix: `server_log::writes_to`,
+      stderr is the file at `log` or at `<log>.1`; `follow` then reopens server.log on its next
+      tick. Forced ordering passes; loop under load 0 of 300. CHANGELOG: Fixed, as users see it.
 
 ## Review
 
