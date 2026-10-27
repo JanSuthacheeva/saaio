@@ -217,3 +217,73 @@ esac
         "{news}"
     );
 }
+
+/// A lab with flow shop-1 and shop-2 standing on its branch.
+fn stack_of_two() -> Lab {
+    let lab = Lab::new();
+    assert!(lab.start(&["SHOP-1 add export"]).status.success());
+    lab.commit_in("shop-1");
+    let stacked = lab.start(&["SHOP-2 export button", "--base", "flow/shop-1"]);
+    assert!(stacked.status.success(), "{}", stdout(&stacked));
+    lab
+}
+
+const STANDS_ON_SHOP_1: &str = "shop-2 stands on flow/shop-1: it keeps its commits and rebases \
+onto origin/flow/shop-1 or where that merged";
+
+#[test]
+fn removing_a_base_names_the_flows_that_stand_on_it() {
+    let lab = stack_of_two();
+
+    let removed = lab.run(&["remove", "shop-1"]);
+
+    assert!(removed.status.success(), "{}", stdout(&removed));
+    assert!(
+        stdout(&removed).contains("branch: deleted\nstacked[1]: shop-2\n"),
+        "its commits live on in flow/shop-2: {}",
+        stdout(&removed)
+    );
+    assert!(
+        stdout(&removed).contains(STANDS_ON_SHOP_1),
+        "{}",
+        stdout(&removed)
+    );
+    let alone = lab.run(&["remove", "shop-2", "--delete-unmerged"]);
+    assert!(alone.status.success(), "{}", stdout(&alone));
+    assert!(!stdout(&alone).contains("stand"), "{}", stdout(&alone));
+}
+
+#[test]
+fn a_refused_removal_of_a_base_names_the_flows_that_stand_on_it() {
+    let lab = stack_of_two();
+    let worktree = lab.repo.join(".saaio/worktrees/shop-1");
+    fs::write(worktree.join("more.txt"), "more").unwrap();
+    git(&worktree, &["add", "more.txt"]);
+    git(
+        &worktree,
+        &[
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-q",
+            "-m",
+            "more",
+        ],
+    );
+
+    let refused = lab.run(&["remove", "shop-1"]);
+
+    assert_eq!(refused.status.code(), Some(1));
+    assert!(
+        stdout(&refused).contains("flow/shop-1 has 1 commit"),
+        "{}",
+        stdout(&refused)
+    );
+    assert!(
+        stdout(&refused).contains(STANDS_ON_SHOP_1),
+        "{}",
+        stdout(&refused)
+    );
+}

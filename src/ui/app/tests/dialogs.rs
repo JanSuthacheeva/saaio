@@ -96,7 +96,7 @@ fn printed(failure: &Failure) -> Result<String, JobError> {
 #[test]
 fn knows_each_refusal_from_what_flow_remove_prints() {
     let uncommitted = printed(&remove::uncommitted("shop-230", "/shop")).unwrap_err();
-    let unmerged = printed(&remove::unmerged("shop-230", "flow/shop-230", 1)).unwrap_err();
+    let unmerged = printed(&remove::unmerged("shop-230", "flow/shop-230", 1, &[])).unwrap_err();
     let other = printed(&Failure::error("no flow named shop-230", Vec::new())).unwrap_err();
 
     assert_eq!(uncommitted.refusal, Some(Refusal::Uncommitted));
@@ -143,7 +143,7 @@ fn asks_before_a_clean_up_loses_work() {
 
     app.on_ran(
         Job::Remove(forced.clone()),
-        printed(&remove::unmerged("shop-230", "flow/shop-230", 2)),
+        printed(&remove::unmerged("shop-230", "flow/shop-230", 2, &[])),
     );
     let View::Confirm {
         question,

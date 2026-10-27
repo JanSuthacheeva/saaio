@@ -31,19 +31,39 @@ pub(crate) fn unchecked(name: &str, path: &str, reason: &anyhow::Error) -> Failu
     )
 }
 
-/// The refusal of flow `name`'s removal while its `branch` has `count` commits on no other branch.
-pub(crate) fn unmerged(name: &str, branch: &str, count: u32) -> Failure {
+/// The refusal of flow `name`'s removal while its `branch` has `count` commits on no other branch;
+/// the `stacked` flows standing on it named in its help.
+pub(crate) fn unmerged(name: &str, branch: &str, count: u32, stacked: &[&str]) -> Failure {
+    let mut help = vec![
+        format!("Merge or push {branch}, then run `saaio remove {name}` again"),
+        format!("Run `saaio remove {name} --delete-unmerged` to delete it with its commits"),
+    ];
+    help.extend(standing(branch, stacked));
     Failure::error(
         format!(
             "{branch} has {count} commit{} {}",
             plural(count),
             Refusal::Unmerged.phrase()
         ),
-        vec![
-            format!("Merge or push {branch}, then run `saaio remove {name}` again"),
-            format!("Run `saaio remove {name} --delete-unmerged` to delete it with its commits"),
-        ],
+        help,
     )
+}
+
+/// The help line naming the flows that stand on `branch`; none without any.
+fn standing(branch: &str, stacked: &[&str]) -> Option<String> {
+    let (last, rest) = stacked.split_last()?;
+    Some(if rest.is_empty() {
+        format!(
+            "{last} stands on {branch}: it keeps its commits and rebases onto origin/{branch} or \
+where that merged"
+        )
+    } else {
+        format!(
+            "{} and {last} stand on {branch}: they keep their commits and rebase onto \
+origin/{branch} or where that merged",
+            rest.join(", ")
+        )
+    })
 }
 
 /// What became of a flow's worktree when it was cleared or removed.
@@ -116,12 +136,13 @@ fn pane_name(closing: Closing) -> &'static str {
 }
 
 /// removed, pane (closed, none or timed out), teardown, worktree, branch (deleted, kept or none),
-/// help.
+/// stacked[n] (the flows standing on `on`, its branch), help.
 pub(crate) fn removed(
     name: &str,
     pane: Closing,
     (worktree, teardown): &(Retired, Teardown),
     branch: BranchFate,
+    (on, stacked): (&str, &[&str]),
 ) -> Document {
     #[derive(Serialize)]
     struct Removed<'a> {
@@ -130,9 +151,11 @@ pub(crate) fn removed(
         teardown: String,
         worktree: String,
         branch: &'a str,
+        #[serde(skip_serializing_if = "<[&str]>::is_empty")]
+        stacked: &'a [&'a str],
         help: Vec<String>,
     }
-    let mut help = Vec::new();
+    let mut help: Vec<String> = standing(on, stacked).into_iter().collect();
     if let Retired::Kept(path) = worktree {
         help.push(format!(
             "Run `git worktree remove --force {path}` to discard what is left"
@@ -148,6 +171,7 @@ pub(crate) fn removed(
         teardown: teardown.to_string(),
         worktree: worktree.to_string(),
         branch: branch.name(),
+        stacked,
         help,
     }))
 }
@@ -205,7 +229,7 @@ mod tests {
     #[test]
     fn reads_each_refusal_back_from_its_own_message() {
         let uncommitted = uncommitted("shop-230", "/shop/.saaio/worktrees/shop-230");
-        let unmerged = unmerged("shop-230", "flow/shop-230", 2);
+        let unmerged = unmerged("shop-230", "flow/shop-230", 2, &["shop-231"]);
 
         assert_eq!(
             Refusal::of(&uncommitted.message),
@@ -213,6 +237,40 @@ mod tests {
         );
         assert_eq!(Refusal::of(&unmerged.message), Some(Refusal::Unmerged));
         assert_eq!(Refusal::of("no flow named shop-230"), None);
+    }
+
+    #[test]
+    fn names_the_flows_standing_on_a_removed_or_refused_branch() {
+        let refused = unmerged("shop-230", "flow/shop-230", 2, &["shop-231", "shop-232"]);
+        let stacked = removed(
+            "shop-230",
+            Closing::Closed,
+            &(Retired::Removed, Teardown::None),
+            BranchFate::Deleted,
+            ("flow/shop-230", &["shop-231"]),
+        );
+        let alone = removed(
+            "shop-230",
+            Closing::Closed,
+            &(Retired::Removed, Teardown::None),
+            BranchFate::Deleted,
+            ("flow/shop-230", &[]),
+        );
+
+        assert_eq!(
+            refused.help.last().map(String::as_str),
+            Some(
+                "shop-231 and shop-232 stand on flow/shop-230: they keep their commits and \
+rebase onto origin/flow/shop-230 or where that merged"
+            )
+        );
+        assert_eq!(
+            stacked.text(),
+            "removed: shop-230\npane: closed\nteardown: none\nworktree: removed\nbranch: \
+deleted\nstacked[1]: shop-231\nhelp[2]: \"shop-231 stands on flow/shop-230: it keeps its \
+commits and rebases onto origin/flow/shop-230 or where that merged\",Run `saaio` to see what is left"
+        );
+        assert!(!alone.text().contains("stack"), "{}", alone.text());
     }
 
     #[test]

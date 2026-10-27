@@ -162,12 +162,17 @@ origin/<onto> <base>`, or `origin/<base>` once that branch is gone), point your 
 ### src/cli/commands/remove.rs, src/cli/output/remove.rs (modified)
 
 ```rust
-pub(crate) fn removed(name: &str, pane: Closing, retired: &(Retired, Teardown), branch: BranchFate, stacked: &[&str]) -> Document;
+pub(crate) fn removed(name: &str, pane: Closing, retired: &(Retired, Teardown), branch: BranchFate, (on, stacked): (&str, &[&str])) -> Document;
 pub(crate) fn unmerged(name: &str, branch: &str, count: u32, stacked: &[&str]) -> Failure;
+// cli/commands/retire.rs
+pub fn refuse_unmerged_commits(flow: &FlowView, stacked: &[&str]) -> Result<(), Failure>;
 ```
 
-`stacked[n]` lists the names from `stack::standing_on`, with the help line "<names> stand on
-<branch>: they keep their commits and rebase onto origin/<branch> or where it merged".
+`stacked[n]` lists the names from `stack::standing_on`, with the help line "shop-2 stands on
+flow/shop-1: it keeps its commits and rebases onto origin/flow/shop-1 or where that merged" ("a
+and b stand on ...: they keep their commits and rebase ..." for several). `removed` takes the
+branch name beside the names for that line. A base whose commits all live on in a stacked
+branch is not unmerged, so its removal deletes its branch.
 
 ### src/ui (modified)
 
@@ -304,7 +309,7 @@ pub enum Note { Master(String), BaseMerged { base: String, onto: String } }
 - [x] Add `EventKind::BaseMerged`, its fold (base moves, timeline note) and `src/stack.rs` (`standing_on`, `on_merge`) with pure tests
 - [x] Append BaseMerged in `forge_answer` through `restack`, with a `server/tests.rs` test
 - [x] Turn worker news into `wake::Note` (`undelivered`, `for_worker`, `WorkerNews::News(Vec<Note>)`) through wait, hook and server/news, with tests for order and the delivered count
-- [ ] Name stacked flows in `saaio remove` output and its unmerged refusal, with output and CLI tests
+- [x] Name stacked flows in `saaio remove` output and its unmerged refusal, with output and CLI tests
 
 ### UI and docs
 

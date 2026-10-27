@@ -50,13 +50,14 @@ pub fn refuse_uncommitted_work(flow: &FlowView) -> Result<(), Failure> {
     }
 }
 
-/// Fails before anything is touched when the flow's branch has commits on no other branch.
-pub fn refuse_unmerged_commits(flow: &FlowView) -> Result<(), Failure> {
+/// Fails before anything is touched when the flow's branch has commits on no other branch; the
+/// refusal names the `stacked` flows standing on it.
+pub fn refuse_unmerged_commits(flow: &FlowView, stacked: &[&str]) -> Result<(), Failure> {
     let Some((repo, branch)) = branch_of(flow) else {
         return Ok(());
     };
     match git::commits_only_on(&repo, branch) {
-        Ok(Some(count)) if count > 0 => Err(remove::unmerged(&flow.name, branch, count)),
+        Ok(Some(count)) if count > 0 => Err(remove::unmerged(&flow.name, branch, count, stacked)),
         _ => Ok(()),
     }
 }
