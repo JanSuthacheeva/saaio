@@ -319,3 +319,50 @@ pub enum Note { Master(String), BaseMerged { base: String, onto: String } }
 - [x] Add the base row to the new-flow dialog (`base`, `checked_out`, `bases`, `Field::Base`, `set_branching`, `on_branching`, `picked_base`, creates line, `Job::args --base`) with form tests and the dialog golden; `on <base>` in the board's detail facts
 - [x] master.md stack lines (master-v12.md kept), docs (cli.md start and remove, flows.md stacks, json.md workspace.base, ui.md dialog), CHANGELOG Unreleased, ROADMAP row dropped, CLAUDE.md architecture (stack.rs), design pages copied to docs/design/
 - [x] End to end in a scratch store: a repo with a bare origin; start flow A, start B `--base` A's branch and C `--base` a remote-only branch; check worktrees, status and `--json`; the dialog's base row in a PTY; simulate A merged (a `merged` answer through the server, or a `base-merged` path test) and see B's base move and its worker news; `saaio remove` of A names B; end with `saaio --stop`
+
+## Review
+
+Isolated review of `flow/start-base` against `main` (commits 2a49885..254e369), 2026-10-27.
+
+### Fixed
+
+- A remote-only base that was force-pushed since the repository last fetched it was refused as
+  "no branch <base> here or on a remote": the unforced refspec failed as a non-fast-forward.
+  Shown by `a_remote_base_rewritten_since_the_last_fetch_is_fetched_again`; the refspec is now
+  forced (`+refs/heads/<base>:refs/remotes/<remote>/<base>`), which only ever moves the
+  remote-tracking ref. 3686337.
+- `src/server/master.rs` was not rustfmt-clean under the pinned toolchain (CI fmt would fail).
+  00f322f.
+
+The fix was re-read against its finding in a separate pass, not by an independent agent.
+
+### Open
+
+- After a base merges into the default branch, `workspace.base` becomes `main`, so a resumed
+  worker is told "Your branch starts from main, not the default branch: ... Push main first if
+  the remote lacks it", gets `SAAIO_BASE=main`, and the board shows `on main`. Recommendation:
+  word `worker_prompt` so it holds for any base ("Your branch stands on <base>: open your merge
+  request against <base> and rebase on it."), and keep the base as recorded.
+- Restacking runs only where `forge_watch` appends Merged, and it asks only about flows whose
+  worktree folder still exists. A base flow removed before the server saw its merge, or a
+  BaseMerged append that fails (logged, never retried), leaves the stacked flows on the old base
+  without news. Recommendation: accept for this PR (`saaio remove` already names the stacked
+  flows and tells them where to rebase); note it in ROADMAP if it shows up in use.
+
+### Where to look
+
+1. `src/server/forge_watch.rs` `forge_answer` -> `stack::on_merge` -> `restack`: restacks only
+   after Merged was appended, from `self.board.flows`; what a failed append leaves behind.
+2. `src/wake.rs` `undelivered` and `src/deliver.rs` `worker_news`: the stored delivered count now
+   counts BaseMerged beside Message. Old logs have none, so counts stay valid.
+3. `src/workspace/git.rs` `start_point`: name check, local first, then a fetch per remote with a
+   30 s deadline, during `saaio start`.
+4. `src/ui/newflow.rs` base row (keys, cursor, `cycled_base`) with the goldens.
+
+Routine, can be skimmed: `base: None` in fixtures, `Workspace.base` plumbing through event, view,
+fold and outputs, `Found.target`, the remove help line, docs and CHANGELOG.
+
+### Checks
+
+`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` pass at
+00f322f. `cargo deny check` not rerun (no dependency changes since 254e369).
