@@ -168,8 +168,9 @@ impl Env {
 1. `read_stdin`/`read_server -> Event::Server(ServerMsg::Board(board))`
 2. `ui::run -> App::on_server(message): Vec<Effect>`
 3. `App::on_server -> App::worker_notifications(old, &board): Vec<Effect>` - only with an old
-   board; nothing when `!self.notify`; for each flow in both boards with
-   `calls_for_you(Some(was.state), flow.state)` and `out_of_sight(&PaneKey::Flow(id))`:
+   board; nothing when `!self.notify`; for each flow of the new board with
+   `calls_for_you(was.map(|was| was.state), flow.state)` (a flow missing from the old board counts
+   as `None`, so one that appears blocked notifies) and `out_of_sight(&PaneKey::Flow(id))`:
    `Effect::Notify(worker_text(flow))`.
 4. `ui::run -> ui::notify(&env.notifier, &env.log, &text, clock)`
 5. `ui::notify -> Notifier::notify(&mut io::stdout(), text): Result<()>`
@@ -247,6 +248,7 @@ impl Env {
 - [x] `Sequence::pick` trusts what the terminal sets fresh first: TERM (alacritty* bell, foot*/rxvt* OSC 777, xterm-ghostty/xterm-kitty/wezterm OSC 9), then TERM_PROGRAM (Apple_Terminal bell, iTerm.app/WezTerm/ghostty OSC 9), only then `VTE_VERSION` and `ALACRITTY_WINDOW_ID`, which a tmux server or a child terminal inherits stale; with tests for a stale `ALACRITTY_WINDOW_ID` under Ghostty
 - [x] Inside tmux, pick from the attached client's terminal: `notify::tmux_client(): Option<TmuxClient { term, version }>` runs `tmux display-message -p '#{client_termname}\t#{client_termtype}'` and `Sequence::for_client` picks by its TERM, else by the version it answered tmux (XTVERSION: ghostty, iTerm2, WezTerm, kitty OSC 9; foot, VTE OSC 777; none, as Alacritty without its terminfo and Terminal.app, the bell) with a 500 ms deadline on a thread of its own, its answer comes back as `Event::Notify(text, client)` and the loop writes the sequence (only the UI thread writes to the terminal); without an answer the environment's pick stands. `Notifier::notify(out, text, client)`, `Notifier::in_tmux()`; tests for the client overriding the environment and the fallback
 - [x] End-to-end: scratch store, UI in a PTY with captured output; report a flow waiting, then blocked, then focus out on the flow in view; assert one sequence per transition, none at startup, none with `notify = false`; then the same in a real terminal window to see the notification
+- [x] After the first board, a flow that appears already Waiting or Blocked notifies (`worker_notifications` takes a flow missing from the old board as `was = None`), with a test for a flow that starts blocked
 
 ## Review
 
@@ -270,6 +272,10 @@ Open:
   there instead of OSC 9. Recommendation: accept; tmux 3.4+ is common, and the bell still alerts.
 - A flow that first appears on a board already Waiting raises nothing (it was not on the old
   board). Recommendation: accept; a new flow shows Working first.
+
+Decided (master, 2026-10-27): 1 accepted. 2 not accepted: a flow that fails setup is blocked right
+after it starts, possibly before the UI saw it working. After the first board, a flow that appears
+already Waiting or Blocked notifies; only the first board stays silent.
 
 Where to look:
 

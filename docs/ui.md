@@ -251,8 +251,9 @@ blocked, never when it only comes to rest.
 
 You aren't looking at a flow when another session is in view, or when the terminal window has lost
 focus, then also for the session in view. One notification per change: a flow that stays waiting
-raises no second one, a waiting flow that becomes blocked does. Attaching raises none for what
-was already waiting. `notify = false` under `[ui]` in config.toml turns them off
+raises no second one, a waiting flow that becomes blocked does, and so does a new flow that is
+blocked from the start, such as one whose setup failed. Attaching raises none for what was already
+waiting. `notify = false` under `[ui]` in config.toml turns them off
 ([configuration.md](configuration.md#ui)).
 
 saaio writes the one escape sequence your terminal turns into a notification, picked from

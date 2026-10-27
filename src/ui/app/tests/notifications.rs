@@ -66,6 +66,25 @@ fn a_flow_out_of_view_that_starts_waiting_notifies_once() {
 }
 
 #[test]
+fn a_flow_that_appears_already_blocked_notifies() {
+    let mut app = App::new(SIZE);
+    app.on_server(board(vec![]));
+    let failed = worker(
+        "export-csv",
+        Mode::Auto,
+        1,
+        vec![EventKind::Blocked {
+            reason: "setup failed".into(),
+        }],
+    );
+
+    assert_eq!(
+        notifications(app.on_server(board(vec![failed]))),
+        vec!["export-csv is blocked: setup failed"]
+    );
+}
+
+#[test]
 fn a_flow_that_goes_from_waiting_to_blocked_notifies_again() {
     let mut app = watching_working();
     app.on_server(waiting());

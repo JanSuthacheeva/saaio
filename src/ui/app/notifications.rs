@@ -10,7 +10,8 @@ impl App {
         self.notify = on;
     }
 
-    /// One notification for each flow of both boards that came to Waiting or Blocked out of sight.
+    /// One notification for each flow that came to Waiting or Blocked out of sight since the old
+    /// board, or appeared already there, such as a flow whose setup failed.
     pub(super) fn worker_notifications(&self, old: &Board, new: &Board) -> Vec<Effect> {
         if !self.notify {
             return vec![];
@@ -18,10 +19,8 @@ impl App {
         new.flows
             .iter()
             .filter(|flow| {
-                old.flows
-                    .iter()
-                    .find(|was| was.id == flow.id)
-                    .is_some_and(|was| calls_for_you(Some(was.state), flow.state))
+                let was = old.flows.iter().find(|was| was.id == flow.id);
+                calls_for_you(was.map(|was| was.state), flow.state)
             })
             .filter(|flow| self.out_of_sight(&PaneKey::Flow(flow.id.clone())))
             .map(|flow| Effect::Notify(worker_text(flow)))

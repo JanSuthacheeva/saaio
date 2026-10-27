@@ -12,10 +12,12 @@ fn shows_the_sidebar_from_the_start_and_keeps_the_pane_when_workers_come() {
         app.on_server(ServerMsg::Board(fold::board(vec![], NOW))),
         vec![]
     );
-    assert_eq!(
-        app.on_server(ServerMsg::Board(fleet())),
-        vec![],
-        "the first worker resizes nothing"
+    let effects = app.on_server(ServerMsg::Board(fleet()));
+    assert!(
+        effects
+            .iter()
+            .all(|effect| matches!(effect, Effect::Notify(_))),
+        "the first worker resizes nothing: {effects:?}"
     );
     assert_eq!(app.areas().pane, pane);
 }
