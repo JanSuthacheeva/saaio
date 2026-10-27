@@ -59,7 +59,7 @@ fn an_unknown_flag_fails_loudly_on_stdout_with_exit_2() {
     let output = saaio(home.path(), &["status", "--nope"]);
 
     assert_eq!(output.status.code(), Some(2));
-    assert!(output.stderr.is_empty());
+    assert_eq!(stderr(&output), "");
     let text = stdout(&output);
     assert!(
         text.starts_with("error: unexpected argument '--nope' found"),

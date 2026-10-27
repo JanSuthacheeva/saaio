@@ -158,7 +158,7 @@ mod tests {
         let store = Store::at(dir.path().to_path_buf());
         started(&store);
 
-        assert!(master_news(&store, || 3, &|| true).is_empty());
+        assert_eq!(master_news(&store, || 3, &|| true), [] as [FlowView; 0]);
     }
 
     #[test]

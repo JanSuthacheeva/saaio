@@ -38,6 +38,6 @@ does what its name says: a UI connects after it and is welcomed.
       welcomed after the refusal. Proof: with a forced ordering (the trailing write held back
       until the server refused) the old test fails every time and the new one passes; the Linux
       loop passes.
-- [ ] Every `assert!(x.is_empty())` and `assert!(!x.is_empty())` clippy 1.99.1 flags rewritten as
+- [x] Every `assert!(x.is_empty())` and `assert!(!x.is_empty())` clippy 1.99.1 flags rewritten as
       it suggests; `cargo clippy --all-targets -- -D warnings` clean on 1.95.0 and 1.99.1, tests
       green.

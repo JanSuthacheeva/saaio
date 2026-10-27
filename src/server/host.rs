@@ -506,7 +506,7 @@ mod tests {
         host.close(&key);
 
         assert!(pump(&mut host, &rx, Duration::from_secs(6)).is_some());
-        assert!(host.panes().is_empty());
+        assert_eq!(host.panes(), [] as [PaneInfo; 0]);
     }
 
     #[test]

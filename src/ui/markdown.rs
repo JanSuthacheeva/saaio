@@ -336,6 +336,7 @@ impl<'a> Renderer<'a> {
 #[cfg(test)]
 mod tests {
     use ratatui::style::Modifier;
+    use ratatui::text::Line;
 
     use crate::ui::theme::Theme;
 
@@ -396,7 +397,7 @@ mod tests {
         let rows = lines("**界界** supercalifragilistic", 7, &Theme::default());
         assert!(rows.iter().all(|line| line.width() <= 7));
         assert!(text(&rows).iter().any(|row| row.ends_with('…')));
-        assert!(lines("anything", 0, &Theme::default()).is_empty());
+        assert_eq!(lines("anything", 0, &Theme::default()), [] as [Line; 0]);
     }
 
     #[test]

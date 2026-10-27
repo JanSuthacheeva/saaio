@@ -112,7 +112,7 @@ mod tests {
         let trust = Trust::at(&Registry::at(dir.path().join("missing")));
 
         assert!(!trust.covers(Path::new("/shop")));
-        assert!(trust.repos().is_empty());
+        assert_eq!(trust.repos(), [] as [PathBuf; 0]);
         assert!(!trust.revoke(Path::new("/shop")).unwrap());
     }
 }

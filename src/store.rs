@@ -427,7 +427,7 @@ mod tests {
 
         let (logs, warnings) = store.logs();
 
-        assert!(warnings.is_empty());
+        assert_eq!(warnings, [] as [String; 0]);
         assert_eq!(logs.len(), 2);
         let log = |id: &str| logs.iter().find(|log| log.id == id).unwrap();
         assert_eq!(log(&first).events, vec![started()]);

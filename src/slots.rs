@@ -174,7 +174,7 @@ mod tests {
         live.merge_request = Some("https://github.com/a/b/pull/7".into());
         assert_eq!(taken(&[live.clone()]), vec![4]);
         live.state = crate::view::State::Ended;
-        assert!(taken(&[live]).is_empty());
+        assert_eq!(taken(&[live]), [] as [u8; 0]);
     }
 
     fn slots(dir: &TempDir) -> Slots {

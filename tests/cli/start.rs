@@ -286,7 +286,7 @@ fn start_refuses_a_config_with_the_top_level_agent_key() {
     );
     assert!(said.contains("no-config.toml:1: "), "{said}");
     assert!(said.contains("`agent` under [worker]"), "{said}");
-    assert!(claimed_slots(&lab.home).is_empty());
+    assert_eq!(claimed_slots(&lab.home), [] as [String; 0]);
 }
 
 /// The slots claimed in the lab's shared folder.
@@ -441,7 +441,7 @@ fn start_and_new_refuse_a_request_over_the_limit_before_making_anything() {
     let text = refused(lab.run(&["new", "--name", "shop-301", "--request", &long]));
     assert!(text.contains("over 20000"), "{text}");
     assert!(stdout(&lab.run(&["status"])).contains("count: 0"));
-    assert!(lab.branches().is_empty());
+    assert_eq!(lab.branches(), [] as [String; 0]);
 
     let fits = &long[..long.len() - "ä".len()];
     assert!(lab.start(&[fits]).status.success());
@@ -495,7 +495,7 @@ fn start_runs_nothing_of_a_repository_the_person_has_not_trusted() {
     assert!(text.contains("run `saaio trust`"), "{text}");
     assert!(!lab.repo.join("setup-ran").exists());
     assert!(!lab.repo.join(".saaio/worktrees").exists());
-    assert!(lab.branches().is_empty());
+    assert_eq!(lab.branches(), [] as [String; 0]);
     assert!(stdout(&saaio(&lab.home, &["status"])).contains("count: 0"));
 
     lab.trust();
@@ -531,7 +531,7 @@ fn start_refuses_a_worktrees_folder_that_links_elsewhere() {
         "{text}"
     );
     assert_eq!(fs::read_dir(elsewhere.path()).unwrap().count(), 0);
-    assert!(lab.branches().is_empty());
+    assert_eq!(lab.branches(), [] as [String; 0]);
     let board = stdout(&saaio(&lab.home, &["status"]));
     assert!(!board.contains("shop-217"), "{board}");
 }
