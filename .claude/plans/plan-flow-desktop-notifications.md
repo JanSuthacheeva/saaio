@@ -226,6 +226,14 @@ impl Env {
   macOS dock bounce, X11/Wayland urgency); `[bell] command` runs a program on a bell, with a
   cooldown.
 
+## Decided in the build
+
+- The end-to-end check in Ghostty under the user's tmux found `ALACRITTY_WINDOW_ID` in tmux's global
+  environment (the tmux server was started from Alacritty), so the first pick rang the bell in
+  Ghostty. Decision (master, 2026-10-27): inside tmux ask tmux for the attached client's terminal,
+  off the UI thread with a short deadline, falling back to the environment rule; outside tmux, TERM
+  and TERM_PROGRAM win over the inherited variables.
+
 ## Tasks
 
 - [x] Add `ui/notify.rs`: `Sequence::pick`, `Notifier::new`, `Notifier::notify`, `sequence`, `passthrough`, with unit tests for picking, each sequence's bytes, tmux wrapping, BEL unwrapped, control characters and cutting
@@ -236,4 +244,6 @@ impl Env {
 - [x] Add `Effect::Notify`, `App.notify`, `App.terminal_focused`, `on_input(Routed::Focus)` and `app/notifications.rs` (`set_notify`, `worker_notifications`, `master_notification`, `out_of_sight`, `calls_for_you`, `worker_text`, `master_text`), wired into `on_server(Board)` and `on_master_turn`, with `app/tests/notifications.rs`
 - [x] Wire `ui::run`: `Target.focus`, `Effect::Notify` -> `ui::notify`, `reload_config` -> `set_notify`
 - [x] Docs: `docs/ui.md` Notifications section (terminal table, tmux `allow-passthrough`, Alacritty `[bell] command` example, Terminal.app), `docs/configuration.md` `notify` rows, `docs/cli.md` environment rows (TERM, TERM_PROGRAM, VTE_VERSION, ALACRITTY_WINDOW_ID, TMUX), README not-yet line, ROADMAP row dropped, CHANGELOG Unreleased Added, CLAUDE.md (`notify.rs`, `app/notifications.rs`, plan list)
+- [ ] `Sequence::pick` trusts what the terminal sets fresh first: TERM (alacritty* bell, foot*/rxvt* OSC 777, xterm-ghostty/xterm-kitty/wezterm OSC 9), then TERM_PROGRAM (Apple_Terminal bell, iTerm.app/WezTerm/ghostty OSC 9), only then `VTE_VERSION` and `ALACRITTY_WINDOW_ID`, which a tmux server or a child terminal inherits stale; with tests for a stale `ALACRITTY_WINDOW_ID` under Ghostty
+- [ ] Inside tmux, pick from the attached client's terminal: `notify::client_term()` runs `tmux display-message -p '#{client_termname}'` with a 500 ms deadline on a thread of its own, its answer comes back as `Event::Notify(text, client)` and the loop writes the sequence (only the UI thread writes to the terminal); without an answer the environment's pick stands. `Notifier::notify(out, text, client)`, `Notifier::in_tmux()`; tests for the client overriding the environment and the fallback
 - [ ] End-to-end: scratch store, UI in a PTY with captured output; report a flow waiting, then blocked, then focus out on the flow in view; assert one sequence per transition, none at startup, none with `notify = false`; then the same in a real terminal window to see the notification
