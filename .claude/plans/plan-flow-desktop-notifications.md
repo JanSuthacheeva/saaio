@@ -305,6 +305,8 @@ Open:
   error on the store, which server.log records. If it ever shows, keep the ids the UI has seen
   instead of looking only at the previous board.
 
+Decided: accepted as recommended (the master asked to go on to the merge request); named in it.
+
 Where to look:
 
 1. `src/ui/app/notifications.rs` `worker_notifications`: a flow missing from the old board counts
