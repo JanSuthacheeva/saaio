@@ -76,7 +76,32 @@ repository's setup script, open the worker.
 | Worker gets | Content |
 | --- | --- |
 | first prompt | default `/ship-feature SHOP-217 add CSV export` (Claude Code), `$ship-feature ...` (Codex) |
-| system prompt from saaio | it runs as a worker of saaio. Messages from the saaio master are answers to act on. |
+| system prompt from saaio | it runs as a worker of saaio. Messages from the saaio master are answers to act on. A stacked flow is also told its merge request targets its base. |
+
+## Stacked flows
+
+A stack of merge requests runs as one flow each: start the first as usual, then each next one on
+the branch before it, with `saaio start --base <branch>` ([cli.md](cli.md#stacked-flows)) or the
+dialog's base row ([ui.md](ui.md#starting-a-flow)).
+
+```
+main <- flow/shop-217 (shop-217) <- flow/shop-218 (shop-218, --base flow/shop-217)
+```
+
+- The stacked flow's worktree starts from the base's commits at that moment. Its worker opens its
+  merge request against the base and rebases on it, and pushes the base first if the remote lacks
+  it.
+- `saaio status <flow>` shows `base`, the board's header `on <base>`, `--json` `workspace.base`.
+- When the base's merge request merges ([how saaio learns](#merge-requests-opened-or-merged-elsewhere)),
+  every unfinished flow of the repository standing on it moves onto the branch it merged into: its
+  base changes, its timeline says `base flow/shop-217 merged, now on main`, and its worker hears it
+  like a message from the master, with what to do: rebase its own commits onto the new base
+  (`git rebase --onto origin/main flow/shop-217`), point its merge request there and push with
+  `--force-with-lease`. saaio runs no git in the worktree itself.
+- Only a base that is a flow of the same store and repository is followed. A stack on a branch no
+  flow runs keeps its base when that merges.
+- `saaio remove` of a base names the flows that stand on it and removes it all the same
+  ([cli.md](cli.md#saaio-remove)).
 
 ## Guided and auto
 

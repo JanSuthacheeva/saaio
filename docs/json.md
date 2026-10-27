@@ -54,7 +54,8 @@ saaio status shop-217 --json # a board with just that flow
         "branch": "flow/shop-217",
         "slot": 1,
         "window": null,
-        "agent": "claude"
+        "agent": "claude",
+        "base": null
       },
       "answer": null,
       "session": null,
@@ -85,7 +86,8 @@ saaio status shop-217 --json # a board with just that flow
         "branch": null,
         "slot": null,
         "window": null,
-        "agent": "claude"
+        "agent": "claude",
+        "base": null
       },
       "answer": null,
       "session": null,
@@ -202,6 +204,7 @@ The repo's `.saaio/pause` and `.saaio/resume` ([repository.md](repository.md#pau
 | `slot` | number or null | the flow's slot, 1 to 20. Null for a plain session |
 | `window` | string or null | `saaio-ui` once the UI opened the worker. Null before |
 | `agent` | string | the agent it runs, a name from the config |
+| `base` | string or null | the branch a stacked flow stands on and its merge request targets: its `saaio start --base`, then where that base merged. Null for a flow that started from what the repository had checked out |
 
 ## Every project
 

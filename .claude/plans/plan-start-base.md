@@ -317,5 +317,5 @@ pub enum Note { Master(String), BaseMerged { base: String, onto: String } }
 ### UI and docs
 
 - [x] Add the base row to the new-flow dialog (`base`, `checked_out`, `bases`, `Field::Base`, `set_branching`, `on_branching`, `picked_base`, creates line, `Job::args --base`) with form tests and the dialog golden; `on <base>` in the board's detail facts
-- [ ] master.md stack lines (master-v12.md kept), docs (cli.md start and remove, flows.md stacks, json.md workspace.base, ui.md dialog), CHANGELOG Unreleased, ROADMAP row dropped, CLAUDE.md architecture (stack.rs), design pages copied to docs/design/
+- [x] master.md stack lines (master-v12.md kept), docs (cli.md start and remove, flows.md stacks, json.md workspace.base, ui.md dialog), CHANGELOG Unreleased, ROADMAP row dropped, CLAUDE.md architecture (stack.rs), design pages copied to docs/design/
 - [ ] End to end in a scratch store: a repo with a bare origin; start flow A, start B `--base` A's branch and C `--base` a remote-only branch; check worktrees, status and `--json`; the dialog's base row in a PTY; simulate A merged (a `merged` answer through the server, or a `base-merged` path test) and see B's base move and its worker news; `saaio remove` of A names B; end with `saaio --stop`

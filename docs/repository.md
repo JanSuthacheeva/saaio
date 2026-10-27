@@ -126,6 +126,7 @@ once the repository is [trusted](#trust).
 | `SAAIO_REPO` | the main checkout's path |
 | `SAAIO_FLOW_NAME` | the flow's name, such as `shop-217` |
 | `SAAIO_FLOW_ID` | the flow's id |
+| `SAAIO_BASE` | the branch the flow started from with `saaio start --base`. Unset without one. |
 
 The worker's session gets the same variables.
 
