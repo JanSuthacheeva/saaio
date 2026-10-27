@@ -320,6 +320,23 @@ pub enum Note { Master(String), BaseMerged { base: String, onto: String } }
 - [x] master.md stack lines (master-v12.md kept), docs (cli.md start and remove, flows.md stacks, json.md workspace.base, ui.md dialog), CHANGELOG Unreleased, ROADMAP row dropped, CLAUDE.md architecture (stack.rs), design pages copied to docs/design/
 - [x] End to end in a scratch store: a repo with a bare origin; start flow A, start B `--base` A's branch and C `--base` a remote-only branch; check worktrees, status and `--json`; the dialog's base row in a PTY; simulate A merged (a `merged` answer through the server, or a `base-merged` path test) and see B's base move and its worker news; `saaio remove` of A names B; end with `saaio --stop`
 
+### After the review
+
+Decided by the master: word the prompt for any base; close both restack holes.
+
+- `Merged` records the branch it merged into (`into: Option<String>`, from `Found.target`), the fold
+  keeps it as `FlowView.merged_into` (`#[serde(skip)]`, not in `--json`).
+- `stack::pending(flows) -> Vec<(String, EventKind)>`: `on_merge` for every merged flow with a
+  `merged_into`; empty once every stacked flow moved, so it repeats nothing.
+- `forge_answer(Answer::Done)` appends `stack::pending(&self.board.flows)`: a failed BaseMerged is
+  retried on the next round. Once per round, never per answer, so a board not refolded yet cannot
+  append twice.
+- `saaio remove` and `saaio clear` append `stack::on_merge` for a merged base before forgetting it.
+
+- [ ] Word `adapter::worker_prompt` for any base ("Your branch stands on <base>: ..."), with its tests
+- [ ] Record `Merged.into` and `FlowView.merged_into`, add `stack::pending`, append it at `Answer::Done`, with fold, stack and server tests for the retry
+- [ ] Append the base-merged events in `saaio remove` and `saaio clear` of a merged base, with CLI tests; docs and CHANGELOG
+
 ## Review
 
 Isolated review of `flow/start-base` against `main` (commits 2a49885..254e369), 2026-10-27.
