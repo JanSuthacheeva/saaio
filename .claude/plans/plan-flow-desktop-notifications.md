@@ -289,3 +289,29 @@ Where to look:
 Routine: config, env, docs and the outer `captured` change.
 
 Checks: cargo test, clippy `--all-targets -D warnings` and fmt pass at e0c413e.
+
+### Round 2
+
+Isolated review of 950368e (a flow that appears already Waiting or Blocked notifies), 2026-10-27.
+
+Fixed: nothing; no finding needed a change.
+
+Open:
+
+- A flow that drops off one board and comes back notifies again for a state already announced:
+  the server leaves a flow off the board when its log cannot be read (`Store::logs` skips it with a
+  warning, and a failed `ids()` sends an empty board), and the next board then has it as new
+  (`was = None`). Before 950368e such a return was silent. Recommendation: accept; it needs a read
+  error on the store, which server.log records. If it ever shows, keep the ids the UI has seen
+  instead of looking only at the previous board.
+
+Where to look:
+
+1. `src/ui/app/notifications.rs` `worker_notifications`: a flow missing from the old board counts
+   as `None`; the first board is still silent through `messages.rs` `on_server` (`if let Some(old)`).
+
+Routine: the docs line in `docs/ui.md`, the new test, and `tests/sidebar.rs`, which now lets the
+fleet's first board raise notifications but still asserts nothing else (no resize).
+
+Checks: cargo test, clippy `--all-targets -D warnings` and fmt pass at 950368e; only the plan
+changed since.
