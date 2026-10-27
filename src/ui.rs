@@ -11,6 +11,11 @@ pub mod input;
 pub mod layout;
 pub mod markdown;
 pub mod newflow;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "used once ui::run raises Effect::Notify")
+)]
+pub mod notify;
 pub mod outer;
 pub mod peek;
 pub mod rail;

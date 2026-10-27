@@ -226,7 +226,7 @@ impl Env {
 
 ## Tasks
 
-- [ ] Add `ui/notify.rs`: `Sequence::pick`, `Notifier::new`, `Notifier::notify`, `sequence`, `passthrough`, with unit tests for picking, each sequence's bytes, tmux wrapping, BEL unwrapped, control characters and cutting
+- [x] Add `ui/notify.rs`: `Sequence::pick`, `Notifier::new`, `Notifier::notify`, `sequence`, `passthrough`, with unit tests for picking, each sequence's bytes, tmux wrapping, BEL unwrapped, control characters and cutting
 - [ ] Add `Env` fields `term`, `term_program`, `vte`, `alacritty`, `tmux`, `Env::notifier`, read them in `main.rs::env()`, and pass `UiEnv.notifier` from `commands/ui.rs`
 - [ ] Add `[ui] notify` to `UiConfig` and its commented line to `examples/config.toml`, with the config tests passing
 - [ ] Add `Routed::Focus`, `Target.focus` and `focus_event` to the Router, with tests: focus to `Routed::Focus`, forwarded unchanged only to a 1004 pane outside a dialog, prefix kept pending
