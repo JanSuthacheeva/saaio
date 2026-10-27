@@ -6,7 +6,7 @@ use std::time::Duration;
 use crate::fold;
 use crate::store::Store;
 use crate::view::FlowView;
-use crate::wake;
+use crate::wake::{self, Note};
 
 /// How long the master's wait keeps collecting after the first change, so flows that stop
 /// together wake it once.
@@ -18,11 +18,11 @@ pub enum WorkerNews {
     /// The flow is finished or gone: stop waiting.
     Gone,
     Nothing,
-    /// The master's messages it had not delivered yet, now marked delivered.
-    News(Vec<String>),
+    /// The notes it had not delivered yet, now marked delivered.
+    News(Vec<Note>),
 }
 
-/// The master's messages to flow `id` that its worker has not read yet.
+/// The master's messages and saaio's notes to flow `id` that its worker has not read yet.
 pub fn worker_news(store: &Store, id: &str, now: u64) -> WorkerNews {
     let Ok(events) = store.events(id) else {
         return WorkerNews::Gone;
@@ -31,14 +31,14 @@ pub fn worker_news(store: &Store, id: &str, now: u64) -> WorkerNews {
         return WorkerNews::Gone;
     }
     let delivered = store.delivered(id);
-    let messages = wake::undelivered(&events, delivered);
-    if messages.is_empty() {
+    let notes = wake::undelivered(&events, delivered);
+    if notes.is_empty() {
         return WorkerNews::Nothing;
     }
-    if store.set_delivered(id, delivered + messages.len()).is_err() {
+    if store.set_delivered(id, delivered + notes.len()).is_err() {
         return WorkerNews::Gone;
     }
-    WorkerNews::News(messages.into_iter().map(str::to_string).collect())
+    WorkerNews::News(notes)
 }
 
 /// The flows that stopped since the master last saw them, collected for SETTLE so several arrive
@@ -105,16 +105,42 @@ mod tests {
         assert_eq!(
             worker_news(&store, &id, 3),
             WorkerNews::News(vec![
-                "use the old API".to_string(),
-                "and keep the tests".to_string()
+                Note::Master("use the old API".to_string()),
+                Note::Master("and keep the tests".to_string())
             ])
         );
         assert_eq!(worker_news(&store, &id, 3), WorkerNews::Nothing);
         send(&store, &id, "one more");
         assert_eq!(
             worker_news(&store, &id, 3),
-            WorkerNews::News(vec!["one more".to_string()])
+            WorkerNews::News(vec![Note::Master("one more".to_string())])
         );
+    }
+
+    #[test]
+    fn delivers_a_merged_base_once_and_counts_it_with_the_messages() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let id = started(&store);
+        send(&store, &id, "read first");
+        let merged = EventKind::BaseMerged {
+            base: "flow/a".into(),
+            onto: "main".into(),
+        };
+        store.append(&id, &Event::new(2, merged)).unwrap();
+
+        assert_eq!(
+            worker_news(&store, &id, 3),
+            WorkerNews::News(vec![
+                Note::Master("read first".into()),
+                Note::BaseMerged {
+                    base: "flow/a".into(),
+                    onto: "main".into()
+                }
+            ])
+        );
+        assert_eq!(store.delivered(&id), 2);
+        assert_eq!(worker_news(&store, &id, 3), WorkerNews::Nothing);
     }
 
     #[test]
@@ -148,7 +174,7 @@ mod tests {
         send(&store, &id, "Fix the race first");
         assert_eq!(
             worker_news(&store, &id, 3),
-            WorkerNews::News(vec!["Fix the race first".into()])
+            WorkerNews::News(vec![Note::Master("Fix the race first".into())])
         );
     }
 

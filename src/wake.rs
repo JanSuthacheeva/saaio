@@ -18,12 +18,23 @@ pub struct Mark {
     pub changed_at: u64,
 }
 
-/// The master's messages in a flow's log after the first `delivered` of them.
-pub fn undelivered(events: &[Event], delivered: usize) -> Vec<&str> {
+/// What a worker hears: the master's message, or saaio's word that its base merged.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Note {
+    Master(String),
+    BaseMerged { base: String, onto: String },
+}
+
+/// The notes in a flow's log after the first `delivered` of them (Message and BaseMerged events).
+pub fn undelivered(events: &[Event], delivered: usize) -> Vec<Note> {
     events
         .iter()
         .filter_map(|event| match &event.kind {
-            EventKind::Message { text } => Some(text.as_str()),
+            EventKind::Message { text } => Some(Note::Master(text.clone())),
+            EventKind::BaseMerged { base, onto } => Some(Note::BaseMerged {
+                base: base.clone(),
+                onto: onto.clone(),
+            }),
             _ => None,
         })
         .skip(delivered)
@@ -97,13 +108,21 @@ fn mark(flow: &FlowView) -> Mark {
     }
 }
 
-/// What a worker reads when saaio wakes it: each of the master's messages, indented.
-pub fn for_worker(messages: &[&str]) -> String {
-    messages
+/// What a worker reads when saaio wakes it: each of the master's messages, indented, and what to
+/// do once its base merged.
+pub fn for_worker(notes: &[Note]) -> String {
+    notes
         .iter()
-        .flat_map(|message| {
-            std::iter::once("message from the saaio master:".to_string())
+        .flat_map(|note| match note {
+            Note::Master(message) => std::iter::once("message from the saaio master:".to_string())
                 .chain(message.lines().map(|line| format!("  {line}")))
+                .collect::<Vec<_>>(),
+            Note::BaseMerged { base, onto } => vec![format!(
+                "news from saaio: {base}, the branch this flow stands on, was merged into {onto}. \
+Rebase your own commits onto it (`git fetch`, then `git rebase --onto origin/{onto} {base}`, or \
+`origin/{base}` once that branch is gone), point your merge request at {onto} and push with \
+`--force-with-lease`."
+            )],
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -224,10 +243,43 @@ mod tests {
             .map(|kind| Event::new(1, kind))
             .collect();
 
-        assert_eq!(undelivered(&events, 0), ["one", "two"]);
-        assert_eq!(undelivered(&events, 1), ["two"]);
-        assert_eq!(undelivered(&events, 2), [] as [&str; 0]);
-        assert_eq!(undelivered(&events, 5), [] as [&str; 0]);
+        assert_eq!(undelivered(&events, 0), [master("one"), master("two")]);
+        assert_eq!(undelivered(&events, 1), [master("two")]);
+        assert_eq!(undelivered(&events, 2), []);
+        assert_eq!(undelivered(&events, 5), []);
+    }
+
+    fn master(text: &str) -> Note {
+        Note::Master(text.into())
+    }
+
+    #[test]
+    fn hands_over_a_merged_base_in_order_with_the_messages() {
+        let merged = EventKind::BaseMerged {
+            base: "flow/shop-1".into(),
+            onto: "main".into(),
+        };
+        let events: Vec<Event> = [message("one"), merged, message("two")]
+            .into_iter()
+            .map(|kind| Event::new(1, kind))
+            .collect();
+        let note = Note::BaseMerged {
+            base: "flow/shop-1".into(),
+            onto: "main".into(),
+        };
+
+        assert_eq!(
+            undelivered(&events, 0),
+            [master("one"), note.clone(), master("two")]
+        );
+        assert_eq!(undelivered(&events, 2), [master("two")], "both kinds count");
+        assert_eq!(
+            for_worker(&[note]),
+            "news from saaio: flow/shop-1, the branch this flow stands on, was merged into main. \
+Rebase your own commits onto it (`git fetch`, then `git rebase --onto origin/main flow/shop-1`, \
+or `origin/flow/shop-1` once that branch is gone), point your merge request at main and push \
+with `--force-with-lease`."
+        );
     }
 
     #[test]
@@ -241,7 +293,7 @@ mod tests {
         assert_eq!(untyped(&events, 0), ["/compact", "continue shipping"]);
         assert_eq!(untyped(&events, 1), ["continue shipping"]);
         assert_eq!(untyped(&events, 2), [] as [&str; 0]);
-        assert_eq!(undelivered(&events, 0), ["hi"]);
+        assert_eq!(undelivered(&events, 0), [master("hi")]);
     }
 
     #[test]
@@ -377,8 +429,8 @@ mod tests {
     fn hands_a_worker_each_message_from_the_master() {
         assert_eq!(
             for_worker(&[
-                "Use semicolons.",
-                "Keep the header row,\nas in the old export."
+                master("Use semicolons."),
+                master("Keep the header row,\nas in the old export.")
             ]),
             [
                 "message from the saaio master:",

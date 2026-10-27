@@ -203,4 +203,17 @@ esac
     let merged = fs::read_to_string(home.path().join(format!("flows/{base}.jsonl"))).unwrap();
     assert!(!merged.contains("base-merged"), "{merged}");
     assert!(saaio(home.path(), &["--stop"]).status.success());
+    let mut wait = waiter(home.path(), Some(&stacked), &[]);
+    let (code, _, news) = ended(&mut wait, PATIENCE).expect("woken");
+    assert_eq!(code, 2);
+    assert!(
+        news.contains(
+            "news from saaio: flow/export, the branch this flow stands on, was merged into release."
+        ),
+        "{news}"
+    );
+    assert!(
+        news.contains("git rebase --onto origin/release flow/export"),
+        "{news}"
+    );
 }

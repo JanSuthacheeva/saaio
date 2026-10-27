@@ -76,10 +76,7 @@ fn wait(
             Waiter::Flow(id) => match deliver::worker_news(store, id, clock()) {
                 WorkerNews::Gone => return None,
                 WorkerNews::Nothing => None,
-                WorkerNews::News(messages) => {
-                    let messages: Vec<&str> = messages.iter().map(String::as_str).collect();
-                    Some(wake::for_worker(&messages))
-                }
+                WorkerNews::News(notes) => Some(wake::for_worker(&notes)),
             },
             Waiter::Master if !wakes => None,
             Waiter::Master => {
