@@ -390,7 +390,7 @@ mod tests {
             String::from_utf8(term.replies()).unwrap(),
             "\x1b[?6c\x1b[?2026;2$y\x1b[1;1R"
         );
-        assert!(term.replies().is_empty());
+        assert_eq!(term.replies(), b"");
     }
 
     #[test]
@@ -404,7 +404,7 @@ mod tests {
         term.feed(b"\x1b]52;p;Ynll\x1b\\");
         assert_eq!(term.copied(), Some("bye".to_string()));
         term.feed(b"\x1b]52;c;?\x07");
-        assert!(term.replies().is_empty());
+        assert_eq!(term.replies(), b"");
         assert_eq!(term.copied(), None);
     }
 

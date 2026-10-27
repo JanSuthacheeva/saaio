@@ -6,6 +6,11 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A server that started while another saaio process moved server.log aside now writes to the
+  new server.log, instead of to server.log.1 for as long as it runs.
+
 ## [0.1.2] - 2026-10-24
 
 Updating from 0.1.1: run `saaio update`, then `saaio --stop` so the server starts again on the

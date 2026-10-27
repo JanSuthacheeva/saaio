@@ -226,8 +226,8 @@ mod tests {
 
         assert_eq!(undelivered(&events, 0), ["one", "two"]);
         assert_eq!(undelivered(&events, 1), ["two"]);
-        assert!(undelivered(&events, 2).is_empty());
-        assert!(undelivered(&events, 5).is_empty());
+        assert_eq!(undelivered(&events, 2), [] as [&str; 0]);
+        assert_eq!(undelivered(&events, 5), [] as [&str; 0]);
     }
 
     #[test]
@@ -240,7 +240,7 @@ mod tests {
 
         assert_eq!(untyped(&events, 0), ["/compact", "continue shipping"]);
         assert_eq!(untyped(&events, 1), ["continue shipping"]);
-        assert!(untyped(&events, 2).is_empty());
+        assert_eq!(untyped(&events, 2), [] as [&str; 0]);
         assert_eq!(undelivered(&events, 0), ["hi"]);
     }
 
@@ -287,7 +287,7 @@ mod tests {
         mark_seen(&mut marked, &news);
         let seen = marked;
 
-        assert!(changed_flows(&asked, &seen).is_empty());
+        assert_eq!(changed_flows(&asked, &seen), [] as [&FlowView; 0]);
 
         let again = vec![flow(
             "asks",
@@ -312,7 +312,7 @@ mod tests {
         let mut plain = flow("scratch", vec![(5, EventKind::waiting("Which?"))]);
         plain.mode = Mode::Plain;
 
-        assert!(changed_flows(&[plain], &Seen::new()).is_empty());
+        assert_eq!(changed_flows(&[plain], &Seen::new()), [] as [&FlowView; 0]);
     }
 
     #[test]

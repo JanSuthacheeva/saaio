@@ -132,8 +132,8 @@ mod tests {
 
         assert_eq!(keys(&wanted), vec![worker("new"), worker("hosted")]);
         assert!(wanted.open[1].argv.contains(&"--resume".to_string()));
-        assert!(wanted.close.is_empty());
-        assert!(wanted.failed.is_empty());
+        assert_eq!(wanted.close, [] as [PaneKey; 0]);
+        assert_eq!(wanted.failed, [] as [(PaneKey, String); 0]);
     }
 
     #[test]
@@ -186,7 +186,7 @@ mod tests {
         );
 
         assert_eq!(wanted.close, vec![worker("removed")]);
-        assert!(wanted.open.is_empty());
+        assert_eq!(wanted.open, [] as [PaneSpec; 0]);
     }
 
     #[test]

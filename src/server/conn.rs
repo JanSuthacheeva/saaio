@@ -186,7 +186,7 @@ impl Server {
         let (Ok(reader), Ok(writer)) = (stream.try_clone(), stream.try_clone()) else {
             return;
         };
-        let outbox = match Outbox::start(conn, writer, self.events.clone()) {
+        let outbox = match Outbox::start(conn, writer, self.timing.write, self.events.clone()) {
             Ok(outbox) => outbox,
             Err(error) => {
                 let line = format!("dropped a connection: {error}");

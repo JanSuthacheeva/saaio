@@ -321,7 +321,7 @@ fn a_plain_session_has_no_steps_but_keeps_its_phase() {
     );
     let flow = view(&[plain, phase(2, Phase::of("plan"))], 3);
 
-    assert!(flow.steps.is_empty());
+    assert_eq!(flow.steps, [] as [Step; 0]);
     assert_eq!(flow.phase, Some(Phase::of("plan")));
 }
 
@@ -1303,7 +1303,7 @@ fn a_log_with_an_empty_phase_list_folds_without_steps() {
 
     assert_eq!(flow.state, State::Done);
     assert_eq!(flow.phase, None);
-    assert!(flow.steps.is_empty());
+    assert_eq!(flow.steps, [] as [Step; 0]);
 }
 
 fn services(at_ms: u64, status: ServiceStatus, reason: Option<&str>) -> Event {

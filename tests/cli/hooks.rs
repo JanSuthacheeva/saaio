@@ -66,7 +66,7 @@ fn a_tool_call_waits_while_its_services_resume() {
 
     resumed.join().unwrap();
     assert!(output.status.success());
-    assert!(output.stdout.is_empty());
+    assert_eq!(stdout(&output), "");
     let waited = started.elapsed();
     assert!(waited >= Duration::from_millis(300), "{waited:?}");
     assert!(waited < Duration::from_secs(5), "{waited:?}");
@@ -267,7 +267,7 @@ fn a_codex_stop_hands_the_masters_message_over_and_goes_on_working() {
     let handed = hook_with(home.path(), &["codex"], Some(&id), stop);
 
     assert_eq!(handed.status.code(), Some(2), "Codex goes on with stderr");
-    assert!(handed.stdout.is_empty());
+    assert_eq!(stdout(&handed), "");
     let news = String::from_utf8_lossy(&handed.stderr);
     assert!(news.contains("message from the saaio master:"), "{news}");
     assert!(news.contains("Tabs."), "{news}");

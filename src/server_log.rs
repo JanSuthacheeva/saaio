@@ -53,8 +53,14 @@ fn open_with(log: &Path, cap: u64, lock: impl Fn(&File) -> io::Result<()>) -> io
     }
 }
 
-/// Whether stderr is the file at `log`: a server ensure_server started, not one in a terminal.
-pub fn is_stderr(log: &Path) -> bool {
+/// Whether stderr is server.log: the file at `log`, or at `<log>.1` when another writer moved it
+/// aside before the server looked. A server ensure_server started, not one in a terminal.
+pub fn writes_to(log: &Path) -> bool {
+    is_stderr(log) || is_stderr(&older(log))
+}
+
+/// Whether stderr is the file at `log`.
+fn is_stderr(log: &Path) -> bool {
     let (Ok(stderr), Ok(file)) = (stderr_meta(), fs::metadata(log)) else {
         return false;
     };

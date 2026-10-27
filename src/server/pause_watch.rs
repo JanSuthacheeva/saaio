@@ -257,7 +257,10 @@ mod tests {
         let again = watch.due(&flows, 10 * MIN, AFTER);
         assert_eq!(again.len(), 1);
         assert_eq!(again[0].0.id, "csv");
-        assert!(watch.due(&flows, 10 * MIN, None).is_empty());
+        assert_eq!(
+            watch.due(&flows, 10 * MIN, None),
+            [] as [(FlowView, Job); 0]
+        );
     }
 
     #[test]

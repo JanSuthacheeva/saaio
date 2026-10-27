@@ -128,7 +128,7 @@ fn a_drag_in_a_dialog_stays_inside_the_dialog() {
 
     assert!(matches!(effects[..], [Effect::CopySelection(_)]));
     let cells = reversed(&render_at(&app, FLEET));
-    assert!(!cells.is_empty());
+    assert_ne!(cells, [] as [(u16, u16); 0]);
     assert!(
         cells
             .iter()

@@ -193,7 +193,7 @@ fn remove_keeps_a_branch_with_its_own_commits_unless_told() {
     let text = stdout(&deleted);
     assert!(deleted.status.success(), "{text}");
     assert!(text.contains("branch: deleted"), "{text}");
-    assert!(lab.branches().is_empty());
+    assert_eq!(lab.branches(), [] as [String; 0]);
 }
 
 #[test]

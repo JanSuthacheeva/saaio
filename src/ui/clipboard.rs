@@ -127,7 +127,7 @@ mod tests {
         .copy(&mut out, "")
         .unwrap();
 
-        assert!(out.is_empty());
+        assert_eq!(out, b"");
     }
 
     #[test]
