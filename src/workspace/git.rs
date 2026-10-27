@@ -4,10 +4,11 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 
-use super::process::stdout_of;
+use super::process::{finish_within, stdout_of};
 use crate::view::Workspace;
 
 /// git rev-parse --show-toplevel in cwd.
@@ -136,6 +137,58 @@ pub fn ssh_hostname(host: &str) -> Option<String> {
         .map(|name| name.trim().to_string())
 }
 
+/// Where git creates a flow's branch: a local branch, or a remote's copy of one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartPoint {
+    Local(String),
+    Remote { remote: String, branch: String },
+}
+
+impl StartPoint {
+    /// What git worktree add starts from: `x` or `refs/remotes/origin/x`.
+    #[cfg_attr(not(test), expect(dead_code, reason = "saaio start --base uses it next"))]
+    pub fn rev(&self) -> String {
+        match self {
+            Self::Local(branch) => branch.clone(),
+            Self::Remote { remote, branch } => format!("refs/remotes/{remote}/{branch}"),
+        }
+    }
+}
+
+/// How long one remote may take to fetch a base.
+const FETCH_LIMIT: Duration = Duration::from_secs(30);
+
+/// The start point for `base`: the local branch, else the first remote (origin first) that has
+/// it, fetched with a deadline. Err for a name git refuses as a branch, or one no remote has.
+#[cfg_attr(not(test), expect(dead_code, reason = "saaio start --base uses it next"))]
+pub fn start_point(repo: &Path, base: &str) -> Result<StartPoint> {
+    if base.starts_with('-') || git(repo, &["check-ref-format", "--branch", base]).is_err() {
+        bail!("{base} is no branch name");
+    }
+    if branch_exists(repo, base) {
+        return Ok(StartPoint::Local(base.to_string()));
+    }
+    let listed = git(repo, &["remote"]).unwrap_or_default();
+    let mut remotes: Vec<&str> = listed.lines().map(str::trim).collect();
+    remotes.sort_by_key(|remote| *remote != "origin");
+    for remote in remotes {
+        let refspec = format!("refs/heads/{base}:refs/remotes/{remote}/{base}");
+        let mut command = Command::new("git");
+        command
+            .arg("-C")
+            .arg(repo)
+            .args(["fetch", "--quiet", "--no-tags", "--", remote, &refspec])
+            .env("GIT_TERMINAL_PROMPT", "0");
+        if finish_within(command, "git", FETCH_LIMIT).is_ok() {
+            return Ok(StartPoint::Remote {
+                remote: remote.to_string(),
+                branch: base.to_string(),
+            });
+        }
+    }
+    bail!("no branch {base} here or on a remote")
+}
+
 /// git branch -D <branch>: the flow's branch once its worktree is gone.
 pub fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
     git(repo, &["branch", "-D", branch]).map(|_| ())
@@ -210,6 +263,97 @@ mod tests {
     use crate::launch::worktree::workspace_for;
     use crate::workspace::create_worktree;
     use crate::workspace::fixtures::{git, repo};
+
+    /// A bare clone of `repo` with a branch `stack` the repo itself lacks, added as `remote`.
+    fn remote_with_stack(dir: &Path, repo: &Path, remote: &str) {
+        let bare = dir.join(format!("{remote}.git"));
+        git(repo, &["branch", "stack"]);
+        git(
+            dir,
+            &[
+                "clone",
+                "-q",
+                "--bare",
+                &repo.display().to_string(),
+                &bare.display().to_string(),
+            ],
+        );
+        git(repo, &["branch", "-D", "stack"]);
+        git(
+            repo,
+            &["remote", "add", remote, &bare.display().to_string()],
+        );
+    }
+
+    #[test]
+    fn a_local_base_starts_from_the_branch_itself() {
+        let (_dir, repo) = repo();
+        git(&repo, &["branch", "flow/csv"]);
+
+        let point = start_point(&repo, "flow/csv").unwrap();
+
+        assert_eq!(point, StartPoint::Local("flow/csv".into()));
+        assert_eq!(point.rev(), "flow/csv");
+    }
+
+    #[test]
+    fn a_remote_only_base_is_fetched_from_origin_first() {
+        let (_dir, repo) = repo();
+        let scratch = TempDir::new().unwrap();
+        remote_with_stack(scratch.path(), &repo, "aaa");
+        remote_with_stack(scratch.path(), &repo, "origin");
+
+        let point = start_point(&repo, "stack").unwrap();
+
+        assert_eq!(
+            point,
+            StartPoint::Remote {
+                remote: "origin".into(),
+                branch: "stack".into()
+            }
+        );
+        assert_eq!(point.rev(), "refs/remotes/origin/stack");
+        git(&repo, &["show-ref", "--verify", "--quiet", &point.rev()]);
+        assert!(!branch_exists(&repo, "stack"));
+    }
+
+    #[test]
+    fn a_base_on_another_remote_is_fetched_from_it() {
+        let (_dir, repo) = repo();
+        let scratch = TempDir::new().unwrap();
+        remote_with_stack(scratch.path(), &repo, "upstream");
+        let empty = scratch.path().join("empty.git");
+        git(
+            scratch.path(),
+            &["init", "-q", "--bare", &empty.display().to_string()],
+        );
+        git(
+            &repo,
+            &["remote", "add", "origin", &empty.display().to_string()],
+        );
+
+        assert_eq!(
+            start_point(&repo, "stack").unwrap().rev(),
+            "refs/remotes/upstream/stack"
+        );
+    }
+
+    #[test]
+    fn refuses_an_invalid_name_and_a_branch_nowhere() {
+        let (_dir, repo) = repo();
+        let scratch = TempDir::new().unwrap();
+        remote_with_stack(scratch.path(), &repo, "origin");
+
+        for bad in ["a..b", "-x", "HEAD", "with space"] {
+            let error = start_point(&repo, bad).unwrap_err();
+            assert_eq!(error.to_string(), format!("{bad} is no branch name"));
+        }
+        let error = start_point(&repo, "flow/nowhere").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "no branch flow/nowhere here or on a remote"
+        );
+    }
 
     #[test]
     fn an_ssh_host_no_rule_names_resolves_to_itself() {
