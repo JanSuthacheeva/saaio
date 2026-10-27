@@ -328,7 +328,10 @@ mod tests {
 
         let text = fs::read_to_string(&path).unwrap();
         assert_eq!(text, INSTRUCTIONS.text);
-        assert!(text.contains("--base <the previous flow's branch>"), "{text}");
+        assert!(
+            text.contains("--base <the previous flow's branch>"),
+            "{text}"
+        );
     }
 
     #[test]
