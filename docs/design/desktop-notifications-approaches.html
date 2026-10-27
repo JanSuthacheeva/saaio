@@ -1,0 +1,129 @@
+<title>Desktop Notifications Approaches</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+/* One 720px reading column of cards, jasu.dev (Nord, one purple accent). */
+:root {
+  --surface:#f8f9fb; --card:#eceff4; --ink:#2e3440; --muted:#4c566a; --subtle:#d8dee9; --border:#d8dee9;
+  --code-block:#2e3440; --code-bg:#e5e9f0; --code-ink:#4b6c8a; --accent:#7b5eaf; --link:#4b6c8a;
+  --constructive:#a3be8c; --warning:#d08770; --critical:#bf616a; --on-accent:#f8f9fb;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --gap:24px; color-scheme:light;
+}
+:root[data-theme="dark"] {
+  --surface:#2e3440; --card:#3b4252; --ink:#eceff4; --muted:#93b1cc; --subtle:#434c5e; --border:#4c566a;
+  --code-block:#3b4252; --code-bg:#3b4252; --code-ink:#88c0d0; --accent:#bd93f9; --link:#88c0d0;
+  --warning:#ebcb8b; --on-accent:#2e3440; color-scheme:dark;
+}
+body { background:var(--surface); color:var(--ink); font:18px/1.6 var(--sans);
+  padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); padding-block:32px 64px; }
+main { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:var(--gap); }
+h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.1; font-weight:800; letter-spacing:-0.03em; margin:0; text-wrap:balance; }
+h2 { font-size:24px; line-height:1.3; margin:0 0 12px; text-wrap:balance; }
+h3 { font-size:18px; margin:16px 0 6px; }
+.meta { font-size:13px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:var(--gap); min-width:0; }
+.card.rec { border-color:var(--accent); }
+.pill { display:inline-block; border-radius:99px; font-size:.8rem; font-weight:600; letter-spacing:.05em; padding:2px 10px; background:var(--accent); color:var(--on-accent); vertical-align:middle; margin-left:8px; }
+p, ul { margin:0 0 12px; } ul { padding-left:22px; }
+code { font-family:var(--mono); font-size:.78em; background:var(--code-bg); color:var(--code-ink); border-radius:.2rem; padding:1px 4px; }
+a { color:var(--link); text-decoration-thickness:1px; text-underline-offset:.18em; }
+.scroll { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; font-size:15px; }
+th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+th { background:var(--subtle); }
+.pro { border-left:4px solid var(--constructive); padding-left:10px; }
+.con { border-left:4px solid var(--warning); padding-left:10px; }
+pre.mermaid { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:12px; margin:0 0 12px; }
+@media (max-width:480px) { :root { --gap:14px; } body { font-size:17px; } }
+</style>
+<main>
+<header>
+  <p class="meta">saaio 0.2.0 · ROADMAP Planned soon · 2026-10-27</p>
+  <h1>Desktop notifications: approaches</h1>
+  <p>When a flow starts waiting or is blocked, the UI makes the terminal raise a desktop notification. One decision here: whether the UI also tracks if the terminal itself has focus.</p>
+</header>
+
+<section class="card">
+  <h2>What exists today</h2>
+  <ul>
+    <li><code>App::on_server(ServerMsg::Board)</code> already diffs the new board against the last one, flow by flow, to light a row that changed state (<code>src/ui/app/messages.rs:31</code>). The first board after start has nothing to diff against, so it lights nothing. That is the natural place for "one per transition, none on startup".</li>
+    <li><code>App</code> is pure: it returns <code>Effect</code>s, and <code>ui::run</code> does the I/O (<code>src/ui.rs:233</code>). Copying is the sibling: <code>Effect::Copy</code> -> <code>Clipboard::copy</code> writes OSC 52 to stdout, its choice of command made once from the environment in <code>Clipboard::new(ssh, wayland, x11)</code> (<code>src/ui/clipboard.rs:19</code>).</li>
+    <li>The master already has an "unseen" idea: it came to rest while not focused (<code>messages.rs:157</code>).</li>
+    <li>Focus reporting (mode 1004) is only mirrored from the focused pane (<code>src/ui/outer.rs:104</code>); <code>Router</code> passes <code>ESC [ I</code> / <code>ESC [ O</code> through as plain bytes. So today saaio does not know whether the terminal has focus.</li>
+    <li><code>[ui]</code> holds <code>prefix</code> and <code>update_check</code> (<code>src/config.rs:102</code>); the new switch goes beside them.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Which sequence, checked</h2>
+  <div class="scroll"><table>
+    <tr><th>Terminal</th><th>OSC 9</th><th>OSC 777</th><th>OSC 99</th></tr>
+    <tr><td>iTerm2</td><td>yes</td><td>no</td><td>no</td></tr>
+    <tr><td>Ghostty</td><td>yes</td><td>yes</td><td>no</td></tr>
+    <tr><td>WezTerm</td><td>yes</td><td>yes</td><td>no</td></tr>
+    <tr><td>kitty</td><td>yes (legacy)</td><td>no</td><td>yes</td></tr>
+    <tr><td>foot, urxvt, VTE (patched)</td><td>no</td><td>yes</td><td>foot only</td></tr>
+    <tr><td>Alacritty, Terminal.app</td><td colspan="3">none: ignored silently</td></tr>
+  </table></div>
+  <p style="margin-top:12px">Sending several at once doubles the notification in Ghostty and WezTerm, so saaio sends exactly one: <b>OSC 9</b> by default, <b>OSC 777</b> when <code>TERM</code> is foot or rxvt or <code>VTE_VERSION</code> is set. The text starts with "saaio:" so ConEmu and Windows Terminal never read it as their numbered <code>9;n</code> commands. Inside tmux (<code>$TMUX</code>) the sequence is wrapped in tmux's DCS passthrough, which needs <code>set -g allow-passthrough on</code> (documented, like <code>set-clipboard</code> for OSC 52). No daemon, no new crate.</p>
+  <p class="meta">Sources: <a href="https://sources.debian.org/src/kitty/0.26.5-5/docs/desktop-notifications.rst">kitty docs</a>, <a href="https://git.uoc.run.place/Applied-Software/ghostty/commit/3f4ea2f76334d07caadbd8c6a77e567e6e292beb">Ghostty OSC 9/777 commit</a>, <a href="https://github.com/ghostty-org/ghostty/discussions/10998">Ghostty OSC 99 discussion</a>, <a href="https://jakub-codes.pages.dev/posts/fixing-claude-code-notifications-in-tmux-ghostty">tmux passthrough write-up</a>.</p>
+</section>
+
+<section class="card rec">
+  <h2>A. Focus-aware <span class="pill">Recommended</span></h2>
+  <p>The App detects the transition in the board diff and returns <code>Effect::Notify</code>; a new <code>ui/notify.rs</code> (<code>Notifier</code>, built from the environment like <code>Clipboard</code>) writes the one sequence. <code>Outer</code> keeps focus reporting on always, the way it keeps the mouse on, and <code>Router</code> turns <code>ESC [ I</code> / <code>ESC [ O</code> into <code>Routed::Focus(bool)</code>, still passing them to a pane that asked for them. A flow notifies when it is not in view, or when the terminal has lost focus, even the flow in view.</p>
+  <pre class="mermaid">
+flowchart LR
+  T[real terminal] -- "ESC[I / ESC[O" --> R[Router]
+  R -- "Routed::Focus" --> A[App]
+  S[server Board] --> A
+  A -- "Effect::Notify" --> L[ui::run loop]
+  L --> N[Notifier]
+  N -- "OSC 9 / 777, tmux-wrapped" --> T
+  O[Outer: 1004 always on] -.-> T
+  classDef new fill:#a3be8c,stroke:#2e3440,color:#2e3440
+  classDef mod fill:#ebcb8b,stroke:#2e3440,color:#2e3440
+  class N new
+  class R,A,L,O mod
+  </pre>
+  <p class="meta">Green: new. Yellow: changed. Grey: as is.</p>
+  <p><b>Touches:</b> <code>ui/notify.rs</code> (new), <code>ui/app/messages.rs</code>, <code>ui/app/effect.rs</code>, <code>ui/app.rs</code>, <code>ui/input.rs</code>, <code>ui/outer.rs</code>, <code>ui.rs</code>, <code>config.rs</code>, <code>examples/config.toml</code>, docs.</p>
+  <p class="pro">Catches the case that matters most: you are in the browser and the worker you were watching asks a question. Fits the Elm core and the Clipboard sibling exactly.</p>
+  <p class="con">Focus events now always arrive, so the Router must swallow them for panes that did not ask, in pane and modal views alike; a bug there types <code>[I</code> into a session. A terminal without 1004 never says "unfocused", so saaio assumes focused and falls back to B's behaviour.</p>
+</section>
+
+<section class="card">
+  <h2>B. Out of view only</h2>
+  <p>Same <code>Notifier</code> and <code>Effect::Notify</code>, no focus tracking: a flow notifies only when its pane is not the one in view.</p>
+  <pre class="mermaid">
+flowchart LR
+  S[server Board] --> A[App]
+  A -- "Effect::Notify" --> L[ui::run loop]
+  L --> N[Notifier]
+  N -- "OSC 9 / 777" --> T[real terminal]
+  classDef new fill:#a3be8c,stroke:#2e3440,color:#2e3440
+  classDef mod fill:#ebcb8b,stroke:#2e3440,color:#2e3440
+  class N new
+  class A,L mod
+  </pre>
+  <p><b>Touches:</b> the same minus <code>input.rs</code> and <code>outer.rs</code>.</p>
+  <p class="pro">Smaller; input handling stays exactly as it is.</p>
+  <p class="con">Misses the flow in view while you work in another window, and notifies about flows out of view while you look straight at the sidebar. Adding focus later means this same change to the Router anyway.</p>
+</section>
+
+<section class="card">
+  <h2>Rejected</h2>
+  <ul>
+    <li><b>Notify from <code>saaio server</code>.</b> The server owns the sessions but not the terminal: only the attached UI knows what is in view and where its stdout goes. It would need a new proto message for no gain, since a detached server has no terminal to notify through.</li>
+    <li><b>Send OSC 9, 777 and 99 together.</b> Two notifications per transition in Ghostty and WezTerm.</li>
+    <li><b>A notifier command (<code>osascript</code>, <code>notify-send</code>).</b> Breaks over SSH and in tmux on a remote box, and is the "extra daemon" the request rules out.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Recommendation</h2>
+  <p><b>A.</b> The point of a desktop notification is reaching you when you are not looking at saaio, and only focus tells that. The extra Router work is small and testable as pure byte routing.</p>
+</section>
+</main>
