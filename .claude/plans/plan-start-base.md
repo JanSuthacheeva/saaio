@@ -383,3 +383,57 @@ fold and outputs, `Found.target`, the remove help line, docs and CHANGELOG.
 
 `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` pass at
 00f322f. `cargo deny check` not rerun (no dependency changes since 254e369).
+
+## Second review
+
+Isolated review of the commits after the first review (fe1220a..d69f1de), the tasks under
+"After the review", 2026-10-27. Both open items of the first review are closed: the prompt holds
+for any base, and the moves a failed append or a removed base missed are made by
+`stack::pending` at the end of every forge round and by `saaio remove` and `saaio clear`.
+
+### Fixed
+
+- CLAUDE.md still described `retire.rs` as the pane, teardown, worktree and branch only; it now
+  names the moves before a merged base is forgotten. Docs only.
+
+### Open
+
+- `saaio remove` or `saaio clear` of a merged base while the server is running can race the
+  server's end-of-round `stack::pending`, which reads a board not yet refolded: the stacked flow
+  then gets a second `base-merged` with the same `onto`. The fold sets the base to `onto` either
+  way, so the only cost is a repeated timeline note and a repeated "your base merged" for the
+  worker. Not reproduced (the window is between one append and the next refold).
+  Recommendation: accept.
+- `restack` in remove and clear runs after the worktree and branch went, with `?`: a failed
+  append (say a stacked flow removed at the same moment) ends the command with an error and keeps
+  the base's log; running it again finishes it. Recommendation: accept.
+- A flow started with `--base` on a flow that already merged (its branch still there) is moved
+  onto where that merged within one round, by `pending`. That seems right (a merge request
+  against a merged branch is wrong), but it is new: before, only the merge moved flows.
+  Recommendation: keep.
+- The plan named "server tests for the retry"; the retry is tested end to end over a real server
+  in `tests/cli/stack.rs` (`a_move_missed_after_a_merge_is_made_on_the_next_round`) and by
+  `stack::pending`'s unit test, not in `server/tests.rs`. Recommendation: accept, it covers more.
+
+### Where to look
+
+1. `src/server/forge_watch.rs` `forge_answer`: `Found` appends Merged then `stack::on_merge` from
+   `self.board.flows`; `Done` appends `stack::pending` from the same board. Why the two cannot
+   append twice: Merged is new only in the round that appends it, when the board still shows the
+   base unmerged.
+2. `src/stack.rs` `standing_on`, `on_merge`, `pending`: what counts as standing on a branch
+   (same repository, unfinished, unmerged), and that a moved flow no longer does.
+3. `src/cli/commands/retire.rs` `restack`, called from `remove.rs` and `clear.rs` before
+   `store.remove`.
+4. `src/workspace/git.rs` `start_point` (name check, local first, then a forced fetch per remote
+   with a 30 s deadline) and `src/wake.rs` `undelivered` with `src/deliver.rs` (the delivered
+   count now counts BaseMerged beside Message).
+
+Routine, can be skimmed: `into: None` in fixtures, `Merged.into` and `FlowView.merged_into`
+(`#[serde(skip)]`, old logs read as `None`), `Workspace.base` plumbing, `Found.target`, the
+prompt wording, the new-flow dialog's base row with its goldens, docs and CHANGELOG.
+
+### Checks
+
+`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` pass at
+d69f1de; the review changed only CLAUDE.md and this plan since.
