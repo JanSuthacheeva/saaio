@@ -44,15 +44,19 @@ pub struct Found {
     pub created_at: u64,
     /// Whether the forge included fractional seconds in its creation time.
     pub precise_time: bool,
+    /// The branch it merges into; empty when the forge did not say.
+    pub target: String,
 }
 
-/// One pull request in `gh pr list --json url,state,createdAt`.
+/// One pull request in `gh pr list --json url,state,createdAt,baseRefName`.
 #[derive(Debug, Deserialize)]
 struct GhPull {
     url: String,
     state: String,
     #[serde(rename = "createdAt")]
     created_at: String,
+    #[serde(rename = "baseRefName", default)]
+    base_ref_name: String,
 }
 
 /// One merge request in `glab mr list --output json`.
@@ -61,7 +65,42 @@ struct GlabRequest {
     web_url: String,
     state: String,
     created_at: String,
+    #[serde(default)]
+    target_branch: String,
 }
+
+/// What both tools say of a merge request, before it is read into a Found.
+struct Listed {
+    url: String,
+    state: String,
+    created: String,
+    target: String,
+}
+
+impl From<GhPull> for Listed {
+    fn from(pull: GhPull) -> Listed {
+        Listed {
+            url: pull.url,
+            state: pull.state,
+            created: pull.created_at,
+            target: pull.base_ref_name,
+        }
+    }
+}
+
+impl From<GlabRequest> for Listed {
+    fn from(request: GlabRequest) -> Listed {
+        Listed {
+            url: request.web_url,
+            state: request.state,
+            created: request.created_at,
+            target: request.target_branch,
+        }
+    }
+}
+
+/// What gh is asked of each pull request.
+const GH_FIELDS: &str = "url,state,createdAt,baseRefName";
 
 impl Forge {
     /// The forge of the first remote whose web host (an SSH alias resolved by `real_host`) is
@@ -84,20 +123,12 @@ impl Forge {
         }
     }
 
-    /// gh pr list --head <branch> --state all --json url,state,createdAt --limit 10
+    /// gh pr list --head <branch> --state all --json url,state,createdAt,baseRefName --limit 10
     /// glab mr list --source-branch <branch> --all --output json --per-page 10
     pub fn argv(self, branch: &str) -> Vec<String> {
         let args: &[&str] = match self {
             Forge::GitHub => &[
-                "pr",
-                "list",
-                "--head",
-                branch,
-                "--state",
-                "all",
-                "--json",
-                "url,state,createdAt",
-                "--limit",
+                "pr", "list", "--head", branch, "--state", "all", "--json", GH_FIELDS, "--limit",
                 "10",
             ],
             Forge::GitLab => &[
@@ -122,7 +153,7 @@ impl Forge {
     /// number after `--` so it is never read as an option.
     pub fn view_argv(self, url: &str) -> Result<Vec<String>> {
         let args: Vec<String> = match self {
-            Forge::GitHub => ["pr", "view", "--json", "url,state,createdAt", "--", url]
+            Forge::GitHub => ["pr", "view", "--json", GH_FIELDS, "--", url]
                 .map(String::from)
                 .to_vec(),
             Forge::GitLab => {
@@ -144,60 +175,55 @@ impl Forge {
             .collect())
     }
 
-    /// The merge requests in gh's or glab's JSON (gh: url, state OPEN|MERGED|CLOSED, createdAt;
-    /// glab: web_url, state opened|locked|merged|closed, created_at); none for empty output; an
-    /// error for JSON of another shape, an unknown state or an unreadable time.
+    /// The merge requests in gh's or glab's JSON (gh: url, state OPEN|MERGED|CLOSED, createdAt,
+    /// baseRefName; glab: web_url, state opened|locked|merged|closed, created_at, target_branch);
+    /// none for empty output; an error for JSON of another shape, an unknown state or an
+    /// unreadable time.
     pub fn parse(self, json: &str) -> Result<Vec<Found>> {
         if json.trim().is_empty() {
             return Ok(Vec::new());
         }
-        let listed: Vec<(String, String, String)> = match self {
-            Forge::GitHub => serde_json::from_str::<Vec<GhPull>>(json).map(|pulls| {
-                pulls
-                    .into_iter()
-                    .map(|pull| (pull.url, pull.state, pull.created_at))
-                    .collect()
-            }),
-            Forge::GitLab => serde_json::from_str::<Vec<GlabRequest>>(json).map(|requests| {
-                requests
-                    .into_iter()
-                    .map(|request| (request.web_url, request.state, request.created_at))
-                    .collect()
-            }),
+        let listed: Vec<Listed> = match self {
+            Forge::GitHub => serde_json::from_str::<Vec<GhPull>>(json)
+                .map(|pulls| pulls.into_iter().map(Listed::from).collect()),
+            Forge::GitLab => serde_json::from_str::<Vec<GlabRequest>>(json)
+                .map(|requests| requests.into_iter().map(Listed::from).collect()),
         }
         .with_context(|| format!("{} printed no list of merge requests", self.program()))?;
-        listed
-            .into_iter()
-            .map(|(url, state, created)| self.found(url, &state, &created))
-            .collect()
+        listed.into_iter().map(|one| self.found(one)).collect()
     }
 
     /// One request returned by `gh pr view` or `glab mr view`.
     pub fn parse_view(self, json: &str) -> Result<Found> {
-        let (url, state, created) = match self {
-            Forge::GitHub => serde_json::from_str::<GhPull>(json)
-                .map(|pull| (pull.url, pull.state, pull.created_at)),
-            Forge::GitLab => serde_json::from_str::<GlabRequest>(json)
-                .map(|request| (request.web_url, request.state, request.created_at)),
+        let listed = match self {
+            Forge::GitHub => serde_json::from_str::<GhPull>(json).map(Listed::from),
+            Forge::GitLab => serde_json::from_str::<GlabRequest>(json).map(Listed::from),
         }
         .with_context(|| format!("{} printed no merge request", self.program()))?;
-        self.found(url, &state, &created)
+        self.found(listed)
     }
 
-    fn found(self, url: String, state: &str, created: &str) -> Result<Found> {
+    fn found(self, listed: Listed) -> Result<Found> {
+        let Listed {
+            url,
+            state,
+            created,
+            target,
+        } = listed;
         let status = match state.to_lowercase().as_str() {
             "open" | "opened" | "locked" => Status::Open,
             "merged" => Status::Merged,
             "closed" => Status::Closed,
             other => anyhow::bail!("{} named an unknown state {other}", self.program()),
         };
-        let created_at = unix_ms(created)
+        let created_at = unix_ms(&created)
             .with_context(|| format!("{} named an unreadable time {created}", self.program()))?;
         Ok(Found {
             url,
             status,
             created_at,
             precise_time: created.contains('.'),
+            target,
         })
     }
 }
@@ -477,6 +503,7 @@ mod tests {
             status,
             created_at: 0,
             precise_time: false,
+            target: "main".into(),
         }
     }
 
@@ -527,7 +554,7 @@ mod tests {
     fn asks_gh_and_glab_for_every_merge_request_of_the_branch() {
         assert_eq!(
             Forge::GitHub.argv("flow/csv").join(" "),
-            "gh pr list --head flow/csv --state all --json url,state,createdAt --limit 10"
+            "gh pr list --head flow/csv --state all --json url,state,createdAt,baseRefName --limit 10"
         );
         assert_eq!(
             Forge::GitLab.argv("flow/csv").join(" "),
@@ -535,7 +562,7 @@ mod tests {
         );
         assert_eq!(
             Forge::GitHub.view_argv(A).unwrap().join(" "),
-            format!("gh pr view --json url,state,createdAt -- {A}")
+            format!("gh pr view --json url,state,createdAt,baseRefName -- {A}")
         );
         let glab_url = "https://gitlab.com/acme/shop/-/merge_requests/7";
         assert_eq!(
@@ -549,7 +576,7 @@ mod tests {
         );
         assert_eq!(
             Forge::GitHub.view_argv("--web").unwrap().join(" "),
-            "gh pr view --json url,state,createdAt -- --web"
+            "gh pr view --json url,state,createdAt,baseRefName -- --web"
         );
     }
 
@@ -557,19 +584,51 @@ mod tests {
     fn reads_one_request_looked_up_by_url() {
         assert_eq!(
             Forge::GitHub
-                .parse_view(r#"{"url":"https://github.com/acme/shop/pull/7","state":"OPEN","createdAt":"2026-10-18T02:22:32Z"}"#)
+                .parse_view(r#"{"url":"https://github.com/acme/shop/pull/7","state":"OPEN","createdAt":"2026-10-18T02:22:32Z","baseRefName":"main"}"#)
                 .unwrap(),
             found_at(A, Status::Open, "2026-10-18T02:22:32Z")
         );
         assert_eq!(
             Forge::GitLab
-                .parse_view(r#"{"web_url":"https://gitlab.com/acme/shop/-/merge_requests/7","state":"opened","created_at":"2026-10-18T02:22:32Z"}"#)
+                .parse_view(r#"{"web_url":"https://gitlab.com/acme/shop/-/merge_requests/7","state":"opened","created_at":"2026-10-18T02:22:32Z","target_branch":"main"}"#)
                 .unwrap(),
             found_at(
                 "https://gitlab.com/acme/shop/-/merge_requests/7",
                 Status::Open,
                 "2026-10-18T02:22:32Z"
             )
+        );
+    }
+
+    #[test]
+    fn reads_the_branch_a_request_merges_into() {
+        let target = |forge: Forge, json: &str| forge.parse_view(json).unwrap().target;
+
+        assert_eq!(
+            target(
+                Forge::GitHub,
+                r#"{"url":"u","state":"MERGED","createdAt":"2026-10-18T02:22:32Z","baseRefName":"flow/shop-1"}"#
+            ),
+            "flow/shop-1"
+        );
+        assert_eq!(
+            target(
+                Forge::GitLab,
+                r#"{"web_url":"u","state":"merged","created_at":"2026-10-18T02:22:32Z","target_branch":"release"}"#
+            ),
+            "release"
+        );
+        assert_eq!(
+            target(
+                Forge::GitHub,
+                r#"{"url":"u","state":"MERGED","createdAt":"2026-10-18T02:22:32Z"}"#
+            ),
+            "",
+            "an older gh that names no base"
+        );
+        assert_eq!(
+            Forge::GitLab.parse(fixture("glab-merged")).unwrap()[0].target,
+            "main"
         );
     }
 
