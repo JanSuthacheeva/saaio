@@ -292,7 +292,7 @@ pub enum Note { Master(String), BaseMerged { base: String, onto: String } }
 - [x] Add `git::StartPoint`, `StartPoint::rev` and `git::start_point` (check-ref-format, local, fetch from remotes origin first under a deadline) with tests on local, remote-only, invalid and unknown bases
 - [x] Add `Workspace.base` to `EventKind::Workspace`, `view::Workspace` and fold, `add_argv(.., from)` with `--no-track`, `create_worktree(.., from)`, `SAAIO_BASE` in `hook_env`/`HOOK_VARS`, with argv, env, fold and worktree tests
 - [x] Add `--base` to `saaio start` (`pick_base`, refusal before anything is created, conflicts with `--plain`), `base` in `output::start::started` and the status detail, with CLI tests for local, remote-only, refused and `--json`
-- [ ] Add `adapter::worker_prompt(base)` and `wiring(.., base)`, passed by `worker_spec`, with tests for both adapters fresh and resumed
+- [x] Add `adapter::worker_prompt(base)` and `wiring(.., base)`, passed by `worker_spec`, with tests for both adapters fresh and resumed
 
 ### Following the stack
 

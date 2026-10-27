@@ -109,7 +109,7 @@ pub fn worker_spec(
         let wiring = if flow.is_plain() {
             adapter.plain_wiring(&env.flow_exe, folder)
         } else {
-            adapter.wiring(&env.flow_exe, folder)
+            adapter.wiring(&env.flow_exe, folder, space.base.as_deref())
         };
         let at = 1.min(argv.len());
         argv.splice(at..at, wiring);
@@ -369,6 +369,46 @@ mod tests {
         assert_eq!(&resumed.argv[7..], ["--resume", "7f3c"]);
     }
 
+    #[test]
+    fn tells_a_stacked_worker_its_base_fresh_and_resumed() {
+        let agents = crate::config::builtin_agents();
+        let env = LaunchEnv {
+            flow_exe: PathBuf::from("/bin/saaio"),
+            ..LaunchEnv::default()
+        };
+        let stacked = |window: Option<&str>, session: Option<&str>| {
+            let mut flow = codex_worker(window, session);
+            if let Some(space) = &mut flow.workspace {
+                space.base = Some("flow/shop-216".into());
+            }
+            flow
+        };
+        let told = "open your merge request against flow/shop-216";
+
+        for (agent, flows) in [
+            ("claude", [stacked(None, None), stacked(Some(HOSTED), None)]),
+            (
+                "codex",
+                [stacked(None, None), stacked(Some(HOSTED), Some(SESSION))],
+            ),
+        ] {
+            for flow in flows {
+                let spec = worker_spec(&flow, &agents[agent], &env, true).unwrap();
+                assert!(
+                    spec.argv.iter().any(|arg| arg.contains(told)),
+                    "{agent}: {:?}",
+                    spec.argv
+                );
+                assert!(
+                    spec.env
+                        .contains(&("SAAIO_BASE".to_string(), "flow/shop-216".to_string())),
+                    "{agent}: {:?}",
+                    spec.env
+                );
+            }
+        }
+    }
+
     const SESSION: &str = "01a14000-0000-7000-8000-000000000001";
 
     fn codex_worker(window: Option<&str>, session: Option<&str>) -> FlowView {
@@ -441,6 +481,7 @@ mod tests {
         let wiring = crate::adapter::Adapter::Codex.wiring(
             Path::new("/bin/saaio"),
             Some(Path::new("/repo/.saaio/worktrees/shop-217")),
+            None,
         );
         for spec in [&fresh, &resumed] {
             assert_eq!(spec.argv[0], "codex");
