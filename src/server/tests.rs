@@ -1153,10 +1153,13 @@ fn refuses_a_length_of_4_gib_and_still_takes_a_ui() {
     let mut huge = UnixStream::connect(&paths.socket).unwrap();
     huge.set_read_timeout(Some(PATIENCE)).unwrap();
     huge.write_all(&u32::MAX.to_le_bytes()).unwrap();
-    huge.write_all(&[0; 1024]).unwrap();
+    let _ = huge.write_all(&[0; 1024]);
 
     assert!(matches!(recv(&mut huge), ServerMsg::Refused { .. }));
     assert!(closed(&mut huge));
+    let size = Size { cols: 20, rows: 4 };
+    let mut ui = connect(&paths.socket, Role::Attach { size });
+    assert!(matches!(recv(&mut ui), ServerMsg::Welcome { .. }));
     stop(&paths, handle);
 }
 
