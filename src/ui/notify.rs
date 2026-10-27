@@ -1,13 +1,17 @@
 //! `Notifier`: desktop notifications through the terminal, by OSC 9, OSC 777 or its bell
 
 use std::io::Write;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 
 use crate::text;
+use crate::workspace::process;
 
 /// The most characters a notification says; a terminal shows less anyway.
 const TEXT_LIMIT: usize = 200;
+/// How long tmux may take to name its client's terminal.
+const TMUX_LIMIT: Duration = Duration::from_millis(500);
 
 /// The one sequence a terminal turns into a desktop notification; sending several would show it
 /// twice in a terminal that reads both.
@@ -60,12 +64,22 @@ impl Notifier {
         Notifier { sequence, tmux }
     }
 
+    /// Whether saaio runs inside tmux, whose client's terminal decides the sequence.
+    pub fn in_tmux(&self) -> bool {
+        self.tmux
+    }
+
     /// Writes the notification for `text` (control characters dropped, cut to 200 chars) and
-    /// flushes; Err when the terminal cannot be written.
-    pub fn notify(&self, out: &mut impl Write, text: &str) -> Result<()> {
+    /// flushes; Err when the terminal cannot be written. Inside tmux, `client` is the terminal
+    /// tmux names for its client (client_term), else the environment's pick stands.
+    pub fn notify(&self, out: &mut impl Write, text: &str, client: Option<&str>) -> Result<()> {
+        let picked = match client {
+            Some(term) if self.tmux => Sequence::pick(Some(term), None, false, false),
+            _ => self.sequence,
+        };
         let text: String = text::printable(text).chars().take(TEXT_LIMIT).collect();
-        let written = sequence(self.sequence, &text);
-        let written = if self.tmux && self.sequence != Sequence::Bell {
+        let written = sequence(picked, &text);
+        let written = if self.tmux && picked != Sequence::Bell {
             passthrough(&written)
         } else {
             written
@@ -74,6 +88,19 @@ impl Notifier {
             .and_then(|()| out.flush())
             .context("could not write the notification to the terminal")
     }
+}
+
+/// The terminal of the client attached to this tmux session, as tmux names it (`xterm-ghostty`);
+/// None when tmux does not answer within 500 ms. It blocks, so the UI asks on a thread of its own.
+pub fn client_term() -> Option<String> {
+    let argv = ["tmux", "display-message", "-p", "#{client_termname}"].map(String::from);
+    client_of(&argv)
+}
+
+fn client_of(argv: &[String]) -> Option<String> {
+    let name = process::output(argv, TMUX_LIMIT).ok()?;
+    let name = name.trim();
+    (!name.is_empty()).then(|| name.to_string())
 }
 
 fn sequence(sequence: Sequence, text: &str) -> String {
@@ -94,9 +121,17 @@ mod tests {
     use super::*;
 
     fn written(notifier: &Notifier, text: &str) -> String {
+        written_for(notifier, text, None)
+    }
+
+    fn written_for(notifier: &Notifier, text: &str, client: Option<&str>) -> String {
         let mut out = Vec::new();
-        notifier.notify(&mut out, text).unwrap();
+        notifier.notify(&mut out, text, client).unwrap();
         String::from_utf8(out).unwrap()
+    }
+
+    fn sh(script: &str) -> Vec<String> {
+        vec!["sh".into(), "-c".into(), script.into()]
     }
 
     #[test]
@@ -198,6 +233,49 @@ mod tests {
     #[test]
     fn inside_tmux_the_bell_goes_as_it_is() {
         assert_eq!(written(&Notifier::new(Sequence::Bell, true), "hi"), "\x07");
+    }
+
+    #[test]
+    fn inside_tmux_the_attached_clients_terminal_decides() {
+        let stale = Notifier::new(Sequence::Bell, true);
+        let ghostty = Notifier::new(Sequence::Osc9, true);
+
+        assert_eq!(
+            written_for(&stale, "hi", Some("xterm-ghostty")),
+            "\x1bPtmux;\x1b\x1b]9;saaio: hi\x07\x1b\\"
+        );
+        assert_eq!(written_for(&ghostty, "hi", Some("alacritty")), "\x07");
+        assert_eq!(written_for(&stale, "hi", None), "\x07");
+    }
+
+    #[test]
+    fn outside_tmux_a_client_changes_nothing() {
+        assert_eq!(
+            written_for(
+                &Notifier::new(Sequence::Bell, false),
+                "hi",
+                Some("xterm-ghostty")
+            ),
+            "\x07"
+        );
+    }
+
+    #[test]
+    fn the_client_is_what_tmux_names_and_none_when_it_cannot() {
+        assert_eq!(
+            client_of(&sh("printf 'xterm-ghostty\\n'")),
+            Some("xterm-ghostty".to_string())
+        );
+        assert_eq!(client_of(&sh("printf '\\n'")), None);
+        assert_eq!(client_of(&sh("echo no server >&2; exit 1")), None);
+    }
+
+    #[test]
+    fn a_tmux_that_hangs_is_given_up_on() {
+        let started = std::time::Instant::now();
+
+        assert_eq!(client_of(&sh("sleep 10")), None);
+        assert!(started.elapsed() < Duration::from_secs(5));
     }
 
     #[test]

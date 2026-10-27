@@ -256,7 +256,9 @@ was already waiting. `notify = false` under `[ui]` in config.toml turns them off
 ([configuration.md](configuration.md#ui)).
 
 saaio writes the one escape sequence your terminal turns into a notification, picked from
-`TERM`, `TERM_PROGRAM`, `VTE_VERSION` and `ALACRITTY_WINDOW_ID`:
+`TERM` and `TERM_PROGRAM` first, then `VTE_VERSION` and `ALACRITTY_WINDOW_ID`. Inside tmux it asks
+tmux which terminal is attached (`#{client_termname}`), since the variables inside tmux are those of
+the terminal that started the tmux server:
 
 | Terminal | Sent |
 | --- | --- |
