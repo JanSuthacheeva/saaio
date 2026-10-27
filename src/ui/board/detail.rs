@@ -508,7 +508,10 @@ mod tests {
         let url = || "https://github.com/acme/shop/pull/42".to_string();
 
         let open = header(EventKind::MergeRequest { url: url() });
-        let merged = header(EventKind::Merged { url: url() });
+        let merged = header(EventKind::Merged {
+            url: url(),
+            into: None,
+        });
 
         assert!(
             open.contains(" · auto · claude · flow/shop-221 · "),

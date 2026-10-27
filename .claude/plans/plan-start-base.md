@@ -334,7 +334,7 @@ Decided by the master: word the prompt for any base; close both restack holes.
 - `saaio remove` and `saaio clear` append `stack::on_merge` for a merged base before forgetting it.
 
 - [x] Word `adapter::worker_prompt` for any base ("Your branch stands on <base>: ..."), with its tests
-- [ ] Record `Merged.into` and `FlowView.merged_into`, add `stack::pending`, append it at `Answer::Done`, with fold, stack and server tests for the retry
+- [x] Record `Merged.into` and `FlowView.merged_into`, add `stack::pending`, append it at `Answer::Done`, with fold, stack and server tests for the retry
 - [ ] Append the base-merged events in `saaio remove` and `saaio clear` of a merged base, with CLI tests; docs and CHANGELOG
 
 ## Review

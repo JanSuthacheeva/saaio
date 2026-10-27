@@ -49,6 +49,17 @@ pub fn on_merge(flows: &[FlowView], merged: &FlowView, onto: &str) -> Vec<(Strin
         .collect()
 }
 
+/// on_merge for every merged flow whose forge named where it merged: the BaseMerged events still
+/// missing, empty once each flow on a merged branch moved.
+pub fn pending(flows: &[FlowView]) -> Vec<(String, EventKind)> {
+    flows
+        .iter()
+        .filter(|flow| flow.merged)
+        .filter_map(|merged| Some(on_merge(flows, merged, merged.merged_into.as_deref()?)))
+        .flatten()
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,7 +96,10 @@ mod tests {
                 "e",
                 at(
                     on("e", Some("flow/a")),
-                    vec![EventKind::Merged { url: "u".into() }],
+                    vec![EventKind::Merged {
+                        url: "u".into(),
+                        into: None,
+                    }],
                 ),
                 2,
             ),
@@ -100,6 +114,37 @@ mod tests {
 
         assert_eq!(names, ["b"]);
         assert!(standing_on(&flows, &flows[6]).is_empty(), "no workspace");
+    }
+
+    #[test]
+    fn finds_the_moves_still_missing_after_a_merge() {
+        let merged = |into: Option<&str>| EventKind::Merged {
+            url: "u".into(),
+            into: into.map(String::from),
+        };
+        let moved = EventKind::BaseMerged {
+            base: "flow/b".into(),
+            onto: "main".into(),
+        };
+        let flows = vec![
+            flow("a", at(on("a", None), vec![merged(Some("main"))]), 2),
+            flow("b", at(on("b", Some("flow/a")), vec![merged(None)]), 2),
+            flow("c", at(on("c", Some("flow/a")), vec![]), 2),
+            flow("d", at(on("d", Some("flow/b")), vec![]), 2),
+            flow("e", at(on("e", Some("flow/a")), vec![moved]), 2),
+        ];
+
+        assert_eq!(
+            pending(&flows),
+            [(
+                "c".to_string(),
+                EventKind::BaseMerged {
+                    base: "flow/a".into(),
+                    onto: "main".into()
+                }
+            )],
+            "b merged itself, d's base named no branch it merged into, e moved already"
+        );
     }
 
     #[test]

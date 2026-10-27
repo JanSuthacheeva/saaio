@@ -180,6 +180,7 @@ impl Folding {
             review: None,
             merge_request: None,
             merged: false,
+            merged_into: None,
             decisions: Vec::new(),
             steps: Vec::new(),
             timeline: vec![entry(at, "started".to_string(), Tone::Neutral)],
@@ -322,9 +323,10 @@ impl Folding {
                 self.open_merge_request(url, at);
                 self.note(at, "MR opened".to_string(), Tone::Success);
             }
-            EventKind::Merged { url } => {
+            EventKind::Merged { url, into } => {
                 self.open_merge_request(url, at);
                 self.view.merged = true;
+                self.view.merged_into.clone_from(into);
                 self.note(
                     at,
                     format!("{} merged", text::merge_request(url)),

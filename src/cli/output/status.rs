@@ -713,7 +713,14 @@ mod tests {
             vec![EventKind::MergeRequest { url: url() }],
             MIN,
         );
-        let merged = flow("shop-221", vec![EventKind::Merged { url: url() }], MIN);
+        let merged = flow(
+            "shop-221",
+            vec![EventKind::Merged {
+                url: url(),
+                into: None,
+            }],
+            MIN,
+        );
 
         let open = detail(&open, MIN, false, None, Prefix::default())
             .text()

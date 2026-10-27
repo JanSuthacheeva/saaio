@@ -81,9 +81,11 @@ pub enum EventKind {
     MergeRequest {
         url: String,
     },
-    /// The merge request at url was merged.
+    /// The merge request at url was merged, into the branch `into` when the forge said.
     Merged {
         url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        into: Option<String>,
     },
     /// The merge request at url was closed without a merge.
     MergeRequestClosed {
@@ -240,7 +242,7 @@ impl EventKind {
             | EventKind::Blocked { reason: text }
             | EventKind::Decision { text }
             | EventKind::MergeRequest { url: text }
-            | EventKind::Merged { url: text }
+            | EventKind::Merged { url: text, .. }
             | EventKind::MergeRequestClosed { url: text }
             | EventKind::Services {
                 reason: Some(text), ..
@@ -475,6 +477,7 @@ mod tests {
             },
             EventKind::Merged {
                 url: "https://github.com/acme/shop/pull/42".into(),
+                into: Some("main".into()),
             },
             EventKind::MergeRequestClosed {
                 url: "https://github.com/acme/shop/pull/41".into(),

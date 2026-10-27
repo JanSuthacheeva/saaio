@@ -159,7 +159,8 @@ impl Server {
     }
 
     /// Folds the flow again from its log and appends forge::news, if any, and once it is Merged
-    /// stack::on_merge's events to the flows on its branch; logs a failure once.
+    /// stack::on_merge's events to the flows on its branch; at the end of a round, the moves still
+    /// pending; logs a failure once.
     pub(super) fn forge_answer(&mut self, answer: Answer) {
         let now = (self.clock)();
         match answer {
@@ -188,7 +189,12 @@ impl Server {
                     server_log::write(now, &format!("could not ask about merge requests: {error}"));
                 }
             }
-            Answer::Done => self.forges.done(),
+            // Once a round, from the board refolded since the last: the moves a failed append
+            // or an earlier server missed.
+            Answer::Done => {
+                self.forges.done();
+                self.restack(stack::pending(&self.board.flows), now);
+            }
         }
     }
 
@@ -275,7 +281,10 @@ mod tests {
             },
         ];
         if merged {
-            kinds.push(EventKind::Merged { url: "u".into() });
+            kinds.push(EventKind::Merged {
+                url: "u".into(),
+                into: None,
+            });
         }
         let events: Vec<LogEvent> = kinds
             .into_iter()

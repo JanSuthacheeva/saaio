@@ -327,8 +327,12 @@ pub fn news(flow: &FlowView, found: Option<&Found>) -> Option<EventKind> {
         Some(Found {
             url,
             status: Status::Merged,
+            target,
             ..
-        }) => (!flow.merged).then(|| EventKind::Merged { url: url.clone() }),
+        }) => (!flow.merged).then(|| EventKind::Merged {
+            url: url.clone(),
+            into: (!target.is_empty()).then(|| target.clone()),
+        }),
         Some(Found {
             status: Status::Closed,
             ..
@@ -404,7 +408,10 @@ mod tests {
     }
 
     fn merged(url: &str) -> EventKind {
-        EventKind::Merged { url: url.into() }
+        EventKind::Merged {
+            url: url.into(),
+            into: Some("main".into()),
+        }
     }
 
     fn closed(url: &str) -> EventKind {

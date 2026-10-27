@@ -34,6 +34,9 @@ pub struct FlowView {
     pub merge_request: Option<String>,
     /// The merge request was merged.
     pub merged: bool,
+    /// The branch it merged into, when the forge said; for the flows stacked on this one.
+    #[serde(skip)]
+    pub merged_into: Option<String>,
     pub decisions: Vec<String>,
     pub steps: Vec<Step>,
     pub timeline: Vec<TimelineEntry>,
@@ -328,6 +331,7 @@ mod tests {
             review: None,
             merge_request: None,
             merged: false,
+            merged_into: None,
             decisions: vec![],
             steps: vec![Step {
                 phase: Phase::of("plan"),

@@ -287,3 +287,48 @@ fn a_refused_removal_of_a_base_names_the_flows_that_stand_on_it() {
         stdout(&refused)
     );
 }
+
+#[test]
+fn a_move_missed_after_a_merge_is_made_on_the_next_round() {
+    let home = TempDir::new().unwrap();
+    let repo = home.path().join("shop");
+    fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q"]);
+    git(
+        &repo,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/shop.git",
+        ],
+    );
+    let base = new_flow(home.path(), "export");
+    let stacked = new_flow(home.path(), "button");
+    workspace_in(home.path(), &base, &repo, "export", None);
+    fs::OpenOptions::new()
+        .append(true)
+        .open(home.path().join(format!("flows/{base}.jsonl")))
+        .unwrap()
+        .write_all(
+            br#"{"v":1,"at":3,"kind":"merged","url":"https://github.com/acme/shop/pull/7","into":"main"}
+"#,
+        )
+        .unwrap();
+    workspace_in(home.path(), &stacked, &repo, "button", Some("flow/export"));
+    let _server = server_with_gh(home.path(), "#!/bin/sh\necho '[]'\n");
+    let log = home.path().join(format!("flows/{stacked}.jsonl"));
+
+    wait_until("no base-merged event", || {
+        fs::read_to_string(&log).unwrap().contains("base-merged")
+    });
+
+    let detail = stdout(&saaio(home.path(), &["status", "button"]));
+    assert!(detail.contains("base: main\n"), "{detail}");
+    assert!(saaio(home.path(), &["--stop"]).status.success());
+    let moves = fs::read_to_string(&log)
+        .unwrap()
+        .matches("base-merged")
+        .count();
+    assert_eq!(moves, 1, "moved once");
+}
