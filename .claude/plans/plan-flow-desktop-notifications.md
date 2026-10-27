@@ -50,7 +50,7 @@ pub struct Notifier {
 
 impl Notifier {
     pub fn new(sequence: Sequence, tmux: bool) -> Notifier;
-    /// Writes the notification for `text` (control characters dropped, cut to 200 chars) and
+    /// Writes the notification for `text` (on one line, control characters dropped, cut to 200 chars) and
     /// flushes; Err when the terminal cannot be written.
     pub fn notify(&self, out: &mut impl Write, text: &str) -> Result<()>;
 }
@@ -201,7 +201,7 @@ impl Env {
 ## Test seams
 
 - notify.rs: `Sequence::pick` per environment; exact bytes of each sequence; tmux doubles every
-  ESC and leaves BEL alone; control characters dropped; long text cut; writes to a `Vec<u8>`.
+  ESC and leaves BEL alone; lines joined by a space, control characters dropped; long text cut; writes to a `Vec<u8>`.
 - input.rs: focus in/out -> `Routed::Focus`; bytes forwarded unchanged to a pane with 1004, not
   to one without, not under a dialog; a focus event after the prefix keeps the prefix pending.
 - app/tests/notifications.rs (new subject): first board silent; Idle -> Waiting out of view

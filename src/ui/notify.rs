@@ -102,9 +102,9 @@ impl Notifier {
         self.tmux
     }
 
-    /// Writes the notification for `text` (control characters dropped, cut to 200 chars) and
-    /// flushes; Err when the terminal cannot be written. Inside tmux, `client` is the terminal
-    /// attached to it (`tmux_client()`), else the environment's pick stands.
+    /// Writes the notification for `text` (on one line, control characters dropped, cut to 200
+    /// chars) and flushes; Err when the terminal cannot be written. Inside tmux, `client` is the
+    /// terminal attached to it (`tmux_client()`), else the environment's pick stands.
     pub fn notify(
         &self,
         out: &mut impl Write,
@@ -115,7 +115,8 @@ impl Notifier {
             Some(client) if self.tmux => Sequence::for_client(client),
             _ => self.sequence,
         };
-        let text: String = text::printable(text).chars().take(TEXT_LIMIT).collect();
+        let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let text: String = text::printable(&line).chars().take(TEXT_LIMIT).collect();
         let written = sequence(picked, &text);
         let written = if self.tmux && picked != Sequence::Bell {
             passthrough(&written)
@@ -363,7 +364,18 @@ mod tests {
                 &Notifier::new(Sequence::Osc9, false),
                 "a\x07b\x1b]c\nd\u{9c}e"
             ),
-            "\x1b]9;saaio: ab]cde\x07"
+            "\x1b]9;saaio: ab]c de\x07"
+        );
+    }
+
+    #[test]
+    fn lines_read_as_one_line() {
+        assert_eq!(
+            written(
+                &Notifier::new(Sequence::Osc9, false),
+                "shop-230 is blocked: agent exited (exit status: 1)\nError:\tno key\n"
+            ),
+            "\x1b]9;saaio: shop-230 is blocked: agent exited (exit status: 1) Error: no key\x07"
         );
     }
 
