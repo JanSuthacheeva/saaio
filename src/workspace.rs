@@ -9,7 +9,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::launch::worktree::{WORKTREES_DIR, add_argv, remove_argv};
 use crate::view::Workspace;
-use git::common_dir;
+use git::{StartPoint, common_dir};
 use process::run;
 
 #[cfg(test)]
@@ -18,11 +18,17 @@ pub mod git;
 pub mod hooks;
 pub mod process;
 
-/// Creates the worktree and branch; adds .saaio/worktrees/ to .git/info/exclude once. Refuses a
-/// repo whose .saaio or .saaio/worktrees is a link, which would place the worktree anywhere.
-pub fn create_worktree(repo: &Path, workspace: &Workspace) -> Result<()> {
+/// Creates the worktree and branch, from `from` or what the repo has checked out; adds
+/// .saaio/worktrees/ to .git/info/exclude once. Refuses a repo whose .saaio or .saaio/worktrees is
+/// a link, which would place the worktree anywhere.
+pub fn create_worktree(
+    repo: &Path,
+    workspace: &Workspace,
+    from: Option<&StartPoint>,
+) -> Result<()> {
     refuse_links(repo)?;
-    run(&add_argv(repo, workspace))?;
+    let from = from.map(StartPoint::rev);
+    run(&add_argv(repo, workspace, from.as_deref()))?;
     exclude_worktrees(repo)
 }
 
@@ -82,17 +88,27 @@ mod tests {
 
     use super::*;
     use crate::launch::worktree::workspace_for;
-    use crate::workspace::fixtures::repo;
+    use crate::workspace::fixtures::{git, repo};
+
+    fn git_out(dir: &Path, args: &[&str]) -> std::process::Output {
+        Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .unwrap()
+    }
 
     #[test]
     fn creates_a_worktree_on_its_branch_and_keeps_it_out_of_git_status() {
         let (_dir, repo) = repo();
         let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
 
-        create_worktree(&repo, &workspace).unwrap();
+        create_worktree(&repo, &workspace, None).unwrap();
         create_worktree(
             &repo,
             &workspace_for(&repo, "shop-230", "flow/shop-230".into(), 2, "claude"),
+            None,
         )
         .unwrap();
 
@@ -106,7 +122,53 @@ mod tests {
         assert_eq!(String::from_utf8(status.stdout).unwrap(), "");
         let exclude = fs::read_to_string(repo.join(".git/info/exclude")).unwrap();
         assert_eq!(exclude.matches(".saaio/worktrees/").count(), 1);
-        assert!(create_worktree(&repo, &workspace).is_err());
+        assert!(create_worktree(&repo, &workspace, None).is_err());
+    }
+
+    #[test]
+    fn starts_a_worktree_from_a_remote_base_without_an_upstream() {
+        let (_dir, repo) = repo();
+        let scratch = TempDir::new().unwrap();
+        let bare = scratch.path().join("origin.git");
+        git(&repo, &["checkout", "-q", "-b", "stack"]);
+        git(
+            &repo,
+            &[
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "stack",
+            ],
+        );
+        let stack = git_out(&repo, &["rev-parse", "stack"]).stdout;
+        let bare_path = bare.display().to_string();
+        git(&repo, &["clone", "-q", "--bare", ".", &bare_path]);
+        git(&repo, &["checkout", "-q", "main"]);
+        git(&repo, &["branch", "-D", "stack"]);
+        git(&repo, &["remote", "add", "origin", &bare_path]);
+        let from = git::start_point(&repo, "stack").unwrap();
+        let workspace = Workspace {
+            base: Some("stack".into()),
+            ..workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude")
+        };
+
+        create_worktree(&repo, &workspace, Some(&from)).unwrap();
+
+        let head = git_out(Path::new(&workspace.path), &["rev-parse", "HEAD"]).stdout;
+        assert_eq!(head, stack);
+        let upstream = git_out(
+            &repo,
+            &["rev-parse", "--abbrev-ref", "flow/shop-217@{upstream}"],
+        );
+        assert!(
+            !upstream.status.success(),
+            "the flow's branch tracks its base"
+        );
     }
 
     #[test]
@@ -114,8 +176,8 @@ mod tests {
         let (_dir, repo) = repo();
         let clean = workspace_for(&repo, "clean", "flow/clean".into(), 1, "claude");
         let dirty = workspace_for(&repo, "dirty", "flow/dirty".into(), 2, "claude");
-        create_worktree(&repo, &clean).unwrap();
-        create_worktree(&repo, &dirty).unwrap();
+        create_worktree(&repo, &clean, None).unwrap();
+        create_worktree(&repo, &dirty, None).unwrap();
         fs::write(Path::new(&dirty.path).join("work.txt"), "unsaved").unwrap();
 
         assert!(remove_worktree(&repo, &clean, false).unwrap());
@@ -131,7 +193,7 @@ mod tests {
         std::os::unix::fs::symlink(elsewhere.path(), repo.join(".saaio")).unwrap();
         let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
 
-        let error = create_worktree(&repo, &workspace).unwrap_err();
+        let error = create_worktree(&repo, &workspace, None).unwrap_err();
 
         assert_eq!(
             format!("{error:#}"),
@@ -148,7 +210,7 @@ mod tests {
         std::os::unix::fs::symlink(elsewhere.path(), repo.join(WORKTREES_DIR)).unwrap();
         let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
 
-        let error = create_worktree(&repo, &workspace).unwrap_err();
+        let error = create_worktree(&repo, &workspace, None).unwrap_err();
 
         assert_eq!(
             format!("{error:#}"),

@@ -146,7 +146,6 @@ pub enum StartPoint {
 
 impl StartPoint {
     /// What git worktree add starts from: `x` or `refs/remotes/origin/x`.
-    #[cfg_attr(not(test), expect(dead_code, reason = "saaio start --base uses it next"))]
     pub fn rev(&self) -> String {
         match self {
             Self::Local(branch) => branch.clone(),
@@ -160,7 +159,10 @@ const FETCH_LIMIT: Duration = Duration::from_secs(30);
 
 /// The start point for `base`: the local branch, else the first remote (origin first) that has
 /// it, fetched with a deadline. Err for a name git refuses as a branch, or one no remote has.
-#[cfg_attr(not(test), expect(dead_code, reason = "saaio start --base uses it next"))]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "saaio start --base uses it next")
+)]
 pub fn start_point(repo: &Path, base: &str) -> Result<StartPoint> {
     if base.starts_with('-') || git(repo, &["check-ref-format", "--branch", base]).is_err() {
         bail!("{base} is no branch name");
@@ -382,7 +384,7 @@ mod tests {
         let (_dir, repo) = repo();
         fs::create_dir_all(repo.join("src/deep")).unwrap();
         let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
-        create_worktree(&repo, &workspace).unwrap();
+        create_worktree(&repo, &workspace, None).unwrap();
         let outside = TempDir::new().unwrap();
         let git_dir = repo.join(".git");
 
@@ -398,7 +400,7 @@ mod tests {
         let sub = repo.join("src/deep");
         fs::create_dir_all(&sub).unwrap();
         let worker = workspace_for(&repo, "csv", "flow/csv".into(), 1, "claude");
-        create_worktree(&repo, &worker).unwrap();
+        create_worktree(&repo, &worker, None).unwrap();
 
         assert_eq!(current_branch(&repo).as_deref(), Some("main"));
         assert_eq!(current_branch(&sub).as_deref(), Some("main"));
@@ -413,7 +415,7 @@ mod tests {
     fn reads_uncommitted_work_through_the_git_dir_the_repository_registered() {
         let (dir, repo) = repo();
         let space = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
-        create_worktree(&repo, &space).unwrap();
+        create_worktree(&repo, &space, None).unwrap();
         let path = Path::new(&space.path);
         let marker = dir.path().join("marker");
         let monitor = dir.path().join("monitor");
@@ -448,7 +450,7 @@ mod tests {
         let (_dir, repo) = repo();
         git(&repo, &["config", "worktree.useRelativePaths", "true"]);
         let space = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
-        create_worktree(&repo, &space).unwrap();
+        create_worktree(&repo, &space, None).unwrap();
 
         assert!(!has_uncommitted_work(&repo, &space).unwrap());
         fs::write(Path::new(&space.path).join("work.txt"), "unsaved").unwrap();

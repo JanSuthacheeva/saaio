@@ -303,6 +303,7 @@ mod tests {
                     slot: Some(2),
                     window: window.map(String::from),
                     agent: "claude".into(),
+                    base: None,
                 },
             ),
         ];
@@ -476,6 +477,7 @@ mod tests {
                     slot: None,
                     window: window.map(String::from),
                     agent: "claude".into(),
+                    base: None,
                 },
             ),
         ];

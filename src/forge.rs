@@ -359,6 +359,7 @@ mod tests {
             slot: None,
             window: None,
             agent: "claude".into(),
+            base: None,
         };
         let events: Vec<Event> = [started, workspace]
             .into_iter()

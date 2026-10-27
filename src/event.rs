@@ -114,6 +114,9 @@ pub enum EventKind {
         slot: Option<u8>,
         window: Option<String>,
         agent: String,
+        /// The branch the worktree started from (`saaio start --base`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        base: Option<String>,
     },
     /// Where the flow's services stand: saaio server ran or is running the repo's .saaio/pause
     /// or .saaio/resume.
@@ -477,6 +480,15 @@ mod tests {
                 slot: None,
                 window: None,
                 agent: "claude".into(),
+                base: None,
+            },
+            EventKind::Workspace {
+                path: "/repo/.saaio/worktrees/shop-222".into(),
+                branch: Some("flow/shop-222".into()),
+                slot: Some(3),
+                window: None,
+                agent: "claude".into(),
+                base: Some("flow/shop-221".into()),
             },
             EventKind::Services {
                 status: ServiceStatus::Paused,
@@ -795,7 +807,9 @@ mod tests {
         let line = r#"{"v":1,"at":7,"kind":"workspace","path":"/repo/.saaio/worktrees/shop-221","branch":"flow/shop-221","slot":2,"window":"saaio-ui","agent":"claude"}"#;
 
         let Some(Event {
-            kind: EventKind::Workspace { branch, slot, .. },
+            kind: EventKind::Workspace {
+                branch, slot, base, ..
+            },
             ..
         }) = Event::from_line(line)
         else {
@@ -803,6 +817,8 @@ mod tests {
         };
         assert_eq!(branch.as_deref(), Some("flow/shop-221"));
         assert_eq!(slot, Some(2));
+        assert_eq!(base, None);
+        assert_eq!(Event::from_line(line).unwrap().to_line(), line);
     }
 
     #[test]

@@ -99,7 +99,7 @@ pub fn run(
     rollback.slot = Some((slot, claim));
     let base = branching::branch_name(branching.as_ref(), kind.as_deref(), request, &name);
     let space = worktree::workspace_for(&repo, &name, free_branch(&repo, &base), slot, agent_name);
-    workspace::create_worktree(&repo, &space)?;
+    workspace::create_worktree(&repo, &space, None)?;
     rollback.disarm();
 
     let setup = match hooks::run(

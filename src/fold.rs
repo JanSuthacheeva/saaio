@@ -353,6 +353,7 @@ impl Folding {
                 slot,
                 window,
                 agent,
+                base,
             } => {
                 self.view.workspace = Some(Workspace {
                     path: path.clone(),
@@ -360,6 +361,7 @@ impl Folding {
                     slot: *slot,
                     window: window.clone(),
                     agent: agent.clone(),
+                    base: base.clone(),
                 });
             }
             EventKind::Message { text } => {

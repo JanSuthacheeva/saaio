@@ -139,6 +139,7 @@ mod tests {
                 slot: Some(slot),
                 window: None,
                 agent: "claude".into(),
+                base: None,
             },
         ));
         if finished {

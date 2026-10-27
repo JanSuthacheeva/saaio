@@ -1124,6 +1124,7 @@ fn workspace(slot: u8, window: Option<&str>) -> EventKind {
         slot: Some(slot),
         window: window.map(String::from),
         agent: "claude".into(),
+        base: None,
     }
 }
 
@@ -1147,6 +1148,21 @@ fn keeps_the_last_workspace_without_changing_the_state() {
     assert_eq!(flow.changed_at, 0);
     assert_eq!(texts(&flow), vec!["started"]);
     assert_eq!(view(&[started(0)], 1).workspace, None);
+}
+
+#[test]
+fn keeps_the_base_a_stacked_flow_started_from() {
+    let mut stacked = workspace(1, None);
+    if let EventKind::Workspace { base, .. } = &mut stacked {
+        *base = Some("flow/shop-220".into());
+    }
+
+    let flow = view(&[started(0), at(1, stacked)], 2);
+
+    assert_eq!(
+        flow.workspace.and_then(|ws| ws.base).as_deref(),
+        Some("flow/shop-220")
+    );
 }
 
 #[test]

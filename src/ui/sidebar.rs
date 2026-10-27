@@ -262,6 +262,7 @@ mod tests {
                     slot: Some(1),
                     window: None,
                     agent: "claude".into(),
+                    base: None,
                 },
             ),
         ];

@@ -71,7 +71,7 @@ pub struct Session {
 }
 
 /// Where a started flow's worker runs: its worktree, branch, port slot, window (saaio-ui once
-/// saaio ui opened it; a tmux window id from before) and agent.
+/// saaio ui opened it; a tmux window id from before), agent and base.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
@@ -80,6 +80,9 @@ pub struct Workspace {
     pub slot: Option<u8>,
     pub window: Option<String>,
     pub agent: String,
+    /// The branch the worktree started from and its merge request targets; None for one that
+    /// started from what the repository had checked out.
+    pub base: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -167,6 +170,7 @@ impl From<Workspace> for EventKind {
             slot: space.slot,
             window: space.window,
             agent: space.agent,
+            base: space.base,
         }
     }
 }
@@ -343,6 +347,7 @@ mod tests {
                 slot: Some(1),
                 window: Some("@14".into()),
                 agent: "claude".into(),
+                base: None,
             }),
             answer: None,
             session: None,
