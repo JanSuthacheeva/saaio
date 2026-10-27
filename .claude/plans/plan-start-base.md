@@ -297,7 +297,7 @@ pub enum Note { Master(String), BaseMerged { base: String, onto: String } }
 ### Following the stack
 
 - [x] Add `Found.target` (gh `baseRefName` in list and view argv, glab `target_branch`) with fixture tests
-- [ ] Add `EventKind::BaseMerged`, its fold (base moves, timeline note) and `src/stack.rs` (`standing_on`, `on_merge`) with pure tests
+- [x] Add `EventKind::BaseMerged`, its fold (base moves, timeline note) and `src/stack.rs` (`standing_on`, `on_merge`) with pure tests
 - [ ] Append BaseMerged in `forge_answer` through `restack`, with a `server/tests.rs` test
 - [ ] Turn worker news into `wake::Note` (`undelivered`, `for_worker`, `WorkerNews::News(Vec<Note>)`) through wait, hook and server/news, with tests for order and the delivered count
 - [ ] Name stacked flows in `saaio remove` output and its unmerged refusal, with output and CLI tests

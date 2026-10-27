@@ -364,6 +364,16 @@ impl Folding {
                     base: base.clone(),
                 });
             }
+            EventKind::BaseMerged { base, onto } => {
+                if let Some(space) = &mut self.view.workspace {
+                    space.base = Some(onto.clone());
+                }
+                self.note(
+                    at,
+                    format!("base {base} merged, now on {onto}"),
+                    Tone::Attention,
+                );
+            }
             EventKind::Message { text } => {
                 self.note(at, format!("master: {text}"), Tone::Neutral);
             }

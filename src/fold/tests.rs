@@ -1151,6 +1151,32 @@ fn keeps_the_last_workspace_without_changing_the_state() {
 }
 
 #[test]
+fn moves_a_stacked_flow_onto_where_its_base_merged() {
+    let mut stacked = workspace(1, None);
+    if let EventKind::Workspace { base, .. } = &mut stacked {
+        *base = Some("flow/shop-220".into());
+    }
+    let merged = EventKind::BaseMerged {
+        base: "flow/shop-220".into(),
+        onto: "main".into(),
+    };
+
+    let flow = view(&[started(0), at(1, stacked), at(2, merged)], 3);
+
+    assert_eq!(
+        flow.workspace.as_ref().and_then(|ws| ws.base.as_deref()),
+        Some("main")
+    );
+    assert_eq!(
+        flow.timeline
+            .last()
+            .map(|entry| (entry.text.as_str(), entry.tone)),
+        Some(("base flow/shop-220 merged, now on main", Tone::Attention))
+    );
+    assert_eq!(flow.state, State::Working);
+}
+
+#[test]
 fn keeps_the_base_a_stacked_flow_started_from() {
     let mut stacked = workspace(1, None);
     if let EventKind::Workspace { base, .. } = &mut stacked {

@@ -118,6 +118,11 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         base: Option<String>,
     },
+    /// The branch this flow stands on (its workspace's base) merged; it now stands on `onto`.
+    BaseMerged {
+        base: String,
+        onto: String,
+    },
     /// Where the flow's services stand: saaio server ran or is running the repo's .saaio/pause
     /// or .saaio/resume.
     Services {
@@ -240,6 +245,10 @@ impl EventKind {
             | EventKind::Services {
                 reason: Some(text), ..
             } => clean(text, TEXT_LIMIT),
+            EventKind::BaseMerged { base, onto } => {
+                clean(base, TEXT_LIMIT);
+                clean(onto, TEXT_LIMIT);
+            }
             EventKind::Message { text }
             | EventKind::Typed { text }
             | EventKind::Answer { text } => clean(text, LONG_TEXT_LIMIT),
@@ -489,6 +498,10 @@ mod tests {
                 window: None,
                 agent: "claude".into(),
                 base: Some("flow/shop-221".into()),
+            },
+            EventKind::BaseMerged {
+                base: "flow/shop-221".into(),
+                onto: "main".into(),
             },
             EventKind::Services {
                 status: ServiceStatus::Paused,
