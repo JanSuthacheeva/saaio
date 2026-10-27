@@ -56,6 +56,7 @@ use crate::workspace::git;
 use app::{App, Effect, Job, JobError};
 use clipboard::Clipboard;
 use input::{Router, Target};
+use notify::Notifier;
 use outer::Outer;
 use peek::PeekCache;
 use theme::Theme;
@@ -103,6 +104,9 @@ pub struct UiEnv {
     pub log: PathBuf,
     /// Where selected text goes.
     pub clipboard: Clipboard,
+    /// How desktop notifications reach the terminal.
+    #[expect(dead_code, reason = "used once ui::run raises Effect::Notify")]
+    pub notifier: Notifier,
     /// update.json in the shared folder; None without one.
     pub update: Option<UpdateCheck>,
     /// Where the latest release is read.

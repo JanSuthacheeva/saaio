@@ -45,6 +45,7 @@ fn attach(store: &Store, env: &Env, log: PathBuf, clock: fn() -> u64) -> anyhow:
         config_file: env.config_file(),
         log,
         clipboard: env.clipboard(),
+        notifier: env.notifier(),
         update: env
             .registry()
             .map(|registry| UpdateCheck::in_folder(registry.root())),
