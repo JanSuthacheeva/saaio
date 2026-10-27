@@ -39,7 +39,13 @@ impl StartPoint {
 /// The start point for `base`: the local branch, else the first remote (origin first) that has
 /// it, fetched with a deadline. Err for a name git refuses as a branch, or one no remote has.
 pub fn start_point(repo: &Path, base: &str) -> Result<StartPoint>;
+
+/// Whether git takes `name` as a branch name as it is (no leading `-`, no `@{`, check-ref-format).
+pub fn is_branch_name(repo: &Path, name: &str) -> bool;
 ```
+
+`pick_base` uses `is_branch_name` to pick the help: for an invalid name "Name a branch, e.g.
+--base flow/shop-216".
 
 Steps: `git check-ref-format --branch <base>`; `refs/heads/<base>` exists -> Local; else for each
 remote (origin first, then `git remote` order) `git fetch --quiet <remote>
@@ -285,7 +291,7 @@ pub enum Note { Master(String), BaseMerged { base: String, onto: String } }
 
 - [x] Add `git::StartPoint`, `StartPoint::rev` and `git::start_point` (check-ref-format, local, fetch from remotes origin first under a deadline) with tests on local, remote-only, invalid and unknown bases
 - [x] Add `Workspace.base` to `EventKind::Workspace`, `view::Workspace` and fold, `add_argv(.., from)` with `--no-track`, `create_worktree(.., from)`, `SAAIO_BASE` in `hook_env`/`HOOK_VARS`, with argv, env, fold and worktree tests
-- [ ] Add `--base` to `saaio start` (`pick_base`, refusal before anything is created, conflicts with `--plain`), `base` in `output::start::started` and the status detail, with CLI tests for local, remote-only, refused and `--json`
+- [x] Add `--base` to `saaio start` (`pick_base`, refusal before anything is created, conflicts with `--plain`), `base` in `output::start::started` and the status detail, with CLI tests for local, remote-only, refused and `--json`
 - [ ] Add `adapter::worker_prompt(base)` and `wiring(.., base)`, passed by `worker_spec`, with tests for both adapters fresh and resumed
 
 ### Following the stack

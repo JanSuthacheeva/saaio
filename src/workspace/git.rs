@@ -157,14 +157,18 @@ impl StartPoint {
 /// How long one remote may take to fetch a base.
 const FETCH_LIMIT: Duration = Duration::from_secs(30);
 
+/// Whether git takes `name` as a branch name as it is (git check-ref-format --branch), not as
+/// `@{-1}` or another name it expands.
+pub fn is_branch_name(repo: &Path, name: &str) -> bool {
+    !name.starts_with('-')
+        && !name.contains("@{")
+        && git(repo, &["check-ref-format", "--branch", name]).is_ok()
+}
+
 /// The start point for `base`: the local branch, else the first remote (origin first) that has
 /// it, fetched with a deadline. Err for a name git refuses as a branch, or one no remote has.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "saaio start --base uses it next")
-)]
 pub fn start_point(repo: &Path, base: &str) -> Result<StartPoint> {
-    if base.starts_with('-') || git(repo, &["check-ref-format", "--branch", base]).is_err() {
+    if !is_branch_name(repo, base) {
         bail!("{base} is no branch name");
     }
     if branch_exists(repo, base) {
@@ -346,7 +350,7 @@ mod tests {
         let scratch = TempDir::new().unwrap();
         remote_with_stack(scratch.path(), &repo, "origin");
 
-        for bad in ["a..b", "-x", "HEAD", "with space"] {
+        for bad in ["a..b", "-x", "HEAD", "with space", "@{-1}"] {
             let error = start_point(&repo, bad).unwrap_err();
             assert_eq!(error.to_string(), format!("{bad} is no branch name"));
         }

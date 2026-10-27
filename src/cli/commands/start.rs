@@ -21,8 +21,9 @@ use crate::slots::{self, Claim, Slots};
 use crate::store::Store;
 use crate::trust::Trust;
 use crate::view::{FlowView, Workspace};
+use crate::workspace;
+use crate::workspace::git::{self, StartPoint};
 use crate::workspace::hooks::{self, Hook};
-use crate::workspace::{self, git};
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -43,6 +44,9 @@ pub struct Args {
     /// Branch type from the repo's .saaio/config.toml [default: its first]
     #[arg(long = "type")]
     kind: Option<String>,
+    /// Branch the worktree starts from and the merge request targets [default: what the repo has checked out]
+    #[arg(long, value_name = "BRANCH", conflicts_with = "plain")]
+    base: Option<String>,
 }
 
 /// Starts a worker: a flow, a worktree, the setup hook, and the agent saaio ui opens; with --plain,
@@ -76,6 +80,7 @@ pub fn run(
     refuse_untrusted(&trust, &repo, config, agent_name)?;
     let branching = Branching::load(&repo)?;
     let kind = pick_kind(branching.as_ref(), args.kind.as_deref())?;
+    let from = pick_base(&repo, args.base.as_deref())?;
     let (flows, _) = views(store, now);
     let name = name::choose(args.name.as_deref(), request, &live_names(&flows));
     let first = Event::new(
@@ -97,9 +102,12 @@ pub fn run(
     };
     let slot = claim_slot(registry, &claim, &flows, now)?;
     rollback.slot = Some((slot, claim));
-    let base = branching::branch_name(branching.as_ref(), kind.as_deref(), request, &name);
-    let space = worktree::workspace_for(&repo, &name, free_branch(&repo, &base), slot, agent_name);
-    workspace::create_worktree(&repo, &space, None)?;
+    let branch = branching::branch_name(branching.as_ref(), kind.as_deref(), request, &name);
+    let space = Workspace {
+        base: args.base.clone(),
+        ..worktree::workspace_for(&repo, &name, free_branch(&repo, &branch), slot, agent_name)
+    };
+    workspace::create_worktree(&repo, &space, from.as_ref())?;
     rollback.disarm();
 
     let setup = match hooks::run(
@@ -194,6 +202,25 @@ fn pick_kind(rules: Option<&Branching>, asked: Option<&str>) -> Result<Option<St
     })
 }
 
+/// The start point --base names, before anything is created; the failure says how to make it
+/// exist.
+fn pick_base(repo: &Path, asked: Option<&str>) -> Result<Option<StartPoint>, Failure> {
+    let Some(base) = asked else {
+        return Ok(None);
+    };
+    git::start_point(repo, base).map(Some).map_err(|error| {
+        let help = if git::is_branch_name(repo, base) {
+            vec![
+                "Run `git branch -a` to see the branches".to_string(),
+                "Push it first when it lives in another clone".to_string(),
+            ]
+        } else {
+            vec!["Name a branch, e.g. --base flow/shop-216".to_string()]
+        };
+        Failure::error(format!("{error:#}"), help)
+    })
+}
+
 /// The lowest slot no unfinished flow in any project holds, claimed for this start.
 fn claim_slot(
     registry: &Registry,
@@ -235,14 +262,14 @@ fn claim_is_live(claim: &Claim, now: u64) -> bool {
         .is_some_and(|flow| !flow.is_finished())
 }
 
-/// `base`, or base-2, base-3, ... when the repo has that branch already.
+/// `wanted`, or wanted-2, wanted-3, ... when the repo has that branch already.
 #[expect(
     clippy::maybe_infinite_iter,
     reason = "find over (2..) ends: the branches taken are finite"
 )]
-fn free_branch(repo: &Path, base: &str) -> String {
-    std::iter::once(base.to_string())
-        .chain((2..).map(|number| format!("{base}-{number}")))
+fn free_branch(repo: &Path, wanted: &str) -> String {
+    std::iter::once(wanted.to_string())
+        .chain((2..).map(|number| format!("{wanted}-{number}")))
         .find(|branch| !git::branch_exists(repo, branch))
         .expect("an unused suffix always exists")
 }
