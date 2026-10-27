@@ -1,8 +1,9 @@
-//! `saaio clear`: forgets finished flows with their panes, worktrees and merged branches
+//! `saaio clear`: forgets finished flows with their panes, worktrees and merged branches, the flows
+//! on a merged one moved
 
 use std::path::Path;
 
-use super::retire::{Uncommitted, Unmerged, close_pane, drop_branch, retire_worktree};
+use super::retire::{Uncommitted, Unmerged, close_pane, drop_branch, restack, retire_worktree};
 use super::views;
 use crate::cli::output::remove::{self, Retired, Teardown};
 use crate::cli::output::{Document, Failure};
@@ -27,6 +28,7 @@ pub fn run(store: &Store, socket: &Path, trust: &Trust, now: u64) -> Result<Docu
                 drop_branch(flow, Unmerged::Keep);
             }
         }
+        restack(store, &flows, flow, now)?;
         store.remove(&flow.id).map_err(|error| {
             Failure::from(error.context(format!("could not clear {}", flow.name)))
         })?;

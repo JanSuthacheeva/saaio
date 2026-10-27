@@ -1,4 +1,5 @@
-//! What remove and clear share: closing the pane, the teardown hook, the worktree and branch
+//! What remove and clear share: closing the pane, the teardown hook, the worktree and branch, the
+//! flows on a merged base moved before it is forgotten
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -6,7 +7,10 @@ use std::time::Duration;
 use crate::cli::output::Failure;
 use crate::cli::output::remove::{self, BranchFate, Retired, Teardown};
 use crate::client::{self, Closing};
+use crate::event::Event;
 use crate::launch::worktree;
+use crate::stack;
+use crate::store::Store;
 use crate::trust::Trust;
 use crate::view::FlowView;
 use crate::workspace::hooks::{self, Hook};
@@ -60,6 +64,23 @@ pub fn refuse_unmerged_commits(flow: &FlowView, stacked: &[&str]) -> Result<(), 
         Ok(Some(count)) if count > 0 => Err(remove::unmerged(&flow.name, branch, count, stacked)),
         _ => Ok(()),
     }
+}
+
+/// Moves the flows standing on `flow`, once it merged and the forge said where, onto that branch,
+/// before its log goes: the server cannot see the merge of a forgotten flow.
+pub fn restack(
+    store: &Store,
+    flows: &[FlowView],
+    flow: &FlowView,
+    now: u64,
+) -> Result<(), Failure> {
+    let Some(onto) = flow.merged_into.as_deref().filter(|_| flow.merged) else {
+        return Ok(());
+    };
+    for (id, kind) in stack::on_merge(flows, flow, onto) {
+        store.append(&id, &Event::new(now, kind))?;
+    }
+    Ok(())
 }
 
 /// Ends the flow's session in saaio ui before its worktree goes.

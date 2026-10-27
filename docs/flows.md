@@ -98,10 +98,14 @@ main <- flow/shop-217 (shop-217) <- flow/shop-218 (shop-218, --base flow/shop-21
   like a message from the master, with what to do: rebase its own commits onto the new base
   (`git rebase --onto origin/main flow/shop-217`), point its merge request there and push with
   `--force-with-lease`. saaio runs no git in the worktree itself.
+- A move that could not be written is made on the next check, 2 minutes later. `saaio remove` and
+  `saaio clear` of a base whose merge saaio saw make the moves themselves, since the server no
+  longer sees a removed flow.
 - Only a base that is a flow of the same store and repository is followed. A stack on a branch no
   flow runs keeps its base when that merges.
 - `saaio remove` of a base names the flows that stand on it and removes it all the same
-  ([cli.md](cli.md#saaio-remove)).
+  ([cli.md](cli.md#saaio-remove)). A base removed before saaio saw its merge leaves them where
+  they are.
 
 ## Guided and auto
 

@@ -12,8 +12,8 @@ All notable changes to saaio are listed here. The format follows
   another branch, such as the branch of the flow before it, so each merge request of a stack runs
   as a flow of its own. The worker is told its merge request targets that branch; `saaio status`
   and `--json` (`workspace.base`) show it. When the base merges, the flows on it move onto the
-  branch it merged into and their workers are told to rebase. `saaio remove` of a base names the
-  flows that stand on it.
+  branch it merged into and their workers are told to rebase, also when the base is removed or
+  cleared after its merge. `saaio remove` of a base names the flows that stand on it.
 
 ### Fixed
 

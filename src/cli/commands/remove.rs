@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::retire::{
     Uncommitted, Unmerged, close_pane, drop_branch, refuse_uncommitted_work,
-    refuse_unmerged_commits, retire_worktree,
+    refuse_unmerged_commits, restack, retire_worktree,
 };
 use super::{no_flow, views};
 use crate::cli::output::remove::{self, BranchFate, Retired};
@@ -62,6 +62,7 @@ pub fn run(
         Retired::Kept(_) => BranchFate::Kept,
         Retired::NoWorktree | Retired::Removed => drop_branch(flow, unmerged),
     };
+    restack(store, &flows, flow, now)?;
     store
         .remove(&flow.id)
         .map_err(|error| Failure::from(error.context(format!("could not remove {}", flow.name))))?;

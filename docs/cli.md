@@ -466,7 +466,9 @@ help[2]: "Merge or push flow/shop-221, then run `saaio remove shop-221` again",R
 
 A flow's removal is never refused for the flows that stand on it. They keep their commits: a base
 whose commits all live on in a stacked branch is not unmerged, so its branch is deleted. Its
-refusal for unmerged commits names them too.
+refusal for unmerged commits names them too. When saaio saw the base merge, `saaio remove` and
+`saaio clear` move the flows on it onto the branch it merged into first
+([flows.md](flows.md#stacked-flows)).
 
 | Option | Effect |
 | --- | --- |

@@ -332,3 +332,53 @@ fn a_move_missed_after_a_merge_is_made_on_the_next_round() {
         .count();
     assert_eq!(moves, 1, "moved once");
 }
+
+/// The id `saaio status <name>` prints.
+fn id_of(lab: &Lab, name: &str) -> String {
+    id_in(&stdout(&lab.run(&["status", name])))
+}
+
+/// Flow `name`'s merge request merged into `into`, as the forge watch records it.
+fn merged_into(lab: &Lab, name: &str, into: &str) {
+    let line = format!(
+        r#"{{"v":1,"at":3,"kind":"merged","url":"https://github.com/acme/shop/pull/1","into":"{into}"}}"#
+    );
+    fs::OpenOptions::new()
+        .append(true)
+        .open(lab.home.join(format!("flows/{}.jsonl", id_of(lab, name))))
+        .unwrap()
+        .write_all(format!("{line}\n").as_bytes())
+        .unwrap();
+}
+
+#[test]
+fn removing_or_clearing_a_merged_base_moves_the_flows_on_it() {
+    let lab = stack_of_two();
+    merged_into(&lab, "shop-1", "main");
+
+    let removed = lab.run(&["remove", "shop-1"]);
+
+    assert!(removed.status.success(), "{}", stdout(&removed));
+    let detail = stdout(&lab.run(&["status", "shop-2"]));
+    assert!(detail.contains("base: main\n"), "{detail}");
+    assert!(
+        detail.contains("base flow/shop-1 merged, now on main"),
+        "{detail}"
+    );
+
+    assert!(
+        lab.start(&["SHOP-3 export tests", "--base", "flow/shop-2"])
+            .status
+            .success()
+    );
+    merged_into(&lab, "shop-2", "main");
+    assert!(
+        lab.run(&["report", "--flow", "shop-2", "ended"])
+            .status
+            .success()
+    );
+    let cleared = lab.run(&["clear"]);
+    assert!(cleared.status.success(), "{}", stdout(&cleared));
+    let detail = stdout(&lab.run(&["status", "shop-3"]));
+    assert!(detail.contains("base: main\n"), "{detail}");
+}
