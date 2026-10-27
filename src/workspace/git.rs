@@ -342,9 +342,11 @@ mod tests {
         let amend = Command::new("git")
             .arg("-C")
             .arg(&bare)
+            .args(["-c", "user.email=t@t", "-c", "user.name=t"])
             .args(["commit-tree", "-m", "rewritten", "stack^{tree}"])
             .output()
             .unwrap();
+        assert!(amend.status.success(), "{amend:?}");
         let rewritten = String::from_utf8(amend.stdout).unwrap();
         git(&bare, &["update-ref", "refs/heads/stack", rewritten.trim()]);
 
