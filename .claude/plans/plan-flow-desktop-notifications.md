@@ -230,7 +230,7 @@ impl Env {
 - [x] Add `Env` fields `term`, `term_program`, `vte`, `alacritty`, `tmux`, `Env::notifier`, read them in `main.rs::env()`, and pass `UiEnv.notifier` from `commands/ui.rs`
 - [x] Add `[ui] notify` to `UiConfig` and its commented line to `examples/config.toml`, with the config tests passing
 - [x] Add `Routed::Focus`, `Target.focus` and `focus_event` to the Router, with tests: focus to `Routed::Focus`, forwarded unchanged only to a 1004 pane outside a dialog, prefix kept pending
-- [ ] Keep focus reporting on in `Outer` (`captured` sets `focus: true`), with its test updated
+- [x] Keep focus reporting on in `Outer` (`captured` sets `focus: true`), with its test updated
 - [ ] Add `Effect::Notify`, `App.notify`, `App.terminal_focused`, `on_input(Routed::Focus)` and `app/notifications.rs` (`set_notify`, `worker_notifications`, `master_notification`, `out_of_sight`, `calls_for_you`, `worker_text`, `master_text`), wired into `on_server(Board)` and `on_master_turn`, with `app/tests/notifications.rs`
 - [ ] Wire `ui::run`: `Target.focus`, `Effect::Notify` -> `ui::notify`, `reload_config` -> `set_notify`
 - [ ] Docs: `docs/ui.md` Notifications section (terminal table, tmux `allow-passthrough`, Alacritty `[bell] command` example, Terminal.app), `docs/configuration.md` `notify` rows, `docs/cli.md` environment rows (TERM, TERM_PROGRAM, VTE_VERSION, ALACRITTY_WINDOW_ID, TMUX), README not-yet line, ROADMAP row dropped, CHANGELOG Unreleased Added, CLAUDE.md (`notify.rs`, `app/notifications.rs`, plan list)
