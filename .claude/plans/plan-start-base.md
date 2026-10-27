@@ -49,7 +49,7 @@ pub fn is_branch_name(repo: &Path, name: &str) -> bool;
 
 Steps: `git check-ref-format --branch <base>`; `refs/heads/<base>` exists -> Local; else for each
 remote (origin first, then `git remote` order) `git fetch --quiet <remote>
-refs/heads/<base>:refs/remotes/<remote>/<base>` through `process::run` with a deadline; the first
++refs/heads/<base>:refs/remotes/<remote>/<base>` (forced, as a remote-tracking ref is, so a rewritten base still fetches) through `process::run` with a deadline; the first
 that succeeds -> Remote. A fetch past its deadline counts as not on that remote.
 
 ### src/launch/worktree.rs (modified)

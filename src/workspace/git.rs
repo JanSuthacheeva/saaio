@@ -178,7 +178,7 @@ pub fn start_point(repo: &Path, base: &str) -> Result<StartPoint> {
     let mut remotes: Vec<&str> = listed.lines().map(str::trim).collect();
     remotes.sort_by_key(|remote| *remote != "origin");
     for remote in remotes {
-        let refspec = format!("refs/heads/{base}:refs/remotes/{remote}/{base}");
+        let refspec = format!("+refs/heads/{base}:refs/remotes/{remote}/{base}");
         let mut command = Command::new("git");
         command
             .arg("-C")
@@ -321,6 +321,37 @@ mod tests {
         assert_eq!(point.rev(), "refs/remotes/origin/stack");
         git(&repo, &["show-ref", "--verify", "--quiet", &point.rev()]);
         assert!(!branch_exists(&repo, "stack"));
+    }
+
+    #[test]
+    fn a_remote_base_rewritten_since_the_last_fetch_is_fetched_again() {
+        let (_dir, repo) = repo();
+        let scratch = TempDir::new().unwrap();
+        remote_with_stack(scratch.path(), &repo, "origin");
+        let rev = |dir: &Path, name: &str| {
+            let out = Command::new("git")
+                .arg("-C")
+                .arg(dir)
+                .args(["rev-parse", name])
+                .output()
+                .unwrap();
+            String::from_utf8(out.stdout).unwrap()
+        };
+        let first = start_point(&repo, "stack").unwrap();
+        let bare = scratch.path().join("origin.git");
+        let amend = Command::new("git")
+            .arg("-C")
+            .arg(&bare)
+            .args(["commit-tree", "-m", "rewritten", "stack^{tree}"])
+            .output()
+            .unwrap();
+        let rewritten = String::from_utf8(amend.stdout).unwrap();
+        git(&bare, &["update-ref", "refs/heads/stack", rewritten.trim()]);
+
+        let again = start_point(&repo, "stack").unwrap();
+
+        assert_eq!(again, first);
+        assert_eq!(rev(&repo, &again.rev()), rev(&bare, "stack"));
     }
 
     #[test]
