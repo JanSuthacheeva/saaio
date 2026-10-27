@@ -124,6 +124,8 @@ pub enum Effect {
     Copy(String),
     /// Trust the repository this folder is in: the person said yes in saaio ui.
     Trust(PathBuf),
+    /// Raise a desktop notification that says this.
+    Notify(String),
     Quit(String),
 }
 

@@ -13,10 +13,13 @@ use crate::ui::screen::Screen;
 
 impl App {
     pub fn on_input(&mut self, routed: Routed) -> Vec<Effect> {
-        if !matches!(routed, Routed::Pane(_) | Routed::Pointer(_)) {
+        if !matches!(
+            routed,
+            Routed::Pane(_) | Routed::Pointer(_) | Routed::Focus(_)
+        ) {
             self.notice = None;
         }
-        if !matches!(routed, Routed::Pointer(_)) {
+        if !matches!(routed, Routed::Pointer(_) | Routed::Focus(_)) {
             self.selection = None;
         }
         match routed {
@@ -28,7 +31,10 @@ impl App {
             Routed::Pane(_) => vec![],
             Routed::View(keys) => self.on_keys(keys),
             Routed::Command(command) => self.on_command(command),
-            Routed::Focus(_) => vec![],
+            Routed::Focus(focused) => {
+                self.terminal_focused = focused;
+                vec![]
+            }
         }
     }
 

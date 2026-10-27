@@ -11,10 +11,6 @@ pub mod input;
 pub mod layout;
 pub mod markdown;
 pub mod newflow;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "used once ui::run raises Effect::Notify")
-)]
 pub mod notify;
 pub mod outer;
 pub mod peek;
@@ -105,7 +101,6 @@ pub struct UiEnv {
     /// Where selected text goes.
     pub clipboard: Clipboard,
     /// How desktop notifications reach the terminal.
-    #[expect(dead_code, reason = "used once ui::run raises Effect::Notify")]
     pub notifier: Notifier,
     /// update.json in the shared folder; None without one.
     pub update: Option<UpdateCheck>,
@@ -236,6 +231,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                 }
                 Effect::Copy(text) => copy(&env.clipboard, &env.log, &text, clock),
                 Effect::Trust(folder) => trust(env.trust.as_ref(), &folder, &env.log, clock),
+                Effect::Notify(text) => notify(&env.notifier, &env.log, &text, clock),
                 Effect::Quit(message) => return Ok(message),
             }
         }
@@ -254,6 +250,13 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
 fn copy(clipboard: &Clipboard, log_file: &Path, text: &str, clock: fn() -> u64) {
     if let Err(error) = clipboard.copy(&mut io::stdout(), text) {
         log(log_file, clock, &format!("ui: copy failed: {error:#}"));
+    }
+}
+
+/// Raises a desktop notification; a failure goes to server.log, since nothing on screen asked.
+fn notify(notifier: &Notifier, log_file: &Path, text: &str, clock: fn() -> u64) {
+    if let Err(error) = notifier.notify(&mut io::stdout(), text) {
+        log(log_file, clock, &format!("ui: notify failed: {error:#}"));
     }
 }
 
@@ -317,6 +320,7 @@ fn reload_config(
         Some(Ok(config)) => {
             router.set_prefix(config.ui.prefix);
             app.set_prefix(config.ui.prefix);
+            app.set_notify(config.ui.notify);
             app.set_agents(
                 config
                     .worker_agents()

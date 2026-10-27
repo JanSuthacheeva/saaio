@@ -188,7 +188,9 @@ impl Env {
 
 1. `App::on_server(ServerMsg::Master { turn, .. }) -> App::on_master_turn(turn): Vec<Effect>`
 2. `App::on_master_turn -> App::master_notification(was, state): Vec<Effect>` - when `notify`,
-   `calls_for_you` and `out_of_sight(&PaneKey::Master)`.
+   `calls_for_you` and `out_of_sight(&PaneKey::Master)`, and not on the first `ServerMsg::Master`
+   after attach (`master.cwd` still unset), which only says where the master stood: no
+   notification on startup, as for the first board. (Added in the build.)
 3. Then steps 4-5 above.
 
 ### config.toml changes
@@ -231,7 +233,7 @@ impl Env {
 - [x] Add `[ui] notify` to `UiConfig` and its commented line to `examples/config.toml`, with the config tests passing
 - [x] Add `Routed::Focus`, `Target.focus` and `focus_event` to the Router, with tests: focus to `Routed::Focus`, forwarded unchanged only to a 1004 pane outside a dialog, prefix kept pending
 - [x] Keep focus reporting on in `Outer` (`captured` sets `focus: true`), with its test updated
-- [ ] Add `Effect::Notify`, `App.notify`, `App.terminal_focused`, `on_input(Routed::Focus)` and `app/notifications.rs` (`set_notify`, `worker_notifications`, `master_notification`, `out_of_sight`, `calls_for_you`, `worker_text`, `master_text`), wired into `on_server(Board)` and `on_master_turn`, with `app/tests/notifications.rs`
-- [ ] Wire `ui::run`: `Target.focus`, `Effect::Notify` -> `ui::notify`, `reload_config` -> `set_notify`
+- [x] Add `Effect::Notify`, `App.notify`, `App.terminal_focused`, `on_input(Routed::Focus)` and `app/notifications.rs` (`set_notify`, `worker_notifications`, `master_notification`, `out_of_sight`, `calls_for_you`, `worker_text`, `master_text`), wired into `on_server(Board)` and `on_master_turn`, with `app/tests/notifications.rs`
+- [x] Wire `ui::run`: `Target.focus`, `Effect::Notify` -> `ui::notify`, `reload_config` -> `set_notify`
 - [ ] Docs: `docs/ui.md` Notifications section (terminal table, tmux `allow-passthrough`, Alacritty `[bell] command` example, Terminal.app), `docs/configuration.md` `notify` rows, `docs/cli.md` environment rows (TERM, TERM_PROGRAM, VTE_VERSION, ALACRITTY_WINDOW_ID, TMUX), README not-yet line, ROADMAP row dropped, CHANGELOG Unreleased Added, CLAUDE.md (`notify.rs`, `app/notifications.rs`, plan list)
 - [ ] End-to-end: scratch store, UI in a PTY with captured output; report a flow waiting, then blocked, then focus out on the flow in view; assert one sequence per transition, none at startup, none with `notify = false`; then the same in a real terminal window to see the notification
