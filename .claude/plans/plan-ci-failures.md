@@ -41,3 +41,24 @@ does what its name says: a UI connects after it and is welcomed.
 - [x] Every `assert!(x.is_empty())` and `assert!(!x.is_empty())` clippy 1.99.1 flags rewritten as
       it suggests; `cargo clippy --all-targets -- -D warnings` clean on 1.95.0 and 1.99.1, tests
       green.
+
+## Review
+
+Test-only branch: no production code, stored data or public surface changes.
+
+- **Fixed** - nothing; no finding held up.
+- **Open** - none. Note: `assert!(x.is_empty(), "msg")` sites with a message (`forge.rs`,
+  `deliver.rs:181`, `server/tests.rs:2095`, `tests/cli/start.rs:337`, `tests/cli/hooks.rs`,
+  `tests/cli/identity.rs`, `ui/screen.rs`) are left as they are: clippy 1.99.1 does not flag
+  them, and the plan scopes the change to the flagged sites.
+- **Where to look** - `src/server/tests.rs` `refuses_a_length_of_4_gib_and_still_takes_a_ui`:
+  the trailing write is now `let _ =` (an EPIPE on Linux after the server's `shutdown(SHUT_RD)`
+  is the refusal, not a failure), Refused and the close are still asserted, and a UI is welcomed
+  afterwards. The other protocol tests write whole frames or already ignore a failed write
+  (lines 1067, 1236-1238); the one remaining `unwrap` on a write (line 1353) sends one whole
+  7-byte frame in a single write before the server acts, so it does not race. The
+  `assert!(..is_empty())` -> `assert_eq!(.., [] as [T; 0])` / `b""` / `""` rewrites across the
+  other 17 files are mechanical and can be skimmed; `tests/cli/hooks.rs` and `status.rs` compare
+  through the `stdout`/`stderr` helpers, which do not trim, so the meaning is unchanged.
+- **Checks** - `cargo test`, `cargo clippy --all-targets -- -D warnings` (1.95.0 and 1.99.1) and
+  `cargo fmt --check` passed at 1fbbeb4; the review changed only this plan.
