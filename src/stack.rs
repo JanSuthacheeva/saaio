@@ -26,10 +26,6 @@ pub fn standing_on<'a>(flows: &'a [FlowView], base: &FlowView) -> Vec<&'a FlowVi
 
 /// For each flow standing_on `merged`: its id and BaseMerged { base: merged's branch, onto }; none
 /// when the forge named no branch it merged into.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "forge_watch appends these next")
-)]
 pub fn on_merge(flows: &[FlowView], merged: &FlowView, onto: &str) -> Vec<(String, EventKind)> {
     let Some(base) = merged
         .workspace

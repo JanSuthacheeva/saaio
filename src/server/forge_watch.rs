@@ -7,10 +7,11 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 
 use super::{Event, Server, spawn_named};
-use crate::event::Event as LogEvent;
+use crate::event::{Event as LogEvent, EventKind};
 use crate::fold;
 use crate::forge::{self, Ask, Forge, Found};
 use crate::server_log;
+use crate::stack;
 use crate::view::FlowView;
 use crate::workspace;
 
@@ -157,7 +158,8 @@ impl Server {
         }
     }
 
-    /// Folds the flow again from its log and appends forge::news, if any; logs a failure once.
+    /// Folds the flow again from its log and appends forge::news, if any, and once it is Merged
+    /// stack::on_merge's events to the flows on its branch; logs a failure once.
     pub(super) fn forge_answer(&mut self, answer: Answer) {
         let now = (self.clock)();
         match answer {
@@ -165,12 +167,20 @@ impl Server {
                 let Ok(events) = self.store.events(&id) else {
                     return;
                 };
-                let news = fold::fold(&id, &events, None, now)
-                    .and_then(|flow| forge::news(&flow, found.as_ref()));
-                if let Some(kind) = news
-                    && let Err(error) = self.store.append(&id, &LogEvent::new(now, kind))
-                {
+                let Some(flow) = fold::fold(&id, &events, None, now) else {
+                    return;
+                };
+                let Some(kind) = forge::news(&flow, found.as_ref()) else {
+                    return;
+                };
+                let merged = matches!(kind, EventKind::Merged { .. });
+                if let Err(error) = self.store.append(&id, &LogEvent::new(now, kind)) {
                     server_log::write(now, &format!("{error:#}"));
+                    return;
+                }
+                if merged && let Some(found) = found {
+                    let events = stack::on_merge(&self.board.flows, &flow, &found.target);
+                    self.restack(events, now);
                 }
             }
             Answer::Failed(error) => {
@@ -181,12 +191,21 @@ impl Server {
             Answer::Done => self.forges.done(),
         }
     }
+
+    /// Appends each (id, kind); logs a failure to server.log and goes on.
+    fn restack(&self, events: Vec<(String, EventKind)>, now: u64) {
+        for (id, kind) in events {
+            if let Err(error) = self.store.append(&id, &LogEvent::new(now, kind)) {
+                server_log::write(now, &format!("{error:#}"));
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event::{EventKind, Mode};
+    use crate::event::Mode;
 
     #[test]
     fn looks_up_a_shown_open_request_beyond_ten_closed_results() {

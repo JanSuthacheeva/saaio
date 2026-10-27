@@ -266,6 +266,28 @@ impl Drop for Terminal {
     }
 }
 
+/// `saaio server` with cat for the worker and the master and `gh` from `script` first on PATH;
+/// its stderr in home/server.log.
+pub fn server_with_gh(home: &Path, script: &str) -> Running {
+    let config = cat_agents(home);
+    let bin = home.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    executable(&bin.join("gh"), script);
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let log = fs::File::create(home.join("server.log")).unwrap();
+    let server = saaio_command(home)
+        .arg("server")
+        .stdout(Stdio::null())
+        .stderr(log)
+        .env("SAAIO_CONFIG", &config)
+        .env("PATH", path)
+        .spawn()
+        .unwrap();
+    let server = Running(server);
+    wait_for_socket(&home.join("server.sock"));
+    server
+}
+
 /// A temp git repo with one commit and a state folder.
 pub struct Lab {
     pub dir: TempDir,

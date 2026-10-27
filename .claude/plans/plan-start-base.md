@@ -121,8 +121,12 @@ reads `target_branch`. gh fixtures re-recorded or extended with `baseRefName`.
 /// ...and, when the news is Merged, stack::on_merge's events appended to the flows on its branch.
 pub(super) fn forge_answer(&mut self, answer: Answer);
 /// Appends each (id, kind); logs a failure to server.log and goes on.
-fn restack(&mut self, events: Vec<(String, EventKind)>, now: u64);
+fn restack(&self, events: Vec<(String, EventKind)>, now: u64);
 ```
+
+Restacks only after the Merged event was appended, so a failed append retried next round never
+restacks twice. Tested end to end in `tests/cli/stack.rs` (a fake gh, as `tests/cli/store.rs`
+does; `server_with_gh` moved to `support.rs`) rather than in `server/tests.rs`.
 
 ### src/wake.rs, src/deliver.rs (modified)
 
@@ -298,7 +302,7 @@ pub enum Note { Master(String), BaseMerged { base: String, onto: String } }
 
 - [x] Add `Found.target` (gh `baseRefName` in list and view argv, glab `target_branch`) with fixture tests
 - [x] Add `EventKind::BaseMerged`, its fold (base moves, timeline note) and `src/stack.rs` (`standing_on`, `on_merge`) with pure tests
-- [ ] Append BaseMerged in `forge_answer` through `restack`, with a `server/tests.rs` test
+- [x] Append BaseMerged in `forge_answer` through `restack`, with a `server/tests.rs` test
 - [ ] Turn worker news into `wake::Note` (`undelivered`, `for_worker`, `WorkerNews::News(Vec<Note>)`) through wait, hook and server/news, with tests for order and the delivered count
 - [ ] Name stacked flows in `saaio remove` output and its unmerged refusal, with output and CLI tests
 

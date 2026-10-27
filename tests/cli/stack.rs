@@ -1,7 +1,11 @@
 //! Tests of stacked flows: `saaio start --base`, and what a base's status and removal say
 
+use std::fs;
+use std::io::Write;
 use std::path::Path;
 use std::process::Command;
+
+use tempfile::TempDir;
 
 use crate::support::*;
 
@@ -127,4 +131,76 @@ fn start_refuses_a_base_nowhere_or_no_branch_before_making_anything() {
         !stdout(&lab.run(&[])).contains("shop-4"),
         "nothing was created"
     );
+}
+
+/// Flow `name`'s workspace in `repo` on flow/<name>, standing on `base`, appended to its log.
+fn workspace_in(home: &Path, id: &str, repo: &Path, name: &str, base: Option<&str>) {
+    let worktree = repo.join(".saaio/worktrees").join(name);
+    fs::create_dir_all(&worktree).unwrap();
+    let base = base.map_or(String::new(), |base| format!(r#","base":"{base}""#));
+    let line = format!(
+        r#"{{"v":1,"at":2,"kind":"workspace","path":"{}","branch":"flow/{name}","slot":null,"window":null,"agent":"claude"{base}}}"#,
+        worktree.display()
+    );
+    fs::OpenOptions::new()
+        .append(true)
+        .open(home.join(format!("flows/{id}.jsonl")))
+        .unwrap()
+        .write_all(format!("{line}\n").as_bytes())
+        .unwrap();
+}
+
+#[test]
+fn a_merged_base_moves_the_flows_on_it_onto_where_it_merged() {
+    let home = TempDir::new().unwrap();
+    let repo = home.path().join("shop");
+    fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q"]);
+    git(
+        &repo,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/shop.git",
+        ],
+    );
+    let base = new_flow(home.path(), "export");
+    let stacked = new_flow(home.path(), "button");
+    let other = new_flow(home.path(), "pdf");
+    workspace_in(home.path(), &base, &repo, "export", Some("release"));
+    workspace_in(home.path(), &stacked, &repo, "button", Some("flow/export"));
+    workspace_in(home.path(), &other, &repo, "pdf", None);
+    let _server = server_with_gh(
+        home.path(),
+        r#"#!/bin/sh
+case "$*" in
+  *'--head flow/export '*) echo '[{"baseRefName":"release","createdAt":"2099-01-01T00:00:00Z","state":"MERGED","url":"https://github.com/acme/shop/pull/7"}]' ;;
+  *) echo '[]' ;;
+esac
+"#,
+    );
+    let log = home.path().join(format!("flows/{stacked}.jsonl"));
+
+    let export = home.path().join(format!("flows/{base}.jsonl"));
+    wait_until("no merged event", || {
+        fs::read_to_string(&export)
+            .unwrap()
+            .contains(r#""kind":"merged""#)
+    });
+    wait_until("no base-merged event", || {
+        fs::read_to_string(&log).unwrap().contains("base-merged")
+    });
+
+    let detail = stdout(&saaio(home.path(), &["status", "button"]));
+    assert!(detail.contains("base: release\n"), "{detail}");
+    assert!(
+        detail.contains("base flow/export merged, now on release"),
+        "{detail}"
+    );
+    let pdf = fs::read_to_string(home.path().join(format!("flows/{other}.jsonl"))).unwrap();
+    assert!(!pdf.contains("base-merged"), "{pdf}");
+    let merged = fs::read_to_string(home.path().join(format!("flows/{base}.jsonl"))).unwrap();
+    assert!(!merged.contains("base-merged"), "{merged}");
+    assert!(saaio(home.path(), &["--stop"]).status.success());
 }
