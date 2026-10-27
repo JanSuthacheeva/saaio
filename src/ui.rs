@@ -52,7 +52,7 @@ use crate::workspace::git;
 use app::{App, Effect, Job, JobError};
 use clipboard::Clipboard;
 use input::{Router, Target};
-use notify::Notifier;
+use notify::{Notifier, TmuxClient};
 use outer::Outer;
 use peek::PeekCache;
 use theme::Theme;
@@ -71,8 +71,8 @@ enum Event {
     Ran(Job, Result<String, JobError>),
     /// The latest release a look found, None when it found none.
     Latest(Option<Tag>),
-    /// A notification to write, with the terminal tmux named for its client.
-    Notify(String, Option<String>),
+    /// A notification to write, with the terminal attached to tmux.
+    Notify(String, Option<TmuxClient>),
 }
 
 /// How often spinners turn.
@@ -197,7 +197,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                     vec![]
                 }
                 Event::Notify(text, client) => {
-                    notify(&env.notifier, &env.log, &text, client.as_deref(), clock);
+                    notify(&env.notifier, &env.log, &text, client.as_ref(), clock);
                     vec![]
                 }
                 Event::Latest(latest) => {
@@ -267,7 +267,7 @@ fn copy(clipboard: &Clipboard, log_file: &Path, text: &str, clock: fn() -> u64) 
 /// Event::Notify, so only the loop writes to the terminal and a hung tmux never stalls it.
 fn ask_tmux(text: String, events: Sender<Event>) {
     thread::spawn(move || {
-        let client = notify::client_term();
+        let client = notify::tmux_client();
         let _ = events.send(Event::Notify(text, client));
     });
 }
@@ -277,7 +277,7 @@ fn notify(
     notifier: &Notifier,
     log_file: &Path,
     text: &str,
-    client: Option<&str>,
+    client: Option<&TmuxClient>,
     clock: fn() -> u64,
 ) {
     if let Err(error) = notifier.notify(&mut io::stdout(), text, client) {
