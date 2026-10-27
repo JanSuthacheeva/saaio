@@ -62,6 +62,11 @@ fn env() -> Env {
         ssh: env::var_os("SSH_CONNECTION").is_some() || env::var_os("SSH_TTY").is_some(),
         wayland: env::var_os("WAYLAND_DISPLAY").is_some(),
         x11: env::var_os("DISPLAY").is_some(),
+        term: env::var("TERM").ok(),
+        term_program: env::var("TERM_PROGRAM").ok(),
+        vte: env::var_os("VTE_VERSION").is_some(),
+        alacritty: env::var_os("ALACRITTY_WINDOW_ID").is_some(),
+        tmux: env::var_os("TMUX").is_some(),
     }
 }
 

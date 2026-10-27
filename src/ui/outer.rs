@@ -37,8 +37,8 @@ impl Outer {
         })
     }
 
-    /// Turns paste, mouse, cursor-key and focus modes on or off to match the focused pane, keeping
-    /// the mouse saaio needs itself.
+    /// Turns paste, mouse and cursor-key modes on or off to match the focused pane, keeping the
+    /// mouse and focus events saaio needs itself.
     pub fn mirror(&mut self, modes: Modes) -> Result<()> {
         let sequence = mode_changes(captured(self.mirrored), captured(modes));
         if !sequence.is_empty() {
@@ -85,11 +85,13 @@ fn install_panic_restore() {
     });
 }
 
-/// The pane's modes with saaio's own mouse needs on top: buttons and drags at least, always SGR.
+/// The pane's modes with saaio's own needs on top: buttons and drags at least, always SGR, and
+/// focus events, which tell saaio when to notify.
 fn captured(modes: Modes) -> Modes {
     Modes {
         mouse: modes.mouse.max(Mouse::Drag),
         sgr_mouse: true,
+        focus: true,
         ..modes
     }
 }
@@ -156,7 +158,7 @@ mod tests {
     }
 
     #[test]
-    fn captures_buttons_and_drags_in_sgr_whatever_the_pane_asks() {
+    fn captures_buttons_drags_and_focus_whatever_the_pane_asks() {
         let pane = |mouse| Modes {
             paste: true,
             mouse,
@@ -166,6 +168,7 @@ mod tests {
             paste: true,
             mouse: Mouse::Drag,
             sgr_mouse: true,
+            focus: true,
             ..Modes::default()
         };
 

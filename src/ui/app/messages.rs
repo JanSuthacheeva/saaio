@@ -19,18 +19,20 @@ impl App {
             ServerMsg::Welcome { .. } | ServerMsg::Closed(_) | ServerMsg::NotOpen(_) => vec![],
             ServerMsg::Clipboard(text) => vec![Effect::Copy(text)],
             ServerMsg::Master { cwd, branch, turn } => {
-                self.on_master_turn(turn);
+                let effects = self.on_master_turn(turn);
                 let place = self.tilde(&cwd);
                 self.master.cwd = Some(cwd);
                 self.master.place = Some(match branch {
                     Some(branch) => format!("{place} · {branch}"),
                     None => place,
                 });
-                vec![]
+                effects
             }
             ServerMsg::Board(board) => {
                 self.now = self.now.max(board.now);
+                let mut effects = Vec::new();
                 if let Some(old) = &self.board {
+                    effects = self.worker_notifications(old, &board);
                     for flow in &board.flows {
                         let was = old.flows.iter().find(|other| other.id == flow.id);
                         if was.is_some_and(|was| was.state != flow.state) {
@@ -40,7 +42,6 @@ impl App {
                     }
                 }
                 self.board = Some(board);
-                let mut effects = Vec::new();
                 if let PaneKey::Flow(id) = &self.focus
                     && !self.workers().iter().any(|flow| &flow.id == id)
                 {
@@ -150,10 +151,11 @@ impl App {
     }
 
     /// Takes the master's turn: lights row 0 when its state changed, and marks it unseen when it
-    /// came to rest (Waiting, Idle, Blocked) while the master is not focused.
-    fn on_master_turn(&mut self, turn: Option<MasterTurn>) {
+    /// came to rest (Waiting, Idle, Blocked) while the master is not focused; the notification
+    /// it raises.
+    fn on_master_turn(&mut self, turn: Option<MasterTurn>) -> Vec<Effect> {
         if turn == self.master.turn {
-            return;
+            return vec![];
         }
         let was = self.master.turn.map(|turn| turn.state);
         let state = turn.map(|turn| turn.state);
@@ -163,6 +165,7 @@ impl App {
         self.master.unseen = matches!(state, Some(State::Waiting | State::Idle | State::Blocked))
             && self.focus != PaneKey::Master;
         self.master.turn = turn;
+        self.master_notification(was, state)
     }
 
     /// The time (Unix ms) ages count to; true when the screen should be drawn again for it:

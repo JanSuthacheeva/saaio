@@ -11,6 +11,7 @@ pub mod input;
 pub mod layout;
 pub mod markdown;
 pub mod newflow;
+pub mod notify;
 pub mod outer;
 pub mod peek;
 pub mod rail;
@@ -51,6 +52,7 @@ use crate::workspace::git;
 use app::{App, Effect, Job, JobError};
 use clipboard::Clipboard;
 use input::{Router, Target};
+use notify::{Notifier, TmuxClient};
 use outer::Outer;
 use peek::PeekCache;
 use theme::Theme;
@@ -69,6 +71,8 @@ enum Event {
     Ran(Job, Result<String, JobError>),
     /// The latest release a look found, None when it found none.
     Latest(Option<Tag>),
+    /// A notification to write, with the terminal attached to tmux.
+    Notify(String, Option<TmuxClient>),
 }
 
 /// How often spinners turn.
@@ -98,6 +102,8 @@ pub struct UiEnv {
     pub log: PathBuf,
     /// Where selected text goes.
     pub clipboard: Clipboard,
+    /// How desktop notifications reach the terminal.
+    pub notifier: Notifier,
     /// update.json in the shared folder; None without one.
     pub update: Option<UpdateCheck>,
     /// Where the latest release is read.
@@ -136,6 +142,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let (events, inbox) = mpsc::channel();
     let jobs = events.clone();
     let looks = events.clone();
+    let notices = events.clone();
     read_stdin(events.clone());
     read_server(client, events.clone());
     watch_resize(events.clone())?;
@@ -154,7 +161,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
         let mut effects = Vec::new();
         let mut redraw = false;
         for event in next_batch(&inbox)? {
-            redraw |= !matches!(event, Event::Tick);
+            redraw |= !matches!(event, Event::Tick | Event::Notify(..));
             effects.extend(match event {
                 Event::Input(bytes) => {
                     let modes = app.pane_modes();
@@ -163,6 +170,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                         modal: app.is_modal(),
                         mouse: modes.mouse,
                         sgr: modes.sgr_mouse,
+                        focus: modes.focus,
                     };
                     let mut effects = Vec::new();
                     for routed in router.route(&bytes, target) {
@@ -186,6 +194,10 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                         log(&env.log, clock, &text);
                     }
                     app.on_ran(job, result);
+                    vec![]
+                }
+                Event::Notify(text, client) => {
+                    notify(&env.notifier, &env.log, &text, client.as_ref(), clock);
                     vec![]
                 }
                 Event::Latest(latest) => {
@@ -226,6 +238,10 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                 }
                 Effect::Copy(text) => copy(&env.clipboard, &env.log, &text, clock),
                 Effect::Trust(folder) => trust(env.trust.as_ref(), &folder, &env.log, clock),
+                Effect::Notify(text) if env.notifier.in_tmux() => {
+                    ask_tmux(text, notices.clone());
+                }
+                Effect::Notify(text) => notify(&env.notifier, &env.log, &text, None, clock),
                 Effect::Quit(message) => return Ok(message),
             }
         }
@@ -244,6 +260,28 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
 fn copy(clipboard: &Clipboard, log_file: &Path, text: &str, clock: fn() -> u64) {
     if let Err(error) = clipboard.copy(&mut io::stdout(), text) {
         log(log_file, clock, &format!("ui: copy failed: {error:#}"));
+    }
+}
+
+/// Asks tmux on a thread of its own which terminal its client is; the notification comes back as
+/// Event::Notify, so only the loop writes to the terminal and a hung tmux never stalls it.
+fn ask_tmux(text: String, events: Sender<Event>) {
+    thread::spawn(move || {
+        let client = notify::tmux_client();
+        let _ = events.send(Event::Notify(text, client));
+    });
+}
+
+/// Raises a desktop notification; a failure goes to server.log, since nothing on screen asked.
+fn notify(
+    notifier: &Notifier,
+    log_file: &Path,
+    text: &str,
+    client: Option<&TmuxClient>,
+    clock: fn() -> u64,
+) {
+    if let Err(error) = notifier.notify(&mut io::stdout(), text, client) {
+        log(log_file, clock, &format!("ui: notify failed: {error:#}"));
     }
 }
 
@@ -307,6 +345,7 @@ fn reload_config(
         Some(Ok(config)) => {
             router.set_prefix(config.ui.prefix);
             app.set_prefix(config.ui.prefix);
+            app.set_notify(config.ui.notify);
             app.set_agents(
                 config
                     .worker_agents()

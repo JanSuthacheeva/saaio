@@ -92,6 +92,7 @@ of a save. No restart.
 | `[master] agent` | the next time the master starts |
 | `[ui] prefix` | at once. The hints show the new prefix. |
 | `[ui] update_check` | off: at once, the line goes. On: the line shows at once, and the next look follows within the hour once a day has passed. |
+| `[ui] notify` | at once, from the next change of a flow |
 | `[services] pause_after_minutes` | at once, for every resting flow |
 | an added or removed agent in the new-flow dialog | the next time the dialog opens |
 
@@ -132,6 +133,7 @@ prefix = "C-b"
 | --- | --- | --- |
 | `prefix` | `"C-space"` | key pressed before every UI command: `"C-space"` or `"C-a"` to `"C-z"` |
 | `update_check` | `true` | the UI looks for a newer release once a day and names it in its title row: `0.1.1 is out: saaio update` |
+| `notify` | `true` | a flow that starts waiting or is blocked while you aren't looking at it raises a desktop notification through your terminal ([ui.md](ui.md#notifications)) |
 
 | Refused prefix | Reason |
 | --- | --- |

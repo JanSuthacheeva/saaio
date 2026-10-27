@@ -242,6 +242,58 @@ instead. It can span the pane and the sidebar.
 Over SSH, OSC 52 is the only way to your clipboard: in Terminal.app use Option-drag. Inside tmux,
 OSC 52 needs `set -g set-clipboard on` in `~/.tmux.conf`.
 
+## Notifications
+
+When a flow starts waiting or is blocked while you aren't looking at it, saaio has your terminal
+raise a desktop notification: `shop-230 asks: Which approach?`, `shop-230 waits for you`,
+`shop-230 is blocked: migration needs a default`. The master raises one too when it waits or is
+blocked, never when it only comes to rest.
+
+You aren't looking at a flow when another session is in view, or when the terminal window has lost
+focus, then also for the session in view. One notification per change: a flow that stays waiting
+raises no second one, a waiting flow that becomes blocked does, and so does a new flow that is
+blocked from the start, such as one whose setup failed. Attaching raises none for what was already
+waiting. `notify = false` under `[ui]` in config.toml turns them off
+([configuration.md](configuration.md#ui)).
+
+saaio writes the one escape sequence your terminal turns into a notification, picked from
+`TERM` and `TERM_PROGRAM` first, then `VTE_VERSION` and `ALACRITTY_WINDOW_ID`. Inside tmux it asks
+tmux which terminal is attached, by its `TERM` and the version it told tmux (`#{client_termname}`,
+`#{client_termtype}`), since the variables inside tmux are those of the terminal that started the
+tmux server. An attached terminal that told no version, such as Alacritty or Terminal.app, gets the
+bell:
+
+| Terminal | Sent |
+| --- | --- |
+| Ghostty, iTerm2, kitty, WezTerm, and any terminal not named below | OSC 9 |
+| foot, urxvt, VTE terminals such as GNOME Terminal | OSC 777 |
+| Alacritty, Terminal.app | the bell |
+
+A terminal that does not know the sequence ignores it. Whether a notification shows while the
+terminal has focus, and how it looks, is up to the terminal and the system's notification settings.
+
+Inside tmux, saaio sends OSC 9 and OSC 777 through tmux's passthrough, which needs
+`set -g allow-passthrough all` in `~/.tmux.conf`. Without it tmux drops them silently, and with
+`on` it drops them while saaio's window is not the one in view. The bell needs nothing. tmux tells
+saaio when its window or the terminal loses focus only with `set -g focus-events on`; without it
+the session in view never notifies.
+
+Alacritty and Terminal.app have no notification sequence, so saaio rings the bell. Alacritty then
+asks for attention while it is not focused: the Dock icon bounces on macOS, the window is marked
+urgent on Linux. For a real notification, have Alacritty run a command on every bell in
+`alacritty.toml`:
+
+```toml
+[bell]
+# macOS
+command = { program = "osascript", args = ["-e", "display notification \"a flow needs you\" with title \"saaio\""] }
+# Linux
+# command = { program = "notify-send", args = ["saaio", "a flow needs you"] }
+```
+
+It runs for any program's bell, not only saaio's. Terminal.app does what Settings > Profiles >
+Advanced > Bell says, such as badging its icon or bouncing it while in the background.
+
 ## Leaving and stopping
 
 `saaio server` owns the sessions. The UI is a client.

@@ -284,6 +284,7 @@ fn every_project() -> Projects {
 mod board;
 mod dialogs;
 mod golden;
+mod notifications;
 mod panes;
 mod pointer;
 mod prefix;

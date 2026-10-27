@@ -6,6 +6,7 @@ mod draw;
 mod effect;
 mod keys;
 mod messages;
+mod notifications;
 mod pointer;
 
 pub use effect::{Effect, Job, JobError, Removal, outcome};
@@ -113,6 +114,10 @@ pub struct App {
     /// Text selected with the mouse, highlighted until the next input.
     selection: Option<Selection>,
     clicks: Option<pointer::Clicks>,
+    /// Whether a flow that comes to waiting or blocked out of sight raises a notification.
+    notify: bool,
+    /// Whether the real terminal has focus: true until it says otherwise.
+    terminal_focused: bool,
 }
 
 impl App {
@@ -144,6 +149,8 @@ impl App {
             prefix: Prefix::default(),
             selection: None,
             clicks: None,
+            notify: true,
+            terminal_focused: true,
         }
     }
 

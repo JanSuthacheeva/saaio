@@ -10,6 +10,7 @@ use crate::release::source::Releases;
 use crate::server_log;
 use crate::store::Store;
 use crate::ui::clipboard::Clipboard;
+use crate::ui::notify::{Notifier, Sequence};
 use crate::workspace;
 
 /// The environment saaio runs in: its variables and its terminal, read once by main so commands get
@@ -46,12 +47,32 @@ pub struct Env {
     /// $WAYLAND_DISPLAY / $DISPLAY are set.
     pub wayland: bool,
     pub x11: bool,
+    /// $TERM and $TERM_PROGRAM: which terminal the UI notifies through.
+    pub term: Option<String>,
+    pub term_program: Option<String>,
+    /// $VTE_VERSION is set: a VTE terminal, such as GNOME Terminal.
+    pub vte: bool,
+    /// $ALACRITTY_WINDOW_ID is set.
+    pub alacritty: bool,
+    /// $TMUX is set: the UI runs inside tmux.
+    pub tmux: bool,
 }
 
 impl Env {
     /// Where the UI copies selected text to.
     pub(crate) fn clipboard(&self) -> Clipboard {
         Clipboard::new(self.ssh, self.wayland, self.x11)
+    }
+
+    /// How the UI raises desktop notifications in this terminal.
+    pub(crate) fn notifier(&self) -> Notifier {
+        let sequence = Sequence::pick(
+            self.term.as_deref(),
+            self.term_program.as_deref(),
+            self.vte,
+            self.alacritty,
+        );
+        Notifier::new(sequence, self.tmux)
     }
 
     /// The store: $SAAIO_HOME, else the project store of the repository `cwd` is in, else the
@@ -203,6 +224,21 @@ mod tests {
 
     fn root(env: &Env, cwd: &Path) -> PathBuf {
         env.store(Some(cwd)).unwrap().unwrap().root().to_path_buf()
+    }
+
+    #[test]
+    fn notifies_through_the_terminal_and_tmux_it_runs_in() {
+        let env = Env {
+            term: Some("alacritty".to_string()),
+            tmux: true,
+            ..Env::default()
+        };
+
+        assert_eq!(env.notifier(), Notifier::new(Sequence::Bell, true));
+        assert_eq!(
+            Env::default().notifier(),
+            Notifier::new(Sequence::Osc9, false)
+        );
     }
 
     #[test]

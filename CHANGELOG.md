@@ -14,6 +14,11 @@ All notable changes to saaio are listed here. The format follows
   and `--json` (`workspace.base`) show it. When the base merges, the flows on it move onto the
   branch it merged into and their workers are told to rebase, also when the base is removed or
   cleared after its merge. `saaio remove` of a base names the flows that stand on it.
+- Desktop notifications: when a flow or the master starts waiting or is blocked while you aren't
+  looking at it, in another session or another window, the UI has your terminal raise a
+  notification (OSC 9 in Ghostty, iTerm2, kitty and WezTerm, OSC 777 in foot, urxvt and VTE
+  terminals, the bell in Alacritty and Terminal.app), also through tmux with
+  `allow-passthrough all`. `[ui] notify = false` in config.toml turns them off.
 
 ### Fixed
 

@@ -1,0 +1,372 @@
+<title>Desktop Notifications Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+/* One 720px reading column of cards, jasu.dev (Nord, one purple accent). */
+:root {
+  --surface:#f8f9fb; --card:#eceff4; --ink:#2e3440; --muted:#4c566a; --subtle:#d8dee9; --border:#d8dee9;
+  --code-block:#2e3440; --code-text:#eceff4; --code-bg:#e5e9f0; --code-ink:#4b6c8a; --accent:#7b5eaf; --link:#4b6c8a;
+  --constructive:#a3be8c; --warning:#d08770; --critical:#bf616a; --on-accent:#f8f9fb;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --gap:24px; color-scheme:light;
+}
+:root[data-theme="dark"] {
+  --surface:#2e3440; --card:#3b4252; --ink:#eceff4; --muted:#93b1cc; --subtle:#434c5e; --border:#4c566a;
+  --code-block:#3b4252; --code-bg:#3b4252; --code-ink:#88c0d0; --accent:#bd93f9; --link:#88c0d0;
+  --warning:#ebcb8b; --on-accent:#2e3440; color-scheme:dark;
+}
+body { background:var(--surface); color:var(--ink); font:18px/1.6 var(--sans);
+  padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); padding-block:32px 64px; }
+main { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:var(--gap); }
+h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.1; font-weight:800; letter-spacing:-0.03em; margin:0; text-wrap:balance; }
+h2 { font-size:24px; line-height:1.3; margin:0 0 12px; text-wrap:balance; }
+h3 { font-size:18px; margin:18px 0 6px; }
+.meta { font-size:13px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:var(--gap); min-width:0; }
+.tag { display:inline-block; border-radius:99px; font-size:.75rem; font-weight:600; letter-spacing:.05em; padding:1px 9px; vertical-align:middle; margin-left:6px; color:#2e3440; }
+.tag.new { background:var(--constructive); } .tag.mod { background:#ebcb8b; }
+p, ul, ol { margin:0 0 12px; } ul, ol { padding-left:22px; } li { margin-bottom:4px; }
+code { font-family:var(--mono); font-size:.78em; background:var(--code-bg); color:var(--code-ink); border-radius:.2rem; padding:1px 4px; }
+pre.code { background:var(--code-block); color:var(--code-text); border-radius:6px; padding:14px; overflow-x:auto; font:13px/1.5 var(--mono); margin:0 0 12px; }
+a { color:var(--link); text-decoration-thickness:1px; text-underline-offset:.18em; }
+.scroll { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; font-size:15px; }
+th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+th { background:var(--subtle); }
+pre.mermaid { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:12px; margin:0 0 12px; overflow-x:auto; }
+.err { border-left:4px solid var(--warning); padding-left:10px; }
+ol.q > li { margin-bottom:10px; }
+@media (max-width:480px) { :root { --gap:14px; } body { font-size:17px; } }
+</style>
+<main>
+<header>
+  <p class="meta">saaio 0.2.0 · approach A, focus-aware, with a bell fallback · 2026-10-27</p>
+  <h1>Desktop notifications: implementation</h1>
+</header>
+
+<section class="card">
+  <h2>Decision recap</h2>
+  <p>The UI notices in the board diff that a flow came to Waiting or Blocked, and asks the loop to notify. A new <code>Notifier</code> writes one sequence, chosen once from the environment: OSC 9, OSC 777, or a plain BEL for terminals that support neither.</p>
+  <ul>
+    <li><b>Approach A</b>, focus-aware. A flow notifies when it is not in view <i>or</i> the terminal has lost focus.</li>
+    <li>saaio keeps focus reporting on itself. A pane that asked for focus events gets them byte for byte as today.</li>
+    <li><b>BEL fallback</b> for terminals without OSC notifications that saaio recognises: Alacritty and Terminal.app. The docs show Alacritty's <code>[bell] command</code>.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Structure overview</h2>
+  <pre class="mermaid">
+flowchart TB
+  subgraph bin[process boundary]
+    M[main.rs env]:::mod --> E[cli::Env]:::mod
+  end
+  subgraph cli[cli]
+    E --> U[commands/ui.rs]:::mod
+  end
+  subgraph ui[ui]
+    U --> L[ui.rs loop]:::mod
+    L --> R[input::Router]:::mod
+    L --> A[App]:::mod
+    A --> AN[app/notifications.rs]:::new
+    A --> EF[app/effect.rs Effect]:::mod
+    L --> N[notify.rs Notifier]:::new
+    L --> O[outer.rs Outer]:::mod
+  end
+  C[config.rs UiConfig]:::mod --> L
+  classDef new fill:#a3be8c,stroke:#2e3440,color:#2e3440
+  classDef mod fill:#ebcb8b,stroke:#2e3440,color:#2e3440
+  </pre>
+  <p class="meta">Green: new. Yellow: changed. Arrows: who uses whom.</p>
+</section>
+
+<section class="card">
+  <h2>Units</h2>
+
+  <h3><code>src/ui/notify.rs</code> <span class="tag new">new</span></h3>
+  <p>Writes one desktop notification to the real terminal in the way it understands. Sibling of <code>clipboard.rs</code>.</p>
+  <pre class="code">//! `Notifier`: desktop notifications through the terminal, by OSC 9, OSC 777 or its bell
+
+/// How the terminal saaio ui runs in is told to notify.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sequence {
+    /// ESC ] 9 ; saaio: text BEL - iTerm2, Ghostty, WezTerm, kitty, and the default.
+    Osc9,
+    /// ESC ] 777 ; notify ; saaio ; text BEL - foot, urxvt, VTE.
+    Osc777,
+    /// BEL alone - Alacritty, Terminal.app: no text, the terminal's own bell handling.
+    Bell,
+}
+
+impl Sequence {
+    /// Bell for Alacritty ($ALACRITTY_WINDOW_ID, TERM alacritty) and Terminal.app
+    /// (TERM_PROGRAM Apple_Terminal); Osc777 for TERM foot* / rxvt* or $VTE_VERSION; else Osc9.
+    pub fn pick(term: Option&lt;&amp;str&gt;, program: Option&lt;&amp;str&gt;, vte: bool, alacritty: bool) -&gt; Sequence;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Notifier {
+    sequence: Sequence,
+    /// Inside tmux: an OSC goes through its DCS passthrough.
+    tmux: bool,
+}
+
+impl Notifier {
+    pub fn new(sequence: Sequence, tmux: bool) -&gt; Notifier;
+
+    /// Writes the notification for `text` (control characters dropped, cut to 200 chars) and
+    /// flushes; Err when the terminal cannot be written.
+    pub fn notify(&amp;self, out: &amp;mut impl Write, text: &amp;str) -&gt; Result&lt;()&gt;;
+}
+
+/// The bytes for the terminal itself, before any tmux wrapping.
+fn sequence(sequence: Sequence, text: &amp;str) -&gt; String;
+/// ESC P tmux; <i>sequence with every ESC doubled</i> ESC \
+fn passthrough(sequence: &amp;str) -&gt; String;</pre>
+  <p>BEL is never wrapped: tmux handles the bell itself and passes it on.</p>
+
+  <h3><code>src/ui/app/notifications.rs</code> <span class="tag new">new</span></h3>
+  <p>Decides which state changes reach you as a notification, and what it says. Part of <code>impl App</code>, no I/O.</p>
+  <pre class="code">impl App {
+    /// [ui] notify: whether state changes raise desktop notifications.
+    pub fn set_notify(&amp;mut self, on: bool);
+
+    /// Effect::Notify for each worker in both boards that came to Waiting or Blocked
+    /// while out of sight.
+    pub(super) fn worker_notifications(&amp;self, old: &amp;Board, new: &amp;Board) -&gt; Vec&lt;Effect&gt;;
+
+    /// Effect::Notify when the master came to Waiting or Blocked while out of sight.
+    pub(super) fn master_notification(&amp;self, was: Option&lt;State&gt;, state: Option&lt;State&gt;) -&gt; Vec&lt;Effect&gt;;
+
+    /// The terminal has lost focus, or `key` is not the pane in view.
+    fn out_of_sight(&amp;self, key: &amp;PaneKey) -&gt; bool;
+}
+
+/// Waiting or Blocked now, and not the same a moment ago.
+fn calls_for_you(was: Option&lt;State&gt;, now: State) -&gt; bool;
+
+/// "shop-230 asks: Which approach?", "shop-230 waits for you",
+/// "shop-230 is blocked: Bash(cargo publish)", "shop-230 is blocked".
+fn worker_text(flow: &amp;FlowView) -&gt; String;
+
+/// "master waits for you", "master is blocked".
+fn master_text(state: State) -&gt; String;</pre>
+
+  <h3><code>src/ui/app.rs</code> <span class="tag mod">changed</span></h3>
+  <pre class="code">pub struct App {
+    // ...
+    /// [ui] notify; true unless config says otherwise.
+    notify: bool,
+    /// The real terminal has focus; true until it says otherwise, so a terminal that never
+    /// reports focus counts as focused.
+    terminal_focused: bool,
+}</pre>
+  <p><code>mod notifications;</code> is added beside the other children.</p>
+
+  <h3><code>src/ui/app/messages.rs</code> <span class="tag mod">changed</span></h3>
+  <ul>
+    <li><code>on_server(ServerMsg::Board)</code>: with an old board, also returns <code>self.worker_notifications(old, &amp;board)</code> next to the focus effect.</li>
+    <li><code>fn on_master_turn(&amp;mut self, turn: Option&lt;MasterTurn&gt;) -&gt; Vec&lt;Effect&gt;</code>: it returned nothing before. It now returns <code>master_notification(was, state)</code>, and <code>ServerMsg::Master</code> returns that.</li>
+  </ul>
+
+  <h3><code>src/ui/app/keys.rs</code> <span class="tag mod">changed</span></h3>
+  <p><code>on_input(Routed::Focus(focused))</code> sets <code>terminal_focused</code> and returns no effects. It is handled before anything else, so focus changes neither clear the notice nor drop the selection.</p>
+
+  <h3><code>src/ui/app/effect.rs</code> <span class="tag mod">changed</span></h3>
+  <pre class="code">pub enum Effect {
+    // ...
+    /// Raise a desktop notification that says this.
+    Notify(String),
+}</pre>
+
+  <h3><code>src/ui/input.rs</code> <span class="tag mod">changed</span></h3>
+  <pre class="code">pub enum Routed {
+    // ...
+    /// The real terminal gained (true) or lost (false) focus.
+    Focus(bool),
+}
+
+pub struct Target {
+    // ...
+    /// The pane asked for focus events (mode 1004).
+    pub focus: bool,
+}
+
+/// ESC [ I is Some(true), ESC [ O Some(false), anything else None.
+fn focus_event(bytes: &amp;[u8]) -&gt; Option&lt;bool&gt;;</pre>
+  <p>In <code>route</code>, a focus event is recognised first, even right after the prefix, which stays pending. Its three bytes go to the pane only when <code>target.focus &amp;&amp; !target.modal</code>, exactly as they reach it today. Then <code>Routed::Focus</code> follows.</p>
+
+  <h3><code>src/ui/outer.rs</code> <span class="tag mod">changed</span></h3>
+  <p><code>captured(modes)</code> also sets <code>focus: true</code>, so 1004 stays on for saaio whatever the pane asks. <code>RESET_MODES</code> already turns it off on exit.</p>
+
+  <h3><code>src/ui.rs</code> <span class="tag mod">changed</span></h3>
+  <pre class="code">pub struct UiEnv {
+    // ...
+    /// How the terminal is told to notify.
+    pub notifier: Notifier,
+}
+
+/// Raises a desktop notification; a failure goes to server.log.
+fn notify(notifier: &amp;Notifier, log_file: &amp;Path, text: &amp;str, clock: fn() -&gt; u64);</pre>
+  <p><code>Target</code> gets <code>focus: modes.focus</code>, <code>Effect::Notify(text)</code> calls <code>notify</code>, and <code>reload_config</code> calls <code>app.set_notify(config.ui.notify)</code>.</p>
+
+  <h3><code>src/cli/env.rs</code>, <code>src/main.rs</code>, <code>src/cli/commands/ui.rs</code> <span class="tag mod">changed</span></h3>
+  <pre class="code">pub struct Env {
+    // ...
+    /// $TERM and $TERM_PROGRAM.
+    pub term: Option&lt;String&gt;,
+    pub term_program: Option&lt;String&gt;,
+    /// $VTE_VERSION, $ALACRITTY_WINDOW_ID and $TMUX are set.
+    pub vte: bool,
+    pub alacritty: bool,
+    pub tmux: bool,
+}
+
+impl Env {
+    /// How the UI raises desktop notifications.
+    pub(crate) fn notifier(&amp;self) -&gt; Notifier;
+}</pre>
+  <p><code>main.rs::env()</code> reads the five variables. <code>commands/ui.rs</code> passes <code>notifier: env.notifier()</code>.</p>
+
+  <h3><code>src/config.rs</code>, <code>examples/config.toml</code> <span class="tag mod">changed</span></h3>
+  <pre class="code">pub struct UiConfig {
+    pub prefix: Prefix,
+    pub update_check: bool,
+    /// Desktop notifications when a flow starts waiting or is blocked; true unless set.
+    pub notify: bool,
+}</pre>
+  <pre class="code">#[ui]
+# ...
+# A flow that starts waiting or is blocked while you aren't looking at it raises a desktop
+# notification through your terminal. false turns it off.
+#notify = true</pre>
+</section>
+
+<section class="card">
+  <h2>Data</h2>
+  <ul>
+    <li><code>Sequence</code>: built in <code>Env::notifier</code>, then lives in the UI. It never crosses the socket.</li>
+    <li><code>Effect::Notify(String)</code>: App to the loop, within the UI process.</li>
+    <li><code>Routed::Focus(bool)</code>, <code>Target.focus</code>: Router to App, within the UI process.</li>
+    <li><code>UiConfig.notify</code>: config.toml to the UI. The server ignores it.</li>
+    <li>No proto, store or <code>--json</code> change.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Call chains</h2>
+
+  <h3>1. A worker comes to Waiting while out of sight</h3>
+  <pre class="mermaid">
+sequenceDiagram
+  participant S as saaio server
+  participant L as ui.rs loop
+  participant A as App
+  participant N as Notifier
+  participant T as terminal
+  S->>L: ServerMsg::Board(board)
+  L->>A: on_server(Board)
+  A->>A: worker_notifications(old, new)
+  A-->>L: [Effect::Notify(text)]
+  L->>N: notify(stdout, text)
+  N->>T: OSC 9 / OSC 777 / BEL (tmux-wrapped OSC)
+  N--xL: Err: could not write
+  L->>L: log to server.log
+  </pre>
+  <ol>
+    <li><code>read_server -&gt; Event::Server(ServerMsg::Board(board))</code></li>
+    <li><code>ui::run -&gt; App::on_server(message): Vec&lt;Effect&gt;</code></li>
+    <li><code>App::on_server -&gt; App::worker_notifications(old, &amp;board): Vec&lt;Effect&gt;</code>. Nothing when <code>!self.notify</code>. Otherwise for each flow present in both boards with <code>calls_for_you(Some(was.state), flow.state)</code> and <code>out_of_sight(&amp;PaneKey::Flow(id))</code>: <code>Effect::Notify(worker_text(flow))</code>.</li>
+    <li><code>ui::run -&gt; ui::notify(&amp;env.notifier, &amp;env.log, &amp;text, clock)</code></li>
+    <li><code>ui::notify -&gt; Notifier::notify(&amp;mut io::stdout(), text): Result&lt;()&gt;</code></li>
+    <li class="err">Error: a failed write returns <code>Err</code>, and <code>ui::notify</code> logs <code>ui: notify failed: ...</code> to server.log. Nothing on screen; the sidebar still shows the state.</li>
+    <li class="err">A terminal that ignores the sequence, or tmux without <code>allow-passthrough</code>, drops it silently. saaio cannot know this, and the docs say so.</li>
+  </ol>
+  <p><b>No storm on startup:</b> the first board has no old board, so step 3 never runs. A flow missing from the old board never notifies.</p>
+
+  <h3>2. The terminal loses focus</h3>
+  <pre class="mermaid">
+sequenceDiagram
+  participant T as terminal
+  participant R as Router
+  participant A as App
+  participant L as ui.rs loop
+  T->>R: ESC [ O
+  R->>R: focus_event: Some(false)
+  opt pane asked for 1004 and no dialog is open
+    R-->>L: Routed::Pane(ESC [ O)
+    L->>A: on_input: Effect::Send(Input)
+  end
+  R-->>L: Routed::Focus(false)
+  L->>A: on_input(Focus(false))
+  A->>A: terminal_focused = false
+  </pre>
+  <ol>
+    <li><code>read_stdin -&gt; Event::Input(bytes)</code></li>
+    <li><code>ui::run -&gt; Router::route(&amp;bytes, Target { focus: modes.focus, .. }): Vec&lt;Routed&gt;</code></li>
+    <li><code>Router::route -&gt; focus_event(rest): Option&lt;bool&gt;</code>. Bytes go into the pane's plain run only when <code>target.focus &amp;&amp; !target.modal</code>, then <code>Routed::Focus(false)</code>.</li>
+    <li><code>ui::run -&gt; App::on_input(Routed::Focus(false)): vec![]</code> sets <code>terminal_focused = false</code>.</li>
+  </ol>
+
+  <h3>3. The master comes to Waiting or Blocked</h3>
+  <ol>
+    <li><code>App::on_server(ServerMsg::Master { turn, .. }) -&gt; App::on_master_turn(turn): Vec&lt;Effect&gt;</code></li>
+    <li><code>App::on_master_turn -&gt; App::master_notification(was, state): Vec&lt;Effect&gt;</code>. It notifies when <code>calls_for_you</code> holds and <code>out_of_sight(&amp;PaneKey::Master)</code>. A master that comes to Idle does not notify.</li>
+    <li>Then as steps 4 and 5 of chain 1.</li>
+  </ol>
+
+  <h3>4. config.toml changes notify</h3>
+  <ol>
+    <li><code>ui::run (tick) -&gt; reload_config -&gt; ConfigWatch::changed(): Some(Ok(config))</code></li>
+    <li><code>reload_config -&gt; App::set_notify(config.ui.notify)</code></li>
+    <li class="err">A broken file keeps the last working setting, as for <code>prefix</code>.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2>Conventions followed</h2>
+  <ul>
+    <li><code>Notifier</code> built from environment flags in <code>Env</code>, written to stdout from the loop, failure to server.log: mirrors <code>Clipboard</code> (<code>src/cli/env.rs:53</code>, <code>src/ui/clipboard.rs:19</code>, <code>src/ui.rs:252</code>).</li>
+    <li>Environment read only in <code>main.rs::env()</code> (<code>src/main.rs:44</code>, clippy <code>disallowed-methods</code>).</li>
+    <li>App returns effects, loop does I/O: <code>Effect::Copy</code> (<code>src/ui/app/effect.rs:126</code>).</li>
+    <li>Transitions from the board diff: the "changed" row light (<code>src/ui/app/messages.rs:31</code>).</li>
+    <li>saaio's own mode kept on over the pane's: mouse in <code>captured</code> (<code>src/ui/outer.rs:88</code>).</li>
+    <li>Config switch next to <code>update_check</code>, set on reload like <code>set_prefix</code> (<code>src/ui.rs:313</code>); example line checked by the existing example tests.</li>
+    <li>A new <code>app/notifications.rs</code> child rather than growing <code>messages.rs</code>: one responsibility per file.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Test seams</h2>
+  <ul>
+    <li><b>notify.rs</b>: <code>Sequence::pick</code> per environment; exact bytes of each sequence; tmux doubles every ESC and leaves BEL alone; control characters dropped; long text cut. Writes go to a <code>Vec&lt;u8&gt;</code>.</li>
+    <li><b>input.rs</b>: focus in and out become <code>Routed::Focus</code>; forwarded unchanged to a pane with 1004 and not to one without, nor under a dialog; a focus event right after the prefix leaves the prefix pending.</li>
+    <li><b>app/tests/notifications.rs</b> (new subject): first board silent; Idle to Waiting out of view notifies once; the same board twice notifies once; in view and focused silent; in view and unfocused notifies; Waiting to Blocked notifies again; off in config silent; master Waiting out of view notifies, Idle does not.</li>
+    <li><b>outer.rs</b>: <code>captured</code> keeps focus on.</li>
+    <li><b>config</b>: the existing example tests cover <code>notify</code> once its line exists.</li>
+    <li><b>E2E</b>: scratch store, UI in a PTY whose output is captured, a flow reported waiting, then blocked, then focus out on the flow in view. Assert one OSC per transition and none on start. Then the same in a real Ghostty window, to see the notification.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Assumptions</h2>
+  <ol>
+    <li>Text: "shop-230 asks: &lt;first question&gt;", "shop-230 waits for you", "shop-230 is blocked: &lt;blocker&gt;", cut to 200 chars. The OSC 9 form starts with "saaio: "; OSC 777 has the title "saaio".</li>
+    <li>"In view" means the pane has focus in saaio, even while the board or a dialog is open over it.</li>
+    <li>Waiting to Blocked, or back, is a new transition and notifies again.</li>
+    <li>A terminal that never reports focus counts as focused.</li>
+    <li>Notifications for other projects' flows (the board's "all" view) are out of scope; only this UI's own board.</li>
+    <li>No rate limit: each transition is one notification. Agents rarely flip faster than a person can read.</li>
+    <li>BEL only for terminals saaio recognises (Alacritty, Terminal.app). An unknown terminal gets OSC 9, which costs nothing when it is ignored.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2>Open questions</h2>
+  <ol class="q">
+    <li><b>The switch:</b> <code>[ui] notify = true</code>, on by default? <i>Recommended: yes.</i> Ignored sequences cost nothing, and the feature is the point of the roadmap row.</li>
+    <li><b>The master:</b> notify when it comes to Waiting or Blocked, but not when its turn ends Idle? <i>Recommended: yes.</i> Idle follows nearly every worker stop and would repeat the worker's own notification.</li>
+  </ol>
+</section>
+</main>

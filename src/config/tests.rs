@@ -277,7 +277,7 @@ fn says_every_error_as_file_line_and_message() {
     assert_eq!(
         error("[ui]\nprefix = \"C-b\"\nagent = \"codex\"\n"),
         format!(
-            "{}unknown field `agent`, expected `prefix` or `update_check`",
+            "{}unknown field `agent`, expected one of `prefix`, `update_check`, `notify`",
             at(3)
         )
     );
@@ -477,4 +477,14 @@ fn looks_for_updates_unless_turned_off() {
 
     assert!(Config::builtin().ui.update_check);
     assert!(!Config::read(Some(&file)).unwrap().ui.update_check);
+}
+
+#[test]
+fn notifies_unless_turned_off() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("config.toml");
+    fs::write(&file, "[ui]\nnotify = false\n").unwrap();
+
+    assert!(Config::builtin().ui.notify);
+    assert!(!Config::read(Some(&file)).unwrap().ui.notify);
 }

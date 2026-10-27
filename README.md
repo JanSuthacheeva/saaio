@@ -183,7 +183,7 @@ flow, from the agents' own hooks. The master is woken instead of polling. Each w
 own setup, teardown and port slot.
 
 Not in saaio: a diff viewer, a pull request button (the worker's skill opens the merge request and
-saaio detects it), desktop notifications, phone access. macOS and Linux only.
+saaio detects it), phone access. macOS and Linux only.
 
 ## Documentation
 
