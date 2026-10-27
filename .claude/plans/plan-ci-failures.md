@@ -49,6 +49,22 @@ does what its name says: a UI connects after it and is welcomed.
       with a 1 s sleep after the start line it failed every time. Fix: `server_log::writes_to`,
       stderr is the file at `log` or at `<log>.1`; `follow` then reopens server.log on its next
       tick. Forced ordering passes; loop under load 0 of 300. CHANGELOG: Fixed, as users see it.
+- [x] `a_ui_that_stops_reading_slows_nobody_and_is_dropped` (master, after #103's CI): its 500 ms
+      budget failed on a loaded machine (3 of 3 full runs locally; 77 of 96 runs at 12 copies
+      and 10 `yes`), while the regression it guards stalls WRITE_TIMEOUT, 2 s. The write timeout
+      moves into `Timing` (`write`, 2 s by default); the test runs with 10 s and asserts each
+      answer within half of it. Sampled under load, the late answers were the server encoding
+      the flood's frames (a 200x100 screen 20 times a second), not a wait: the pane is now
+      100x50 and scrolls 4 times a second, which still fills the stuck UI's socket, and the
+      control requests run until the stuck UI is dropped (by 2 x `write`: a write that got
+      partway waits once more), so they span the whole stall. Proof: a send that waits for
+      earlier messages (the old synchronous server) fails it, "answered after 20s"; 0 of 48 at
+      12 copies and 10 `yes`. The Outbox unit test's 1 s budget compares against a 20 s stall
+      the same way.
+- [x] `a_pane_that_prints_without_pause_slows_nobody`, the same 500 ms budget: 6 of 8 failed
+      beside 10 `yes`. Without the backlog's cap the server never answers (recv's 30 s PATIENCE
+      fails it), so the budget only adds flakes and goes; 0 of 48 at 12 copies and 10 `yes`,
+      and the cap-less server still fails it.
 
 ## Review
 

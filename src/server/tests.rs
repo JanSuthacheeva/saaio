@@ -51,6 +51,7 @@ fn quick() -> Timing {
         first_turn_grace: Duration::from_millis(300),
         unstarted: Duration::from_secs(30),
         hello: Duration::from_millis(500),
+        write: Duration::from_secs(2),
     }
 }
 
@@ -1078,40 +1079,51 @@ fn closes_a_connection_whose_hello_is_not_whole_by_the_deadline() {
 #[test]
 fn a_ui_that_stops_reading_slows_nobody_and_is_dropped() {
     let dir = TempDir::new().unwrap();
-    let scroll = "while :; do seq 1 300; sleep 0.05; done";
+    // A new screen four times a second fills the stuck UI's socket within seconds, yet leaves the
+    // server idle enough to answer at once on a loaded machine.
+    let scroll = "while :; do seq 1 50; sleep 0.25; done";
     let flood = vec!["sh".into(), "-c".into(), scroll.into()];
-    let (paths, handle) = start_with(
+    // A server that waited on the stuck UI would answer only after its write gave up: this late.
+    let stall = Duration::from_secs(10);
+    let (paths, handle) = start_timed(
         dir.path(),
-        Agent {
-            command: flood.clone(),
-            prompt: None,
-            adapter: None,
-            resume: Some(flood),
+        BTreeMap::from([(
+            "claude".to_string(),
+            Agent {
+                command: flood.clone(),
+                prompt: None,
+                adapter: None,
+                resume: Some(flood),
+            },
+        )]),
+        Timing {
+            write: stall,
+            ..quick()
         },
+        || 0,
     );
     let size = Size {
-        cols: 200,
-        rows: 100,
+        cols: 100,
+        rows: 50,
     };
     let mut stuck = connect(&paths.socket, Role::Attach { size });
 
-    for _ in 0..5 {
+    // Dropped once its writer waited `stall` on it: twice when a write got partway first.
+    let deadline = Instant::now() + 2 * stall + PATIENCE;
+    while proto::write_msg(&mut stuck, &ClientMsg::Input(Vec::new())).is_ok() {
+        assert!(Instant::now() < deadline, "the stuck ui was never dropped");
         let mut control = connect(&paths.socket, Role::Control);
         let asked = Instant::now();
         assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
         proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
         assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
         assert!(
-            asked.elapsed() < Duration::from_millis(500),
+            asked.elapsed() < stall / 2,
             "answered after {:?}",
             asked.elapsed()
         );
         thread::sleep(Duration::from_millis(300));
     }
-
-    wait_until("the stuck ui was never dropped", || {
-        proto::write_msg(&mut stuck, &ClientMsg::History(None)).is_err()
-    });
     stop(&paths, handle);
 }
 
@@ -1132,15 +1144,9 @@ fn a_pane_that_prints_without_pause_slows_nobody() {
     for _ in 0..5 {
         thread::sleep(Duration::from_millis(300));
         let mut control = connect(&paths.socket, Role::Control);
-        let asked = Instant::now();
         assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
         proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
         assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
-        assert!(
-            asked.elapsed() < Duration::from_millis(500),
-            "answered after {:?}",
-            asked.elapsed()
-        );
     }
     stop(&paths, handle);
 }

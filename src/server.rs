@@ -65,8 +65,6 @@ pub use timing::Timing;
 const FRAME_EVERY: Duration = Duration::from_millis(16);
 /// How long a stop waits for the panes to exit.
 const STOP_WAIT: Duration = Duration::from_millis(3500);
-/// A connection's writer thread gives up on a client that takes no bytes for this long.
-const WRITE_TIMEOUT: Duration = Duration::from_secs(2);
 /// A resumed pane that fails within this time is started fresh instead: its agent never saved
 /// the session (Claude Code saves one only after the first message).
 const RESUME_GRACE: Duration = Duration::from_secs(5);
