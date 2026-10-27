@@ -18,7 +18,7 @@ All notable changes to saaio are listed here. The format follows
   looking at it, in another session or another window, the UI has your terminal raise a
   notification (OSC 9 in Ghostty, iTerm2, kitty and WezTerm, OSC 777 in foot, urxvt and VTE
   terminals, the bell in Alacritty and Terminal.app), also through tmux with
-  `allow-passthrough on`. `[ui] notify = false` in config.toml turns them off.
+  `allow-passthrough all`. `[ui] notify = false` in config.toml turns them off.
 
 ### Fixed
 

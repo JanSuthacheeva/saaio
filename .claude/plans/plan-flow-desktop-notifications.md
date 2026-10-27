@@ -11,7 +11,7 @@ implementation https://claude.ai/artifact/ALahCYcds96LWTUx1qCBQd (`docs/design/d
   `ui::run` hands it to `Notifier` (`ui/notify.rs`), which writes exactly one sequence chosen once
   from the environment: OSC 9 by default, OSC 777 for foot, rxvt and VTE, a plain BEL for
   Alacritty and Terminal.app. Inside tmux an OSC goes through tmux's DCS passthrough
-  (`allow-passthrough on`); BEL is never wrapped.
+  (`allow-passthrough all`, since `on` drops it from a window out of view; focus inside tmux needs `focus-events on`); BEL is never wrapped.
 - saaio keeps focus reporting (1004) on itself. The Router turns `ESC [ I` / `ESC [ O` into
   `Routed::Focus`, and still passes the bytes, unchanged, to a pane that asked for 1004 when no
   dialog is open, as today.

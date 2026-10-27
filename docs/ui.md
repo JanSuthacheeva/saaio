@@ -272,8 +272,10 @@ A terminal that does not know the sequence ignores it. Whether a notification sh
 terminal has focus, and how it looks, is up to the terminal and the system's notification settings.
 
 Inside tmux, saaio sends OSC 9 and OSC 777 through tmux's passthrough, which needs
-`set -g allow-passthrough on` in `~/.tmux.conf`. Without it tmux drops them silently. The bell
-needs nothing.
+`set -g allow-passthrough all` in `~/.tmux.conf`. Without it tmux drops them silently, and with
+`on` it drops them while saaio's window is not the one in view. The bell needs nothing. tmux tells
+saaio when its window or the terminal loses focus only with `set -g focus-events on`; without it
+the session in view never notifies.
 
 Alacritty and Terminal.app have no notification sequence, so saaio rings the bell. Alacritty then
 asks for attention while it is not focused: the Dock icon bounces on macOS, the window is marked
