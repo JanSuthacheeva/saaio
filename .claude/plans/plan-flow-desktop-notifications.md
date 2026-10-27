@@ -247,3 +247,39 @@ impl Env {
 - [x] `Sequence::pick` trusts what the terminal sets fresh first: TERM (alacritty* bell, foot*/rxvt* OSC 777, xterm-ghostty/xterm-kitty/wezterm OSC 9), then TERM_PROGRAM (Apple_Terminal bell, iTerm.app/WezTerm/ghostty OSC 9), only then `VTE_VERSION` and `ALACRITTY_WINDOW_ID`, which a tmux server or a child terminal inherits stale; with tests for a stale `ALACRITTY_WINDOW_ID` under Ghostty
 - [x] Inside tmux, pick from the attached client's terminal: `notify::tmux_client(): Option<TmuxClient { term, version }>` runs `tmux display-message -p '#{client_termname}\t#{client_termtype}'` and `Sequence::for_client` picks by its TERM, else by the version it answered tmux (XTVERSION: ghostty, iTerm2, WezTerm, kitty OSC 9; foot, VTE OSC 777; none, as Alacritty without its terminfo and Terminal.app, the bell) with a 500 ms deadline on a thread of its own, its answer comes back as `Event::Notify(text, client)` and the loop writes the sequence (only the UI thread writes to the terminal); without an answer the environment's pick stands. `Notifier::notify(out, text, client)`, `Notifier::in_tmux()`; tests for the client overriding the environment and the fallback
 - [x] End-to-end: scratch store, UI in a PTY with captured output; report a flow waiting, then blocked, then focus out on the flow in view; assert one sequence per transition, none at startup, none with `notify = false`; then the same in a real terminal window to see the notification
+
+## Review
+
+Isolated review, 2026-10-27. The fixes were not reviewed by a second agent; re-read against their
+findings in a separate pass.
+
+Fixed:
+
+- A multi-line blocker ran together in the notification ("agent exited (exit status: 1)Error:"),
+  since `text::printable` drops newlines; `Notifier::notify` now joins lines and whitespace runs
+  with one space (`ui: notify: put a notification's text on one line`).
+- docs/ui.md and CHANGELOG said `allow-passthrough on`, which tmux honours only while the pane is
+  visible, so a notification from a saaio window out of view was dropped; they now say `all`. tmux's
+  `focus-events` is off by default, so inside tmux saaio never heard of focus loss; docs/ui.md now
+  names `set -g focus-events on` (`docs: ui: tmux needs allow-passthrough all and focus-events on`).
+
+Open:
+
+- `Sequence::for_client` gives the bell to a client that answered no version. A tmux too old to
+  have `#{client_termtype}` expands it empty, so iTerm2 (TERM xterm-256color) would get the bell
+  there instead of OSC 9. Recommendation: accept; tmux 3.4+ is common, and the bell still alerts.
+- A flow that first appears on a board already Waiting raises nothing (it was not on the old
+  board). Recommendation: accept; a new flow shows Working first.
+
+Where to look:
+
+1. `src/ui/input.rs` `Router::route`: the focus check before prefix and CSI handling, and which
+   panes get the bytes.
+2. `src/ui/app/notifications.rs` with `messages.rs` `on_server(Board)` / `on_master_turn`: when a
+   transition counts, and the first-board and first-master-message silence.
+3. `src/ui/notify.rs` `Notifier::notify` and `Sequence::for_client`, and `ui.rs` `ask_tmux`: the
+   bytes written and the tmux client pick off the UI thread.
+
+Routine: config, env, docs and the outer `captured` change.
+
+Checks: cargo test, clippy `--all-targets -D warnings` and fmt pass at e0c413e.
