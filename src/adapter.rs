@@ -29,8 +29,8 @@ ask the master or the user something, end your turn with the question.";
 pub fn worker_prompt(base: Option<&str>) -> String {
     match base {
         Some(base) => format!(
-            "{WORKER_PROMPT} Your branch starts from {base}, not the default branch: open your \
-merge request against {base} and rebase on it. Push {base} first if the remote lacks it."
+            "{WORKER_PROMPT} Your branch stands on {base}: open your merge request against \
+{base} and rebase on it. Push {base} first if the remote lacks it."
         ),
         None => WORKER_PROMPT.to_string(),
     }
@@ -286,8 +286,8 @@ mod tests {
         assert!(prompt.starts_with(WORKER_PROMPT));
         assert!(
             prompt.ends_with(
-                "Your branch starts from flow/shop-216, not the default branch: open your merge \
-request against flow/shop-216 and rebase on it. Push flow/shop-216 first if the remote lacks it."
+                "Your branch stands on flow/shop-216: open your merge request against \
+flow/shop-216 and rebase on it. Push flow/shop-216 first if the remote lacks it."
             ),
             "{prompt}"
         );

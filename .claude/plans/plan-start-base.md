@@ -88,8 +88,8 @@ fn pick_base(repo: &Path, asked: Option<&str>) -> Result<Option<StartPoint>, Fai
 ### src/adapter.rs (modified)
 
 ```rust
-/// WORKER_PROMPT, and for a stacked flow: "Your branch starts from <base>, not the default branch:
-/// open your merge request against <base> and rebase on it. Push <base> first if the remote lacks it."
+/// WORKER_PROMPT, and for a stacked flow: "Your branch stands on <base>: open your merge request
+/// against <base> and rebase on it. Push <base> first if the remote lacks it."
 pub fn worker_prompt(base: Option<&str>) -> String;
 
 pub fn wiring(self, flow_exe: &Path, trusted: Option<&Path>, base: Option<&str>) -> Vec<String>;
@@ -333,7 +333,7 @@ Decided by the master: word the prompt for any base; close both restack holes.
   append twice.
 - `saaio remove` and `saaio clear` append `stack::on_merge` for a merged base before forgetting it.
 
-- [ ] Word `adapter::worker_prompt` for any base ("Your branch stands on <base>: ..."), with its tests
+- [x] Word `adapter::worker_prompt` for any base ("Your branch stands on <base>: ..."), with its tests
 - [ ] Record `Merged.into` and `FlowView.merged_into`, add `stack::pending`, append it at `Answer::Done`, with fold, stack and server tests for the retry
 - [ ] Append the base-merged events in `saaio remove` and `saaio clear` of a merged base, with CLI tests; docs and CHANGELOG
 
