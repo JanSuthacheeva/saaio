@@ -71,21 +71,37 @@ does what its name says: a UI connects after it and is welcomed.
 
 ## Review
 
-Test-only branch: no production code, stored data or public surface changes.
+Two test fixes (the 4 GiB refusal race, clippy 1.99.1's assert-empty lint), one production fix
+(`server_log::writes_to`, with a CHANGELOG line) and one production refactor (the write timeout
+moved into `Timing::write`, default still 2 s). No stored data or public surface changes.
 
-- **Fixed** - nothing; no finding held up.
-- **Open** - none. Note: `assert!(x.is_empty(), "msg")` sites with a message (`forge.rs`,
-  `deliver.rs:181`, `server/tests.rs:2095`, `tests/cli/start.rs:337`, `tests/cli/hooks.rs`,
-  `tests/cli/identity.rs`, `ui/screen.rs`) are left as they are: clippy 1.99.1 does not flag
-  them, and the plan scopes the change to the flagged sites.
-- **Where to look** - `src/server/tests.rs` `refuses_a_length_of_4_gib_and_still_takes_a_ui`:
-  the trailing write is now `let _ =` (an EPIPE on Linux after the server's `shutdown(SHUT_RD)`
-  is the refusal, not a failure), Refused and the close are still asserted, and a UI is welcomed
-  afterwards. The other protocol tests write whole frames or already ignore a failed write
-  (lines 1067, 1236-1238); the one remaining `unwrap` on a write (line 1353) sends one whole
-  7-byte frame in a single write before the server acts, so it does not race. The
-  `assert!(..is_empty())` -> `assert_eq!(.., [] as [T; 0])` / `b""` / `""` rewrites across the
-  other 17 files are mechanical and can be skimmed; `tests/cli/hooks.rs` and `status.rs` compare
-  through the `stdout`/`stderr` helpers, which do not trim, so the meaning is unchanged.
-- **Checks** - `cargo test`, `cargo clippy --all-targets -- -D warnings` (1.95.0 and 1.99.1) and
-  `cargo fmt --check` passed at 1fbbeb4; the review changed only this plan.
+- **Fixed** - the server-log fix had only a timing-dependent regression test (the CLI test that
+  flaked). Added `a_server_whose_log_moved_aside_before_it_looked_writes_to_the_new_log`: the
+  log is renamed to server.log.1 before the server starts on it, so a server that checks only
+  server.log fails it every time (shown by reverting `writes_to`). Test-only, so not reviewed
+  again.
+- **Open** - none blocking. Notes: `a_ui_that_stops_reading_slows_nobody_and_is_dropped` now
+  runs about 20 s (the stuck UI is dropped only after 1-2 x the 10 s `write`), the price of a
+  budget far from a loaded runner's hiccups; recommend keeping it. `writes_to` misses a log moved
+  aside twice before the server looks (server.log.1 replaced too); that needs 2 MiB written in
+  the server's first moments, so leave it. `assert!(x.is_empty(), "msg")` sites with a message
+  stay as they are: clippy 1.99.1 does not flag them.
+- **Where to look** -
+  1. `src/server_log.rs` `writes_to` -> `src/server.rs` `run` (`log: ... .filter(writes_to)`)
+     -> `follow`: stderr at `<log>.1` now counts as server.log, and `follow` reopens server.log
+     on its next tick since `is_stderr(log)` is false. A server in a terminal (stderr a tty or
+     pipe) still gets `log: None`.
+  2. `src/server/tests.rs` `a_ui_that_stops_reading_slows_nobody_and_is_dropped`: probes the
+     stuck UI with an empty `Input` (a no-op write to the focused pane, unlike the old
+     `History`, which sent a full frame) until it is dropped, asserting each control answer
+     within `stall / 2`; `a_pane_that_prints_without_pause_slows_nobody` drops its budget and
+     relies on recv's 30 s PATIENCE.
+  3. `src/server/tests.rs` `refuses_a_length_of_4_gib_and_still_takes_a_ui`: the trailing write
+     is `let _ =` (EPIPE on Linux after the server's `shutdown(SHUT_RD)` is the refusal), Refused
+     and the close still asserted, a UI welcomed afterwards.
+  Routine, skim: `Timing::write` threading through `Outbox::start` and its unit tests, the
+  CLAUDE.md line, and the `assert!(..is_empty())` -> `assert_eq!(.., [] as [T; 0])` / `b""` /
+  `""` rewrites across 17 files (`tests/cli` helpers do not trim, so meaning is unchanged).
+- **Checks** - `cargo test`, `cargo clippy --all-targets -- -D warnings` (1.95.0 and 1.99.1)
+  and `cargo fmt --check` passed at b0b29d9 (CI green). After the review's test: fmt, clippy on
+  1.95.0 and 1.99.1 and `cargo test --test cli server::` pass; nothing else changed.
