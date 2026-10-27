@@ -259,16 +259,19 @@ impl App {
         self.cursor = next.and_then(|index| ids.get(index)).cloned();
     }
 
-    /// The new-flow dialog for the repo in view, asking for its branch convention.
+    /// The new-flow dialog for the repo in view, asking for its branch convention; the branches
+    /// of its unfinished flows to stack on, the focused one's first.
     pub(super) fn open_new_flow(&mut self) -> Vec<Effect> {
         let repo = self.focused_repo();
         let place = self.tilde(&repo.display().to_string());
-        self.view = View::NewFlow(NewFlowForm::new(repo.clone(), place, self.agents.clone()));
+        let mut form = NewFlowForm::new(repo.clone(), place, self.agents.clone());
+        form.bases = self.bases_in(&repo);
+        self.view = View::NewFlow(Box::new(form));
         vec![Effect::LoadBranching(repo)]
     }
 
     /// Runs `saaio remove` in the background; what it refuses comes back as a question (on_ran).
-    fn start(&mut self, form: NewFlowForm) -> Vec<Effect> {
+    fn start(&mut self, form: Box<NewFlowForm>) -> Vec<Effect> {
         self.notice = Some("starting the flow…".to_string());
         vec![Effect::Run(Job::Start(form))]
     }

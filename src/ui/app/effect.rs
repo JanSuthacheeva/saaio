@@ -33,7 +33,7 @@ impl Removal {
 /// A saaio command saaio ui runs in the background.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Job {
-    Start(NewFlowForm),
+    Start(Box<NewFlowForm>),
     Remove(Removal),
     /// `saaio status --all --json`: every project's board.
     Overview,
@@ -65,6 +65,9 @@ impl Job {
                 }
                 if let Some(agent) = form.picked_agent() {
                     args.extend(["--agent".to_string(), agent.to_string()]);
+                }
+                if let Some(base) = form.picked_base() {
+                    args.extend(["--base".to_string(), base.to_string()]);
                 }
                 args.extend(["--".to_string(), form.request.trim().to_string()]);
                 args

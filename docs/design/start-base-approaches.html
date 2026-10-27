@@ -1,0 +1,122 @@
+<title>Stacked Flows: Approaches</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+/* One 720px reading column of cards, jasu.dev look */
+:root {
+  --surface:#f8f9fb; --card:#eceff4; --ink:#2e3440; --muted:#4c566a; --subtle:#d8dee9; --border:#d8dee9;
+  --code-block:#2e3440; --code-bg:#e5e9f0; --code-ink:#4b6c8a; --accent:#7b5eaf; --link:#4b6c8a;
+  --constructive:#a3be8c; --warning:#d08770; --critical:#bf616a; --on-accent:#f8f9fb; --block-ink:#eceff4;
+  --sans:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --mono:ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --gap:24px; --radius:6px; color-scheme:light;
+}
+:root[data-theme="dark"] {
+  --surface:#2e3440; --card:#3b4252; --ink:#eceff4; --muted:#93b1cc; --subtle:#434c5e; --border:#4c566a;
+  --code-block:#3b4252; --code-bg:#3b4252; --code-ink:#88c0d0; --accent:#bd93f9; --link:#88c0d0;
+  --warning:#ebcb8b; --on-accent:#2e3440; color-scheme:dark;
+}
+body { background:var(--surface); color:var(--ink); font:18px/1.6 var(--sans); }
+main { max-width:720px; margin:0 auto; padding-block:32px 64px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); display:flex; flex-direction:column; gap:var(--gap); }
+h1 { font-size:clamp(1.75rem, 5vw, 2.5rem); line-height:1.1; font-weight:800; letter-spacing:-0.03em; margin:0; text-wrap:balance; }
+h2 { font-size:24px; line-height:1.3; margin:0; text-wrap:balance; }
+h3 { font-size:18px; margin:0; }
+p, ul, ol { margin:0; }
+ul, ol { padding-left:1.2em; display:flex; flex-direction:column; gap:6px; }
+.meta { font-size:13px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:var(--gap); display:flex; flex-direction:column; gap:14px; min-width:0; }
+.card.pick { border:2px solid var(--accent); }
+.pill { display:inline-block; border-radius:99px; background:var(--accent); color:var(--on-accent); font-size:0.8rem; font-weight:600; letter-spacing:0.05em; padding:1px 10px; vertical-align:middle; }
+.pill.grey { background:var(--subtle); color:var(--ink); }
+code { font-family:var(--mono); font-size:0.78em; background:var(--code-bg); color:var(--code-ink); border-radius:0.2rem; padding:1px 4px; }
+.diagram { overflow-x:auto; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px; }
+.cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.cols > div { min-width:0; }
+.pro { border-left:3px solid var(--constructive); padding-left:10px; }
+.con { border-left:3px solid var(--warning); padding-left:10px; }
+a { color:var(--link); text-underline-offset:0.18em; }
+@media (max-width:560px) { .cols { grid-template-columns:1fr; } .card { padding:14px; } }
+</style>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:8px">
+  <p class="meta">saaio 0.2.0 - design-code, step 1 of 2 - branch flow/start-base</p>
+  <h1>Stacked flows with <code style="font-size:0.8em">saaio start --base</code></h1>
+  <p>Every approach shares the same front half: <code>--base &lt;branch&gt;</code> on <code>saaio start</code>, a base row in the new-flow dialog, the base recorded with the flow, shown in status and <code>--json</code>, and told to the worker so its merge request targets the base. They differ in one thing: <b>what happens when the base merges first</b>.</p>
+</header>
+
+<section class="card">
+  <h2>What exists today</h2>
+  <ul>
+    <li><code>saaio start</code> builds the branch name, then <code>git worktree add -b &lt;branch&gt; &lt;path&gt;</code> with no start point, so the worktree starts at the main checkout's HEAD (<code>src/launch/worktree.rs:32</code>, <code>src/cli/commands/start.rs:102</code>).</li>
+    <li>Where a flow runs is the <code>Workspace</code> event: path, branch, slot, window, agent (<code>src/event.rs:116</code>). The server re-appends it with <code>window: saaio-ui</code> when it opens the pane, copying every other field (<code>src/server/panes.rs:202</code>), so a new field there survives.</li>
+    <li>The worker knows nothing of its target: its instructions are the fixed <code>WORKER_PROMPT</code> (<code>src/adapter.rs:22</code>) and the hooks' env <code>SAAIO_FLOW_ID/NAME/SLOT/WORKTREE/REPO</code> (<code>src/launch/worktree.rs:89</code>). The skill opening the MR picks the default branch.</li>
+    <li>The server asks gh/glab about each flow's branch every two minutes and appends <code>merged</code> once its MR merged (<code>src/forge.rs:293</code>, <code>src/server/forge_watch.rs</code>).</li>
+    <li>A worker hears only the master's messages: <code>Message</code> events not yet delivered (<code>src/wake.rs:22</code>). The master is woken only when a flow <i>stops</i>, not when one merges.</li>
+    <li><code>--json</code> may gain keys without a new version (<code>docs/json.md</code>, Versions).</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Shared by all approaches</h2>
+  <ul>
+    <li><b>Another flow's branch as base</b>: any local branch is a start point, also one checked out in another worktree. The base's latest commits are taken at start; the base must be on the remote before the stacked flow pushes, which the worker prompt says.</li>
+    <li><b>Remote-only base</b>: not a local branch but <code>&lt;remote&gt;/&lt;base&gt;</code> exists (after a <code>git fetch</code>): start from that ref, with <code>--no-track</code>, so the flow's branch does not pull from or push to the base.</li>
+    <li><b>Unknown base</b>: refused before anything is created, like an unknown agent.</li>
+    <li><b>The worker</b> gets <code>SAAIO_BASE</code> and one more sentence in its instructions: open the merge request against <code>&lt;base&gt;</code>, rebase on it, not on the default branch.</li>
+    <li><b>Status</b>: <code>saaio status &lt;name&gt;</code> and the board's detail show <code>base</code>; <code>--json</code> adds <code>workspace.base</code> (null without one).</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>A. Record the base, the master keeps the stack <span class="pill grey">smallest</span></h2>
+  <p>saaio records the base and nothing more. When a base merges, the master (which usually merges on the user's OK) tells the flows stacked on it to rebase and retarget; <code>master.md</code> gets the rule. A merge on the forge's web page goes unnoticed until someone looks.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  start["saaio start --base"]:::mod --> ws["Workspace event + base"]:::mod
+  ws --> status["status / --json: base"]:::mod
+  ws --> pane["worker: SAAIO_BASE, prompt"]:::mod
+  master["master.md: rebase stacked flows after a merge"]:::mod -.-> send["saaio send"]:::old
+  classDef mod fill:#e5d9f7,stroke:#7b5eaf,color:#2e3440
+  classDef old fill:#eceff4,stroke:#4c566a,color:#2e3440
+  </pre></div>
+  <p class="meta">Touches start.rs, launch/worktree.rs, workspace.rs, event.rs, view.rs, launch/pane.rs, adapter.rs, cli/output/status.rs, ui/newflow, ui/board/detail.rs, master.md (+ master-v12.md).</p>
+  <div class="cols">
+    <div class="pro">Least code, nothing new in the server. Keeps judgment with the master, as for every other coordination.</div>
+    <div class="con">Depends on the master noticing the merge. After a squash merge the stacked branch still carries the base's old commits until someone rebases; status keeps showing a base that no longer exists.</div>
+  </div>
+</section>
+
+<section class="card pick">
+  <h2>B. saaio follows the stack <span class="pill">recommended</span></h2>
+  <p>As A, plus: when the server sees a flow merge (the forge answer it already appends), every unfinished flow whose base is that branch gets a <code>base-merged</code> event naming the new base (the merged flow's own base, else the default branch). The fold moves <code>base</code> to it, and the worker hears it as news, like a master message: rebase onto the new base, retarget the MR, push. The master hears it in its next wake list.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  fw["forge_watch: merged"]:::old --> stack["stack: flows based on it"]:::new
+  stack --> ev["base-merged event"]:::new
+  ev --> fold["fold: base = new base"]:::mod
+  ev --> wake["wake: news for the worker"]:::mod
+  fold --> status["status / --json"]:::mod
+  classDef new fill:#d5e4c8,stroke:#5e7a46,color:#2e3440
+  classDef mod fill:#e5d9f7,stroke:#7b5eaf,color:#2e3440
+  classDef old fill:#eceff4,stroke:#4c566a,color:#2e3440
+  </pre></div>
+  <p class="meta">Touches everything in A, plus a small pure <code>stack.rs</code> (which flows a merge affects, what their new base is), server/forge_watch.rs, wake.rs, fold.rs.</p>
+  <div class="cols">
+    <div class="pro">Works whoever merges and wherever. Status is never stale. The rebase still happens in the worker, which owns its worktree and can resolve conflicts.</div>
+    <div class="con">One more event kind and one server reaction. Only bases that are flows in the same store are followed; a base branch nobody runs as a flow stays as A.</div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>C. saaio rebases the stack itself <span class="pill grey">rejected</span></h2>
+  <p>The server runs <code>git rebase --onto</code> in each stacked worktree and retargets the MR through gh/glab.</p>
+  <div class="con">Rejected: the server would run git in a worktree whose <code>.git</code> and hooks the worker controls, which saaio avoids on purpose (<code>src/workspace/git.rs:166</code>); a conflict needs an agent anyway; it races a working worker.</div>
+</section>
+
+<section class="card">
+  <h2>Recommendation</h2>
+  <p><b>B.</b> A stack is exactly the case where one merge silently breaks the next flow: its MR points at a merged branch, and after a squash it shows the base's commits again. saaio already learns of every merge; acting on it costs one pure module and one event, and keeps the rebase where it belongs, in the worker. GitHub and GitLab retarget an MR themselves only when the merged branch is deleted, so the worker's retarget is still needed.</p>
+  <p>Which one, A or B? Questions on the dialog field and on fetching come with the implementation page.</p>
+</section>
+</main>

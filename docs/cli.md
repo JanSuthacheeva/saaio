@@ -28,7 +28,7 @@
 | --- | --- |
 | `saaio` | the terminal UI in your terminal. Every flow and what needs you for an agent or a script. |
 | `saaio --stop` | stop the server and every session |
-| `saaio start <request> [--name] [--mode] [--agent] [--type]` | start a worker in its own worktree |
+| `saaio start <request> [--name] [--mode] [--agent] [--type] [--base]` | start a worker in its own worktree |
 | `saaio start --plain <folder> [--name] [--agent]` | start an agent in a folder, without a flow |
 | `saaio status [<flow>] [--json] [--full] [--all]` | where flows stand |
 | `saaio send <flow> <text>` | tell a worker something |
@@ -104,7 +104,7 @@ help[2]: "Run `saaio status <name>` for one flow's phases, timeline and decision
 ## saaio start
 
 ```
-saaio start <request> [--name <name>] [--mode guided|auto] [--agent <agent>] [--type <type>]
+saaio start <request> [--name <name>] [--mode guided|auto] [--agent <agent>] [--type <type>] [--base <branch>]
 saaio start --plain <folder> [--name <name>] [--agent <agent>]
 ```
 
@@ -114,7 +114,8 @@ Run in the repository the flow works on. Steps:
    agent is Codex
 2. names the flow
 3. claims a slot (1 to 20, [repository.md](repository.md#slots-and-ports))
-4. creates a git worktree in `.saaio/worktrees/<name>` on a new branch
+4. creates a git worktree in `.saaio/worktrees/<name>` on a new branch, from what the repository
+   has checked out or from `--base`
 5. runs the repository's `.saaio/setup` there, if present, for at most 10 minutes
 6. records the flow, so the UI opens the agent in the worktree
 
@@ -143,10 +144,42 @@ help[2]: Run `saaio` in a terminal to open the worker,Run `saaio` for all flows
 | `--mode <mode>` | `guided` | `guided` or `auto`: who answers the worker's questions ([flows.md](flows.md#guided-and-auto)) |
 | `--agent <agent>` | `[worker] agent`, else `claude` | an agent from the config ([configuration.md](configuration.md#agents)) |
 | `--type <type>` | the repository's first type | a branch type from the repository's `.saaio/config.toml` ([repository.md](repository.md#branch-names)) |
+| `--base <branch>` | what the repository has checked out | the branch the worktree starts from and the merge request targets ([Stacked flows](#stacked-flows)) |
 | `--plain <folder>` | | open the agent in this folder as a plain session |
 
 The branch is `flow/<name>` unless the repository sets a convention. An existing branch gets `-2`,
 `-3` and so on.
+
+### Stacked flows
+
+`--base <branch>`: the worktree starts from that branch instead of what the repository has checked
+out, so each merge request of a stack runs as a flow of its own. The base is often another flow's
+branch.
+
+```
+$ saaio start "SHOP-218 export button" --base flow/shop-217
+flow: shop-218
+id: 9c1d53a0-2f4e-4b8e-a1c3-5d2e7f9b6a10
+worktree: ~/projects/shop/.saaio/worktrees/shop-218
+branch: flow/shop-218
+base: flow/shop-217
+slot: 2
+setup: none
+agent: claude
+pane: when saaio opens
+help[2]: Run `saaio` in a terminal to open the worker,Run `saaio` for all flows
+```
+
+- A local branch is used as it is, without a fetch. A branch only a remote has is fetched, from
+  `origin` first, then the other remotes.
+- The flow's branch does not track its base, so `git pull` and `git push` never touch the base.
+- The worker is told its merge request targets the base, and gets `SAAIO_BASE`.
+- Refused before anything is created: a name git takes for no branch, and a branch neither the
+  repository nor a remote has (`no branch <base> here or on a remote`).
+- Not combinable with `--plain`.
+- When the base's merge request merges, the flow moves onto the branch it merged into, and its
+  worker is told to rebase and point its merge request there
+  ([flows.md](flows.md#stacked-flows)).
 
 ### Plain sessions
 
@@ -165,7 +198,7 @@ help[2]: Run `saaio` in a terminal to open the session,Run `saaio` for all flows
 
 - Name: the folder's name, unless `--name`.
 - A leading `~` is the home folder.
-- Not combinable with a request, `--mode` or `--type`.
+- Not combinable with a request, `--mode`, `--type` or `--base`.
 
 ## saaio status
 
@@ -213,6 +246,7 @@ help[2]: Run `saaio report --flow shop-217 working` once the block is resolved,R
 | `review`, `merge_request` | once reported |
 | `merged` | once the merge request is merged |
 | `branch`, `worktree`, `worktree_exists` | for a flow with a worktree. `worktree_exists` is false once the folder is gone. |
+| `base` | for a [stacked flow](#stacked-flows): the branch it stands on, after `branch` |
 | `folder` | for a plain session |
 | `answer` | the closing message of the worker's last turn |
 | `services`, `services_error` | while the flow's services are not running: `paused`, `resume-failed`, ..., and the last error line of a failed pause or resume |
@@ -428,6 +462,13 @@ help[2]: "Merge or push flow/shop-221, then run `saaio remove shop-221` again",R
 | `teardown` | `ran`, `none` (no worktree or no executable `.saaio/teardown`), `failed: <its last error line>`, or `not run, the repository is not trusted` |
 | `worktree` | `removed`, `none` or `kept: <path>`, with a help line to discard what is left |
 | `branch` | `deleted`, `kept` or `none` |
+| `stacked[n]` | the unfinished flows that stand on its branch ([Stacked flows](#stacked-flows)), with a help line. Left out without any. |
+
+A flow's removal is never refused for the flows that stand on it. They keep their commits: a base
+whose commits all live on in a stacked branch is not unmerged, so its branch is deleted. Its
+refusal for unmerged commits names them too. When saaio saw the base merge, `saaio remove` and
+`saaio clear` move the flows on it onto the branch it merged into first
+([flows.md](flows.md#stacked-flows)).
 
 | Option | Effect |
 | --- | --- |
@@ -608,6 +649,7 @@ Set by saaio in every worker's session and in the setup, teardown, pause and res
 | `SAAIO_SLOT` | the flow's slot, 1 to 20 |
 | `SAAIO_WORKTREE` | the worktree's path |
 | `SAAIO_REPO` | the repository's path |
+| `SAAIO_BASE` | the branch a stacked flow stands on ([Stacked flows](#stacked-flows)). Unset without `--base`. |
 
 - A plain session gets only `SAAIO_FLOW_ID`.
 - Every session, the master's too, gets its own `SAAIO_PROOF`. Hooks get none.

@@ -71,10 +71,7 @@ impl Server {
     fn take_news(&self, waiter: &Waiter) -> Option<String> {
         match waiter {
             Waiter::Flow(id) => match deliver::worker_news(&self.store, id, (self.clock)()) {
-                WorkerNews::News(messages) => {
-                    let messages: Vec<&str> = messages.iter().map(String::as_str).collect();
-                    Some(wake::for_worker(&messages))
-                }
+                WorkerNews::News(notes) => Some(wake::for_worker(&notes)),
                 WorkerNews::Nothing | WorkerNews::Gone => None,
             },
             Waiter::Master => {

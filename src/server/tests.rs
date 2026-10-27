@@ -384,6 +384,7 @@ fn a_failed_resume_retries_fresh_before_blocking() {
                     slot: Some(1),
                     window: Some(HOSTED.into()),
                     agent: "shell".into(),
+                    base: None,
                 },
             ),
         )
@@ -2010,13 +2011,14 @@ fn idle_flow(store: &Store, repo: &Path, name: &str) -> String {
         crate::workspace::fixtures::init(repo);
     }
     let space = workspace_for(repo, name, format!("flow/{name}"), 4, "claude");
-    crate::workspace::create_worktree(repo, &space).unwrap();
+    crate::workspace::create_worktree(repo, &space, None).unwrap();
     let workspace = EventKind::Workspace {
         path: space.path,
         branch: Some(format!("flow/{name}")),
         slot: Some(4),
         window: None,
         agent: "claude".into(),
+        base: None,
     };
     store
         .append(&id, &LogEvent::new(now() - 20 * 60_000, workspace))

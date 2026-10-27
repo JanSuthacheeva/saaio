@@ -14,6 +14,7 @@ pub fn workspace_for(repo: &Path, name: &str, branch: String, slot: u8, agent: &
         slot: Some(slot),
         window: None,
         agent: agent.to_string(),
+        base: None,
     }
 }
 
@@ -25,28 +26,28 @@ pub fn folder_workspace(folder: &Path, agent: &str) -> Workspace {
         slot: None,
         window: None,
         agent: agent.to_string(),
+        base: None,
     }
 }
 
-/// git -C <repo> worktree add -b <branch> <path>; workspace_for always sets the branch.
-pub fn add_argv(repo: &Path, workspace: &Workspace) -> Vec<String> {
+/// git -C <repo> worktree add [--no-track] -b <branch> <path> [<from>]: --no-track with `from`,
+/// so the flow's branch never pulls from or pushes to its base. workspace_for always sets the
+/// branch.
+pub fn add_argv(repo: &Path, workspace: &Workspace, from: Option<&str>) -> Vec<String> {
     let repo = repo.display().to_string();
     let branch = workspace
         .branch
         .as_deref()
         .expect("a worktree flow has a branch");
-    [
-        "git",
-        "-C",
-        &repo,
-        "worktree",
-        "add",
-        "-b",
-        branch,
-        &workspace.path,
-    ]
-    .map(String::from)
-    .to_vec()
+    let mut argv: Vec<String> = ["git", "-C", &repo, "worktree", "add"]
+        .map(String::from)
+        .to_vec();
+    if from.is_some() {
+        argv.push("--no-track".to_string());
+    }
+    argv.extend(["-b", branch, &workspace.path].map(String::from));
+    argv.extend(from.map(String::from));
+    argv
 }
 
 /// git -C <repo> worktree remove [--force] <path>; without force a dirty worktree is kept.
@@ -77,15 +78,17 @@ pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
 
 /// What hook_env sets: a worker's identity, which a session saaio ui starts from inside one must
 /// not pass on.
-pub const HOOK_VARS: [&str; 5] = [
+pub const HOOK_VARS: [&str; 6] = [
     "SAAIO_FLOW_ID",
     "SAAIO_FLOW_NAME",
     "SAAIO_SLOT",
     "SAAIO_WORKTREE",
     "SAAIO_REPO",
+    "SAAIO_BASE",
 ];
 
-/// SAAIO_FLOW_ID, SAAIO_FLOW_NAME, SAAIO_SLOT (when it has one), SAAIO_WORKTREE, SAAIO_REPO for the hooks.
+/// SAAIO_FLOW_ID, SAAIO_FLOW_NAME, SAAIO_SLOT (when it has one), SAAIO_WORKTREE, SAAIO_REPO and
+/// SAAIO_BASE (when it has one) for the hooks.
 pub fn hook_env(id: &str, name: &str, repo: &Path, workspace: &Workspace) -> Vec<(String, String)> {
     [
         Some(("SAAIO_FLOW_ID", id.to_string())),
@@ -93,6 +96,7 @@ pub fn hook_env(id: &str, name: &str, repo: &Path, workspace: &Workspace) -> Vec
         workspace.slot.map(|slot| ("SAAIO_SLOT", slot.to_string())),
         Some(("SAAIO_WORKTREE", workspace.path.clone())),
         Some(("SAAIO_REPO", repo.display().to_string())),
+        workspace.base.clone().map(|base| ("SAAIO_BASE", base)),
     ]
     .into_iter()
     .flatten()
@@ -115,7 +119,7 @@ mod tests {
         assert_eq!(workspace.window, None);
         assert_eq!(workspace.agent, "claude");
         assert_eq!(
-            add_argv(Path::new("/repo"), &workspace),
+            add_argv(Path::new("/repo"), &workspace, None),
             strings(&[
                 "git",
                 "-C",
@@ -149,6 +153,47 @@ mod tests {
                 "--force",
                 "/repo/.saaio/worktrees/shop-217"
             ])
+        );
+    }
+
+    #[test]
+    fn starts_a_worktree_from_its_base_without_tracking_it() {
+        assert_eq!(
+            add_argv(
+                Path::new("/repo"),
+                &shop(),
+                Some("refs/remotes/origin/stack")
+            ),
+            strings(&[
+                "git",
+                "-C",
+                "/repo",
+                "worktree",
+                "add",
+                "--no-track",
+                "-b",
+                "flow/shop-217",
+                "/repo/.saaio/worktrees/shop-217",
+                "refs/remotes/origin/stack"
+            ])
+        );
+    }
+
+    #[test]
+    fn names_the_base_to_the_hooks_of_a_stacked_flow() {
+        let stacked = Workspace {
+            base: Some("flow/shop-216".into()),
+            ..shop()
+        };
+
+        assert_eq!(
+            hook_env("7f3c", "shop-217", Path::new("/repo"), &stacked).last(),
+            Some(&("SAAIO_BASE".to_string(), "flow/shop-216".to_string()))
+        );
+        assert!(
+            hook_env("7f3c", "shop-217", Path::new("/repo"), &shop())
+                .iter()
+                .all(|(key, _)| key != "SAAIO_BASE")
         );
     }
 

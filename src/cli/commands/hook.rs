@@ -367,19 +367,18 @@ fn of_flow_repo(store: &Store, id: &str, url: &str, now: u64) -> bool {
         .is_some_and(|dir| of_own_repo(&dir, url))
 }
 
-/// The news a session's Stop hands over: a worker's messages from the master (its flow working
+/// The news a session's Stop hands over: a worker's messages from the master and saaio's notes (its flow working
 /// again, since the session goes on with them), the flows that stopped for the master.
 fn hand_over(store: &Store, waiter: &Waiter, log: &Log, now: u64) -> Option<String> {
     match waiter {
         Waiter::Flow(id) => {
-            let WorkerNews::News(messages) = deliver::worker_news(store, id, now) else {
+            let WorkerNews::News(notes) = deliver::worker_news(store, id, now) else {
                 return None;
             };
             if let Err(error) = store.append(id, &Event::new(now, EventKind::Working)) {
                 log.error(&format!("{error:#}"));
             }
-            let messages: Vec<&str> = messages.iter().map(String::as_str).collect();
-            Some(wake::for_worker(&messages))
+            Some(wake::for_worker(&notes))
         }
         Waiter::Master => {
             let changed = deliver::master_news_now(store, &views(store, now).0);

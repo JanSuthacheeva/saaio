@@ -578,7 +578,10 @@ mod tests {
             flow(
                 "shop-240",
                 Mode::Auto,
-                vec![EventKind::Merged { url: url.into() }],
+                vec![EventKind::Merged {
+                    url: url.into(),
+                    into: None,
+                }],
             )
         };
         let pull = merged("https://github.com/acme/shop/pull/418");

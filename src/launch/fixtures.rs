@@ -27,5 +27,6 @@ pub(super) fn scratch() -> Workspace {
         slot: None,
         window: None,
         agent: "claude".into(),
+        base: None,
     }
 }

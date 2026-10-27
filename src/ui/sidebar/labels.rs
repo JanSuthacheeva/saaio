@@ -184,7 +184,10 @@ mod tests {
         let sidebar = sidebar(&board, &theme, &changed);
 
         let open = sidebar.label(&flow(EventKind::MergeRequest { url: url() }));
-        let merged = sidebar.label(&flow(EventKind::Merged { url: url() }));
+        let merged = sidebar.label(&flow(EventKind::Merged {
+            url: url(),
+            into: None,
+        }));
 
         assert_eq!(open.content, "PR #42");
         assert_eq!(merged.content, "merged");

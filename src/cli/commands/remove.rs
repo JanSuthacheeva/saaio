@@ -4,12 +4,13 @@ use std::path::Path;
 
 use super::retire::{
     Uncommitted, Unmerged, close_pane, drop_branch, refuse_uncommitted_work,
-    refuse_unmerged_commits, retire_worktree,
+    refuse_unmerged_commits, restack, retire_worktree,
 };
 use super::{no_flow, views};
 use crate::cli::output::remove::{self, BranchFate, Retired};
 use crate::cli::output::{Document, Failure};
 use crate::fold;
+use crate::stack;
 use crate::store::Store;
 use crate::trust::Trust;
 
@@ -45,11 +46,15 @@ pub fn run(
     };
     let (flows, _) = views(store, now);
     let flow = fold::resolve(&flows, &args.flow).ok_or_else(|| no_flow(&args.flow))?;
+    let stacked: Vec<&str> = stack::standing_on(&flows, flow)
+        .iter()
+        .map(|on| on.name.as_str())
+        .collect();
     if uncommitted == Uncommitted::Keep {
         refuse_uncommitted_work(flow)?;
     }
     if unmerged == Unmerged::Keep {
-        refuse_unmerged_commits(flow)?;
+        refuse_unmerged_commits(flow, &stacked)?;
     }
     let pane = close_pane(socket, flow)?;
     let retired = retire_worktree(trust, flow, uncommitted);
@@ -57,8 +62,20 @@ pub fn run(
         Retired::Kept(_) => BranchFate::Kept,
         Retired::NoWorktree | Retired::Removed => drop_branch(flow, unmerged),
     };
+    restack(store, &flows, flow, now)?;
     store
         .remove(&flow.id)
         .map_err(|error| Failure::from(error.context(format!("could not remove {}", flow.name))))?;
-    Ok(remove::removed(&flow.name, pane, &retired, branch))
+    let on = flow
+        .workspace
+        .as_ref()
+        .and_then(|space| space.branch.as_deref())
+        .unwrap_or_default();
+    Ok(remove::removed(
+        &flow.name,
+        pane,
+        &retired,
+        branch,
+        (on, &stacked),
+    ))
 }

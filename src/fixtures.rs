@@ -48,6 +48,7 @@ pub fn workspace(name: &str, agent: &str) -> Workspace {
         slot: Some(1),
         window: None,
         agent: agent.into(),
+        base: None,
     }
 }
 

@@ -11,10 +11,10 @@ mod pointer;
 pub use effect::{Effect, Job, JobError, Removal, outcome};
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::config::prefix::Prefix;
-use crate::launch::worktree::WORKTREES_DIR;
+use crate::launch::worktree::{WORKTREES_DIR, repo_of};
 use crate::proto::{Modes, PaneInfo, PaneKey, PaneStatus, Size};
 use crate::ui::board::BoardState;
 use crate::ui::fit;
@@ -38,7 +38,7 @@ const OVERVIEW_EVERY_MS: u64 = 2_000;
 pub enum View {
     Panes,
     Board(BoardState),
-    NewFlow(NewFlowForm),
+    NewFlow(Box<NewFlowForm>),
     /// Scrolled back this many lines in the pane's history (the prefix and [).
     History(u32),
     /// The prefix and Q: the ids of the workers that are not finished, which the answer keeps or ends.
@@ -58,7 +58,7 @@ pub enum View {
 pub enum Confirmed {
     Remove(Removal),
     /// Trust the form's repository, then start the flow again.
-    Trust(NewFlowForm),
+    Trust(Box<NewFlowForm>),
 }
 
 /// The master as the UI shows it.
@@ -255,6 +255,31 @@ impl App {
             }
             _ => None,
         }
+    }
+
+    /// The branches of `repo`'s unfinished worktree flows, a new flow can stand on; the focused
+    /// flow's first.
+    fn bases_in(&self, repo: &Path) -> Vec<String> {
+        let focused = match &self.focus {
+            PaneKey::Flow(id) => Some(id.as_str()),
+            PaneKey::Master => None,
+        };
+        let mut flows: Vec<&FlowView> = self
+            .workers()
+            .into_iter()
+            .filter(|flow| !flow.is_finished() && !flow.merged)
+            .filter(|flow| {
+                flow.workspace
+                    .as_ref()
+                    .and_then(repo_of)
+                    .is_some_and(|of| of == repo)
+            })
+            .collect();
+        flows.sort_by_key(|flow| Some(flow.id.as_str()) != focused);
+        flows
+            .into_iter()
+            .filter_map(|flow| flow.workspace.as_ref()?.branch.clone())
+            .collect()
     }
 
     /// The repository of the pane in view: the master's directory, the repo a worker's worktree is

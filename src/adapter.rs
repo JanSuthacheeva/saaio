@@ -25,6 +25,17 @@ hook feedback or as a prompt that starts with \"message from the saaio master:\"
 you asked or pass on what the user said, so act on them as you would on the user's own answer. To \
 ask the master or the user something, end your turn with the question.";
 
+/// WORKER_PROMPT, and for a stacked flow which branch its merge request targets.
+pub fn worker_prompt(base: Option<&str>) -> String {
+    match base {
+        Some(base) => format!(
+            "{WORKER_PROMPT} Your branch stands on {base}: open your merge request against \
+{base} and rebase on it. Push {base} first if the remote lacks it."
+        ),
+        None => WORKER_PROMPT.to_string(),
+    }
+}
+
 /// Codex has no Skill tool event; a single SKILL.md read is the phase signal.
 const CODEX_PHASE_PROMPT: &str = "For each workflow skill, read its SKILL.md only when you begin \
 working on that skill. Never read workflow skills ahead, even in separate commands. saaio \
@@ -87,17 +98,24 @@ impl Adapter {
 
     /// The arguments that make the harness report to `<flow_exe> hook <name>` and wait for the
     /// master's messages, inserted right after the program in the agent's argv, fresh and resumed;
-    /// with `trusted`, Codex trusts that folder (else it asks in its pane).
-    pub fn wiring(self, flow_exe: &Path, trusted: Option<&Path>) -> Vec<String> {
+    /// with `trusted`, Codex trusts that folder (else it asks in its pane); with `base`, the worker
+    /// is told its merge request targets it.
+    pub fn wiring(
+        self,
+        flow_exe: &Path,
+        trusted: Option<&Path>,
+        base: Option<&str>,
+    ) -> Vec<String> {
+        let prompt = worker_prompt(base);
         match self {
             Adapter::ClaudeCode => vec!["--settings".to_string(), claude_code::settings(flow_exe)]
                 .into_iter()
-                .chain(self.instruct(WORKER_PROMPT))
+                .chain(self.instruct(&prompt))
                 .collect(),
             Adapter::Codex => codex::hooks(flow_exe)
                 .into_iter()
                 .chain(trusted.map(codex::trusted_folder).unwrap_or_default())
-                .chain(self.instruct(&format!("{WORKER_PROMPT} {CODEX_PHASE_PROMPT}")))
+                .chain(self.instruct(&format!("{prompt} {CODEX_PHASE_PROMPT}")))
                 .collect(),
         }
     }
@@ -256,9 +274,32 @@ mod tests {
             "the prompt names no harness"
         );
         let wiring =
-            Adapter::ClaudeCode.wiring(Path::new("/bin/saaio"), Some(Path::new("/worktree")));
+            Adapter::ClaudeCode.wiring(Path::new("/bin/saaio"), Some(Path::new("/worktree")), None);
         assert_eq!(wiring[0], "--settings");
         assert_eq!(wiring[2..], ["--append-system-prompt", WORKER_PROMPT]);
+    }
+
+    #[test]
+    fn tells_a_stacked_worker_its_merge_request_targets_its_base() {
+        let prompt = worker_prompt(Some("flow/shop-216"));
+
+        assert!(prompt.starts_with(WORKER_PROMPT));
+        assert!(
+            prompt.ends_with(
+                "Your branch stands on flow/shop-216: open your merge request against \
+flow/shop-216 and rebase on it. Push flow/shop-216 first if the remote lacks it."
+            ),
+            "{prompt}"
+        );
+        assert_eq!(worker_prompt(None), WORKER_PROMPT);
+        let exe = Path::new("/bin/saaio");
+        let claude = Adapter::ClaudeCode.wiring(exe, None, Some("flow/shop-216"));
+        assert_eq!(claude[2..], ["--append-system-prompt", prompt.as_str()]);
+        let codex = Adapter::Codex.wiring(exe, None, Some("flow/shop-216"));
+        assert_eq!(
+            codex[codex.len() - 2..],
+            Adapter::Codex.instruct(&format!("{prompt} {CODEX_PHASE_PROMPT}"))
+        );
     }
 
     #[test]
@@ -281,7 +322,7 @@ mod tests {
         );
 
         let folder = Path::new("/worktree");
-        let worker = Adapter::Codex.wiring(exe, Some(folder));
+        let worker = Adapter::Codex.wiring(exe, Some(folder), None);
         let worker_prompt: toml::Table = toml::from_str(&worker[worker.len() - 1]).unwrap();
         let prompt = worker_prompt["developer_instructions"].as_str().unwrap();
         assert!(prompt.contains("read its SKILL.md only when you begin working on that skill"));
@@ -303,7 +344,7 @@ mod tests {
                 .chain(codex::trusted_folder(folder))
                 .collect::<Vec<_>>()
         );
-        let untrusted = Adapter::Codex.wiring(exe, None);
+        let untrusted = Adapter::Codex.wiring(exe, None, None);
         assert!(!untrusted.iter().any(|arg| arg.starts_with("projects=")));
         assert_eq!(untrusted.len(), worker.len() - 2);
         assert_eq!(Adapter::Codex.plain_wiring(exe, None), codex::hooks(exe));

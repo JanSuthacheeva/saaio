@@ -14,7 +14,7 @@ pub(crate) enum Opening {
     WhenUiRuns,
 }
 
-/// flow, id, worktree, branch, slot, setup (ran / none / failed: ...), agent, pane, help.
+/// flow, id, worktree, branch, base (for a stacked flow), slot, setup (ran / none / failed: ...), agent, pane, help.
 pub(crate) fn started(
     flow: &FlowView,
     workspace: &Workspace,
@@ -27,6 +27,8 @@ pub(crate) fn started(
         id: &'a str,
         worktree: &'a str,
         branch: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        base: Option<&'a str>,
         slot: Option<u8>,
         setup: String,
         agent: &'a str,
@@ -39,6 +41,7 @@ pub(crate) fn started(
         id: &flow.id,
         worktree: &workspace.path,
         branch: workspace.branch.as_deref(),
+        base: workspace.base.as_deref(),
         slot: workspace.slot,
         setup: setup.to_string(),
         agent: &workspace.agent,

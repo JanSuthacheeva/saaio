@@ -1,0 +1,383 @@
+<title>Stacked Flows: Implementation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+/* One 720px reading column of cards, jasu.dev look */
+:root {
+  --surface:#f8f9fb; --card:#eceff4; --ink:#2e3440; --muted:#4c566a; --subtle:#d8dee9; --border:#d8dee9;
+  --code-block:#2e3440; --code-bg:#e5e9f0; --code-ink:#4b6c8a; --accent:#7b5eaf; --link:#4b6c8a;
+  --constructive:#a3be8c; --warning:#d08770; --critical:#bf616a; --on-accent:#f8f9fb; --block-ink:#eceff4;
+  --sans:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --mono:ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --gap:24px; --radius:6px; color-scheme:light;
+}
+:root[data-theme="dark"] {
+  --surface:#2e3440; --card:#3b4252; --ink:#eceff4; --muted:#93b1cc; --subtle:#434c5e; --border:#4c566a;
+  --code-block:#3b4252; --code-bg:#3b4252; --code-ink:#88c0d0; --accent:#bd93f9; --link:#88c0d0;
+  --warning:#ebcb8b; --on-accent:#2e3440; color-scheme:dark;
+}
+body { background:var(--surface); color:var(--ink); font:18px/1.6 var(--sans); }
+main { max-width:720px; margin:0 auto; padding-block:32px 64px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); display:flex; flex-direction:column; gap:var(--gap); }
+h1 { font-size:clamp(1.75rem, 5vw, 2.5rem); line-height:1.1; font-weight:800; letter-spacing:-0.03em; margin:0; text-wrap:balance; }
+h2 { font-size:24px; line-height:1.3; margin:0; text-wrap:balance; }
+h3 { font-size:18px; margin:0; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+p, ul, ol { margin:0; }
+ul, ol { padding-left:1.2em; display:flex; flex-direction:column; gap:6px; }
+.meta { font-size:13px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:var(--gap); display:flex; flex-direction:column; gap:14px; min-width:0; }
+.unit { border-top:1px solid var(--border); padding-top:14px; display:flex; flex-direction:column; gap:8px; min-width:0; }
+.pill { display:inline-block; border-radius:99px; font-size:0.75rem; font-weight:600; letter-spacing:0.05em; padding:0 9px; }
+.new { background:var(--constructive); color:#2e3440; }
+.mod { background:var(--accent); color:var(--on-accent); }
+code { font-family:var(--mono); font-size:0.78em; background:var(--code-bg); color:var(--code-ink); border-radius:0.2rem; padding:1px 4px; overflow-wrap:anywhere; }
+pre.code { background:var(--code-block); color:var(--block-ink); border-radius:var(--radius); padding:12px 14px; overflow-x:auto; font:0.78em/1.5 var(--mono); margin:0; }
+pre.code code { background:none; color:inherit; padding:0; font-size:1em; }
+.diagram { overflow-x:auto; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px; }
+ol.steps { font-size:15px; }
+ol.steps code { font-size:0.85em; }
+.err { border-left:3px solid var(--critical); padding-left:10px; font-size:15px; }
+.q li { padding:4px 0; }
+.q b { color:var(--accent); }
+table { border-collapse:collapse; font-size:15px; width:100%; }
+td, th { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+th { background:var(--subtle); }
+.tablewrap { overflow-x:auto; }
+@media (max-width:560px) { .card { padding:14px; } }
+</style>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:8px">
+  <p class="meta">saaio 0.2.0 - design-code, step 2 of 2 - branch flow/start-base</p>
+  <h1>Stacked flows: the implementation</h1>
+</header>
+
+<section class="card">
+  <h2>1. Decision recap</h2>
+  <p>Approach B: <code>saaio start --base &lt;branch&gt;</code> (and a base row in the new-flow dialog) creates the worktree from the base and records it on the <code>Workspace</code> event; the worker is told to target it. When the server learns that a flow's merge request merged, every unfinished flow standing on that flow's branch gets a <code>base-merged</code> event: its base moves to the branch the merge went into, and its worker hears it as news.</p>
+  <p class="meta">Decided: B over A (master only) and C (saaio rebases). The rebase stays with the worker.</p>
+</section>
+
+<section class="card">
+  <h2>2. Structure overview</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart TB
+  subgraph cli[command line]
+    start["commands/start.rs"]:::mod
+    out["output/start.rs, output/status.rs"]:::mod
+  end
+  subgraph ui[ui]
+    form["newflow.rs + view.rs"]:::mod
+    eff["app/effect.rs Job::args"]:::mod
+    det["board/detail.rs"]:::mod
+  end
+  subgraph git[git and launch]
+    gitrs["workspace/git.rs start_point"]:::mod
+    wsrs["workspace.rs create_worktree"]:::mod
+    wt["launch/worktree.rs add_argv, hook_env"]:::mod
+    pane["launch/pane.rs worker_spec"]:::mod
+    ad["adapter.rs worker_prompt"]:::mod
+  end
+  subgraph core[log and views]
+    ev["event.rs Workspace.base, BaseMerged"]:::mod
+    view["view.rs Workspace.base"]:::mod
+    fold["fold.rs"]:::mod
+    wake["wake.rs Note"]:::mod
+    stack["stack.rs"]:::new
+    forge["forge.rs Found.target"]:::mod
+  end
+  subgraph server[server]
+    fw["server/forge_watch.rs"]:::mod
+    news["server/news.rs, deliver.rs"]:::mod
+  end
+  start --> gitrs --> wsrs --> wt
+  start --> ev
+  eff --> start
+  form --> eff
+  pane --> ad
+  pane --> wt
+  fw --> forge
+  fw --> stack --> ev
+  fold --> view
+  news --> wake
+  out --> view
+  det --> view
+  classDef new fill:#d5e4c8,stroke:#5e7a46,color:#2e3440
+  classDef mod fill:#e5d9f7,stroke:#7b5eaf,color:#2e3440
+  </pre></div>
+  <p class="meta">Green: new. Purple: modified. Also modified, text only: master.md (+ master-v12.md), CHANGELOG.md, ROADMAP.md, docs/cli.md, docs/flows.md, docs/json.md, docs/ui.md, CLAUDE.md.</p>
+</section>
+
+<section class="card">
+  <h2>3. Units</h2>
+
+  <div class="unit">
+    <h3><code>src/workspace/git.rs</code> <span class="pill mod">modified</span></h3>
+    <p>Learns where a flow's branch starts from a base name.</p>
+<pre class="code"><code>/// Where git creates a flow's branch: a local branch, or a remote's copy of one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartPoint {
+    Local(String),
+    Remote { remote: String, branch: String },
+}
+
+impl StartPoint {
+    /// What git worktree add starts from: `x` or `refs/remotes/origin/x`.
+    pub fn rev(&self) -&gt; String;
+}
+
+/// The start point for `base`: the local branch, else the first remote (origin first) that has it,
+/// fetched with a deadline. Err for a name git refuses as a branch, or one no remote has.
+pub fn start_point(repo: &amp;Path, base: &amp;str) -&gt; Result&lt;StartPoint&gt;;</code></pre>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/launch/worktree.rs</code> <span class="pill mod">modified</span></h3>
+<pre class="code"><code>/// git -C &lt;repo&gt; worktree add [--no-track] -b &lt;branch&gt; &lt;path&gt; [&lt;from&gt;]
+pub fn add_argv(repo: &amp;Path, workspace: &amp;Workspace, from: Option&lt;&amp;str&gt;) -&gt; Vec&lt;String&gt;;
+
+pub const HOOK_VARS: [&amp;str; 6] = [.., "SAAIO_BASE"];
+/// ...and SAAIO_BASE when the flow has a base.
+pub fn hook_env(id, name, repo, workspace) -&gt; Vec&lt;(String, String)&gt;;   // unchanged signature</code></pre>
+    <p class="meta"><code>workspace_for</code> and <code>folder_workspace</code> set <code>base: None</code>; start.rs sets it with struct update syntax.</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/workspace.rs</code> <span class="pill mod">modified</span></h3>
+<pre class="code"><code>/// Creates the worktree and branch, from `from` when given; ...
+pub fn create_worktree(repo: &amp;Path, workspace: &amp;Workspace, from: Option&lt;&amp;StartPoint&gt;) -&gt; Result&lt;()&gt;;</code></pre>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/cli/commands/start.rs</code> <span class="pill mod">modified</span></h3>
+<pre class="code"><code>pub struct Args {
+    ..
+    /// Branch the worktree starts from and the merge request targets [default: what the repo has checked out]
+    #[arg(long, value_name = "BRANCH", conflicts_with = "plain")]
+    base: Option&lt;String&gt;,
+}
+
+/// The start point --base names, before anything is created; the failure says how to make it exist.
+fn pick_base(repo: &amp;Path, asked: Option&lt;&amp;str&gt;) -&gt; Result&lt;Option&lt;StartPoint&gt;, Failure&gt;;</code></pre>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/adapter.rs</code> <span class="pill mod">modified</span></h3>
+<pre class="code"><code>/// WORKER_PROMPT, and for a stacked flow: "Your branch starts from &lt;base&gt;, not the default branch:
+/// open your merge request against &lt;base&gt; and rebase on it. Push &lt;base&gt; first if the remote lacks it."
+pub fn worker_prompt(base: Option&lt;&amp;str&gt;) -&gt; String;
+
+pub fn wiring(self, flow_exe: &amp;Path, trusted: Option&lt;&amp;Path&gt;, base: Option&lt;&amp;str&gt;) -&gt; Vec&lt;String&gt;;</code></pre>
+    <p class="meta"><code>launch/pane.rs::worker_spec</code> passes <code>space.base</code>, fresh and resumed, so a resumed worker sees the base it has now.</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/stack.rs</code> <span class="pill new">new</span></h3>
+    <p>Which flows stand on a branch that merged, and the event each gets (pure).</p>
+<pre class="code"><code>/// For each unfinished, unmerged worktree flow of `merged`'s repository whose base is `merged`'s
+/// branch: its id and BaseMerged { base: that branch, onto }.
+pub fn on_merge(flows: &amp;[FlowView], merged: &amp;FlowView, onto: &amp;str) -&gt; Vec&lt;(String, EventKind)&gt;;</code></pre>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/forge.rs</code> <span class="pill mod">modified</span></h3>
+    <p><code>Found</code> gains the branch the request targets; gh asks for <code>baseRefName</code> (list and view), glab already prints <code>target_branch</code>.</p>
+<pre class="code"><code>pub struct Found { .., pub target: String }</code></pre>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/server/forge_watch.rs</code> <span class="pill mod">modified</span></h3>
+<pre class="code"><code>/// ...and, when the news is Merged, stack::on_merge's events appended to the flows on its branch.
+pub(super) fn forge_answer(&amp;mut self, answer: Answer);   // unchanged signature
+/// Appends each (id, kind); logs a failure and goes on.
+fn restack(&amp;mut self, events: Vec&lt;(String, EventKind)&gt;, now: u64);</code></pre>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/wake.rs</code>, <code>src/deliver.rs</code> <span class="pill mod">modified</span></h3>
+<pre class="code"><code>/// What a worker hears: the master's message, or saaio's word that its base merged.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Note {
+    Master(String),
+    BaseMerged { base: String, onto: String },
+}
+
+/// The notes in a flow's log after the first `delivered` of them (Message and BaseMerged events).
+pub fn undelivered(events: &amp;[Event], delivered: usize) -&gt; Vec&lt;Note&gt;;
+/// "message from the saaio master:" + text, or "news from saaio:" + what to do after a base merged.
+pub fn for_worker(notes: &amp;[Note]) -&gt; String;
+
+pub enum WorkerNews { Gone, Nothing, News(Vec&lt;Note&gt;) }   // deliver.rs</code></pre>
+    <p class="meta">The delivered count now counts both kinds. Old stores hold no BaseMerged, so their counts stay right. <code>dialog_answered</code> keeps looking at Message only.</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/fold.rs</code> <span class="pill mod">modified</span></h3>
+    <p><code>Workspace</code> copies <code>base</code>; <code>BaseMerged</code> sets <code>workspace.base = Some(onto)</code> and notes "base flow/a merged, now on main" (Attention).</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/ui/newflow.rs</code>, <code>newflow/view.rs</code>, <code>app/effect.rs</code>, <code>app/keys.rs</code>, <code>app/messages.rs</code>, <code>ui.rs</code> <span class="pill mod">modified</span></h3>
+<pre class="code"><code>pub struct NewFlowForm {
+    ..
+    /// The base typed or picked; empty starts from what the repo has checked out.
+    pub base: String,
+    /// What the repo has checked out, shown faint in an empty base row.
+    pub checked_out: Option&lt;String&gt;,
+    /// The branches of the repo's unfinished flows, which up and down put into the base row.
+    pub bases: Vec&lt;String&gt;,
+}
+enum Field { Request, Type, Agent, Base, Mode }
+
+/// The repo's convention and what it has checked out arrived (LoadBranching).
+pub fn set_branching(&amp;mut self, branching: Option&lt;Branching&gt;, checked_out: Option&lt;String&gt;);
+/// The base asked for, when one is typed.
+pub fn picked_base(&amp;self) -&gt; Option&lt;&amp;str&gt;;
+
+// app/messages.rs
+pub fn on_branching(&amp;mut self, repo: &amp;Path, branching: Result&lt;Option&lt;Branching&gt;, String&gt;, checked_out: Option&lt;String&gt;);
+// Job::args: [.., "--base", base] before "--"</code></pre>
+    <p class="meta">The base row shows for flows, not plain sessions. Its own cursor like the request box. The "creates" line ends in <code>from &lt;base&gt;</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3><code>src/cli/output/start.rs</code>, <code>output/status.rs</code>, <code>ui/board/detail.rs</code> <span class="pill mod">modified</span></h3>
+    <p><code>started</code> and the detail document gain <code>base</code> after <code>branch</code>; the board's facts show <code>on &lt;base&gt;</code> after the branch. The list stays as it is.</p>
+  </div>
+</section>
+
+<section class="card">
+  <h2>4. Data</h2>
+<pre class="code"><code>// event.rs - the log (private)
+EventKind::Workspace { path, branch, slot, window, agent,
+    #[serde(default, skip_serializing_if = "Option::is_none")] base: Option&lt;String&gt; }
+/// The branch this flow stands on merged; it now stands on `onto`.
+EventKind::BaseMerged { base: String, onto: String }     // {"kind":"base-merged",...}
+
+// view.rs - the --json contract (VIEW_VERSION stays 3: a new key)
+pub struct Workspace { path, branch, slot, window, agent, pub base: Option&lt;String&gt; }
+
+// forge.rs - server only
+pub struct Found { url, status, created_at, precise_time, pub target: String }
+
+// wake.rs - store to worker
+pub enum Note { Master(String), BaseMerged { base: String, onto: String } }</code></pre>
+  <p class="meta">Both Workspace and BaseMerged texts are cleaned to TEXT_LIMIT by <code>Event::new</code>. An older saaio skips a <code>base-merged</code> line, as for any unknown kind.</p>
+</section>
+
+<section class="card">
+  <h2>5. Call chains</h2>
+  <h3>saaio start --base flow/shop-217 "SHOP-218 ..."</h3>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  participant S as start::run
+  participant G as git
+  participant St as Store
+  participant W as workspace
+  S->>G: start_point(repo, base)
+  G-->>S: Local / Remote
+  G--xS: Err unknown base
+  S->>St: create(Started)
+  S->>W: create_worktree(repo, space, Some(from))
+  W->>W: run(add_argv(.., from))
+  S->>St: append(Workspace with base)
+  </pre></div>
+  <ol class="steps">
+    <li><code>start::run -&gt; start::pick_base(&amp;repo, args.base): Result&lt;Option&lt;StartPoint&gt;, Failure&gt;</code>, right after <code>pick_kind</code>, before <code>store.create</code>.</li>
+    <li><code>pick_base -&gt; git::start_point(repo, base): Result&lt;StartPoint&gt;</code>: <code>check-ref-format --branch</code>, then <code>refs/heads/&lt;base&gt;</code>, else for each remote (origin first) <code>git fetch &lt;remote&gt; refs/heads/&lt;base&gt;:refs/remotes/&lt;remote&gt;/&lt;base&gt;</code> under a deadline, the first that has it.</li>
+    <li><code>start::run -&gt; worktree::workspace_for(..)</code>, then <code>Workspace { base: args.base, .. }</code>.</li>
+    <li><code>start::run -&gt; workspace::create_worktree(&amp;repo, &amp;space, from.as_ref()): Result&lt;()&gt;</code> <code>-&gt; process::run(&amp;add_argv(repo, space, Some(&amp;from.rev())))</code>: <code>git worktree add --no-track -b flow/shop-218 &lt;path&gt; flow/shop-217</code>.</li>
+    <li>Setup hook with <code>SAAIO_BASE</code>, then <code>append_workspace</code> (base recorded), then <code>output::start::started</code> with <code>base</code>.</li>
+    <li>Server opens the pane: <code>worker_spec -&gt; Adapter::wiring(exe, trusted, space.base)</code> <code>-&gt; worker_prompt(Some("flow/shop-217"))</code>; <code>worker_env</code> sets <code>SAAIO_BASE</code>.</li>
+  </ol>
+  <div class="err">Errors: an invalid name or a base no local branch or remote has fails in step 2 as <code>Failure::error("no branch flow/x here or on origin", ["Run `git branch -a` to see the branches", "Push it first when it lives in another clone"])</code>, exit 1, nothing created. A fetch past its deadline counts as "not on that remote". <code>--base</code> with <code>--plain</code> is a clap usage error, exit 2.</div>
+
+  <h3>The base merges first</h3>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  participant F as forge_watch
+  participant K as stack
+  participant St as Store
+  participant D as deliver / wake
+  participant Wk as worker B
+  F->>F: forge::news(A) = Merged
+  F->>St: append(A, Merged)
+  F->>K: on_merge(board.flows, A, found.target)
+  K-->>F: [(B, BaseMerged)]
+  F->>St: append(B, BaseMerged)
+  D->>St: undelivered(B)
+  D-->>Wk: news from saaio: rebase onto main
+  </pre></div>
+  <ol class="steps">
+    <li><code>Server::forge_answer(Answer::Found { id: A, found })</code> folds A, <code>forge::news(&amp;flow, found) = Some(Merged)</code>, appends it (as today).</li>
+    <li>When that kind is <code>Merged</code>: <code>stack::on_merge(&amp;self.board.flows, &amp;flow, &amp;found.target): Vec&lt;(String, EventKind)&gt;</code>.</li>
+    <li><code>Server::restack(events, now)</code>: <code>store.append(id, &amp;LogEvent::new(now, BaseMerged { base: "flow/shop-217", onto: "main" }))</code> for each.</li>
+    <li>The StoreWatch refolds B: <code>workspace.base = "main"</code>, timeline "base flow/shop-217 merged, now on main". Status and <code>--json</code> show <code>main</code>.</li>
+    <li>Claude Code worker: its <code>saaio wait</code> <code>-&gt; deliver::worker_news -&gt; wake::undelivered: [Note::BaseMerged]</code> <code>-&gt; wake::for_worker</code>. Codex worker: <code>server/news.rs::take_news</code>, the same text typed once it is idle.</li>
+    <li>The worker reads: "news from saaio: flow/shop-217, the branch this flow stands on, was merged into main. Rebase your own commits onto it (<code>git fetch</code>, <code>git rebase --onto origin/main flow/shop-217</code>, or <code>origin/flow/shop-217</code> once that branch is gone), point your merge request at main and push with <code>--force-with-lease</code>." Later notes say the same for each later merge.</li>
+  </ol>
+  <div class="err">Errors: a failed append is logged to server.log (as forge news is), the other flows still get theirs. A flow already finished or merged gets nothing. B's own pane is never touched by the server's git.</div>
+
+  <h3>New-flow dialog</h3>
+  <ol class="steps">
+    <li><code>App</code> opens the dialog: <code>NewFlowForm::new(..)</code> with <code>bases</code> = branches of the unfinished flows of that repo, <code>Effect::LoadBranching(repo)</code>.</li>
+    <li><code>ui.rs</code> answers: <code>app.on_branching(&amp;repo, Branching::load(&amp;repo), git::current_branch(&amp;repo))</code> <code>-&gt; form.set_branching(branching, checked_out)</code>.</li>
+    <li>Tab reaches <code>Field::Base</code>: typing edits <code>form.base</code>; up and down cycle <code>form.bases</code>; empty shows <code>main (checked out)</code> faint.</li>
+    <li>Enter: <code>Job::Start(form).args()</code> adds <code>--base &lt;base&gt;</code>; a refused base comes back as the form's error under the request, like any failed start.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2>6. Conventions followed</h2>
+  <ul>
+    <li>Refuse before anything is created, with help lines: <code>pick_agent</code>, <code>pick_kind</code> (<code>src/cli/commands/start.rs:142</code>, <code>:162</code>).</li>
+    <li>Optional event field with <code>serde(default, skip_serializing_if)</code>: <code>Started.phases</code> (<code>src/event.rs:39</code>).</li>
+    <li>Pure decision module beside a server reaction: <code>forge::news</code> + <code>forge_watch::forge_answer</code> (<code>src/forge.rs:293</code>, <code>src/server/forge_watch.rs:161</code>); <code>stack.rs</code> mirrors <code>pause.rs</code>, <code>reconcile.rs</code>.</li>
+    <li>git argv built in <code>launch/worktree.rs</code> and asserted as strings in its tests (<code>src/launch/worktree.rs:112</code>).</li>
+    <li>gh/glab always run in the main checkout, never the worktree (<code>src/forge.rs:21</code>); git fetch for the base runs there too.</li>
+    <li>New <code>--json</code> key without a version bump (<code>docs/json.md</code>, Versions).</li>
+    <li>master.md changes keep the old default as <code>master-v12.md</code> (<code>src/server/master-v11.md</code>).</li>
+    <li>Deviation: <code>wake::undelivered</code> counts two kinds. Kept in one count so "delivered" stays one number per flow in <code>waits/</code>.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>7. Test seams</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Unit</th><th>Test</th></tr>
+    <tr><td><code>git::start_point</code></td><td>real repos from <code>workspace::fixtures</code>: local, remote-only (a bare clone as origin), invalid name, unknown</td></tr>
+    <tr><td><code>add_argv</code>, <code>hook_env</code></td><td>argv and env as strings, with and without base</td></tr>
+    <tr><td><code>create_worktree</code></td><td>worktree from a base has its commit, no upstream set</td></tr>
+    <tr><td><code>worker_prompt</code>, <code>wiring</code></td><td>sentence present only with a base, both adapters</td></tr>
+    <tr><td><code>stack::on_merge</code></td><td>pure: picks by base and repo, skips finished, merged, plain and the merged flow itself</td></tr>
+    <tr><td><code>forge::parse</code></td><td>recorded fixtures with <code>baseRefName</code> / <code>target_branch</code></td></tr>
+    <tr><td><code>forge_answer</code></td><td><code>server/tests.rs</code>: Merged answer for A appends BaseMerged to B only</td></tr>
+    <tr><td><code>fold</code>, <code>wake</code>, <code>deliver</code></td><td>base moves on BaseMerged; notes in order with Message; delivered counts both</td></tr>
+    <tr><td><code>NewFlowForm</code>, <code>Job::args</code></td><td>base row keys, up/down, <code>--base</code> in args; golden for the dialog</td></tr>
+    <tr><td>CLI</td><td><code>tests/cli/start.rs</code>: <code>--base</code> local and remote-only, refusal, status detail and <code>--json</code> show base</td></tr>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>8. Assumptions</h2>
+  <ol>
+    <li>A local base wins over the remote's and is used as it is, not fetched or updated.</li>
+    <li>The new branch never tracks the base (<code>--no-track</code>), so <code>git pull</code> and <code>git push</code> in the worktree do not touch the base.</li>
+    <li>The new base after a merge is the branch the merge request actually went into (gh/glab), not a guess at the default branch.</li>
+    <li>Only bases that are flows of the same store and repository are followed; a base nobody runs as a flow stays as typed.</li>
+    <li><code>saaio remove</code> of the base flow does not refuse because a flow stands on it; the stacked worktree keeps its commits.</li>
+    <li>The master learns of a base merge from status and the worker's next stop; master.md gets two lines: start stacks with <code>--base &lt;the previous flow's branch&gt;</code>, and saaio tells stacked workers when a base merges.</li>
+    <li>The board's sidebar and the status list stay unchanged; base shows in detail views only.</li>
+    <li><code>--base</code> takes a branch name only, not a flow name.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2>9. Decided in review</h2>
+  <ol class="q">
+    <li><b>Remote-only base:</b> fetched from the remotes (origin first) under a deadline.</li>
+    <li><b>Dialog base field:</b> a text row, <code>main (checked out)</code> faint when empty, up and down fill in this repo's unfinished flows' branches.</li>
+    <li><b>--base</b> takes a branch name only.</li>
+    <li><b>saaio remove</b> of a base flow does not refuse for it, but names the flows standing on it: <code>stacked[n]</code> in its output and refusal, with a help line. <code>stack::standing_on(flows, base)</code> is shared with <code>on_merge</code>.</li>
+  </ol>
+</section>
+</main>

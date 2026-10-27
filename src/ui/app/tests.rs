@@ -87,6 +87,7 @@ fn worker(id: &str, mode: crate::event::Mode, age: u64, events: Vec<EventKind>) 
                 slot: Some(1),
                 window: Some("saaio-ui".into()),
                 agent: "claude".into(),
+                base: None,
             },
         ),
     ];
@@ -115,6 +116,7 @@ fn plain_session(id: &str, folder: &str, age: u64, events: Vec<EventKind>) -> Fl
                 slot: None,
                 window: Some("saaio-ui".into()),
                 agent: "claude".into(),
+                base: None,
             },
         ),
     ];

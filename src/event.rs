@@ -81,9 +81,11 @@ pub enum EventKind {
     MergeRequest {
         url: String,
     },
-    /// The merge request at url was merged.
+    /// The merge request at url was merged, into the branch `into` when the forge said.
     Merged {
         url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        into: Option<String>,
     },
     /// The merge request at url was closed without a merge.
     MergeRequestClosed {
@@ -114,6 +116,14 @@ pub enum EventKind {
         slot: Option<u8>,
         window: Option<String>,
         agent: String,
+        /// The branch the worktree started from (`saaio start --base`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        base: Option<String>,
+    },
+    /// The branch this flow stands on (its workspace's base) merged; it now stands on `onto`.
+    BaseMerged {
+        base: String,
+        onto: String,
     },
     /// Where the flow's services stand: saaio server ran or is running the repo's .saaio/pause
     /// or .saaio/resume.
@@ -232,11 +242,15 @@ impl EventKind {
             | EventKind::Blocked { reason: text }
             | EventKind::Decision { text }
             | EventKind::MergeRequest { url: text }
-            | EventKind::Merged { url: text }
+            | EventKind::Merged { url: text, .. }
             | EventKind::MergeRequestClosed { url: text }
             | EventKind::Services {
                 reason: Some(text), ..
             } => clean(text, TEXT_LIMIT),
+            EventKind::BaseMerged { base, onto } => {
+                clean(base, TEXT_LIMIT);
+                clean(onto, TEXT_LIMIT);
+            }
             EventKind::Message { text }
             | EventKind::Typed { text }
             | EventKind::Answer { text } => clean(text, LONG_TEXT_LIMIT),
@@ -463,6 +477,7 @@ mod tests {
             },
             EventKind::Merged {
                 url: "https://github.com/acme/shop/pull/42".into(),
+                into: Some("main".into()),
             },
             EventKind::MergeRequestClosed {
                 url: "https://github.com/acme/shop/pull/41".into(),
@@ -477,6 +492,19 @@ mod tests {
                 slot: None,
                 window: None,
                 agent: "claude".into(),
+                base: None,
+            },
+            EventKind::Workspace {
+                path: "/repo/.saaio/worktrees/shop-222".into(),
+                branch: Some("flow/shop-222".into()),
+                slot: Some(3),
+                window: None,
+                agent: "claude".into(),
+                base: Some("flow/shop-221".into()),
+            },
+            EventKind::BaseMerged {
+                base: "flow/shop-221".into(),
+                onto: "main".into(),
             },
             EventKind::Services {
                 status: ServiceStatus::Paused,
@@ -795,7 +823,9 @@ mod tests {
         let line = r#"{"v":1,"at":7,"kind":"workspace","path":"/repo/.saaio/worktrees/shop-221","branch":"flow/shop-221","slot":2,"window":"saaio-ui","agent":"claude"}"#;
 
         let Some(Event {
-            kind: EventKind::Workspace { branch, slot, .. },
+            kind: EventKind::Workspace {
+                branch, slot, base, ..
+            },
             ..
         }) = Event::from_line(line)
         else {
@@ -803,6 +833,8 @@ mod tests {
         };
         assert_eq!(branch.as_deref(), Some("flow/shop-221"));
         assert_eq!(slot, Some(2));
+        assert_eq!(base, None);
+        assert_eq!(Event::from_line(line).unwrap().to_line(), line);
     }
 
     #[test]

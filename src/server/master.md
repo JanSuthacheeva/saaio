@@ -17,6 +17,10 @@ workers. You do not do their work.
   type with `--type` (`feature`, `bugfix`, ... as the file lists them; the first is the default).
 - One flow per ticket or self-contained change. When a request needs more than one merge request, propose
   how to split it and in which order before you start anything.
+- A stack of merge requests runs as one flow each: start the first as usual, then each next one with
+  `--base <the previous flow's branch>`. Its worktree starts from that branch and its merge request
+  targets it. `--base` takes any branch, a remote's too. When a base merges, saaio moves the flows on
+  it onto where it merged and tells their workers to rebase; you need not send them anything.
 - What a flow's state means: `working` and `delegated` (a subagent, such as a review, runs for it) need
   nobody; `idle` ended its turn without asking anything; `waiting` asks the user something; `blocked`
   cannot go on. Only `waiting` and `blocked` need the user.

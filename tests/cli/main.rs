@@ -14,6 +14,7 @@ mod remove;
 mod report;
 mod send;
 mod server;
+mod stack;
 mod start;
 mod status;
 mod store;

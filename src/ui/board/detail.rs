@@ -57,6 +57,7 @@ impl BoardView<'_> {
             facts.push(self.sidebar.tilde(&space.path));
         } else if let Some(space) = &flow.workspace {
             facts.extend(space.branch.clone());
+            facts.extend(space.base.as_ref().map(|base| format!("on {base}")));
             facts.extend(space.slot.map(|slot| format!("slot {slot}")));
         }
         if let Some(url) = &flow.merge_request {
@@ -507,7 +508,10 @@ mod tests {
         let url = || "https://github.com/acme/shop/pull/42".to_string();
 
         let open = header(EventKind::MergeRequest { url: url() });
-        let merged = header(EventKind::Merged { url: url() });
+        let merged = header(EventKind::Merged {
+            url: url(),
+            into: None,
+        });
 
         assert!(
             open.contains(" · auto · claude · flow/shop-221 · "),
@@ -533,6 +537,15 @@ mod tests {
         );
         let running = services(ServiceStatus::Running, None);
         assert!(!running.contains("services"), "{running}");
+        let stacked = header(EventKind::BaseMerged {
+            base: "flow/shop-220".into(),
+            onto: "main".into(),
+        });
+        assert!(
+            stacked.contains(" · flow/shop-221 · on main · slot 1 · "),
+            "{stacked}"
+        );
+        assert!(!open.contains(" on "), "{open}");
     }
 
     #[test]

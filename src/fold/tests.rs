@@ -817,11 +817,33 @@ fn opened(at_ms: u64, url: &str) -> Event {
 }
 
 fn merged(at_ms: u64, url: &str) -> Event {
-    at(at_ms, EventKind::Merged { url: url.into() })
+    at(
+        at_ms,
+        EventKind::Merged {
+            url: url.into(),
+            into: None,
+        },
+    )
 }
 
 fn closed(at_ms: u64, url: &str) -> Event {
     at(at_ms, EventKind::MergeRequestClosed { url: url.into() })
+}
+
+#[test]
+fn keeps_the_branch_a_merge_went_into_out_of_the_json() {
+    let into = at(
+        MIN,
+        EventKind::Merged {
+            url: PR.into(),
+            into: Some("main".into()),
+        },
+    );
+
+    let flow = view(&[started(0), into], 2 * MIN);
+
+    assert_eq!(flow.merged_into.as_deref(), Some("main"));
+    assert!(!serde_json::to_string(&flow).unwrap().contains("mergedInto"));
 }
 
 #[test]
@@ -837,6 +859,7 @@ fn a_merge_seen_at_review_finishes_the_flow_merged() {
     assert!(flow.merged);
     assert_eq!(flow.phase, Some(Phase::of("merge-request")));
     assert_eq!(flow.merge_request.as_deref(), Some(PR));
+    assert_eq!(flow.merged_into, None);
     assert_eq!(flow.changed_at, 6 * MIN);
     assert!(
         steps(&flow)
@@ -908,13 +931,19 @@ fn a_merge_of_an_open_one_keeps_the_flow_done_and_its_change_time() {
     assert!(changes(
         "x",
         &events[..2],
-        &EventKind::Merged { url: PR.into() },
+        &EventKind::Merged {
+            url: PR.into(),
+            into: None
+        },
         10 * MIN
     ));
     assert!(!changes(
         "x",
         &events,
-        &EventKind::Merged { url: PR.into() },
+        &EventKind::Merged {
+            url: PR.into(),
+            into: None
+        },
         10 * MIN
     ));
 }
@@ -1124,6 +1153,7 @@ fn workspace(slot: u8, window: Option<&str>) -> EventKind {
         slot: Some(slot),
         window: window.map(String::from),
         agent: "claude".into(),
+        base: None,
     }
 }
 
@@ -1147,6 +1177,47 @@ fn keeps_the_last_workspace_without_changing_the_state() {
     assert_eq!(flow.changed_at, 0);
     assert_eq!(texts(&flow), vec!["started"]);
     assert_eq!(view(&[started(0)], 1).workspace, None);
+}
+
+#[test]
+fn moves_a_stacked_flow_onto_where_its_base_merged() {
+    let mut stacked = workspace(1, None);
+    if let EventKind::Workspace { base, .. } = &mut stacked {
+        *base = Some("flow/shop-220".into());
+    }
+    let merged = EventKind::BaseMerged {
+        base: "flow/shop-220".into(),
+        onto: "main".into(),
+    };
+
+    let flow = view(&[started(0), at(1, stacked), at(2, merged)], 3);
+
+    assert_eq!(
+        flow.workspace.as_ref().and_then(|ws| ws.base.as_deref()),
+        Some("main")
+    );
+    assert_eq!(
+        flow.timeline
+            .last()
+            .map(|entry| (entry.text.as_str(), entry.tone)),
+        Some(("base flow/shop-220 merged, now on main", Tone::Attention))
+    );
+    assert_eq!(flow.state, State::Working);
+}
+
+#[test]
+fn keeps_the_base_a_stacked_flow_started_from() {
+    let mut stacked = workspace(1, None);
+    if let EventKind::Workspace { base, .. } = &mut stacked {
+        *base = Some("flow/shop-220".into());
+    }
+
+    let flow = view(&[started(0), at(1, stacked)], 2);
+
+    assert_eq!(
+        flow.workspace.and_then(|ws| ws.base).as_deref(),
+        Some("flow/shop-220")
+    );
 }
 
 #[test]

@@ -218,7 +218,7 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
 }
 
 /// One flow with its steps, decisions and timeline, and for a started flow where its code is:
-/// branch, worktree and whether the worktree is still there (`worktree_exists`), or a plain
+/// branch, base, worktree and whether the worktree is still there (`worktree_exists`), or a plain
 /// session's folder.
 #[expect(
     clippy::too_many_lines,
@@ -265,6 +265,8 @@ pub(crate) fn detail(
         folder: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         branch: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        base: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         worktree: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -354,6 +356,7 @@ pub(crate) fn detail(
         merged: flow.merged,
         folder: plain.map(|space| space.path.clone()),
         branch: worktree.and_then(|space| space.branch.clone()),
+        base: worktree.and_then(|space| space.base.clone()),
         worktree: worktree.map(|space| space.path.clone()),
         worktree_exists: worktree.and(worktree_exists),
         steps: flow
@@ -710,7 +713,14 @@ mod tests {
             vec![EventKind::MergeRequest { url: url() }],
             MIN,
         );
-        let merged = flow("shop-221", vec![EventKind::Merged { url: url() }], MIN);
+        let merged = flow(
+            "shop-221",
+            vec![EventKind::Merged {
+                url: url(),
+                into: None,
+            }],
+            MIN,
+        );
 
         let open = detail(&open, MIN, false, None, Prefix::default())
             .text()

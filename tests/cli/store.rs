@@ -4,7 +4,6 @@ use std::fs;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::process::Stdio;
 use std::thread;
 use std::time::Duration;
 
@@ -66,28 +65,6 @@ fn worktree_of(home: &Path, id: &str, name: &str, origin: &str) {
         .unwrap();
 }
 
-/// `saaio server` with cat for the worker and the master and `gh` from `script` first on PATH;
-/// its stderr in home/server.log.
-fn server_with_gh(home: &Path, script: &str) -> Running {
-    let config = cat_agents(home);
-    let bin = home.join("bin");
-    fs::create_dir_all(&bin).unwrap();
-    executable(&bin.join("gh"), script);
-    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
-    let log = fs::File::create(home.join("server.log")).unwrap();
-    let server = saaio_command(home)
-        .arg("server")
-        .stdout(Stdio::null())
-        .stderr(log)
-        .env("SAAIO_CONFIG", &config)
-        .env("PATH", path)
-        .spawn()
-        .unwrap();
-    let server = Running(server);
-    wait_for_socket(&home.join("server.sock"));
-    server
-}
-
 #[test]
 fn a_store_is_for_its_user_alone() {
     let outer = TempDir::new().unwrap();
@@ -117,7 +94,7 @@ fn a_pull_request_merged_elsewhere_finishes_its_flow() {
     let _server = server_with_gh(
         home.path(),
         r#"#!/bin/sh
-[ "$*" = 'pr list --head flow/csv --state all --json url,state,createdAt --limit 10' ] || exit 1
+[ "$*" = 'pr list --head flow/csv --state all --json url,state,createdAt,baseRefName --limit 10' ] || exit 1
 echo '[{"createdAt":"2020-05-04T10:00:00Z","state":"MERGED","url":"https://github.com/acme/shop/pull/7"},{"createdAt":"2099-01-01T00:00:00Z","state":"MERGED","url":"https://github.com/acme/shop/pull/42"}]'
 "#,
     );

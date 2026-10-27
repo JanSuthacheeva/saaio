@@ -162,7 +162,7 @@ mod tests {
         let state = TempDir::new().unwrap();
         let trust = Trust::at(&Registry::at(state.path().to_path_buf()));
         let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
-        create_worktree(&repo, &workspace).unwrap();
+        create_worktree(&repo, &workspace, None).unwrap();
         hook(
             &repo,
             "setup",
@@ -195,7 +195,7 @@ touch ran.txt
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
         let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 3, "claude");
-        create_worktree(&repo, &workspace).unwrap();
+        create_worktree(&repo, &workspace, None).unwrap();
         hook(
             &repo,
             "setup",
@@ -222,7 +222,7 @@ touch ran.txt
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
         let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
-        create_worktree(&repo, &workspace).unwrap();
+        create_worktree(&repo, &workspace, None).unwrap();
         hook(
             &repo,
             "setup",
@@ -239,7 +239,7 @@ touch ran.txt
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
         let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 3, "claude");
-        create_worktree(&repo, &workspace).unwrap();
+        create_worktree(&repo, &workspace, None).unwrap();
         let env = [("SAAIO_SLOT".to_string(), "3".to_string())];
 
         assert!(!exists(&repo, Hook::Pause));
@@ -273,7 +273,7 @@ touch ran.txt
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
         let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 3, "claude");
-        create_worktree(&repo, &workspace).unwrap();
+        create_worktree(&repo, &workspace, None).unwrap();
         let pids = repo.join("pids");
         let leave = format!("sleep 30 &\necho $! >> {}", pids.display());
         hook(&repo, "resume", &format!("#!/bin/sh\necho up\n{leave}\n"));
@@ -335,7 +335,7 @@ git rev-parse --absolute-git-dir > git-dir.txt
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
         let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
-        create_worktree(&repo, &workspace).unwrap();
+        create_worktree(&repo, &workspace, None).unwrap();
         let registered = repo.join(".git/worktrees/shop-217");
         let (_decoy, _git_dir, marker) = tamper(&workspace);
 
@@ -360,7 +360,7 @@ git rev-parse --absolute-git-dir > git-dir.txt
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
         let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
-        create_worktree(&repo, &workspace).unwrap();
+        create_worktree(&repo, &workspace, None).unwrap();
         let (_decoy, git_dir, marker) = tamper(&workspace);
         hook(&repo, "setup", GIT_SCRIPT);
 

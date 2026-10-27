@@ -38,6 +38,7 @@ mod release;
 mod server;
 mod server_log;
 mod slots;
+mod stack;
 mod store;
 mod system;
 mod text;

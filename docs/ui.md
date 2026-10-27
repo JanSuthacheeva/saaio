@@ -101,7 +101,8 @@ the sidebar only, not on the rail.
 ## The board
 
 `C-space o`. A card per session. Below the cards: the selected flow's phases and how long each took,
-its timeline, decisions and last answer.
+its timeline, decisions and last answer. Its header names its request, mode, agent, branch, `on
+<base>` for a [stacked flow](flows.md#stacked-flows), slot and merge request.
 
 | Key | Does |
 | --- | --- |
@@ -134,6 +135,7 @@ sidebar does not show it.
 │▌ ╰──────────────────────────────────────────────────────────────────────╯  │
 │                                                                            │
 │  agent   (•) claude   ( ) codex                                            │
+│  base    main (checked out)                                                │
 │  mode    ( ) auto   (•) guided   ( ) plain    guided stops at every phase  │
 │  creates a branch, a worktree and a slot                                   │
 │                                                                            │
@@ -147,14 +149,16 @@ sidebar does not show it.
 | request | what to build, such as `SHOP-217 add CSV export`. Plain mode: the folder to open. |
 | type | the branch type, when the repository has a [branch convention](repository.md#branch-names) with types |
 | agent | the agent to run, when there is more than one |
+| base | the branch the flow starts from and its merge request targets ([flows.md](flows.md#stacked-flows)). Empty: what the repository has checked out, shown faint. Up and down put in the branch of one of the repository's unfinished flows, the one in view first. |
 | mode | `auto`, `guided` or `plain` ([flows.md](flows.md#guided-and-auto)) |
 | creates | the branch, worktree and slot the start creates, filled in once you type, or `every slot is taken`. Plain mode: where the session opens. |
 
 | Key | Does |
 | --- | --- |
-| typing | edits the request or folder |
+| typing | edits the request, folder or base |
 | `backspace` | deletes a character |
-| `C-w` | deletes the last word, in plain mode the last folder |
+| `C-w` | deletes the last word, in plain mode the last folder, in the base the part after the last `/` |
+| up, down arrow | in the base row: the previous or next flow's branch, then empty again |
 | `C-u` | clears the text |
 | `tab` | next row |
 | `space`, `l`, right arrow | next option in a row, wrapping around |
@@ -163,7 +167,7 @@ sidebar does not show it.
 | `esc` | cancel |
 
 In plain mode the dialog is titled `new session`, the text row is `folder`, prefilled with the
-folder in view, and the type row is hidden.
+folder in view, and the type and base rows are hidden.
 
 `enter` runs `saaio start`. The new session appears in the sidebar. A failed start shows its reason
 under the request.
