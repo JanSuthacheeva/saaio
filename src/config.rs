@@ -95,7 +95,7 @@ impl Default for MasterConfig {
     }
 }
 
-/// [ui]: how saaio ui takes keys, and whether it looks for a new release.
+/// [ui]: how saaio ui takes keys, whether it looks for a new release and raises notifications.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[cfg_attr(test, derive(Serialize))]
 #[serde(default, deny_unknown_fields)]
@@ -104,6 +104,9 @@ pub struct UiConfig {
     pub prefix: Prefix,
     /// The UI asks for the latest release once a day and names a newer one; true unless set.
     pub update_check: bool,
+    /// A flow that comes to waiting or blocked out of sight raises a desktop notification; true
+    /// unless set.
+    pub notify: bool,
 }
 
 impl Default for UiConfig {
@@ -111,6 +114,7 @@ impl Default for UiConfig {
         UiConfig {
             prefix: Prefix::default(),
             update_check: true,
+            notify: true,
         }
     }
 }

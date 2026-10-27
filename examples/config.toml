@@ -31,6 +31,9 @@
 # Once a day the UI asks GitHub for the latest release and names a newer one in its title row:
 # "0.1.1 is out: saaio update". The one network call saaio makes on its own. false turns it off.
 #update_check = true
+# A flow that starts waiting or is blocked while you aren't looking at it raises a desktop
+# notification through your terminal. false turns it off.
+#notify = true
 
 #[services]
 # Minutes a flow rests (idle, waiting, blocked, done or ended) before saaio runs the repo's
