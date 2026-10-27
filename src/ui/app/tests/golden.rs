@@ -161,9 +161,18 @@ fn every_view_looks_as_it_did() {
     new_flow.on_input(Routed::View(vec![Key::Tab]));
     golden("new-flow-agent", &render_at(&new_flow, FLEET));
 
+    let mut stacked = board_app();
+    stacked.on_input(Routed::Command(Command::Focus(2)));
+    stacked.on_input(Routed::Command(Command::NewFlow));
+    stacked.on_input(Routed::View(
+        "SHOP-240 export button".chars().map(Key::Char).collect(),
+    ));
+    stacked.on_input(Routed::View(vec![Key::Tab, Key::Down]));
+    golden("new-flow-base", &render_at(&stacked, FLEET));
+
     let mut new_session = board_app();
     new_session.on_input(Routed::Command(Command::NewFlow));
-    new_session.on_input(Routed::View(vec![Key::Tab, Key::Right]));
+    new_session.on_input(Routed::View(vec![Key::Tab, Key::Tab, Key::Right]));
     golden("new-flow-plain", &render_at(&new_session, FLEET));
 
     let mut plain = board_app();

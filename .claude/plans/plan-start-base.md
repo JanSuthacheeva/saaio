@@ -196,7 +196,10 @@ pub fn on_branching(&mut self, repo: &Path, branching: Result<Option<Branching>,
 ```
 
 - `ui.rs` answers LoadBranching with `git::current_branch(&repo)` as `checked_out`.
-- `app/keys.rs` fills `bases` when it opens the dialog.
+- `app/keys.rs` fills `bases` when it opens the dialog, from `App::bases_in(repo)`: the branches
+  of the repo's unfinished, unmerged worktree flows, the focused flow's first.
+- The bigger form is boxed where enums carry it (`View::NewFlow`, `Job::Start`,
+  `Confirmed::Trust`), for `clippy::large_enum_variant`.
 - Base row: for flows only, text with its own cursor, up/down cycle `bases`, `<checked out>
   (checked out)` faint when empty. The creates line ends in `from <base>`.
 - `Job::args` adds `--base <base>` before `--`.
@@ -313,6 +316,6 @@ pub enum Note { Master(String), BaseMerged { base: String, onto: String } }
 
 ### UI and docs
 
-- [ ] Add the base row to the new-flow dialog (`base`, `checked_out`, `bases`, `Field::Base`, `set_branching`, `on_branching`, `picked_base`, creates line, `Job::args --base`) with form tests and the dialog golden; `on <base>` in the board's detail facts
+- [x] Add the base row to the new-flow dialog (`base`, `checked_out`, `bases`, `Field::Base`, `set_branching`, `on_branching`, `picked_base`, creates line, `Job::args --base`) with form tests and the dialog golden; `on <base>` in the board's detail facts
 - [ ] master.md stack lines (master-v12.md kept), docs (cli.md start and remove, flows.md stacks, json.md workspace.base, ui.md dialog), CHANGELOG Unreleased, ROADMAP row dropped, CLAUDE.md architecture (stack.rs), design pages copied to docs/design/
 - [ ] End to end in a scratch store: a repo with a bare origin; start flow A, start B `--base` A's branch and C `--base` a remote-only branch; check worktrees, status and `--json`; the dialog's base row in a PTY; simulate A merged (a `merged` answer through the server, or a `base-merged` path test) and see B's base move and its worker news; `saaio remove` of A names B; end with `saaio --stop`

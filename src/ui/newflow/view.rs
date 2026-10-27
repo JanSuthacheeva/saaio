@@ -56,6 +56,9 @@ impl Widget for NewFlowView<'_> {
         if form.has_agent_row() {
             lines.push((5 + u16::from(form.has_type_row()), self.agent_row()));
         }
+        if form.has_base_row() {
+            lines.push((form.base_row(), self.base_row(body)));
+        }
         // A terminal too short for the dialog gets the rows that fit.
         for (row, line) in lines {
             if row < body.height {
@@ -67,6 +70,7 @@ impl Widget for NewFlowView<'_> {
             Field::Request => (0, 4),
             Field::Type => (5, 1),
             Field::Agent => (5 + u16::from(form.has_type_row()), 1),
+            Field::Base => (form.base_row(), 1),
             Field::Mode => (5 + extra, 1),
         };
         // From the border to the border, so the bar stands where the sidebar's does.
@@ -183,6 +187,35 @@ impl NewFlowView<'_> {
         Line::from(row)
     }
 
+    /// The base typed or picked, else what the repo has checked out, faint; with the keys, how up
+    /// and down pick a flow's branch.
+    fn base_row(&self, body: Rect) -> Line<'static> {
+        let theme = self.theme;
+        let form = self.form;
+        let mut row = vec![self.heading("base    ")];
+        if form.base.is_empty() {
+            let checked_out = form.checked_out.as_ref().map_or_else(
+                || "what the repo has checked out".to_string(),
+                |branch| format!("{branch} (checked out)"),
+            );
+            row.push(Span::styled(checked_out, theme.ui.faint));
+        } else {
+            row.push(Span::styled(
+                form.shown_base(body).to_string(),
+                theme.ui.text,
+            ));
+        }
+        if form.field != Field::Base || form.bases.is_empty() {
+            return Line::from(row);
+        }
+        let width = usize::from(body.width);
+        let hint = vec![Span::styled("↑↓ a flow's branch", theme.ui.faint)];
+        if spans_width(&row) + spans_width(&hint) + 2 > width {
+            return Line::from(row);
+        }
+        split(row, hint, width)
+    }
+
     /// auto, guided, plain, and what the picked one means.
     fn mode_row(&self, width: usize) -> Line<'static> {
         let mut row = vec![self.heading("mode    ")];
@@ -240,6 +273,10 @@ impl NewFlowView<'_> {
             Span::styled("creates ", theme.ui.faint),
             Span::styled(branch, theme.ui.text),
         ];
+        if let Some(base) = form.picked_base() {
+            spans.push(Span::styled(" from ", theme.ui.faint));
+            spans.push(Span::styled(base.to_string(), theme.ui.text));
+        }
         let worktree = format!("{}/{name}", worktree::WORKTREES_DIR);
         if spans_width(&spans) + worktree.len() + 20 <= width {
             spans.push(Span::styled("  ·  ", theme.ui.faint));
@@ -285,6 +322,7 @@ mod tests {
                 .add_modifier
                 .contains(Modifier::REVERSED)
         );
+        form.on_key(crate::ui::input::Key::Tab);
         form.on_key(crate::ui::input::Key::Tab);
         let chosen = view(&form);
         assert!(chosen[0].style.add_modifier.contains(Modifier::REVERSED));

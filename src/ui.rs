@@ -218,7 +218,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                 Effect::Mirror(modes) => outer.mirror(modes)?,
                 Effect::LoadBranching(repo) => {
                     let branching = Branching::load(&repo).map_err(|error| format!("{error:#}"));
-                    app.on_branching(&repo, branching);
+                    app.on_branching(&repo, branching, git::current_branch(&repo));
                 }
                 Effect::Run(job) => run_job(&env.exe, job, jobs.clone()),
                 Effect::CopySelection(selection) => {

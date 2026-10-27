@@ -31,9 +31,9 @@ fn a_job_passes_a_request_folder_or_name_that_starts_with_a_dash_as_written() {
     };
     let mut form = NewFlowForm::new("/shop".into(), "-scratch".into(), vec![]);
     form.request = "-fix the totals".into();
-    let start = Job::Start(form.clone());
+    let start = Job::Start(Box::new(form.clone()));
     form.mode = crate::event::Mode::Plain;
-    let plain = Job::Start(form);
+    let plain = Job::Start(Box::new(form));
     let remove = Job::Remove(Removal::of("-old"));
 
     for (job, value) in [
@@ -360,6 +360,7 @@ fn opens_a_plain_session_from_the_dialog() {
     app.on_input(Routed::Command(Command::NewFlow));
     app.on_input(Routed::View(vec![
         Key::Tab,
+        Key::Tab,
         Key::Right,
         Key::Tab,
         Key::Ctrl('w'),
@@ -422,6 +423,7 @@ fn names_the_branch_after_the_repos_convention_in_the_dialog() {
             name: "{type}/{ticket}-{slug}".into(),
             types: vec!["feature".into(), "bugfix".into()],
         })),
+        Some("main".into()),
     );
     app.on_input(Routed::View(
         "SHOP-240 fix totals".chars().map(Key::Char).collect(),
@@ -456,7 +458,11 @@ fn names_the_branch_after_the_repos_convention_in_the_dialog() {
     );
 
     app.on_input(Routed::Command(Command::NewFlow));
-    app.on_branching(&repo, Err("/shop/.saaio/config.toml is not valid".into()));
+    app.on_branching(
+        &repo,
+        Err("/shop/.saaio/config.toml is not valid".into()),
+        None,
+    );
     let View::NewFlow(form) = &app.view else {
         panic!("expected the dialog");
     };
@@ -548,6 +554,7 @@ fn picks_the_agent_in_the_dialog_when_there_are_two() {
         Key::Tab,
         Key::Right,
         Key::Tab,
+        Key::Tab,
         Key::Right,
     ]));
     let effects = app.on_input(Routed::View(vec![Key::Enter]));
@@ -590,4 +597,40 @@ fn shows_no_agent_row_with_one_agent() {
     let terminal = render_at(&app, FLEET);
     let dialog: String = (10..26).map(|y| row(&terminal, y) + "\n").collect();
     assert!(!dialog.contains("agent "), "{dialog}");
+}
+
+#[test]
+fn stacks_a_flow_on_the_focused_flows_branch_from_the_dialog() {
+    let mut app = board_app();
+    app.on_input(Routed::Command(Command::Focus(2)));
+    app.on_input(Routed::Command(Command::NewFlow));
+    app.on_branching(&PathBuf::from("/shop"), Ok(None), Some("main".into()));
+    app.on_input(Routed::View(
+        "SHOP-240 button".chars().map(Key::Char).collect(),
+    ));
+    app.on_input(Routed::View(vec![Key::Tab]));
+
+    let empty = render_at(&app, FLEET);
+    let dialog: String = (10..26).map(|y| row(&empty, y) + "\n").collect();
+    assert!(
+        dialog.contains("│▌ base    main (checked out) "),
+        "{dialog}"
+    );
+    app.on_input(Routed::View(vec![Key::Down]));
+    let effects = app.on_input(Routed::View(vec![Key::Enter]));
+    let [Effect::Run(job)] = &effects[..] else {
+        panic!("expected a job: {effects:?}");
+    };
+    assert_eq!(
+        job.args(),
+        [
+            "start",
+            "--mode",
+            "guided",
+            "--base",
+            "flow/shop-230",
+            "--",
+            "SHOP-240 button"
+        ]
+    );
 }

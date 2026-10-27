@@ -126,8 +126,14 @@ impl App {
         }
     }
 
-    /// The repo's branch convention for the open dialog; a broken file shows as its error.
-    pub fn on_branching(&mut self, repo: &Path, branching: Result<Option<Branching>, String>) {
+    /// The repo's branch convention and what it has checked out, for the open dialog; a broken
+    /// file shows as its error.
+    pub fn on_branching(
+        &mut self,
+        repo: &Path,
+        branching: Result<Option<Branching>, String>,
+        checked_out: Option<String>,
+    ) {
         let View::NewFlow(form) = &mut self.view else {
             return;
         };
@@ -135,8 +141,11 @@ impl App {
             return;
         }
         match branching {
-            Ok(branching) => form.set_branching(branching),
-            Err(error) => form.error = Some(error),
+            Ok(branching) => form.set_branching(branching, checked_out),
+            Err(error) => {
+                form.checked_out = checked_out;
+                form.error = Some(error);
+            }
         }
     }
 
