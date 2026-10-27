@@ -3,7 +3,7 @@
 | Page | Covers |
 | --- | --- |
 | [install.md](install.md) | requirements, installing saaio and the skills, agent settings, first run, updating |
-| [ui.md](ui.md) | the terminal UI: screen, keys, peek, board, new-flow dialog, stopping |
+| [ui.md](ui.md) | the terminal UI: screen, keys, peek, board, new-flow dialog, notifications, stopping |
 | [flows.md](flows.md) | flows, states, phases, guided and auto, the master, plain sessions, hooks |
 | [configuration.md](configuration.md) | `config.toml`: your own workflow, every setting |
 | [agents.md](agents.md) | harness setup and recommended worker permissions |

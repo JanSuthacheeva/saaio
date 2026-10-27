@@ -11,7 +11,6 @@ Nothing in progress.
 | Item | Today | Planned |
 | --- | --- | --- |
 | More agents | Claude Code and Codex are followed through their hooks | other harnesses followed the same way |
-| Desktop notifications | a waiting flow shows only in the sidebar and to the master | the UI has the terminal notify when a flow starts waiting or is blocked out of view. Switch in `config.toml`. |
 | Every subagent in the sidebar | a worker's background subagents do not show: it looks working while its turn runs, idle or waiting once it ends. | the sidebar counts every running subagent, the board lists their tasks |
 | Working across repositories | each repository has its own UI. In one store shared through `SAAIO_HOME`, the new-flow dialog starts flows in the repository of the session in view. | pick the repository in the dialog, sidebar and board show each flow's repository, `saaio start --repo <path>` |
 | Codex phases from the skill it starts | a Codex worker that reads a later skill's `SKILL.md` early seems to start that phase early | the phase follows the skill actually started |
