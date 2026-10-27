@@ -22,16 +22,27 @@ pub enum Sequence {
 }
 
 impl Sequence {
-    /// Bell for Alacritty ($ALACRITTY_WINDOW_ID, TERM alacritty*) and Terminal.app
-    /// (TERM_PROGRAM Apple_Terminal); Osc777 for TERM foot* / rxvt* or $VTE_VERSION; else Osc9.
+    /// From what the terminal sets itself first: TERM (alacritty* Bell, foot* / rxvt* Osc777,
+    /// xterm-ghostty, xterm-kitty, wezterm Osc9), then TERM_PROGRAM (Apple_Terminal Bell, iTerm.app,
+    /// WezTerm, ghostty Osc9); only then $VTE_VERSION (Osc777) and $ALACRITTY_WINDOW_ID (Bell), which
+    /// a tmux server or a terminal started from another one inherits stale; else Osc9.
     pub fn pick(term: Option<&str>, program: Option<&str>, vte: bool, alacritty: bool) -> Sequence {
         let term = term.unwrap_or_default();
-        if alacritty || term.starts_with("alacritty") || program == Some("Apple_Terminal") {
-            Sequence::Bell
-        } else if vte || term.starts_with("foot") || term.starts_with("rxvt") {
-            Sequence::Osc777
-        } else {
-            Sequence::Osc9
+        if term.starts_with("alacritty") {
+            return Sequence::Bell;
+        }
+        if term.starts_with("foot") || term.starts_with("rxvt") {
+            return Sequence::Osc777;
+        }
+        if ["xterm-ghostty", "xterm-kitty", "wezterm"].contains(&term) {
+            return Sequence::Osc9;
+        }
+        match program {
+            Some("Apple_Terminal") => Sequence::Bell,
+            Some("iTerm.app" | "WezTerm" | "ghostty") => Sequence::Osc9,
+            _ if vte => Sequence::Osc777,
+            _ if alacritty => Sequence::Bell,
+            _ => Sequence::Osc9,
         }
     }
 }
@@ -134,6 +145,26 @@ mod tests {
         assert_eq!(
             Sequence::pick(Some("xterm-256color"), Some("Apple_Terminal"), false, false),
             Sequence::Bell
+        );
+    }
+
+    #[test]
+    fn what_the_terminal_sets_itself_wins_over_inherited_variables() {
+        assert_eq!(
+            Sequence::pick(Some("xterm-ghostty"), Some("ghostty"), false, true),
+            Sequence::Osc9
+        );
+        assert_eq!(
+            Sequence::pick(Some("xterm-256color"), Some("iTerm.app"), true, true),
+            Sequence::Osc9
+        );
+        assert_eq!(
+            Sequence::pick(Some("alacritty"), Some("ghostty"), false, false),
+            Sequence::Bell
+        );
+        assert_eq!(
+            Sequence::pick(Some("xterm-kitty"), None, true, false),
+            Sequence::Osc9
         );
     }
 
