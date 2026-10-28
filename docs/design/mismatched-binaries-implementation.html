@@ -1,0 +1,357 @@
+<title>Mismatched Binaries Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+/* One 720px reading column of cards, jasu.dev (Nord, one purple accent). */
+:root {
+  --surface:#f8f9fb; --card:#eceff4; --ink:#2e3440; --muted:#4c566a; --subtle:#d8dee9; --border:#d8dee9;
+  --code-block:#2e3440; --code-bg:#e5e9f0; --code-ink:#4b6c8a; --accent:#7b5eaf; --link:#4b6c8a;
+  --constructive:#a3be8c; --warning:#d08770; --critical:#bf616a; --on-accent:#f8f9fb;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --gap:24px; color-scheme:light;
+}
+:root[data-theme="dark"] {
+  --surface:#2e3440; --card:#3b4252; --ink:#eceff4; --muted:#93b1cc; --subtle:#434c5e; --border:#4c566a;
+  --code-block:#3b4252; --code-bg:#3b4252; --code-ink:#88c0d0; --accent:#bd93f9; --link:#88c0d0;
+  --warning:#ebcb8b; --on-accent:#2e3440; color-scheme:dark;
+}
+body { background:var(--surface); color:var(--ink); font:18px/1.6 var(--sans);
+  padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); padding-block:32px 64px; }
+main { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:var(--gap); }
+h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.1; font-weight:800; letter-spacing:-0.03em; margin:0; text-wrap:balance; }
+h2 { font-size:24px; line-height:1.3; margin:0 0 12px; text-wrap:balance; }
+h3 { font-size:18px; margin:16px 0 6px; }
+.meta { font-size:13px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:var(--gap); min-width:0; }
+.card.rec { border-color:var(--accent); }
+.pill { display:inline-block; border-radius:99px; font-size:.8rem; font-weight:600; letter-spacing:.05em; padding:2px 10px; background:var(--accent); color:var(--on-accent); vertical-align:middle; margin-left:8px; }
+p, ul { margin:0 0 12px; } ul { padding-left:22px; }
+code { font-family:var(--mono); font-size:.78em; background:var(--code-bg); color:var(--code-ink); border-radius:.2rem; padding:1px 4px; }
+a { color:var(--link); text-decoration-thickness:1px; text-underline-offset:.18em; }
+.scroll { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; font-size:15px; }
+th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+th { background:var(--subtle); }
+.pro { border-left:4px solid var(--constructive); padding-left:10px; }
+.con { border-left:4px solid var(--warning); padding-left:10px; }
+pre.mermaid { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:12px; margin:0 0 12px; }
+@media (max-width:480px) { :root { --gap:14px; } body { font-size:17px; } }
+pre.code { background:var(--code-block); color:#eceff4; border-radius:6px; padding:12px 14px; overflow-x:auto; font:14px/1.5 var(--mono); margin:0 0 12px; }
+ol li, ul li { margin-bottom:4px; }
+.small { font-size:15px; }
+</style>
+<main>
+<div>
+<h1>Mismatched saaio binaries</h1>
+<p class="meta">0.2.0 &middot; implementation design &middot; approach A, the handshake &middot; 2026-10-28</p>
+</div>
+
+<section class="card">
+<h2>Decision recap</h2>
+<p>The server's <code>Welcome</code> says which build it is and which binary it started from (protocol 9, the bump in its own commit). The UI and <code>saaio update</code> compare that build with their own, and with the first <code>saaio</code> on PATH, and name both binaries and <code>saaio --stop</code> when they differ.</p>
+<p class="small">Decided in phase 2: shared parts as proposed (the UI dialog plus a title-row line, <code>shadowed</code> and <code>servers[]</code> in <code>saaio update</code>, the clearer <code>saaio send</code> refusal). The refusal from a 0.1.x server tells the user exactly to run <code>saaio --stop</code>. The kinds-of-flows flow may bump the protocol too: whichever merges second takes the next number.</p>
+</section>
+
+<section class="card">
+<h2>Structure overview</h2>
+<pre class="mermaid">
+flowchart TB
+  subgraph cli
+    main["main.rs<br/>PATH into Env"]:::mod
+    env["cli/env.rs Env.path"]:::mod
+    upd["commands/update.rs"]:::mod
+    send["commands/send.rs"]:::mod
+    hook["commands/hook.rs"]:::mod
+    out["output/update.rs"]:::mod
+    uicmd["commands/ui.rs"]:::mod
+  end
+  subgraph core
+    bin["binaries.rs<br/>Binary, Mismatch"]:::new
+    sys["system.rs version()"]:::mod
+    proto["proto.rs Welcome.server"]:::mod
+    client["client.rs<br/>Client.server, running()"]:::mod
+  end
+  subgraph server
+    conn["server/conn.rs hello"]:::mod
+  end
+  subgraph ui
+    uirs["ui.rs"]:::mod
+    app["ui/app.rs<br/>View::Mismatch"]:::mod
+    chrome["ui/app/chrome.rs"]:::mod
+    dlg["ui/dialog.rs mismatch()"]:::mod
+  end
+  main --> env
+  upd --> client
+  upd --> bin
+  upd --> out
+  uicmd --> uirs
+  uirs --> client
+  uirs --> bin
+  uirs --> app
+  app --> dlg
+  app --> chrome
+  client --> proto
+  conn --> proto
+  proto --> bin
+  bin --> sys
+  classDef new fill:#a3be8c,color:#2e3440;
+  classDef mod fill:#ebcb8b,color:#2e3440;
+</pre>
+<p class="meta">Green: new. Amber: modified. <code>send.rs</code> and <code>hook.rs</code> only read <code>Env</code>.</p>
+</section>
+
+<section class="card">
+<h2>Units</h2>
+
+<h3>src/binaries.rs <span class="pill">new</span></h3>
+<p>The saaio binaries that can disagree (this one, the first on PATH, a server's) and how they differ.</p>
+<pre class="code">#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Binary {
+    pub exe: PathBuf,
+    /// proto::BUILD's form: `0.1.2 (45630ee)`; `unknown` when --version said nothing usable.
+    pub build: String,
+}
+
+impl Binary {
+    /// This process: current_exe and BUILD.
+    pub fn this() -&gt; io::Result&lt;Binary&gt;;
+    /// The version part of the build: `0.1.2`.
+    pub fn version(&amp;self) -&gt; &amp;str;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Mismatch {
+    /// Another saaio of another build comes first on PATH.
+    Shadowed(Binary),
+    /// The running server is another build.
+    Server(Binary),
+}
+
+/// The first executable file named saaio in `path`'s folders; empty and relative entries skipped.
+pub fn first_on_path(path: &amp;OsStr) -&gt; Option&lt;PathBuf&gt;;
+
+/// The first saaio on PATH when it is another file than `this` (canonicalised) and its
+/// `--version` (1 s) names another build or none.
+pub fn shadowing(this: &amp;Binary, path: &amp;OsStr) -&gt; Option&lt;Binary&gt;;
+
+/// Shadowed first, then Server when `server`'s build is not `this`'s.
+pub fn mismatches(this: &amp;Binary, server: Option&lt;&amp;Binary&gt;, path: Option&lt;&amp;OsStr&gt;) -&gt; Vec&lt;Mismatch&gt;;</pre>
+
+<h3>src/system.rs <span class="pill">modified</span></h3>
+<pre class="code">/// `&lt;program&gt; --version` from the first word that starts with a digit; was private and took &amp;str.
+pub(crate) fn version(program: impl AsRef&lt;OsStr&gt;, deadline: Instant) -&gt; Probe;</pre>
+
+<h3>src/proto.rs <span class="pill">modified</span></h3>
+<pre class="code">pub const PROTOCOL_VERSION: u32 = 9;   // its own commit
+
+ServerMsg::Welcome {
+    version: u32,
+    /// The server's build and the binary it started from.
+    server: Binary,
+},</pre>
+
+<h3>src/server/conn.rs <span class="pill">modified</span></h3>
+<p><code>hello</code> sends <code>Welcome { version, server: Binary { exe: launch flow_exe, build: BUILD } }</code>. For another protocol, its <code>Refused</code> reason names the server's build and exe: <code>saaio server 0.2.0 (abc1234) from ~/.local/bin/saaio speaks protocol 9, this saaio speaks 8</code>. The exe is the one recorded when the server started (<code>LaunchEnv::flow_exe</code>, src/cli/commands/server.rs:39), so it stays correct after an update replaces the file.</p>
+
+<h3>src/client.rs <span class="pill">modified</span></h3>
+<pre class="code">pub struct Client {
+    stream: UnixStream,
+    server: Binary,
+}
+
+impl Client {
+    /// The server's build and binary, from its Welcome.
+    pub fn server(&amp;self) -&gt; &amp;Binary;
+}
+
+/// A server that listens on a socket: its pid, and its binary unless it refused
+/// (an earlier protocol).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Running {
+    pub pid: u32,
+    pub server: Option&lt;Binary&gt;,
+}
+
+/// Connects as Control to read who listens; None when no server does.
+pub fn running(socket: &amp;Path) -&gt; Result&lt;Option&lt;Running&gt;&gt;;</pre>
+<p class="small"><code>connect</code> on <code>Refused</code> now fails with <code>{reason}. The saaio server (pid 4321) is another saaio than this one (saaio 0.2.0 (abc1234), ~/.local/bin/saaio): run `saaio --stop`, then start saaio again; unfinished flows resume</code>.</p>
+
+<h3>src/cli/env.rs, src/main.rs <span class="pill">modified</span></h3>
+<pre class="code">pub struct Env { /* ... */ pub path: Option&lt;OsString&gt;, }   // main.rs: env::var_os("PATH")</pre>
+
+<h3>src/cli/commands/update.rs, src/cli/output/update.rs <span class="pill">modified</span></h3>
+<pre class="code">/// What update finds beside its own install: the saaio first on PATH and the servers on
+/// another version than `version`.
+pub(crate) struct Others {
+    pub shadowed: Option&lt;Binary&gt;,
+    pub servers: Vec&lt;(PathBuf, Running)&gt;,   // store root, who listens
+}
+
+fn others(env: &amp;Env, version: &amp;str) -&gt; Others;   // commands/update.rs
+
+pub(crate) fn updated(from: &amp;Build, to: &amp;Tag, binary: &amp;str, others: &amp;Others) -&gt; Document;
+pub(crate) fn latest(running: &amp;Build, latest: &amp;Tag, others: &amp;Others) -&gt; Document;</pre>
+<p class="small"><code>servers</code> comes from <code>Registry::stores()</code> and <code>client::running</code>. A server counts when it refused (earlier protocol) or its version is not <code>version</code>: the target after an install, the running build when already the latest. The general "a running server keeps..." help goes away in favour of these concrete lines.</p>
+
+<h3>src/cli/commands/send.rs, src/cli/commands/hook.rs <span class="pill">modified</span></h3>
+<p><code>send</code>: when <code>env.saaio_master</code> is set but <code>env.key()</code> is None, it fails with <code>this pane has no key: an earlier saaio server opened it</code> and help <code>Ask the user to run `saaio --stop` and start saaio again; unfinished flows resume</code>, before the "only the master sends" check. <code>hook</code>: the same case logs <code>no SAAIO_PROOF: an earlier saaio server opened this pane; saaio --stop</code> instead of "does not prove".</p>
+
+<h3>src/cli/commands/ui.rs, src/ui.rs <span class="pill">modified</span></h3>
+<p><code>UiEnv</code> gains <code>path: Option&lt;OsString&gt;</code>. After <code>Client::connect</code>, <code>ui::run</code> calls <code>binaries::mismatches(&amp;this, Some(client.server()), env.path.as_deref())</code> and passes the result to <code>App::warn(this, mismatches)</code>.</p>
+
+<h3>src/ui/app.rs, src/ui/app/keys.rs, draw.rs, chrome.rs <span class="pill">modified</span></h3>
+<pre class="code">pub enum View { /* ... */
+    /// The binaries disagree: any key closes it.
+    Mismatch,
+}
+struct App { /* ... */
+    this: Option&lt;Binary&gt;,
+    mismatches: Vec&lt;Mismatch&gt;,
+}
+
+/// Opens View::Mismatch when `mismatches` is not empty; the title row keeps a line after.
+pub fn warn(&amp;mut self, this: Binary, mismatches: Vec&lt;Mismatch&gt;);</pre>
+<p class="small">keys.rs: any key in <code>View::Mismatch</code> goes back to Panes. draw.rs <code>dialog()</code>: <code>View::Mismatch</code> becomes <code>dialog::mismatch(...)</code>. chrome.rs: right side is the notice, else the mismatch line (<code>server is saaio 0.1.1: saaio --stop</code> or <code>another saaio first on PATH</code>, in waiting style), else release and hint.</p>
+
+<h3>src/ui/dialog.rs <span class="pill">modified</span></h3>
+<pre class="code">/// "mismatched saaio": each mismatch with both binaries (with ~), what it breaks, and what to run.
+pub fn mismatch&lt;'a&gt;(this: &amp;Binary, mismatches: &amp;[Mismatch], home: Option&lt;&amp;str&gt;, theme: &amp;'a Theme) -&gt; Dialog&lt;'a&gt;;</pre>
+</section>
+
+<section class="card">
+<h2>Data</h2>
+<div class="scroll"><table>
+<tr><th>Type</th><th>Fields</th><th>Crosses</th></tr>
+<tr><td><code>binaries::Binary</code></td><td>exe: PathBuf, build: String</td><td>server -&gt; client in Welcome (postcard)</td></tr>
+<tr><td><code>binaries::Mismatch</code></td><td>Shadowed(Binary) | Server(Binary)</td><td>ui.rs -&gt; App</td></tr>
+<tr><td><code>client::Running</code></td><td>pid: u32, server: Option&lt;Binary&gt;</td><td>client -&gt; update command</td></tr>
+<tr><td><code>output::update::Others</code></td><td>shadowed, servers</td><td>update command -&gt; TOON</td></tr>
+<tr><td><code>ServerMsg::Welcome</code></td><td>+ server: Binary</td><td>the wire, protocol 9</td></tr>
+</table></div>
+<p class="small">TOON after an install, for example:</p>
+<pre class="code">updated: saaio 0.1.2 -&gt; 0.2.0
+binary: ~/.local/bin/saaio
+shadowed: ~/.cargo/bin/saaio (saaio 0.1.0 (9b77d8c))
+servers[1]{store,pid,build,binary}:
+  ~/.local/state/saaio/projects/shop,4321,0.1.2 (45630ee),~/.local/bin/saaio
+help[3]:
+  `saaio` runs ~/.cargo/bin/saaio, not ~/.local/bin/saaio: remove it (cargo uninstall saaio) or put ~/.local/bin first on PATH
+  Run `SAAIO_HOME=&lt;store&gt; saaio --stop` for each server, then start saaio again; unfinished flows resume
+  Changes: https://github.com/JanSuthacheeva/saaio/releases/tag/v0.2.0</pre>
+</section>
+
+<section class="card">
+<h2>Call chains</h2>
+
+<h3>1. Bare <code>saaio</code> attaches to a server of another build</h3>
+<pre class="mermaid">
+sequenceDiagram
+  participant U as commands/ui.rs
+  participant R as ui::run
+  participant C as Client
+  participant S as server/conn.rs
+  participant B as binaries
+  participant A as App
+  U->>R: run(socket, UiEnv{path})
+  R->>C: connect(socket, Attach)
+  C->>S: Hello{9, peer}
+  S-->>C: Welcome{9, server}
+  R->>B: mismatches(this, server, path)
+  B-->>R: [Server(0.1.2 ~/.local/bin/saaio)]
+  R->>A: warn(this, mismatches)
+  A-->>U: View::Mismatch dialog, then title line
+  S--xC: Refused (another protocol)
+  C--xU: Err "... run `saaio --stop`, then start saaio again"
+</pre>
+<ol class="small">
+<li><code>commands::ui::attach -&gt; ui::run(socket, UiEnv { path, .. }, clock)</code></li>
+<li><code>ui::run -&gt; Client::connect(socket, Role::Attach{..}): Result&lt;Option&lt;Client&gt;&gt;</code></li>
+<li><code>Conn::hello -&gt; ServerMsg::Welcome { version: 9, server: Binary { exe: flow_exe, build: BUILD } }</code></li>
+<li><code>ui::run -&gt; Binary::this(): io::Result&lt;Binary&gt;</code></li>
+<li><code>ui::run -&gt; binaries::mismatches(&amp;this, Some(client.server()), env.path.as_deref()): Vec&lt;Mismatch&gt;</code>, which calls <code>shadowing -&gt; first_on_path</code> and <code>system::version(exe, 1 s)</code> only when PATH's saaio is another file</li>
+<li><code>ui::run -&gt; App::warn(this, mismatches)</code>: <code>View::Mismatch</code> when not empty</li>
+<li>Any key: <code>App::on_key -&gt; View::Panes</code>. <code>draw_title</code> keeps the mismatch line.</li>
+</ol>
+<p class="small"><b>Errors.</b> Another protocol: <code>Conn::hello</code> sends <code>Refused</code>. <code>Client::connect</code> adds the server's pid (<code>peer_pid</code>) and this binary, ending in "run `saaio --stop`, then start saaio again; unfinished flows resume". <code>ui</code> fails and the person reads that line. If <code>Binary::this</code> fails (current_exe unreadable), there are no warnings and the UI runs. A <code>--version</code> that fails or times out counts as build <code>unknown</code>, which is shadowed.</p>
+
+<h3>2. <code>saaio update</code> installs</h3>
+<pre class="mermaid">
+sequenceDiagram
+  participant Up as commands/update.rs
+  participant Rg as Registry
+  participant C as client
+  participant B as binaries
+  participant O as output/update.rs
+  Up->>Up: install(releases, target, dir)
+  Up->>B: shadowing(this, path)
+  B-->>Up: Option Binary
+  Up->>Rg: stores()
+  loop each store
+    Up->>C: running(env.socket(store))
+    C-->>Up: Option Running
+  end
+  Up->>O: updated(from, to, binary, others)
+</pre>
+<ol class="small">
+<li><code>update::run -&gt; install(&amp;releases, &amp;target, dir): anyhow::Result&lt;()&gt;</code> (unchanged)</li>
+<li><code>update::run -&gt; others(env, &amp;target.version().to_string()): Others</code></li>
+<li><code>others -&gt; binaries::shadowing(&amp;Binary { exe, build: target version }, path): Option&lt;Binary&gt;</code>. After the rename, <code>exe</code> is the newly installed file.</li>
+<li><code>others -&gt; env.registry()?.stores() -&gt; client::running(&amp;env.socket(&amp;store)): Result&lt;Option&lt;Running&gt;&gt;</code>, kept when <code>server</code> is None or its version differs</li>
+<li><code>update::run -&gt; output::updated(&amp;running, &amp;target, &amp;bin_path, &amp;others): Document</code></li>
+</ol>
+<p class="small"><b>Errors.</b> A store whose socket does not answer or errors is left out; update still succeeds. No registry means no servers are listed. The <code>Step::Latest</code> path runs the same <code>others</code> with the running version and prints <code>latest(.., &amp;others)</code>.</p>
+
+<h3>3. <code>saaio send</code> in a pane with no key</h3>
+<ol class="small">
+<li><code>send::run</code>: <code>env.saaio_master &amp;&amp; env.key().is_none()</code> leads to <code>Failure</code> "this pane has no key: an earlier saaio server opened it", help "Ask the user to run `saaio --stop` and start saaio again; unfinished flows resume"</li>
+<li>Otherwise the existing <code>identity::proves</code> check runs unchanged</li>
+</ol>
+</section>
+
+<section class="card">
+<h2>Conventions followed</h2>
+<ul class="small">
+<li>A wire change goes with a protocol bump, and the server reports the reason in <code>Refused</code> (src/server/conn.rs:110-124).</li>
+<li>Probing <code>--version</code> with a deadline reuses <code>system::version</code> (src/system.rs:87), as <code>bug-report</code> does.</li>
+<li>Environment variables are read only in main.rs, into <code>Env</code> (clippy.toml disallowed-methods). <code>current_exe</code> is read by the code that needs it (CLAUDE.md, cli).</li>
+<li>Over-session boxes use <code>Dialog</code>, as <code>dialog::help</code> does (src/ui/dialog.rs). The title row's right side has the priority order notice, then update (src/ui/app/chrome.rs:24).</li>
+<li>TOON documents carry <code>help[]</code> next steps (src/cli/output/update.rs:10).</li>
+<li>Paths shown with ~ (<code>Env::bin_path</code> src/cli/env.rs:189, <code>App::tilde</code>).</li>
+<li>Deviation: <code>proto</code> imports <code>binaries</code> for a wire type. <code>proto</code> already imports <code>view</code> for Board, and the layering test keeps this free of cycles.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>Test seams</h2>
+<ul class="small">
+<li><code>binaries</code>: unit tests on temp folders with <code>fixtures::executable</code> scripts that print a version: first on PATH, a symlink to the same file is not shadowing, same build is not shadowing, another build or none is.</li>
+<li><code>client::connect</code> / <code>running</code>: server tests over a real socket (src/server/tests.rs). Welcome carries the server's binary. A refusal message names the pid and <code>saaio --stop</code>. <code>running</code> against a fake protocol-8 listener reports <code>server: None</code>.</li>
+<li><code>output::update</code>: TOON snapshots with and without others.</li>
+<li><code>App::warn</code>, keys and chrome: app tests plus golden screens of the dialog and title line (SAAIO_UPDATE_GOLDEN).</li>
+<li><code>send</code>: CLI test in tests/cli with SAAIO_MASTER=1 and no SAAIO_PROOF.</li>
+<li>E2E: the repro rerun with 0.1.1 first on PATH and this build behind it, plus a running 0.1.2 server.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>Assumptions</h2>
+<ul class="small">
+<li>A different file on PATH with the same build is not a mismatch: copies of one build behave alike.</li>
+<li>The UI compares the full build (version and commit), so two source builds of different commits warn. <code>saaio update</code> compares versions only, since a release's commit is not known before install.</li>
+<li>The PATH probe runs once when the UI starts. Up to 1 s is added only when another saaio comes first.</li>
+<li>The dialog shows once per UI start. The title line stays until the UI quits.</li>
+<li>The UI warns and does nothing else. It does not stop or restart the server itself.</li>
+<li><code>saaio update</code> lists servers of every registered store, not only the current one.</li>
+<li>Paths in messages use ~ for the home folder.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>Open questions</h2>
+<ol>
+<li><b>Offer a restart in the dialog?</b> The UI could offer <code>r</code>: stop this server (without ending flows) and start one from this binary, which is what <code>saaio --stop</code> plus <code>saaio</code> does by hand. Recommended: <b>no</b> for this PR. Warn only, as asked. Add it to the roadmap if the warning proves to be a chore.</li>
+<li><b>Make panes run the server's saaio?</b> The server could put a private folder holding a <code>saaio</code> link to its own binary first on each pane's PATH. Agents' <code>saaio send</code> would then always match the server, which removes the PATH case for agents entirely. Recommended: <b>roadmap item</b>, not this PR.</li>
+</ol>
+</section>
+</main>
