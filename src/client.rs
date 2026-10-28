@@ -11,7 +11,7 @@ use anyhow::{Context, Result, bail};
 use nix::sys::socket::{getsockopt, sockopt};
 use rustix::process::{Pid, Signal};
 
-use crate::binaries::BUILD;
+use crate::binaries::{BUILD, Binary};
 use crate::launch::{pane, worktree};
 use crate::private;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, Peer, Role, ServerMsg};
@@ -41,6 +41,7 @@ pub enum Closing {
 #[derive(Debug)]
 pub struct Client {
     stream: UnixStream,
+    server: Binary,
 }
 
 impl Client {
@@ -58,19 +59,25 @@ impl Client {
                 peer: this_process(),
             },
         )?;
-        match proto::read_msg::<_, ServerMsg>(&mut stream)
+        let server = match proto::read_msg::<_, ServerMsg>(&mut stream)
             .context("the saaio server did not answer")?
         {
-            Some(ServerMsg::Welcome { .. }) => {}
+            Some(ServerMsg::Welcome { server, .. }) => server,
             Some(ServerMsg::Refused { reason }) => {
                 bail!("{reason}; run `saaio --stop` and start saaio again")
             }
             Some(other) => bail!("the saaio server answered {other:?} instead of a welcome"),
             None => bail!("the saaio server closed the connection"),
-        }
+        };
         // macOS refuses socket options once the server hung up (EINVAL); the next recv says so.
         let _ = stream.set_read_timeout(None);
-        Ok(Some(Client { stream }))
+        Ok(Some(Client { stream, server }))
+    }
+
+    /// The server's build and binary, from its Welcome.
+    #[cfg_attr(not(test), expect(dead_code, reason = "the UI warns with it"))]
+    pub fn server(&self) -> &Binary {
+        &self.server
     }
 
     pub fn send(&mut self, message: &ClientMsg) -> Result<()> {
@@ -86,6 +93,7 @@ impl Client {
     pub fn try_clone(&self) -> Result<Client> {
         Ok(Client {
             stream: self.stream.try_clone()?,
+            server: self.server.clone(),
         })
     }
 }
@@ -421,16 +429,21 @@ mod tests {
     fn says_hello_and_is_welcomed() {
         let dir = private_dir();
         let socket = dir.path().join("server.sock");
+        let binary = Binary {
+            exe: "/opt/saaio/bin/saaio".into(),
+            build: "0.2.0 (abc1234)".into(),
+        };
         let server = fake_server(
             &socket,
             ServerMsg::Welcome {
                 version: PROTOCOL_VERSION,
+                server: binary.clone(),
             },
         );
 
         let client = Client::connect(&socket, Role::Control).unwrap();
 
-        assert!(client.is_some());
+        assert_eq!(client.unwrap().server(), &binary);
         assert_eq!(
             server.join().unwrap(),
             Some(ClientMsg::Hello {

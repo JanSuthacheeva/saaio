@@ -12,6 +12,7 @@ use nix::sys::socket::{getsockopt, sockopt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::binaries::Binary;
 use crate::text;
 use crate::view::{Board, MasterTurn};
 
@@ -178,6 +179,8 @@ impl ClientMsg {
 pub enum ServerMsg {
     Welcome {
         version: u32,
+        /// The server's build and the binary it started from.
+        server: Binary,
     },
     Refused {
         reason: String,
@@ -473,6 +476,10 @@ mod tests {
         vec![
             ServerMsg::Welcome {
                 version: PROTOCOL_VERSION,
+                server: Binary {
+                    exe: "/home/jan/.local/bin/saaio".into(),
+                    build: "0.2.0 (abc1234)".into(),
+                },
             },
             ServerMsg::Refused {
                 reason: "protocol 2".into(),

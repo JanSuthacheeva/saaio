@@ -5,13 +5,14 @@ use std::fs;
 use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::thread;
 
 use tempfile::TempDir;
 
 use super::*;
 use crate::adapter::Adapter;
+use crate::binaries::Binary;
 use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
 use crate::fixtures::{self, executable};
@@ -88,6 +89,9 @@ fn start_at(
     start_timed(dir, agents, quick(), clock)
 }
 
+/// The binary a test server says it started from.
+const FLOW_EXE: &str = "/opt/saaio/bin/saaio";
+
 fn start_timed(
     dir: &Path,
     agents: BTreeMap<String, Agent>,
@@ -115,7 +119,10 @@ fn start_timed(
             &thread_paths,
             store,
             config,
-            LaunchEnv::default(),
+            LaunchEnv {
+                flow_exe: PathBuf::from(FLOW_EXE),
+                ..LaunchEnv::default()
+            },
             &System::default(),
             timing,
             clock,
@@ -188,7 +195,11 @@ fn a_ui_attaches_types_into_the_master_and_sees_it() {
     assert_eq!(
         recv(&mut ui),
         ServerMsg::Welcome {
-            version: PROTOCOL_VERSION
+            version: PROTOCOL_VERSION,
+            server: Binary {
+                exe: PathBuf::from(FLOW_EXE),
+                build: BUILD.to_string(),
+            },
         }
     );
     let ServerMsg::Master { cwd, .. } = recv(&mut ui) else {
@@ -1351,7 +1362,16 @@ fn a_second_ui_takes_over_and_an_old_protocol_is_refused() {
         },
     )
     .unwrap();
-    assert!(matches!(recv(&mut old), ServerMsg::Refused { .. }));
+    let ServerMsg::Refused { reason } = recv(&mut old) else {
+        panic!("expected a refusal");
+    };
+    assert!(
+        reason.contains(&format!(
+            "saaio server {BUILD} from {FLOW_EXE} speaks protocol {PROTOCOL_VERSION}, this saaio speaks {}",
+            PROTOCOL_VERSION + 1
+        )),
+        "{reason}"
+    );
 
     let mut unreadable = UnixStream::connect(&paths.socket).unwrap();
     unreadable.set_read_timeout(Some(PATIENCE)).unwrap();
