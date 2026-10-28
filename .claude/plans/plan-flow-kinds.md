@@ -439,8 +439,8 @@ Resume never uses the prompt.
 ### Master and docs
 
 - [x] master.md bullets, master-v13.md as the earlier default
-- [ ] README, docs/configuration.md (kinds, old [[phases]]), cli.md (--kind, --type default, clear), flows.md (kinds, research lifecycle), ui.md (kind row), json.md (kind), ROADMAP.md (kinds of flows built), CHANGELOG.md Unreleased, CLAUDE.md (kind.rs, plan list)
+- [x] README, docs/configuration.md (kinds, old [[phases]]), cli.md (--kind, --type default, clear), flows.md (kinds, research lifecycle), ui.md (kind row), json.md (kind), ROADMAP.md (kinds of flows built), CHANGELOG.md Unreleased, CLAUDE.md (kind.rs, plan list)
 
 ### End to end
 
-- [ ] With a scratch SAAIO_HOME and XDG_STATE_HOME and a scratch repo with `[branch] types = ["feature", "bugfix"]`: `saaio start --kind fix` gives a bugfix branch and the pane's `/ship-fix` prompt, `--kind research` a detached worktree; `saaio status`, `--json` and the UI's dialog, sidebar and board show the kinds; a research flow answers, is done, and `saaio clear` forgets it; end with `saaio --stop`
+- [x] With a scratch SAAIO_HOME and XDG_STATE_HOME and a scratch repo with `[branch] types = ["feature", "bugfix"]`: `saaio start --kind fix` gives a bugfix branch and the pane's `/ship-fix` prompt, `--kind research` a detached worktree; `saaio status`, `--json` and the UI's dialog, sidebar and board show the kinds; a research flow answers, is done, and `saaio clear` forgets it; end with `saaio --stop`
