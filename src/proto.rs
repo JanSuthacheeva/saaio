@@ -16,8 +16,6 @@ use crate::text;
 use crate::view::{Board, MasterTurn};
 
 pub const PROTOCOL_VERSION: u32 = 8;
-/// This binary: `0.1.0 (2904734)`, the commit from build.rs, `unknown` outside a git checkout.
-pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("SAAIO_COMMIT"), ")");
 pub const MAX_MESSAGE: usize = 8 << 20;
 /// The widest and tallest pane the server makes: past it a terminal's cells cost too much.
 pub const MAX_SIZE: Size = Size {

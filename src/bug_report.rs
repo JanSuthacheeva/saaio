@@ -3,7 +3,8 @@
 use std::fmt::Write;
 use std::path::PathBuf;
 
-use crate::proto::{BUILD, PROTOCOL_VERSION};
+use crate::binaries::BUILD;
+use crate::proto::PROTOCOL_VERSION;
 use crate::system::System;
 use crate::text;
 

@@ -1,5 +1,6 @@
 //! `System`: the OS and the versions of claude, codex, gh and glab, probed with a deadline
 
+use std::ffi::OsStr;
 use std::io::{self, BufRead, BufReader, ErrorKind};
 use std::process::{ChildStdout, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
@@ -83,9 +84,9 @@ impl Probe {
     }
 }
 
-/// `<tool> --version`, from the first word that starts with a digit.
-fn version(tool: &str, deadline: Instant) -> Probe {
-    match run(tool, &["--version"], deadline) {
+/// `<program> --version`, from the first word that starts with a digit.
+pub(crate) fn version(program: impl AsRef<OsStr>, deadline: Instant) -> Probe {
+    match run(program, &["--version"], deadline) {
         Probe::Version(line) => Probe::Version(version_of(&line)),
         other => other,
     }
@@ -93,7 +94,7 @@ fn version(tool: &str, deadline: Instant) -> Probe {
 
 /// Runs `program args`, killed at `deadline`; the first line it prints as Probe::Version. The
 /// line is read on its own thread: a child it leaves running can hold its output open.
-fn run(program: &str, args: &[&str], deadline: Instant) -> Probe {
+fn run(program: impl AsRef<OsStr>, args: &[&str], deadline: Instant) -> Probe {
     let spawned = Command::new(program)
         .args(args)
         .stdin(Stdio::null())

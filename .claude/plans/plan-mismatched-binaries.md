@@ -29,6 +29,10 @@ implementation https://claude.ai/artifact/EUzhze5ULtwx2e6k3Uift9 (`docs/design/m
 ```rust
 //! The saaio binaries that can disagree: this one, the first on PATH, a server's; `Mismatch`
 
+/// Moved here from proto.rs (build): proto now imports binaries for `Welcome`, so binaries
+/// cannot import proto.
+pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("SAAIO_COMMIT"), ")");
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Binary {
     pub exe: PathBuf,
@@ -57,6 +61,10 @@ pub fn first_on_path(path: &OsStr) -> Option<PathBuf>;
 /// The first saaio on PATH when it is another file than `this` (canonicalised) and its
 /// `--version` (1 s) names another build or none.
 pub fn shadowing(this: &Binary, path: &OsStr) -> Option<Binary>;
+
+/// `shadowing` with its own limit for --version (tests: a fresh script's first exec on macOS can
+/// take past 1 s). A build without its commit (`0.2.0`, from `saaio update`) matches on the version.
+fn shadowing_within(this: &Binary, path: &OsStr, limit: Duration) -> Option<Binary>;
 
 /// Shadowed first, then Server when `server`'s build is not `this`'s.
 pub fn mismatches(this: &Binary, server: Option<&Binary>, path: Option<&OsStr>) -> Vec<Mismatch>;
@@ -250,7 +258,7 @@ Errors: a socket that errors is left out; no registry -> no servers. `Step::Late
 
 ## Tasks
 
-- [ ] Add `binaries.rs` (`Binary`, `Mismatch`, `first_on_path`, `shadowing`, `mismatches`) and make `system::version` take any program, with unit tests on scripts first on PATH (same file via symlink, same build, other build, no version)
+- [x] Add `binaries.rs` (`Binary`, `Mismatch`, `first_on_path`, `shadowing`, `mismatches`) and make `system::version` take any program, with unit tests on scripts first on PATH (same file via symlink, same build, other build, no version)
 - [ ] Bump `PROTOCOL_VERSION` to 9 (own commit)
 - [ ] `ServerMsg::Welcome { version, server }` from `Conn::hello`, `Refused` naming the server's build and exe, `Client::server`, with server tests over a socket
 - [ ] `Client::connect` refusal naming the server's pid, this binary and `saaio --stop`; `client::running`; tests incl. a protocol-8 listener

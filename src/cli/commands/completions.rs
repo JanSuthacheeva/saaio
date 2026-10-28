@@ -29,7 +29,7 @@ fn listed() -> clap::Command {
         .filter(|command| !command.is_hide_set())
         .cloned();
     clap::Command::new("saaio")
-        .version(crate::proto::BUILD)
+        .version(crate::binaries::BUILD)
         .args(cli.get_arguments().cloned())
         .subcommands(visible)
 }

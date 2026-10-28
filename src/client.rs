@@ -11,9 +11,10 @@ use anyhow::{Context, Result, bail};
 use nix::sys::socket::{getsockopt, sockopt};
 use rustix::process::{Pid, Signal};
 
+use crate::binaries::BUILD;
 use crate::launch::{pane, worktree};
 use crate::private;
-use crate::proto::{self, BUILD, ClientMsg, PROTOCOL_VERSION, Peer, Role, ServerMsg};
+use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, Peer, Role, ServerMsg};
 use crate::registry;
 use crate::server_log;
 use crate::store::Store;
