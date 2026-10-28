@@ -19,6 +19,18 @@ All notable changes to saaio are listed here. The format follows
   notification (OSC 9 in Ghostty, iTerm2, kitty and WezTerm, OSC 777 in foot, urxvt and VTE
   terminals, the bell in Alacritty and Terminal.app), also through tmux with
   `allow-passthrough all`. `[ui] notify = false` in config.toml turns them off.
+- The UI warns when the running server is another build than the `saaio` you ran, or when another
+  `saaio` (such as an old `cargo install` in `~/.cargo/bin`) comes first on PATH: a dialog names
+  each binary with its build and `saaio --stop`, then the title row keeps a short line.
+  `saaio update` lists the same: `shadowed` and every running server on another version
+  (`servers[]`), each with what to run.
+
+### Changed
+
+- Protocol 9: the server says which build it is and which binary it started from. Moving to this
+  version, run `saaio --stop` once; the refusal from an earlier server now names its pid, this
+  binary and `saaio --stop`. `saaio send` in a pane an earlier server opened says the pane has no
+  key and to run `saaio --stop`, instead of `only the master sends`.
 
 ### Fixed
 

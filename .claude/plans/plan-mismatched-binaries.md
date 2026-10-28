@@ -276,5 +276,5 @@ Errors: a socket that errors is left out; no registry -> no servers. `Step::Late
 - [x] `Env::path` from main.rs; `send` and `hook` say an earlier server opened a keyless pane, with a tests/cli case for send
 - [x] `saaio update`: `Others`, `others()`, `updated`/`latest` with `shadowed` and `servers[]`, with TOON tests
 - [x] UI: `UiEnv::path`, `App::warn`, `View::Mismatch`, `dialog::mismatch`, the title-row line, with app tests and golden screens
-- [ ] Docs: README/docs (install.md, troubleshooting.md, cli.md, ui.md as they apply), ROADMAP (drop the row, add the "panes run the server's saaio" Planned soon row), CHANGELOG Unreleased, CLAUDE.md (binaries.rs, plan list)
+- [x] Docs: README/docs (install.md, troubleshooting.md, cli.md, ui.md as they apply), ROADMAP (drop the row, add the "panes run the server's saaio" Planned soon row), CHANGELOG Unreleased, CLAUDE.md (binaries.rs, plan list)
 - [ ] E2E: rerun the repro (0.1.1 first on PATH, this build behind it; a running 0.1.2 server; a 0.1.0 server) on a scratch store and check the dialog, title line, `saaio update` (local mirror) and `saaio send` messages; `saaio --stop` after

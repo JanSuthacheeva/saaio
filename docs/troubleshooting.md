@@ -46,9 +46,12 @@ project names. A second report on the same day is written beside the first, as
 
 | Problem | Cause | Fix |
 | --- | --- | --- |
-| `saaio server runs protocol 7, this saaio speaks 8` | after an update, the old server still runs | `saaio --stop`, then `saaio`. Unfinished flows resume. |
+| `saaio server runs protocol 8, this saaio speaks 9. The saaio server (pid ...) is another saaio than this one (...)` | after an update, the old server still runs | `saaio --stop`, then `saaio`. Unfinished flows resume. |
+| a `mismatched saaio` dialog, then `server is saaio 0.1.1: saaio --stop` in the title row | the running server is another build than the `saaio` you ran, such as one started before an update | `saaio --stop`, then `saaio`. Unfinished flows resume. Until then its sessions run the server's version. |
+| a `mismatched saaio` dialog naming one `on PATH`, then `another saaio first on PATH` in the title row | another `saaio`, such as an old `cargo install` in `~/.cargo/bin`, comes before the one you ran on PATH, so typing `saaio` (and an agent's `saaio send`) runs it | remove it (`cargo uninstall saaio`), or put the folder of the one you want first on PATH |
 | `a saaio server of an earlier version still runs on /tmp/saaio-<uid>/...` | after updating from 0.1.0, its server of a store with a long path still runs | `saaio --stop`, then `saaio` |
 | `saaio connects to its server only in a private folder: ... is open to others` | the socket's folder is not yours alone (`0700`) | `chmod 700` it if it is yours, else remove it, then `saaio` |
+| `saaio send` says `this pane has no key: an earlier saaio server opened it`, or server.log says `no SAAIO_PROOF: an earlier saaio server opened this pane` | a server of saaio 0.1.0 opened the pane, which hands out no keys | `saaio --stop`, then `saaio`: every session reopens with its key |
 | a session's state no longer changes; server.log says `SAAIO_PROOF does not prove ...` | the session was not opened by the running server, such as one still open from before an update | `saaio --stop`, then `saaio`: every session reopens with its key |
 | the prefix key does nothing | the terminal or a surrounding tmux keeps `C-space` | set another prefix, such as `prefix = "C-b"` under `[ui]` in `config.toml`. It applies on save ([configuration.md](configuration.md#ui)) |
 | `saaio` prints the flows instead of opening the UI | it runs inside an agent or a worker (`CLAUDECODE`, `CODEX_THREAD_ID`, `SAAIO_FLOW_ID` or `SAAIO_MASTER` set), or stdin or stdout is not a terminal | run it in a terminal of its own |
