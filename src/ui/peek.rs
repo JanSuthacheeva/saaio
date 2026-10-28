@@ -33,11 +33,12 @@ pub enum PeekLine {
     Text(String),
     /// A tool still running.
     Now(String),
-    /// Where an ended flow's code is: its branch and worktree.
+    /// Where an ended flow's code is: its branch and worktree, or a plain session's folder.
     Code {
         branch: Option<String>,
         worktree: String,
         exists: bool,
+        plain: bool,
     },
 }
 
@@ -237,6 +238,7 @@ fn code_of(flow: &FlowView) -> Option<PeekLine> {
         branch: space.branch.clone(),
         worktree: space.path.clone(),
         exists: Path::new(&space.path).exists(),
+        plain: flow.is_plain(),
     })
 }
 

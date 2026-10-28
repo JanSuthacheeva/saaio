@@ -196,6 +196,10 @@ pub fn add_argv(repo: &Path, workspace: &Workspace, from: Option<&str>) -> Vec<S
 pub fn agent_argv(agent: &Agent, prompt: &str, id: &str, name: &str, request: &str) -> Vec<String>;
 ```
 
+`repo_of` knows a plain session by neither branch nor slot (was: no branch), so a detached
+worktree has its repository: the pane's hook variables, teardown and removal on clear. The peek's
+`PeekLine::Code` gains `plain`, so a detached worktree reads "worktree", not "folder".
+
 `worker_spec` takes the template from `flow.prompt`, else `Kind::feature().prompt_for(agent)`.
 `server/master.rs` passes `""`.
 

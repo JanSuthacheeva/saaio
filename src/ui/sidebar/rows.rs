@@ -251,6 +251,7 @@ impl Sidebar<'_> {
                     branch,
                     worktree,
                     exists,
+                    plain,
                 } => {
                     if let Some(branch) = branch {
                         body.push(vec![
@@ -264,11 +265,7 @@ impl Sidebar<'_> {
                         "gone".to_string()
                     };
                     // A plain session's code is in its folder.
-                    let label = if branch.is_some() {
-                        " worktree "
-                    } else {
-                        " folder   "
-                    };
+                    let label = if *plain { " folder   " } else { " worktree " };
                     body.push(vec![
                         Span::styled(label, theme.ui.faint),
                         Span::styled(place, theme.ui.muted),

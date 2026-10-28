@@ -188,3 +188,60 @@ fn the_hook_moves_a_flow_through_the_workflow_it_recorded() {
     let detail = stdout(&lab.run(&["status", "shop-230"]));
     assert!(detail.contains("phase: implement"), "{detail}");
 }
+
+#[test]
+fn clear_forgets_a_research_flow_once_it_answered_and_keeps_a_done_feature() {
+    let lab = Lab::new();
+    git(
+        &lab.repo,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/shop.git",
+        ],
+    );
+    assert!(
+        lab.start(&["why refunds round", "--kind", "research"])
+            .status
+            .success()
+    );
+    assert!(lab.start(&["SHOP-2 export orders"]).status.success());
+    assert!(
+        lab.start(&["what calls the ledger", "--kind", "research"])
+            .status
+            .success()
+    );
+    let report = |name: &str, args: &[&str]| {
+        let mut all = vec!["report", "--flow", name];
+        all.extend_from_slice(args);
+        let output = lab.run(&all);
+        assert!(output.status.success(), "{}", stdout(&output));
+    };
+    report("why-refunds-round", &["idle", "They round per line."]);
+    report(
+        "shop-2",
+        &["merge-request", "https://github.com/acme/shop/pull/2"],
+    );
+
+    let output = lab.run(&["clear"]);
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(text.starts_with("cleared: 1\n"), "{text}");
+    let worktrees = lab.repo.join(".saaio/worktrees");
+    assert!(!worktrees.join("why-refunds-round").exists(), "{text}");
+    assert!(worktrees.join("shop-2").exists(), "its session still runs");
+    assert!(
+        worktrees.join("what-calls-the-ledger").exists(),
+        "not answered yet"
+    );
+    let list = stdout(&lab.run(&["status"]));
+    assert!(!list.contains("why-refunds-round"), "{list}");
+    let next = lab.start(&["SHOP-4 x"]);
+    assert!(
+        stdout(&next).contains("slot: 1"),
+        "its slot is free again: {}",
+        stdout(&next)
+    );
+}

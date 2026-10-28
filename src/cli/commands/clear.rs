@@ -1,5 +1,5 @@
-//! `saaio clear`: forgets finished flows with their panes, worktrees and merged branches, the flows
-//! on a merged one moved
+//! `saaio clear`: forgets ended flows and done ones that merge nothing, with their panes,
+//! worktrees and merged branches, the flows on a merged one moved
 
 use std::path::Path;
 
@@ -10,7 +10,7 @@ use crate::cli::output::{Document, Failure};
 use crate::store::Store;
 use crate::trust::Trust;
 
-/// Forgets ended flows, with their panes, worktrees and merged branches.
+/// Forgets ended flows and done ones that merge nothing, with their panes, worktrees and merged branches.
 pub fn run(store: &Store, socket: &Path, trust: &Trust, now: u64) -> Result<Document, Failure> {
     let (flows, _) = views(store, now);
     let mut names = Vec::new();

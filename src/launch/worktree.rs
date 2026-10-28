@@ -71,11 +71,13 @@ pub fn remove_argv(repo: &Path, workspace: &Workspace, force: bool) -> Vec<Strin
     argv
 }
 
-/// The repository a flow worktree belongs to: the path above .saaio/worktrees/<name>. None for a
-/// plain session (no branch), even one opened inside a worktree, so remove never tears down a folder
-/// it did not create.
+/// The repository a flow worktree belongs to: the path above .saaio/worktrees/<name>, with a
+/// branch or detached with a slot. None for a plain session (neither), even one opened inside a
+/// worktree, so remove never tears down a folder it did not create.
 pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
-    space.branch.as_ref()?;
+    if space.branch.is_none() && space.slot.is_none() {
+        return None;
+    }
     Path::new(&space.path)
         .parent()
         .filter(|worktrees| worktrees.ends_with(WORKTREES_DIR))?
@@ -256,6 +258,11 @@ mod tests {
             ..shop()
         };
         assert_eq!(repo_of(&elsewhere), None);
+        let detached = Workspace {
+            branch: None,
+            ..shop()
+        };
+        assert_eq!(repo_of(&detached), Some(PathBuf::from("/repo")));
     }
 
     #[test]

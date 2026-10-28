@@ -403,6 +403,7 @@ fn peeks_at_where_an_ended_flows_code_is() {
         branch: Some("flow/shop-198".into()),
         worktree: "/shop/.saaio/worktrees/shop-198".into(),
         exists: false,
+        plain: false,
     }];
 
     let terminal = render_peek(&app, &peek);
@@ -429,6 +430,7 @@ fn peeks_at_an_ended_plain_sessions_folder_without_a_branch() {
         branch: None,
         worktree: "/Users/jan/notes".into(),
         exists: true,
+        plain: true,
     }];
 
     let terminal = render_peek(&app, &peek);
