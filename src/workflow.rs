@@ -119,16 +119,21 @@ impl Workflow {
 impl TryFrom<String> for Phase {
     type Error = String;
 
-    /// Lowercase letters, digits and '-'; not empty.
     fn try_from(name: String) -> Result<Phase, String> {
-        let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
-        if name.is_empty() || !name.chars().all(allowed) {
-            return Err(format!(
-                "{name:?} is no phase name: lowercase letters, digits and -"
-            ));
-        }
+        check_name(&name, "phase")?;
         Ok(Phase(name))
     }
+}
+
+/// A phase's or a kind's name: lowercase letters, digits and '-', not empty; Err names `what`.
+pub fn check_name(name: &str, what: &str) -> Result<(), String> {
+    let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
+    if name.is_empty() || !name.chars().all(allowed) {
+        return Err(format!(
+            "{name:?} is no {what} name: lowercase letters, digits and -"
+        ));
+    }
+    Ok(())
 }
 
 impl From<Phase> for String {

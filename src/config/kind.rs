@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use super::Agent;
 use crate::text::fill;
-use crate::workflow::{PhaseSpec, Workflow};
+use crate::workflow::{self, PhaseSpec, Workflow};
 
 /// The kind saaio start gives a flow unless [worker] kind or --kind names another.
 pub const DEFAULT_KIND: &str = "feature";
@@ -101,15 +101,9 @@ impl Kind {
     }
 }
 
-/// Lowercase letters, digits and '-', not empty, as a phase's name.
+/// A kind's name, as a phase's: lowercase letters, digits and '-'.
 pub fn check_name(name: &str) -> Result<(), String> {
-    let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
-    if name.is_empty() || !name.chars().all(allowed) {
-        return Err(format!(
-            "{name:?} is no kind name: lowercase letters, digits and -"
-        ));
-    }
-    Ok(())
+    workflow::check_name(name, "kind")
 }
 
 /// A built-in workflow of (name, skill).

@@ -519,8 +519,8 @@ Fixed:
 
 Open:
 
-- `kind::check_name` repeats `Phase::try_from`'s alphabet check. Recommendation: leave it, or
-  share one `fn is_name(&str) -> bool` in workflow.rs if a third name ever takes the rule.
+- `kind::check_name` repeats `Phase::try_from`'s alphabet check. Settled: one
+  `workflow::check_name(name, what)` serves both.
 
 Where to look: `src/cli/commands/hook.rs` `workflow_for` (fallback by `DEFAULT_KIND`, the
 feature kind, not `[worker] kind`), and `src/wake.rs` `undelivered` (the delivered count stays
