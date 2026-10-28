@@ -75,8 +75,9 @@ fn the_ui_names_another_saaio_first_on_path() {
 
     // Cells left as they were are skipped, so only single words are sure to arrive whole. Its
     // build is not checked: a fresh script's first exec can outlast the 1 s probe on macOS.
+    // `PATH:` is the shadowed line's ("runs the one on PATH: remove it").
     wait_until("the UI never named the other saaio", || {
-        terminal.shows("mismatched")
+        terminal.shows("mismatched") && terminal.shows("PATH:")
     });
     assert!(lab.run(&["--stop"]).status.success());
 }
