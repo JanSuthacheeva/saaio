@@ -321,8 +321,6 @@ fn last_line(file: &Path, matches: &LineMatch, chunk: u64) -> std::io::Result<Op
     Ok(None)
 }
 
-/// Appends the kinds that change flow `flow` (a name or id); its id, None when there is no such
-/// flow or its log cannot be read.
 /// The workflow the hooked flow recorded; the config's default kind's for the master, nobody, and
 /// a flow that recorded none or cannot be read.
 fn workflow_for(store: &Store, hooked: &Hooked, config: &Config, now: u64) -> Workflow {
@@ -338,6 +336,8 @@ fn workflow_for(store: &Store, hooked: &Hooked, config: &Config, now: u64) -> Wo
     recorded.unwrap_or_else(|| config.workflow())
 }
 
+/// Appends the kinds that change flow `flow` (a name or id); its id, None when there is no such
+/// flow or its log cannot be read.
 fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, log: &Log, now: u64) -> Option<String> {
     let id = if store.events(flow).is_ok() {
         flow.to_string()
