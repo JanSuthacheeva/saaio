@@ -1,6 +1,7 @@
 //! `Env`: the environment as values, and the store, registry, config and homes it points to
 
 use std::env;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use crate::client;
@@ -28,6 +29,8 @@ pub struct Env {
     pub saaio_master: bool,
     /// $SAAIO_PROOF: the key the server handed this session's pane.
     pub saaio_proof: Option<String>,
+    /// $PATH: where another saaio can come first.
+    pub path: Option<OsString>,
     pub home: Option<PathBuf>,
     pub xdg_state_home: Option<PathBuf>,
     pub xdg_config_home: Option<PathBuf>,

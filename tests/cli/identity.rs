@@ -11,6 +11,9 @@ use crate::support::*;
 const WORKER: &str = "7f3c0000-0000-4000-8000-000000000000";
 
 /// `saaio <args>` with exactly these identity variables, as a session that set them itself.
+/// What a hook logs in a pane an earlier server opened, which handed it no key.
+const NO_KEY: &str = "no SAAIO_PROOF: an earlier saaio server opened this pane; saaio --stop";
+
 fn claiming(home: &Path, args: &[&str], vars: &[(&str, &str)]) -> Command {
     let mut command = saaio_command(home);
     command.args(args).envs(vars.iter().copied());
@@ -52,9 +55,10 @@ fn a_hook_reports_into_a_flow_only_with_that_flows_key() {
     assert_eq!(
         log.matches(&format!("SAAIO_PROOF does not prove flow {victim}"))
             .count(),
-        3,
+        2,
         "{log}"
     );
+    assert_eq!(log.matches(NO_KEY).count(), 1, "{log}");
     let own_key = key(home.path(), &victim);
     let vars = [
         ("SAAIO_FLOW_ID", victim.as_str()),
@@ -87,9 +91,10 @@ fn a_hook_is_the_masters_only_with_the_masters_key() {
     let log = server_log(home.path());
     assert_eq!(
         log.matches("SAAIO_PROOF does not prove the master").count(),
-        2,
+        1,
         "{log}"
     );
+    assert_eq!(log.matches(NO_KEY).count(), 1, "{log}");
 }
 
 #[test]
@@ -115,6 +120,21 @@ fn only_the_masters_key_sends() {
         );
     }
     assert!(!flow_log(home.path(), WORKER).contains("forged"));
+
+    let keyless = claiming(
+        home.path(),
+        &["send", "shop-217", "forged"],
+        &[("SAAIO_MASTER", "1")],
+    )
+    .output()
+    .unwrap();
+    assert_eq!(keyless.status.code(), Some(1));
+    let said = stdout(&keyless);
+    assert!(
+        said.contains("this pane has no key: an earlier saaio server opened it")
+            && said.contains("Ask the user to run `saaio --stop` and start saaio again"),
+        "{said}"
+    );
 
     let sent = as_master(home.path(), &["send", "shop-217", "Tabs."]);
     assert!(sent.status.success(), "{}", stdout(&sent));

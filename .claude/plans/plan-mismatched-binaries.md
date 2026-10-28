@@ -265,7 +265,7 @@ Errors: a socket that errors is left out; no registry -> no servers. `Step::Late
 - [x] Bump `PROTOCOL_VERSION` to 9 (own commit)
 - [x] `ServerMsg::Welcome { version, server }` from `Conn::hello`, `Refused` naming the server's build and exe, `Client::server`, with server tests over a socket
 - [x] `Client::connect` refusal naming the server's pid, this binary and `saaio --stop`; `client::running`; tests incl. a protocol-8 listener
-- [ ] `Env::path` from main.rs; `send` and `hook` say an earlier server opened a keyless pane, with a tests/cli case for send
+- [x] `Env::path` from main.rs; `send` and `hook` say an earlier server opened a keyless pane, with a tests/cli case for send
 - [ ] `saaio update`: `Others`, `others()`, `updated`/`latest` with `shadowed` and `servers[]`, with TOON tests
 - [ ] UI: `UiEnv::path`, `App::warn`, `View::Mismatch`, `dialog::mismatch`, the title-row line, with app tests and golden screens
 - [ ] Docs: README/docs (install.md, troubleshooting.md, cli.md, ui.md as they apply), ROADMAP (drop the row, add the "panes run the server's saaio" Planned soon row), CHANGELOG Unreleased, CLAUDE.md (binaries.rs, plan list)
