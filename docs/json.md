@@ -25,6 +25,8 @@ saaio status shop-217 --json # a board with just that flow
       "name": "shop-217",
       "request": "SHOP-217 add CSV export",
       "mode": "guided",
+      "kind": "feature",
+      "merges": true,
       "phase": "implement",
       "state": "blocked",
       "blocker": "Task 5: the migration needs a default value",
@@ -68,6 +70,8 @@ saaio status shop-217 --json # a board with just that flow
       "name": "scratch",
       "request": "",
       "mode": "plain",
+      "kind": null,
+      "merges": true,
       "phase": null,
       "state": "idle",
       "blocker": null,
@@ -117,6 +121,8 @@ All times are Unix milliseconds.
 | `name` | string | the flow's name |
 | `request` | string | what was asked for. Empty for a plain session |
 | `mode` | string | `guided`, `auto` or `plain` |
+| `kind` | string or null | the flow's kind: `feature`, `fix`, `research` or one of the config's. Null for a plain session and a flow from before kinds |
+| `merges` | boolean | false for a kind without a branch, such as `research`: nothing to merge, `done` once it answered |
 | `phase` | string or null | the phase it is in. Null before its first phase and for a plain session |
 | `state` | string | see [States](#states) |
 | `blocker` | string or null | the question of a `waiting` flow, or the reason of a `blocked` one |
@@ -147,7 +153,7 @@ All times are Unix milliseconds.
 | `idle` | the worker's turn ended without a question |
 | `blocked` | the flow cannot go on (`blocker` holds the reason) |
 | `not-responding` | the worker sent heartbeats and stopped for 90 seconds |
-| `done` | the merge request is open or merged |
+| `done` | the merge request is open or merged, or a flow that merges nothing answered |
 | `ended` | the worker's session ended for good |
 
 `waiting`, `blocked` and `not-responding` count as needing you.

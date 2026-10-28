@@ -63,7 +63,7 @@ project names. A second report on the same day is written beside the first, as
 | `pane: when saaio opens` | the flow is recorded, the UI is not running | run `saaio` in a terminal. It opens the worker within half a second. |
 | the row shows only whether it runs | the agent has no `adapter` | set `adapter = "claude-code"` or `"codex"` on a custom agent that runs one of them ([configuration.md](configuration.md#agents)) |
 | a Codex flow is waiting with "no turn began after launch" | its pane stopped at a Codex dialog before its first turn | jump to the worker and answer the dialog |
-| steps stay `○───○───○───○`, the sidebar shows the state instead of a phase | no skill the worker ran matches a phase. The flow still works. | list your skills under `[[phases]]` ([configuration.md](configuration.md#use-your-own-workflow)) |
+| steps stay `○───○───○───○`, the sidebar shows the state instead of a phase | no skill the worker ran matches a phase. The flow still works. | list your skills under the kind's `phases` ([configuration.md](configuration.md#use-your-own-workflow)) |
 | a Claude Code worker keeps its spinner after Esc | Claude Code runs no hook on interrupt | none. The state corrects at the worker's next prompt. |
 | a Codex flow shows no task counts and never ends | Codex has no task count tool and no `/exit` event | end it from the UI (`x` on its exited pane, or on the board when done) or with `saaio remove` |
 | a Codex flow does not change phase after reading a skill | one command read the skills of several phases, which saaio treats as read-ahead | the next single read of the skill's `SKILL.md` starts it, or `saaio report --flow <name> phase <phase>` |

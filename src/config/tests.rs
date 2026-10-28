@@ -135,7 +135,7 @@ fn names_the_new_shape_when_the_file_has_the_old_phases_table() {
     let error = format!("{:#}", Config::read(Some(&file)).unwrap_err());
 
     assert!(error.contains(&file.display().to_string()), "{error}");
-    assert!(error.contains("[[phases]]"), "{error}");
+    assert!(error.contains("[[kinds.feature.phases]]"), "{error}");
 }
 
 #[test]
@@ -364,7 +364,7 @@ fn says_every_error_as_file_line_and_message() {
     assert!(top.contains("`agent` under [worker]"), "{top}");
     let phases = error("\n[phases]\nplan = \"design-code\"\n");
     assert!(phases.starts_with(&at(2)), "{phases}");
-    assert!(phases.contains("[[phases]]"), "{phases}");
+    assert!(phases.contains("[[kinds.feature.phases]]"), "{phases}");
     assert_eq!(
         error("[master]\nwake = \"sk-secret\"\n"),
         format!("{}invalid type: a string, expected a boolean", at(2)),

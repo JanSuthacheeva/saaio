@@ -186,8 +186,8 @@ impl Config {
             let refusal = match key.get_ref().as_ref() {
                 "agent" => "the top-level `agent` key is now `agent` under [worker]",
                 "phases" if matches!(value.get_ref(), DeValue::Table(_)) => {
-                    "[phases] is now a list of phases: [[phases]] with name = \"plan\" and \
-                     skills = [\"design-code\"], one per phase in order"
+                    "[phases] is now a kind's list of phases: [[kinds.feature.phases]] with \
+                     name = \"plan\" and skills = [\"design-code\"], one per phase in order"
                 }
                 "phases" if feature_phases => {
                     "[[phases]] is the feature kind's; set it in one place, \

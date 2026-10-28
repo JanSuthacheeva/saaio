@@ -11,7 +11,8 @@ saaio status shop-217
 
 | Term | Definition |
 | --- | --- |
-| flow | one feature, from request to open merge request, with its own git worktree and branch |
+| flow | one feature, fix or question, from request to open merge request or answer, with its own git worktree and branch |
+| kind | what a flow is: `feature`, `fix` or `research`, each with its own phases, first prompt and branch |
 | worker | the agent session the UI runs in a flow's worktree |
 | master | the agent session that starts flows, answers workers and reports to you |
 | plain session | an agent in any folder, without a flow |
@@ -21,6 +22,7 @@ timeline.
 
 - [States](#states)
 - [Phases](#phases)
+- [Kinds](#kinds)
 - [Starting a flow](#starting-a-flow)
 - [Guided and auto](#guided-and-auto)
 - [The master](#the-master)
@@ -39,7 +41,7 @@ timeline.
 | `idle` | the worker's turn ended without a question | READY |
 | `blocked` | the flow cannot go on | NEEDS YOU |
 | `not-responding` | a worker that sent heartbeats has sent none for 90 seconds | NEEDS YOU |
-| `done` | the merge request opened or merged; the worker can still report activity | DONE |
+| `done` | the merge request opened or merged, or a research flow answered; the worker can still report activity | DONE |
 | `ended` | the worker's session ended for good | DONE |
 
 | Session stops by | Result |
@@ -49,7 +51,9 @@ timeline.
 
 ## Phases
 
-| Built-in phase | Started by the skill |
+The phases come with the flow's [kind](#kinds). The feature kind's:
+
+| Phase | Started by the skill |
 | --- | --- |
 | `plan` | `design-code` |
 | `implement` | `implement-plan` |
@@ -59,8 +63,41 @@ timeline.
 - Up to 4 phases, shown as steps: `●───●───○───○` (finished, current, open).
 - Each step records the time spent in it.
 - A flow keeps the phases it started with.
-- Custom phases and skills: [configuration.md](configuration.md#phases-the-workflow).
+- Custom phases and skills: [configuration.md](configuration.md#kinds-of-flows).
 - No matching skills: [configuration.md](configuration.md#without-matching-skills).
+
+## Kinds
+
+| Kind | For | First prompt | Phases | Branch |
+| --- | --- | --- | --- | --- |
+| `feature` (default) | anything to build | `/ship-feature <request>` | plan, implement, review, merge-request | `feature` type |
+| `fix` | a bug report, a ticket of type bug | `/ship-fix <request>` | diagnose (`diagnose-bug`), implement, review, merge-request | `bugfix` type, or `fix`, `hotfix` |
+| `research` | a question to answer | `Research this and answer here. Change no code and commit nothing: <request>` | research | none |
+
+- `saaio start --kind fix`, the new-flow dialog's kind row, or the master, which picks the kind
+  from the request. Codex gets `$ship-feature` and `$ship-fix`.
+- `fix` runs [`ship-fix`](https://github.com/JanSuthacheeva/agent-skills), which starts with
+  `diagnose-bug`: reproduce the bug end to end, find the cause, then plan the fix.
+- The branch type is the first of the kind's types the repository's convention lists
+  ([repository.md](repository.md#branch-names)).
+- Kinds of your own, or other phases and prompts: [configuration.md](configuration.md#kinds-of-flows).
+- `saaio status`, `--json` (`kind`), the board's header and, for a kind other than feature, the
+  sidebar (`fix claude`) show a flow's kind.
+
+### Research flows
+
+A research flow answers a question and changes nothing.
+
+- Its worktree is detached at the base: no branch, nothing to merge. It still gets a slot and the
+  repository's setup script, so the worker can run the project.
+- Its phase, `research`, starts with its first turn.
+- Once a turn ends without a question, the flow is `done`: it moves to DONE, its services pause like
+  any resting flow's, and the master tells you its findings are ready. `saaio status <name> --full`
+  shows the whole answer.
+- A follow-up you type or send makes it work again; it is `done` again when it answers.
+- `saaio clear` forgets it once it is done, like an ended flow: it closes its pane, runs the
+  teardown script, removes its worktree (kept with uncommitted work) and frees its slot. `x` on the
+  board clears one.
 
 ## Starting a flow
 
@@ -70,12 +107,12 @@ timeline.
 | the UI | `C-space n` ([ui.md](ui.md#starting-a-flow)) |
 | the shell, in the repository | `saaio start "SHOP-217 add CSV export"` ([cli.md](cli.md#saaio-start)) |
 
-All three run the same steps: name the flow, create its worktree and branch, claim a slot, run the
-repository's setup script, open the worker.
+All three run the same steps: pick the kind, name the flow, create its worktree and branch, claim
+a slot, run the repository's setup script, open the worker.
 
 | Worker gets | Content |
 | --- | --- |
-| first prompt | default `/ship-feature SHOP-217 add CSV export` (Claude Code), `$ship-feature ...` (Codex) |
+| first prompt | its kind's: `/ship-feature SHOP-217 add CSV export` for a feature in Claude Code, `$ship-feature ...` in Codex, `/ship-fix ...` for a fix |
 | system prompt from saaio | it runs as a worker of saaio. Messages from the saaio master are answers to act on. A stacked flow is also told its merge request targets its base. |
 
 ## Stacked flows
@@ -315,9 +352,10 @@ How to write the scripts: [repository.md](repository.md#pause-and-resume).
 | Action | Effect |
 | --- | --- |
 | merge request opened or merged, by anyone | a live flow can show `done` but still runs, keeps its slot, and can ask questions. |
+| a research flow answers | the flow is `done`, and `saaio clear` forgets it. |
 | worker session ended | the flow is `ended`; its slot is released and it can be cleared. |
-| `saaio clear` | forgets every ended flow and removes its worktree. Keeps a worktree with uncommitted work. |
-| `x` on the board | cleans up one ended flow |
+| `saaio clear` | forgets every ended flow, and every research flow that answered, and removes its worktree. Keeps a worktree with uncommitted work. |
+| `x` on the board | cleans up one such flow |
 | `saaio remove <name>` | any state: closes the session, runs the teardown script, removes worktree and branch, forgets the flow. Refuses uncommitted work and commits on no other branch, unless `--force` or `--delete-unmerged`. |
 | `x` in an ended worker's pane | same as `saaio remove`, asks before discarding anything |
 

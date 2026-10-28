@@ -9,44 +9,45 @@ File: `~/.config/saaio/config.toml`. Optional. Every key has a default.
 - [\[master\]](#master)
 - [\[ui\]](#ui)
 - [\[services\]](#services)
-- [\[\[phases\]\]: the workflow](#phases-the-workflow)
+- [Kinds of flows](#kinds-of-flows)
 - [Agents](#agents)
 - [The first prompt](#the-first-prompt)
 - [Errors](#errors)
 
 ## Use your own workflow
 
-Replaces the default `/ship-feature` prompt and the four
+A flow's kind holds its workflow: the skill its first prompt calls and the phases its steps show.
+Replace the built-in feature kind's `/ship-feature` and the four
 [agent-skills](https://github.com/JanSuthacheeva/agent-skills) phases:
 
 ```toml
-[worker]
-prompt = "/my-feature {request}"   # $my-feature in Codex
+[kinds.feature]
+skill = "my-feature"
 
-[[phases]]
+[[kinds.feature.phases]]
 name = "plan"
 skills = ["my-plan"]
 
-[[phases]]
+[[kinds.feature.phases]]
 name = "build"
 skills = ["my-build"]
 
-[[phases]]
+[[kinds.feature.phases]]
 name = "ship"
 skills = ["my-pr"]
 ```
 
 | Setting | Effect |
 | --- | --- |
-| `[worker] prompt` | first prompt of every worker. `{request}` is the request: `saaio start "SHOP-217 add CSV export"` sends `/my-feature SHOP-217 add CSV export`. |
-| `[[phases]]` | the flow's steps. A skill the worker runs moves the flow to the phase that lists it. 1 to 4 phases. Replaces the built-in four. |
+| `skill` | the skill the first prompt calls: `saaio start "SHOP-217 add CSV export"` sends `/my-feature SHOP-217 add CSV export` in Claude Code, `$my-feature ...` in Codex. |
+| `phases` | the flow's steps. A skill the worker runs moves the flow to the phase that lists it. 1 to 4 phases. |
 
-- The prompt starts the work. The phases only track it. Either can be set without the other.
-- Claude Code calls a skill `/name`, Codex `$name`. A `[worker] prompt` used by both names no
-  skill, or each agent sets its own `prompt` ([The first prompt](#the-first-prompt)).
-- `[[phases]]` applies at the next `saaio start`. `[worker] prompt` applies to the next worker
-  that starts.
-- A running flow keeps the phases it started with.
+- The prompt starts the work. The phases only track it.
+- A kind with a built-in name replaces the built-in one whole: name its `phases`, and its
+  `branch_types` if you want them.
+- A change applies at the next `saaio start`. A running flow keeps the kind it started with.
+- Files from before kinds keep working: a top-level `[[phases]]` is the feature kind's phases, and
+  `[worker] prompt` its prompt.
 
 ### Without matching skills
 
@@ -85,8 +86,8 @@ of a save. No restart.
 | Setting | Applies |
 | --- | --- |
 | `[worker] agent` | at once: the next `saaio start`, the new-flow dialog's preselected agent |
-| `[worker] prompt`, an agent's `prompt` | to the next worker that starts |
-| `[[phases]]` | at the next `saaio start`. A running flow keeps its phases. |
+| `[worker] kind`, `[kinds]` | at the next `saaio start`, and the next time the new-flow dialog opens. A running flow keeps its kind: its phases and its first prompt. |
+| an agent's `prompt` | to the next flow that starts |
 | `[agents]` | to the next session opened or resumed with that agent. A running session keeps its command and adapter. |
 | `[master] wake` | at once |
 | `[master] agent` | the next time the master starts |
@@ -106,7 +107,8 @@ agent = "codex"
 | Key | Default | Effect |
 | --- | --- | --- |
 | `agent` | `"claude"` | agent used by `saaio start` and the new-flow dialog when none is picked. A name under `[agents]`. |
-| `prompt` | unset | first prompt of every agent without its own `prompt`, built-in agents included ([The first prompt](#the-first-prompt)) |
+| `kind` | `"feature"` | kind of flow used by `saaio start`, `saaio new` and the new-flow dialog when none is picked. A name under `[kinds]`. |
+| `prompt` | unset | from earlier versions: the feature kind's `prompt`, unless `[kinds.feature]` sets one |
 
 ## [master]
 
@@ -162,58 +164,103 @@ pause_after_minutes = 15
 
 Only repos with both scripts are paused: [repository.md](repository.md#pause-and-resume).
 
-## [[phases]]: the workflow
+## Kinds of flows
 
-Default:
+A kind is what a flow walks through: its phases, its first prompt and its branch. `saaio start
+--kind`, `saaio new --kind` and the new-flow dialog pick one; `[worker] kind` is the default.
+Built in:
+
+| Kind | First prompt (Claude Code) | Phases | Branch |
+| --- | --- | --- | --- |
+| `feature` | `/ship-feature <request>` | plan, implement, review, merge-request | type `feature` or `feat` |
+| `fix` | `/ship-fix <request>` | diagnose, implement, review, merge-request | type `fix`, `bugfix` or `hotfix` |
+| `research` | `Research this and answer here. Change no code and commit nothing: <request>` | research | none |
+
+The same in config.toml, each key at its default:
 
 ```toml
-[[phases]]
+[kinds.feature]
+skill = "ship-feature"
+branch_types = ["feature", "feat"]
+branch = true
+
+[[kinds.feature.phases]]
 name = "plan"
 skills = ["design-code"]
 
-[[phases]]
+[[kinds.feature.phases]]
 name = "implement"
 skills = ["implement-plan"]
 
-[[phases]]
+[[kinds.feature.phases]]
 name = "review"
 skills = ["review-changes"]
 
-[[phases]]
+[[kinds.feature.phases]]
 name = "merge-request"
 skills = ["write-merge-request"]
+
+[kinds.fix]
+skill = "ship-fix"
+branch_types = ["fix", "bugfix", "hotfix"]
+branch = true
+
+[[kinds.fix.phases]]
+name = "diagnose"
+skills = ["diagnose-bug"]
+
+# implement, review and merge-request as in feature
+
+[kinds.research]
+prompt = "Research this and answer here. Change no code and commit nothing: {request}"
+branch_types = []
+branch = false
+
+[[kinds.research.phases]]
+name = "research"
+skills = []
 ```
 
-| Key | Effect |
-| --- | --- |
-| `name` | phase name: lowercase letters, digits, `-` |
-| `skills` | skills that start the phase. Matched with or without the plugin prefix (`superpowers:brainstorming` matches `brainstorming`). A skill starts at most one phase. |
+| Key | Required | Effect |
+| --- | --- | --- |
+| `phases` | yes | 1 to 4 phases in order, each a `name` (lowercase letters, digits, `-`) and the `skills` that start it |
+| `skill` | no | the skill the first prompt calls, filled into `{skill}`: `/name` in Claude Code, `$name` in Codex, the bare name for an agent without an adapter |
+| `prompt` | no | the first prompt. Unset: `{skill} {request}`, or `{request}` without a skill. An agent's own `prompt` wins over it ([The first prompt](#the-first-prompt)). |
+| `branch_types` | no | branch types the kind means. The first one the repo's `.saaio/config.toml` lists wins, else the repo's first ([repository.md](repository.md#branch-names)). `--type` picks another. |
+| `branch` | no, `true` | `false`: no branch and nothing to merge. The worktree is detached at the base, the worker answers in its pane, and the flow is done once a turn ends without a question ([flows.md](flows.md#research-flows)). |
 
-- 1 to 4 phases, in order. A custom list replaces all four.
+- A kind with a built-in name replaces the built-in one whole. Add your own under a new name: it
+  shows in `saaio start --kind` and the new-flow dialog.
 - The UI shows the phases as steps (`●───●───○───○`) with the time spent in each.
-- A phase starts when the worker runs one of its skills.
+- A phase starts when the worker runs one of its skills. A phase without skills, first in its
+  list, starts with the flow's first turn, as research does.
+- Skills match with or without the plugin prefix (`superpowers:brainstorming` matches
+  `brainstorming`). A skill starts at most one phase of a kind.
 - Codex has no skill event. A Codex worker's phase starts when a prompt names `$skill`, or when it
   reads that skill's `SKILL.md`. saaio tells Codex to read each `SKILL.md` only when it begins that
   skill. One command that reads the skills of several phases starts none.
-- A flow keeps the phases it started with. A change affects new flows only.
+- `saaio start` records the kind's phases and first prompt in the flow. A change affects new flows
+  only.
 - A skill of a phase the running flow does not have reports nothing.
 - An opened merge request finishes the flow in its last phase, whatever its name.
+- A top-level `[[phases]]` from earlier versions is the feature kind's phases. Beside
+  `[[kinds.feature.phases]]` it is an error: set them in one place.
 
 Example with [superpowers](https://github.com/obra/superpowers):
 
 ```toml
-[worker]
-prompt = "/brainstorming {request}"
+[kinds.feature]
+skill = "brainstorming"
 
-[[phases]]
+[[kinds.feature.phases]]
 name = "spec"
 skills = ["brainstorming", "writing-plans"]
 
-[[phases]]
+[[kinds.feature.phases]]
 name = "build"
 skills = ["executing-plans", "subagent-driven-development"]
 
-[[phases]]
+[[kinds.feature.phases]]
 name = "ship"
 skills = ["finishing-a-development-branch"]
 ```
@@ -226,13 +273,11 @@ permissions, see [Agent permissions](agents.md). Built in:
 ```toml
 [agents.claude]
 command = ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
-prompt = "/ship-feature {request}"
 resume = ["claude", "-n", "{name}", "--resume", "{id}"]
 adapter = "claude-code"
 
 [agents.codex]
 command = ["codex", "{prompt}"]
-prompt = "$ship-feature {request}"
 resume = ["codex", "resume", "{session}"]
 adapter = "codex"
 
@@ -245,14 +290,13 @@ adapter = "claude-code"
 
 - `claude` and `codex` run workers. `master` runs the master.
 - An added agent appears in `saaio start --agent` and the new-flow dialog.
-- An agent with a built-in name replaces the built-in one whole. Repeat every key to keep. Only a
-  missing `prompt` falls back: to `[worker] prompt`, else the built-in one
-  ([The first prompt](#the-first-prompt)).
+- An agent with a built-in name replaces the built-in one whole. Repeat every key to keep.
+- `claude` and `codex` have no `prompt`: they get the flow's kind's ([The first prompt](#the-first-prompt)).
 
 | Key | Required | Effect |
 | --- | --- | --- |
 | `command` | yes | command line that starts a new session, one string per argument |
-| `prompt` | no | first prompt, filled into `{prompt}` |
+| `prompt` | no | first prompt for every kind, filled into `{prompt}`. Unset: the flow's kind's. |
 | `resume` | no | command line that continues the session after a restart. Without it: started once, not resumed. |
 | `adapter` | no | `"claude-code"` or `"codex"`: the harness whose hooks report the agent's state. Without it: the UI shows only whether the process runs. |
 
@@ -261,12 +305,13 @@ adapter = "claude-code"
 | `{id}` | flow's id for the session |
 | `{name}` | the flow's name |
 | `{request}` | the request |
-| `{prompt}` | the agent's first prompt, its placeholders filled |
+| `{prompt}` | the first prompt, its placeholders filled |
+| `{skill}` | the kind's skill as the agent's harness calls it. In a kind's `prompt` only. |
 | `{session}` | the session id the harness picked, for a harness that picks its own (Codex). In `resume` only. |
 | `{instructions}` | path of `master.md`, for a master that reads its instructions from a file. For the master only. |
 
 `{id}` and `{name}` are filled in `command`, `prompt` and `resume`, `{request}` in `command` and
-`prompt`, `{prompt}` in `command`. An argument that fills to an empty string is dropped.
+`prompt`, `{prompt}` in `command`, `{skill}` in a kind's `prompt`. An argument that fills to an empty string is dropped.
 
 Custom agent, [aider](https://aider.chat):
 
@@ -290,13 +335,14 @@ A worker's first prompt is the first of:
 
 | Order | Source |
 | --- | --- |
-| 1 | the agent's own `prompt` |
-| 2 | `[worker] prompt`, as written, for every agent |
-| 3 | the built-in agent of the same name: `/ship-feature {request}` (`claude`), `$ship-feature {request}` (`codex`) |
-| 4 | none |
+| 1 | the agent's own `prompt`, for every kind |
+| 2 | the kind's `prompt` |
+| 3 | `{skill} {request}` with the kind's `skill`: `/ship-fix {request}` in Claude Code, `$ship-fix {request}` in Codex |
+| 4 | `{request}` |
 
-- Claude Code calls a skill `/name`, Codex `$name`. A `[worker] prompt` shared by both names no
-  skill, or each agent sets its own `prompt`.
+- saaio writes the skill the way the agent's harness calls one, so one kind serves Claude Code and
+  Codex alike.
+- `saaio start` records the prompt in the flow; a flow keeps it when the config changes.
 - A plain session gets no first prompt.
 - The master never gets one: its agent's `prompt` is ignored. A new Codex master is told to run
   `saaio status`.
@@ -306,7 +352,7 @@ A worker's first prompt is the first of:
 Every error names the file, the line and the reason. `saaio start` prints:
 
 ```
-error: "/Users/jan/.config/saaio/config.toml:2: unknown field `agnet`, expected `agent` or `prompt`"
+error: "/Users/jan/.config/saaio/config.toml:2: unknown field `agnet`, expected one of `agent`, `kind`, `prompt`"
 ```
 
 A running UI shows the same in its title row, as
@@ -323,4 +369,7 @@ Settings from earlier versions are refused with a message naming the new form:
 | Earlier | Now |
 | --- | --- |
 | top-level `agent` | `agent` under `[worker]` |
-| `[phases]` table of skill names | `[[phases]]` |
+| `[phases]` table of skill names | `[[kinds.feature.phases]]` |
+
+Still read: a top-level `[[phases]]`, as `[[kinds.feature.phases]]`, and `[worker] prompt`, as
+`[kinds.feature] prompt`.

@@ -28,15 +28,15 @@
 | --- | --- |
 | `saaio` | the terminal UI in your terminal. Every flow and what needs you for an agent or a script. |
 | `saaio --stop` | stop the server and every session |
-| `saaio start <request> [--name] [--mode] [--agent] [--type] [--base]` | start a worker in its own worktree |
+| `saaio start <request> [--name] [--mode] [--kind] [--agent] [--type] [--base]` | start a worker in its own worktree |
 | `saaio start --plain <folder> [--name] [--agent]` | start an agent in a folder, without a flow |
 | `saaio status [<flow>] [--json] [--full] [--all]` | where flows stand |
 | `saaio send <flow> <text>` | tell a worker something |
 | `saaio send --type <flow> <line>` | type a line into a worker's pane, such as `/compact` |
 | `saaio report [--flow <flow>] <event>` | add an event to a flow by hand |
-| `saaio new --name <name> --request <text> [--mode]` | track a flow without starting a worker |
+| `saaio new --name <name> --request <text> [--mode] [--kind]` | track a flow without starting a worker |
 | `saaio remove <flow> [--force] [--delete-unmerged]` | end a flow and tear down its worktree |
-| `saaio clear` | forget finished flows and tear down their worktrees |
+| `saaio clear` | forget finished flows and answered research flows, and tear down their worktrees |
 | `saaio trust [<folder>] [--revoke] [--list]` | let saaio run a repository's `.saaio` scripts |
 | `saaio bug-report` | write a file to attach to a bug report |
 | `saaio completions <shell>` | print the completion script for a shell |
@@ -76,10 +76,10 @@ bin: ~/.local/bin/saaio
 description: "Tracks parallel feature flows: what each is doing, where it is blocked, how far it got"
 count: 3
 needs_you: 2
-flows[3]{name,state,phase,tasks,age,services}:
-  shop-221,waiting,plan,"",2s,""
-  shop-217,blocked,implement,4/9,2s,""
-  scratch,idle,"","",11s,""
+flows[3]{name,kind,state,phase,tasks,age,services}:
+  shop-221,feature,waiting,plan,"",2s,""
+  shop-217,fix,blocked,implement,4/9,2s,""
+  scratch,"",idle,"","",11s,""
 blockers[2]{name,blocker}:
   shop-221,Should refunds count against the original order's totals or the refund date's?
   shop-217,"Task 5: the migration needs a default value"
@@ -88,6 +88,8 @@ help[2]: "Run `saaio status <name>` for one flow's phases, timeline and decision
 
 - Order: needs you, ready (turn ended, nothing asked), running, finished. Most recent change first
   within each group.
+- `kind`: `feature`, `fix`, `research` or one of the config's; empty for a plain session and a
+  flow from before kinds.
 - `age`: time since the flow's state, phase or blocker last changed.
 - No flows: `flows: none tracked`. A log that cannot be read adds a `warnings[]` line.
 - `services`: empty while the flow's services run or were never paused; else `pausing`, `paused`,
@@ -104,7 +106,7 @@ help[2]: "Run `saaio status <name>` for one flow's phases, timeline and decision
 ## saaio start
 
 ```
-saaio start <request> [--name <name>] [--mode guided|auto] [--agent <agent>] [--type <type>] [--base <branch>]
+saaio start <request> [--name <name>] [--mode guided|auto] [--kind <kind>] [--agent <agent>] [--type <type>] [--base <branch>]
 saaio start --plain <folder> [--name <name>] [--agent <agent>]
 ```
 
@@ -112,10 +114,10 @@ Run in the repository the flow works on. Steps:
 
 1. refuses a repository not [trusted](repository.md#trust) yet when it has `.saaio` scripts or the
    agent is Codex
-2. names the flow
+2. picks the kind and names the flow
 3. claims a slot (1 to 20, [repository.md](repository.md#slots-and-ports))
 4. creates a git worktree in `.saaio/worktrees/<name>` on a new branch, from what the repository
-   has checked out or from `--base`
+   has checked out or from `--base`; for a research flow detached there, without a branch
 5. runs the repository's `.saaio/setup` there, if present, for at most 10 minutes
 6. records the flow, so the UI opens the agent in the worktree
 
@@ -123,6 +125,7 @@ Run in the repository the flow works on. Steps:
 $ saaio start "SHOP-217 add CSV export"
 flow: shop-217
 id: e514f1de-604d-4dbc-9b88-2cd76333d0a4
+kind: feature
 worktree: ~/projects/shop/.saaio/worktrees/shop-217
 branch: flow/shop-217
 slot: 1
@@ -136,14 +139,16 @@ help[2]: Run `saaio` in a terminal to open the worker,Run `saaio` for all flows
 | --- | --- |
 | `setup` | `ran`, `none` (no executable `.saaio/setup`), `failed: <its last error line>`. A failed setup marks the flow blocked. The worker still opens. |
 | `pane` | `opening` while the UI runs, else `when saaio opens` |
+| `branch` | left out for a research flow, which says it has none in `help` |
 
 | Option | Default | Effect |
 | --- | --- | --- |
 | `<request>` | | what to build, such as `"SHOP-217 add CSV export"`. Up to 20000 characters. Part of the agent's first prompt. |
 | `--name <name>` | from the request | the flow's name, lowercased, with anything but letters and digits turned into `-` (`Skills Reporting` becomes `skills-reporting`). Default: the ticket key at the start of the request, lowercased (`SHOP-217` becomes `shop-217`), else the first four words (`add-a-dark-mode`). A name held by an unfinished flow, given or not, gets `-2`, `-3` and so on. |
 | `--mode <mode>` | `guided` | `guided` or `auto`: who answers the worker's questions ([flows.md](flows.md#guided-and-auto)) |
+| `--kind <kind>` | `[worker] kind`, else `feature` | `feature`, `fix`, `research` or a kind from the config: the flow's phases, first prompt and branch ([flows.md](flows.md#kinds)). An unknown kind is refused with the list. |
 | `--agent <agent>` | `[worker] agent`, else `claude` | an agent from the config ([configuration.md](configuration.md#agents)) |
-| `--type <type>` | the repository's first type | a branch type from the repository's `.saaio/config.toml` ([repository.md](repository.md#branch-names)) |
+| `--type <type>` | the first of the kind's types the repository lists, else its first | a branch type from the repository's `.saaio/config.toml` ([repository.md](repository.md#branch-names)). Refused for a research flow, which has no branch. |
 | `--base <branch>` | what the repository has checked out | the branch the worktree starts from and the merge request targets ([Stacked flows](#stacked-flows)) |
 | `--plain <folder>` | | open the agent in this folder as a plain session |
 
@@ -198,7 +203,7 @@ help[2]: Run `saaio` in a terminal to open the session,Run `saaio` for all flows
 
 - Name: the folder's name, unless `--name`.
 - A leading `~` is the home folder.
-- Not combinable with a request, `--mode`, `--type` or `--base`.
+- Not combinable with a request, `--mode`, `--kind`, `--type` or `--base`.
 
 ## saaio status
 
@@ -412,17 +417,18 @@ help[1]: Run `saaio report working` once the block is resolved
 ## saaio new
 
 ```
-saaio new --name <name> --request <text> [--mode guided|auto]
+saaio new --name <name> --request <text> [--mode guided|auto] [--kind <kind>]
 ```
 
 Tracks a flow without a worktree or worker, for a worker run by hand. An existing unfinished flow
 of that name is returned (`existing: true`). The request: up to 20000 characters, as for
-`saaio start`.
+`saaio start`. `--kind` records the kind's phases, as `saaio start` does.
 
 ```
 $ saaio new --name shop-230 --request "SHOP-230 tracked by hand"
 flow: shop-230
 id: a825cdf3-a951-4333-bae2-e0c872be66bf
+kind: feature
 existing: false
 help[2]: Run `saaio report --flow shop-230 phase plan` when plan starts,Or set SAAIO_FLOW_ID=a825cdf3-a951-4333-bae2-e0c872be66bf in the worker's environment and leave out --flow
 ```
@@ -483,8 +489,8 @@ A plain session: only the session is forgotten. The folder is never touched.
 saaio clear
 ```
 
-Forgets every ended flow and tears down its worktree like `saaio remove`,
-except:
+Forgets every ended flow, and every research flow that answered (`done`), and tears down its
+worktree like `saaio remove`, except:
 
 - a worktree with uncommitted work is kept and listed under `kept`
 - a flow whose teardown did not run, since the repository is no longer trusted, is listed under
