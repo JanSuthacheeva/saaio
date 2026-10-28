@@ -66,13 +66,18 @@ impl Others {
             } else {
                 "remove it"
             };
+            // Without its own path (bin_path's `saaio`) it names no folder to put first.
             let folder = Path::new(binary)
                 .parent()
-                .map_or_else(|| binary.to_string(), |dir| dir.display().to_string());
-            format!(
-                "`saaio` runs {}, not {binary}: {remove} or put {folder} first on PATH",
-                other.exe.display()
-            )
+                .filter(|dir| !dir.as_os_str().is_empty());
+            match folder {
+                Some(folder) => format!(
+                    "`saaio` runs {}, not {binary}: {remove} or put {} first on PATH",
+                    other.exe.display(),
+                    folder.display()
+                ),
+                None => format!("`saaio` runs {}: {remove}", other.exe.display()),
+            }
         });
         let servers = match self.servers.as_slice() {
             [] => None,
@@ -255,6 +260,27 @@ mod tests {
         assert_eq!(
             document.text(),
             "updated: saaio 0.1.2 -> 0.2.0\nbinary: ~/.local/bin/saaio\nshadowed: ~/.cargo/bin/saaio (saaio 0.1.0 (9b77d8c))\nservers[2]{store,pid,build,binary}:\n  ~/.local/state/saaio/projects/shop,4321,0.1.2 (45630ee),~/.local/bin/saaio\n  ~/.local/state/saaio/projects/blog,4400,an earlier protocol,unknown\nhelp[3]: \"`saaio` runs ~/.cargo/bin/saaio, not ~/.local/bin/saaio: remove it (`cargo uninstall saaio`) or put ~/.local/bin first on PATH\",\"Run `SAAIO_HOME=<store> saaio --stop` for each server, then start saaio again; unfinished flows resume\",\"Changes: https://github.com/JanSuthacheeva/saaio/releases/tag/v0.2.0\""
+        );
+    }
+
+    #[test]
+    fn names_no_folder_when_this_binary_is_unknown() {
+        let mut others = others();
+        others.servers.clear();
+
+        let document = updated(
+            &Build::Release(tag("v0.1.2")),
+            &tag("v0.2.0"),
+            "saaio",
+            &others,
+        );
+
+        assert!(
+            document.text().contains(
+                "\"`saaio` runs ~/.cargo/bin/saaio: remove it (`cargo uninstall saaio`)\""
+            ),
+            "{}",
+            document.text()
         );
     }
 
