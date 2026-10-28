@@ -95,7 +95,6 @@ pub struct Running {
 }
 
 /// Connects as Control to read who listens; None when no server does.
-#[cfg_attr(not(test), expect(dead_code, reason = "saaio update names them"))]
 pub fn running(socket: &Path) -> Result<Option<Running>> {
     let Some(mut stream) = dial(socket)? else {
         return Ok(None);

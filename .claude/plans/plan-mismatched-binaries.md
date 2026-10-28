@@ -145,12 +145,16 @@ pub(crate) struct Others {
 fn others(env: &Env, version: &str) -> Others;   // commands/update.rs
 
 pub(crate) fn updated(from: &Build, to: &Tag, binary: &str, others: &Others) -> Document;
-pub(crate) fn latest(running: &Build, latest: &Tag, others: &Others) -> Document;
+pub(crate) fn latest(running: &Build, latest: &Tag, binary: &str, others: &Others) -> Document;
 ```
 
 - `servers` from `Registry::stores()` and `client::running(&env.socket(&store))`; kept when it
   refused (`server: None`) or its version is not `version` (the target after an install, the
   running version on Latest). The general "a running server keeps..." help line is replaced.
+- Build: `others` writes Others' paths with ~ (`Env::tilde`, which `bin_path` now uses), so
+  output needs no home; it also asks `client::earlier_socket`, where a 0.1.0 server of a long
+  store listens; `latest` takes `binary` for the PATH help line; one server's help names its
+  store (`SAAIO_HOME=<root> saaio --stop`), a refused one shows build `an earlier protocol`.
 - TOON after an install:
 
 ```
@@ -266,7 +270,7 @@ Errors: a socket that errors is left out; no registry -> no servers. `Step::Late
 - [x] `ServerMsg::Welcome { version, server }` from `Conn::hello`, `Refused` naming the server's build and exe, `Client::server`, with server tests over a socket
 - [x] `Client::connect` refusal naming the server's pid, this binary and `saaio --stop`; `client::running`; tests incl. a protocol-8 listener
 - [x] `Env::path` from main.rs; `send` and `hook` say an earlier server opened a keyless pane, with a tests/cli case for send
-- [ ] `saaio update`: `Others`, `others()`, `updated`/`latest` with `shadowed` and `servers[]`, with TOON tests
+- [x] `saaio update`: `Others`, `others()`, `updated`/`latest` with `shadowed` and `servers[]`, with TOON tests
 - [ ] UI: `UiEnv::path`, `App::warn`, `View::Mismatch`, `dialog::mismatch`, the title-row line, with app tests and golden screens
 - [ ] Docs: README/docs (install.md, troubleshooting.md, cli.md, ui.md as they apply), ROADMAP (drop the row, add the "panes run the server's saaio" Planned soon row), CHANGELOG Unreleased, CLAUDE.md (binaries.rs, plan list)
 - [ ] E2E: rerun the repro (0.1.1 first on PATH, this build behind it; a running 0.1.2 server; a 0.1.0 server) on a scratch store and check the dialog, title line, `saaio update` (local mirror) and `saaio send` messages; `saaio --stop` after

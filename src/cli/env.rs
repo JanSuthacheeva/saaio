@@ -190,15 +190,20 @@ impl Env {
 
     /// This binary, with ~ for the user's home.
     pub(crate) fn bin_path(&self) -> String {
-        let Ok(exe) = env::current_exe() else {
-            return "saaio".to_string();
-        };
+        match env::current_exe() {
+            Ok(exe) => self.tilde(&exe),
+            Err(_) => "saaio".to_string(),
+        }
+    }
+
+    /// `path` with ~ for the user's home.
+    pub(crate) fn tilde(&self, path: &Path) -> String {
         match self
             .user_home()
-            .and_then(|home| exe.strip_prefix(home).ok())
+            .and_then(|home| path.strip_prefix(home).ok())
         {
             Some(rest) => format!("~/{}", rest.display()),
-            None => exe.display().to_string(),
+            None => path.display().to_string(),
         }
     }
 }
