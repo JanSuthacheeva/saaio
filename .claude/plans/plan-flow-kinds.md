@@ -444,3 +444,55 @@ Resume never uses the prompt.
 ### End to end
 
 - [x] With a scratch SAAIO_HOME and XDG_STATE_HOME and a scratch repo with `[branch] types = ["feature", "bugfix"]`: `saaio start --kind fix` gives a bugfix branch and the pane's `/ship-fix` prompt, `--kind research` a detached worktree; `saaio status`, `--json` and the UI's dialog, sidebar and board show the kinds; a research flow answers, is done, and `saaio clear` forgets it; end with `saaio --stop`
+
+## Review
+
+Isolated review of flow/kinds-of-flows against main and this plan. The build matches the plan's
+units, call chains and test seams; no bug in behaviour was found.
+
+### Fixed
+
+- `report`'s doc comment in `cli/commands/hook.rs` had been left above the new `workflow_for`,
+  which so carried two docs and `report` none: moved back (23ea0ba).
+- docs/flows.md said `saaio status <name> --full` shows a research flow's whole answer; the
+  answer is cut at 4000 characters (`LONG_TEXT_LIMIT`): says so, and that the pane holds all of
+  it (64f58d9).
+
+Both are comment and docs only, so no second review round was needed; fmt and clippy pass.
+
+### Open
+
+- An old flow (no `workflow` recorded) is translated by `saaio hook` with `Config::workflow()`,
+  the default kind's. Every pre-kinds flow was a feature flow, so with `[worker] kind = "fix"` set
+  while such a flow still runs, its feature skills (design-code, ...) move it nowhere.
+  Recommendation: fall back to the `feature` kind's workflow for flows without a recorded one,
+  keep the default kind's for the master; low priority, it only affects flows started before the
+  upgrade.
+- A research answer is capped at 4000 characters in the log. Recommendation: keep it; long
+  findings belong in the pane or a file the worker writes, and the master's text already points
+  at `--full`.
+- A research flow started with `--base X` still gets a `base-merged` note when X merges, though
+  its detached worktree has nothing to move. Harmless; recommendation: leave it.
+- A user kind named with spaces or commas works but reads oddly in the TOON list; config does not
+  restrict kind names as it does phase names. Recommendation: restrict to the phase-name alphabet
+  in a follow-up if it matters.
+
+### Where to look
+
+1. `src/fold.rs` `Folding::apply`, the `Working` and `Idle if !merges` arms, then `finish`:
+   the research lifecycle (done on answer, clock restarted on a follow-up, steps all done).
+2. `src/config.rs` `parse` and `add_builtins`: old `[[phases]]` and `[worker] prompt` moved into
+   the feature kind, the refusals and their lines. This is what existing users' files hit.
+3. `src/cli/commands/start.rs` `run` and `pick_branch_type`, with `launch/worktree.rs`
+   `add_argv`/`repo_of`: research's detached worktree, and `repo_of` now taking a slot as the
+   sign of a worktree (teardown, hook variables, pause scripts and clear all follow it).
+4. `src/cli/commands/hook.rs` `workflow_for`: the per-flow workflow every hook now folds the log
+   for.
+
+Routine, skimmable: the `Phase` move from event.rs to workflow.rs, the `kind: None, ...` fixture
+lines, the golden files, the new-flow dialog row plumbing and the docs.
+
+### Checks
+
+fmt, test, clippy and deny passed at 6107914; after the two fix commits (comment and docs only)
+fmt and clippy pass again.
