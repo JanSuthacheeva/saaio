@@ -15,7 +15,7 @@
       agent: review changes                            shop-198
 
 
-  1 shop-221  shop-221 · auto · claude · flow/shop-221 · slot 1 · started 29m ago
+  1 shop-221  shop-221 · feature · auto · claude · flow/shop-221 · slot 1 · started 29m ago
               plan ✓ 0s   implement ● 29m   review ○   MR ○
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   TIMELINE                                                                                DECISIONS

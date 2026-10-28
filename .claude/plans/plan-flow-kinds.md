@@ -432,7 +432,7 @@ Resume never uses the prompt.
 
 ### UI
 
-- [ ] `KindChoice`, the dialog's kind row, `branch_type` rename, type row following the kind, `Job::args --kind`, `App::set_kinds` from `ui.rs`; dialog unit tests
+- [x] `KindChoice`, the dialog's kind row, `branch_type` rename, type row following the kind, `Job::args --kind`, `App::set_kinds` from `ui.rs`; dialog unit tests
 - [ ] Sidebar marker for a kind other than feature and the board's detail fact; golden tests updated
 
 ### Master and docs

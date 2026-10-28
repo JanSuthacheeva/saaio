@@ -51,6 +51,7 @@ impl BoardView<'_> {
         if !flow.request.is_empty() {
             facts.push(flow.request.clone());
         }
+        facts.extend(flow.kind.clone());
         facts.push(flow.mode.name().to_string());
         facts.extend(flow.workspace.as_ref().map(|space| space.agent.clone()));
         if let Some(space) = flow.workspace.as_ref().filter(|_| flow.is_plain()) {

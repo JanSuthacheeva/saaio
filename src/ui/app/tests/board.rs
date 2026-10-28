@@ -37,7 +37,7 @@ fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
     assert!(row(&terminal, 10).contains(" 3 ◓ export-csv               review · agent "));
     assert!(
         row(&terminal, 16)
-            .starts_with(" 2 shop-230  shop-230 · guided · claude · flow/shop-230 · slot 1"),
+            .starts_with(" 2 shop-230  shop-230 · fix · guided · claude · flow/shop-230 · slot 1"),
         "{}",
         row(&terminal, 16)
     );
