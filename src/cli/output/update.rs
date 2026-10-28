@@ -1,46 +1,144 @@
 //! What `saaio update` prints: the update, the latest release already running, or why it cannot
 
+use std::path::{Path, PathBuf};
+
 use serde::Serialize;
 
 use super::{Document, Failure, toon};
+use crate::binaries::Binary;
+use crate::client::Running;
 use crate::release::source::{GITHUB, Releases};
 use crate::release::{Build, Tag};
 
-/// updated, binary, help: the running server keeps the old version.
-pub(crate) fn updated(from: &Build, to: &Tag, binary: &str) -> Document {
+/// What update finds beside its own install: the saaio first on PATH and the servers on another
+/// version; paths written with ~.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Others {
+    pub shadowed: Option<Binary>,
+    /// Each server's store root and who listens there.
+    pub servers: Vec<(PathBuf, Running)>,
+}
+
+/// One row of servers[].
+#[derive(Serialize)]
+struct Server {
+    store: String,
+    pid: u32,
+    build: String,
+    binary: String,
+}
+
+impl Others {
+    /// `~/.cargo/bin/saaio (saaio 0.1.0 (9b77d8c))`.
+    fn shadowed(&self) -> Option<String> {
+        self.shadowed
+            .as_ref()
+            .map(|other| format!("{} (saaio {})", other.exe.display(), other.build))
+    }
+
+    fn rows(&self) -> Vec<Server> {
+        self.servers
+            .iter()
+            .map(|(store, running)| Server {
+                store: store.display().to_string(),
+                pid: running.pid,
+                build: running.server.as_ref().map_or_else(
+                    || "an earlier protocol".to_string(),
+                    |server| server.build.clone(),
+                ),
+                binary: running.server.as_ref().map_or_else(
+                    || "unknown".to_string(),
+                    |server| server.exe.display().to_string(),
+                ),
+            })
+            .collect()
+    }
+
+    /// What to do about them: `binary` is the saaio update installed or found.
+    fn help(&self, binary: &str) -> Vec<String> {
+        let shadowed = self.shadowed.as_ref().map(|other| {
+            let remove = if other
+                .exe
+                .parent()
+                .is_some_and(|dir| dir.ends_with(".cargo/bin"))
+            {
+                "remove it (`cargo uninstall saaio`)"
+            } else {
+                "remove it"
+            };
+            // Without its own path (bin_path's `saaio`) it names no folder to put first.
+            let folder = Path::new(binary)
+                .parent()
+                .filter(|dir| !dir.as_os_str().is_empty());
+            match folder {
+                Some(folder) => format!(
+                    "`saaio` runs {}, not {binary}: {remove} or put {} first on PATH",
+                    other.exe.display(),
+                    folder.display()
+                ),
+                None => format!("`saaio` runs {}: {remove}", other.exe.display()),
+            }
+        });
+        let servers = match self.servers.as_slice() {
+            [] => None,
+            [(store, _)] => Some(format!(
+                "Run `SAAIO_HOME={} saaio --stop`, then start saaio again; unfinished flows resume",
+                store.display()
+            )),
+            _ => Some(
+                "Run `SAAIO_HOME=<store> saaio --stop` for each server, then start saaio again; unfinished flows resume"
+                    .to_string(),
+            ),
+        };
+        shadowed.into_iter().chain(servers).collect()
+    }
+}
+
+/// updated, binary, shadowed and servers[] when there are, help: what to do about them.
+pub(crate) fn updated(from: &Build, to: &Tag, binary: &str, others: &Others) -> Document {
     #[derive(Serialize)]
     struct Updated<'a> {
         updated: String,
         binary: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        shadowed: Option<String>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        servers: Vec<Server>,
         help: Vec<String>,
     }
+    let mut help = others.help(binary);
+    help.push(format!("Changes: {GITHUB}/tag/{to}"));
     Document::Toon(toon(&Updated {
         updated: format!("saaio {} -> {}", from.version(), to.version()),
         binary,
-        help: vec![
-            format!(
-                "A running saaio server keeps {} until `saaio --stop`; unfinished flows resume after",
-                from.version()
-            ),
-            format!("Changes: {GITHUB}/tag/{to}"),
-        ],
+        shadowed: others.shadowed(),
+        servers: others.rows(),
+        help,
     }))
 }
 
-/// running, latest, update: none.
-pub(crate) fn latest(running: &Build, latest: &Tag) -> Document {
+/// running, latest, update: none, shadowed and servers[] when there are.
+pub(crate) fn latest(running: &Build, latest: &Tag, binary: &str, others: &Others) -> Document {
     #[derive(Serialize)]
     struct Latest {
         running: String,
         latest: String,
         update: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        shadowed: Option<String>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        servers: Vec<Server>,
         help: Vec<String>,
     }
+    let mut help = others.help(binary);
+    help.push("Run `saaio update --version <tag>` to install another release".to_string());
     Document::Toon(toon(&Latest {
         running: format!("v{}", running.version()),
         latest: latest.to_string(),
         update: "none",
-        help: vec!["Run `saaio update --version <tag>` to install another release".to_string()],
+        shadowed: others.shadowed(),
+        servers: others.rows(),
+        help,
     }))
 }
 
@@ -107,23 +205,112 @@ mod tests {
         Tag::parse(text).unwrap()
     }
 
+    fn others() -> Others {
+        Others {
+            shadowed: Some(Binary {
+                exe: "~/.cargo/bin/saaio".into(),
+                build: "0.1.0 (9b77d8c)".into(),
+            }),
+            servers: vec![
+                (
+                    "~/.local/state/saaio/projects/shop".into(),
+                    Running {
+                        pid: 4321,
+                        server: Some(Binary {
+                            exe: "~/.local/bin/saaio".into(),
+                            build: "0.1.2 (45630ee)".into(),
+                        }),
+                    },
+                ),
+                (
+                    "~/.local/state/saaio/projects/blog".into(),
+                    Running {
+                        pid: 4400,
+                        server: None,
+                    },
+                ),
+            ],
+        }
+    }
+
     #[test]
-    fn says_what_was_updated_and_that_the_server_keeps_its_version() {
+    fn says_what_was_updated() {
         let document = updated(
             &Build::Release(tag("v0.1.0")),
             &tag("v0.1.1"),
             "~/.local/bin/saaio",
+            &Others::default(),
         );
 
         assert_eq!(
             document.text(),
-            "updated: saaio 0.1.0 -> 0.1.1\nbinary: ~/.local/bin/saaio\nhelp[2]: A running saaio server keeps 0.1.0 until `saaio --stop`; unfinished flows resume after,\"Changes: https://github.com/JanSuthacheeva/saaio/releases/tag/v0.1.1\""
+            "updated: saaio 0.1.0 -> 0.1.1\nbinary: ~/.local/bin/saaio\nhelp[1]: \"Changes: https://github.com/JanSuthacheeva/saaio/releases/tag/v0.1.1\""
+        );
+    }
+
+    #[test]
+    fn names_the_saaio_first_on_path_and_the_servers_on_another_version() {
+        let document = updated(
+            &Build::Release(tag("v0.1.2")),
+            &tag("v0.2.0"),
+            "~/.local/bin/saaio",
+            &others(),
+        );
+
+        assert_eq!(
+            document.text(),
+            "updated: saaio 0.1.2 -> 0.2.0\nbinary: ~/.local/bin/saaio\nshadowed: ~/.cargo/bin/saaio (saaio 0.1.0 (9b77d8c))\nservers[2]{store,pid,build,binary}:\n  ~/.local/state/saaio/projects/shop,4321,0.1.2 (45630ee),~/.local/bin/saaio\n  ~/.local/state/saaio/projects/blog,4400,an earlier protocol,unknown\nhelp[3]: \"`saaio` runs ~/.cargo/bin/saaio, not ~/.local/bin/saaio: remove it (`cargo uninstall saaio`) or put ~/.local/bin first on PATH\",\"Run `SAAIO_HOME=<store> saaio --stop` for each server, then start saaio again; unfinished flows resume\",\"Changes: https://github.com/JanSuthacheeva/saaio/releases/tag/v0.2.0\""
+        );
+    }
+
+    #[test]
+    fn names_no_folder_when_this_binary_is_unknown() {
+        let mut others = others();
+        others.servers.clear();
+
+        let document = updated(
+            &Build::Release(tag("v0.1.2")),
+            &tag("v0.2.0"),
+            "saaio",
+            &others,
+        );
+
+        assert!(
+            document.text().contains(
+                "\"`saaio` runs ~/.cargo/bin/saaio: remove it (`cargo uninstall saaio`)\""
+            ),
+            "{}",
+            document.text()
+        );
+    }
+
+    #[test]
+    fn names_the_one_store_to_stop() {
+        let mut others = others();
+        others.shadowed = None;
+        others.servers.truncate(1);
+
+        let document = latest(
+            &Build::Release(tag("v0.1.1")),
+            &tag("v0.1.1"),
+            "~/.local/bin/saaio",
+            &others,
+        );
+
+        assert_eq!(
+            document.text(),
+            "running: v0.1.1\nlatest: v0.1.1\nupdate: none\nservers[1]{store,pid,build,binary}:\n  ~/.local/state/saaio/projects/shop,4321,0.1.2 (45630ee),~/.local/bin/saaio\nhelp[2]: \"Run `SAAIO_HOME=~/.local/state/saaio/projects/shop saaio --stop`, then start saaio again; unfinished flows resume\",Run `saaio update --version <tag>` to install another release"
         );
     }
 
     #[test]
     fn names_the_latest_release_when_nothing_is_newer() {
-        let document = latest(&Build::Release(tag("v0.1.1")), &tag("v0.1.1"));
+        let document = latest(
+            &Build::Release(tag("v0.1.1")),
+            &tag("v0.1.1"),
+            "~/.local/bin/saaio",
+            &Others::default(),
+        );
 
         assert_eq!(
             document.text(),

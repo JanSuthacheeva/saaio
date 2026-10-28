@@ -29,8 +29,20 @@ pub fn saaio_command(home: &Path) -> Command {
         .env("XDG_STATE_HOME", shared(home))
         .env("SAAIO_CONFIG", home.join("no-config.toml"))
         .env("XDG_CONFIG_HOME", home.join("no-config-home"))
-        .env("CLAUDE_CONFIG_DIR", home.join("no-claude-home"));
+        .env("CLAUDE_CONFIG_DIR", home.join("no-claude-home"))
+        .env(
+            "PATH",
+            path_first(Path::new(env!("CARGO_BIN_EXE_saaio")).parent().unwrap()),
+        );
     command
+}
+
+/// PATH with `dir` first, as an install puts saaio's folder: a saaio of another build earlier on
+/// PATH makes the UI and `saaio update` warn.
+pub fn path_first(dir: &Path) -> std::ffi::OsString {
+    let rest = std::env::var_os("PATH").unwrap_or_default();
+    std::env::join_paths(std::iter::once(dir.to_path_buf()).chain(std::env::split_paths(&rest)))
+        .unwrap()
 }
 
 pub fn saaio(home: &Path, args: &[&str]) -> Output {

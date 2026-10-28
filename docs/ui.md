@@ -25,7 +25,7 @@ One terminal with the master, every worker and every plain session. Run by an ag
 | Area | Shows |
 | --- | --- |
 | pane (left) | the session in view. The master when the UI opens. Receives all typing except the [prefix key](#keys). |
-| title row (above the pane) | worker: state, name, steps, phase, branch, slot. Plain session: state, name, folder. Master: branch, plus folder while the sidebar is folded. Notices on the right, such as a theme error or "starting the flow…", else a newer release: `0.1.1 is out: saaio update` ([cli.md](cli.md#saaio-update)). |
+| title row (above the pane) | worker: state, name, steps, phase, branch, slot. Plain session: state, name, folder. Master: branch, plus folder while the sidebar is folded. Notices on the right, such as a theme error or "starting the flow…", else mismatched binaries (`server is saaio 0.1.1: saaio --stop`, `another saaio first on PATH`), else a newer release: `0.1.1 is out: saaio update` ([cli.md](cli.md#saaio-update)). |
 | sidebar (right) | every session, see below |
 | rail | the folded sidebar: numbers and marks only. Below 110 columns, or `C-space b`. The title row then names the first flow that needs you and is not in view. |
 
@@ -312,6 +312,15 @@ Advanced > Bell says, such as badging its icon or bouncing it while in the backg
 | `k` | keep: the server stops, sessions resume at the next `saaio` |
 | `e` | end: the server stops, flows are marked ended. Branches and worktrees stay until `saaio clear`. |
 | `esc` | cancel |
+
+### Another saaio
+
+When the UI attaches, it compares itself with the server and with the first `saaio` on PATH. If
+the server is another build, such as one started before `saaio update`, or another build comes
+first on PATH, such as an old `cargo install` in `~/.cargo/bin`, a `mismatched saaio` dialog names
+each binary with its build and what to do. Any key closes it, and the title row keeps a short line
+until the UI quits. The UI only warns: `saaio --stop` ends every session, so you choose when
+([troubleshooting.md](troubleshooting.md#the-terminal-ui)).
 
 ## After a crash or a reboot
 

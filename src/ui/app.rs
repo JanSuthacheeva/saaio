@@ -14,6 +14,7 @@ pub use effect::{Effect, Job, JobError, Removal, outcome};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use crate::binaries::{Binary, Mismatch};
 use crate::config::prefix::Prefix;
 use crate::launch::worktree::{WORKTREES_DIR, repo_of};
 use crate::proto::{Modes, PaneInfo, PaneKey, PaneStatus, Size};
@@ -46,6 +47,8 @@ pub enum View {
     Stop(Vec<String>),
     /// The prefix and ?: every key.
     Help,
+    /// The binaries disagree: any key closes it.
+    Mismatch,
     /// A question before a removal loses work or a start trusts a repository: y does `then`, any
     /// other key leaves it.
     Confirm {
@@ -98,6 +101,9 @@ pub struct App {
     notice: Option<String>,
     /// A newer release, as the title row names it: `0.1.1 is out: saaio update`.
     update: Option<String>,
+    /// This saaio, and how the server and the saaio first on PATH disagree with it.
+    this: Option<Binary>,
+    mismatches: Vec<Mismatch>,
     /// The sidebar folded to a rail: Some once the prefix and b chose, None follows the width (RAIL_BELOW).
     rail: Option<bool>,
     /// This project's store, to tell its flows from other projects'.
@@ -142,6 +148,8 @@ impl App {
             master: Master::default(),
             notice: None,
             update: None,
+            this: None,
+            mismatches: Vec::new(),
             rail: None,
             here: None,
             projects: None,
@@ -160,6 +168,15 @@ impl App {
     /// Shows a one-line notice until the next key, such as why theme.toml could not be read.
     pub fn say(&mut self, notice: String) {
         self.notice = Some(notice);
+    }
+
+    /// Opens View::Mismatch when `mismatches` is not empty; the title row keeps a line after.
+    pub fn warn(&mut self, this: Binary, mismatches: Vec<Mismatch>) {
+        if !mismatches.is_empty() {
+            self.view = View::Mismatch;
+        }
+        self.this = Some(this);
+        self.mismatches = mismatches;
     }
 
     /// Names a newer release in the title row, or none; true when that changed.

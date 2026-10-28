@@ -1,15 +1,18 @@
 //! `saaio update`: installs the latest release, or a tag, over this binary with its install.sh
 
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use anyhow::{Context, bail};
 use rustix::fs::{Access, access};
 
+use crate::binaries::{self, Binary};
 use crate::cli::Env;
+use crate::cli::output::update::Others;
 use crate::cli::output::{Document, Failure, update as output};
+use crate::client;
 use crate::release::source::Releases;
 use crate::release::{Build, Tag};
 use crate::update::{self, Step};
@@ -46,7 +49,10 @@ pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
     let writable = access(dir, Access::WRITE_OK).is_ok();
     let running = Build::running();
     match update::step(&running, &target, args.version.is_some(), writable) {
-        Step::Latest => Ok(output::latest(&running, &target)),
+        Step::Latest => {
+            let others = others(env, &running.version().to_string(), binaries::DEADLINE);
+            Ok(output::latest(&running, &target, &env.bin_path(), &others))
+        }
         Step::Source => Err(output::source(&target)),
         Step::Unwritable => Err(output::unwritable(
             &dir.display().to_string(),
@@ -56,8 +62,48 @@ pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
         Step::Install => {
             install(&releases, &target, dir)
                 .map_err(|error| output::failed(&target, &format!("{error:#}"), &releases))?;
-            Ok(output::updated(&running, &target, &env.bin_path()))
+            let others = others(env, &target.version().to_string(), binaries::DEADLINE);
+            Ok(output::updated(&running, &target, &env.bin_path(), &others))
         }
+    }
+}
+
+/// The saaio first on PATH when it is not `version`, and the servers of every registered store
+/// that are not `version` or refused this one (an earlier protocol); paths with ~. A server that
+/// cannot be asked is left out. The saaio on PATH gets `limit` to print its version.
+fn others(env: &Env, version: &str, limit: Duration) -> Others {
+    let shadowed = std::env::current_exe().ok().and_then(|exe| {
+        let this = Binary {
+            exe,
+            build: version.to_string(),
+        };
+        binaries::shadowing_within(&this, env.path.as_deref()?, limit)
+    });
+    let stores = env.registry().map(|registry| registry.stores());
+    let servers = stores
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|store| {
+            let sockets = [Some(env.socket(store)), client::earlier_socket(store)];
+            let mut running = sockets
+                .into_iter()
+                .flatten()
+                .find_map(|socket| client::running(&socket).ok().flatten())?;
+            if let Some(server) = &mut running.server {
+                if server.version() == version {
+                    return None;
+                }
+                server.exe = PathBuf::from(env.tilde(&server.exe));
+            }
+            Some((PathBuf::from(env.tilde(store.root())), running))
+        })
+        .collect();
+    Others {
+        shadowed: shadowed.map(|other| Binary {
+            exe: PathBuf::from(env.tilde(&other.exe)),
+            build: other.build,
+        }),
+        servers,
     }
 }
 
@@ -97,13 +143,23 @@ fn install(releases: &Releases, tag: &Tag, dir: &Path) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::os::unix::net::UnixListener;
     use std::path::PathBuf;
+    use std::thread;
 
     use sha2::{Digest, Sha256};
     use tempfile::TempDir;
 
     use super::*;
+    use crate::client::Running;
     use crate::fixtures::executable;
+    use crate::private;
+    use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, ServerMsg};
+    use crate::store::Store;
+
+    /// How long a test's fake saaio gets to print its version: a fresh script's first exec is slow
+    /// on macOS.
+    const PATIENCE: Duration = Duration::from_secs(30);
 
     /// The release target install.sh picks on this machine.
     fn target() -> &'static str {
@@ -168,6 +224,90 @@ mod tests {
         install(&releases, &Tag::parse("v0.1.1").unwrap(), &bin).unwrap();
 
         assert_eq!(installed(&bin), "saaio 0.1.1 (abc1234)\n");
+    }
+
+    #[test]
+    fn names_another_version_first_on_path_with_tilde() {
+        let home = TempDir::new().unwrap();
+        let cargo = home.path().join(".cargo/bin");
+        fs::create_dir_all(&cargo).unwrap();
+        executable(
+            &cargo.join("saaio"),
+            "#!/bin/sh\necho 'saaio 0.1.0 (9b77d8c)'\n",
+        );
+        let env = Env {
+            home: Some(home.path().to_path_buf()),
+            path: Some(cargo.clone().into_os_string()),
+            ..Env::default()
+        };
+
+        assert_eq!(
+            others(&env, "0.2.0", PATIENCE),
+            Others {
+                shadowed: Some(Binary {
+                    exe: "~/.cargo/bin/saaio".into(),
+                    build: "0.1.0 (9b77d8c)".into(),
+                }),
+                servers: Vec::new(),
+            }
+        );
+        assert_eq!(others(&env, "0.1.0", PATIENCE), Others::default());
+    }
+
+    /// A server on `socket` that welcomes `answers` hellos as `server`.
+    fn welcoming(socket: &Path, server: Binary, answers: usize) -> thread::JoinHandle<()> {
+        let listener = UnixListener::bind(socket).unwrap();
+        thread::spawn(move || {
+            for _ in 0..answers {
+                let (mut stream, _) = listener.accept().unwrap();
+                proto::read_msg::<_, ClientMsg>(&mut stream).unwrap();
+                proto::write_msg(
+                    &mut stream,
+                    &ServerMsg::Welcome {
+                        version: PROTOCOL_VERSION,
+                        server: server.clone(),
+                    },
+                )
+                .unwrap();
+            }
+        })
+    }
+
+    #[test]
+    fn names_the_servers_on_another_version_with_tilde() {
+        // Short enough that the socket sits in the store, not in a temp folder.
+        let home = tempfile::Builder::new().tempdir_in("/tmp").unwrap();
+        let store = Store::at(home.path().join("s"));
+        private::create_dir(store.root()).unwrap();
+        let env = Env {
+            home: Some(home.path().to_path_buf()),
+            xdg_state_home: Some(home.path().join("state")),
+            ..Env::default()
+        };
+        env.registry().unwrap().register(&store).unwrap();
+        let socket = env.socket(&store);
+        assert_eq!(socket, store.root().join("server.sock"));
+        let server = Binary {
+            exe: home.path().join(".local/bin/saaio"),
+            build: "0.1.2 (45630ee)".into(),
+        };
+        let listening = welcoming(&socket, server, 2);
+
+        assert_eq!(
+            others(&env, "0.2.0", PATIENCE).servers,
+            vec![(
+                PathBuf::from("~/s"),
+                Running {
+                    pid: std::process::id(),
+                    server: Some(Binary {
+                        exe: "~/.local/bin/saaio".into(),
+                        build: "0.1.2 (45630ee)".into(),
+                    }),
+                },
+            )]
+        );
+        assert_eq!(others(&env, "0.1.2", PATIENCE).servers, Vec::new());
+        listening.join().unwrap();
     }
 
     #[test]

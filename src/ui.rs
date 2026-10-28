@@ -22,6 +22,7 @@ pub mod theme;
 pub mod theme_file;
 mod update_watch;
 
+use std::ffi::OsString;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -38,6 +39,7 @@ use ratatui::layout::Rect;
 use signal_hook::consts::SIGWINCH;
 use signal_hook::iterator::Signals;
 
+use crate::binaries::{self, Binary};
 use crate::branching::Branching;
 use crate::client::Client;
 use crate::config::prefix::Prefix;
@@ -111,6 +113,8 @@ pub struct UiEnv {
     pub releases: Releases,
     /// The repositories the person trusts; None without a shared folder.
     pub trust: Option<Trust>,
+    /// $PATH, where another saaio can come first.
+    pub path: Option<OsString>,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
@@ -132,6 +136,12 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let mut configs = ConfigWatch::new(env.config_file);
     let mut updates = UpdateWatch::new(env.update, env.releases, Build::running());
     reload_config(&mut configs, &mut app, &mut router, &mut updates);
+    // Before the connect: the probe can take a second the server's output would wait for.
+    let this = Binary::this().ok();
+    let shadowed = this
+        .as_ref()
+        .zip(env.path.as_deref())
+        .and_then(|(this, path)| binaries::shadowing(this, path));
     let client = Client::connect(
         socket,
         Role::Attach {
@@ -139,6 +149,10 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
         },
     )?
     .context("no saaio server answers")?;
+    if let Some(this) = this {
+        let mismatches = binaries::mismatches(&this, Some(client.server()), shadowed);
+        app.warn(this, mismatches);
+    }
     let mut writer = client.try_clone()?;
     let (events, inbox) = mpsc::channel();
     let jobs = events.clone();

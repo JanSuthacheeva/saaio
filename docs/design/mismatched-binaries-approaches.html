@@ -1,0 +1,117 @@
+<title>Mismatched Binaries Approaches</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+/* One 720px reading column of cards, jasu.dev (Nord, one purple accent). */
+:root {
+  --surface:#f8f9fb; --card:#eceff4; --ink:#2e3440; --muted:#4c566a; --subtle:#d8dee9; --border:#d8dee9;
+  --code-block:#2e3440; --code-bg:#e5e9f0; --code-ink:#4b6c8a; --accent:#7b5eaf; --link:#4b6c8a;
+  --constructive:#a3be8c; --warning:#d08770; --critical:#bf616a; --on-accent:#f8f9fb;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --gap:24px; color-scheme:light;
+}
+:root[data-theme="dark"] {
+  --surface:#2e3440; --card:#3b4252; --ink:#eceff4; --muted:#93b1cc; --subtle:#434c5e; --border:#4c566a;
+  --code-block:#3b4252; --code-bg:#3b4252; --code-ink:#88c0d0; --accent:#bd93f9; --link:#88c0d0;
+  --warning:#ebcb8b; --on-accent:#2e3440; color-scheme:dark;
+}
+body { background:var(--surface); color:var(--ink); font:18px/1.6 var(--sans);
+  padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); padding-block:32px 64px; }
+main { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:var(--gap); }
+h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.1; font-weight:800; letter-spacing:-0.03em; margin:0; text-wrap:balance; }
+h2 { font-size:24px; line-height:1.3; margin:0 0 12px; text-wrap:balance; }
+h3 { font-size:18px; margin:16px 0 6px; }
+.meta { font-size:13px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:var(--gap); min-width:0; }
+.card.rec { border-color:var(--accent); }
+.pill { display:inline-block; border-radius:99px; font-size:.8rem; font-weight:600; letter-spacing:.05em; padding:2px 10px; background:var(--accent); color:var(--on-accent); vertical-align:middle; margin-left:8px; }
+p, ul { margin:0 0 12px; } ul { padding-left:22px; }
+code { font-family:var(--mono); font-size:.78em; background:var(--code-bg); color:var(--code-ink); border-radius:.2rem; padding:1px 4px; }
+a { color:var(--link); text-decoration-thickness:1px; text-underline-offset:.18em; }
+.scroll { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; font-size:15px; }
+th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+th { background:var(--subtle); }
+.pro { border-left:4px solid var(--constructive); padding-left:10px; }
+.con { border-left:4px solid var(--warning); padding-left:10px; }
+pre.mermaid { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:12px; margin:0 0 12px; }
+@media (max-width:480px) { :root { --gap:14px; } body { font-size:17px; } }
+</style>
+<main>
+<div>
+<h1>Mismatched saaio binaries</h1>
+<p class="meta">0.2.0 &middot; ROADMAP Planned soon &middot; approaches &middot; 2026-10-28</p>
+</div>
+
+<section class="card">
+<h2>Reproduced</h2>
+<p>On a scratch store, with the real release binaries: <code>cargo/saaio</code> is 0.1.0 and comes first on PATH, <code>local/saaio</code> is 0.1.1 behind it.</p>
+<ul>
+<li>Bare <code>saaio</code> runs 0.1.0 and starts a 0.1.0 server. The master pane gets <code>SAAIO_MASTER=1</code> but no <code>SAAIO_PROOF</code>.</li>
+<li>Run from the pane, 0.1.1's <code>saaio send</code> answers <code>error: only the master sends</code>. That is wrong: it is the master, but its server hands out no keys.</li>
+<li>A 0.1.1 server is running and a 0.1.2 UI attaches: nothing is said. Both speak protocol 8.</li>
+<li>Already covered: a 0.1.2 UI against a 0.1.0 server is refused (<code>a saaio server of an earlier version still runs on /tmp/saaio-501/...; run `saaio --stop`</code>). It names neither binary.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>What exists today</h2>
+<ul>
+<li><code>proto::BUILD</code> is <code>0.1.2 (45630ee)</code>. The client sends it in <code>Hello</code> as <code>Peer { pid, cwd, build }</code> (src/client.rs:52). The server only logs it.</li>
+<li><code>ServerMsg::Welcome { version }</code> (src/proto.rs:181) does not say which build the server is. So no client knows.</li>
+<li>Another protocol: the server sends <code>Refused</code> (src/server/conn.rs:110) and the client appends "run `saaio --stop`" (src/client.rs:62).</li>
+<li>Hooks run the server's own <code>current_exe</code> by absolute path (src/adapter.rs:99). An agent's <code>saaio send</code> runs whichever saaio its PATH finds first.</li>
+<li><code>saaio update</code> installs into the folder of <code>current_exe</code> (src/cli/commands/update.rs:44). Its help says in general terms that a running server keeps the old version.</li>
+<li><code>Env</code> does not read PATH (src/cli/env.rs).</li>
+</ul>
+<p>All three approaches share the PATH check: the first executable <code>saaio</code> on PATH, compared with <code>current_exe</code> after both are canonicalised, and that binary's <code>--version</code> read with a 1 s deadline. They differ only in how a command finds out which build the running server is.</p>
+</section>
+
+<section class="card rec">
+<h2>A. The server says who it is in the handshake <span class="pill">recommended</span></h2>
+<p><code>Welcome</code> carries the server's build and the executable it started from, recorded at startup. The protocol goes to 9. From 0.2.0 on, a server's <code>Refused</code> names its build and executable too. The UI compares builds when it attaches. <code>saaio update</code> connects as Control to each registered store's server and reads them. An old protocol-8 server refuses a 0.2.0 client: the client names the server's pid, and <code>saaio --stop</code>.</p>
+<pre class="mermaid">
+flowchart LR
+  UI["ui.rs / App<br/>(modified)"] -->|Hello| C["client::connect<br/>(modified)"]
+  C -->|Welcome + server build, exe| UI
+  S["server/conn.rs hello<br/>(modified)"] --> C
+  U["commands/update.rs<br/>(modified)"] --> C
+  U --> B["binaries.rs<br/>(new: PATH check)"]
+  UI --> B
+  classDef new fill:#a3be8c,color:#2e3440;
+  classDef mod fill:#ebcb8b,color:#2e3440;
+  class B new; class UI,C,S,U mod;
+</pre>
+<p class="pro">Builds on the handshake that already exists, where the request expects it. Nothing new is stored. The executable is the one the server started from, so it is still correct after an update replaced the file on disk.</p>
+<p class="con">The protocol bump means any 0.1.x server refuses a 0.2.0 UI until <code>saaio --stop</code>. A minor release would usually bring that anyway, and the refusal now explains it. A command without a UI has to connect to the server to learn its build.</p>
+</section>
+
+<section class="card">
+<h2>B. The server writes <code>server.json</code> beside its socket</h2>
+<p>At start, the server writes its pid, build and executable into a private file next to the socket. Any command reads it without connecting and checks that the pid is still the one listening. No protocol change.</p>
+<p class="pro">Works without a connection, so <code>saaio send</code> and <code>status</code> could name the server's build cheaply.</p>
+<p class="con">A second record of the same fact, which can go stale and needs a pid check. Every 0.1.x server lacks the file, so "no file but something listening" has to mean "an earlier saaio" anyway. It ignores the handshake that already carries the client's build.</p>
+</section>
+
+<section class="card">
+<h2>C. Ask the OS which process listens</h2>
+<p>Take the peer pid of the socket (we already do this for <code>--stop</code>), get its executable path (<code>ps -o comm=</code> on macOS, <code>/proc/&lt;pid&gt;/exe</code> on Linux), and run <code>&lt;path&gt; --version</code>.</p>
+<p class="pro">No server change. Works for every old server.</p>
+<p class="con">Wrong in exactly the case that matters. After <code>saaio update</code> renamed the new binary over the old path, <code>--version</code> on that path names the new build while the server still runs the old one. macOS gives no "(deleted)" marker. It also depends on parsing <code>ps</code>. Rejected.</p>
+</section>
+
+<section class="card">
+<h2>Shared by all three</h2>
+<ul>
+<li><b>UI.</b> On attach, if the server is another build or another saaio comes first on PATH, a dialog names both binaries and builds and <code>saaio --stop</code>. After it is dismissed, a short line stays in the title row, ahead of the update notice.</li>
+<li><b>saaio update.</b> After it installs, and also when the release is already the latest, it adds <code>shadowed</code> (the other saaio first on PATH, with its build) and <code>servers[]</code> (each running server whose build differs from this binary's), each with help naming <code>saaio --stop</code>.</li>
+<li><b>saaio send.</b> When the pane says master or flow but carries no <code>SAAIO_PROOF</code>, the refusal says the server hands out no keys, and names <code>saaio --stop</code>.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>Recommendation</h2>
+<p><b>A.</b> The handshake already carries the client's build, so making it carry the server's build is a small step. It is the only option that names the right build after an update replaced the file. Its one cost, a single <code>saaio --stop</code> when moving to 0.2.0, comes with a refusal that now says why.</p>
+</section>
+</main>

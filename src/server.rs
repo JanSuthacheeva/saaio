@@ -37,13 +37,14 @@ use signal_hook::iterator::SignalsInfo;
 use signal_hook::iterator::exfiltrator::WithOrigin;
 use signal_hook::low_level::signal_name;
 
+use crate::binaries::BUILD;
 use crate::config::watch::ConfigWatch;
 use crate::config::{self, Config};
 use crate::default_file;
 use crate::fold;
 use crate::launch::pane::LaunchEnv;
 use crate::private;
-use crate::proto::{BUILD, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, ServerMsg, Size};
+use crate::proto::{ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, ServerMsg, Size};
 use crate::server_log;
 use crate::store::Store;
 use crate::system::System;

@@ -581,9 +581,12 @@ against `SHA256SUMS` and renames the new binary over the old one. Works without 
 
 ```
 $ saaio update
-updated: saaio 0.1.0 -> 0.1.1
+updated: saaio 0.1.2 -> 0.2.0
 binary: ~/.local/bin/saaio
-help[2]: A running saaio server keeps 0.1.0 until `saaio --stop`; unfinished flows resume after,"Changes: https://github.com/JanSuthacheeva/saaio/releases/tag/v0.1.1"
+shadowed: ~/.cargo/bin/saaio (saaio 0.1.0 (9b77d8c))
+servers[1]{store,pid,build,binary}:
+  ~/.local/state/saaio/projects/shop,4321,0.1.2 (45630ee),~/.local/bin/saaio
+help[3]: "`saaio` runs ~/.cargo/bin/saaio, not ~/.local/bin/saaio: remove it (`cargo uninstall saaio`) or put ~/.local/bin first on PATH","Run `SAAIO_HOME=~/.local/state/saaio/projects/shop saaio --stop`, then start saaio again; unfinished flows resume","Changes: https://github.com/JanSuthacheeva/saaio/releases/tag/v0.2.0"
 ```
 
 - Already on the latest release (or a newer pre-release), it changes nothing and says so.
@@ -594,6 +597,11 @@ help[2]: A running saaio server keeps 0.1.0 until `saaio --stop`; unfinished flo
 - A folder you cannot write, such as `/usr/local/bin`, is not touched. It names the `sudo` line
   that runs `install.sh` there.
 - The running server and the UI attached to it keep the old version until `saaio --stop`.
+  `servers[]` lists every running server, of any registered store, that is not on the version
+  just installed (or, when nothing was newer, the one running), with its store, pid, build and
+  the binary it started from. A server of an earlier protocol shows `an earlier protocol`.
+- `shadowed` names another `saaio` that comes first on PATH and is not that version: typing
+  `saaio` runs it, not the one just updated. Remove it or reorder PATH.
 
 ```
 $ saaio update

@@ -27,6 +27,11 @@ All notable changes to saaio are listed here. The format follows
   once it has answered, and `saaio clear` (or `x` on the board) forgets it. `saaio status`,
   `--json` (`kind`, `merges`), the board and the sidebar (`fix claude`) show a flow's kind.
   `[kinds.<name>]` in config.toml changes a kind or adds one; `[worker] kind` sets the default.
+- The UI warns when the running server is another build than the `saaio` you ran, or when another
+  `saaio` (such as an old `cargo install` in `~/.cargo/bin`) comes first on PATH: a dialog names
+  each binary with its build and `saaio --stop`, then the title row keeps a short line.
+  `saaio update` lists the same: `shadowed` and every running server on another version
+  (`servers[]`), each with what to run.
 
 ### Changed
 
@@ -35,6 +40,10 @@ All notable changes to saaio are listed here. The format follows
   so an agent you defined with `prompt = "$ship-feature {request}"` sends that for fixes too:
   leave it out to get each kind's. A top-level `[[phases]]` and `[worker] prompt` keep working as
   the feature kind's.
+- Protocol 9: the server says which build it is and which binary it started from. Moving to this
+  version, run `saaio --stop` once; the refusal from an earlier server now names its pid, this
+  binary and `saaio --stop`. `saaio send` in a pane an earlier server opened says the pane has no
+  key and to run `saaio --stop`, instead of `only the master sends`.
 
 ### Fixed
 

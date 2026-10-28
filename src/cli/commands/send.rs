@@ -24,6 +24,15 @@ pub struct Args {
 /// Appends the master's message to a flow its worker reads when flow wakes it, or with --type a
 /// line saaio server types into its pane; only the master sends (its pane's key proves it).
 pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, Failure> {
+    if env.saaio_master && env.key().is_none() {
+        return Err(Failure::error(
+            "this pane has no key: an earlier saaio server opened it",
+            vec![
+                "Ask the user to run `saaio --stop` and start saaio again; unfinished flows resume"
+                    .to_string(),
+            ],
+        ));
+    }
     if !identity::proves(store, &Waiter::Master, env.key()) {
         return Err(Failure::error(
             "only the master sends",

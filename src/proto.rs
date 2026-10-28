@@ -12,12 +12,11 @@ use nix::sys::socket::{getsockopt, sockopt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::binaries::Binary;
 use crate::text;
 use crate::view::{Board, MasterTurn};
 
-pub const PROTOCOL_VERSION: u32 = 8;
-/// This binary: `0.1.0 (2904734)`, the commit from build.rs, `unknown` outside a git checkout.
-pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("SAAIO_COMMIT"), ")");
+pub const PROTOCOL_VERSION: u32 = 9;
 pub const MAX_MESSAGE: usize = 8 << 20;
 /// The widest and tallest pane the server makes: past it a terminal's cells cost too much.
 pub const MAX_SIZE: Size = Size {
@@ -180,6 +179,8 @@ impl ClientMsg {
 pub enum ServerMsg {
     Welcome {
         version: u32,
+        /// The server's build and the binary it started from.
+        server: Binary,
     },
     Refused {
         reason: String,
@@ -479,6 +480,10 @@ mod tests {
         vec![
             ServerMsg::Welcome {
                 version: PROTOCOL_VERSION,
+                server: Binary {
+                    exe: "/home/jan/.local/bin/saaio".into(),
+                    build: "0.2.0 (abc1234)".into(),
+                },
             },
             ServerMsg::Refused {
                 reason: "protocol 2".into(),

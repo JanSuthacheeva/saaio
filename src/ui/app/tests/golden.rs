@@ -220,6 +220,22 @@ fn every_view_looks_as_it_did() {
     help.on_input(Routed::Command(Command::Help));
     golden("help", &render_at(&help, FLEET));
 
+    let this = crate::binaries::Binary {
+        exe: "/Users/jan/.local/bin/saaio".into(),
+        build: "0.2.0 (abc1234)".into(),
+    };
+    let server = crate::binaries::Binary {
+        exe: "/Users/jan/.cargo/bin/saaio".into(),
+        build: "0.1.1 (6ded49e)".into(),
+    };
+    let mut mismatch = board_app().with_home(Some("/Users/jan".into()));
+    mismatch.warn(this, vec![crate::binaries::Mismatch::Server(server)]);
+    golden("mismatch", &render_at(&mismatch, FLEET));
+    mismatch.on_input(Routed::View(vec![Key::Esc]));
+    golden("mismatch-title", &render_at(&mismatch, FLEET));
+    mismatch.on_input(Routed::Command(Command::Rail));
+    golden("rail-mismatch", &render_at(&mismatch, FLEET));
+
     let mut stop = board_app();
     stop.on_input(Routed::Command(Command::StopServer));
     golden("stop", &render_at(&stop, FLEET));

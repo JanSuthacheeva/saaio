@@ -173,7 +173,12 @@ saaio
 From source: `cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag <new tag> --force`.
 `saaio update` names this line for a build from source.
 
-- The running server keeps the old version until stopped.
+- The running server keeps the old version until stopped. `saaio update` lists each server that
+  is still on another version, and the UI says when its server is another build
+  ([troubleshooting.md](troubleshooting.md#the-terminal-ui)).
+- Another `saaio` earlier on PATH, such as an old `cargo install` in `~/.cargo/bin`, keeps running
+  when you type `saaio`. `saaio update` and the UI name it: remove it (`cargo uninstall saaio`) or
+  put the updated binary's folder first on PATH.
 - Unfinished flows resume after the restart.
 - Write a completion script saved to a file again, so it knows the new version's commands.
 - `master.md` is refreshed while it still holds an earlier default. `config.toml` and `theme.toml`

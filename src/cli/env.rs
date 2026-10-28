@@ -1,6 +1,7 @@
 //! `Env`: the environment as values, and the store, registry, config and homes it points to
 
 use std::env;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use crate::client;
@@ -28,6 +29,8 @@ pub struct Env {
     pub saaio_master: bool,
     /// $SAAIO_PROOF: the key the server handed this session's pane.
     pub saaio_proof: Option<String>,
+    /// $PATH: where another saaio can come first.
+    pub path: Option<OsString>,
     pub home: Option<PathBuf>,
     pub xdg_state_home: Option<PathBuf>,
     pub xdg_config_home: Option<PathBuf>,
@@ -187,15 +190,20 @@ impl Env {
 
     /// This binary, with ~ for the user's home.
     pub(crate) fn bin_path(&self) -> String {
-        let Ok(exe) = env::current_exe() else {
-            return "saaio".to_string();
-        };
+        match env::current_exe() {
+            Ok(exe) => self.tilde(&exe),
+            Err(_) => "saaio".to_string(),
+        }
+    }
+
+    /// `path` with ~ for the user's home.
+    pub(crate) fn tilde(&self, path: &Path) -> String {
         match self
             .user_home()
-            .and_then(|home| exe.strip_prefix(home).ok())
+            .and_then(|home| path.strip_prefix(home).ok())
         {
             Some(rest) => format!("~/{}", rest.display()),
-            None => exe.display().to_string(),
+            None => path.display().to_string(),
         }
     }
 }

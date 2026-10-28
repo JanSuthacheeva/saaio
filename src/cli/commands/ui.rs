@@ -51,6 +51,7 @@ fn attach(store: &Store, env: &Env, log: PathBuf, clock: fn() -> u64) -> anyhow:
             .map(|registry| UpdateCheck::in_folder(registry.root())),
         releases: env.releases(),
         trust: env.registry().as_ref().map(Trust::at),
+        path: env.path.clone(),
     };
     ui::run(&socket, ui_env, clock)
 }

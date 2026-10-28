@@ -11,6 +11,7 @@
 pub mod cli;
 
 mod adapter;
+mod binaries;
 mod branching;
 mod bug_report;
 mod client;

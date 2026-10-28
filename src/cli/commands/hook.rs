@@ -88,6 +88,10 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
         None => Hooked::Nobody,
     };
     let log = Log::new(env.server_log(&store), &args.adapter, &hooked, clock);
+    if hooked.waiter().is_some() && env.key().is_none() {
+        log.error("no SAAIO_PROOF: an earlier saaio server opened this pane; saaio --stop");
+        return Document::Silent;
+    }
     if let Some(claimed) = hooked.waiter()
         && !identity::proves(&store, &claimed, env.key())
     {

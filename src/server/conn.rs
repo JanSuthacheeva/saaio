@@ -21,6 +21,7 @@ use super::{ConnId, Event, FRAME_EVERY, Server, Stop, spawn_named};
 const MAX_CONNS: usize = 16;
 /// How long accept rests after an error such as EMFILE before it tries again.
 const ACCEPT_PAUSE: Duration = Duration::from_millis(100);
+use crate::binaries::{BUILD, Binary};
 use crate::private;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, Role, ServerMsg};
 use crate::server_log;
@@ -116,7 +117,8 @@ impl Server {
                 conn,
                 &ServerMsg::Refused {
                     reason: format!(
-                        "saaio server runs protocol {PROTOCOL_VERSION}, this saaio speaks {version}"
+                        "saaio server {BUILD} from {} speaks protocol {PROTOCOL_VERSION}, this saaio speaks {version}",
+                        self.env.flow_exe.display()
                     ),
                 },
             );
@@ -150,6 +152,10 @@ impl Server {
             conn,
             &ServerMsg::Welcome {
                 version: PROTOCOL_VERSION,
+                server: Binary {
+                    exe: self.env.flow_exe.clone(),
+                    build: BUILD.to_string(),
+                },
             },
         );
         if self.attached == Some(conn) {
@@ -219,7 +225,8 @@ impl Server {
             conn,
             &ServerMsg::Refused {
                 reason: format!(
-                    "saaio server runs protocol {PROTOCOL_VERSION} and could not read this flow's hello"
+                    "saaio server {BUILD} from {} speaks protocol {PROTOCOL_VERSION} and could not read this saaio's hello",
+                    self.env.flow_exe.display()
                 ),
             },
         );
