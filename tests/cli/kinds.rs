@@ -245,3 +245,31 @@ fn clear_forgets_a_research_flow_once_it_answered_and_keeps_a_done_feature() {
         stdout(&next)
     );
 }
+
+#[test]
+fn status_shows_each_flows_kind() {
+    let lab = Lab::new();
+    assert!(
+        lab.start(&["SHOP-230 fix totals", "--kind", "fix"])
+            .status
+            .success()
+    );
+    assert!(lab.start(&["SHOP-231 export orders"]).status.success());
+
+    let list = stdout(&lab.run(&["status"]));
+    let detail = stdout(&lab.run(&["status", "shop-230"]));
+    let board: serde_json::Value =
+        serde_json::from_slice(&lab.run(&["status", "--json"]).stdout).unwrap();
+
+    assert!(list.contains("{name,kind,state,phase,tasks,age"), "{list}");
+    assert!(list.contains("  shop-230,fix,working,"), "{list}");
+    assert!(list.contains("  shop-231,feature,working,"), "{list}");
+    assert!(detail.contains("\nkind: fix\n"), "{detail}");
+    let kinds: Vec<&str> = board["flows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|flow| flow["kind"].as_str().unwrap())
+        .collect();
+    assert_eq!(kinds, ["feature", "fix"], "newest first");
+}

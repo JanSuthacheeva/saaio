@@ -425,7 +425,7 @@ Resume never uses the prompt.
 - [x] `workspace_for` with an optional branch and `add_argv` with `--detach`; worktree tests including a real detached worktree
 - [x] `saaio start --kind`, `--type` into `branch_type`, `pick_kind`, `pick_branch_type`, research without a branch; `saaio new --kind`; CLI tests for fix, research, unknown kind, research with --type
 - [x] `saaio hook` translates with `workflow_for`; CLI test: a fix flow moves to diagnose on /diagnose-bug
-- [ ] `saaio clear` uses `is_clearable`; CLI test: a done research flow is cleared, a done feature flow kept
+- [x] `saaio clear` uses `is_clearable`; CLI test: a done research flow is cleared, a done feature flow kept
 - [ ] status list column and detail field, start and new documents name the kind; `--json` kind; output tests
 
 ### UI

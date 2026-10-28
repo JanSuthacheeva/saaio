@@ -24,7 +24,7 @@ fn status_lists_flows_and_shows_one_in_detail() {
     seed_blocked(home.path());
 
     let list = stdout(&saaio(home.path(), &["status"]));
-    assert!(list.contains("shop-221,blocked,implement,"), "{list}");
+    assert!(list.contains("shop-221,\"\",blocked,implement,"), "{list}");
     assert!(
         list.contains("blockers[1]{name,blocker}:\n  shop-221,no default"),
         "{list}"
