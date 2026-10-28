@@ -90,11 +90,13 @@ fn shadowing_within(this: &Binary, path: &OsStr, limit: Duration) -> Option<Bina
     (!this.same_build(&other)).then_some(other)
 }
 
-/// Shadowed first, then Server when `server`'s build is not `this`'s.
-pub fn mismatches(this: &Binary, server: Option<&Binary>, path: Option<&OsStr>) -> Vec<Mismatch> {
-    let shadowed = path
-        .and_then(|path| shadowing(this, path))
-        .map(Mismatch::Shadowed);
+/// `shadowed` (what `shadowing` found) first, then Server when `server`'s build is not `this`'s.
+pub fn mismatches(
+    this: &Binary,
+    server: Option<&Binary>,
+    shadowed: Option<Binary>,
+) -> Vec<Mismatch> {
+    let shadowed = shadowed.map(Mismatch::Shadowed);
     let server = server
         .filter(|server| server.build != this.build)
         .map(|server| Mismatch::Server(server.clone()));
@@ -113,7 +115,6 @@ fn canonical(path: &Path) -> PathBuf {
 mod tests {
     use std::ffi::OsString;
     use std::os::unix::fs::symlink;
-    use std::process::Command;
 
     use tempfile::TempDir;
 
@@ -258,27 +259,18 @@ mod tests {
     fn mismatches_name_the_shadow_first_then_the_server() {
         let root = TempDir::new().unwrap();
         let this = this(root.path());
-        let other = saaio(root.path(), "cargo", "echo 'saaio 0.1.0 (9b77d8c)'");
-        // its first exec can take past mismatches' 1 s on macOS
-        assert!(Command::new(&other).output().unwrap().status.success());
+        let first = Binary {
+            exe: "/cargo/saaio".into(),
+            build: "0.1.0 (9b77d8c)".to_string(),
+        };
         let server = Binary {
-            exe: other.clone(),
+            exe: "/cargo/saaio".into(),
             build: "0.1.1 (6ded49e)".to_string(),
         };
-        let found = mismatches(
-            &this,
-            Some(&server),
-            Some(&path(&[other.parent().unwrap().into()])),
-        );
+        let found = mismatches(&this, Some(&server), Some(first.clone()));
         assert_eq!(
             found,
-            vec![
-                Mismatch::Shadowed(Binary {
-                    exe: other,
-                    build: "0.1.0 (9b77d8c)".to_string()
-                }),
-                Mismatch::Server(server),
-            ]
+            vec![Mismatch::Shadowed(first), Mismatch::Server(server)]
         );
         assert_eq!(mismatches(&this, Some(&this.clone()), None), vec![]);
         assert_eq!(mismatches(&this, None, None), vec![]);
