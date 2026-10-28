@@ -91,6 +91,8 @@ A research flow answers a question and changes nothing.
 - Its worktree is detached at the base: no branch, nothing to merge. It still gets a slot and the
   repository's setup script, so the worker can run the project.
 - Its phase, `research`, starts with its first turn.
+- Started with `--base`, it stands on that branch's commits. When the base merges, its base moves
+  like any stacked flow's, but its worker is not told to rebase: it has nothing to rebase.
 - Once a turn ends without a question, the flow is `done`: it moves to DONE, its services pause like
   any resting flow's, and the master tells you its findings are ready. `saaio status <name> --full`
   shows its answer, up to 4000 characters; its pane holds all of it.

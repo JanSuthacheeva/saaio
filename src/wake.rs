@@ -25,13 +25,17 @@ pub enum Note {
     BaseMerged { base: String, onto: String },
 }
 
-/// The notes in a flow's log after the first `delivered` of them (Message and BaseMerged events).
+/// The notes in a flow's log after the first `delivered` of them (Message and BaseMerged events);
+/// a flow that merges nothing has nothing to rebase, so its base moves without a note.
 pub fn undelivered(events: &[Event], delivered: usize) -> Vec<Note> {
+    let merges = events
+        .iter()
+        .all(|event| !matches!(event.kind, EventKind::Started { merges: false, .. }));
     events
         .iter()
         .filter_map(|event| match &event.kind {
             EventKind::Message { text } => Some(Note::Master(text.clone())),
-            EventKind::BaseMerged { base, onto } => Some(Note::BaseMerged {
+            EventKind::BaseMerged { base, onto } if merges => Some(Note::BaseMerged {
                 base: base.clone(),
                 onto: onto.clone(),
             }),
@@ -280,6 +284,31 @@ Rebase your own commits onto it (`git fetch`, then `git rebase --onto origin/mai
 or `origin/flow/shop-1` once that branch is gone), point your merge request at main and push \
 with `--force-with-lease`."
         );
+    }
+
+    #[test]
+    fn a_flow_that_merges_nothing_hears_no_merged_base() {
+        let research = EventKind::Started {
+            name: "why".into(),
+            request: "why".into(),
+            mode: crate::event::Mode::Guided,
+            phases: None,
+            kind: Some("research".into()),
+            workflow: None,
+            prompt: None,
+            merges: false,
+        };
+        let merged = EventKind::BaseMerged {
+            base: "flow/shop-1".into(),
+            onto: "main".into(),
+        };
+        let events: Vec<Event> = [research, message("one"), merged, message("two")]
+            .into_iter()
+            .map(|kind| Event::new(1, kind))
+            .collect();
+
+        assert_eq!(undelivered(&events, 0), [master("one"), master("two")]);
+        assert_eq!(undelivered(&events, 1), [master("two")]);
     }
 
     #[test]
