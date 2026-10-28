@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::text;
 use crate::view::{Board, MasterTurn};
 
-pub const PROTOCOL_VERSION: u32 = 8;
+pub const PROTOCOL_VERSION: u32 = 9;
 pub const MAX_MESSAGE: usize = 8 << 20;
 /// The widest and tallest pane the server makes: past it a terminal's cells cost too much.
 pub const MAX_SIZE: Size = Size {

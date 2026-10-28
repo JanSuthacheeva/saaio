@@ -259,7 +259,7 @@ Errors: a socket that errors is left out; no registry -> no servers. `Step::Late
 ## Tasks
 
 - [x] Add `binaries.rs` (`Binary`, `Mismatch`, `first_on_path`, `shadowing`, `mismatches`) and make `system::version` take any program, with unit tests on scripts first on PATH (same file via symlink, same build, other build, no version)
-- [ ] Bump `PROTOCOL_VERSION` to 9 (own commit)
+- [x] Bump `PROTOCOL_VERSION` to 9 (own commit)
 - [ ] `ServerMsg::Welcome { version, server }` from `Conn::hello`, `Refused` naming the server's build and exe, `Client::server`, with server tests over a socket
 - [ ] `Client::connect` refusal naming the server's pid, this binary and `saaio --stop`; `client::running`; tests incl. a protocol-8 listener
 - [ ] `Env::path` from main.rs; `send` and `hook` say an earlier server opened a keyless pane, with a tests/cli case for send
