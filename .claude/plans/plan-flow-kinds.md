@@ -406,7 +406,7 @@ Resume never uses the prompt.
 
 - [x] Add `Adapter::skill_call` and `src/config/kind.rs` (`Kind`, `builtins`, `feature`, `prompt_for`, `DEFAULT_KIND`) with unit tests per adapter and prompt precedence; `Workflow`/`PhaseSpec` Serialize and `Workflow::starts_unasked`
 - [x] Config: `kinds`, `legacy_phases`, `[worker] kind`, `Config::kind`, `workflow` (`worker_kinds` with the UI task, its only user); `agent_argv` takes the prompt and `worker_spec` the feature kind's, since built-in agents lost theirs; agents without built-in prompts; legacy `[[phases]]` and `[worker] prompt` moved to feature; refusals; `examples/config.toml`; config tests
-- [ ] `Branching::pick_type(asked, preferred)` with unit tests
+- [x] `Branching::pick_type(asked, preferred)` with unit tests
 - [ ] `Started` gains `flow_kind`, `workflow`, `prompt`, `merges`; fold reads them into `FlowView` (`kind`, `workflow`, `prompt`, `merges`), enters an unasked first phase on the first turn, folds idle to done for merges false; `FlowView::is_clearable`; event and fold tests
 - [ ] `agent_argv` takes the prompt; `worker_spec` uses `flow.prompt` with the feature fallback; master passes ""; pane tests
 

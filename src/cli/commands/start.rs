@@ -184,7 +184,7 @@ fn opening(socket: &Path) -> Opening {
 /// The branch type for a start: the one asked for or the repo's first, if the repo has types.
 fn pick_kind(rules: Option<&Branching>, asked: Option<&str>) -> Result<Option<String>, Failure> {
     match rules {
-        Some(rules) => rules.pick_type(asked),
+        Some(rules) => rules.pick_type(asked, &[]),
         None if asked.is_some() => Err(anyhow::anyhow!(
             "this repo has no {}, so no branch types",
             branching::CONFIG_FILE
