@@ -64,7 +64,7 @@ pub fn shadowing(this: &Binary, path: &OsStr) -> Option<Binary>;
 
 /// `shadowing` with its own limit for --version (tests: a fresh script's first exec on macOS can
 /// take past 1 s). A build without its commit (`0.2.0`, from `saaio update`) matches on the version.
-fn shadowing_within(this: &Binary, path: &OsStr, limit: Duration) -> Option<Binary>;
+pub fn shadowing_within(this: &Binary, path: &OsStr, limit: Duration) -> Option<Binary>;
 
 /// Shadowed first, then Server when `server`'s build is not `this`'s.
 pub fn mismatches(this: &Binary, server: Option<&Binary>, shadowed: Option<Binary>) -> Vec<Mismatch>;
@@ -142,7 +142,7 @@ pub(crate) struct Others {
     pub servers: Vec<(PathBuf, Running)>,   // store root, who listens
 }
 
-fn others(env: &Env, version: &str) -> Others;   // commands/update.rs
+fn others(env: &Env, version: &str, limit: Duration) -> Others;   // commands/update.rs; run passes binaries::DEADLINE
 
 pub(crate) fn updated(from: &Build, to: &Tag, binary: &str, others: &Others) -> Document;
 pub(crate) fn latest(running: &Build, latest: &Tag, binary: &str, others: &Others) -> Document;
@@ -279,7 +279,7 @@ Errors: a socket that errors is left out; no registry -> no servers. `Step::Late
 - [x] Docs: README/docs (install.md, troubleshooting.md, cli.md, ui.md as they apply), ROADMAP (drop the row, add the "panes run the server's saaio" Planned soon row), CHANGELOG Unreleased, CLAUDE.md (binaries.rs, plan list)
 - [x] E2E: rerun the repro (0.1.1 first on PATH, this build behind it; a running 0.1.2 server; a 0.1.0 server) on a scratch store and check the dialog, title line, `saaio update` (local mirror) and `saaio send` messages; `saaio --stop` after
 - [x] Review: the UI probes PATH before `Client::connect`; `mismatches(this, server, shadowed: Option<Binary>)` then only compares the server
-- [ ] Review: `others(env, version, limit)` with the probe's limit, tests with 30 s; the CLI UI test checks the dialog without the probed build
+- [x] Review: `others(env, version, limit)` with the probe's limit, tests with 30 s; the CLI UI test checks the dialog without the probed build
 - [ ] Review: `Others::help` leaves out "or put <folder> first on PATH" when the folder is unknown
 - [ ] Review: `refuse_unreadable` names the server's build and binary like the version refusal (no protocol change)
 

@@ -15,7 +15,7 @@ use crate::system::{self, Probe};
 /// This binary: `0.1.0 (2904734)`, the commit from build.rs, `unknown` outside a git checkout.
 pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("SAAIO_COMMIT"), ")");
 /// How long the saaio first on PATH gets to print its version.
-const DEADLINE: Duration = Duration::from_secs(1);
+pub const DEADLINE: Duration = Duration::from_secs(1);
 /// The build of a saaio whose `--version` said nothing usable.
 const UNKNOWN: &str = "unknown";
 
@@ -77,7 +77,7 @@ pub fn shadowing(this: &Binary, path: &OsStr) -> Option<Binary> {
 }
 
 /// `shadowing` with `limit` for `--version`: the first exec of a fresh script can take a while.
-fn shadowing_within(this: &Binary, path: &OsStr, limit: Duration) -> Option<Binary> {
+pub fn shadowing_within(this: &Binary, path: &OsStr, limit: Duration) -> Option<Binary> {
     let first = first_on_path(path)?;
     if canonical(&first) == canonical(&this.exe) {
         return None;

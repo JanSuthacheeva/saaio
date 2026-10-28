@@ -50,7 +50,7 @@ pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
     let running = Build::running();
     match update::step(&running, &target, args.version.is_some(), writable) {
         Step::Latest => {
-            let others = others(env, &running.version().to_string());
+            let others = others(env, &running.version().to_string(), binaries::DEADLINE);
             Ok(output::latest(&running, &target, &env.bin_path(), &others))
         }
         Step::Source => Err(output::source(&target)),
@@ -62,7 +62,7 @@ pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
         Step::Install => {
             install(&releases, &target, dir)
                 .map_err(|error| output::failed(&target, &format!("{error:#}"), &releases))?;
-            let others = others(env, &target.version().to_string());
+            let others = others(env, &target.version().to_string(), binaries::DEADLINE);
             Ok(output::updated(&running, &target, &env.bin_path(), &others))
         }
     }
@@ -70,14 +70,14 @@ pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
 
 /// The saaio first on PATH when it is not `version`, and the servers of every registered store
 /// that are not `version` or refused this one (an earlier protocol); paths with ~. A server that
-/// cannot be asked is left out.
-fn others(env: &Env, version: &str) -> Others {
+/// cannot be asked is left out. The saaio on PATH gets `limit` to print its version.
+fn others(env: &Env, version: &str, limit: Duration) -> Others {
     let shadowed = std::env::current_exe().ok().and_then(|exe| {
         let this = Binary {
             exe,
             build: version.to_string(),
         };
-        binaries::shadowing(&this, env.path.as_deref()?)
+        binaries::shadowing_within(&this, env.path.as_deref()?, limit)
     });
     let stores = env.registry().map(|registry| registry.stores());
     let servers = stores
@@ -157,6 +157,10 @@ mod tests {
     use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, ServerMsg};
     use crate::store::Store;
 
+    /// How long a test's fake saaio gets to print its version: a fresh script's first exec is slow
+    /// on macOS.
+    const PATIENCE: Duration = Duration::from_secs(30);
+
     /// The release target install.sh picks on this machine.
     fn target() -> &'static str {
         match (std::env::consts::OS, std::env::consts::ARCH) {
@@ -231,14 +235,6 @@ mod tests {
             &cargo.join("saaio"),
             "#!/bin/sh\necho 'saaio 0.1.0 (9b77d8c)'\n",
         );
-        // its first exec can take past the probe's 1 s on macOS
-        assert!(
-            Command::new(cargo.join("saaio"))
-                .output()
-                .unwrap()
-                .status
-                .success()
-        );
         let env = Env {
             home: Some(home.path().to_path_buf()),
             path: Some(cargo.clone().into_os_string()),
@@ -246,7 +242,7 @@ mod tests {
         };
 
         assert_eq!(
-            others(&env, "0.2.0"),
+            others(&env, "0.2.0", PATIENCE),
             Others {
                 shadowed: Some(Binary {
                     exe: "~/.cargo/bin/saaio".into(),
@@ -255,7 +251,7 @@ mod tests {
                 servers: Vec::new(),
             }
         );
-        assert_eq!(others(&env, "0.1.0"), Others::default());
+        assert_eq!(others(&env, "0.1.0", PATIENCE), Others::default());
     }
 
     /// A server on `socket` that welcomes `answers` hellos as `server`.
@@ -298,7 +294,7 @@ mod tests {
         let listening = welcoming(&socket, server, 2);
 
         assert_eq!(
-            others(&env, "0.2.0").servers,
+            others(&env, "0.2.0", PATIENCE).servers,
             vec![(
                 PathBuf::from("~/s"),
                 Running {
@@ -310,7 +306,7 @@ mod tests {
                 },
             )]
         );
-        assert_eq!(others(&env, "0.1.2").servers, Vec::new());
+        assert_eq!(others(&env, "0.1.2", PATIENCE).servers, Vec::new());
         listening.join().unwrap();
     }
 
