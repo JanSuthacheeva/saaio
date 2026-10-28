@@ -1305,21 +1305,28 @@ fn takes_at_most_16_connections_at_once() {
         ..quick()
     };
     let (paths, handle) = start_timed(dir.path(), BTreeMap::new(), patient, || 0);
-    // The connections start_timed dropped count until the server reads their end, so the 16 are
-    // the ones it welcomed: a refused one is tried again until those are gone.
+    // One that never says hello counts too. It comes first, so it is taken: what start_timed
+    // dropped cannot fill 16.
+    let silent = UnixStream::connect(&paths.socket).unwrap();
+    // Those dropped connections count until the server reads their end, so a refused one is tried
+    // again; with 15 welcomed beside the silent one, none of them is left.
     let mut open: Vec<UnixStream> = Vec::new();
-    wait_until("the server never took 16 connections", || {
-        let mut stream = connect(&paths.socket, Role::Control);
-        if !closed(&mut stream) {
-            open.push(stream);
-        }
-        open.len() == 16
-    });
+    wait_until(
+        "the server never took 15 connections beside the silent one",
+        || {
+            let mut stream = connect(&paths.socket, Role::Control);
+            if !closed(&mut stream) {
+                open.push(stream);
+            }
+            open.len() == 15
+        },
+    );
 
     let mut one_more = connect(&paths.socket, Role::Control);
     assert!(closed(&mut one_more), "the 17th connection");
 
     drop(open);
+    drop(silent);
     wait_until("the server never took a connection again", || {
         let mut control = connect(&paths.socket, Role::Control);
         !closed(&mut control)
