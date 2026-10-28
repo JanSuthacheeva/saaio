@@ -94,6 +94,8 @@ ServerMsg::Welcome {
 - `hello` sends `Welcome { version, server: Binary { exe: flow_exe, build: BUILD } }`.
 - Another protocol: `Refused` reason names the server's build and exe:
   `saaio server 0.2.0 (abc1234) from ~/.local/bin/saaio speaks protocol 9, this saaio speaks 8`.
+- An unreadable hello: `saaio server 0.2.0 (abc1234) from ~/.local/bin/saaio speaks protocol 9
+  and could not read this saaio's hello`.
 
 ### src/client.rs (modified)
 
@@ -179,8 +181,8 @@ help[3]:
 ### src/cli/commands/ui.rs, src/ui.rs (modified)
 
 - `UiEnv` gains `path: Option<OsString>`.
-- After `Client::connect`: `binaries::mismatches(&this, Some(client.server()), env.path.as_deref())`
-  -> `App::warn(this, mismatches)`.
+- Before `Client::connect`: `Binary::this` and `binaries::shadowing(&this, path)`; after it
+  `binaries::mismatches(&this, Some(client.server()), shadowed)` -> `App::warn(this, mismatches)`.
 
 ### src/ui/app.rs, keys.rs, draw.rs, chrome.rs (modified)
 
@@ -219,11 +221,13 @@ pub fn mismatch<'a>(this: &Binary, mismatches: &[Mismatch], home: Option<&str>, 
 ### Bare `saaio` attaches
 
 1. `commands::ui::attach -> ui::run(socket, UiEnv { path, .. }, clock)`
-2. `ui::run -> Client::connect(socket, Role::Attach{..}): Result<Option<Client>>`
-3. `Conn::hello -> ServerMsg::Welcome { version: 9, server: Binary { exe: flow_exe, build: BUILD } }`
-4. `ui::run -> Binary::this(): io::Result<Binary>`
-5. `ui::run -> binaries::mismatches(&this, Some(client.server()), path): Vec<Mismatch>`
-   (`shadowing -> first_on_path`, `system::version(exe, 1 s)` only when PATH's saaio is another file)
+2. `ui::run -> Binary::this(): io::Result<Binary>`
+3. `ui::run -> binaries::shadowing(&this, path): Option<Binary>` (`first_on_path`,
+   `system::version(exe, 1 s)` only when PATH's saaio is another file), before the connect so
+   the server's output never waits on the probe
+4. `ui::run -> Client::connect(socket, Role::Attach{..}): Result<Option<Client>>`;
+   `Conn::hello -> ServerMsg::Welcome { version: 9, server: Binary { exe: flow_exe, build: BUILD } }`
+5. `ui::run -> binaries::mismatches(&this, Some(client.server()), shadowed): Vec<Mismatch>`
 6. `ui::run -> App::warn(this, mismatches)`: `View::Mismatch` when not empty
 7. Any key: `App::on_key -> View::Panes`; `draw_title` keeps the mismatch line.
 
@@ -234,8 +238,8 @@ warnings, the UI runs. A failed or slow `--version` -> build `unknown`, shadowed
 ### `saaio update`
 
 1. `update::run -> install(&releases, &target, dir)` (unchanged)
-2. `update::run -> others(env, &target.version().to_string()): Others`
-3. `others -> binaries::shadowing(&Binary { exe, build: target version }, path)`
+2. `update::run -> others(env, &target.version().to_string(), binaries::DEADLINE): Others`
+3. `others -> binaries::shadowing_within(&Binary { exe, build: target version }, path, limit)`
 4. `others -> env.registry()?.stores() -> client::running(&env.socket(&store))`, kept when
    `server` is None or its version differs
 5. `update::run -> output::updated(&running, &target, &bin_path, &others)`
@@ -329,3 +333,43 @@ No production code changed in review; the fixes are tests only.
 
 `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at the
 review's test commit; `cargo deny check` passed at d6e5fe3 (no dependency change since).
+
+## Second review
+
+Reviewed 2026-10-28 in an isolated context: the commits after a3c4853 (the four "Review:"
+tasks) against this plan and CLAUDE.md. All four first-review open items are closed as the tasks
+say. No production code changed in this review; the fixes are a test and the plan's text.
+
+### Fixed
+
+- `the_ui_names_another_saaio_first_on_path` dropped its build checks and then only asserted the
+  dialog's title, which proves a mismatch but not which. It now also waits for `PATH:`, the
+  shadowed line's own word, so it still fails if the PATH probe stops reaching the dialog.
+- The plan's ui.rs unit and "Bare `saaio` attaches" chain still put the PATH probe after
+  `Client::connect` and passed `path` to `mismatches`; the update chain had no limit; the
+  conn.rs unit did not name the unreadable-hello refusal. Synced with the code.
+
+### Open
+
+- The UI's PATH probe runs after `Outer::enter` and the screen clear, so with another saaio first
+  on PATH the terminal can stay blank for up to 1 s before the first draw (it was the same before
+  the move). Recommend leaving it: one second, once per start, only in the mismatch case.
+- The CLI UI test no longer checks the probed build (a fresh script can outlast 1 s on macOS);
+  the build in the dialog is covered by the golden screens and `binaries` unit tests with 30 s.
+  Recommend leaving it.
+
+### Where to look
+
+1. `src/ui.rs` `run`, from `Binary::this` to `app.warn`: the probe now precedes the connect, and
+   a failed `Binary::this` skips both the probe and the warnings.
+2. `src/cli/output/update.rs` `Others::help`: the folder filter on bin_path's bare `saaio`.
+3. `src/server/conn.rs` `refuse_unreadable`: the new text, which `Client::connect` extends with
+   the pid and `saaio --stop`. The test-only `PATIENCE` limits and `DEADLINE`/`shadowing_within`
+   going `pub` are routine.
+
+### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` passed at
+2d6c657; after the test change, clippy, fmt and `the_ui_names_another_saaio_first_on_path` pass
+(the full suite was not rerun for a one-line test assertion). `cargo deny check`: no dependency
+change.
