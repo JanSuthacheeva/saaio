@@ -6,6 +6,12 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A release candidate's `saaio --version`, bug report and UI name its pre-release, such as
+  `0.2.0-rc.2`, instead of the version it leads to, and its `saaio update` no longer lists its own
+  server as another build.
+
 ## [0.2.0] - not released yet
 
 Updating from 0.1.x: run `saaio update`, then `saaio --stop`. 0.2.0 refuses a 0.1.x server that

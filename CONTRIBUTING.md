@@ -164,7 +164,10 @@ than the tag's, or `install.sh` fails to install from the built assets. The rele
 version's `CHANGELOG.md` section.
 
 A tag with a `-`, such as `v0.2.0-rc.1`, publishes a pre-release, which the install script skips:
-a trial run. Its `CHANGELOG.md` entry may still read `not released yet`. Delete it after the check:
+a trial run. `Cargo.toml` carries the pre-release too (`version = "0.2.0-rc.1"`), so its
+`saaio --version` names it. Its release notes are the final version's `CHANGELOG.md` section
+(`## [0.2.0]`), which may still read `not released yet`. The final release sets `0.2.0` in
+`Cargo.toml` and dates the entry. Delete a pre-release after the check:
 
 ```sh
 gh release delete v0.2.0-rc.1 --cleanup-tag --yes

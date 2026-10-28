@@ -81,7 +81,8 @@ build.rs. `binaries::BUILD` and `release::Build` do not change.
 - CONTRIBUTING.md Releasing: a pre-release sets the pre-release in Cargo.toml (`0.2.0-rc.2`), its
   CHANGELOG entry stays `## [0.2.0] - not released yet`; the final release sets `0.2.0` and dates
   the entry. Cargo.lock changes with every version bump.
-- docs/cli.md:47 and docs/install.md:5 show the `--version` form; name the pre-release form too.
+- docs/cli.md:47 shows the `--version` form; name the pre-release form too. docs/install.md:5 stays:
+  it installs the latest release, which never is a pre-release.
 
 ## Assumptions
 
@@ -99,7 +100,7 @@ build.rs. `binaries::BUILD` and `release::Build` do not change.
   `## [0.2.0]`), `v0.2.0` / `0.2.0` (passes), `v0.2.0-rc.2` / `0.2.0` (fails)
 - [x] Add a test in `src/release.rs` that `Build::running().version()` is the version
   `binaries::BUILD` names, so the two cannot drift again
-- [ ] Docs: CONTRIBUTING.md Releasing with the rc steps; docs/cli.md and docs/install.md name the
+- [x] Docs: CONTRIBUTING.md Releasing with the rc steps; docs/cli.md and docs/install.md name the
   pre-release form; CHANGELOG `### Fixed` under Unreleased: a release candidate's `saaio
   --version`, bug report and UI name its pre-release, and its `saaio update` no longer lists its
   own server as another build
