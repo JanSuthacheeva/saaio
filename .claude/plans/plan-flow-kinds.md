@@ -505,3 +505,25 @@ lines, the golden files, the new-flow dialog row plumbing and the docs.
 
 fmt, test, clippy and deny passed at 6107914; after the two fix commits (comment and docs only)
 fmt and clippy pass again.
+
+### Second round
+
+Isolated review of the "After review" commits (fb68db4..4fd89fb). All three tasks match their
+decisions and each has a test that fails without its code; no bug in behaviour was found.
+
+Fixed:
+
+- `Config::workflow`'s doc (and its line in this plan) still called it the fallback for a flow
+  that recorded no workflow; `saaio hook` now gives such a flow the feature kind's (7c3afba).
+  Doc only, so no further review round.
+
+Open:
+
+- `kind::check_name` repeats `Phase::try_from`'s alphabet check. Recommendation: leave it, or
+  share one `fn is_name(&str) -> bool` in workflow.rs if a third name ever takes the rule.
+
+Where to look: `src/cli/commands/hook.rs` `workflow_for` (fallback by `DEFAULT_KIND`, the
+feature kind, not `[worker] kind`), and `src/wake.rs` `undelivered` (the delivered count stays
+consistent, since the filter is the same on every read). The config check and docs are routine.
+
+Checks: fmt, test and clippy passed at 4fd89fb; after the doc-only fix fmt and clippy pass.
