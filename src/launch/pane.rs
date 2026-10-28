@@ -102,7 +102,11 @@ pub fn worker_spec(
     } else if flow.is_plain() {
         plain_argv(agent, &flow.id, &flow.name)
     } else {
-        let prompt = Kind::feature().prompt_for(agent);
+        // A flow from before kinds recorded no prompt: the feature kind's.
+        let prompt = flow
+            .prompt
+            .clone()
+            .unwrap_or_else(|| Kind::feature().prompt_for(agent));
         agent_argv(agent, &prompt, &flow.id, &flow.name, &flow.request)
     };
     if let Some(adapter) = agent.adapter {
@@ -325,6 +329,32 @@ mod tests {
             ),
         ];
         fold::fold("7f3c", &events, None, 2).unwrap()
+    }
+
+    #[test]
+    fn asks_a_worker_the_prompt_its_flow_recorded() {
+        let agents = crate::config::builtin_agents();
+        let env = LaunchEnv::default();
+        let mut fix = worker(None);
+        fix.prompt = Some("/ship-fix {request} ({name})".into());
+
+        let spec = worker_spec(&fix, &agents["claude"], &env, true).unwrap();
+        assert_eq!(
+            spec.argv.last().map(String::as_str),
+            Some("/ship-fix SHOP-217 add CSV export (shop-217)")
+        );
+        let old = worker_spec(&worker(None), &agents["codex"], &env, true).unwrap();
+        assert_eq!(
+            old.argv.last().map(String::as_str),
+            Some("$ship-feature SHOP-217 add CSV export"),
+            "a flow from before kinds: the feature kind's for its agent"
+        );
+        fix.workspace.as_mut().unwrap().window = Some(HOSTED.into());
+        let resumed = worker_spec(&fix, &agents["claude"], &env, true).unwrap();
+        assert!(
+            !resumed.argv.iter().any(|part| part.contains("ship-fix")),
+            "a resume asks nothing"
+        );
     }
 
     #[test]
