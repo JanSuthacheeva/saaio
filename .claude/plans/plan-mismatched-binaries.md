@@ -278,3 +278,50 @@ Errors: a socket that errors is left out; no registry -> no servers. `Step::Late
 - [x] UI: `UiEnv::path`, `App::warn`, `View::Mismatch`, `dialog::mismatch`, the title-row line, with app tests and golden screens
 - [x] Docs: README/docs (install.md, troubleshooting.md, cli.md, ui.md as they apply), ROADMAP (drop the row, add the "panes run the server's saaio" Planned soon row), CHANGELOG Unreleased, CLAUDE.md (binaries.rs, plan list)
 - [x] E2E: rerun the repro (0.1.1 first on PATH, this build behind it; a running 0.1.2 server; a 0.1.0 server) on a scratch store and check the dialog, title line, `saaio update` (local mirror) and `saaio send` messages; `saaio --stop` after
+
+## Review
+
+Reviewed 2026-10-28 in an isolated context against this plan, CLAUDE.md and the diff to main.
+No production code changed in review; the fixes are tests only.
+
+### Fixed
+
+- `others()`'s server half (registry scan, version filter, ~ in store and binary) had no test:
+  only the PATH half did. Added `names_the_servers_on_another_version_with_tilde` over a fake
+  welcoming server (`update: test the servers others() names and leaves out`).
+- The warm-up execs before the PATH probes printed `saaio 0.1.0 (9b77d8c)` into `cargo test`
+  output; they now use `output()` (`binaries, update: keep the warm-up exec's version line out of
+  test output`).
+
+### Open
+
+- `refuse_unreadable` (server/conn.rs) still says `saaio server runs protocol 9 and could not read
+  this flow's hello`, without the build and binary the version refusal now names. Unreachable
+  from 0.1.x clients (Hello did not change), so low; recommend aligning it the next time Hello
+  changes.
+- `others()`'s unit test and `the_ui_names_another_saaio_first_on_path` run the production 1 s
+  `--version` deadline after one warm-up exec; on a loaded runner the probe could time out and
+  read `unknown`, which still shadows, so the UI test holds but the update test's exact build
+  would fail. Recommend: watch CI; if it flakes, give `others` a deadline parameter as
+  `shadowing_within` has.
+- The UI probes PATH after `Client::connect` and before its reader thread starts, so up to 1 s
+  of server output waits in the socket (the server's write limit is 2 s). Safe today; recommend
+  moving `shadowing` before the connect so only the server comparison runs after it.
+- `Others::help` with `bin_path`'s fallback `saaio` (no current_exe) writes `put  first on PATH`.
+  Edge only; recommend leaving it.
+
+### Where to look
+
+1. `src/client.rs` `Client::connect` -> `hello` -> `running`: pid read before the hello (macOS),
+   and the refusal text a 0.1.x server now produces.
+2. `src/cli/commands/update.rs` `others()`: every registered store dialled (plus the earlier
+   socket), what is kept, and that a hung server costs HELLO_WAIT per store.
+3. `src/binaries.rs` `Binary::same_build` and `shadowing_within`: when a bare version matches and
+   why `unknown` never does (also covers Linux's `(deleted)` current_exe after an update).
+4. `src/ui.rs` after connect, then `ui/app/chrome.rs` `news_and_hint`. The dialog, docs, goldens
+   and the `BUILD` move from proto.rs are routine and can be skimmed.
+
+### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at the
+review's test commit; `cargo deny check` passed at d6e5fe3 (no dependency change since).
