@@ -143,13 +143,19 @@ fn install(releases: &Releases, tag: &Tag, dir: &Path) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::os::unix::net::UnixListener;
     use std::path::PathBuf;
+    use std::thread;
 
     use sha2::{Digest, Sha256};
     use tempfile::TempDir;
 
     use super::*;
+    use crate::client::Running;
     use crate::fixtures::executable;
+    use crate::private;
+    use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, ServerMsg};
+    use crate::store::Store;
 
     /// The release target install.sh picks on this machine.
     fn target() -> &'static str {
@@ -250,6 +256,62 @@ mod tests {
             }
         );
         assert_eq!(others(&env, "0.1.0"), Others::default());
+    }
+
+    /// A server on `socket` that welcomes `answers` hellos as `server`.
+    fn welcoming(socket: &Path, server: Binary, answers: usize) -> thread::JoinHandle<()> {
+        let listener = UnixListener::bind(socket).unwrap();
+        thread::spawn(move || {
+            for _ in 0..answers {
+                let (mut stream, _) = listener.accept().unwrap();
+                proto::read_msg::<_, ClientMsg>(&mut stream).unwrap();
+                proto::write_msg(
+                    &mut stream,
+                    &ServerMsg::Welcome {
+                        version: PROTOCOL_VERSION,
+                        server: server.clone(),
+                    },
+                )
+                .unwrap();
+            }
+        })
+    }
+
+    #[test]
+    fn names_the_servers_on_another_version_with_tilde() {
+        // Short enough that the socket sits in the store, not in a temp folder.
+        let home = tempfile::Builder::new().tempdir_in("/tmp").unwrap();
+        let store = Store::at(home.path().join("s"));
+        private::create_dir(store.root()).unwrap();
+        let env = Env {
+            home: Some(home.path().to_path_buf()),
+            xdg_state_home: Some(home.path().join("state")),
+            ..Env::default()
+        };
+        env.registry().unwrap().register(&store).unwrap();
+        let socket = env.socket(&store);
+        assert_eq!(socket, store.root().join("server.sock"));
+        let server = Binary {
+            exe: home.path().join(".local/bin/saaio"),
+            build: "0.1.2 (45630ee)".into(),
+        };
+        let listening = welcoming(&socket, server, 2);
+
+        assert_eq!(
+            others(&env, "0.2.0").servers,
+            vec![(
+                PathBuf::from("~/s"),
+                Running {
+                    pid: std::process::id(),
+                    server: Some(Binary {
+                        exe: "~/.local/bin/saaio".into(),
+                        build: "0.1.2 (45630ee)".into(),
+                    }),
+                },
+            )]
+        );
+        assert_eq!(others(&env, "0.1.2").servers, Vec::new());
+        listening.join().unwrap();
     }
 
     #[test]
