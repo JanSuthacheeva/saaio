@@ -445,6 +445,14 @@ Resume never uses the prompt.
 
 - [x] With a scratch SAAIO_HOME and XDG_STATE_HOME and a scratch repo with `[branch] types = ["feature", "bugfix"]`: `saaio start --kind fix` gives a bugfix branch and the pane's `/ship-fix` prompt, `--kind research` a detached worktree; `saaio status`, `--json` and the UI's dialog, sidebar and board show the kinds; a research flow answers, is done, and `saaio clear` forgets it; end with `saaio --stop`
 
+### After review
+
+Decided by the master: 1 fix, 2 keep (answers stay cut at 4000 characters), 3 fix, 4 fix.
+
+- [ ] `saaio hook` translates a flow that recorded no workflow with the feature kind's phases, the master and nobody with the default kind's; CLI test with `[worker] kind = "fix"` and a pre-kinds flow
+- [ ] A flow that merges nothing gets no base-merged note from `wake::undelivered` (its `base-merged` event still records the move); wake unit test
+- [ ] Kind names take the phase-name alphabet (lowercase letters, digits, `-`): config refuses another on the line of its key; config test
+
 ## Review
 
 Isolated review of flow/kinds-of-flows against main and this plan. The build matches the plan's
