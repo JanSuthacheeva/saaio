@@ -278,6 +278,10 @@ Errors: a socket that errors is left out; no registry -> no servers. `Step::Late
 - [x] UI: `UiEnv::path`, `App::warn`, `View::Mismatch`, `dialog::mismatch`, the title-row line, with app tests and golden screens
 - [x] Docs: README/docs (install.md, troubleshooting.md, cli.md, ui.md as they apply), ROADMAP (drop the row, add the "panes run the server's saaio" Planned soon row), CHANGELOG Unreleased, CLAUDE.md (binaries.rs, plan list)
 - [x] E2E: rerun the repro (0.1.1 first on PATH, this build behind it; a running 0.1.2 server; a 0.1.0 server) on a scratch store and check the dialog, title line, `saaio update` (local mirror) and `saaio send` messages; `saaio --stop` after
+- [ ] Review: the UI probes PATH before `Client::connect`; `mismatches(this, server, shadowed: Option<Binary>)` then only compares the server
+- [ ] Review: `others(env, version, limit)` with the probe's limit, tests with 30 s; the CLI UI test checks the dialog without the probed build
+- [ ] Review: `Others::help` leaves out "or put <folder> first on PATH" when the folder is unknown
+- [ ] Review: `refuse_unreadable` names the server's build and binary like the version refusal (no protocol change)
 
 ## Review
 
