@@ -1381,7 +1381,12 @@ fn a_second_ui_takes_over_and_an_old_protocol_is_refused() {
     let ServerMsg::Refused { reason } = recv(&mut unreadable) else {
         panic!("expected a refusal");
     };
-    assert!(reason.contains("could not read"), "{reason}");
+    assert_eq!(
+        reason,
+        format!(
+            "saaio server {BUILD} from {FLOW_EXE} speaks protocol {PROTOCOL_VERSION} and could not read this saaio's hello"
+        )
+    );
 
     proto::write_msg(&mut second, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();

@@ -225,7 +225,8 @@ impl Server {
             conn,
             &ServerMsg::Refused {
                 reason: format!(
-                    "saaio server runs protocol {PROTOCOL_VERSION} and could not read this flow's hello"
+                    "saaio server {BUILD} from {} speaks protocol {PROTOCOL_VERSION} and could not read this saaio's hello",
+                    self.env.flow_exe.display()
                 ),
             },
         );
