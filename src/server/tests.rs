@@ -105,11 +105,8 @@ fn start_timed(
     };
     let thread_paths = paths.clone();
     let store = Store::at(dir.to_path_buf());
-    let config = Config {
-        agents,
-        workflow: crate::workflow::Workflow::builtin(),
-        ..Config::default()
-    };
+    let mut config = Config::default();
+    config.agents = agents;
     let handle = thread::spawn(move || {
         run(
             &thread_paths,

@@ -236,7 +236,7 @@ fn hook(
     now: u64,
 ) -> Option<String> {
     let approver = adapter.approver(payload, |file, matches| rollout_line(file, matches, log));
-    let kinds = adapter.translate(payload, &config.workflow, approver);
+    let kinds = adapter.translate(payload, &config.workflow(), approver);
     let waiter = match hooked {
         Hooked::Nobody => return None,
         Hooked::Master => {

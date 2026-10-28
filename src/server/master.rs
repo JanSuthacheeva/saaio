@@ -105,13 +105,7 @@ impl MasterRecord {
             start => start,
         };
         let argv = match start {
-            Start::Fresh => {
-                let bare = Agent {
-                    prompt: None,
-                    ..agent.clone()
-                };
-                pane::agent_argv(&bare, &self.session, MASTER_NAME, "")
-            }
+            Start::Fresh => pane::agent_argv(agent, "", &self.session, MASTER_NAME, ""),
             Start::Resume => pane::resume_argv(
                 agent,
                 &self.session,

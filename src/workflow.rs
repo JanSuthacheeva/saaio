@@ -1,8 +1,6 @@
 //! `Workflow`: the phases a flow walks through, the built-in four, the phase a skill starts
 
-use serde::Deserialize;
-#[cfg(test)]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::event::Phase;
 
@@ -10,8 +8,7 @@ use crate::event::Phase;
 pub const MAX_PHASES: usize = 4;
 
 /// One [[phases]] entry: its name and the skills that start it.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[cfg_attr(test, derive(Serialize))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PhaseSpec {
     pub name: Phase,
@@ -20,9 +17,8 @@ pub struct PhaseSpec {
 }
 
 /// 1 to MAX_PHASES phases with distinct names, no skill in two.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[cfg_attr(test, derive(Serialize), serde(into = "Vec<PhaseSpec>"))]
-#[serde(try_from = "Vec<PhaseSpec>")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "Vec<PhaseSpec>", into = "Vec<PhaseSpec>")]
 pub struct Workflow {
     phases: Vec<PhaseSpec>,
 }
@@ -54,7 +50,6 @@ impl TryFrom<Vec<PhaseSpec>> for Workflow {
     }
 }
 
-#[cfg(test)]
 impl From<Workflow> for Vec<PhaseSpec> {
     fn from(workflow: Workflow) -> Vec<PhaseSpec> {
         workflow.phases
@@ -95,6 +90,13 @@ impl Workflow {
     /// The names in order: what saaio start records.
     pub fn phases(&self) -> Vec<Phase> {
         self.phases.iter().map(|phase| phase.name.clone()).collect()
+    }
+
+    /// Whether the phase at `index` has no skill to start it.
+    pub fn starts_unasked(&self, index: usize) -> bool {
+        self.phases
+            .get(index)
+            .is_some_and(|phase| phase.skills.is_empty())
     }
 
     /// The phase a skill starts: "/design-code" and "plugin:design-code" both find design-code's.
@@ -163,6 +165,27 @@ mod tests {
             workflow.phase_of("subagent-driven-development"),
             Some(Phase::of("build"))
         );
+    }
+
+    #[test]
+    fn a_phase_without_skills_starts_unasked() {
+        let workflow = Workflow::of(&[("research", &[]), ("build", &["implement-plan"])]);
+
+        assert!(workflow.starts_unasked(0));
+        assert!(!workflow.starts_unasked(1));
+        assert!(!workflow.starts_unasked(2));
+    }
+
+    #[test]
+    fn reads_back_what_it_writes() {
+        let workflow = Workflow::of(&[("diagnose", &["diagnose-bug"]), ("review", &[])]);
+        let json = serde_json::to_string(&workflow).unwrap();
+
+        assert_eq!(
+            json,
+            r#"[{"name":"diagnose","skills":["diagnose-bug"]},{"name":"review","skills":[]}]"#
+        );
+        assert_eq!(serde_json::from_str::<Workflow>(&json).unwrap(), workflow);
     }
 
     #[test]

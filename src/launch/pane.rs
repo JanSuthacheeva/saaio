@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::adapter::Adapter;
 use crate::config::Agent;
+use crate::config::kind::Kind;
 use crate::event::is_uuid;
 use crate::launch::worktree::{hook_env, repo_of};
 use crate::proto::PaneKey;
@@ -38,12 +39,11 @@ pub struct PaneSpec {
     pub adapter: Option<Adapter>,
 }
 
-/// The agent's command with {id}, {name}, {prompt}, {request} filled in ({prompt} itself filled first),
-/// each in one pass, so a request holding a placeholder is passed on as written;
-/// an argument that fills to nothing is dropped, so an agent without a prompt gets no empty one.
-pub fn agent_argv(agent: &Agent, id: &str, name: &str, request: &str) -> Vec<String> {
-    let template = agent.prompt.as_deref().unwrap_or_default();
-    let prompt = fill(template, id, name, request, "", "");
+/// The agent's command with {id}, {name}, {prompt}, {request} filled in ({prompt} itself filled
+/// first, from `prompt`), each in one pass, so a request holding a placeholder is passed on as
+/// written; an argument that fills to nothing is dropped, so an empty prompt is no argument.
+pub fn agent_argv(agent: &Agent, prompt: &str, id: &str, name: &str, request: &str) -> Vec<String> {
+    let prompt = fill(prompt, id, name, request, "", "");
     agent
         .command
         .iter()
@@ -102,7 +102,8 @@ pub fn worker_spec(
     } else if flow.is_plain() {
         plain_argv(agent, &flow.id, &flow.name)
     } else {
-        agent_argv(agent, &flow.id, &flow.name, &flow.request)
+        let prompt = Kind::feature().prompt_for(agent);
+        agent_argv(agent, &prompt, &flow.id, &flow.name, &flow.request)
     };
     if let Some(adapter) = agent.adapter {
         let folder = trusted.then_some(Path::new(&space.path));
@@ -191,7 +192,13 @@ mod tests {
         };
 
         assert_eq!(
-            agent_argv(&agent, "7f3c", "shop-217", "SHOP-217 add CSV export"),
+            agent_argv(
+                &agent,
+                "/ship-feature {request}",
+                "7f3c",
+                "shop-217",
+                "SHOP-217 add CSV export"
+            ),
             strings(&[
                 "claude",
                 "-n",
@@ -213,7 +220,7 @@ mod tests {
         };
 
         assert_eq!(
-            agent_argv(&agent, "7f3c", "master", ""),
+            agent_argv(&agent, "", "7f3c", "master", ""),
             strings(&["claude", "-n", "master"])
         );
     }
@@ -229,7 +236,13 @@ mod tests {
         let request = "fix {request} {request} for {name} in {prompt}";
 
         assert_eq!(
-            agent_argv(&agent, "7f3c", "shop-217", request),
+            agent_argv(
+                &agent,
+                "/ship-feature {request}",
+                "7f3c",
+                "shop-217",
+                request
+            ),
             strings(&[
                 "claude",
                 "-n",
@@ -325,7 +338,14 @@ mod tests {
         assert_eq!(fresh.cwd, PathBuf::from("/repo/.saaio/worktrees/shop-217"));
         assert_eq!(
             fresh.argv,
-            agent_argv(claude, "7f3c", "shop-217", "SHOP-217 add CSV export")
+            agent_argv(
+                claude,
+                "ship-feature {request}",
+                "7f3c",
+                "shop-217",
+                "SHOP-217 add CSV export"
+            ),
+            "without an adapter the skill is named bare"
         );
         let mut expected = hook_env("7f3c", "shop-217", Path::new("/repo"), &shop());
         expected.extend(shared_env(&env));
@@ -443,13 +463,13 @@ mod tests {
         let forged = codex_worker(Some(HOSTED), Some("-cnotify=[\"sh\",\"-c\",\"id\"]"));
         assert_eq!(
             worker_spec(&forged, &codex, &env, true).unwrap().argv,
-            strings(&["codex", "$ship-feature SHOP-217 add CSV export"]),
+            strings(&["codex", "ship-feature SHOP-217 add CSV export"]),
             "a session that is no UUID starts again, never in the argv"
         );
         let never_ran = worker_spec(&codex_worker(Some(HOSTED), None), &codex, &env, true).unwrap();
         assert_eq!(
             never_ran.argv,
-            strings(&["codex", "$ship-feature SHOP-217 add CSV export"]),
+            strings(&["codex", "ship-feature SHOP-217 add CSV export"]),
             "a session that never had a turn starts again"
         );
         let mut plain = codex_worker(Some(HOSTED), None);

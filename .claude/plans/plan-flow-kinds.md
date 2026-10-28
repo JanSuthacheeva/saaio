@@ -34,7 +34,10 @@ implementation https://claude.ai/artifact/J6pbSP8y5hrtjA56yQsu2V (`docs/design/k
 
 ## Units
 
-### src/kind.rs (new)
+### src/config/kind.rs (new)
+
+(Under config, not top-level: `prompt_for` takes `config::Agent` and config holds `Kind`, so a
+top-level `kind` module would make a cycle `layering.rs` refuses.)
 
 What a kind of flow is: its workflow, how it is started, and whether it gets a branch.
 
@@ -104,8 +107,9 @@ pub struct Config {
 impl Config {
     pub fn kind(&self, name: Option<&str>) -> Option<(&str, &Kind)>;
     pub fn worker_kinds(&self) -> Vec<&str>;
-    /// The default kind's workflow: the master's, and an old flow's that recorded none.
-    pub fn workflow(&self) -> &Workflow;
+    /// The default kind's workflow: the master's, and an old flow's that recorded none; the
+    /// built-in one for a Config that never loaded its built-ins.
+    pub fn workflow(&self) -> Workflow;
 }
 ```
 
@@ -400,8 +404,8 @@ Resume never uses the prompt.
 
 ### Core
 
-- [ ] Add `Adapter::skill_call` and `src/kind.rs` (`Kind`, `builtins`, `feature`, `prompt_for`, `DEFAULT_KIND`) with unit tests per adapter and prompt precedence; `Workflow`/`PhaseSpec` Serialize and `Workflow::starts_unasked`
-- [ ] Config: `kinds`, `legacy_phases`, `[worker] kind`, `Config::kind`, `worker_kinds`, `workflow`; agents without built-in prompts; legacy `[[phases]]` and `[worker] prompt` moved to feature; refusals; `examples/config.toml`; config tests
+- [x] Add `Adapter::skill_call` and `src/config/kind.rs` (`Kind`, `builtins`, `feature`, `prompt_for`, `DEFAULT_KIND`) with unit tests per adapter and prompt precedence; `Workflow`/`PhaseSpec` Serialize and `Workflow::starts_unasked`
+- [x] Config: `kinds`, `legacy_phases`, `[worker] kind`, `Config::kind`, `workflow` (`worker_kinds` with the UI task, its only user); `agent_argv` takes the prompt and `worker_spec` the feature kind's, since built-in agents lost theirs; agents without built-in prompts; legacy `[[phases]]` and `[worker] prompt` moved to feature; refusals; `examples/config.toml`; config tests
 - [ ] `Branching::pick_type(asked, preferred)` with unit tests
 - [ ] `Started` gains `flow_kind`, `workflow`, `prompt`, `merges`; fold reads them into `FlowView` (`kind`, `workflow`, `prompt`, `merges`), enters an unasked first phase on the first turn, folds idle to done for merges false; `FlowView::is_clearable`; event and fold tests
 - [ ] `agent_argv` takes the prompt; `worker_spec` uses `flow.prompt` with the feature fallback; master passes ""; pane tests
