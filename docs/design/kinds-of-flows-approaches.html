@@ -1,0 +1,175 @@
+<title>Kinds of Flows Approaches</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+/* One 720px reading column of cards, jasu.dev tokens */
+:root {
+  --surface:#f8f9fb; --card:#eceff4; --ink:#2e3440; --muted:#4c566a; --subtle:#d8dee9; --border:#d8dee9;
+  --code-block:#2e3440; --code-bg:#e5e9f0; --code-ink:#4b6c8a; --accent:#7b5eaf; --link:#4b6c8a;
+  --constructive:#a3be8c; --warning:#d08770; --critical:#bf616a; --block-ink:#eceff4;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --surface:#2e3440; --card:#3b4252; --ink:#eceff4; --muted:#93b1cc; --subtle:#434c5e; --border:#4c566a;
+  --code-block:#3b4252; --code-bg:#3b4252; --code-ink:#88c0d0; --accent:#bd93f9; --link:#88c0d0;
+  --warning:#ebcb8b; color-scheme: dark;
+}
+body { background:var(--surface); color:var(--ink); font:18px/1.6 var(--sans);
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:32px 64px; }
+main { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:24px; }
+h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.1; font-weight:800; letter-spacing:-0.03em; margin:0; text-wrap:balance; }
+h2 { font-size:24px; line-height:1.3; margin:0 0 12px; text-wrap:balance; }
+h3 { font-size:18px; margin:16px 0 6px; }
+p { margin:0 0 12px; }
+.meta { font-size:13px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:24px; min-width:0; }
+@media (max-width:500px){ .card{ padding:14px; } body{ font-size:17px; } }
+.pill { display:inline-block; border-radius:99px; padding:2px 10px; font-size:0.8rem; font-weight:600; letter-spacing:0.05em; background:var(--accent); color:var(--surface); vertical-align:middle; }
+code { font-family:var(--mono); font-size:0.78em; background:var(--code-bg); color:var(--code-ink); border-radius:0.2rem; padding:1px 4px; }
+pre { background:var(--code-block); color:var(--block-ink); border-radius:6px; padding:14px; overflow-x:auto; font-size:14px; line-height:1.5; margin:8px 0 12px; }
+pre code { background:none; color:inherit; padding:0; font-size:inherit; }
+ul, ol { margin:0 0 12px; padding-left:22px; }
+li { margin-bottom:4px; }
+.costs { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width:560px){ .costs{ grid-template-columns:1fr; } }
+.costs > div { border-left:4px solid var(--constructive); padding-left:12px; min-width:0; }
+.costs > div.con { border-left-color:var(--warning); }
+.costs h3 { margin-top:0; }
+.diagram { overflow-x:auto; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:8px; margin:8px 0 12px; }
+.legend { font-size:13px; color:var(--muted); }
+.rec { border:2px solid var(--accent); }
+a { color:var(--link); text-decoration-thickness:1px; text-underline-offset:0.18em; }
+table { border-collapse:collapse; font-size:15px; width:100%; }
+.tablewrap { overflow-x:auto; }
+th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+th { background:var(--subtle); }
+</style>
+
+<main>
+<header>
+  <p class="meta">saaio 0.2.0 - design-code, phase 2 of 4 - 2026-10-28</p>
+  <h1>Kinds of flows: where the workflows live</h1>
+  <p style="margin-top:12px">Feature, fix and research flows, each with its own phases, skills, first prompt and branch type. Pick one approach below, and answer the four shared questions at the end.</p>
+</header>
+
+<section class="card">
+  <h2>What exists today</h2>
+  <ul>
+    <li><b>One workflow.</b> <code>Config.workflow</code> is the top-level <code>[[phases]]</code>, the built-in four otherwise (<code>src/workflow.rs:64</code>, <code>src/config.rs:46</code>).</li>
+    <li><b>Phase names are recorded, skills are not.</b> <code>saaio start</code> and <code>saaio new</code> write the names into <code>Started.phases</code> (<code>start.rs:92</code>, <code>new.rs:33</code>); <code>fold</code> reads them from there (<code>fold.rs:196</code>).</li>
+    <li><b>The hook maps skills with today's config.</b> <code>saaio hook</code> calls <code>translate(payload, &amp;config.workflow)</code> for every flow (<code>hook.rs:239</code>), so a config edit already changes what a running flow's skills mean.</li>
+    <li><b>The first prompt belongs to the agent.</b> Built-in claude has <code>/ship-feature {request}</code>, codex <code>$ship-feature {request}</code>; <code>[worker] prompt</code> fills in for agents without one (<code>config.rs:214</code>, <code>config.rs:280</code>). Only the sigil differs.</li>
+    <li><b>"kind" already means branch type.</b> <code>saaio start --type</code> is stored in a field named <code>kind</code> and picked by <code>pick_kind</code> from the repo's <code>[branch] types</code> (<code>start.rs:44</code>, <code>branching.rs:47</code>); the dialog's type row is <code>NewFlowForm.kind</code> (<code>newflow.rs:37</code>). These get renamed to <code>branch_type</code>.</li>
+    <li><b>A branchless worktree fits.</b> <code>Workspace.branch</code> is already an <code>Option</code>, and remove and clear skip a flow without one (<code>retire.rs:147</code>).</li>
+    <li><b>A flow is done only by its merge request</b> (<code>fold.rs:437</code>).</li>
+    <li><b>master.md is versioned</b>: changing it adds <code>master-v13.md</code> as the earlier default (<code>src/server/master-v*.md</code>).</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>A. Kinds in config, looked up by name</h2>
+  <p><code>config.toml</code> gets <code>[kinds.&lt;name&gt;]</code> tables, with feature, fix and research built in. <code>Started</code> records the kind's name next to its phase names. <code>saaio hook</code> reads the flow's kind from its log and maps skills with that kind's workflow from today's config.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  cfg["config.rs<br/>kinds: Kinds"]:::new
+  kind["kind.rs<br/>Kind"]:::new
+  wf["workflow.rs<br/>Workflow"]:::old
+  start["start / new<br/>--kind"]:::mod
+  ev["event.rs<br/>Started.kind"]:::mod
+  hook["hook.rs"]:::mod
+  cfg --> kind --> wf
+  start --> cfg
+  start --> ev
+  hook -- "kind name from log" --> cfg
+  classDef new fill:#a3be8c,stroke:#4c566a,color:#2e3440
+  classDef mod fill:#ebcb8b,stroke:#4c566a,color:#2e3440
+  classDef old fill:#eceff4,stroke:#4c566a,color:#2e3440
+  </pre></div>
+  <p class="legend">green new, yellow modified, grey unchanged</p>
+  <p><b>Touches:</b> new <code>kind.rs</code>; <code>config.rs</code>, <code>event.rs</code>, <code>fold.rs</code>, <code>view.rs</code>, <code>start.rs</code>, <code>new.rs</code>, <code>hook.rs</code>, <code>launch/pane.rs</code>, <code>branching.rs</code>, <code>workspace.rs</code>, <code>ui/newflow*</code>, <code>master.md</code>, docs.</p>
+  <div class="costs">
+    <div><h3>Gains</h3><ul><li>Smallest log change: one optional field.</li><li>Same lookup the hook does today, per kind.</li></ul></div>
+    <div class="con"><h3>Costs</h3><ul><li>Rename or remove a kind in config and its running flows stop moving through steps.</li><li>Editing a kind's skills mid-flow can point a skill at a phase the flow never recorded.</li><li>The hook reads the flow's log before translating, an extra read per hook call.</li></ul></div>
+  </div>
+</section>
+
+<section class="card rec">
+  <h2>B. Kinds in config, the workflow recorded in the flow <span class="pill">Recommended</span></h2>
+  <p>Same config as A. <code>Started</code> records the kind and its whole workflow, names and skills. Config is read once, at start; afterwards the flow's own log says what each skill means, so the docs' promise "a running flow keeps its phases" becomes true for the skills too.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  cfg["config.rs<br/>kinds: Kinds"]:::new
+  kind["kind.rs<br/>Kind"]:::new
+  wf["workflow.rs<br/>Workflow"]:::mod
+  start["start / new<br/>--kind"]:::mod
+  ev["event.rs<br/>Started.kind, .workflow"]:::mod
+  fold["fold.rs<br/>FlowView.workflow"]:::mod
+  hook["hook.rs"]:::mod
+  cfg --> kind --> wf
+  start --> cfg
+  start -- "records" --> ev
+  ev --> fold
+  hook -- "the flow's own workflow" --> fold
+  classDef new fill:#a3be8c,stroke:#4c566a,color:#2e3440
+  classDef mod fill:#ebcb8b,stroke:#4c566a,color:#2e3440
+  classDef old fill:#eceff4,stroke:#4c566a,color:#2e3440
+  </pre></div>
+  <p class="legend">green new, yellow modified, grey unchanged</p>
+  <p><b>Touches:</b> as A. <code>Started.phases: Vec&lt;Phase&gt;</code> gains a sibling <code>skills</code> (or becomes <code>Vec&lt;PhaseSpec&gt;</code> with a reader that still takes bare names); old logs fall back to today's config, as now.</p>
+  <div class="costs">
+    <div><h3>Gains</h3><ul><li>A running flow never changes meaning under a config edit, rename or removed kind.</li><li>The hook already folds the flow to decide what changes (<code>fold::changes</code>); it takes the workflow from there.</li><li>Fits the existing rule "fold reads phases from the log, never from config" (<code>workflow.rs</code> doc, CLAUDE.md).</li></ul></div>
+    <div class="con"><h3>Costs</h3><ul><li>A wider log change: the skills ride in every <code>started</code> line, and the reader keeps old lines working.</li><li>The hook must fold before it translates; today it translates first.</li></ul></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>C. Three kinds in code</h2>
+  <p>An enum <code>Kind { Feature, Fix, Research }</code> with fixed workflows, prompts and branch types; only feature stays configurable through today's <code>[[phases]]</code> and <code>[worker] prompt</code>. No <code>[kinds]</code> in config.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  kind["kind.rs<br/>enum Kind"]:::new
+  cfg["config.rs<br/>[[phases]] = feature"]:::old
+  start["start / new<br/>--kind"]:::mod
+  ev["event.rs<br/>Started.kind"]:::mod
+  hook["hook.rs"]:::mod
+  start --> kind
+  kind -- "feature only" --> cfg
+  start --> ev
+  hook --> kind
+  classDef new fill:#a3be8c,stroke:#4c566a,color:#2e3440
+  classDef mod fill:#ebcb8b,stroke:#4c566a,color:#2e3440
+  classDef old fill:#eceff4,stroke:#4c566a,color:#2e3440
+  </pre></div>
+  <p class="legend">green new, yellow modified, grey unchanged</p>
+  <div class="costs">
+    <div><h3>Gains</h3><ul><li>Least code and no new config surface.</li><li><code>--kind</code> is a clap <code>ValueEnum</code>, so completions list the kinds.</li></ul></div>
+    <div class="con"><h3>Costs</h3><ul><li>Someone with their own skills can change the feature workflow but not fix or research, nor add a "docs" kind.</li><li>Contradicts the roadmap's "named workflows" and the configurable-workflow direction; a later move to config changes the public surface twice.</li></ul></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Recommendation</h2>
+  <p><b>B.</b> The config shape is the same as A, so the public surface is decided once. Recording the skills costs a slightly wider <code>started</code> line and buys flows that keep their meaning however the config changes, which is the rule the code already follows for phase names. C is the cheapest now and the most expensive later.</p>
+</section>
+
+<section class="card">
+  <h2>Shared by all three: four questions</h2>
+  <p>These are public surface or stored behaviour, so they are yours. My recommendation first in each.</p>
+  <ol>
+    <li><b>First prompt.</b> A kind has a <code>skill</code> (feature <code>ship-feature</code>, fix <code>ship-fix</code>) and a <code>prompt</code>, default <code>{skill} {request}</code>. <code>{skill}</code> is written in the agent's harness syntax: <code>/ship-fix</code> for Claude Code, <code>$ship-fix</code> for Codex, bare for an agent without an adapter. The built-in agents lose their own prompt, the kind supplies it. Research has no skill in agent-skills, so its built-in prompt is plain words: <code>Research this and answer here. Change no code and commit nothing: {request}</code>. An agent's own <code>prompt</code> in config.toml still wins for every kind (it is how that agent takes input); <code>[worker] prompt</code> becomes the feature kind's prompt.
+<pre><code>[kinds.fix]
+skill = "ship-fix"
+branch_types = ["fix", "bugfix", "hotfix"]
+
+[[kinds.fix.phases]]
+name = "diagnose"
+skills = ["diagnose-bug"]
+# implement, review, merge-request as in feature</code></pre></li>
+    <li><b>Branch type.</b> A kind lists the branch types it means, in order; the first one the repo's <code>[branch] types</code> lists wins, else the repo's first type, as today. <code>--type</code> still overrides. Built in: feature <code>["feature", "feat"]</code>, fix <code>["fix", "bugfix", "hotfix"]</code>. Without a repo convention the branch stays <code>flow/&lt;name&gt;</code>. The alternative, a mapping in each repo's <code>.saaio/config.toml</code>, is explicit but needs every repo edited before fix branches get the right type.</li>
+    <li><b>Research.</b> <code>branch = false</code>: its worktree is detached at the base (<code>git worktree add --detach</code>), so it can read and run the code with its own slot and setup, and leaves no branch behind; remove and clear already handle a flow without one. Its one phase is <code>research</code>. It never becomes done by a merge request; it ends <code>idle</code> with its answer, and the master says the findings are ready. The alternative is no worktree at all, in the repo's checkout like a plain session, which shares the person's working tree.</li>
+    <li><b>Old configs.</b> Top-level <code>[[phases]]</code> and <code>[worker] prompt</code> keep working as the feature kind's. Setting both <code>[[phases]]</code> and <code>[[kinds.feature.phases]]</code> is an error that names the line. <code>--kind</code> defaults to <code>feature</code> (a <code>[worker] kind</code> setting can change it); the master picks the kind from the request per master.md.</li>
+  </ol>
+</section>
+</main>
