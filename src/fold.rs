@@ -1,12 +1,13 @@
 //! A flow's events folded into its `FlowView`, views into the sorted `Board`, a name into a flow
 
-use crate::event::{Event, EventKind, Mode, Phase, ServiceStatus};
+use crate::event::{Event, EventKind, Mode, ServiceStatus};
 use crate::store::FlowLog;
 use crate::text;
 use crate::view::{
     Board, FlowView, ReviewCount, Services, Session, State, Step, StepStatus, Tasks, TimelineEntry,
     Tone, VIEW_VERSION, Workspace,
 };
+use crate::workflow::Phase;
 use crate::workflow::Workflow;
 
 /// A flow with a heartbeat older than this, not done or ended, is not responding.
@@ -22,17 +23,11 @@ pub fn fold<'a>(
     now: u64,
 ) -> Option<FlowView> {
     let mut events = events.into_iter();
-    let (name, request, mode, phases, at) =
-        events.by_ref().find_map(|event| match &event.kind {
-            EventKind::Started {
-                name,
-                request,
-                mode,
-                phases,
-            } => Some((name, request, *mode, phases.as_deref(), event.at)),
-            _ => None,
-        })?;
-    let mut folding = Folding::new(id, name, request, mode, phases, at);
+    let (started, at) = events.by_ref().find_map(|event| match &event.kind {
+        started @ EventKind::Started { .. } => Some((started, event.at)),
+        _ => None,
+    })?;
+    let mut folding = Folding::new(id, started, at);
     for event in events {
         folding.apply(event);
     }
@@ -154,19 +149,31 @@ struct Folding {
 }
 
 impl Folding {
-    fn new(
-        id: &str,
-        name: &str,
-        request: &str,
-        mode: Mode,
-        phases: Option<&[Phase]>,
-        at: u64,
-    ) -> Folding {
+    /// From the flow's started event.
+    fn new(id: &str, started: &EventKind, at: u64) -> Folding {
+        let EventKind::Started {
+            name,
+            request,
+            mode,
+            phases,
+            kind,
+            workflow,
+            prompt,
+            merges,
+        } = started
+        else {
+            unreachable!("a flow folds from its started event");
+        };
+        let mode = *mode;
         let view = FlowView {
             id: id.to_string(),
-            name: name.to_string(),
-            request: request.to_string(),
+            name: name.clone(),
+            request: request.clone(),
             mode,
+            kind: kind.clone(),
+            workflow: workflow.clone(),
+            prompt: prompt.clone(),
+            merges: *merges,
             phase: None,
             // A plain session opens at an empty prompt; a flow's agent starts on its request.
             state: if mode == Mode::Plain {
@@ -193,7 +200,11 @@ impl Folding {
             permission: false,
             services: None,
         };
-        let phases = phases.map_or_else(|| Workflow::builtin().phases(), <[Phase]>::to_vec);
+        let phases = match (workflow, phases) {
+            (Some(workflow), _) => workflow.phases(),
+            (None, Some(phases)) => phases.clone(),
+            (None, None) => Workflow::builtin().phases(),
+        };
         Folding {
             view,
             durations: vec![None; phases.len()],
@@ -254,6 +265,19 @@ impl Folding {
             }
             EventKind::Working => {
                 self.pending_permission = None;
+                if self.view.phase.is_none() && self.starts_unasked() {
+                    self.enter(0, at);
+                    let text = format!("phase: {}", self.phases[0].name());
+                    self.note(at, text, Tone::Progress);
+                }
+                // A flow that merges nothing works again on a follow-up: its phase's clock too.
+                if self.view.state == State::Done
+                    && !self.view.merges
+                    && let Some(stopped) = self.stopped_at.take()
+                {
+                    self.close_phase(stopped);
+                    self.phase_since = at;
+                }
                 if matches!(self.view.state, State::Waiting | State::Blocked) {
                     self.note(at, "answered".to_string(), Tone::Progress);
                 }
@@ -276,6 +300,16 @@ impl Folding {
             }
             EventKind::PermissionPending { question } => {
                 self.pending_permission = Some((at, question.clone()));
+            }
+            EventKind::Idle { note } if !self.view.merges => {
+                self.pending_permission = None;
+                if self.view.state != State::Done {
+                    self.view.changed_at = at;
+                    self.view.state = State::Done;
+                    self.view.delegate = None;
+                    self.stopped_at.get_or_insert(at);
+                    self.note(at, format!("answered: {note}"), Tone::Success);
+                }
             }
             EventKind::Idle { note } => {
                 self.pending_permission = None;
@@ -449,6 +483,14 @@ impl Folding {
         self.stopped_at.get_or_insert(at);
     }
 
+    /// The recorded workflow's first phase has no skill to start it: the first turn enters it.
+    fn starts_unasked(&self) -> bool {
+        self.view
+            .workflow
+            .as_ref()
+            .is_some_and(|workflow| workflow.starts_unasked(0))
+    }
+
     /// Where `phase` stands in the flow's phases; None when it has none.
     fn position(&self, phase: &Phase) -> Option<usize> {
         self.phases.iter().position(|known| known == phase)
@@ -506,7 +548,8 @@ impl Folding {
             .phase
             .as_ref()
             .and_then(|phase| self.position(phase));
-        let is_done = self.view.merge_request.is_some();
+        let is_done = self.view.merge_request.is_some()
+            || (!self.view.merges && self.view.state == State::Done);
         self.view.steps = self
             .phases
             .iter()

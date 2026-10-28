@@ -36,6 +36,10 @@ pub fn started(name: &str, request: &str) -> Event {
             request: request.into(),
             mode: Mode::Auto,
             phases: None,
+            kind: None,
+            workflow: None,
+            prompt: None,
+            merges: true,
         },
     )
 }

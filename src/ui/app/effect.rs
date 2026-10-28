@@ -60,8 +60,11 @@ impl Job {
                     "--mode".to_string(),
                     form.mode.name().to_string(),
                 ];
-                if let Some(kind) = form.picked_type() {
-                    args.extend(["--type".to_string(), kind.to_string()]);
+                if let Some(kind) = form.picked_kind() {
+                    args.extend(["--kind".to_string(), kind.to_string()]);
+                }
+                if let Some(branch_type) = form.picked_type() {
+                    args.extend(["--type".to_string(), branch_type.to_string()]);
                 }
                 if let Some(agent) = form.picked_agent() {
                     args.extend(["--agent".to_string(), agent.to_string()]);

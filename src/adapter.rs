@@ -135,6 +135,14 @@ impl Adapter {
         }
     }
 
+    /// How a prompt calls a skill: "/ship-fix" in Claude Code, "$ship-fix" in Codex.
+    pub fn skill_call(self, skill: &str) -> String {
+        match self {
+            Adapter::ClaudeCode => format!("/{skill}"),
+            Adapter::Codex => format!("${skill}"),
+        }
+    }
+
     /// The arguments that add `text` to the session's instructions.
     pub fn instruct(self, text: &str) -> Vec<String> {
         match self {
@@ -264,6 +272,12 @@ mod tests {
         assert_eq!(Adapter::named("codex"), Some(Adapter::Codex));
         assert_eq!(Adapter::Codex.name(), "codex");
         assert_eq!(Adapter::named("pi"), None);
+    }
+
+    #[test]
+    fn calls_a_skill_as_its_harness_does() {
+        assert_eq!(Adapter::ClaudeCode.skill_call("ship-fix"), "/ship-fix");
+        assert_eq!(Adapter::Codex.skill_call("ship-fix"), "$ship-fix");
     }
 
     #[test]

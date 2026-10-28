@@ -93,7 +93,7 @@ A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase co
 
 ## [phase]
 
-Keys: the phase names of your [workflow](configuration.md#phases-the-workflow). A phase without a
+Keys: the phase names of your [workflow](configuration.md#kinds-of-flows). A phase without a
 color takes the color of its place:
 
 | Place | Built-in phase | `terminal` | `saaio` | `saaio-light` |

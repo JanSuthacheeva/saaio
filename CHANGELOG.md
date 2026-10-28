@@ -19,6 +19,22 @@ All notable changes to saaio are listed here. The format follows
   notification (OSC 9 in Ghostty, iTerm2, kitty and WezTerm, OSC 777 in foot, urxvt and VTE
   terminals, the bell in Alacritty and Terminal.app), also through tmux with
   `allow-passthrough all`. `[ui] notify = false` in config.toml turns them off.
+- Kinds of flows: `feature`, `fix` and `research`, each with its own phases, first prompt and
+  branch type. `saaio start --kind fix`, `saaio new --kind` and a kind row in the new-flow dialog
+  pick one; the master picks it from the request. A fix runs `/ship-fix` (`$ship-fix` in Codex),
+  starting with a `diagnose` phase, on a `bugfix`-type branch where the repository's convention has
+  one. A research flow answers a question in its pane from a worktree without a branch, is `done`
+  once it has answered, and `saaio clear` (or `x` on the board) forgets it. `saaio status`,
+  `--json` (`kind`, `merges`), the board and the sidebar (`fix claude`) show a flow's kind.
+  `[kinds.<name>]` in config.toml changes a kind or adds one; `[worker] kind` sets the default.
+
+### Changed
+
+- The built-in `claude` and `codex` agents no longer set a `prompt`: a worker's first prompt is its
+  flow's kind's, written for its harness. An agent's own `prompt` still wins, now for every kind,
+  so an agent you defined with `prompt = "$ship-feature {request}"` sends that for fixes too:
+  leave it out to get each kind's. A top-level `[[phases]]` and `[worker] prompt` keep working as
+  the feature kind's.
 
 ### Fixed
 

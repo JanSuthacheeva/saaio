@@ -42,36 +42,38 @@ More: [docs/install.md](docs/install.md).
 
 ## Workflow
 
-A worker's first prompt is `/ship-feature <request>` (`$ship-feature` in Codex) by default. Pick one:
+Each flow has a kind: `feature` (the default), `fix` or `research`. A feature worker's first prompt
+is `/ship-feature <request>`, a fix's `/ship-fix <request>` (`$ship-feature`, `$ship-fix` in Codex),
+and a research flow answers a question without a branch. Pick the skills:
 
-**agent-skills.** Installs `ship-feature` and the skills it runs, from
+**agent-skills.** Installs `ship-feature`, `ship-fix` and the skills they run, from
 [agent-skills](https://github.com/JanSuthacheeva/agent-skills):
 
 ```sh
-npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature design-code implement-plan review-changes write-merge-request commit setup-saaio
+npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature ship-fix design-code diagnose-bug implement-plan review-changes write-merge-request commit setup-saaio
 ```
 
 **Your own skills.** In `~/.config/saaio/config.toml`:
 
 ```toml
-[worker]
-prompt = "/my-feature {request}"   # $my-feature in Codex
+[kinds.feature]
+skill = "my-feature"   # /my-feature in Claude Code, $my-feature in Codex
 
-[[phases]]
+[[kinds.feature.phases]]
 name = "plan"
 skills = ["my-plan"]
 
-[[phases]]
+[[kinds.feature.phases]]
 name = "build"
 skills = ["my-build"]
 
-[[phases]]
+[[kinds.feature.phases]]
 name = "ship"
 skills = ["my-pr"]
 ```
 
-A phase starts when the worker runs one of its skills. Your phases replace the built-in four.
-Details: [Use your own workflow](docs/configuration.md#use-your-own-workflow).
+A phase starts when the worker runs one of its skills. Your kind replaces the built-in one; add
+kinds of your own under new names. Details: [Use your own workflow](docs/configuration.md#use-your-own-workflow).
 
 **Neither.** The flow still works. States show as usual. The steps stay `○───○───○───○`.
 

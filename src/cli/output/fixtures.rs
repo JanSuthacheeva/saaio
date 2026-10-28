@@ -1,9 +1,10 @@
 //! Flows and a sample board the tests of `output::flow` and `output::status` share
 
-use crate::event::{Event, EventKind, Phase, ServiceStatus};
+use crate::event::{Event, EventKind, ServiceStatus};
 use crate::fixtures;
 use crate::fold;
 use crate::view::{Board, FlowView};
+use crate::workflow::Phase;
 
 pub(super) const MIN: u64 = 60_000;
 
@@ -21,28 +22,39 @@ pub(super) fn flow(name: &str, events: Vec<EventKind>, now: u64) -> FlowView {
     view
 }
 
+/// shop-221, a fix, blocked; shop-230, a feature, planning; export-csv, from before kinds, done.
 pub(super) fn sample_board(now: u64) -> Board {
+    let kind = |name: &str, mut flow: FlowView| {
+        flow.kind = Some(name.to_string());
+        flow
+    };
     fold::board(
         vec![
-            flow(
-                "shop-221",
-                vec![
-                    EventKind::Phase {
-                        phase: Phase::of("implement"),
-                    },
-                    EventKind::Tasks { done: 4, total: 9 },
-                    EventKind::Blocked {
-                        reason: "Task 5: migration needs a default value".into(),
-                    },
-                ],
-                now,
+            kind(
+                "fix",
+                flow(
+                    "shop-221",
+                    vec![
+                        EventKind::Phase {
+                            phase: Phase::of("implement"),
+                        },
+                        EventKind::Tasks { done: 4, total: 9 },
+                        EventKind::Blocked {
+                            reason: "Task 5: migration needs a default value".into(),
+                        },
+                    ],
+                    now,
+                ),
             ),
-            flow(
-                "shop-230",
-                vec![EventKind::Phase {
-                    phase: Phase::of("plan"),
-                }],
-                now,
+            kind(
+                "feature",
+                flow(
+                    "shop-230",
+                    vec![EventKind::Phase {
+                        phase: Phase::of("plan"),
+                    }],
+                    now,
+                ),
             ),
             flow(
                 "export-csv",

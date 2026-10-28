@@ -1,12 +1,12 @@
-//! `Event`, `EventKind`, `Phase`, `Mode` and the JSON line format of the log
+//! `Event`, `EventKind`, `Mode` and the JSON line format of the log
 
-use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
 use crate::text;
+use crate::workflow::{Phase, Workflow};
 
 pub const EVENT_VERSION: u32 = 1;
 pub const TEXT_LIMIT: usize = 500;
@@ -34,10 +34,22 @@ pub enum EventKind {
         name: String,
         request: String,
         mode: Mode,
-        /// The flow's phases in order; None in a log from before they were configurable, and for
-        /// a plain session.
+        /// The flow's phase names in order, in logs from before its whole workflow was recorded;
+        /// None in older ones, for a plain session and beside `workflow`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         phases: Option<Vec<Phase>>,
+        /// The flow's kind's name: "fix"; None for a plain session and older flows.
+        #[serde(rename = "flow_kind", default, skip_serializing_if = "Option::is_none")]
+        kind: Option<String>,
+        /// Its kind's phases with the skills that start them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workflow: Option<Workflow>,
+        /// The first prompt's template, {request}, {id} and {name} still to fill.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        prompt: Option<String>,
+        /// false: nothing to merge; the flow is done once it answered.
+        #[serde(default = "merges", skip_serializing_if = "merges_by_default")]
+        merges: bool,
     },
     Phase {
         phase: Phase,
@@ -164,10 +176,17 @@ pub struct Choice {
     pub description: String,
 }
 
-/// A phase's name: plan, implement, ... as the workflow names it.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
-pub struct Phase(String);
+fn merges() -> bool {
+    true
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if passes a reference"
+)]
+fn merges_by_default(merges: &bool) -> bool {
+    *merges
+}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
@@ -341,50 +360,6 @@ impl ServiceStatus {
     }
 }
 
-impl TryFrom<String> for Phase {
-    type Error = String;
-
-    /// Lowercase letters, digits and '-'; not empty.
-    fn try_from(name: String) -> Result<Phase, String> {
-        let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
-        if name.is_empty() || !name.chars().all(allowed) {
-            return Err(format!(
-                "{name:?} is no phase name: lowercase letters, digits and -"
-            ));
-        }
-        Ok(Phase(name))
-    }
-}
-
-impl From<Phase> for String {
-    fn from(phase: Phase) -> String {
-        phase.0
-    }
-}
-
-impl FromStr for Phase {
-    type Err = String;
-
-    fn from_str(name: &str) -> Result<Phase, String> {
-        Phase::try_from(name.to_string())
-    }
-}
-
-#[cfg(test)]
-impl Phase {
-    /// A phase by a name the test knows is valid.
-    pub fn of(name: &str) -> Phase {
-        name.parse().expect("a valid phase name")
-    }
-}
-
-impl Phase {
-    /// The name the workflow, the command line and the logs use.
-    pub fn name(&self) -> &str {
-        &self.0
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -444,12 +419,20 @@ mod tests {
                 request: "SHOP-221 add CSV export".into(),
                 mode: Mode::Auto,
                 phases: Some(vec![phase("plan"), phase("ship")]),
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
             EventKind::Started {
                 name: "scratch".into(),
                 request: String::new(),
                 mode: Mode::Plain,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
             EventKind::Phase {
                 phase: phase("merge-request"),
@@ -635,6 +618,10 @@ mod tests {
                 request: long.clone(),
                 mode: Mode::Guided,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
         );
 
@@ -857,9 +844,58 @@ mod tests {
                 request: String::new(),
                 mode: Mode::Plain,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
         );
         assert!(!plain.to_line().contains("phases"), "left out when None");
+        let Some(Event {
+            kind:
+                EventKind::Started {
+                    kind,
+                    workflow,
+                    prompt,
+                    merges,
+                    ..
+                },
+            ..
+        }) = Event::from_line(line)
+        else {
+            panic!("an old started line parses");
+        };
+        assert_eq!((kind, workflow, prompt, merges), (None, None, None, true));
+    }
+
+    #[test]
+    fn writes_a_flows_kind_workflow_and_prompt_in_its_started_line() {
+        let fix = Workflow::of(&[("diagnose", &["diagnose-bug"]), ("review", &[])]);
+        let started = |merges| {
+            Event::new(
+                7,
+                EventKind::Started {
+                    name: "shop-230".into(),
+                    request: "SHOP-230 fix totals".into(),
+                    mode: Mode::Guided,
+                    phases: None,
+                    kind: Some("fix".into()),
+                    workflow: Some(fix.clone()),
+                    prompt: Some("/ship-fix {request}".into()),
+                    merges,
+                },
+            )
+        };
+
+        let line = started(true).to_line();
+        assert_eq!(
+            line,
+            r#"{"v":1,"at":7,"kind":"started","name":"shop-230","request":"SHOP-230 fix totals","mode":"guided","flow_kind":"fix","workflow":[{"name":"diagnose","skills":["diagnose-bug"]},{"name":"review","skills":[]}],"prompt":"/ship-fix {request}"}"#
+        );
+        assert_eq!(Event::from_line(&line), Some(started(true)));
+        let research = started(false).to_line();
+        assert!(research.ends_with(r#","merges":false}"#), "{research}");
+        assert_eq!(Event::from_line(&research), Some(started(false)));
     }
 
     #[test]

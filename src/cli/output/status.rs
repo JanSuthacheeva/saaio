@@ -4,17 +4,18 @@ use serde::Serialize;
 
 use super::{DESCRIPTION, Document, toon};
 use crate::config::prefix::Prefix;
-use crate::event::{Phase, ServiceStatus};
+use crate::event::ServiceStatus;
 use crate::text::short_duration;
 use crate::text::{LIST_TEXT_LIMIT, truncated};
 use crate::view::{Board, FlowView, Projects, State};
+use crate::workflow::Phase;
 
 /// bin, description, then the list view.
 pub(crate) fn home(board: &Board, bin: &str, warnings: &[String]) -> Document {
     board_list(board, Some(bin), warnings, false)
 }
 
-/// count, needs_you, flows[n]{name,state,phase,tasks,age}, blockers[n]{name,blocker}, warnings, help;
+/// count, needs_you, flows[n]{name,kind,state,phase,tasks,age}, blockers[n]{name,blocker}, warnings, help;
 /// "flows: none tracked" when empty.
 pub(crate) fn list(board: &Board, warnings: &[String], full: bool) -> Document {
     board_list(board, None, warnings, full)
@@ -48,6 +49,7 @@ enum FlowRows<'a> {
 #[derive(Debug, Serialize)]
 struct FlowRow<'a> {
     name: &'a str,
+    kind: &'a str,
     state: &'static str,
     phase: &'a str,
     tasks: String,
@@ -71,6 +73,7 @@ fn board_list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool)
                 .iter()
                 .map(|flow| FlowRow {
                     name: &flow.name,
+                    kind: flow.kind.as_deref().unwrap_or_default(),
                     state: flow.state.name(),
                     phase: flow.phase.as_ref().map_or("", Phase::name),
                     tasks: flow
@@ -145,6 +148,7 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
     struct AllRow<'a> {
         project: &'a str,
         name: &'a str,
+        kind: &'a str,
         state: &'static str,
         phase: &'a str,
         tasks: String,
@@ -174,6 +178,7 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
         .map(|&(project, flow)| AllRow {
             project,
             name: &flow.name,
+            kind: flow.kind.as_deref().unwrap_or_default(),
             state: flow.state.name(),
             phase: flow.phase.as_ref().map_or("", Phase::name),
             tasks: flow
@@ -238,6 +243,8 @@ pub(crate) fn detail(
         #[serde(skip_serializing_if = "String::is_empty")]
         request: String,
         mode: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        kind: Option<String>,
         state: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
         phase: Option<String>,
@@ -320,6 +327,7 @@ pub(crate) fn detail(
         id: flow.id.clone(),
         request: cut(&flow.request),
         mode: flow.mode.name(),
+        kind: flow.kind.clone(),
         state: flow.state.name(),
         phase: flow.phase.as_ref().map(|phase| phase.name().to_string()),
         blocker: flow.blocker.as_deref().map(cut),
@@ -414,7 +422,7 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>, prefix: Prefix) -
             "Run `saaio report --flow {} working` once answered",
             flow.name
         )),
-        State::Done => help.push("Run `saaio clear` after the worker session ends".to_string()),
+        State::Done => help.push(super::flow::after_done(flow)),
         _ => {}
     }
     help.push("Run `saaio` for all flows".to_string());
@@ -425,9 +433,10 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>, prefix: Prefix) -
 mod tests {
     use super::*;
     use crate::cli::output::fixtures::{MIN, flow, sample_board};
-    use crate::event::{EventKind, Phase, Question};
+    use crate::event::{EventKind, Question};
     use crate::fold;
     use crate::view::VIEW_VERSION;
+    use crate::workflow::Phase;
 
     #[test]
     fn home_shows_the_binary_the_description_and_the_flows() {
@@ -442,10 +451,10 @@ mod tests {
                 "description: \"Tracks parallel feature flows: what each is doing, where it is blocked, how far it got\"",
                 "count: 3",
                 "needs_you: 1",
-                "flows[3]{name,state,phase,tasks,age,services}:",
-                "  shop-221,blocked,implement,4/9,7m,\"\"",
-                "  shop-230,working,plan,\"\",9m,\"\"",
-                "  export-csv,done,merge-request,\"\",9m,paused",
+                "flows[3]{name,kind,state,phase,tasks,age,services}:",
+                "  shop-221,fix,blocked,implement,4/9,7m,\"\"",
+                "  shop-230,feature,working,plan,\"\",9m,\"\"",
+                "  export-csv,\"\",done,merge-request,\"\",9m,paused",
                 "blockers[1]{name,blocker}:",
                 "  shop-221,\"Task 5: migration needs a default value\"",
                 "help[2]: \"Run `saaio status <name>` for one flow's phases, timeline and decisions\",Run `saaio new --name <name> --request <text>` to track a new flow",
@@ -535,12 +544,12 @@ mod tests {
 
         assert!(text.starts_with("count: 4\nneeds_you: 1\n"), "{text}");
         assert!(
-            text.contains("flows[4]{project,name,state,phase,tasks,age,services}:"),
+            text.contains("flows[4]{project,name,kind,state,phase,tasks,age,services}:"),
             "{text}"
         );
-        assert!(text.contains("  api,api-7,working,"), "{text}");
+        assert!(text.contains("  api,api-7,\"\",working,"), "{text}");
         assert!(
-            text.contains("  shop,shop-221,blocked,implement,4/9,"),
+            text.contains("  shop,shop-221,fix,blocked,implement,4/9,"),
             "{text}"
         );
         assert!(
@@ -549,7 +558,7 @@ mod tests {
         );
         assert!(text.contains("web: cannot read x"), "{text}");
         assert!(
-            text.contains("  shop,export-csv,done,merge-request,\"\",29m,paused"),
+            text.contains("  shop,export-csv,\"\",done,merge-request,\"\",29m,paused"),
             "{text}"
         );
     }
@@ -601,6 +610,20 @@ mod tests {
         );
         let running = text(vec![services(ServiceStatus::Running, None)]);
         assert!(!running.contains("services"), "{running}");
+    }
+
+    #[test]
+    fn the_detail_names_the_kind_after_the_mode() {
+        let mut fix = flow("shop-230", vec![], MIN);
+        fix.kind = Some("fix".into());
+
+        let document = detail(&fix, MIN, false, None, Prefix::default());
+        let text = document.text();
+
+        assert!(
+            text.contains("\nmode: auto\nkind: fix\nstate: working\n"),
+            "{text}"
+        );
     }
 
     #[test]

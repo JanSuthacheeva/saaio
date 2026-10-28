@@ -27,6 +27,10 @@ pub(super) fn flow(name: &str, mode: Mode, events: Vec<EventKind>) -> FlowView {
                 request: format!("{} add CSV export", name.to_uppercase()),
                 mode,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
         ),
         Event::new(

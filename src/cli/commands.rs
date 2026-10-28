@@ -24,6 +24,8 @@ use std::path::{Path, PathBuf};
 
 use crate::adapter::calls;
 use crate::cli::output::Failure;
+use crate::config::Config;
+use crate::config::kind::Kind;
 use crate::event::REQUEST_LIMIT;
 use crate::fold;
 use crate::launch::worktree::repo_of;
@@ -47,6 +49,17 @@ fn check_request(request: &str) -> Result<(), Failure> {
         ));
     }
     Ok(())
+}
+
+/// The config's kind `asked` names (or its default); the failure lists the kinds.
+fn pick_kind<'a>(config: &'a Config, asked: Option<&str>) -> Result<(&'a str, &'a Kind), Failure> {
+    config.kind(asked).ok_or_else(|| {
+        let known: Vec<&str> = config.kinds.keys().map(String::as_str).collect();
+        Failure::error(
+            format!("no kind named {}", asked.unwrap_or(&config.worker.kind)),
+            vec![format!("Kinds: {}", known.join(", "))],
+        )
+    })
 }
 
 fn no_flow(name: &str) -> Failure {

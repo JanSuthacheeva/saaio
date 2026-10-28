@@ -51,6 +51,7 @@ impl BoardView<'_> {
         if !flow.request.is_empty() {
             facts.push(flow.request.clone());
         }
+        facts.extend(flow.kind.clone());
         facts.push(flow.mode.name().to_string());
         facts.extend(flow.workspace.as_ref().map(|space| space.agent.clone()));
         if let Some(space) = flow.workspace.as_ref().filter(|_| flow.is_plain()) {
@@ -354,7 +355,7 @@ mod tests {
             Mode::Auto,
             vec![
                 EventKind::Phase {
-                    phase: crate::event::Phase::of("implement"),
+                    phase: crate::workflow::Phase::of("implement"),
                 },
                 EventKind::Blocked {
                     reason: "migration needs a default".into(),
@@ -466,10 +467,10 @@ mod tests {
             Mode::Auto,
             vec![
                 EventKind::Phase {
-                    phase: crate::event::Phase::of("plan"),
+                    phase: crate::workflow::Phase::of("plan"),
                 },
                 EventKind::Phase {
-                    phase: crate::event::Phase::of("implement"),
+                    phase: crate::workflow::Phase::of("implement"),
                 },
             ],
         );
@@ -554,7 +555,7 @@ mod tests {
             "shop-221",
             Mode::Auto,
             vec![EventKind::Phase {
-                phase: crate::event::Phase::of("implement"),
+                phase: crate::workflow::Phase::of("implement"),
             }],
         );
         let area = Rect::new(0, 0, 80, 6);

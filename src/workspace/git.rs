@@ -420,7 +420,7 @@ mod tests {
     fn finds_the_main_git_dir_from_a_subfolder_and_a_worktree() {
         let (_dir, repo) = repo();
         fs::create_dir_all(repo.join("src/deep")).unwrap();
-        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         let outside = TempDir::new().unwrap();
         let git_dir = repo.join(".git");
@@ -436,7 +436,7 @@ mod tests {
         let (_dir, repo) = repo();
         let sub = repo.join("src/deep");
         fs::create_dir_all(&sub).unwrap();
-        let worker = workspace_for(&repo, "csv", "flow/csv".into(), 1, "claude");
+        let worker = workspace_for(&repo, "csv", Some("flow/csv".into()), 1, "claude");
         create_worktree(&repo, &worker, None).unwrap();
 
         assert_eq!(current_branch(&repo).as_deref(), Some("main"));
@@ -451,7 +451,7 @@ mod tests {
     #[test]
     fn reads_uncommitted_work_through_the_git_dir_the_repository_registered() {
         let (dir, repo) = repo();
-        let space = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        let space = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         create_worktree(&repo, &space, None).unwrap();
         let path = Path::new(&space.path);
         let marker = dir.path().join("marker");
@@ -474,7 +474,7 @@ mod tests {
         fs::write(path.join(".git"), gitdir).unwrap();
         assert!(has_uncommitted_work(&repo, &space).unwrap());
         assert!(!marker.exists(), "the worktree's own .git configured git");
-        let elsewhere = workspace_for(&repo, "other", "flow/other".into(), 2, "claude");
+        let elsewhere = workspace_for(&repo, "other", Some("flow/other".into()), 2, "claude");
         fs::create_dir_all(&elsewhere.path).unwrap();
         assert!(
             has_uncommitted_work(&repo, &elsewhere).is_err(),
@@ -486,7 +486,7 @@ mod tests {
     fn reads_uncommitted_work_in_a_repository_that_records_relative_paths() {
         let (_dir, repo) = repo();
         git(&repo, &["config", "worktree.useRelativePaths", "true"]);
-        let space = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        let space = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         create_worktree(&repo, &space, None).unwrap();
 
         assert!(!has_uncommitted_work(&repo, &space).unwrap());

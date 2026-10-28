@@ -14,7 +14,7 @@
                                                                                                             │    • second item
                                                                                                             │  C-space enter jump in
                                                                                                             │
-                                                                                                            │ 2 ● shop-230                claude 31m
+                                                                                                            │ 2 ● shop-230            fix claude 31m
                                                                                                             │     ●───○───○───○ plan
                                                                                                             │     Which approach: a channel column …
                                                                                                             │

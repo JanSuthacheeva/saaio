@@ -7,13 +7,14 @@ use ratatui::layout::{Margin, Rect};
 use ratatui::text::{Line, Span};
 
 use super::{BoardView, CARD_ROWS, COLUMNS, DETAIL_ROWS, Item, card_rect, every_flow};
-use crate::event::{Mode, Phase, ServiceStatus};
+use crate::event::{Mode, ServiceStatus};
 use crate::proto::{PaneKey, PaneStatus};
 use crate::text::{plural, short_duration};
 use crate::ui::fit::{clip, clip_place, columns, spans_width, split};
 use crate::ui::focus;
 use crate::ui::sidebar;
 use crate::view::{FlowView, Project, Projects, State};
+use crate::workflow::Phase;
 
 /// The columns of a name a card keeps before its state label says less.
 const NAME_KEPT: usize = 10;

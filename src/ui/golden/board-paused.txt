@@ -15,7 +15,7 @@
       agent: review changes                            shop-198
 
 
-  2 shop-230  services paused 16:14 · shop-230 · guided · claude · flow/shop-230 · slot 1 · started 31m ago
+  2 shop-230  services paused 16:14 · shop-230 · fix · guided · claude · flow/shop-230 · slot 1 · started 31m ago
               plan ● 31m   implement ○   review ○   MR ○
  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   TIMELINE

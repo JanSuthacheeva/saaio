@@ -38,11 +38,10 @@ impl Widget for NewFlowView<'_> {
         let body = dialog.body_area(area);
         dialog.render(area, buf);
         let width = usize::from(body.width);
-        let extra = form.extra_rows();
         let mut lines = vec![
             (0, Line::styled(self.label(), self.theme.ui.faint)),
-            (5 + extra, self.mode_row(width)),
-            (6 + extra, self.creates(width)),
+            (form.row_of(Field::Mode), self.mode_row(width)),
+            (form.row_of(Field::Mode) + 1, self.creates(width)),
         ];
         if let Some(error) = &form.error {
             lines.push((
@@ -50,14 +49,14 @@ impl Widget for NewFlowView<'_> {
                 Line::styled(clip(error, width), self.theme.state.blocked),
             ));
         }
-        if form.has_type_row() {
-            lines.push((5, self.type_row()));
-        }
-        if form.has_agent_row() {
-            lines.push((5 + u16::from(form.has_type_row()), self.agent_row()));
-        }
-        if form.has_base_row() {
-            lines.push((form.base_row(), self.base_row(body)));
+        for field in form.extra_fields() {
+            let line = match field {
+                Field::Kind => self.kind_row(),
+                Field::Type => self.type_row(),
+                Field::Agent => self.agent_row(),
+                _ => self.base_row(body),
+            };
+            lines.push((form.row_of(field), line));
         }
         // A terminal too short for the dialog gets the rows that fit.
         for (row, line) in lines {
@@ -66,13 +65,8 @@ impl Widget for NewFlowView<'_> {
             }
         }
         self.render_text(body, buf);
-        let (top, rows) = match form.field {
-            Field::Request => (0, 4),
-            Field::Type => (5, 1),
-            Field::Agent => (5 + u16::from(form.has_type_row()), 1),
-            Field::Base => (form.base_row(), 1),
-            Field::Mode => (5 + extra, 1),
-        };
+        let top = form.row_of(form.field);
+        let rows = if form.field == Field::Request { 4 } else { 1 };
         // From the border to the border, so the bar stands where the sidebar's does.
         let focused = Rect::new(
             body.x.saturating_sub(PAD_COLS),
@@ -165,13 +159,24 @@ impl NewFlowView<'_> {
         Span::styled(text, self.theme.ui.faint)
     }
 
+    fn kind_row(&self) -> Line<'static> {
+        let mut row = vec![self.heading("kind    ")];
+        for (index, kind) in self.form.kinds.iter().enumerate() {
+            if index > 0 {
+                row.push(Span::raw("   "));
+            }
+            row.extend(self.radio(Field::Kind, index == self.form.kind, &kind.name));
+        }
+        Line::from(row)
+    }
+
     fn type_row(&self) -> Line<'static> {
         let mut row = vec![self.heading("type    ")];
         for (index, kind) in self.form.types().iter().enumerate() {
             if index > 0 {
                 row.push(Span::raw("   "));
             }
-            row.extend(self.radio(Field::Type, index == self.form.kind, kind));
+            row.extend(self.radio(Field::Type, index == self.form.branch_type, kind));
         }
         Line::from(row)
     }
@@ -254,7 +259,12 @@ impl NewFlowView<'_> {
             ]);
         }
         if form.request.trim().is_empty() {
-            return Line::styled("creates a branch, a worktree and a slot", theme.ui.faint);
+            let what = if form.makes_branch() {
+                "creates a branch, a worktree and a slot"
+            } else {
+                "creates a worktree and a slot, no branch: it answers in its pane"
+            };
+            return Line::styled(what, theme.ui.faint);
         }
         let taken: Vec<String> = self
             .flows
@@ -263,16 +273,18 @@ impl NewFlowView<'_> {
             .map(|flow| flow.name.clone())
             .collect();
         let name = name::choose(None, &form.request, &taken);
-        let branch = branching::branch_name(
-            form.branching.as_ref(),
-            form.picked_type(),
-            &form.request,
-            &name,
-        );
-        let mut spans = vec![
-            Span::styled("creates ", theme.ui.faint),
-            Span::styled(branch, theme.ui.text),
-        ];
+        let mut spans = vec![Span::styled("creates ", theme.ui.faint)];
+        if form.makes_branch() {
+            let branch = branching::branch_name(
+                form.branching.as_ref(),
+                form.picked_type(),
+                &form.request,
+                &name,
+            );
+            spans.push(Span::styled(branch, theme.ui.text));
+        } else {
+            spans.push(Span::styled("no branch", theme.ui.text));
+        }
         if let Some(base) = form.picked_base() {
             spans.push(Span::styled(" from ", theme.ui.faint));
             spans.push(Span::styled(base.to_string(), theme.ui.text));
@@ -304,7 +316,12 @@ mod tests {
 
     #[test]
     fn reverses_the_chosen_option_of_the_row_with_the_keys() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into(), Vec::new());
+        let mut form = NewFlowForm::new(
+            PathBuf::from("/shop"),
+            "~/shop".into(),
+            Vec::new(),
+            Vec::new(),
+        );
         let theme = Theme::default();
         let view = |form: &NewFlowForm| {
             NewFlowView {
@@ -331,7 +348,12 @@ mod tests {
 
     #[test]
     fn draws_an_error_in_a_terminal_too_small_for_it() {
-        let mut form = NewFlowForm::new(PathBuf::from("/shop"), "~/shop".into(), Vec::new());
+        let mut form = NewFlowForm::new(
+            PathBuf::from("/shop"),
+            "~/shop".into(),
+            Vec::new(),
+            Vec::new(),
+        );
         form.error = Some("the branch exists".into());
         let theme = Theme::default();
         for (width, height) in (0..6)

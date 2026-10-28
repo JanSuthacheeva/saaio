@@ -4,7 +4,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::event::{EventKind, Mode, Phase, Question, ServiceStatus};
+use crate::event::{EventKind, Mode, Question, ServiceStatus};
+use crate::workflow::{Phase, Workflow};
 
 pub const VIEW_VERSION: u32 = 3;
 
@@ -18,6 +19,10 @@ pub struct Board {
     pub flows: Vec<FlowView>,
 }
 
+fn merges() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlowView {
@@ -25,6 +30,17 @@ pub struct FlowView {
     pub name: String,
     pub request: String,
     pub mode: Mode,
+    /// Its kind of flow: "fix"; None for a plain session and flows from before kinds.
+    pub kind: Option<String>,
+    /// The workflow its started line recorded; None for older flows.
+    #[serde(skip)]
+    pub workflow: Option<Workflow>,
+    /// Its first prompt's template, as recorded; None for older flows.
+    #[serde(skip)]
+    pub prompt: Option<String>,
+    /// false: nothing to merge, done once it answered.
+    #[serde(default = "merges")]
+    pub merges: bool,
     pub phase: Option<Phase>,
     pub state: State,
     pub blocker: Option<String>,
@@ -254,6 +270,11 @@ impl FlowView {
         self.state == State::Ended
     }
 
+    /// What saaio clear takes: an ended flow, or a done one that merges nothing.
+    pub fn is_clearable(&self) -> bool {
+        self.is_finished() || (self.state == State::Done && !self.merges)
+    }
+
     /// Started with --plain: no phases, no master.
     pub fn is_plain(&self) -> bool {
         self.mode == Mode::Plain
@@ -323,6 +344,10 @@ mod tests {
             name: "shop-221".into(),
             request: "SHOP-221 add CSV export".into(),
             mode: Mode::Auto,
+            kind: Some("feature".into()),
+            workflow: None,
+            prompt: None,
+            merges: true,
             phase: Some(Phase::of("merge-request")),
             state,
             blocker: None,
@@ -393,6 +418,11 @@ mod tests {
         assert_eq!(flow["workspace"]["window"], "@14");
         assert_eq!(flow["permission"], false);
         assert_eq!(flow["services"], serde_json::Value::Null);
+        assert_eq!(flow["kind"], "feature");
+        assert_eq!(flow["merges"], true);
+        for skipped in ["workflow", "prompt"] {
+            assert!(flow.get(skipped).is_none(), "{skipped} is saaio's own");
+        }
     }
 
     #[test]
@@ -422,6 +452,24 @@ mod tests {
         assert!(flow(State::Ended).is_finished());
         assert!(!flow(State::Blocked).is_finished());
         assert!(!flow(State::Working).is_finished());
+    }
+
+    #[test]
+    fn clears_an_ended_flow_or_a_done_one_that_merges_nothing() {
+        let research = |state| FlowView {
+            merges: false,
+            ..flow(state)
+        };
+
+        assert!(flow(State::Ended).is_clearable());
+        assert!(
+            !flow(State::Done).is_clearable(),
+            "its merge request is open"
+        );
+        assert!(research(State::Done).is_clearable());
+        assert!(research(State::Ended).is_clearable());
+        assert!(!research(State::Idle).is_clearable());
+        assert!(!research(State::Waiting).is_clearable());
     }
 
     #[test]

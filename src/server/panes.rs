@@ -430,7 +430,7 @@ mod tests {
         let sub = repo.join("docs");
         std::fs::create_dir(&sub).unwrap();
         let elsewhere = tempfile::TempDir::new().unwrap();
-        let worktree = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        let worktree = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
 
         assert_eq!(trust_root(&worktree), repo);
         assert_eq!(trust_root(&folder_workspace(&sub, "codex")), repo);
