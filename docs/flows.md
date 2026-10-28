@@ -93,7 +93,7 @@ A research flow answers a question and changes nothing.
 - Its phase, `research`, starts with its first turn.
 - Once a turn ends without a question, the flow is `done`: it moves to DONE, its services pause like
   any resting flow's, and the master tells you its findings are ready. `saaio status <name> --full`
-  shows the whole answer.
+  shows its answer, up to 4000 characters; its pane holds all of it.
 - A follow-up you type or send makes it work again; it is `done` again when it answers.
 - `saaio clear` forgets it once it is done, like an ended flow: it closes its pane, runs the
   teardown script, removes its worktree (kept with uncommitted work) and frees its slot. `x` on the
