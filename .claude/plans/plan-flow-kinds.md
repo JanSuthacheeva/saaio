@@ -317,7 +317,8 @@ The idle and done bullet: a research flow is done once it answers; say its findi
 ```
 
   research adds `"merges":false`.
-- `--json`: `"kind": "fix"`, null for plain and older flows.
+- `--json`: `"kind": "fix"`, null for plain and older flows; `"merges": false` for research.
+- The board's `x` clears by `is_clearable` too.
 
 ## Call chains
 
@@ -433,11 +434,11 @@ Resume never uses the prompt.
 ### UI
 
 - [x] `KindChoice`, the dialog's kind row, `branch_type` rename, type row following the kind, `Job::args --kind`, `App::set_kinds` from `ui.rs`; dialog unit tests
-- [ ] Sidebar marker for a kind other than feature and the board's detail fact; golden tests updated
+- [x] Sidebar marker for a kind other than feature and the board's detail fact; golden tests updated
 
 ### Master and docs
 
-- [ ] master.md bullets, master-v13.md as the earlier default
+- [x] master.md bullets, master-v13.md as the earlier default
 - [ ] README, docs/configuration.md (kinds, old [[phases]]), cli.md (--kind, --type default, clear), flows.md (kinds, research lifecycle), ui.md (kind row), json.md (kind), ROADMAP.md (kinds of flows built), CHANGELOG.md Unreleased, CLAUDE.md (kind.rs, plan list)
 
 ### End to end

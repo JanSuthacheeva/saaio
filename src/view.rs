@@ -39,7 +39,7 @@ pub struct FlowView {
     #[serde(skip)]
     pub prompt: Option<String>,
     /// false: nothing to merge, done once it answered.
-    #[serde(skip, default = "merges")]
+    #[serde(default = "merges")]
     pub merges: bool,
     pub phase: Option<Phase>,
     pub state: State,
@@ -419,7 +419,8 @@ mod tests {
         assert_eq!(flow["permission"], false);
         assert_eq!(flow["services"], serde_json::Value::Null);
         assert_eq!(flow["kind"], "feature");
-        for skipped in ["workflow", "prompt", "merges"] {
+        assert_eq!(flow["merges"], true);
+        for skipped in ["workflow", "prompt"] {
             assert!(flow.get(skipped).is_none(), "{skipped} is saaio's own");
         }
     }

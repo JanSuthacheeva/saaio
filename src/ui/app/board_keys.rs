@@ -111,10 +111,11 @@ impl App {
         }
     }
 
-    /// Removes a finished flow of this project in the background; says so for any other.
+    /// Removes a finished flow of this project, or a done one that merges nothing, in the
+    /// background; says so for any other.
     fn clear(&mut self, flow: Option<FlowView>) -> Vec<Effect> {
         match flow {
-            Some(flow) if flow.is_finished() => {
+            Some(flow) if flow.is_clearable() => {
                 if let View::Board(state) = &mut self.view {
                     state.selected = 0;
                 }

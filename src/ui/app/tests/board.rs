@@ -249,6 +249,34 @@ fn starts_from_a_workers_repo_and_clears_only_finished_flows() {
 }
 
 #[test]
+fn clears_a_done_flow_that_merges_nothing() {
+    let mut app = board_app();
+    let mut board = fleet();
+    let answered = board
+        .flows
+        .iter_mut()
+        .find(|flow| flow.name == "shop-230")
+        .unwrap();
+    answered.state = State::Done;
+    answered.merges = false;
+    app.on_server(ServerMsg::Board(board));
+    app.on_input(Routed::Command(Command::Board));
+    let at = app
+        .workers()
+        .iter()
+        .position(|flow| flow.name == "shop-230")
+        .unwrap();
+    let digit = char::from(b'1' + u8::try_from(at).unwrap());
+
+    let effects = app.on_input(Routed::View(vec![Key::Char(digit), Key::Char('x')]));
+
+    assert_eq!(
+        effects,
+        vec![Effect::Run(Job::Remove(Removal::of("shop-230")))]
+    );
+}
+
+#[test]
 fn shows_every_project_and_jumps_only_into_this_ones_flows() {
     let mut app = board_app().with_store("/state/projects/shop".into());
     app.on_input(Routed::Command(Command::Board));
