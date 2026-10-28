@@ -45,29 +45,17 @@ pub struct Client {
 }
 
 impl Client {
-    /// Connects and says hello; None when no server listens; Err when it refuses (another protocol version).
+    /// Connects and says hello; None when no server listens; Err when it refuses (another
+    /// protocol version), naming the server's pid, this binary and `saaio --stop`.
     pub fn connect(socket: &Path, role: Role) -> Result<Option<Client>> {
         let Some(mut stream) = dial(socket)? else {
             return Ok(None);
         };
-        stream.set_read_timeout(Some(HELLO_WAIT))?;
-        proto::write_msg(
-            &mut stream,
-            &ClientMsg::Hello {
-                version: PROTOCOL_VERSION,
-                role,
-                peer: this_process(),
-            },
-        )?;
-        let server = match proto::read_msg::<_, ServerMsg>(&mut stream)
-            .context("the saaio server did not answer")?
-        {
-            Some(ServerMsg::Welcome { server, .. }) => server,
-            Some(ServerMsg::Refused { reason }) => {
-                bail!("{reason}; run `saaio --stop` and start saaio again")
-            }
-            Some(other) => bail!("the saaio server answered {other:?} instead of a welcome"),
-            None => bail!("the saaio server closed the connection"),
+        // Before the hello: macOS refuses socket options once a refusing server hung up.
+        let pid = peer_pid(&stream).ok();
+        let server = match hello(&mut stream, role)? {
+            Ok(server) => server,
+            Err(reason) => bail!("{reason}. {}", another_saaio(pid)),
         };
         // macOS refuses socket options once the server hung up (EINVAL); the next recv says so.
         let _ = stream.set_read_timeout(None);
@@ -96,6 +84,68 @@ impl Client {
             server: self.server.clone(),
         })
     }
+}
+
+/// A server that listens on a socket: its pid, and its binary unless it refused (an earlier
+/// protocol).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Running {
+    pub pid: u32,
+    pub server: Option<Binary>,
+}
+
+/// Connects as Control to read who listens; None when no server does.
+#[cfg_attr(not(test), expect(dead_code, reason = "saaio update names them"))]
+pub fn running(socket: &Path) -> Result<Option<Running>> {
+    let Some(mut stream) = dial(socket)? else {
+        return Ok(None);
+    };
+    let pid = peer_pid(&stream).with_context(|| {
+        format!(
+            "could not tell which process listens on {}",
+            socket.display()
+        )
+    })?;
+    let server = hello(&mut stream, Role::Control)?.ok();
+    Ok(Some(Running {
+        pid: pid.as_raw_nonzero().get().unsigned_abs(),
+        server,
+    }))
+}
+
+/// Says hello on `stream`: the server's binary from its Welcome, or the reason it refused.
+fn hello(stream: &mut UnixStream, role: Role) -> Result<Result<Binary, String>> {
+    stream.set_read_timeout(Some(HELLO_WAIT))?;
+    proto::write_msg(
+        stream,
+        &ClientMsg::Hello {
+            version: PROTOCOL_VERSION,
+            role,
+            peer: this_process(),
+        },
+    )?;
+    match proto::read_msg::<_, ServerMsg>(stream).context("the saaio server did not answer")? {
+        Some(ServerMsg::Welcome { server, .. }) => Ok(Ok(server)),
+        Some(ServerMsg::Refused { reason }) => Ok(Err(reason)),
+        Some(other) => bail!("the saaio server answered {other:?} instead of a welcome"),
+        None => bail!("the saaio server closed the connection"),
+    }
+}
+
+/// `The saaio server (pid 4321) is another saaio than this one (saaio 0.2.0 (abc1234),
+/// /usr/local/bin/saaio): run `saaio --stop`, then start saaio again; unfinished flows resume`.
+fn another_saaio(pid: Option<Pid>) -> String {
+    let server = match pid {
+        Some(pid) => format!("The saaio server (pid {pid})"),
+        None => "The saaio server".to_string(),
+    };
+    let this = match Binary::this() {
+        Ok(this) => format!("saaio {}, {}", this.build, this.exe.display()),
+        Err(_) => format!("saaio {BUILD}"),
+    };
+    format!(
+        "{server} is another saaio than this one ({this}): run `saaio --stop`, then start saaio again; unfinished flows resume"
+    )
 }
 
 /// This process as a Peer: its pid, current folder (empty when it cannot be read) and BUILD.
@@ -467,14 +517,80 @@ mod tests {
 
         let error = Client::connect(&socket, Role::Control).err().unwrap();
 
-        assert!(error.to_string().contains("protocol 9"), "{error}");
-        assert!(error.to_string().contains("saaio --stop"), "{error}");
+        let this = Binary::this().unwrap();
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "saaio server runs protocol 9. The saaio server (pid {}) is another saaio than this one (saaio {BUILD}, {}): run `saaio --stop`, then start saaio again; unfinished flows resume",
+                std::process::id(),
+                this.exe.display()
+            )
+        );
         server.join().unwrap();
         assert!(
             Client::connect(&dir.path().join("none.sock"), Role::Control)
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn reads_who_listens_and_whether_it_speaks_this_protocol() {
+        let dir = private_dir();
+        let socket = dir.path().join("server.sock");
+        let binary = Binary {
+            exe: "/opt/saaio/bin/saaio".into(),
+            build: "0.2.0 (abc1234)".into(),
+        };
+        let server = fake_server(
+            &socket,
+            ServerMsg::Welcome {
+                version: PROTOCOL_VERSION,
+                server: binary.clone(),
+            },
+        );
+
+        let found = running(&socket).unwrap();
+
+        assert_eq!(
+            found,
+            Some(Running {
+                pid: std::process::id(),
+                server: Some(binary),
+            })
+        );
+        assert!(matches!(
+            server.join().unwrap(),
+            Some(ClientMsg::Hello {
+                role: Role::Control,
+                ..
+            })
+        ));
+        assert_eq!(running(&dir.path().join("none.sock")).unwrap(), None);
+    }
+
+    #[test]
+    fn a_server_of_protocol_8_runs_without_a_binary() {
+        let dir = private_dir();
+        let socket = dir.path().join("server.sock");
+        // What a 0.1.x server answers a hello of protocol 9.
+        let server = fake_server(
+            &socket,
+            ServerMsg::Refused {
+                reason: "saaio server runs protocol 8, this saaio speaks 9".into(),
+            },
+        );
+
+        let found = running(&socket).unwrap();
+
+        assert_eq!(
+            found,
+            Some(Running {
+                pid: std::process::id(),
+                server: None,
+            })
+        );
+        server.join().unwrap();
     }
 
     #[test]

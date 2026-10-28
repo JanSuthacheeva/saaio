@@ -11,7 +11,10 @@
 pub mod cli;
 
 mod adapter;
-#[expect(dead_code, reason = "the UI and saaio update use it once they warn")]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the UI and saaio update use it once they warn")
+)]
 mod binaries;
 mod branching;
 mod bug_report;
