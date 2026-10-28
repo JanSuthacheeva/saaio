@@ -144,7 +144,7 @@ impl App {
                     effects
                 }
             },
-            View::Confirm { .. } | View::Help | View::Panes => vec![],
+            View::Confirm { .. } | View::Help | View::Mismatch | View::Panes => vec![],
         }
     }
 

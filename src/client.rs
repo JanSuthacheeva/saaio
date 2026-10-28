@@ -63,7 +63,6 @@ impl Client {
     }
 
     /// The server's build and binary, from its Welcome.
-    #[cfg_attr(not(test), expect(dead_code, reason = "the UI warns with it"))]
     pub fn server(&self) -> &Binary {
         &self.server
     }

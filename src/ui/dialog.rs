@@ -1,4 +1,4 @@
-//! `Dialog`, the one frame every box over a session is drawn in; the help and pane notices
+//! `Dialog`, the one frame every box over a session is drawn in; the help, mismatch and pane notices
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -6,9 +6,10 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Widget};
 
+use crate::binaries::{Binary, Mismatch};
 use crate::config::prefix::Prefix;
 use crate::proto::PaneStatus;
-use crate::ui::fit::columns;
+use crate::ui::fit::{columns, tilde};
 use crate::ui::hints::{self, Hint};
 use crate::ui::theme::Theme;
 
@@ -182,6 +183,68 @@ pub fn help(prefix: Prefix, theme: &Theme) -> Dialog<'_> {
     Dialog {
         keys: vec![Hint::new("any key", "closes this")],
         ..Dialog::new("keys", body, theme)
+    }
+}
+
+/// "mismatched saaio": this saaio, the server and the saaio first on PATH, each with its build and
+/// binary (with ~), what each one means and what to run.
+pub fn mismatch<'a>(
+    this: &Binary,
+    mismatches: &[Mismatch],
+    home: Option<&str>,
+    theme: &'a Theme,
+) -> Dialog<'a> {
+    let mut rows = vec![("this", this)];
+    for mismatch in mismatches {
+        rows.push(match mismatch {
+            Mismatch::Server(server) => ("server", server),
+            Mismatch::Shadowed(other) => ("on PATH", other),
+        });
+    }
+    let wide = rows
+        .iter()
+        .map(|(_, binary)| columns(&binary.build))
+        .max()
+        .unwrap_or(0);
+    let mut body = vec![Line::styled(
+        "These saaio binaries disagree:",
+        theme.ui.text,
+    )];
+    for (label, binary) in rows {
+        let exe = tilde(&binary.exe.display().to_string(), home);
+        body.push(Line::from(vec![
+            Span::styled(format!("  {label:<9}"), theme.ui.muted),
+            Span::styled(format!("{:<wide$}  ", binary.build), theme.ui.text),
+            Span::styled(exe, theme.ui.faint),
+        ]));
+    }
+    body.push(Line::default());
+    for mismatch in mismatches {
+        body.push(match mismatch {
+            Mismatch::Server(_) => Line::from(vec![
+                Span::styled("Its sessions keep the server's saaio until ", theme.ui.text),
+                Span::styled("saaio --stop", theme.ui.key),
+                Span::styled("; unfinished flows resume.", theme.ui.text),
+            ]),
+            Mismatch::Shadowed(_) => {
+                let folder = this
+                    .exe
+                    .parent()
+                    .map(|dir| tilde(&dir.display().to_string(), home))
+                    .unwrap_or_default();
+                Line::styled(
+                    format!(
+                        "`saaio` runs the one on PATH: remove it, or put {folder} first on PATH."
+                    ),
+                    theme.ui.text,
+                )
+            }
+        });
+    }
+    Dialog {
+        border: theme.state.waiting,
+        keys: vec![Hint::new("any key", "closes this")],
+        ..Dialog::new("mismatched saaio", body, theme)
     }
 }
 

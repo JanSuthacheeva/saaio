@@ -1,0 +1,44 @@
+
+  master  main                                                          server is saaio 0.1.1: saaio --stop │ ▚▄▞ saaio
+                                                                                                            ├────────────────────────────────────────
+                                                                                                            │▌0   master
+                                                                                                            │▌    ~/projects/shop · main
+                                                                                                            │
+                                                                                                            │ NEEDS YOU 2
+                                                                                                            │ 1 ● shop-221                claude 29m
+                                                                                                            │     ●───●───○───○ implement        4/9
+                                                                                                            │     migration needs a default value f…
+                                                                                                            │
+                                                                                                            │ 2 ● shop-230                claude 31m
+                                                                                                            │     ●───○───○───○ plan
+           ╭─ mismatched saaio ──────────────────────────────────────────────────────────────────╮          │     Which approach: a channel column …
+           │                                                                                     │          │
+           │  These saaio binaries disagree:                                                     │          │ RUNNING 1
+           │    this     0.2.0 (abc1234)  ~/.local/bin/saaio                                     │          │ 3 ◓ export-csv               claude 1h
+           │    server   0.1.1 (6ded49e)  ~/.cargo/bin/saaio                                     │          │     ●───●───●───○ review           6/6
+           │                                                                                     │          │     agent: review changes
+           │  Its sessions keep the server's saaio until saaio --stop; unfinished flows resume.  │          │
+           │                                                                                     │          │ DONE 1
+           ├─────────────────────────────────────────────────────────────────────────────────────┤          │ 4 ○ shop-198                 claude 2h
+           │  any key closes this                                                                │          │     ●───●───●───● MR !418      took 0s
+           ╰─────────────────────────────────────────────────────────────────────────────────────╯          │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │
+                                                                                                            │ C-space ? keys
+

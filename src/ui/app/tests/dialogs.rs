@@ -1,6 +1,7 @@
 //! Tests of `App`'s dialogs: stop, clean up, refusals, help and the new-flow dialog
 
 use super::*;
+use crate::binaries::{Binary, Mismatch};
 
 #[test]
 fn detaches_and_stops_only_after_a_yes() {
@@ -260,6 +261,75 @@ fn lists_every_key_until_any_key() {
 
     app.on_input(Routed::View(vec![Key::Char('x')]));
     assert!(!app.is_modal());
+}
+
+fn binary(exe: &str, build: &str) -> Binary {
+    Binary {
+        exe: exe.into(),
+        build: build.into(),
+    }
+}
+
+#[test]
+fn names_mismatched_binaries_until_any_key_then_keeps_a_line_in_the_title() {
+    let mut app = with_fleet().with_home(Some("/Users/jan".into()));
+    let this = binary("/Users/jan/.local/bin/saaio", "0.2.0 (abc1234)");
+    let server = binary("/Users/jan/.cargo/bin/saaio", "0.1.1 (6ded49e)");
+    let first = binary("/Users/jan/.cargo/bin/saaio", "0.1.0 (9b77d8c)");
+    app.warn(
+        this,
+        vec![Mismatch::Shadowed(first), Mismatch::Server(server)],
+    );
+    assert!(app.is_modal());
+
+    let terminal = render_at(&app, FLEET);
+    let shown: String = (0..42).map(|y| row(&terminal, y) + "\n").collect();
+    for line in [
+        "  this     0.2.0 (abc1234)  ~/.local/bin/saaio",
+        "  on PATH  0.1.0 (9b77d8c)  ~/.cargo/bin/saaio",
+        "  server   0.1.1 (6ded49e)  ~/.cargo/bin/saaio",
+        "Its sessions keep the server's saaio until saaio --stop; unfinished flows resume.",
+        "`saaio` runs the one on PATH: remove it, or put ~/.local/bin first on PATH.",
+    ] {
+        assert!(shown.contains(line), "{line}\n{shown}");
+    }
+
+    app.on_input(Routed::View(vec![Key::Char('x')]));
+    assert!(!app.is_modal());
+    let title = row(&render_at(&app, FLEET), 0);
+    assert!(
+        title.contains(" server is saaio 0.1.1: saaio --stop │"),
+        "{title}"
+    );
+}
+
+#[test]
+fn agreeing_binaries_open_nothing() {
+    let mut app = with_fleet();
+    let this = binary("/usr/local/bin/saaio", "0.2.0 (abc1234)");
+
+    app.warn(this, vec![]);
+
+    assert!(!app.is_modal());
+    let title = row(&render_at(&app, FLEET), 0);
+    assert!(
+        !title.contains("is saaio") && !title.contains("PATH"),
+        "{title}"
+    );
+}
+
+#[test]
+fn a_saaio_first_on_path_alone_keeps_its_own_line() {
+    let mut app = with_fleet();
+    let this = binary("/usr/local/bin/saaio", "0.2.0 (abc1234)");
+    let first = binary("/opt/bin/saaio", "unknown");
+    app.warn(this, vec![Mismatch::Shadowed(first)]);
+    app.set_update(Some("0.2.1 is out: saaio update".into()));
+
+    app.on_input(Routed::View(vec![Key::Esc]));
+
+    let title = row(&render_at(&app, FLEET), 0);
+    assert!(title.contains(" another saaio first on PATH │"), "{title}");
 }
 
 #[test]

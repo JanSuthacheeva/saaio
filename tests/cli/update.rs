@@ -1,8 +1,9 @@
-//! Tests of updates: the UI's notice, and `saaio update` from a source build, an unreachable
-//! releases page, a tag that is none
+//! Tests of updates: the UI's notices of a newer release and of another saaio first on PATH,
+//! and `saaio update` from a source build, an unreachable releases page, a tag that is none
 
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
@@ -51,6 +52,40 @@ fn the_ui_names_a_newer_release_unless_turned_off() {
         }
         assert!(lab.run(&["--stop"]).status.success());
     }
+}
+
+#[test]
+fn the_ui_names_another_saaio_first_on_path() {
+    let lab = Lab::new();
+    lab.agent("command = [\"cat\"]\nprompt = \"\"\nresume = [\"cat\"]");
+    let cargo = lab.dir.path().join("cargo-bin");
+    fs::create_dir_all(&cargo).unwrap();
+    executable(
+        &cargo.join("saaio"),
+        "#!/bin/sh\necho 'saaio 0.0.1 (0000000)'\n",
+    );
+    // its first exec can take past the UI's 1 s probe on macOS
+    assert!(
+        Command::new(cargo.join("saaio"))
+            .status()
+            .unwrap()
+            .success()
+    );
+    let path = path_first(&cargo);
+    let _stops = StopsServer(&lab.home);
+
+    let terminal = Terminal::open(
+        &lab.home,
+        &lab.repo,
+        &[],
+        &[("PATH", path.to_str().unwrap())],
+    );
+
+    // Cells left as they were are skipped, so only single words are sure to arrive whole.
+    wait_until("the UI never named the other saaio", || {
+        terminal.shows("mismatched") && terminal.shows("0.0.1") && terminal.shows("(0000000)")
+    });
+    assert!(lab.run(&["--stop"]).status.success());
 }
 
 #[test]

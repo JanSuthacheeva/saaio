@@ -111,7 +111,7 @@ impl App {
     /// The open dialog or overlay over the session, or the pane's cursor when there is none.
     fn draw_view(&self, frame: &mut Frame, areas: &Areas, theme: &Theme) {
         match &self.view {
-            View::Stop(_) | View::Confirm { .. } | View::Help => {
+            View::Stop(_) | View::Confirm { .. } | View::Help | View::Mismatch => {
                 if let Some(dialog) = self.dialog(theme) {
                     frame.render_widget(dialog, areas.session());
                 }
@@ -164,6 +164,10 @@ impl App {
                 )
             }),
             View::Help => Some(dialog::help(self.prefix, theme)),
+            View::Mismatch => self
+                .this
+                .as_ref()
+                .map(|this| dialog::mismatch(this, &self.mismatches, self.home.as_deref(), theme)),
             _ => None,
         }
     }

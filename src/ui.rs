@@ -22,6 +22,7 @@ pub mod theme;
 pub mod theme_file;
 mod update_watch;
 
+use std::ffi::OsString;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -38,6 +39,7 @@ use ratatui::layout::Rect;
 use signal_hook::consts::SIGWINCH;
 use signal_hook::iterator::Signals;
 
+use crate::binaries::{self, Binary};
 use crate::branching::Branching;
 use crate::client::Client;
 use crate::config::prefix::Prefix;
@@ -110,6 +112,8 @@ pub struct UiEnv {
     pub releases: Releases,
     /// The repositories the person trusts; None without a shared folder.
     pub trust: Option<Trust>,
+    /// $PATH, where another saaio can come first.
+    pub path: Option<OsString>,
 }
 
 /// Attaches, then loops on stdin, server and resize events until detach; what to tell the user.
@@ -138,6 +142,10 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
         },
     )?
     .context("no saaio server answers")?;
+    if let Ok(this) = Binary::this() {
+        let mismatches = binaries::mismatches(&this, Some(client.server()), env.path.as_deref());
+        app.warn(this, mismatches);
+    }
     let mut writer = client.try_clone()?;
     let (events, inbox) = mpsc::channel();
     let jobs = events.clone();

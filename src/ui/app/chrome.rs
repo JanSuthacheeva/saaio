@@ -1,4 +1,5 @@
-//! The title row above the pane: the session in view, a notice, a newer release or the rail's hint
+//! The title row above the pane: the session in view, a notice, mismatched binaries, a newer
+//! release or the rail's hint
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
@@ -6,6 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 
 use super::App;
+use crate::binaries::Mismatch;
 use crate::proto::PaneKey;
 use crate::ui::fit::{clip, clip_place, columns, spans_width};
 use crate::ui::theme::Theme;
@@ -23,7 +25,7 @@ impl App {
     pub(super) fn draw_title(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let right = match &self.notice {
             Some(notice) => Some(Line::styled(format!(" {notice} "), theme.state.waiting)),
-            None => self.release_and_hint(theme, area.width),
+            None => self.news_and_hint(theme, area.width),
         };
         let left = self.title_line(theme, area.width, right.as_ref().map_or(0, Line::width));
         frame.render_widget(Block::default().style(theme.ui.bar), area);
@@ -93,21 +95,56 @@ impl App {
         Line::from(title)
     }
 
-    /// A newer release, then the rail's hint; the release goes when the session in view would keep
-    /// fewer than TITLE_KEPT columns.
-    fn release_and_hint(&self, theme: &Theme, width: u16) -> Option<Line<'static>> {
-        let hint = self.border_hint(theme);
-        let Some(update) = &self.update else {
-            return hint;
+    /// How the binaries disagree: `server is saaio 0.1.1: saaio --stop`, else `another saaio
+    /// first on PATH`.
+    fn mismatch(&self, theme: &Theme) -> Option<Vec<Span<'static>>> {
+        let this = self.this.as_ref()?;
+        let server = self.mismatches.iter().find_map(|mismatch| match mismatch {
+            Mismatch::Server(server) => Some(server),
+            Mismatch::Shadowed(_) => None,
+        });
+        let line = match server {
+            Some(server) => {
+                // Two builds of one version differ in their commit.
+                let shown = if server.version() == this.version() {
+                    &server.build
+                } else {
+                    server.version()
+                };
+                vec![
+                    Span::styled(format!(" server is saaio {shown}: "), theme.state.waiting),
+                    Span::styled("saaio --stop", theme.ui.key),
+                ]
+            }
+            None if !self.mismatches.is_empty() => vec![Span::styled(
+                " another saaio first on PATH",
+                theme.state.waiting,
+            )],
+            None => return None,
         };
+        Some(line)
+    }
+
+    /// A newer release: `0.1.1 is out: saaio update`.
+    fn release(&self, theme: &Theme) -> Option<Vec<Span<'static>>> {
+        let update = self.update.as_ref()?;
         let (news, command) = match update.rsplit_once(": ") {
             Some((news, command)) => (format!(" {news}: "), command.to_string()),
             None => (format!(" {update}"), String::new()),
         };
-        let mut spans = vec![
+        Some(vec![
             Span::styled(news, theme.ui.faint),
             Span::styled(command, theme.ui.key),
-        ];
+        ])
+    }
+
+    /// Mismatched binaries, else a newer release, then the rail's hint; the news goes when the
+    /// session in view would keep fewer than TITLE_KEPT columns.
+    fn news_and_hint(&self, theme: &Theme, width: u16) -> Option<Line<'static>> {
+        let hint = self.border_hint(theme);
+        let Some(mut spans) = self.mismatch(theme).or_else(|| self.release(theme)) else {
+            return hint;
+        };
         match hint {
             Some(hint) => {
                 spans.push(Span::styled(

@@ -201,7 +201,11 @@ pub fn warn(&mut self, this: Binary, mismatches: Vec<Mismatch>);
 - keys.rs: any key in `View::Mismatch` -> `View::Panes`.
 - draw.rs `dialog()`: `View::Mismatch` -> `dialog::mismatch(..)`; draw_view draws it like Help.
 - chrome.rs right side: notice, else the mismatch line (`server is saaio 0.1.1: saaio --stop` /
-  `another saaio first on PATH`, waiting style), else release and hint.
+  `another saaio first on PATH`, waiting style), else release and hint. (Build: the mismatch line
+  takes the release's place before the rail's hint, which stays: `news_and_hint`; the server's
+  full build is shown when its version is this one's.)
+- Build: tests/cli's `saaio_command` puts the binary under test first on PATH (`path_first`), else
+  the UI under test warns about the developer's installed saaio; `the_ui_names_another_saaio_first_on_path`.
 
 ### src/ui/dialog.rs (modified)
 
@@ -271,6 +275,6 @@ Errors: a socket that errors is left out; no registry -> no servers. `Step::Late
 - [x] `Client::connect` refusal naming the server's pid, this binary and `saaio --stop`; `client::running`; tests incl. a protocol-8 listener
 - [x] `Env::path` from main.rs; `send` and `hook` say an earlier server opened a keyless pane, with a tests/cli case for send
 - [x] `saaio update`: `Others`, `others()`, `updated`/`latest` with `shadowed` and `servers[]`, with TOON tests
-- [ ] UI: `UiEnv::path`, `App::warn`, `View::Mismatch`, `dialog::mismatch`, the title-row line, with app tests and golden screens
+- [x] UI: `UiEnv::path`, `App::warn`, `View::Mismatch`, `dialog::mismatch`, the title-row line, with app tests and golden screens
 - [ ] Docs: README/docs (install.md, troubleshooting.md, cli.md, ui.md as they apply), ROADMAP (drop the row, add the "panes run the server's saaio" Planned soon row), CHANGELOG Unreleased, CLAUDE.md (binaries.rs, plan list)
 - [ ] E2E: rerun the repro (0.1.1 first on PATH, this build behind it; a running 0.1.2 server; a 0.1.0 server) on a scratch store and check the dialog, title line, `saaio update` (local mirror) and `saaio send` messages; `saaio --stop` after
