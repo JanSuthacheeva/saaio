@@ -280,7 +280,8 @@ impl Config {
         self.kind(None).into_iter().chain(others).collect()
     }
 
-    /// The default kind's workflow: the master's, and an older flow's that recorded none.
+    /// The default kind's workflow: what `saaio hook` translates the master's events with, and
+    /// those of no flow.
     pub fn workflow(&self) -> Workflow {
         self.kind(None)
             .map_or_else(Workflow::builtin, |(_, kind)| kind.phases.clone())

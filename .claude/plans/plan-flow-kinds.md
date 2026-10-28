@@ -110,8 +110,8 @@ pub struct Config {
 impl Config {
     pub fn kind(&self, name: Option<&str>) -> Option<(&str, &Kind)>;
     pub fn worker_kinds(&self) -> Vec<(&str, &Kind)>; // the UI needs each kind's types and branch
-    /// The default kind's workflow: the master's, and an old flow's that recorded none; the
-    /// built-in one for a Config that never loaded its built-ins.
+    /// The default kind's workflow: what `saaio hook` translates the master's events with, and
+    /// those of no flow; the built-in one for a Config that never loaded its built-ins.
     pub fn workflow(&self) -> Workflow;
 }
 ```
