@@ -109,7 +109,7 @@ pub struct Config {
 
 impl Config {
     pub fn kind(&self, name: Option<&str>) -> Option<(&str, &Kind)>;
-    pub fn worker_kinds(&self) -> Vec<&str>;
+    pub fn worker_kinds(&self) -> Vec<(&str, &Kind)>; // the UI needs each kind's types and branch
     /// The default kind's workflow: the master's, and an old flow's that recorded none; the
     /// built-in one for a Config that never loaded its built-ins.
     pub fn workflow(&self) -> Workflow;
@@ -271,6 +271,8 @@ pub fn new(repo: PathBuf, place: String, agents: Vec<String>, kinds: Vec<KindCho
 pub fn picked_kind(&self) -> Option<&str>;   // when not the default
 fn has_type_row(&self) -> bool;               // repo has types and the kind a branch
 fn pick_branch_type(&mut self);               // kind changed or convention arrived
+fn extra_fields(&self) -> Vec<Field>;         // kind, type, agent, base rows that show, in order
+fn row_of(&self, field: Field) -> u16;        // one place for every row's position and tab order
 
 // app.rs
 pub fn set_kinds(&mut self, kinds: Vec<KindChoice>);
@@ -426,7 +428,7 @@ Resume never uses the prompt.
 - [x] `saaio start --kind`, `--type` into `branch_type`, `pick_kind`, `pick_branch_type`, research without a branch; `saaio new --kind`; CLI tests for fix, research, unknown kind, research with --type
 - [x] `saaio hook` translates with `workflow_for`; CLI test: a fix flow moves to diagnose on /diagnose-bug
 - [x] `saaio clear` uses `is_clearable`; CLI test: a done research flow is cleared, a done feature flow kept
-- [ ] status list column and detail field, start and new documents name the kind; `--json` kind; output tests
+- [x] status list column and detail field, start and new documents name the kind; `--json` kind; output tests
 
 ### UI
 

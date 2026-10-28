@@ -20,7 +20,7 @@ use crate::proto::{Modes, PaneInfo, PaneKey, PaneStatus, Size};
 use crate::ui::board::BoardState;
 use crate::ui::fit;
 use crate::ui::layout::{self, Areas, Chrome};
-use crate::ui::newflow::NewFlowForm;
+use crate::ui::newflow::{KindChoice, NewFlowForm};
 use crate::ui::peek::PeekLine;
 use crate::ui::screen::Screen;
 use crate::ui::selection::Selection;
@@ -109,6 +109,8 @@ pub struct App {
     overview_running: bool,
     /// The agents the new-flow dialog offers, the default first.
     agents: Vec<String>,
+    /// The kinds of flow the new-flow dialog offers, the default first.
+    kinds: Vec<KindChoice>,
     /// The key before every command, for the hints that name it.
     prefix: Prefix,
     /// Text selected with the mouse, highlighted until the next input.
@@ -146,6 +148,7 @@ impl App {
             overview_at: 0,
             overview_running: false,
             agents: Vec::new(),
+            kinds: Vec::new(),
             prefix: Prefix::default(),
             selection: None,
             clicks: None,
@@ -201,6 +204,11 @@ impl App {
     /// The agents the new-flow dialog offers, the default first; an open dialog keeps its list.
     pub fn set_agents(&mut self, agents: Vec<String>) {
         self.agents = agents;
+    }
+
+    /// The kinds the new-flow dialog offers, the default first; an open dialog keeps its list.
+    pub fn set_kinds(&mut self, kinds: Vec<KindChoice>) {
+        self.kinds = kinds;
     }
 
     /// The key before every command, for the hints that name it.

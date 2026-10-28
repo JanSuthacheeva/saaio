@@ -303,6 +303,7 @@ fn draws_every_view_in_a_terminal_of_any_size() {
             PathBuf::from("/shop"),
             "/shop".into(),
             Vec::new(),
+            Vec::new(),
         ))),
         View::History(3),
         View::Stop(vec!["shop-221".into()]),

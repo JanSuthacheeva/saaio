@@ -263,6 +263,16 @@ impl Config {
             .map(|(name, kind)| (name.as_str(), kind))
     }
 
+    /// The kinds a flow can be, the default first.
+    pub fn worker_kinds(&self) -> Vec<(&str, &Kind)> {
+        let others = self
+            .kinds
+            .iter()
+            .filter(|(name, _)| **name != self.worker.kind)
+            .map(|(name, kind)| (name.as_str(), kind));
+        self.kind(None).into_iter().chain(others).collect()
+    }
+
     /// The default kind's workflow: the master's, and an older flow's that recorded none.
     pub fn workflow(&self) -> Workflow {
         self.kind(None)

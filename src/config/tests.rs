@@ -489,6 +489,27 @@ fn lists_the_agents_a_flow_can_run_the_default_first() {
 }
 
 #[test]
+fn lists_the_kinds_a_flow_can_be_the_default_first() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("config.toml");
+    fs::write(&file, "[worker]\nkind = \"fix\"\n").unwrap();
+
+    let names = |config: &Config| -> Vec<String> {
+        config
+            .worker_kinds()
+            .into_iter()
+            .map(|(name, _)| name.to_string())
+            .collect()
+    };
+
+    assert_eq!(
+        names(&Config::read(Some(&file)).unwrap()),
+        ["fix", "feature", "research"]
+    );
+    assert_eq!(names(&Config::builtin()), ["feature", "fix", "research"]);
+}
+
+#[test]
 fn names_worker_agent_when_the_file_has_the_old_key() {
     let dir = TempDir::new().unwrap();
     let file = dir.path().join("config.toml");
