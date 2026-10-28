@@ -92,7 +92,7 @@ build.rs. `binaries::BUILD` and `release::Build` do not change.
 
 ## Tasks
 
-- [ ] release.yml: run the "Match the tag" step locally with `GITHUB_REF_NAME=v0.2.0-rc.2` against
+- [x] release.yml: run the "Match the tag" step locally with `GITHUB_REF_NAME=v0.2.0-rc.2` against
   a scratch copy whose Cargo.toml says `0.2.0-rc.2` (fails today with `tag v0.2.0-rc.2 does not
   match Cargo.toml 0.2.0-rc.2`); then compare the tag exactly, add the `notes` output and read the
   CHANGELOG by it; run both steps again for `v0.2.0-rc.2` / `0.2.0-rc.2` (passes, notes from
