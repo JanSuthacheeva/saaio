@@ -6,6 +6,13 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - not released yet
+
+Updating from 0.1.x: run `saaio update`, then `saaio --stop`. 0.2.0 refuses a 0.1.x server that
+still runs; once it is stopped, the next `saaio` starts the server on the new version. An agent
+you defined in config.toml with its own `prompt` now sends it for every kind of flow: leave the
+`prompt` out to get each kind's.
+
 ### Added
 
 - `saaio start --base <branch>` and a base row in the new-flow dialog start a flow's worktree from
@@ -40,9 +47,9 @@ All notable changes to saaio are listed here. The format follows
   so an agent you defined with `prompt = "$ship-feature {request}"` sends that for fixes too:
   leave it out to get each kind's. A top-level `[[phases]]` and `[worker] prompt` keep working as
   the feature kind's.
-- Protocol 9: the server says which build it is and which binary it started from. Moving to this
-  version, run `saaio --stop` once; the refusal from an earlier server now names its pid, this
-  binary and `saaio --stop`. `saaio send` in a pane an earlier server opened says the pane has no
+- Protocol 9: the server says which build it is and which binary it started from, so the UI can
+  warn about a mismatch. The refusal from an earlier server now names its pid, this binary and
+  `saaio --stop`. `saaio send` in a pane an earlier server opened says the pane has no
   key and to run `saaio --stop`, instead of `only the master sends`.
 
 ### Fixed
