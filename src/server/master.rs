@@ -34,6 +34,7 @@ pub const INSTRUCTIONS: DefaultFile = DefaultFile {
         include_str!("master-v10.md"),
         include_str!("master-v11.md"),
         include_str!("master-v12.md"),
+        include_str!("master-v13.md"),
     ],
 };
 
@@ -316,7 +317,7 @@ mod tests {
     fn a_master_md_left_at_the_last_default_takes_the_new_one() {
         let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().join("master.md");
-        fs::write(&path, include_str!("master-v12.md")).unwrap();
+        fs::write(&path, include_str!("master-v13.md")).unwrap();
 
         INSTRUCTIONS.ensure(&path).unwrap();
 
@@ -326,6 +327,7 @@ mod tests {
             text.contains("--base <the previous flow's branch>"),
             "{text}"
         );
+        assert!(text.contains("always pass it: `--kind fix`"), "{text}");
     }
 
     #[test]

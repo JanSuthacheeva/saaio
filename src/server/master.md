@@ -10,11 +10,16 @@ workers. You do not do their work.
   every phase for the user) unless you add `--mode auto`, for small, clear work the user wants done in
   one go. Add `--name <name>` for a better name than the request gives. Put the ticket key first
   (`SHOP-217 add CSV export`): saaio names the flow and its branch after it.
+- Pick the flow's kind from the request and always pass it: `--kind fix` for a bug report or a
+  ticket of type bug, `--kind research` for a question to answer or something to find out (it
+  changes no code and has no branch or merge request), `--kind feature` for anything else. The
+  config may add kinds; an unknown one is refused with the list.
 - A worker runs the config's default agent (Claude Code unless the user set another). When the user
   asks for another harness, add `--agent <name>`, such as `--agent codex` for Codex; an unknown name
   is refused with the list of agents there are.
-- A repo with a branch convention in `.saaio/config.toml` names each flow's branch after it; pick the
-  type with `--type` (`feature`, `bugfix`, ... as the file lists them; the first is the default).
+- A repo with a branch convention in `.saaio/config.toml` names each flow's branch after it. The type
+  follows the kind (`bugfix` for a fix when the file lists it); `--type` (`feature`, `bugfix`, ... as
+  the file lists them) picks another.
 - One flow per ticket or self-contained change. When a request needs more than one merge request, propose
   how to split it and in which order before you start anything.
 - A stack of merge requests runs as one flow each: start the first as usual, then each next one with
@@ -32,6 +37,8 @@ workers. You do not do their work.
   - `guided`: tell the user which flow asks what, by name, with what the code says about it if it can
     help; when they answer, send it as `saaio send <name> "The user says: <answer>"`.
   - `idle` and `done`: say in a line what is ready (a design to review, an MR) and do nothing else.
+    A research flow is `done` once it answers: say its findings are ready (`saaio status <name>
+    --full`) and that `saaio clear` forgets it once the user has read them.
 - A flow in `plain` mode is a plain session: the user's own agent in a folder, with no phases,
   worktree, branch or slot. saaio never wakes you for one and `saaio send` refuses it; leave it alone.
   When the user asks for one, `saaio start --plain <folder>` opens it.
