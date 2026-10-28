@@ -67,8 +67,9 @@ fn the_ui_names_another_saaio_first_on_path() {
     // its first exec can take past the UI's 1 s probe on macOS
     assert!(
         Command::new(cargo.join("saaio"))
-            .status()
+            .output()
             .unwrap()
+            .status
             .success()
     );
     let path = path_first(&cargo);

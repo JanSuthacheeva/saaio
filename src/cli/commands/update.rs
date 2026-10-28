@@ -228,8 +228,9 @@ mod tests {
         // its first exec can take past the probe's 1 s on macOS
         assert!(
             Command::new(cargo.join("saaio"))
-                .status()
+                .output()
                 .unwrap()
+                .status
                 .success()
         );
         let env = Env {

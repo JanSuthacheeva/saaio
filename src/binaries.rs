@@ -260,7 +260,7 @@ mod tests {
         let this = this(root.path());
         let other = saaio(root.path(), "cargo", "echo 'saaio 0.1.0 (9b77d8c)'");
         // its first exec can take past mismatches' 1 s on macOS
-        assert!(Command::new(&other).status().unwrap().success());
+        assert!(Command::new(&other).output().unwrap().status.success());
         let server = Binary {
             exe: other.clone(),
             build: "0.1.1 (6ded49e)".to_string(),
