@@ -148,7 +148,8 @@ LTO, one codegen unit and no debug info, so a release build takes about twice as
 plain one. It keeps the symbols: a panic's backtrace in server.log names its functions. `saaio --version` names the commit `build.rs` takes from git, only from saaio's own
 checkout; `SAAIO_COMMIT` set while building overrides it.
 
-1. Set `version` in `Cargo.toml`. In `CHANGELOG.md`, rename `## [Unreleased]` to the version and
+1. Set `version` in `Cargo.toml` and run `cargo build`, so `Cargo.lock` names it too (the
+   release builds with `--locked`). In `CHANGELOG.md`, rename `## [Unreleased]` to the version and
    its date, such as `## [0.2.0] - 2026-11-03`.
 2. Merge that to `main`.
 3. Tag `main` and push the tag:
