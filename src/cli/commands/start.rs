@@ -109,7 +109,13 @@ pub fn run(
     let branch = branching::branch_name(branching.as_ref(), kind.as_deref(), request, &name);
     let space = Workspace {
         base: args.base.clone(),
-        ..worktree::workspace_for(&repo, &name, free_branch(&repo, &branch), slot, agent_name)
+        ..worktree::workspace_for(
+            &repo,
+            &name,
+            Some(free_branch(&repo, &branch)),
+            slot,
+            agent_name,
+        )
     };
     workspace::create_worktree(&repo, &space, from.as_ref())?;
     rollback.disarm();

@@ -161,7 +161,7 @@ mod tests {
         let (_dir, repo) = repo();
         let state = TempDir::new().unwrap();
         let trust = Trust::at(&Registry::at(state.path().to_path_buf()));
-        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         hook(
             &repo,
@@ -194,7 +194,7 @@ touch ran.txt
     fn runs_a_hook_in_the_worktree_with_the_flow_environment() {
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
-        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 3, "claude");
+        let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 3, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         hook(
             &repo,
@@ -221,7 +221,7 @@ touch ran.txt
     fn a_failing_hook_reports_its_last_error_line() {
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
-        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         hook(
             &repo,
@@ -238,7 +238,7 @@ touch ran.txt
     fn runs_pause_and_resume_within_a_limit_with_the_flow_environment() {
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
-        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 3, "claude");
+        let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 3, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         let env = [("SAAIO_SLOT".to_string(), "3".to_string())];
 
@@ -272,7 +272,7 @@ touch ran.txt
     fn a_hook_that_leaves_a_process_behind_still_ends() {
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
-        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 3, "claude");
+        let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 3, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         let pids = repo.join("pids");
         let leave = format!("sleep 30 &\necho $! >> {}", pids.display());
@@ -334,7 +334,7 @@ git rev-parse --absolute-git-dir > git-dir.txt
     fn pins_git_to_the_registered_worktree_in_teardown_pause_and_resume() {
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
-        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         let registered = repo.join(".git/worktrees/shop-217");
         let (_decoy, _git_dir, marker) = tamper(&workspace);
@@ -359,7 +359,7 @@ git rev-parse --absolute-git-dir > git-dir.txt
     fn leaves_git_in_setup_to_the_worktree() {
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
-        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         let (_decoy, git_dir, marker) = tamper(&workspace);
         hook(&repo, "setup", GIT_SCRIPT);
@@ -376,7 +376,7 @@ git rev-parse --absolute-git-dir > git-dir.txt
     fn runs_no_pinned_hook_in_a_folder_that_is_no_worktree() {
         let (_dir, repo) = repo();
         let (_state, trust) = trusted(&repo);
-        let workspace = workspace_for(&repo, "shop-217", "flow/shop-217".into(), 1, "claude");
+        let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         fs::create_dir_all(&workspace.path).unwrap();
         hook(
             &repo,

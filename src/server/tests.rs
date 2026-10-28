@@ -2011,7 +2011,7 @@ fn idle_flow(store: &Store, repo: &Path, name: &str) -> String {
     if !repo.join(".git").exists() {
         crate::workspace::fixtures::init(repo);
     }
-    let space = workspace_for(repo, name, format!("flow/{name}"), 4, "claude");
+    let space = workspace_for(repo, name, Some(format!("flow/{name}")), 4, "claude");
     crate::workspace::create_worktree(repo, &space, None).unwrap();
     let workspace = EventKind::Workspace {
         path: space.path,
