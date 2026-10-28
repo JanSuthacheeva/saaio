@@ -273,3 +273,28 @@ fn status_shows_each_flows_kind() {
         .collect();
     assert_eq!(kinds, ["feature", "fix"], "newest first");
 }
+
+#[test]
+fn a_flow_from_before_kinds_walks_the_feature_kinds_phases_whatever_the_default() {
+    let lab = Lab::new();
+    let id = "0f3c0000-0000-4000-8000-000000000000";
+    seed(
+        &lab.home,
+        id,
+        &[
+            r#"{"v":1,"at":1,"kind":"started","name":"shop-9","request":"SHOP-9 x","mode":"guided"}"#,
+        ],
+    );
+    fs::write(
+        lab.home.join("no-config.toml"),
+        "[worker]\nkind = \"fix\"\n",
+    )
+    .unwrap();
+    let skill = r#"{"hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"design-code"}}"#;
+
+    let output = hook(&lab.home, Some(id), skill);
+
+    assert!(output.status.success(), "{}", stdout(&output));
+    let detail = stdout(&lab.run(&["status", "shop-9"]));
+    assert!(detail.contains("phase: plan"), "{detail}");
+}

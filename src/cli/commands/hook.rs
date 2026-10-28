@@ -15,6 +15,7 @@ use crate::adapter::{Adapter, LineMatch, Turn};
 use crate::cli::Env;
 use crate::cli::output::Document;
 use crate::config::Config;
+use crate::config::kind::DEFAULT_KIND;
 use crate::deliver::{self, WorkerNews};
 use crate::event::{Event, EventKind, ServiceStatus, is_uuid};
 use crate::fold;
@@ -321,8 +322,8 @@ fn last_line(file: &Path, matches: &LineMatch, chunk: u64) -> std::io::Result<Op
     Ok(None)
 }
 
-/// The workflow the hooked flow recorded; the config's default kind's for the master, nobody, and
-/// a flow that recorded none or cannot be read.
+/// The workflow the hooked flow recorded; for one from before kinds, which was a feature flow, the
+/// feature kind's; for the master and nobody the config's default kind's.
 fn workflow_for(store: &Store, hooked: &Hooked, config: &Config, now: u64) -> Workflow {
     let Hooked::Flow(flow) = hooked else {
         return config.workflow();
@@ -333,7 +334,11 @@ fn workflow_for(store: &Store, hooked: &Hooked, config: &Config, now: u64) -> Wo
         let (flows, _) = views(store, now);
         fold::resolve(&flows, flow).and_then(|view| view.workflow.clone())
     };
-    recorded.unwrap_or_else(|| config.workflow())
+    recorded.unwrap_or_else(|| {
+        config
+            .kind(Some(DEFAULT_KIND))
+            .map_or_else(Workflow::builtin, |(_, kind)| kind.phases.clone())
+    })
 }
 
 /// Appends the kinds that change flow `flow` (a name or id); its id, None when there is no such
