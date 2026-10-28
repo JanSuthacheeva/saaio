@@ -451,8 +451,8 @@ Resume never uses the prompt.
 Decided by the master: 1 fix, 2 keep (answers stay cut at 4000 characters), 3 fix, 4 fix.
 
 - [x] `saaio hook` translates a flow that recorded no workflow with the feature kind's phases, the master and nobody with the default kind's; CLI test with `[worker] kind = "fix"` and a pre-kinds flow
-- [ ] A flow that merges nothing gets no base-merged note from `wake::undelivered` (its `base-merged` event still records the move); wake unit test
-- [ ] Kind names take the phase-name alphabet (lowercase letters, digits, `-`): config refuses another on the line of its key; config test
+- [x] A flow that merges nothing gets no base-merged note from `wake::undelivered` (its `base-merged` event still records the move); wake unit test
+- [x] Kind names take the phase-name alphabet (lowercase letters, digits, `-`): config refuses another on the line of its key; config test
 
 ## Review
 

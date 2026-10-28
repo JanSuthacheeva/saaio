@@ -197,6 +197,13 @@ impl Config {
             };
             return refuse(key.span().start, refusal);
         }
+        if let Some(DeValue::Table(kinds)) = table.get("kinds").map(toml::Spanned::get_ref) {
+            for key in kinds.keys() {
+                if let Err(refusal) = kind::check_name(key.get_ref()) {
+                    return refuse(key.span().start, &refusal);
+                }
+            }
+        }
         let config: Config = toml::from_str(text).map_err(at)?;
         let kind = &config.worker.kind;
         if !config.kinds.contains_key(kind) && !Kind::builtins().contains_key(kind) {

@@ -294,6 +294,13 @@ fn refuses_phases_in_two_places_and_an_unknown_worker_kind_on_their_line() {
         )
     );
     assert_eq!(
+        error("[kinds.\"Chore Day\"]\n\n[[kinds.\"Chore Day\".phases]]\nname = \"tidy\"\n"),
+        format!(
+            "{}\"Chore Day\" is no kind name: lowercase letters, digits and -",
+            at(1)
+        )
+    );
+    assert_eq!(
         error("# mine\n[worker]\nkind = \"chore\"\n"),
         format!("{}no kind named chore", at(3))
     );

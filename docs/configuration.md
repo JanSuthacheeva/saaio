@@ -231,6 +231,7 @@ skills = []
 
 - A kind with a built-in name replaces the built-in one whole. Add your own under a new name: it
   shows in `saaio start --kind` and the new-flow dialog.
+- A kind's name, like a phase's: lowercase letters, digits, `-`.
 - The UI shows the phases as steps (`●───●───○───○`) with the time spent in each.
 - A phase starts when the worker runs one of its skills. A phase without skills, first in its
   list, starts with the flow's first turn, as research does.

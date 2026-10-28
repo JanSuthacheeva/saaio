@@ -101,6 +101,17 @@ impl Kind {
     }
 }
 
+/// Lowercase letters, digits and '-', not empty, as a phase's name.
+pub fn check_name(name: &str) -> Result<(), String> {
+    let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
+    if name.is_empty() || !name.chars().all(allowed) {
+        return Err(format!(
+            "{name:?} is no kind name: lowercase letters, digits and -"
+        ));
+    }
+    Ok(())
+}
+
 /// A built-in workflow of (name, skill).
 fn workflow(phases: &[(&str, Option<&str>)]) -> Workflow {
     let specs = phases
@@ -179,6 +190,14 @@ mod tests {
         assert_eq!(fix.prompt_for(&claude), "/ship-fix now: {request} ({name})");
         let own = agent(Some(Adapter::ClaudeCode), Some("do {request}"));
         assert_eq!(fix.prompt_for(&own), "do {request}");
+    }
+
+    #[test]
+    fn a_kind_is_named_like_a_phase() {
+        assert_eq!(check_name("hot-fix2"), Ok(()));
+        for bad in ["", "Fix", "fix it", "a,b"] {
+            assert!(check_name(bad).is_err(), "{bad:?}");
+        }
     }
 
     #[test]
