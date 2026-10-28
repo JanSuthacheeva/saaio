@@ -97,7 +97,7 @@ build.rs. `binaries::BUILD` and `release::Build` do not change.
   match Cargo.toml 0.2.0-rc.2`); then compare the tag exactly, add the `notes` output and read the
   CHANGELOG by it; run both steps again for `v0.2.0-rc.2` / `0.2.0-rc.2` (passes, notes from
   `## [0.2.0]`), `v0.2.0` / `0.2.0` (passes), `v0.2.0-rc.2` / `0.2.0` (fails)
-- [ ] Add a test in `src/release.rs` that `Build::running().version()` is the version
+- [x] Add a test in `src/release.rs` that `Build::running().version()` is the version
   `binaries::BUILD` names, so the two cannot drift again
 - [ ] Docs: CONTRIBUTING.md Releasing with the rc steps; docs/cli.md and docs/install.md name the
   pre-release form; CHANGELOG `### Fixed` under Unreleased: a release candidate's `saaio
