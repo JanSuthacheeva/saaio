@@ -212,8 +212,10 @@ pub struct Args {
     branch_type: Option<String>,
 }
 
+// in commands.rs, shared with saaio new
 fn pick_kind<'a>(config: &'a Config, asked: Option<&str>) -> Result<(&'a str, &'a Kind), Failure>;
-fn pick_branch_type(rules: Option<&Branching>, kind: &Kind, asked: Option<&str>) -> Result<Option<String>, Failure>;
+// the kind's name for the refusal: "a research flow has no branch, so no branch type"
+fn pick_branch_type(rules: Option<&Branching>, (name, kind): (&str, &Kind), asked: Option<&str>) -> Result<Option<String>, Failure>;
 ```
 
 `--plain` conflicts with `kind` and `branch_type`.
@@ -417,7 +419,7 @@ Resume never uses the prompt.
 ### Commands
 
 - [x] `workspace_for` with an optional branch and `add_argv` with `--detach`; worktree tests including a real detached worktree
-- [ ] `saaio start --kind`, `--type` into `branch_type`, `pick_kind`, `pick_branch_type`, research without a branch; `saaio new --kind`; CLI tests for fix, research, unknown kind, research with --type
+- [x] `saaio start --kind`, `--type` into `branch_type`, `pick_kind`, `pick_branch_type`, research without a branch; `saaio new --kind`; CLI tests for fix, research, unknown kind, research with --type
 - [ ] `saaio hook` translates with `workflow_for`; CLI test: a fix flow moves to diagnose on /diagnose-bug
 - [ ] `saaio clear` uses `is_clearable`; CLI test: a done research flow is cleared, a done feature flow kept
 - [ ] status list column and detail field, start and new documents name the kind; `--json` kind; output tests

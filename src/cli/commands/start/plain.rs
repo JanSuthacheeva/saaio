@@ -23,7 +23,7 @@ pub(super) fn open(
     env: &Env,
     now: u64,
 ) -> Result<Document, Failure> {
-    let agent = pick_agent(config, args.agent.as_deref())?;
+    let (agent, _) = pick_agent(config, args.agent.as_deref())?;
     let folder = resolve(folder, cwd, env.user_home())?;
     let (flows, _) = views(store, now);
     let base = args.name.clone().unwrap_or_else(|| {

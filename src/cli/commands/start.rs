@@ -4,14 +4,15 @@ mod plain;
 
 use std::path::{Path, PathBuf};
 
-use super::{check_request, views};
+use super::{check_request, pick_kind, views};
 use crate::adapter::Adapter;
 use crate::branching::{self, Branching};
 use crate::cli::Env;
 use crate::cli::output::start::{self, Opening, Setup};
 use crate::cli::output::{self, Document, Failure};
 use crate::client::Client;
-use crate::config::Config;
+use crate::config::kind::Kind;
+use crate::config::{Agent, Config};
 use crate::event::{Event, EventKind, Mode};
 use crate::fold;
 use crate::launch::{name, worktree};
@@ -31,7 +32,11 @@ pub struct Args {
     #[arg(required_unless_present = "plain")]
     request: Option<String>,
     /// Open the agent in this folder instead: no worktree, branch, slot or prompt
-    #[arg(long, value_name = "FOLDER", conflicts_with_all = ["request", "mode", "kind"])]
+    #[arg(
+        long,
+        value_name = "FOLDER",
+        conflicts_with_all = ["request", "mode", "kind", "branch_type"]
+    )]
     plain: Option<PathBuf>,
     /// Flow name [default: from the ticket key or the first words]
     #[arg(long)]
@@ -41,9 +46,12 @@ pub struct Args {
     /// Agent from the config [default: the config's agent, claude]
     #[arg(long)]
     agent: Option<String>,
-    /// Branch type from the repo's .saaio/config.toml [default: its first]
-    #[arg(long = "type")]
+    /// Kind of flow from the config: feature, fix, research [default: the config's, feature]
+    #[arg(long)]
     kind: Option<String>,
+    /// Branch type from the repo's .saaio/config.toml [default: the kind's, else its first]
+    #[arg(long = "type")]
+    branch_type: Option<String>,
     /// Branch the worktree starts from and the merge request targets [default: what the repo has checked out]
     #[arg(long, value_name = "BRANCH", conflicts_with = "plain")]
     base: Option<String>,
@@ -69,7 +77,8 @@ pub fn run(
         .as_deref()
         .expect("clap requires a request without --plain");
     check_request(request)?;
-    let agent_name = pick_agent(config, args.agent.as_deref())?;
+    let (kind_name, kind) = pick_kind(config, args.kind.as_deref())?;
+    let (agent_name, agent) = pick_agent(config, args.agent.as_deref())?;
     let repo = git::repo_root(cwd).map_err(|_| {
         Failure::error(
             "saaio start needs a git repository",
@@ -79,7 +88,11 @@ pub fn run(
     let trust = Trust::at(registry);
     refuse_untrusted(&trust, &repo, config, agent_name)?;
     let branching = Branching::load(&repo)?;
-    let kind = pick_kind(branching.as_ref(), args.kind.as_deref())?;
+    let branch_type = pick_branch_type(
+        branching.as_ref(),
+        (kind_name, kind),
+        args.branch_type.as_deref(),
+    )?;
     let from = pick_base(&repo, args.base.as_deref())?;
     let (flows, _) = views(store, now);
     let name = name::choose(args.name.as_deref(), request, &live_names(&flows));
@@ -89,11 +102,11 @@ pub fn run(
             name: name.clone(),
             request: request.to_string(),
             mode: args.mode,
-            phases: Some(config.workflow().phases()),
-            kind: None,
-            workflow: None,
-            prompt: None,
-            merges: true,
+            phases: None,
+            kind: Some(kind_name.to_string()),
+            workflow: Some(kind.phases.clone()),
+            prompt: Some(kind.prompt_for(agent)),
+            merges: kind.branch,
         },
     );
     let id = store.create(&first)?;
@@ -106,16 +119,14 @@ pub fn run(
     };
     let slot = claim_slot(registry, &claim, &flows, now)?;
     rollback.slot = Some((slot, claim));
-    let branch = branching::branch_name(branching.as_ref(), kind.as_deref(), request, &name);
+    let branch = kind.branch.then(|| {
+        let wanted =
+            branching::branch_name(branching.as_ref(), branch_type.as_deref(), request, &name);
+        free_branch(&repo, &wanted)
+    });
     let space = Workspace {
         base: args.base.clone(),
-        ..worktree::workspace_for(
-            &repo,
-            &name,
-            Some(free_branch(&repo, &branch)),
-            slot,
-            agent_name,
-        )
+        ..worktree::workspace_for(&repo, &name, branch, slot, agent_name)
     };
     workspace::create_worktree(&repo, &space, from.as_ref())?;
     rollback.disarm();
@@ -172,15 +183,17 @@ fn live_names(flows: &[FlowView]) -> Vec<String> {
 }
 
 /// The config's agent `asked` names (or its default); the failure lists the agents.
-fn pick_agent<'a>(config: &'a Config, asked: Option<&str>) -> Result<&'a str, Failure> {
-    let Some((name, _)) = config.agent(asked) else {
+fn pick_agent<'a>(
+    config: &'a Config,
+    asked: Option<&str>,
+) -> Result<(&'a str, &'a Agent), Failure> {
+    config.agent(asked).ok_or_else(|| {
         let known: Vec<&str> = config.agents.keys().map(String::as_str).collect();
-        return Err(Failure::error(
+        Failure::error(
             format!("no agent named {}", asked.unwrap_or(&config.worker.agent)),
             vec![format!("Agents: {}", known.join(", "))],
-        ));
-    };
-    Ok(name)
+        )
+    })
 }
 
 /// Whether saaio ui opens the new agent now or once it runs.
@@ -191,10 +204,24 @@ fn opening(socket: &Path) -> Opening {
     }
 }
 
-/// The branch type for a start: the one asked for or the repo's first, if the repo has types.
-fn pick_kind(rules: Option<&Branching>, asked: Option<&str>) -> Result<Option<String>, Failure> {
+/// The branch type for a start: the one asked for, else the kind's the repo lists, else the repo's
+/// first, if the repo has types; none for a kind without a branch.
+fn pick_branch_type(
+    rules: Option<&Branching>,
+    (name, kind): (&str, &Kind),
+    asked: Option<&str>,
+) -> Result<Option<String>, Failure> {
+    if !kind.branch {
+        return match asked {
+            Some(_) => Err(Failure::error(
+                format!("a {name} flow has no branch, so no branch type"),
+                vec!["Leave out --type".to_string()],
+            )),
+            None => Ok(None),
+        };
+    }
     match rules {
-        Some(rules) => rules.pick_type(asked, &[]),
+        Some(rules) => rules.pick_type(asked, &kind.branch_types),
         None if asked.is_some() => Err(anyhow::anyhow!(
             "this repo has no {}, so no branch types",
             branching::CONFIG_FILE

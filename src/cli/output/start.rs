@@ -14,7 +14,8 @@ pub(crate) enum Opening {
     WhenUiRuns,
 }
 
-/// flow, id, worktree, branch, base (for a stacked flow), slot, setup (ran / none / failed: ...), agent, pane, help.
+/// flow, id, kind, worktree, branch (none for a flow that merges nothing), base (for a stacked
+/// flow), slot, setup (ran / none / failed: ...), agent, pane, help.
 pub(crate) fn started(
     flow: &FlowView,
     workspace: &Workspace,
@@ -25,7 +26,10 @@ pub(crate) fn started(
     struct Started<'a> {
         flow: &'a str,
         id: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        kind: Option<&'a str>,
         worktree: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
         branch: Option<&'a str>,
         #[serde(skip_serializing_if = "Option::is_none")]
         base: Option<&'a str>,
@@ -36,9 +40,17 @@ pub(crate) fn started(
         help: Vec<String>,
     }
     let (pane, watch) = pane(flow, opening, "worker");
+    let mut help = vec![watch, "Run `saaio` for all flows".to_string()];
+    if workspace.branch.is_none() {
+        help.push(
+            "It has no branch: it answers in its pane, and `saaio clear` forgets it once it is done"
+                .to_string(),
+        );
+    }
     Document::Toon(toon(&Started {
         flow: &flow.name,
         id: &flow.id,
+        kind: flow.kind.as_deref(),
         worktree: &workspace.path,
         branch: workspace.branch.as_deref(),
         base: workspace.base.as_deref(),
@@ -46,7 +58,7 @@ pub(crate) fn started(
         setup: setup.to_string(),
         agent: &workspace.agent,
         pane,
-        help: vec![watch, "Run `saaio` for all flows".to_string()],
+        help,
     }))
 }
 
