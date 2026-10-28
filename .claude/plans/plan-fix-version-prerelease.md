@@ -104,7 +104,7 @@ build.rs. `binaries::BUILD` and `release::Build` do not change.
   pre-release form; CHANGELOG `### Fixed` under Unreleased: a release candidate's `saaio
   --version`, bug report and UI name its pre-release, and its `saaio update` no longer lists its
   own server as another build
-- [ ] End-to-end: in a scratch copy of the repo with Cargo.toml set to `0.2.0-rc.2`,
+- [x] End-to-end: in a scratch copy of the repo with Cargo.toml set to `0.2.0-rc.2`,
   `SAAIO_RELEASE=v0.2.0-rc.2 cargo build --release`; `--version` prints `saaio 0.2.0-rc.2
   (<commit>)`, `saaio bug-report` names it; with that binary's server running in a scratch store,
   `saaio update` (PATH starting with its folder) shows no `servers[]`; end with `saaio --stop` on
