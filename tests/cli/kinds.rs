@@ -153,3 +153,38 @@ fn new_records_the_kind_it_is_given() {
     assert_eq!(unknown.status.code(), Some(1));
     assert!(stdout(&unknown).contains("no kind named chore"));
 }
+
+#[test]
+fn the_hook_moves_a_flow_through_the_workflow_it_recorded() {
+    let lab = Lab::new();
+    let created = lab.run(&[
+        "new",
+        "--name",
+        "shop-230",
+        "--request",
+        "SHOP-230 fix totals",
+        "--kind",
+        "fix",
+    ]);
+    let id = id_in(&stdout(&created));
+    let skill = |name: &str| {
+        format!(
+            r#"{{"hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{{"skill":"{name}"}}}}"#
+        )
+    };
+    // The config changes after the start: the flow keeps what it recorded.
+    fs::write(
+        lab.home.join("no-config.toml"),
+        "[[kinds.fix.phases]]\nname = \"triage\"\nskills = [\"diagnose-bug\"]\n",
+    )
+    .unwrap();
+
+    let output = hook(&lab.home, Some(&id), &skill("diagnose-bug"));
+
+    assert!(output.status.success(), "{}", stdout(&output));
+    let detail = stdout(&lab.run(&["status", "shop-230"]));
+    assert!(detail.contains("phase: diagnose"), "{detail}");
+    hook(&lab.home, Some(&id), &skill("implement-plan"));
+    let detail = stdout(&lab.run(&["status", "shop-230"]));
+    assert!(detail.contains("phase: implement"), "{detail}");
+}

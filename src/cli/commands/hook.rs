@@ -24,6 +24,7 @@ use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
 use crate::view::{FlowView, MasterTurn, State};
 use crate::wake;
+use crate::workflow::Workflow;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -236,7 +237,7 @@ fn hook(
     now: u64,
 ) -> Option<String> {
     let approver = adapter.approver(payload, |file, matches| rollout_line(file, matches, log));
-    let kinds = adapter.translate(payload, &config.workflow(), approver);
+    let kinds = adapter.translate(payload, &workflow_for(store, hooked, config, now), approver);
     let waiter = match hooked {
         Hooked::Nobody => return None,
         Hooked::Master => {
@@ -322,6 +323,21 @@ fn last_line(file: &Path, matches: &LineMatch, chunk: u64) -> std::io::Result<Op
 
 /// Appends the kinds that change flow `flow` (a name or id); its id, None when there is no such
 /// flow or its log cannot be read.
+/// The workflow the hooked flow recorded; the config's default kind's for the master, nobody, and
+/// a flow that recorded none or cannot be read.
+fn workflow_for(store: &Store, hooked: &Hooked, config: &Config, now: u64) -> Workflow {
+    let Hooked::Flow(flow) = hooked else {
+        return config.workflow();
+    };
+    let recorded = if let Ok(events) = store.events(flow) {
+        fold::fold(flow, &events, None, now).and_then(|view| view.workflow)
+    } else {
+        let (flows, _) = views(store, now);
+        fold::resolve(&flows, flow).and_then(|view| view.workflow.clone())
+    };
+    recorded.unwrap_or_else(|| config.workflow())
+}
+
 fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, log: &Log, now: u64) -> Option<String> {
     let id = if store.events(flow).is_ok() {
         flow.to_string()
