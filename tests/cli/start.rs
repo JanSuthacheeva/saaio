@@ -60,7 +60,7 @@ fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_saaio_ui() {
     assert!(
         fs::read_to_string(log)
             .unwrap()
-            .contains(r#""phases":["plan","implement","review","merge-request"]"#),
+            .contains(r#""workflow":[{"name":"plan","skills":["design-code"]}"#),
         "start records the workflow"
     );
 }

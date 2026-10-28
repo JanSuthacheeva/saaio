@@ -28,12 +28,12 @@ when beginning it, never ahead. A command reading skills from several phases sta
 
 To enable automatic approval review for saaio workers, define both launch commands in
 `~/.config/saaio/config.toml` (or your [configured location](configuration.md#file-location)). An
-agent with a built-in name replaces that definition, so retain its prompt and adapter:
+agent with a built-in name replaces that definition, so retain its adapter. Leave out `prompt`:
+an agent's own prompt would replace every kind's ([configuration.md](configuration.md#the-first-prompt)).
 
 ```toml
 [agents.codex]
 command = ["codex", "--approve-for-me", "{prompt}"]
-prompt = "$ship-feature {request}"
 resume = ["codex", "--approve-for-me", "resume", "{session}"]
 adapter = "codex"
 ```

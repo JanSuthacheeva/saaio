@@ -81,11 +81,9 @@ mod tests {
                 resume: None,
             },
         );
-        Config {
-            agents,
-            workflow: crate::workflow::Workflow::builtin(),
-            ..Config::default()
-        }
+        let mut config = Config::default();
+        config.agents = agents;
+        config
     }
 
     fn flow(id: &str, agent: &str, window: Option<&str>, ended: bool) -> FlowView {

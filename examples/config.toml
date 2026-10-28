@@ -8,15 +8,14 @@
 # settings. A key saaio doesn't know is an error that names the file, line and key.
 # The whole file, explained: https://github.com/JanSuthacheeva/saaio/blob/main/docs/configuration.md
 #
-# To use your own skills instead of the agent-skills set, set [worker] prompt and [[phases]]:
+# To use your own skills instead of the agent-skills set, change the kinds below:
 # https://github.com/JanSuthacheeva/saaio/blob/main/docs/configuration.md#use-your-own-workflow
 
 #[worker]
 # The agent a new flow runs when you don't pick one, by its name under [agents].
 #agent = "claude"
-# The first prompt for every agent that doesn't set its own, built-in agents included. Unset, each
-# agent keeps its own. Claude Code calls a skill /name, Codex calls it $name.
-# For example: prompt = "/my-feature {request}" ($my-feature in Codex)
+# The kind of flow a new flow is when you don't pick one, by its name under [kinds].
+#kind = "feature"
 
 #[master]
 # Wakes the master when a worker stops. With false, it only finds out when it runs saaio status.
@@ -40,30 +39,77 @@
 # .saaio/pause. Its .saaio/resume runs when the worker works again. 0 never pauses.
 #pause_after_minutes = 5
 
-# The workflow: one to four phases in order, each with the skills that start it. The UI shows them
-# as a flow's steps. Your own list replaces all four. A flow whose skills match no phase still
-# works. Its steps stay empty.
-#[[phases]]
+# The kinds of flow: what a flow walks through, its first prompt and its branch. saaio start
+# --kind and the new-flow dialog pick one. A kind with a built-in name replaces the built-in one
+# whole. Add your own under a new name.
+#
+# phases        one to four phases in order, each with the skills that start it. The UI shows
+#               them as a flow's steps. A flow whose skills match no phase still works. Its steps
+#               stay empty. A phase without skills starts with the flow's first turn.
+# skill         the skill the first prompt calls, as {skill}: /name in Claude Code, $name in Codex
+# prompt        the first prompt. Unset, it's "{skill} {request}", or "{request}" without a skill.
+#               An agent's own prompt wins over it.
+# branch_types  the repo's branch types it means. The first one the repo's .saaio/config.toml
+#               lists wins, else the repo's first.
+# branch        false: no branch to merge. The worker answers in its pane, from a worktree
+#               detached at the base, and the flow is done once it has answered.
+
+#[kinds.feature]
+#skill = "ship-feature"
+#branch_types = ["feature", "feat"]
+#branch = true
+
+#[[kinds.feature.phases]]
 #name = "plan"
 #skills = ["design-code"]
 
-#[[phases]]
+#[[kinds.feature.phases]]
 #name = "implement"
 #skills = ["implement-plan"]
 
-#[[phases]]
+#[[kinds.feature.phases]]
 #name = "review"
 #skills = ["review-changes"]
 
-#[[phases]]
+#[[kinds.feature.phases]]
 #name = "merge-request"
 #skills = ["write-merge-request"]
+
+#[kinds.fix]
+#skill = "ship-fix"
+#branch_types = ["fix", "bugfix", "hotfix"]
+#branch = true
+
+#[[kinds.fix.phases]]
+#name = "diagnose"
+#skills = ["diagnose-bug"]
+
+#[[kinds.fix.phases]]
+#name = "implement"
+#skills = ["implement-plan"]
+
+#[[kinds.fix.phases]]
+#name = "review"
+#skills = ["review-changes"]
+
+#[[kinds.fix.phases]]
+#name = "merge-request"
+#skills = ["write-merge-request"]
+
+#[kinds.research]
+#prompt = "Research this and answer here. Change no code and commit nothing: {request}"
+#branch_types = []
+#branch = false
+
+#[[kinds.research.phases]]
+#name = "research"
+#skills = []
 
 # The agents a flow can run. Any agent you add here shows up in saaio start --agent and the new-flow
 # dialog. An agent with a built-in name replaces the built-in one.
 #
 # command   the command line that starts a new session
-# prompt    the first prompt, filled into {prompt}
+# prompt    the first prompt for every kind, filled into {prompt}. Unset, the flow's kind's
 # resume    the command line that continues a session after a restart. Without it, the agent
 #           starts once and isn't resumed
 # adapter   "claude-code" or "codex", the harness whose hooks tell saaio what the agent is doing.
@@ -75,13 +121,11 @@
 
 #[agents.claude]
 #command = ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
-#prompt = "/ship-feature {request}"
 #resume = ["claude", "-n", "{name}", "--resume", "{id}"]
 #adapter = "claude-code"
 
 #[agents.codex]
 #command = ["codex", "{prompt}"]
-#prompt = "$ship-feature {request}"
 #resume = ["codex", "resume", "{session}"]
 #adapter = "codex"
 

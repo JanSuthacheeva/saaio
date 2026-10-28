@@ -10,6 +10,7 @@ mod completions;
 mod home;
 mod hooks;
 mod identity;
+mod kinds;
 mod remove;
 mod report;
 mod send;

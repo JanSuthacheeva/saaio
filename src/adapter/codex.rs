@@ -10,7 +10,8 @@ use sha2::{Digest, Sha256};
 use crate::adapter::answer::turn_end;
 use crate::adapter::calls::{created_merge_request, simple_commands, tool_call};
 use crate::adapter::{Adapter, Approver, LineMatch, Turn, cut};
-use crate::event::{EventKind, Phase, is_uuid};
+use crate::event::{EventKind, is_uuid};
+use crate::workflow::Phase;
 use crate::workflow::Workflow;
 
 /// One hook saaio listens to: Codex's event name, the key its trust state uses, its timeout.

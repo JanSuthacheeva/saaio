@@ -5,6 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 
 use super::*;
+use crate::config::kind::Kind;
 use crate::default_file::uncommented;
 
 #[test]
@@ -44,14 +45,14 @@ fn knows_claude_code_without_a_config_file() {
         agent.command,
         vec!["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
     );
-    assert_eq!(agent.prompt.as_deref(), Some("/ship-feature {request}"));
+    assert_eq!(agent.prompt, None, "the flow's kind's");
     assert_eq!(
         agent.resume.as_deref(),
         Some(&["claude", "-n", "{name}", "--resume", "{id}"].map(String::from)[..])
     );
     let (_, codex) = config.agent(Some("codex")).unwrap();
     assert_eq!(codex.command, ["codex", "{prompt}"]);
-    assert_eq!(codex.prompt.as_deref(), Some("$ship-feature {request}"));
+    assert_eq!(codex.prompt, None);
     assert_eq!(
         codex.resume.as_deref(),
         Some(&["codex", "resume", "{session}"].map(String::from)[..])
@@ -67,7 +68,7 @@ fn knows_claude_code_without_a_config_file() {
 }
 
 #[test]
-fn reads_the_workflow_from_the_file_or_takes_the_built_in_one() {
+fn reads_the_older_top_level_phases_as_the_feature_kinds() {
     let dir = TempDir::new().unwrap();
     let file = dir.path().join("config.toml");
     fs::write(
@@ -80,9 +81,13 @@ fn reads_the_workflow_from_the_file_or_takes_the_built_in_one() {
     let config = Config::read(Some(&file)).unwrap();
     let none = Config::read(Some(&dir.path().join("missing.toml"))).unwrap();
 
-    assert_eq!(none.workflow, Workflow::builtin());
+    assert_eq!(none.workflow(), Workflow::builtin());
     assert_eq!(
-        config.workflow,
+        config.kind(Some("feature")).unwrap().1.phases,
+        config.workflow()
+    );
+    assert_eq!(
+        config.workflow(),
         Workflow::of(&[
             ("spec", &["brainstorming"]),
             ("build", &["executing-plans", "tdd"])
@@ -130,7 +135,7 @@ fn names_the_new_shape_when_the_file_has_the_old_phases_table() {
     let error = format!("{:#}", Config::read(Some(&file)).unwrap_err());
 
     assert!(error.contains(&file.display().to_string()), "{error}");
-    assert!(error.contains("[[phases]]"), "{error}");
+    assert!(error.contains("[[kinds.feature.phases]]"), "{error}");
 }
 
 #[test]
@@ -174,51 +179,131 @@ prompt = "/design-code {request}"
 }
 
 #[test]
-fn worker_prompt_overrides_the_built_in_prompts_but_not_an_agents_own() {
+fn worker_prompt_is_the_feature_kinds_unless_the_kind_sets_one() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("config.toml");
+    let read = |text: &str| {
+        fs::write(&file, text).unwrap();
+        Config::read(Some(&file)).unwrap()
+    };
+
+    let config = read(
+        "[worker]\nprompt = \"/my-flow {request}\"\n\n\
+         [agents.aider]\ncommand = [\"aider\", \"{prompt}\"]\nprompt = \"{request}\"\n",
+    );
+    let feature = |config: &Config| config.kind(Some("feature")).unwrap().1.prompt.clone();
+    assert_eq!(feature(&config).as_deref(), Some("/my-flow {request}"));
+    assert_eq!(config.kind(Some("fix")).unwrap().1.prompt, None);
+    assert_eq!(config.agent(Some("claude")).unwrap().1.prompt, None);
+    assert_eq!(
+        config.agent(Some("aider")).unwrap().1.prompt.as_deref(),
+        Some("{request}"),
+        "its own, for every kind"
+    );
+
+    let both = read(
+        "[worker]\nprompt = \"/my-flow {request}\"\n\n\
+         [kinds.feature]\nprompt = \"/mine {request}\"\n\n\
+         [[kinds.feature.phases]]\nname = \"build\"\n",
+    );
+    assert_eq!(feature(&both).as_deref(), Some("/mine {request}"));
+}
+
+#[test]
+fn reads_kinds_from_the_file_under_the_built_in_ones() {
     let dir = TempDir::new().unwrap();
     let file = dir.path().join("config.toml");
     fs::write(
         &file,
         r#"
 [worker]
-prompt = "/my-flow {request}"
+kind = "chore"
 
-[agents.aider]
-command = ["aider", "--message", "{prompt}"]
-prompt = "{request}"
+[kinds.chore]
+skill = "tidy"
+branch_types = ["chore"]
 
-[agents.pi]
-command = ["pi", "{prompt}"]
+[[kinds.chore.phases]]
+name = "tidy"
+skills = ["tidy"]
+
+[kinds.fix]
+skill = "my-fix"
+
+[[kinds.fix.phases]]
+name = "fix"
+skills = ["my-fix"]
 "#,
     )
     .unwrap();
 
     let config = Config::read(Some(&file)).unwrap();
-    let prompt = |name| config.agent(Some(name)).unwrap().1.prompt.as_deref();
 
-    assert_eq!(prompt("claude"), Some("/my-flow {request}"));
-    assert_eq!(prompt("codex"), Some("/my-flow {request}"), "as written");
-    assert_eq!(prompt("aider"), Some("{request}"), "its own wins");
-    assert_eq!(prompt("pi"), Some("/my-flow {request}"));
+    let (name, chore) = config.kind(None).unwrap();
+    assert_eq!(name, "chore");
+    assert_eq!(chore.skill.as_deref(), Some("tidy"));
+    assert_eq!(chore.branch_types, ["chore"]);
+    assert!(chore.branch, "a branch unless set");
+    assert_eq!(config.workflow(), Workflow::of(&[("tidy", &["tidy"])]));
+    let fix = config.kind(Some("fix")).unwrap().1;
+    assert_eq!(
+        fix.phases,
+        Workflow::of(&[("fix", &["my-fix"])]),
+        "a built-in name replaces it whole"
+    );
+    assert!(fix.branch_types.is_empty());
+    assert_eq!(config.kind(Some("feature")).unwrap().1, &Kind::feature());
+    assert!(config.kind(Some("research")).is_some());
+    assert!(config.kind(Some("chores")).is_none());
 }
 
 #[test]
-fn an_agent_without_a_prompt_keeps_the_built_in_one_of_its_name() {
+fn refuses_a_kind_without_phases_or_with_an_unknown_key() {
     let dir = TempDir::new().unwrap();
     let file = dir.path().join("config.toml");
-    fs::write(
-        &file,
-        "[agents.claude]\ncommand = [\"claude\", \"--verbose\", \"{prompt}\"]\n\n\
-         [agents.pi]\ncommand = [\"pi\"]\n",
-    )
-    .unwrap();
+    let error = |text: &str| {
+        fs::write(&file, text).unwrap();
+        format!("{:#}", Config::read(Some(&file)).unwrap_err())
+    };
 
-    let config = Config::read(Some(&file)).unwrap();
-    let prompt = |name| config.agent(Some(name)).unwrap().1.prompt.as_deref();
+    let phases = error("[kinds.chore]\nskill = \"tidy\"\n");
+    assert!(phases.contains("missing field `phases`"), "{phases}");
+    let key = error("[kinds.chore]\nbranches = false\n\n[[kinds.chore.phases]]\nname = \"tidy\"\n");
+    assert!(key.contains("config.toml:2: "), "{key}");
+    assert!(key.contains("branches"), "{key}");
+}
 
-    assert_eq!(prompt("claude"), Some("/ship-feature {request}"));
-    assert_eq!(prompt("codex"), Some("$ship-feature {request}"));
-    assert_eq!(prompt("pi"), Some(""), "no prompt anywhere");
+#[test]
+fn refuses_phases_in_two_places_and_an_unknown_worker_kind_on_their_line() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("config.toml");
+    let error = |text: &str| {
+        fs::write(&file, text).unwrap();
+        format!("{:#}", Config::read(Some(&file)).unwrap_err())
+    };
+    let at = |line: usize| format!("{}:{line}: ", file.display());
+
+    assert_eq!(
+        error(
+            "[[kinds.feature.phases]]\nname = \"build\"\n\n\
+             [[phases]]\nname = \"plan\"\n"
+        ),
+        format!(
+            "{}[[phases]] is the feature kind's; set it in one place, [[kinds.feature.phases]]",
+            at(4)
+        )
+    );
+    assert_eq!(
+        error("[kinds.\"Chore Day\"]\n\n[[kinds.\"Chore Day\".phases]]\nname = \"tidy\"\n"),
+        format!(
+            "{}\"Chore Day\" is no kind name: lowercase letters, digits and -",
+            at(1)
+        )
+    );
+    assert_eq!(
+        error("# mine\n[worker]\nkind = \"chore\"\n"),
+        format!("{}no kind named chore", at(3))
+    );
 }
 
 #[test]
@@ -269,7 +354,7 @@ fn says_every_error_as_file_line_and_message() {
     assert_eq!(
         unknown,
         format!(
-            "{}unknown field `agnet`, expected `agent` or `prompt`",
+            "{}unknown field `agnet`, expected one of `agent`, `kind`, `prompt`",
             at(2)
         )
     );
@@ -286,7 +371,7 @@ fn says_every_error_as_file_line_and_message() {
     assert!(top.contains("`agent` under [worker]"), "{top}");
     let phases = error("\n[phases]\nplan = \"design-code\"\n");
     assert!(phases.starts_with(&at(2)), "{phases}");
-    assert!(phases.contains("[[phases]]"), "{phases}");
+    assert!(phases.contains("[[kinds.feature.phases]]"), "{phases}");
     assert_eq!(
         error("[master]\nwake = \"sk-secret\"\n"),
         format!("{}invalid type: a string, expected a boolean", at(2)),
@@ -408,6 +493,27 @@ fn lists_the_agents_a_flow_can_run_the_default_first() {
 
     assert_eq!(config.worker_agents(), ["codex", "claude"]);
     assert_eq!(Config::builtin().worker_agents(), ["claude", "codex"]);
+}
+
+#[test]
+fn lists_the_kinds_a_flow_can_be_the_default_first() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("config.toml");
+    fs::write(&file, "[worker]\nkind = \"fix\"\n").unwrap();
+
+    let names = |config: &Config| -> Vec<String> {
+        config
+            .worker_kinds()
+            .into_iter()
+            .map(|(name, _)| name.to_string())
+            .collect()
+    };
+
+    assert_eq!(
+        names(&Config::read(Some(&file)).unwrap()),
+        ["fix", "feature", "research"]
+    );
+    assert_eq!(names(&Config::builtin()), ["feature", "fix", "research"]);
 }
 
 #[test]

@@ -3,8 +3,8 @@
 use serde::Serialize;
 
 use super::{Document, toon};
-use crate::event::Phase;
 use crate::view::{FlowView, State};
+use crate::workflow::Phase;
 
 /// flow, id, existing (true when `new` found the unfinished flow of that name), how to use it.
 pub(crate) fn created(flow: &FlowView, existing: bool) -> Document {
@@ -12,12 +12,15 @@ pub(crate) fn created(flow: &FlowView, existing: bool) -> Document {
     struct Created<'a> {
         flow: &'a str,
         id: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        kind: Option<&'a str>,
         existing: bool,
         help: Vec<String>,
     }
     Document::Toon(toon(&Created {
         flow: &flow.name,
         id: &flow.id,
+        kind: flow.kind.as_deref(),
         existing,
         help: flow
             .steps
@@ -38,6 +41,19 @@ pub(crate) fn created(flow: &FlowView, existing: bool) -> Document {
     }))
 }
 
+/// What follows a done flow: clear once its session ended, or once its answer is read when it
+/// merges nothing.
+pub(crate) fn after_done(flow: &FlowView) -> String {
+    if flow.is_clearable() {
+        format!(
+            "Its answer is ready: `saaio status {} --full`. Run `saaio clear` once it is read",
+            flow.name
+        )
+    } else {
+        "Run `saaio clear` after the worker session ends".to_string()
+    }
+}
+
 /// flow, state, phase, and the next step that fits the new state.
 pub(crate) fn reported(flow: &FlowView) -> Document {
     #[derive(Serialize)]
@@ -51,7 +67,7 @@ pub(crate) fn reported(flow: &FlowView) -> Document {
     let next = match flow.state {
         State::Blocked => "Run `saaio report working` once the block is resolved".to_string(),
         State::Waiting => "Run `saaio report working` once answered".to_string(),
-        State::Done => "Run `saaio clear` after the worker session ends".to_string(),
+        State::Done => after_done(flow),
         _ => format!(
             "Run `saaio status {}` for its phases and timeline",
             flow.name
@@ -145,7 +161,8 @@ pub(crate) fn skipped() -> Document {
 mod tests {
     use super::*;
     use crate::cli::output::fixtures::{MIN, flow};
-    use crate::event::{EventKind, Phase, Question};
+    use crate::event::{EventKind, Question};
+    use crate::workflow::Phase;
 
     #[test]
     fn created_names_the_flow_and_how_to_report_into_it() {
@@ -162,6 +179,13 @@ mod tests {
             .join("\n")
         );
         assert!(created(&flow, true).text().contains("existing: true"));
+        let mut fix = flow.clone();
+        fix.kind = Some("fix".into());
+        assert!(
+            created(&fix, false)
+                .text()
+                .contains("id: shop-221-id\nkind: fix\nexisting: false"),
+        );
     }
 
     #[test]
@@ -205,6 +229,23 @@ mod tests {
             reported(&done)
                 .text()
                 .ends_with("help[1]: Run `saaio clear` after the worker session ends")
+        );
+
+        let mut answered = flow(
+            "why-refunds",
+            vec![EventKind::Idle {
+                note: "Per line.".into(),
+            }],
+            MIN,
+        );
+        answered.merges = false;
+        answered.state = State::Done;
+        assert!(
+            reported(&answered).text().ends_with(
+                "help[1]: \"Its answer is ready: `saaio status why-refunds --full`. Run `saaio clear` once it is read\""
+            ),
+            "{}",
+            reported(&answered).text()
         );
 
         let working = flow("shop-221", vec![], MIN);

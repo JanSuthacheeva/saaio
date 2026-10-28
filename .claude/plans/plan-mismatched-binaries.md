@@ -358,6 +358,8 @@ say. No production code changed in this review; the fixes are a test and the pla
   the build in the dialog is covered by the golden screens and `binaries` unit tests with 30 s.
   Recommend leaving it.
 
+Decided (saaio master, 2026-10-28): leave both.
+
 ### Where to look
 
 1. `src/ui.rs` `run`, from `Binary::this` to `app.warn`: the probe now precedes the connect, and

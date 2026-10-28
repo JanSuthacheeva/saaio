@@ -270,6 +270,10 @@ mod tests {
                 request: "add csv".into(),
                 mode: Mode::Auto,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
             EventKind::Workspace {
                 path: "/work/shop/.saaio/worktrees/csv".into(),

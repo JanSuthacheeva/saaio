@@ -15,6 +15,7 @@ use crate::adapter::{Adapter, LineMatch, Turn};
 use crate::cli::Env;
 use crate::cli::output::Document;
 use crate::config::Config;
+use crate::config::kind::DEFAULT_KIND;
 use crate::deliver::{self, WorkerNews};
 use crate::event::{Event, EventKind, ServiceStatus, is_uuid};
 use crate::fold;
@@ -24,6 +25,7 @@ use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
 use crate::view::{FlowView, MasterTurn, State};
 use crate::wake;
+use crate::workflow::Workflow;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -240,7 +242,7 @@ fn hook(
     now: u64,
 ) -> Option<String> {
     let approver = adapter.approver(payload, |file, matches| rollout_line(file, matches, log));
-    let kinds = adapter.translate(payload, &config.workflow, approver);
+    let kinds = adapter.translate(payload, &workflow_for(store, hooked, config, now), approver);
     let waiter = match hooked {
         Hooked::Nobody => return None,
         Hooked::Master => {
@@ -322,6 +324,25 @@ fn last_line(file: &Path, matches: &LineMatch, chunk: u64) -> std::io::Result<Op
         end = start;
     }
     Ok(None)
+}
+
+/// The workflow the hooked flow recorded; for one from before kinds, which was a feature flow, the
+/// feature kind's; for the master and nobody the config's default kind's.
+fn workflow_for(store: &Store, hooked: &Hooked, config: &Config, now: u64) -> Workflow {
+    let Hooked::Flow(flow) = hooked else {
+        return config.workflow();
+    };
+    let recorded = if let Ok(events) = store.events(flow) {
+        fold::fold(flow, &events, None, now).and_then(|view| view.workflow)
+    } else {
+        let (flows, _) = views(store, now);
+        fold::resolve(&flows, flow).and_then(|view| view.workflow.clone())
+    };
+    recorded.unwrap_or_else(|| {
+        config
+            .kind(Some(DEFAULT_KIND))
+            .map_or_else(Workflow::builtin, |(_, kind)| kind.phases.clone())
+    })
 }
 
 /// Appends the kinds that change flow `flow` (a name or id); its id, None when there is no such

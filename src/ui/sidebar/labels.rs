@@ -173,6 +173,10 @@ mod tests {
                 request: "x".into(),
                 mode: Mode::Auto,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             };
             let events = [started, kind].map(|kind| Event::new(0, kind));
             crate::fold::fold("id", &events, None, 0).unwrap()
@@ -196,13 +200,17 @@ mod tests {
 
     #[test]
     fn colors_only_the_current_step() {
-        use crate::event::Phase;
+        use crate::workflow::Phase;
         let events = [
             EventKind::Started {
                 name: "shop".into(),
                 request: "x".into(),
                 mode: Mode::Auto,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
             EventKind::Phase {
                 phase: Phase::of("plan"),
@@ -237,7 +245,7 @@ mod tests {
 
     #[test]
     fn a_note_is_what_the_flow_last_said_not_what_the_row_shows() {
-        use crate::event::Phase;
+        use crate::workflow::Phase;
         let flow = |kinds: Vec<EventKind>| {
             let mut events = vec![Event::new(
                 0,
@@ -246,6 +254,10 @@ mod tests {
                     request: "x".into(),
                     mode: Mode::Auto,
                     phases: None,
+                    kind: None,
+                    workflow: None,
+                    prompt: None,
+                    merges: true,
                 },
             )];
             events.extend(kinds.into_iter().map(|kind| Event::new(1, kind)));

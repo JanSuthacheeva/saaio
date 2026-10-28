@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::binaries::{Binary, Mismatch};
+use crate::ui::newflow::KindChoice;
 
 #[test]
 fn detaches_and_stops_only_after_a_yes() {
@@ -30,7 +31,7 @@ fn a_job_passes_a_request_folder_or_name_that_starts_with_a_dash_as_written() {
             .map(|cli| format!("{cli:?}"))
             .map_err(|error| error.to_string())
     };
-    let mut form = NewFlowForm::new("/shop".into(), "-scratch".into(), vec![]);
+    let mut form = NewFlowForm::new("/shop".into(), "-scratch".into(), vec![], vec![]);
     form.request = "-fix the totals".into();
     let start = Job::Start(Box::new(form.clone()));
     form.mode = crate::event::Mode::Plain;
@@ -635,6 +636,50 @@ fn picks_the_agent_in_the_dialog_when_there_are_two() {
         job.args(),
         ["start", "--plain=~/projects/shop", "--agent", "codex"],
         "a plain session too"
+    );
+}
+
+#[test]
+fn picks_the_kind_in_the_dialog() {
+    let mut app = board_app();
+    let kind = |name: &str, branch| KindChoice {
+        name: name.into(),
+        branch_types: Vec::new(),
+        branch,
+    };
+    app.set_kinds(vec![
+        kind("feature", true),
+        kind("fix", true),
+        kind("research", false),
+    ]);
+    app.on_input(Routed::Command(Command::NewFlow));
+    app.on_input(Routed::View(
+        "why are refunds off".chars().map(Key::Char).collect(),
+    ));
+    app.on_input(Routed::View(vec![Key::Tab, Key::Left]));
+
+    let terminal = render_at(&app, FLEET);
+    let dialog: String = (10..26).map(|y| row(&terminal, y) + "\n").collect();
+    assert!(
+        dialog.contains("│▌ kind    ( ) feature   ( ) fix   (•) research"),
+        "{dialog}"
+    );
+    assert!(dialog.contains("creates no branch  ·  "), "{dialog}");
+    let effects = app.on_input(Routed::View(vec![Key::Enter]));
+    let [Effect::Run(job)] = &effects[..] else {
+        panic!("expected a job: {effects:?}");
+    };
+    assert_eq!(
+        job.args(),
+        [
+            "start",
+            "--mode",
+            "guided",
+            "--kind",
+            "research",
+            "--",
+            "why are refunds off"
+        ]
     );
 }
 

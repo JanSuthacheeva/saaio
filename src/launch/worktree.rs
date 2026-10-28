@@ -7,10 +7,16 @@ use crate::view::Workspace;
 pub const WORKTREES_DIR: &str = ".saaio/worktrees";
 
 /// <repo>/.saaio/worktrees/<name> on `branch`.
-pub fn workspace_for(repo: &Path, name: &str, branch: String, slot: u8, agent: &str) -> Workspace {
+pub fn workspace_for(
+    repo: &Path,
+    name: &str,
+    branch: Option<String>,
+    slot: u8,
+    agent: &str,
+) -> Workspace {
     Workspace {
         path: repo.join(WORKTREES_DIR).join(name).display().to_string(),
-        branch: Some(branch),
+        branch,
         slot: Some(slot),
         window: None,
         agent: agent.to_string(),
@@ -31,21 +37,23 @@ pub fn folder_workspace(folder: &Path, agent: &str) -> Workspace {
 }
 
 /// git -C <repo> worktree add [--no-track] -b <branch> <path> [<from>]: --no-track with `from`,
-/// so the flow's branch never pulls from or pushes to its base. workspace_for always sets the
-/// branch.
+/// so the flow's branch never pulls from or pushes to its base; without a branch,
+/// git -C <repo> worktree add --detach <path> [<from>].
 pub fn add_argv(repo: &Path, workspace: &Workspace, from: Option<&str>) -> Vec<String> {
     let repo = repo.display().to_string();
-    let branch = workspace
-        .branch
-        .as_deref()
-        .expect("a worktree flow has a branch");
     let mut argv: Vec<String> = ["git", "-C", &repo, "worktree", "add"]
         .map(String::from)
         .to_vec();
-    if from.is_some() {
-        argv.push("--no-track".to_string());
+    match &workspace.branch {
+        Some(branch) => {
+            if from.is_some() {
+                argv.push("--no-track".to_string());
+            }
+            argv.extend(["-b", branch].map(String::from));
+        }
+        None => argv.push("--detach".to_string()),
     }
-    argv.extend(["-b", branch, &workspace.path].map(String::from));
+    argv.push(workspace.path.clone());
     argv.extend(from.map(String::from));
     argv
 }
@@ -63,11 +71,13 @@ pub fn remove_argv(repo: &Path, workspace: &Workspace, force: bool) -> Vec<Strin
     argv
 }
 
-/// The repository a flow worktree belongs to: the path above .saaio/worktrees/<name>. None for a
-/// plain session (no branch), even one opened inside a worktree, so remove never tears down a folder
-/// it did not create.
+/// The repository a flow worktree belongs to: the path above .saaio/worktrees/<name>, with a
+/// branch or detached with a slot. None for a plain session (neither), even one opened inside a
+/// worktree, so remove never tears down a folder it did not create.
 pub fn repo_of(space: &Workspace) -> Option<PathBuf> {
-    space.branch.as_ref()?;
+    if space.branch.is_none() && space.slot.is_none() {
+        return None;
+    }
     Path::new(&space.path)
         .parent()
         .filter(|worktrees| worktrees.ends_with(WORKTREES_DIR))?
@@ -180,6 +190,32 @@ mod tests {
     }
 
     #[test]
+    fn detaches_a_worktree_without_a_branch() {
+        let research = Workspace {
+            branch: None,
+            ..shop()
+        };
+
+        assert_eq!(
+            add_argv(Path::new("/repo"), &research, Some("main")),
+            strings(&[
+                "git",
+                "-C",
+                "/repo",
+                "worktree",
+                "add",
+                "--detach",
+                "/repo/.saaio/worktrees/shop-217",
+                "main"
+            ])
+        );
+        assert_eq!(
+            add_argv(Path::new("/repo"), &research, None)[5..],
+            ["--detach", "/repo/.saaio/worktrees/shop-217"]
+        );
+    }
+
+    #[test]
     fn names_the_base_to_the_hooks_of_a_stacked_flow() {
         let stacked = Workspace {
             base: Some("flow/shop-216".into()),
@@ -222,6 +258,11 @@ mod tests {
             ..shop()
         };
         assert_eq!(repo_of(&elsewhere), None);
+        let detached = Workspace {
+            branch: None,
+            ..shop()
+        };
+        assert_eq!(repo_of(&detached), Some(PathBuf::from("/repo")));
     }
 
     #[test]

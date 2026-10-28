@@ -252,6 +252,10 @@ mod tests {
                     request: id.into(),
                     mode: Mode::Auto,
                     phases: None,
+                    kind: None,
+                    workflow: None,
+                    prompt: None,
+                    merges: true,
                 },
             ),
             Event::new(

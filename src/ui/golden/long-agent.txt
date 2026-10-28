@@ -9,7 +9,7 @@
                                                                                                             │     ●───●───○───○ implement    4/9 29m
                                                                                                             │     migration needs a default value f…
                                                                                                             │
-                                                                                                            │ 2 ● shop-230                claude 31m
+                                                                                                            │ 2 ● shop-230            fix claude 31m
                                                                                                             │     ●───○───○───○ plan
                                                                                                             │     Which approach: a channel column …
                                                                                                             │

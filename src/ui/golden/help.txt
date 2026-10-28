@@ -9,7 +9,7 @@
                                                                                                             │     ●───●───○───○ implement        4/9
                                                                                                             │     migration needs a default value f…
                             ╭─ keys ───────────────────────────────────────────╮                            │
-                            │                                                  │                            │ 2 ● shop-230                claude 31m
+                            │                                                  │                            │ 2 ● shop-230            fix claude 31m
                             │  C-space then                                    │                            │     ●───○───○───○ plan
                             │    0-9      jump to a session (0 is the master)  │                            │     Which approach: a channel column …
                             │    j k      move the peek over the workers       │                            │

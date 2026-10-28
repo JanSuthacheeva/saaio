@@ -44,11 +44,15 @@ impl Branching {
         Ok(config.branch)
     }
 
-    /// The type a flow gets: `asked` when the repo lists it, else the first listed; None when the
-    /// repo lists no types.
-    pub fn pick_type(&self, asked: Option<&str>) -> Result<Option<String>> {
+    /// The type a flow gets: `asked` when the repo lists it, else the first of `preferred` (its
+    /// kind's) the repo lists, else the repo's first; None when the repo lists no types.
+    pub fn pick_type(&self, asked: Option<&str>, preferred: &[String]) -> Result<Option<String>> {
         match asked {
-            None => Ok(self.types.first().cloned()),
+            None => Ok(preferred
+                .iter()
+                .find(|kind| self.types.contains(kind))
+                .or(self.types.first())
+                .cloned()),
             Some(kind) if self.types.iter().any(|known| known == kind) => {
                 Ok(Some(kind.to_string()))
             }
@@ -159,12 +163,15 @@ mod tests {
     fn picks_the_asked_type_or_the_first() {
         let rules = convention();
 
-        assert_eq!(rules.pick_type(None).unwrap(), Some("feature".into()));
+        assert_eq!(rules.pick_type(None, &[]).unwrap(), Some("feature".into()));
         assert_eq!(
-            rules.pick_type(Some("bugfix")).unwrap(),
+            rules.pick_type(Some("bugfix"), &[]).unwrap(),
             Some("bugfix".into())
         );
-        let unknown = rules.pick_type(Some("hotfix")).unwrap_err().to_string();
+        let unknown = rules
+            .pick_type(Some("hotfix"), &[])
+            .unwrap_err()
+            .to_string();
         assert_eq!(
             unknown,
             "no branch type hotfix; this repo has feature, bugfix"
@@ -173,8 +180,31 @@ mod tests {
             types: vec![],
             ..rules
         };
-        assert_eq!(none.pick_type(None).unwrap(), None);
-        assert!(none.pick_type(Some("bugfix")).is_err());
+        assert_eq!(none.pick_type(None, &[]).unwrap(), None);
+        assert!(none.pick_type(Some("bugfix"), &[]).is_err());
+    }
+
+    #[test]
+    fn picks_the_first_type_of_the_kind_the_repo_lists() {
+        let rules = convention();
+        let fix = [
+            "fix".to_string(),
+            "bugfix".to_string(),
+            "hotfix".to_string(),
+        ];
+        let chore = ["chore".to_string()];
+
+        assert_eq!(rules.pick_type(None, &fix).unwrap(), Some("bugfix".into()));
+        assert_eq!(
+            rules.pick_type(None, &chore).unwrap(),
+            Some("feature".into()),
+            "the repo's first when it lists none of them"
+        );
+        assert_eq!(
+            rules.pick_type(Some("feature"), &fix).unwrap(),
+            Some("feature".into()),
+            "the asked one wins"
+        );
     }
 
     #[test]

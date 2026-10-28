@@ -381,6 +381,10 @@ mod tests {
             request: "add csv".into(),
             mode,
             phases: None,
+            kind: None,
+            workflow: None,
+            prompt: None,
+            merges: true,
         };
         let path = "/work/shop/.saaio/worktrees/csv";
         let workspace = EventKind::Workspace {

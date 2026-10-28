@@ -156,9 +156,20 @@ fn every_view_looks_as_it_did() {
 
     let mut new_flow = board_app();
     new_flow.set_agents(vec!["claude".into(), "codex".into()]);
+    new_flow.set_kinds(
+        crate::config::Config::builtin()
+            .worker_kinds()
+            .into_iter()
+            .map(|(name, kind)| crate::ui::newflow::KindChoice {
+                name: name.into(),
+                branch_types: kind.branch_types.clone(),
+                branch: kind.branch,
+            })
+            .collect(),
+    );
     new_flow.on_input(Routed::Command(Command::NewFlow));
     golden("new-flow", &render_at(&new_flow, FLEET));
-    new_flow.on_input(Routed::View(vec![Key::Tab]));
+    new_flow.on_input(Routed::View(vec![Key::Tab, Key::Right, Key::Tab]));
     golden("new-flow-agent", &render_at(&new_flow, FLEET));
 
     let mut stacked = board_app();

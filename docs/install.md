@@ -99,18 +99,21 @@ Open a new shell afterwards. The same scripts are in `complete/` in each release
 
 ## Skills
 
-Default first prompt: `/ship-feature <request>` (`$ship-feature <request>` in Codex), a skill from
+Default first prompts: `/ship-feature <request>` for a feature, `/ship-fix <request>` for a fix
+(`$ship-feature` and `$ship-fix` in Codex), skills from
 [agent-skills](https://github.com/JanSuthacheeva/agent-skills). Install with the
 [skills CLI](https://github.com/vercel-labs/skills), which asks which agents to install for:
 
 ```sh
-npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature design-code implement-plan review-changes write-merge-request commit setup-saaio
+npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature ship-fix design-code diagnose-bug implement-plan review-changes write-merge-request commit setup-saaio
 ```
 
 | Skill | Does |
 | --- | --- |
-| `ship-feature` | takes a feature from plan to merge request, using the next four and `commit` |
+| `ship-feature` | takes a feature from plan to merge request, using `design-code`, `implement-plan`, `review-changes`, `write-merge-request` and `commit` |
+| `ship-fix` | takes a bug from report to merge request, using `diagnose-bug` in place of `design-code` |
 | `design-code` | starts the plan phase |
+| `diagnose-bug` | starts a fix's diagnose phase: reproduces the bug, finds its cause, plans the fix |
 | `implement-plan` | starts the implement phase |
 | `review-changes` | starts the review phase |
 | `write-merge-request` | starts the merge-request phase |

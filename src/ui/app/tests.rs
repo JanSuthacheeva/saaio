@@ -77,6 +77,10 @@ fn worker(id: &str, mode: crate::event::Mode, age: u64, events: Vec<EventKind>) 
                 request: id.into(),
                 mode,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
         ),
         Event::new(
@@ -106,6 +110,10 @@ fn plain_session(id: &str, folder: &str, age: u64, events: Vec<EventKind>) -> Fl
                 request: String::new(),
                 mode: crate::event::Mode::Plain,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
         ),
         Event::new(
@@ -126,34 +134,40 @@ fn plain_session(id: &str, folder: &str, age: u64, events: Vec<EventKind>) -> Fl
 
 fn fleet() -> Board {
     use crate::event::Mode::{Auto, Guided};
-    use crate::event::Phase;
+    use crate::workflow::Phase;
     let phase = |name| EventKind::Phase {
         phase: Phase::of(name),
     };
     let tasks = |done, total| EventKind::Tasks { done, total };
     let flows = vec![
-        worker(
-            "shop-221",
-            Auto,
-            29,
-            vec![
-                phase("plan"),
-                phase("implement"),
-                tasks(4, 9),
-                EventKind::Blocked {
-                    reason: "migration needs a default value for orders.exported_at".into(),
-                },
-            ],
-        ),
-        worker(
-            "shop-230",
-            Guided,
-            31,
-            vec![
-                phase("plan"),
-                EventKind::waiting("Which approach: a channel column or a join table?"),
-            ],
-        ),
+        FlowView {
+            kind: Some("feature".into()),
+            ..worker(
+                "shop-221",
+                Auto,
+                29,
+                vec![
+                    phase("plan"),
+                    phase("implement"),
+                    tasks(4, 9),
+                    EventKind::Blocked {
+                        reason: "migration needs a default value for orders.exported_at".into(),
+                    },
+                ],
+            )
+        },
+        FlowView {
+            kind: Some("fix".into()),
+            ..worker(
+                "shop-230",
+                Guided,
+                31,
+                vec![
+                    phase("plan"),
+                    EventKind::waiting("Which approach: a channel column or a join table?"),
+                ],
+            )
+        },
         worker(
             "export-csv",
             Auto,

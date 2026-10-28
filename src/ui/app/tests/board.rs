@@ -37,7 +37,7 @@ fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
     assert!(row(&terminal, 10).contains(" 3 ◓ export-csv               review · agent "));
     assert!(
         row(&terminal, 16)
-            .starts_with(" 2 shop-230  shop-230 · guided · claude · flow/shop-230 · slot 1"),
+            .starts_with(" 2 shop-230  shop-230 · fix · guided · claude · flow/shop-230 · slot 1"),
         "{}",
         row(&terminal, 16)
     );
@@ -245,6 +245,34 @@ fn starts_from_a_workers_repo_and_clears_only_finished_flows() {
     assert_eq!(
         app.notice.as_deref(),
         Some("could not remove shop-198: permission denied")
+    );
+}
+
+#[test]
+fn clears_a_done_flow_that_merges_nothing() {
+    let mut app = board_app();
+    let mut board = fleet();
+    let answered = board
+        .flows
+        .iter_mut()
+        .find(|flow| flow.name == "shop-230")
+        .unwrap();
+    answered.state = State::Done;
+    answered.merges = false;
+    app.on_server(ServerMsg::Board(board));
+    app.on_input(Routed::Command(Command::Board));
+    let at = app
+        .workers()
+        .iter()
+        .position(|flow| flow.name == "shop-230")
+        .unwrap();
+    let digit = char::from(b'1' + u8::try_from(at).unwrap());
+
+    let effects = app.on_input(Routed::View(vec![Key::Char(digit), Key::Char('x')]));
+
+    assert_eq!(
+        effects,
+        vec![Effect::Run(Job::Remove(Removal::of("shop-230")))]
     );
 }
 

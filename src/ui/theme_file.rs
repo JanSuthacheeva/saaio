@@ -11,12 +11,12 @@ use toml::Spanned;
 use toml::Value;
 use toml::de::{DeTable, DeValue, ValueDeserializer};
 
-use crate::event::Phase;
 use crate::store::Stamp;
 use crate::text::{line_of, place, without_value};
 #[cfg(test)]
 use crate::ui::theme::MARK;
 use crate::ui::theme::{ColorKey, Palette, PaletteKey, PhaseColors, Section, Theme, hex};
+use crate::workflow::Phase;
 
 pub const THEME_FILE: &str = "theme.toml";
 pub const THEMES_DIR: &str = "themes";

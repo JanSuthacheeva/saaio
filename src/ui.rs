@@ -54,6 +54,7 @@ use crate::workspace::git;
 use app::{App, Effect, Job, JobError};
 use clipboard::Clipboard;
 use input::{Router, Target};
+use newflow::KindChoice;
 use notify::{Notifier, TmuxClient};
 use outer::Outer;
 use peek::PeekCache;
@@ -365,6 +366,17 @@ fn reload_config(
                     .worker_agents()
                     .into_iter()
                     .map(String::from)
+                    .collect(),
+            );
+            app.set_kinds(
+                config
+                    .worker_kinds()
+                    .into_iter()
+                    .map(|(name, kind)| KindChoice {
+                        name: name.to_string(),
+                        branch_types: kind.branch_types.clone(),
+                        branch: kind.branch,
+                    })
                     .collect(),
             );
             updates.set_enabled(config.ui.update_check);

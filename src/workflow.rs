@@ -1,17 +1,20 @@
-//! `Workflow`: the phases a flow walks through, the built-in four, the phase a skill starts
+//! `Workflow`: the phases a flow walks through, the built-in four, the phase a skill starts;
+//! `Phase`, a phase's name
 
-use serde::Deserialize;
-#[cfg(test)]
-use serde::Serialize;
+use std::str::FromStr;
 
-use crate::event::Phase;
+use serde::{Deserialize, Serialize};
 
 /// The most phases a workflow has: the steps row and the built-in colors have room for four.
 pub const MAX_PHASES: usize = 4;
 
+/// A phase's name: plan, implement, ... as the workflow names it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct Phase(String);
+
 /// One [[phases]] entry: its name and the skills that start it.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[cfg_attr(test, derive(Serialize))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PhaseSpec {
     pub name: Phase,
@@ -20,9 +23,8 @@ pub struct PhaseSpec {
 }
 
 /// 1 to MAX_PHASES phases with distinct names, no skill in two.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[cfg_attr(test, derive(Serialize), serde(into = "Vec<PhaseSpec>"))]
-#[serde(try_from = "Vec<PhaseSpec>")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "Vec<PhaseSpec>", into = "Vec<PhaseSpec>")]
 pub struct Workflow {
     phases: Vec<PhaseSpec>,
 }
@@ -54,7 +56,6 @@ impl TryFrom<Vec<PhaseSpec>> for Workflow {
     }
 }
 
-#[cfg(test)]
 impl From<Workflow> for Vec<PhaseSpec> {
     fn from(workflow: Workflow) -> Vec<PhaseSpec> {
         workflow.phases
@@ -97,6 +98,13 @@ impl Workflow {
         self.phases.iter().map(|phase| phase.name.clone()).collect()
     }
 
+    /// Whether the phase at `index` has no skill to start it.
+    pub fn starts_unasked(&self, index: usize) -> bool {
+        self.phases
+            .get(index)
+            .is_some_and(|phase| phase.skills.is_empty())
+    }
+
     /// The phase a skill starts: "/design-code" and "plugin:design-code" both find design-code's.
     pub fn phase_of(&self, skill: &str) -> Option<Phase> {
         let name = skill.trim_start_matches('/');
@@ -105,6 +113,55 @@ impl Workflow {
             .iter()
             .find(|phase| phase.skills.iter().any(|known| known == name))
             .map(|phase| phase.name.clone())
+    }
+}
+
+impl TryFrom<String> for Phase {
+    type Error = String;
+
+    fn try_from(name: String) -> Result<Phase, String> {
+        check_name(&name, "phase")?;
+        Ok(Phase(name))
+    }
+}
+
+/// A phase's or a kind's name: lowercase letters, digits and '-', not empty; Err names `what`.
+pub fn check_name(name: &str, what: &str) -> Result<(), String> {
+    let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
+    if name.is_empty() || !name.chars().all(allowed) {
+        return Err(format!(
+            "{name:?} is no {what} name: lowercase letters, digits and -"
+        ));
+    }
+    Ok(())
+}
+
+impl From<Phase> for String {
+    fn from(phase: Phase) -> String {
+        phase.0
+    }
+}
+
+impl FromStr for Phase {
+    type Err = String;
+
+    fn from_str(name: &str) -> Result<Phase, String> {
+        Phase::try_from(name.to_string())
+    }
+}
+
+#[cfg(test)]
+impl Phase {
+    /// A phase by a name the test knows is valid.
+    pub fn of(name: &str) -> Phase {
+        name.parse().expect("a valid phase name")
+    }
+}
+
+impl Phase {
+    /// The name the workflow, the command line and the logs use.
+    pub fn name(&self) -> &str {
+        &self.0
     }
 }
 
@@ -163,6 +220,27 @@ mod tests {
             workflow.phase_of("subagent-driven-development"),
             Some(Phase::of("build"))
         );
+    }
+
+    #[test]
+    fn a_phase_without_skills_starts_unasked() {
+        let workflow = Workflow::of(&[("research", &[]), ("build", &["implement-plan"])]);
+
+        assert!(workflow.starts_unasked(0));
+        assert!(!workflow.starts_unasked(1));
+        assert!(!workflow.starts_unasked(2));
+    }
+
+    #[test]
+    fn reads_back_what_it_writes() {
+        let workflow = Workflow::of(&[("diagnose", &["diagnose-bug"]), ("review", &[])]);
+        let json = serde_json::to_string(&workflow).unwrap();
+
+        assert_eq!(
+            json,
+            r#"[{"name":"diagnose","skills":["diagnose-bug"]},{"name":"review","skills":[]}]"#
+        );
+        assert_eq!(serde_json::from_str::<Workflow>(&json).unwrap(), workflow);
     }
 
     #[test]

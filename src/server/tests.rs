@@ -109,11 +109,8 @@ fn start_timed(
     };
     let thread_paths = paths.clone();
     let store = Store::at(dir.to_path_buf());
-    let config = Config {
-        agents,
-        workflow: crate::workflow::Workflow::builtin(),
-        ..Config::default()
-    };
+    let mut config = Config::default();
+    config.agents = agents;
     let handle = thread::spawn(move || {
         run(
             &thread_paths,
@@ -1319,14 +1316,28 @@ fn takes_at_most_16_connections_at_once() {
         ..quick()
     };
     let (paths, handle) = start_timed(dir.path(), BTreeMap::new(), patient, || 0);
-    let open: Vec<UnixStream> = (0..16)
-        .map(|_| UnixStream::connect(&paths.socket).unwrap())
-        .collect();
+    // One that never says hello counts too. It comes first, so it is taken: what start_timed
+    // dropped cannot fill 16.
+    let silent = UnixStream::connect(&paths.socket).unwrap();
+    // Those dropped connections count until the server reads their end, so a refused one is tried
+    // again; with 15 welcomed beside the silent one, none of them is left.
+    let mut open: Vec<UnixStream> = Vec::new();
+    wait_until(
+        "the server never took 15 connections beside the silent one",
+        || {
+            let mut stream = connect(&paths.socket, Role::Control);
+            if !closed(&mut stream) {
+                open.push(stream);
+            }
+            open.len() == 15
+        },
+    );
 
     let mut one_more = connect(&paths.socket, Role::Control);
     assert!(closed(&mut one_more), "the 17th connection");
 
     drop(open);
+    drop(silent);
     wait_until("the server never took a connection again", || {
         let mut control = connect(&paths.socket, Role::Control);
         !closed(&mut control)
@@ -2028,6 +2039,10 @@ fn idle_flow(store: &Store, repo: &Path, name: &str) -> String {
                 request: "x".into(),
                 mode: crate::event::Mode::Auto,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
         ))
         .unwrap();
@@ -2035,7 +2050,7 @@ fn idle_flow(store: &Store, repo: &Path, name: &str) -> String {
     if !repo.join(".git").exists() {
         crate::workspace::fixtures::init(repo);
     }
-    let space = workspace_for(repo, name, format!("flow/{name}"), 4, "claude");
+    let space = workspace_for(repo, name, Some(format!("flow/{name}")), 4, "claude");
     crate::workspace::create_worktree(repo, &space, None).unwrap();
     let workspace = EventKind::Workspace {
         path: space.path,

@@ -23,7 +23,7 @@ pub(super) fn open(
     env: &Env,
     now: u64,
 ) -> Result<Document, Failure> {
-    let agent = pick_agent(config, args.agent.as_deref())?;
+    let (agent, _) = pick_agent(config, args.agent.as_deref())?;
     let folder = resolve(folder, cwd, env.user_home())?;
     let (flows, _) = views(store, now);
     let base = args.name.clone().unwrap_or_else(|| {
@@ -39,6 +39,10 @@ pub(super) fn open(
             request: String::new(),
             mode: Mode::Plain,
             phases: None,
+            kind: None,
+            workflow: None,
+            prompt: None,
+            merges: true,
         },
     );
     let id = store.create(&first)?;

@@ -271,7 +271,8 @@ impl App {
     pub(super) fn open_new_flow(&mut self) -> Vec<Effect> {
         let repo = self.focused_repo();
         let place = self.tilde(&repo.display().to_string());
-        let mut form = NewFlowForm::new(repo.clone(), place, self.agents.clone());
+        let mut form =
+            NewFlowForm::new(repo.clone(), place, self.agents.clone(), self.kinds.clone());
         form.bases = self.bases_in(&repo);
         self.view = View::NewFlow(Box::new(form));
         vec![Effect::LoadBranching(repo)]

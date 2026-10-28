@@ -1,0 +1,555 @@
+<title>Kinds of Flows Implementation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+/* One 720px reading column of cards, jasu.dev tokens */
+:root {
+  --surface:#f8f9fb; --card:#eceff4; --ink:#2e3440; --muted:#4c566a; --subtle:#d8dee9; --border:#d8dee9;
+  --code-block:#2e3440; --code-bg:#e5e9f0; --code-ink:#4b6c8a; --accent:#7b5eaf; --link:#4b6c8a;
+  --constructive:#a3be8c; --warning:#d08770; --critical:#bf616a; --block-ink:#eceff4;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --surface:#2e3440; --card:#3b4252; --ink:#eceff4; --muted:#93b1cc; --subtle:#434c5e; --border:#4c566a;
+  --code-block:#3b4252; --code-bg:#3b4252; --code-ink:#88c0d0; --accent:#bd93f9; --link:#88c0d0;
+  --warning:#ebcb8b; color-scheme: dark;
+}
+body { background:var(--surface); color:var(--ink); font:18px/1.6 var(--sans);
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:32px 64px; }
+main { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:24px; }
+h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.1; font-weight:800; letter-spacing:-0.03em; margin:0; text-wrap:balance; }
+h2 { font-size:24px; line-height:1.3; margin:0 0 12px; text-wrap:balance; }
+h3 { font-size:18px; margin:18px 0 6px; }
+p { margin:0 0 12px; }
+.meta { font-size:13px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:24px; min-width:0; }
+@media (max-width:500px){ .card{ padding:14px; } body{ font-size:17px; } }
+.pill { display:inline-block; border-radius:99px; padding:1px 9px; font-size:0.72rem; font-weight:600; letter-spacing:0.05em; vertical-align:middle; color:var(--ink); }
+.new { background:var(--constructive); color:#2e3440; }
+.mod { background:var(--warning); color:#2e3440; }
+code { font-family:var(--mono); font-size:0.78em; background:var(--code-bg); color:var(--code-ink); border-radius:0.2rem; padding:1px 4px; }
+pre { background:var(--code-block); color:var(--block-ink); border-radius:6px; padding:14px; overflow-x:auto; font-size:13.5px; line-height:1.5; margin:8px 0 12px; }
+pre code { background:none; color:inherit; padding:0; font-size:inherit; }
+ul, ol { margin:0 0 12px; padding-left:22px; }
+li { margin-bottom:4px; }
+.unit { border-top:1px solid var(--border); padding-top:12px; margin-top:16px; }
+.unit:first-of-type { border-top:none; margin-top:0; padding-top:0; }
+.unit h3 { margin:0 0 4px; font-family:var(--mono); font-size:16px; overflow-wrap:anywhere; }
+.diagram { overflow-x:auto; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:8px; margin:8px 0 12px; }
+.steps li { font-family:var(--mono); font-size:14px; overflow-wrap:anywhere; }
+.err { border-left:4px solid var(--critical); padding-left:12px; }
+.legend { font-size:13px; color:var(--muted); }
+a { color:var(--link); text-decoration-thickness:1px; text-underline-offset:0.18em; }
+.q li { margin-bottom:10px; }
+</style>
+
+<main>
+<header>
+  <p class="meta">saaio 0.2.0 - design-code, phase 3 of 4 - 2026-10-28</p>
+  <h1>Kinds of flows: implementation</h1>
+</header>
+
+<section class="card">
+  <h2>1. Decision recap</h2>
+  <p>Approach B: kinds live in config.toml as <code>[kinds.&lt;name&gt;]</code> with feature, fix and research built in, and <code>saaio start</code> records the kind's name, its whole workflow (phases and skills) and its first prompt in the flow's <code>started</code> line, so the server and <code>saaio hook</code> read the flow's own log and never config for a running flow.</p>
+  <ul>
+    <li><b>Prompt:</b> a kind has a <code>skill</code> and a <code>prompt</code> (default <code>{skill} {request}</code>); <code>{skill}</code> is <code>/name</code> for Claude Code, <code>$name</code> for Codex, bare otherwise. An agent's own <code>prompt</code> still wins; <code>[worker] prompt</code> is the feature kind's.</li>
+    <li><b>Branch type:</b> a kind lists the types it means; the first one the repo lists wins, else the repo's first. <code>--type</code> overrides.</li>
+    <li><b>Research:</b> <code>branch = false</code>, a worktree detached at the base, one phase <code>research</code>; done once it answers, and <code>saaio clear</code> forgets it then (section 9).</li>
+    <li><b>Old configs:</b> top-level <code>[[phases]]</code> is the feature kind's; with <code>[[kinds.feature.phases]]</code> too it is an error on its line. <code>[worker] kind</code> picks the default, <code>feature</code>.</li>
+    <li><b>Shown:</b> the kind in <code>saaio status</code> (list and detail), <code>--json</code>, the board's detail and the sidebar. master.md tells the master to pick it: a bug report or bug ticket is <code>fix</code>, a question to answer is <code>research</code>, anything else <code>feature</code>, always passed as <code>--kind</code>.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>2. Structure overview</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart TB
+  subgraph cli["cli/"]
+    start["commands/start.rs"]:::mod
+    new["commands/new.rs"]:::mod
+    hook["commands/hook.rs"]:::mod
+    out["output/status.rs, start.rs"]:::mod
+  end
+  subgraph core["core (pure)"]
+    kind["kind.rs Kind"]:::new
+    wf["workflow.rs Workflow"]:::mod
+    cfg["config.rs Config"]:::mod
+    br["branching.rs"]:::mod
+    ev["event.rs Started"]:::mod
+    fold["fold.rs"]:::mod
+    view["view.rs FlowView"]:::mod
+    adapter["adapter.rs skill_call"]:::mod
+    pane["launch/pane.rs"]:::mod
+    wt["launch/worktree.rs"]:::mod
+  end
+  subgraph ui["ui/"]
+    form["newflow.rs + view.rs"]:::mod
+    eff["app/effect.rs"]:::mod
+    side["sidebar/rows.rs"]:::mod
+    det["board/detail.rs"]:::mod
+  end
+  md["server/master.md, master-v13.md"]:::mod
+  cfg --> kind --> wf
+  kind --> adapter
+  start --> cfg
+  start --> br
+  start --> wt
+  start --> ev
+  new --> cfg
+  new --> ev
+  ev --> fold --> view
+  hook --> fold
+  pane --> view
+  form --> eff
+  side --> view
+  det --> view
+  out --> view
+  classDef new fill:#a3be8c,stroke:#4c566a,color:#2e3440
+  classDef mod fill:#ebcb8b,stroke:#4c566a,color:#2e3440
+  </pre></div>
+  <p class="legend">green new, yellow modified. Docs: README.md, docs/configuration.md, cli.md, flows.md, ui.md, json.md, examples/config.toml, ROADMAP.md, CHANGELOG.md.</p>
+</section>
+
+<section class="card">
+  <h2>3. Units</h2>
+
+  <div class="unit">
+    <h3>src/kind.rs <span class="pill new">new</span></h3>
+    <p>What a kind of flow is: its workflow, how it is started, and whether it gets a branch.</p>
+<pre><code>/// The kind a flow runs when none is named and [worker] kind is unset.
+pub const DEFAULT_KIND: &amp;str = "feature";
+
+/// One [kinds.&lt;name&gt;]: the workflow, the skill and prompt that start it, its branch.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Kind {
+    pub phases: Workflow,
+    /// The umbrella skill the first prompt runs: ship-feature, ship-fix.
+    #[serde(default)]
+    pub skill: Option&lt;String&gt;,
+    /// The first prompt; None is "{skill} {request}", or "{request}" without a skill.
+    #[serde(default)]
+    pub prompt: Option&lt;String&gt;,
+    /// The branch types it means, in order of preference.
+    #[serde(default)]
+    pub branch_types: Vec&lt;String&gt;,
+    /// false: a worktree detached at the base, no branch (research).
+    #[serde(default = "with_branch")]
+    pub branch: bool,
+}
+
+impl Kind {
+    /// feature, fix and research.
+    pub fn builtins() -&gt; BTreeMap&lt;String, Kind&gt;;
+    /// The built-in feature kind, for flows recorded before kinds.
+    pub fn feature() -&gt; Kind;
+    /// The first prompt template for `agent`: its own prompt, else this kind's, else the
+    /// default, {skill} filled in as the agent's harness calls a skill; {request}, {id} and
+    /// {name} stay for the pane to fill.
+    pub fn prompt_for(&amp;self, agent: &amp;Agent) -&gt; String;
+}</code></pre>
+    <p>Built-ins:</p>
+<pre><code>feature  skill ship-feature  branch_types [feature, feat]
+         plan design-code, implement implement-plan, review review-changes,
+         merge-request write-merge-request
+fix      skill ship-fix      branch_types [fix, bugfix, hotfix]
+         diagnose diagnose-bug, implement implement-plan, review review-changes,
+         merge-request write-merge-request
+research branch = false
+         prompt "Research this and answer here. Change no code and commit nothing: {request}"
+         research (no skills)</code></pre>
+  </div>
+
+  <div class="unit">
+    <h3>src/workflow.rs <span class="pill mod">modified</span></h3>
+    <p><code>Workflow</code> and <code>PhaseSpec</code> derive <code>Serialize</code> always (as a list of phases), since <code>started</code> records them. Added:</p>
+<pre><code>/// Whether the phase at `index` has no skill to start it: it begins with the flow's first turn.
+pub fn starts_unasked(&amp;self, index: usize) -&gt; bool;</code></pre>
+    <p><code>Workflow::builtin()</code> stays the feature workflow; <code>Kind::builtins</code> uses it.</p>
+  </div>
+
+  <div class="unit">
+    <h3>src/config.rs <span class="pill mod">modified</span></h3>
+    <p><code>Config.workflow</code> goes. In its place:</p>
+<pre><code>pub struct Config {
+    pub agents: BTreeMap&lt;String, Agent&gt;,
+    /// [kinds.&lt;name&gt;] over the built-in three; a built-in name replaces it whole.
+    pub kinds: BTreeMap&lt;String, Kind&gt;,
+    /// Top-level [[phases]]: the feature kind's, from before kinds. Moved there at load.
+    #[serde(rename = "phases")]
+    legacy_phases: Option&lt;Workflow&gt;,
+    pub worker: WorkerConfig,   // + kind: String, "feature" unless set
+    ...
+}
+
+impl Config {
+    /// The named kind, or [worker] kind.
+    pub fn kind(&amp;self, name: Option&lt;&amp;str&gt;) -&gt; Option&lt;(&amp;str, &amp;Kind)&gt;;
+    /// The kinds a flow can be, the default first.
+    pub fn worker_kinds(&amp;self) -&gt; Vec&lt;&amp;str&gt;;
+    /// The default kind's workflow: the master's, and an old flow's that recorded none.
+    pub fn workflow(&amp;self) -&gt; &amp;Workflow;
+}</code></pre>
+    <ul>
+      <li><code>Agent.prompt</code> stays <code>Option</code> after load: None means "the kind's". The built-in claude and codex agents lose their prompt; <code>resolve_prompts</code> is removed. The master keeps <code>Some("")</code>.</li>
+      <li><code>add_builtins</code> also fills the built-in kinds, then moves <code>legacy_phases</code> and <code>[worker] prompt</code> into the feature kind (a field it set itself wins).</li>
+      <li><code>parse</code> refuses top-level <code>[[phases]]</code> together with <code>[[kinds.feature.phases]]</code>, on the <code>phases</code> line: "[[phases]] is the feature kind's; set it in one place, [[kinds.feature.phases]]". It also refuses <code>[worker] kind</code> naming no kind.</li>
+    </ul>
+  </div>
+
+  <div class="unit">
+    <h3>src/adapter.rs <span class="pill mod">modified</span></h3>
+<pre><code>/// How a prompt calls `skill` in this harness: "/ship-fix" in Claude Code, "$ship-fix" in Codex.
+pub fn skill_call(self, skill: &amp;str) -&gt; String;</code></pre>
+  </div>
+
+  <div class="unit">
+    <h3>src/event.rs <span class="pill mod">modified</span></h3>
+<pre><code>Started {
+    name: String,
+    request: String,
+    mode: Mode,
+    /// Phase names alone: logs from before kinds. New lines write `workflow` instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    phases: Option&lt;Vec&lt;Phase&gt;&gt;,
+    /// The kind's name; None for a plain session and before kinds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kind: Option&lt;String&gt;,
+    /// The kind's phases with their skills, as the flow started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    workflow: Option&lt;Workflow&gt;,
+    /// The first prompt's template for the flow's agent; None for saaio new and plain.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    prompt: Option&lt;String&gt;,
+    /// false: the flow ends in an answer, not a merge request (a kind without a branch).
+    #[serde(default = "merges", skip_serializing_if = "merges_by_default")]
+    merges: bool,
+}</code></pre>
+  </div>
+
+  <div class="unit">
+    <h3>src/fold.rs <span class="pill mod">modified</span></h3>
+    <ul>
+      <li>The phases come from <code>workflow</code>, else <code>phases</code>, else <code>Workflow::builtin()</code>.</li>
+      <li>The view carries <code>kind</code>, <code>workflow</code> and <code>prompt</code> from <code>Started</code>.</li>
+      <li>On the first <code>Working</code> with no phase entered, a first phase that <code>starts_unasked</code> is entered (research's one step).</li>
+      <li>In a flow with <code>merges: false</code>, <code>Idle</code> folds to <code>State::Done</code> with the timeline entry "answered"; <code>Waiting</code>, <code>Blocked</code> and <code>Working</code> fold as everywhere.</li>
+    </ul>
+  </div>
+
+  <div class="unit">
+    <h3>src/view.rs <span class="pill mod">modified</span></h3>
+<pre><code>pub struct FlowView {
+    ...
+    /// The kind it started as: "feature", "fix", "research"; None for plain and older flows.
+    pub kind: Option&lt;String&gt;,
+    /// Its phases and their skills; what saaio hook maps a skill with.
+    #[serde(skip)]
+    pub workflow: Option&lt;Workflow&gt;,
+    /// The first prompt's template; what the pane fills.
+    #[serde(skip)]
+    pub prompt: Option&lt;String&gt;,
+    /// It ends in a merge request; false for research.
+    #[serde(skip)]
+    pub merges: bool,
+}
+
+impl FlowView {
+    /// What saaio clear forgets: an ended flow, or a done one that merges nothing.
+    pub fn is_clearable(&amp;self) -&gt; bool;
+}</code></pre>
+    <p><code>kind</code> is a new key in <code>--json</code>; <code>VIEW_VERSION</code> stays 3 (new keys need no version, docs/json.md).</p>
+  </div>
+
+  <div class="unit">
+    <h3>src/branching.rs <span class="pill mod">modified</span></h3>
+<pre><code>/// The type a flow gets: `asked` when the repo lists it, else the first of `preferred` the
+/// repo lists, else its first; None when it lists none.
+pub fn pick_type(&amp;self, asked: Option&lt;&amp;str&gt;, preferred: &amp;[String]) -&gt; Result&lt;Option&lt;String&gt;&gt;;</code></pre>
+  </div>
+
+  <div class="unit">
+    <h3>src/launch/worktree.rs, src/launch/pane.rs <span class="pill mod">modified</span></h3>
+<pre><code>// worktree.rs: branch None for a kind without one
+pub fn workspace_for(repo: &amp;Path, name: &amp;str, branch: Option&lt;String&gt;, slot: u8, agent: &amp;str) -&gt; Workspace;
+/// ... add [--no-track] -b &lt;branch&gt; &lt;path&gt; [from], or add --detach &lt;path&gt; [from] without a branch
+pub fn add_argv(repo: &amp;Path, workspace: &amp;Workspace, from: Option&lt;&amp;str&gt;) -&gt; Vec&lt;String&gt;;
+
+// pane.rs: the template is passed in, no longer read from the agent
+pub fn agent_argv(agent: &amp;Agent, prompt: &amp;str, id: &amp;str, name: &amp;str, request: &amp;str) -&gt; Vec&lt;String&gt;;</code></pre>
+    <p><code>worker_spec</code> takes the template from <code>flow.prompt</code>, else <code>Kind::feature().prompt_for(agent)</code> for a flow started before kinds. <code>master.rs</code> passes <code>""</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3>src/cli/commands/start.rs <span class="pill mod">modified</span></h3>
+<pre><code>pub struct Args {
+    ...
+    /// Kind of flow from the config: feature, fix, research [default: the config's, feature]
+    #[arg(long)]
+    kind: Option&lt;String&gt;,
+    /// Branch type from the repo's .saaio/config.toml [default: the kind's, else its first]
+    #[arg(long = "type")]
+    branch_type: Option&lt;String&gt;,
+}
+
+/// The config's kind `asked` names (or its default); the failure lists the kinds.
+fn pick_kind&lt;'a&gt;(config: &amp;'a Config, asked: Option&lt;&amp;str&gt;) -&gt; Result&lt;(&amp;'a str, &amp;'a Kind), Failure&gt;;
+/// Was pick_kind: the branch type, None for a kind without a branch (refusing --type then).
+fn pick_branch_type(rules: Option&lt;&amp;Branching&gt;, kind: &amp;Kind, asked: Option&lt;&amp;str&gt;) -&gt; Result&lt;Option&lt;String&gt;, Failure&gt;;</code></pre>
+    <p><code>--plain</code> conflicts with <code>kind</code> and <code>branch_type</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3>src/cli/commands/new.rs, src/cli.rs <span class="pill mod">modified</span></h3>
+<pre><code>// new.rs: --kind too; records kind and workflow, no prompt (saaio new opens no pane)
+pub fn run(args: Args, store: &amp;Store, config: &amp;Config, now: u64) -&gt; Result&lt;Document, Failure&gt;;</code></pre>
+  </div>
+
+  <div class="unit">
+    <h3>src/cli/commands/hook.rs <span class="pill mod">modified</span></h3>
+<pre><code>/// The workflow a hook event's skills are read with: the flow's recorded one, else the
+/// config's default (the master, and flows from before kinds).
+fn workflow_for(store: &amp;Store, hooked: &amp;Hooked, config: &amp;Config, now: u64) -&gt; Workflow;</code></pre>
+    <p><code>hook</code> calls it before <code>adapter.translate</code>, in place of <code>&amp;config.workflow</code>.</p>
+  </div>
+
+  <div class="unit">
+    <h3>src/cli/commands/clear.rs <span class="pill mod">modified</span></h3>
+    <p>Filters with <code>flow.is_clearable()</code> in place of <code>is_finished()</code>. <code>close_pane</code> already ends a running worker's pane, so a done research flow's session goes with it. <code>drop_branch</code> finds no branch and does nothing.</p>
+  </div>
+
+  <div class="unit">
+    <h3>src/cli/output/status.rs, output/start.rs, output/flow.rs <span class="pill mod">modified</span></h3>
+    <ul>
+      <li>List rows: <code>flows[n]{name,kind,state,phase,tasks,age}</code>, kind empty for plain and older flows.</li>
+      <li>Detail: <code>kind: fix</code> after <code>mode</code>.</li>
+      <li><code>saaio start</code> and <code>saaio new</code> documents name the kind; a research start says it has no branch.</li>
+    </ul>
+  </div>
+
+  <div class="unit">
+    <h3>src/ui/newflow.rs, newflow/view.rs, app/effect.rs, app.rs, ui.rs <span class="pill mod">modified</span></h3>
+<pre><code>/// A kind the dialog offers: its name and what decides the type row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KindChoice {
+    pub name: String,
+    pub branch_types: Vec&lt;String&gt;,
+    pub branch: bool,
+}
+
+pub struct NewFlowForm {
+    ...
+    /// The kinds, the default first; a kind row is shown with two or more.
+    pub kinds: Vec&lt;KindChoice&gt;,
+    /// The picked kind, an index into kinds.
+    pub kind: usize,
+    /// Was `kind`: the picked branch type, an index into the repo's types.
+    pub branch_type: usize,
+}
+
+pub fn new(repo: PathBuf, place: String, agents: Vec&lt;String&gt;, kinds: Vec&lt;KindChoice&gt;) -&gt; NewFlowForm;
+/// The picked kind when it is not the default.
+pub fn picked_kind(&amp;self) -&gt; Option&lt;&amp;str&gt;;
+/// Whether the type row shows: the repo has types and the picked kind a branch.
+fn has_type_row(&amp;self) -&gt; bool;
+/// The kind changed, or the convention arrived: the type moves to the kind's preferred one.
+fn pick_branch_type(&amp;mut self);
+
+// app.rs: set_agents gains a sibling
+pub fn set_kinds(&amp;mut self, kinds: Vec&lt;KindChoice&gt;);</code></pre>
+    <p>Rows in order: request, <b>kind</b>, type, agent, base, mode. The kind row reads like the agent row: left and right cycle. <code>Job::args</code> adds <code>--kind &lt;name&gt;</code> when it is not the default. Plain mode hides kind, type and base, as it hides type today.</p>
+  </div>
+
+  <div class="unit">
+    <h3>src/ui/sidebar/rows.rs, src/ui/board/detail.rs <span class="pill mod">modified</span></h3>
+    <ul>
+      <li>Sidebar, first row: the faint marker on the right reads <code>fix claude</code> for a kind other than feature, <code>claude</code> for feature as today. It is clipped the way the agent is.</li>
+      <li>Board detail facts: the kind before the mode, for every flow that has one: <code>fix · guided · claude · fix/shop-230-...</code></li>
+    </ul>
+  </div>
+
+  <div class="unit">
+    <h3>src/server/master.md, master-v13.md, master.rs <span class="pill mod">modified</span></h3>
+    <p>master-v13.md is today's master.md, added to <code>INSTRUCTIONS.earlier</code>. master.md gets a bullet after the one on <code>saaio start</code>:</p>
+<pre><code>- Pick the flow's kind from the request and always pass it: `--kind fix` for a bug report or a
+  ticket of type bug, `--kind research` for a question to answer or something to find out (it
+  changes no code and has no branch or merge request), `--kind feature` for anything else. The
+  config may add kinds; an unknown one is refused with the list.</code></pre>
+    <p>The <code>idle</code> and <code>done</code> bullet adds: a research flow is done once it answers; say its findings are ready (<code>saaio status &lt;name&gt; --full</code>), and that <code>saaio clear</code> forgets it once the user has read them. The <code>--type</code> bullet says the type defaults to the kind's.</p>
+  </div>
+</section>
+
+<section class="card">
+  <h2>4. Data</h2>
+  <h3>config.toml (user, read by every command)</h3>
+<pre><code>[worker]
+kind = "fix"                     # default kind
+
+[kinds.docs]                     # a kind of one's own
+skill = "write-docs"
+branch_types = ["docs"]
+[[kinds.docs.phases]]
+name = "write"
+skills = ["write-docs"]
+
+[[phases]]                       # still accepted: the feature kind's phases</code></pre>
+  <h3>started line (flow log, private to the crate)</h3>
+  <p>The event's JSON tag is already <code>kind</code>, so the flow's kind is written <b><code>flow_kind</code></b> in the line (serde rename) and read back as <code>kind</code> in Rust:</p>
+<pre><code>{"v":1,"at":1793146307000,"kind":"started","name":"shop-230","request":"SHOP-230 fix totals on refunds",
+ "mode":"guided","flow_kind":"fix",
+ "workflow":[{"name":"diagnose","skills":["diagnose-bug"]},{"name":"implement","skills":["implement-plan"]},
+             {"name":"review","skills":["review-changes"]},{"name":"merge-request","skills":["write-merge-request"]}],
+ "prompt":"/ship-fix {request}"}
+
+research adds  "merges":false   (left out when true)</code></pre>
+  <h3>--json (programs)</h3>
+<pre><code>{ "name": "shop-230", "kind": "fix", "mode": "guided", ... }   // null for plain and older flows</code></pre>
+</section>
+
+<section class="card">
+  <h2>5. Call chains</h2>
+
+  <h3>saaio start --kind fix "SHOP-230 fix totals on refunds"</h3>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  participant S as start::run
+  participant C as Config
+  participant B as Branching
+  participant K as Kind
+  participant St as Store
+  participant G as workspace
+  S->>C: kind(Some("fix"))
+  C-->>S: ("fix", &Kind)
+  S->>B: pick_type(None, kind.branch_types)
+  B-->>S: Some("bugfix")
+  S->>K: prompt_for(agent)
+  K-->>S: "/ship-fix {request}"
+  S->>St: create(Started{kind, workflow, prompt})
+  S->>G: create_worktree(-b bugfix/SHOP-230-...)
+  S->>St: append(Workspace)
+  S--)S: error: unknown kind, Failure lists kinds
+  </pre></div>
+  <ol class="steps">
+    <li>start::run -&gt; pick_kind(config, Some("fix")): (&amp;str, &amp;Kind)</li>
+    <li>start::run -&gt; Branching::load(repo): Option&lt;Branching&gt;</li>
+    <li>start::run -&gt; pick_branch_type(branching, kind, args.branch_type): Option&lt;String&gt; -&gt; Branching::pick_type(None, &amp;kind.branch_types)</li>
+    <li>start::run -&gt; Kind::prompt_for(agent): String -&gt; Adapter::skill_call("ship-fix"): "/ship-fix"</li>
+    <li>start::run -&gt; Store::create(Started { kind: Some("fix"), workflow: Some(kind.phases), prompt: Some(..), phases: None, .. }): id</li>
+    <li>start::run -&gt; branching::branch_name(..) then free_branch: "bugfix/SHOP-230-fix-totals-on-refunds"</li>
+    <li>start::run -&gt; worktree::workspace_for(repo, name, Some(branch), slot, agent) -&gt; workspace::create_worktree</li>
+    <li>setup hook, append Workspace, fold, output::start::started: unchanged</li>
+  </ol>
+  <div class="err">
+    <p><b>Error paths</b> (all before anything is created, exit 1):</p>
+    <ul>
+      <li>Unknown kind: "no kind named fixx", help "Kinds: feature, fix, research".</li>
+      <li><code>--kind research --type feature</code>: "a research flow has no branch, so no branch type", help "Leave out --type".</li>
+      <li><code>--type</code> the repo does not list: as today.</li>
+    </ul>
+    <p>Research: step 3 returns None without reading the convention, step 6 is skipped, <code>workspace_for(.., None, ..)</code> and <code>add_argv</code> writes <code>worktree add --detach &lt;path&gt; [base]</code>.</p>
+  </div>
+
+  <h3>saaio server opens a fix flow's pane</h3>
+  <ol class="steps">
+    <li>panes -&gt; pane::worker_spec(flow, agent, env, trusted): PaneSpec</li>
+    <li>worker_spec -&gt; flow.prompt ("/ship-fix {request}"), else Kind::feature().prompt_for(agent)</li>
+    <li>worker_spec -&gt; agent_argv(agent, prompt, id, name, request): ["claude", .., "/ship-fix SHOP-230 fix totals on refunds"]</li>
+  </ol>
+  <p>A resume is unchanged: it never uses the prompt.</p>
+
+  <h3>saaio hook claude-code: the worker runs /diagnose-bug</h3>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  participant H as hook::hook
+  participant St as Store
+  participant F as fold
+  participant A as Adapter
+  H->>St: events(flow)
+  H->>F: fold(id, events)
+  F-->>H: FlowView{workflow: Some(fix)}
+  H->>A: translate(payload, &workflow)
+  A-->>H: [Phase{diagnose}]
+  H->>St: append (report)
+  </pre></div>
+  <ol class="steps">
+    <li>hook -&gt; workflow_for(store, hooked, config, now): Workflow</li>
+    <li>workflow_for (Flow) -&gt; Store::events(flow) -&gt; fold::fold(..): FlowView -&gt; view.workflow</li>
+    <li>workflow_for (Master, Nobody, a log without a workflow, or a log that cannot be read) -&gt; config.workflow().clone()</li>
+    <li>hook -&gt; adapter.translate(payload, &amp;workflow, approver): Vec&lt;EventKind&gt;</li>
+    <li>hook -&gt; report(..): as today</li>
+  </ol>
+  <p class="err">A flow name that resolves to nothing falls back to the config's workflow; <code>report</code> then logs and drops the events as today.</p>
+
+  <h3>Config::read with an old [[phases]]</h3>
+  <ol class="steps">
+    <li>Config::read -&gt; Config::parse: refuses [[phases]] beside [[kinds.feature.phases]], "&lt;file&gt;:&lt;line&gt;: ..."</li>
+    <li>Config::read -&gt; add_builtins: built-in agents (no prompts), built-in kinds under the file's</li>
+    <li>add_builtins -&gt; legacy_phases into kinds["feature"].phases; worker.prompt into kinds["feature"].prompt when the file's feature kind sets none</li>
+    <li>add_builtins: [worker] kind naming no kind -&gt; error on the [worker] line</li>
+  </ol>
+
+  <h3>New-flow dialog: pick fix and start</h3>
+  <ol class="steps">
+    <li>ui.rs -&gt; App::set_kinds(config.worker_kinds() as KindChoice) on start and on config change</li>
+    <li>App opens View::NewFlow(NewFlowForm::new(repo, place, agents, kinds))</li>
+    <li>keys: right on the kind row -&gt; form.kind += 1 -&gt; pick_branch_type(): type row moves to "bugfix"</li>
+    <li>LoadBranching answer -&gt; set_branching(..) -&gt; pick_branch_type()</li>
+    <li>enter -&gt; Job::Start(form).args(): ["start", "--mode", "guided", "--kind", "fix", "--type", "bugfix", "--", request]</li>
+    <li>A refused start shows its message under the request, as today.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2>6. Conventions followed</h2>
+  <ul>
+    <li><code>Config::kind</code> and <code>worker_kinds</code> mirror <code>Config::agent</code> and <code>worker_agents</code> (<code>config.rs:241</code>, <code>config.rs:226</code>); built-ins under the file's, as <code>add_builtins</code> does for agents (<code>config.rs:196</code>).</li>
+    <li>A built-in name replaces the built-in whole, as for agents (<code>examples/config.toml</code>, "An agent with a built-in name replaces the built-in one").</li>
+    <li>Old config shapes refused with a message on their line, as <code>parse</code> does for <code>[phases]</code> (<code>config.rs:175</code>).</li>
+    <li>Optional <code>started</code> fields with <code>skip_serializing_if</code> and old lines read back, as <code>phases</code> (<code>event.rs:39</code>, test <code>event.rs:842</code>).</li>
+    <li><code>pick_kind</code> failures list what exists, as <code>pick_agent</code> (<code>start.rs:160</code>).</li>
+    <li>Dialog rows cycle like the agent and type rows (<code>newflow.rs:37</code>); <code>Job::args</code> adds a flag only when it is not the default (<code>effect.rs:52</code>).</li>
+    <li>master.md change with the previous text kept as <code>master-v13.md</code> (<code>master.rs:24</code>).</li>
+    <li>Example file lists every built-in, so the test that compares <code>examples/config.toml</code> with the built-ins fails until it does.</li>
+    <li><b>Deviation:</b> the <code>started</code> line's field is <code>flow_kind</code>, not <code>kind</code>, because <code>kind</code> is the event's tag.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>7. Test seams</h2>
+  <ul>
+    <li><code>kind.rs</code>: unit - built-ins, <code>prompt_for</code> per adapter and with an agent prompt or a kind prompt.</li>
+    <li><code>config/tests.rs</code>: unit - <code>[kinds.*]</code> read, built-in replaced, legacy <code>[[phases]]</code> and <code>[worker] prompt</code> moved to feature, both phases refused on their line, unknown <code>[worker] kind</code>, the example file.</li>
+    <li><code>branching.rs</code>: unit - preferred types, asked wins, repo first as fallback.</li>
+    <li><code>event.rs</code>: unit - new <code>started</code> round trip, old line without the fields.</li>
+    <li><code>fold/tests.rs</code>: unit - phases from workflow, kind on the view, research's step entered on its first turn.</li>
+    <li><code>launch/worktree.rs</code>, <code>workspace.rs</code>: unit - <code>--detach</code> argv; a real detached worktree on a temp repo.</li>
+    <li><code>tests/cli/</code>: end to end - <code>start --kind fix</code> branch and recorded prompt, <code>--kind research</code> detached, unknown kind, research with <code>--type</code>, <code>status</code> list and detail and <code>--json</code> kind, <code>new --kind</code>, hook moves a fix flow to diagnose on <code>/diagnose-bug</code> with a recorded payload.</li>
+    <li><code>ui</code>: unit and golden - dialog kind row, type row following the kind, research hiding it, Job args; sidebar marker; board detail facts.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>8. Assumptions</h2>
+  <ol>
+    <li>Fix's phase names are <code>diagnose</code>, <code>implement</code>, <code>review</code>, <code>merge-request</code>; the phase colors follow position, so they look like feature's.</li>
+    <li><code>saaio new</code> takes <code>--kind</code> too, so a tracked flow shows the right steps.</li>
+    <li>A user kind must name its <code>phases</code>; a built-in name replaces it whole, no field-wise merge.</li>
+    <li>Old flows show no kind (null in <code>--json</code>, nothing in the sidebar); they are not relabelled feature.</li>
+    <li>An old flow never opened before the upgrade gets the built-in feature prompt for its agent, ignoring <code>[worker] prompt</code>.</li>
+    <li>The sidebar shows the kind only when it is not feature, so the common case stays as it looks today.</li>
+    <li>Research keeps a slot and runs the setup hook, so it can run the project.</li>
+    <li>The dialog's kind row is shown always (three built-ins), right below the request.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2>9. Decided in review</h2>
+  <ol class="q">
+    <li><b>flow_kind</b> is the key in the <code>started</code> line.</li>
+    <li><b>A research flow finishes by answering.</b> The kind's <code>branch = false</code> is recorded as <code>"merges":false</code> in <code>started</code>. In such a flow, a turn that ends without a question folds to <code>done</code> instead of <code>idle</code> (timeline "answered"); a later turn makes it working again, as a done feature flow can. Being <code>done</code> gives it what a done feature flow has: the DONE group in the sidebar, its services paused after <code>pause_after_minutes</code>, the master told it is ready. On top, <code>saaio clear</code> takes a done flow that merges nothing (<code>FlowView::is_clearable</code>): it closes its pane, runs teardown, removes its worktree (kept with uncommitted work) and forgets it, which releases its slot. A feature flow still needs its session ended first, as today, since it may still have review or merge work.</li>
+  </ol>
+</section>
+</main>

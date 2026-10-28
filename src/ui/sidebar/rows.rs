@@ -3,6 +3,7 @@
 use ratatui::text::{Line, Span};
 
 use super::{Mark, Row, Sidebar, WIDTH, digit, plain};
+use crate::config::kind::DEFAULT_KIND;
 use crate::proto::{PaneKey, PaneStatus};
 use crate::text::short_duration;
 use crate::ui::fit::{self, clip, clip_place, split};
@@ -100,9 +101,14 @@ impl Sidebar<'_> {
                 theme.ui.faint,
             ),
         };
+        // The agent, after the kind when it is not the default one: "fix claude".
         let agent = flow.workspace.as_ref().map(|space| {
             let room = width.saturating_sub(fit::spans_width(&first) + 2).max(1);
-            fit::clip(&space.agent, room)
+            let marker = match flow.kind.as_deref() {
+                Some(kind) if kind != DEFAULT_KIND => format!("{kind} {}", space.agent),
+                _ => space.agent.clone(),
+            };
+            fit::clip(&marker, room)
         });
         let marker = agent.as_ref().map(|agent| format!("{agent} "));
         let age_on_first = marker.as_ref().is_none_or(|marker| {
@@ -251,6 +257,7 @@ impl Sidebar<'_> {
                     branch,
                     worktree,
                     exists,
+                    plain,
                 } => {
                     if let Some(branch) = branch {
                         body.push(vec![
@@ -264,11 +271,7 @@ impl Sidebar<'_> {
                         "gone".to_string()
                     };
                     // A plain session's code is in its folder.
-                    let label = if branch.is_some() {
-                        " worktree "
-                    } else {
-                        " folder   "
-                    };
+                    let label = if *plain { " folder   " } else { " worktree " };
                     body.push(vec![
                         Span::styled(label, theme.ui.faint),
                         Span::styled(place, theme.ui.muted),

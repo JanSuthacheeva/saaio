@@ -27,7 +27,8 @@ the setup starts services.
 ## Worktrees
 
 - Each flow gets a [git worktree](https://git-scm.com/docs/git-worktree) in
-  `.saaio/worktrees/<name>`, on a new branch from the current checkout's `HEAD`.
+  `.saaio/worktrees/<name>`, on a new branch from the current checkout's `HEAD`. A research flow's
+  worktree has no branch: it is detached at that commit.
 - The worker runs there. The main checkout is untouched.
 - `saaio start` refuses a repository whose `.saaio` or `.saaio/worktrees` is a symbolic link, so a
   worktree is never created outside the repository.
@@ -45,7 +46,7 @@ types = ["feature", "bugfix", "hotfix", "chore"]
 ```
 
 ```
-$ saaio start --type bugfix "SHOP-230 fix totals on refunds"
+$ saaio start --kind fix "SHOP-230 fix totals on refunds"
 flow: shop-230
 ...
 branch: bugfix/SHOP-230-fix-totals-on-refunds
@@ -59,11 +60,11 @@ branch: feature/add-a-dark-mode-to
 | Key | Effect |
 | --- | --- |
 | `name` | the branch name, with placeholders |
-| `types` | allowed types. The first is the default. Optional. |
+| `types` | allowed types. The flow's kind picks the first of its own the repo lists, else the first here. Optional. |
 
 | Placeholder | Value |
 | --- | --- |
-| `{type}` | `--type` of `saaio start`, the type picked in the new-flow dialog, or the first in `types` |
+| `{type}` | `--type` of `saaio start`, the type picked in the new-flow dialog, else the first of the kind's `branch_types` that `types` lists (`bugfix` for a fix), else the first in `types` |
 | `{ticket}` | the ticket key at the start of the request, as written (`SHOP-230`) |
 | `{slug}` | up to five words of the request after the ticket key, lowercased, joined by `-` |
 | `{name}` | the flow's name |

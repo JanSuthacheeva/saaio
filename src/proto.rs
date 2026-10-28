@@ -404,6 +404,10 @@ mod tests {
                     request: "add csv".into(),
                     mode: Mode::Guided,
                     phases: None,
+                    kind: None,
+                    workflow: None,
+                    prompt: None,
+                    merges: true,
                 },
             ),
             Event::new(

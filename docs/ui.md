@@ -42,11 +42,11 @@ Workers and plain sessions follow, grouped:
 | NEEDS YOU | waiting, blocked, not responding |
 | READY | idle: the turn ended, nothing asked |
 | RUNNING | working, or a subagent is |
-| DONE | finished or ended |
+| DONE | finished, a research flow that answered, or ended |
 
 | Row line | Content |
 | --- | --- |
-| 1 | number (`1` is the top), state, name, agent, age |
+| 1 | number (`1` is the top), state, name, agent (after the kind for one other than feature: `fix claude`), age |
 | 2 | steps (`●───●───○───○`), phase, task count. Once finished: its merge request (`PR #42`, `merged`) or its state, and how long it took. Plain session: its state, such as `idle`. |
 | 3 | what it asks or does |
 
@@ -101,7 +101,7 @@ the sidebar only, not on the rail.
 ## The board
 
 `C-space o`. A card per session. Below the cards: the selected flow's phases and how long each took,
-its timeline, decisions and last answer. Its header names its request, mode, agent, branch, `on
+its timeline, decisions and last answer. Its header names its request, kind, mode, agent, branch, `on
 <base>` for a [stacked flow](flows.md#stacked-flows), slot and merge request.
 
 | Key | Does |
@@ -134,6 +134,7 @@ sidebar does not show it.
 │▌ │                                                                      │  │
 │▌ ╰──────────────────────────────────────────────────────────────────────╯  │
 │                                                                            │
+│  kind    (•) feature   ( ) fix   ( ) research                              │
 │  agent   (•) claude   ( ) codex                                            │
 │  base    main (checked out)                                                │
 │  mode    ( ) auto   (•) guided   ( ) plain    guided stops at every phase  │
@@ -147,11 +148,12 @@ sidebar does not show it.
 | Row | Holds |
 | --- | --- |
 | request | what to build, such as `SHOP-217 add CSV export`. Plain mode: the folder to open. |
-| type | the branch type, when the repository has a [branch convention](repository.md#branch-names) with types |
+| kind | the [kind of flow](flows.md#kinds): `feature`, `fix`, `research` and the config's, the default first |
+| type | the branch type, when the repository has a [branch convention](repository.md#branch-names) with types and the kind a branch. Follows the kind: `bugfix` for a fix when the repository lists it. |
 | agent | the agent to run, when there is more than one |
 | base | the branch the flow starts from and its merge request targets ([flows.md](flows.md#stacked-flows)). Empty: what the repository has checked out, shown faint. Up and down put in the branch of one of the repository's unfinished flows, the one in view first. |
 | mode | `auto`, `guided` or `plain` ([flows.md](flows.md#guided-and-auto)) |
-| creates | the branch, worktree and slot the start creates, filled in once you type, or `every slot is taken`. Plain mode: where the session opens. |
+| creates | the branch, worktree and slot the start creates, filled in once you type, or `every slot is taken`; `no branch` for a research flow. Plain mode: where the session opens. |
 
 | Key | Does |
 | --- | --- |
@@ -167,7 +169,7 @@ sidebar does not show it.
 | `esc` | cancel |
 
 In plain mode the dialog is titled `new session`, the text row is `folder`, prefilled with the
-folder in view, and the type and base rows are hidden.
+folder in view, and the kind, type and base rows are hidden.
 
 `enter` runs `saaio start`. The new session appears in the sidebar. A failed start shows its reason
 under the request.
