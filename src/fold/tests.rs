@@ -274,6 +274,10 @@ fn says_whether_an_event_changes_what_the_flow_shows() {
             request: "x".into(),
             mode: Mode::Auto,
             phases: None,
+            kind: None,
+            workflow: None,
+            prompt: None,
+            merges: true,
         },
     );
     let waiting = Event::new(1, EventKind::waiting("Which?"));
@@ -311,6 +315,10 @@ fn a_plain_session_has_no_steps_but_keeps_its_phase() {
             request: String::new(),
             mode: Mode::Plain,
             phases: None,
+            kind: None,
+            workflow: None,
+            prompt: None,
+            merges: true,
         },
     );
 
@@ -908,6 +916,10 @@ fn a_custom_workflow_mr_keeps_its_last_phase_after_a_late_skill() {
                 request: "add csv".into(),
                 mode: Mode::Auto,
                 phases: Some(vec![Phase::of("build"), Phase::of("release")]),
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
         ),
         phase(MIN, Phase::of("build")),
@@ -1232,6 +1244,10 @@ fn ignores_a_second_started_event() {
                     request: "other".into(),
                     mode: Mode::Guided,
                     phases: None,
+                    kind: None,
+                    workflow: None,
+                    prompt: None,
+                    merges: true,
                 },
             ),
         ],
@@ -1250,6 +1266,10 @@ fn started_with(at: u64, phases: &[&str]) -> Event {
             request: "SHOP-221 add CSV export".into(),
             mode: Mode::Auto,
             phases: Some(phases.iter().copied().map(Phase::of).collect()),
+            kind: None,
+            workflow: None,
+            prompt: None,
+            merges: true,
         },
     )
 }
@@ -1466,4 +1486,103 @@ fn services_still_fold_after_the_worker_ended() {
     assert_eq!(flow.state, State::Ended);
     assert_eq!(flow.changed_at, MIN);
     assert_eq!(flow.services.unwrap().status, ServiceStatus::Paused);
+}
+
+fn started_as(kind: &str, workflow: Workflow, merges: bool) -> Event {
+    Event::new(
+        0,
+        EventKind::Started {
+            name: "shop-230".into(),
+            request: "SHOP-230 why are refunds off".into(),
+            mode: Mode::Guided,
+            phases: None,
+            kind: Some(kind.into()),
+            workflow: Some(workflow),
+            prompt: Some("/ship-fix {request}".into()),
+            merges,
+        },
+    )
+}
+
+#[test]
+fn takes_the_phases_kind_and_prompt_from_the_recorded_workflow() {
+    let fix = Workflow::of(&[
+        ("diagnose", &["diagnose-bug"]),
+        ("implement", &["implement-plan"]),
+    ]);
+    let events = [
+        started_as("fix", fix.clone(), true),
+        phase(MIN, Phase::of("diagnose")),
+    ];
+
+    let flow = view(&events, 2 * MIN);
+
+    assert_eq!(flow.kind.as_deref(), Some("fix"));
+    assert_eq!(flow.workflow, Some(fix));
+    assert_eq!(flow.prompt.as_deref(), Some("/ship-fix {request}"));
+    assert!(flow.merges);
+    assert_eq!(flow.phase, Some(Phase::of("diagnose")));
+    assert_eq!(
+        flow.steps
+            .iter()
+            .map(|step| step.phase.name())
+            .collect::<Vec<_>>(),
+        ["diagnose", "implement"]
+    );
+    let old = view(&[started(0)], MIN);
+    assert_eq!((old.kind, old.workflow, old.merges), (None, None, true));
+}
+
+#[test]
+fn a_first_phase_without_skills_starts_with_the_first_turn() {
+    let research = Workflow::of(&[("research", &[])]);
+    let events = [
+        started_as("research", research, false),
+        at(MIN, EventKind::Working),
+    ];
+
+    let flow = view(&events, 2 * MIN);
+
+    assert_eq!(flow.phase, Some(Phase::of("research")));
+    assert_eq!(texts(&flow), ["started", "phase: research"]);
+    let asked = [
+        started_as(
+            "fix",
+            Workflow::of(&[("diagnose", &["diagnose-bug"])]),
+            true,
+        ),
+        at(MIN, EventKind::Working),
+    ];
+    assert_eq!(view(&asked, 2 * MIN).phase, None, "its skill starts it");
+}
+
+#[test]
+fn a_flow_that_merges_nothing_is_done_once_it_answers() {
+    let research = Workflow::of(&[("research", &[])]);
+    let idle = |ms, note: &str| at(ms, EventKind::Idle { note: note.into() });
+    let mut events = vec![
+        started_as("research", research, false),
+        at(MIN, EventKind::Working),
+        idle(3 * MIN, "Refunds round per line."),
+    ];
+
+    let done = view(&events, 10 * MIN);
+    assert_eq!(done.state, State::Done);
+    assert_eq!(done.changed_at, 3 * MIN);
+    assert_eq!(
+        texts(&done).last(),
+        Some(&"answered: Refunds round per line.")
+    );
+    assert_eq!(steps(&done), [(StepStatus::Done, Some(2 * MIN))]);
+    assert!(done.is_clearable());
+    assert!(!changes("7f3c", &events, &events[2].kind, 11 * MIN));
+
+    events.push(at(12 * MIN, EventKind::Working));
+    let again = view(&events, 13 * MIN);
+    assert_eq!(again.state, State::Working);
+    assert!(!again.is_clearable());
+    events.push(idle(14 * MIN, "And per invoice."));
+    let answered = view(&events, 20 * MIN);
+    assert_eq!(answered.state, State::Done);
+    assert_eq!(steps(&answered), [(StepStatus::Done, Some(4 * MIN))]);
 }

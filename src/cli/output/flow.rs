@@ -3,8 +3,8 @@
 use serde::Serialize;
 
 use super::{Document, toon};
-use crate::event::Phase;
 use crate::view::{FlowView, State};
+use crate::workflow::Phase;
 
 /// flow, id, existing (true when `new` found the unfinished flow of that name), how to use it.
 pub(crate) fn created(flow: &FlowView, existing: bool) -> Document {
@@ -145,7 +145,8 @@ pub(crate) fn skipped() -> Document {
 mod tests {
     use super::*;
     use crate::cli::output::fixtures::{MIN, flow};
-    use crate::event::{EventKind, Phase, Question};
+    use crate::event::{EventKind, Question};
+    use crate::workflow::Phase;
 
     #[test]
     fn created_names_the_flow_and_how_to_report_into_it() {

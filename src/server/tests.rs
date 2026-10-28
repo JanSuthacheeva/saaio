@@ -2000,6 +2000,10 @@ fn idle_flow(store: &Store, repo: &Path, name: &str) -> String {
                 request: "x".into(),
                 mode: crate::event::Mode::Auto,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
         ))
         .unwrap();

@@ -7,9 +7,9 @@ use std::collections::BTreeMap;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 
-use crate::event::Phase;
 use crate::view::{FlowView, State, Tone};
 use crate::workflow::MAX_PHASES;
+use crate::workflow::Phase;
 
 pub use palette::{ColorKey, Palette, PaletteKey, Section, hex};
 

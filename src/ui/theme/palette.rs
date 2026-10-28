@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 
 use ratatui::style::Color;
 
-use crate::event::Phase;
 use crate::workflow::MAX_PHASES;
+use crate::workflow::Phase;
 
 /// The colors a theme file names, by its keys; Color::Reset is "default", the terminal's own.
 #[derive(Debug, Clone, PartialEq, Eq)]

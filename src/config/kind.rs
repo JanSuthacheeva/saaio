@@ -121,7 +121,7 @@ fn names(parts: &[&str]) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::adapter::Adapter;
-    use crate::event::Phase;
+    use crate::workflow::Phase;
 
     fn agent(adapter: Option<Adapter>, prompt: Option<&str>) -> Agent {
         Agent {

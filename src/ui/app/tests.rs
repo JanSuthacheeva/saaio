@@ -77,6 +77,10 @@ fn worker(id: &str, mode: crate::event::Mode, age: u64, events: Vec<EventKind>) 
                 request: id.into(),
                 mode,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
         ),
         Event::new(
@@ -106,6 +110,10 @@ fn plain_session(id: &str, folder: &str, age: u64, events: Vec<EventKind>) -> Fl
                 request: String::new(),
                 mode: crate::event::Mode::Plain,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
         ),
         Event::new(
@@ -126,7 +134,7 @@ fn plain_session(id: &str, folder: &str, age: u64, events: Vec<EventKind>) -> Fl
 
 fn fleet() -> Board {
     use crate::event::Mode::{Auto, Guided};
-    use crate::event::Phase;
+    use crate::workflow::Phase;
     let phase = |name| EventKind::Phase {
         phase: Phase::of(name),
     };

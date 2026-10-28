@@ -129,6 +129,10 @@ mod tests {
                 request: "x".into(),
                 mode: Mode::Guided,
                 phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
             },
         )];
         events.push(Event::new(

@@ -1,11 +1,17 @@
-//! `Workflow`: the phases a flow walks through, the built-in four, the phase a skill starts
+//! `Workflow`: the phases a flow walks through, the built-in four, the phase a skill starts;
+//! `Phase`, a phase's name
+
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::event::Phase;
-
 /// The most phases a workflow has: the steps row and the built-in colors have room for four.
 pub const MAX_PHASES: usize = 4;
+
+/// A phase's name: plan, implement, ... as the workflow names it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct Phase(String);
 
 /// One [[phases]] entry: its name and the skills that start it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,6 +113,50 @@ impl Workflow {
             .iter()
             .find(|phase| phase.skills.iter().any(|known| known == name))
             .map(|phase| phase.name.clone())
+    }
+}
+
+impl TryFrom<String> for Phase {
+    type Error = String;
+
+    /// Lowercase letters, digits and '-'; not empty.
+    fn try_from(name: String) -> Result<Phase, String> {
+        let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
+        if name.is_empty() || !name.chars().all(allowed) {
+            return Err(format!(
+                "{name:?} is no phase name: lowercase letters, digits and -"
+            ));
+        }
+        Ok(Phase(name))
+    }
+}
+
+impl From<Phase> for String {
+    fn from(phase: Phase) -> String {
+        phase.0
+    }
+}
+
+impl FromStr for Phase {
+    type Err = String;
+
+    fn from_str(name: &str) -> Result<Phase, String> {
+        Phase::try_from(name.to_string())
+    }
+}
+
+#[cfg(test)]
+impl Phase {
+    /// A phase by a name the test knows is valid.
+    pub fn of(name: &str) -> Phase {
+        name.parse().expect("a valid phase name")
+    }
+}
+
+impl Phase {
+    /// The name the workflow, the command line and the logs use.
+    pub fn name(&self) -> &str {
+        &self.0
     }
 }
 

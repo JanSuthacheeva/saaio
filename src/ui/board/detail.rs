@@ -354,7 +354,7 @@ mod tests {
             Mode::Auto,
             vec![
                 EventKind::Phase {
-                    phase: crate::event::Phase::of("implement"),
+                    phase: crate::workflow::Phase::of("implement"),
                 },
                 EventKind::Blocked {
                     reason: "migration needs a default".into(),
@@ -466,10 +466,10 @@ mod tests {
             Mode::Auto,
             vec![
                 EventKind::Phase {
-                    phase: crate::event::Phase::of("plan"),
+                    phase: crate::workflow::Phase::of("plan"),
                 },
                 EventKind::Phase {
-                    phase: crate::event::Phase::of("implement"),
+                    phase: crate::workflow::Phase::of("implement"),
                 },
             ],
         );
@@ -554,7 +554,7 @@ mod tests {
             "shop-221",
             Mode::Auto,
             vec![EventKind::Phase {
-                phase: crate::event::Phase::of("implement"),
+                phase: crate::workflow::Phase::of("implement"),
             }],
         );
         let area = Rect::new(0, 0, 80, 6);

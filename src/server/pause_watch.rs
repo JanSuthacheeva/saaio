@@ -212,6 +212,10 @@ mod tests {
                     request: "x".into(),
                     mode: Mode::Auto,
                     phases: None,
+                    kind: None,
+                    workflow: None,
+                    prompt: None,
+                    merges: true,
                 },
             ),
             LogEvent::new(

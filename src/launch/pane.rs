@@ -306,6 +306,10 @@ mod tests {
                     request: "SHOP-217 add CSV export".into(),
                     mode: Mode::Auto,
                     phases: None,
+                    kind: None,
+                    workflow: None,
+                    prompt: None,
+                    merges: true,
                 },
             ),
             Event::new(
@@ -528,6 +532,10 @@ mod tests {
                     request: String::new(),
                     mode: Mode::Plain,
                     phases: None,
+                    kind: None,
+                    workflow: None,
+                    prompt: None,
+                    merges: true,
                 },
             ),
             Event::new(

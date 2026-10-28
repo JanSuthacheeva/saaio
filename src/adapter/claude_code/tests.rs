@@ -1,7 +1,7 @@
 //! Tests of `claude_code`: recorded payloads as flow events and turns, the `--settings` hooks
 
 use super::*;
-use crate::event::Phase;
+use crate::workflow::Phase;
 
 fn fixture(name: &str) -> Value {
     let path = format!(

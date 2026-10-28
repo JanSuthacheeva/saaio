@@ -5,10 +5,11 @@ use clap::Subcommand;
 use super::{no_flow, of_own_repo, repo_dir, views};
 use crate::adapter::calls;
 use crate::cli::output::{Document, Failure, flow};
-use crate::event::{Event, EventKind, Phase};
+use crate::event::{Event, EventKind};
 use crate::fold;
 use crate::store::Store;
 use crate::view::FlowView;
+use crate::workflow::Phase;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {

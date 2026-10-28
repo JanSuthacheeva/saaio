@@ -1,9 +1,10 @@
 //! Flows and a sample board the tests of `output::flow` and `output::status` share
 
-use crate::event::{Event, EventKind, Phase, ServiceStatus};
+use crate::event::{Event, EventKind, ServiceStatus};
 use crate::fixtures;
 use crate::fold;
 use crate::view::{Board, FlowView};
+use crate::workflow::Phase;
 
 pub(super) const MIN: u64 = 60_000;
 

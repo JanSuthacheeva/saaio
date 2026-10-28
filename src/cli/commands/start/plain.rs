@@ -39,6 +39,10 @@ pub(super) fn open(
             request: String::new(),
             mode: Mode::Plain,
             phases: None,
+            kind: None,
+            workflow: None,
+            prompt: None,
+            merges: true,
         },
     );
     let id = store.create(&first)?;

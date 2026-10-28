@@ -16,7 +16,7 @@ pub fn run(store: &Store, socket: &Path, trust: &Trust, now: u64) -> Result<Docu
     let mut names = Vec::new();
     let mut kept = Vec::new();
     let mut untrusted = Vec::new();
-    for flow in flows.iter().filter(|flow| flow.is_finished()) {
+    for flow in flows.iter().filter(|flow| flow.is_clearable()) {
         close_pane(socket, flow)?;
         let (retired, teardown) = retire_worktree(trust, flow, Uncommitted::Keep);
         if teardown == Teardown::Untrusted {

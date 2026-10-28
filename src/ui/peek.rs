@@ -398,6 +398,10 @@ mod tests {
                     request: "add csv".into(),
                     mode: crate::event::Mode::Guided,
                     phases: None,
+                    kind: None,
+                    workflow: None,
+                    prompt: None,
+                    merges: true,
                 },
             ),
             crate::event::Event::new(

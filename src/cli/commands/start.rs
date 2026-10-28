@@ -90,6 +90,10 @@ pub fn run(
             request: request.to_string(),
             mode: args.mode,
             phases: Some(config.workflow().phases()),
+            kind: None,
+            workflow: None,
+            prompt: None,
+            merges: true,
         },
     );
     let id = store.create(&first)?;

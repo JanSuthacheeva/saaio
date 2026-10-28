@@ -83,6 +83,9 @@ research branch = false
 
 ### src/workflow.rs (modified)
 
+`Phase` moves here from event.rs: `Started` now holds a `Workflow`, and workflow.rs naming
+`event::Phase` would make a cycle.
+
 `Workflow` and `PhaseSpec` derive `Serialize` always (a list of phases).
 
 ```rust
@@ -154,7 +157,8 @@ Started {
 - Phases from `workflow`, else `phases`, else `Workflow::builtin()`.
 - The view carries `kind`, `workflow`, `prompt`, `merges` from `Started`.
 - First `Working` with no phase entered: a first phase that `starts_unasked` is entered.
-- `merges: false`: `Idle` folds to `State::Done`, timeline "answered".
+- `merges: false`: `Idle` folds to `State::Done`, timeline "answered: <note>", its steps done and its
+  phase's clock stopped; a later `Working` starts the clock again.
 
 ### src/view.rs (modified)
 
@@ -407,7 +411,7 @@ Resume never uses the prompt.
 - [x] Add `Adapter::skill_call` and `src/config/kind.rs` (`Kind`, `builtins`, `feature`, `prompt_for`, `DEFAULT_KIND`) with unit tests per adapter and prompt precedence; `Workflow`/`PhaseSpec` Serialize and `Workflow::starts_unasked`
 - [x] Config: `kinds`, `legacy_phases`, `[worker] kind`, `Config::kind`, `workflow` (`worker_kinds` with the UI task, its only user); `agent_argv` takes the prompt and `worker_spec` the feature kind's, since built-in agents lost theirs; agents without built-in prompts; legacy `[[phases]]` and `[worker] prompt` moved to feature; refusals; `examples/config.toml`; config tests
 - [x] `Branching::pick_type(asked, preferred)` with unit tests
-- [ ] `Started` gains `flow_kind`, `workflow`, `prompt`, `merges`; fold reads them into `FlowView` (`kind`, `workflow`, `prompt`, `merges`), enters an unasked first phase on the first turn, folds idle to done for merges false; `FlowView::is_clearable`; event and fold tests
+- [x] `Started` gains `flow_kind`, `workflow`, `prompt`, `merges`; fold reads them into `FlowView` (`kind`, `workflow`, `prompt`, `merges`), enters an unasked first phase on the first turn, folds idle to done for merges false; `FlowView::is_clearable`; event and fold tests
 - [ ] `agent_argv` takes the prompt; `worker_spec` uses `flow.prompt` with the feature fallback; master passes ""; pane tests
 
 ### Commands

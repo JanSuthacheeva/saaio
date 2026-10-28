@@ -31,6 +31,10 @@ pub fn run(args: Args, store: &Store, workflow: &Workflow, now: u64) -> Result<D
             request: args.request,
             mode: args.mode,
             phases: Some(workflow.phases()),
+            kind: None,
+            workflow: None,
+            prompt: None,
+            merges: true,
         },
     );
     let id = store.create(&first)?;

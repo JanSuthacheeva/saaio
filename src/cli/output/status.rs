@@ -4,10 +4,11 @@ use serde::Serialize;
 
 use super::{DESCRIPTION, Document, toon};
 use crate::config::prefix::Prefix;
-use crate::event::{Phase, ServiceStatus};
+use crate::event::ServiceStatus;
 use crate::text::short_duration;
 use crate::text::{LIST_TEXT_LIMIT, truncated};
 use crate::view::{Board, FlowView, Projects, State};
+use crate::workflow::Phase;
 
 /// bin, description, then the list view.
 pub(crate) fn home(board: &Board, bin: &str, warnings: &[String]) -> Document {
@@ -425,9 +426,10 @@ fn detail_help(flow: &FlowView, worktree_exists: Option<bool>, prefix: Prefix) -
 mod tests {
     use super::*;
     use crate::cli::output::fixtures::{MIN, flow, sample_board};
-    use crate::event::{EventKind, Phase, Question};
+    use crate::event::{EventKind, Question};
     use crate::fold;
     use crate::view::VIEW_VERSION;
+    use crate::workflow::Phase;
 
     #[test]
     fn home_shows_the_binary_the_description_and_the_flows() {
