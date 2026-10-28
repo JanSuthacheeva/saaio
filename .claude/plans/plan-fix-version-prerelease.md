@@ -109,3 +109,38 @@ build.rs. `binaries::BUILD` and `release::Build` do not change.
   (<commit>)`, `saaio bug-report` names it; with that binary's server running in a scratch store,
   `saaio update` (PATH starting with its folder) shows no `servers[]`; end with `saaio --stop` on
   the scratch store
+
+## Review
+
+Fixed:
+
+- CONTRIBUTING.md Releasing step 1 did not say to update `Cargo.lock` with the version. Every rc
+  now bumps Cargo.toml, and release.yml builds and tests with `--locked`: proven by setting
+  Cargo.toml to `0.2.0-rc.2` and running `cargo metadata --locked` (exit 101, "cannot update the
+  lock file"). Docs only (b0b5b78).
+
+Open:
+
+- The new test `this_build_names_the_version_saaio_version_prints` cannot fail in any run that
+  exists: `cargo test` (CI and release.yml's Test step) builds without `SAAIO_RELEASE`, so
+  `Build::running` is `Source(CARGO_PKG_VERSION)` and BUILD starts with the same constant. It
+  guards a future change to BUILD's source, not this bug. The real guard is release.yml: the
+  exact tag match plus "Check the build names this commit" comparing `--version` with the full
+  version. Recommendation: keep it as a cheap drift guard; no change.
+- The plan's docs task says docs/install.md names the pre-release form; it was left unchanged, as
+  "Also affected" decides (it installs the latest release, never a pre-release). Recommendation:
+  correct, nothing to do.
+
+Where to look:
+
+1. `.github/workflows/release.yml` job `check`: the exact tag match and the `notes` output, then
+   the notes step reading `## [$NOTES]` and the "date the entry" check for a final only.
+2. CONTRIBUTING.md Releasing: the rc steps (Cargo.toml carries `-rc.N`, notes from the final's
+   entry, Cargo.lock with every bump).
+
+Routine, skim: the CHANGELOG Fixed line, docs/cli.md's `--version` line, the `Build::of` test
+inputs in `src/release.rs`.
+
+Checks: `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` passed at
+78e835c; since then only docs and this plan changed. The fix was docs only, so it needed no second
+review.
