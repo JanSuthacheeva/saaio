@@ -110,13 +110,14 @@
 #
 # command   the command line that starts a new session
 # prompt    the first prompt for every kind, filled into {prompt}. Unset, the flow's kind's
+#           prompt applies
 # resume    the command line that continues a session after a restart. Without it, the agent
 #           starts once and isn't resumed
 # adapter   "claude-code" or "codex", the harness whose hooks tell saaio what the agent is doing.
 #           Without it, the UI only shows whether the process is running.
 #
-# Placeholders: {id} is flow's id for the session, {name} the flow's name, {request} what you asked
-# for, {prompt} the prompt above, {session} the session id the harness picked (Codex), and
+# Placeholders: {id} is the flow's id for the session, {name} the flow's name, {request} what you
+# asked for, {prompt} the prompt above, {session} the session id the harness picked (Codex), and
 # {instructions} the path of master.md, the master's instructions.
 
 #[agents.claude]

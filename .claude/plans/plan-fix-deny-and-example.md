@@ -92,7 +92,7 @@ Fails every run.
 - [x] Run `cargo deny check` (fails today with `advisories FAILED` on RUSTSEC-2026-0414), then bump
   pulldown-cmark to 0.13.5 in `Cargo.toml` and `Cargo.lock`; `cargo deny check`, `cargo test` and
   clippy pass
-- [ ] Complete the `prompt` sentence and add "the" to `{id}` in `examples/config.toml`,
+- [x] Complete the `prompt` sentence and add "the" to `{id}` in `examples/config.toml`,
   `docs/configuration.md` and the `src/config.rs:32` comment
 - [ ] Keep the released examples as `examples/config-v1.toml` (0.1.0), `config-v2.toml`
   (0.1.1/0.1.2) and `config-v3.toml` (0.2.0-rc.1), byte for byte from their tags, and list them in

@@ -29,7 +29,7 @@ pub mod watch;
 #[serde(deny_unknown_fields)]
 pub struct Agent {
     pub command: Vec<String>,
-    /// Its own first prompt, for every kind; None takes the flow's kind's.
+    /// Its own first prompt, for every kind; None takes the flow's kind's prompt.
     #[serde(default)]
     pub prompt: Option<String>,
     /// The command that continues session {id}; an agent without one is started fresh by hand.

@@ -297,13 +297,13 @@ adapter = "claude-code"
 | Key | Required | Effect |
 | --- | --- | --- |
 | `command` | yes | command line that starts a new session, one string per argument |
-| `prompt` | no | first prompt for every kind, filled into `{prompt}`. Unset: the flow's kind's. |
+| `prompt` | no | first prompt for every kind, filled into `{prompt}`. Unset: the flow's kind's prompt. |
 | `resume` | no | command line that continues the session after a restart. Without it: started once, not resumed. |
 | `adapter` | no | `"claude-code"` or `"codex"`: the harness whose hooks report the agent's state. Without it: the UI shows only whether the process runs. |
 
 | Placeholder | Value |
 | --- | --- |
-| `{id}` | flow's id for the session |
+| `{id}` | the flow's id for the session |
 | `{name}` | the flow's name |
 | `{request}` | the request |
 | `{prompt}` | the first prompt, its placeholders filled |
