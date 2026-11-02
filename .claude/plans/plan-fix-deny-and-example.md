@@ -89,7 +89,7 @@ Fails every run.
 
 ## Tasks
 
-- [ ] Run `cargo deny check` (fails today with `advisories FAILED` on RUSTSEC-2026-0414), then bump
+- [x] Run `cargo deny check` (fails today with `advisories FAILED` on RUSTSEC-2026-0414), then bump
   pulldown-cmark to 0.13.5 in `Cargo.toml` and `Cargo.lock`; `cargo deny check`, `cargo test` and
   clippy pass
 - [ ] Complete the `prompt` sentence and add "the" to `{id}` in `examples/config.toml`,
