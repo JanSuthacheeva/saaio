@@ -108,3 +108,46 @@ Fails every run.
 - [x] End-to-end: `cargo deny check` prints `advisories ok`; a scratch `SAAIO_HOME` with a fresh
   `XDG_CONFIG_HOME` running `saaio server` once writes a config.toml whose [agents] lines read
   "Unset, the flow's kind's prompt applies" and "{id} is the flow's id"; then `saaio --stop`
+
+## Review
+
+Reviewed in an isolated context against main (95aec22), commits 87bf81e..7129ae0.
+
+### Fixed
+
+- Nothing: no finding needed a change.
+
+### Checked
+
+- `examples/earlier/config-v1.toml`, `-v2.toml`, `-v3.toml` are byte for byte the tags' examples
+  (sha1 9330ae82 = v0.1.0, b067ef56 = v0.1.1 and v0.1.2, 820ca7de = v0.2.0-rc.1), and main changed
+  `examples/config.toml` only after rc.1 was tagged, so no released text is missing.
+- `DefaultFile::ensure` replaces only an exact match, so a released example with one line edited,
+  or a newline added by an editor, stays as it is. The current example is all comments, so
+  replacing an untouched one changes no setting.
+- `Cargo.lock` moves pulldown-cmark alone, to 0.13.6 (the plan allowed the latest 0.13.x);
+  `Cargo.toml` requires 0.13.5.
+- Docs: configuration.md, files.md, install.md and CLAUDE.md now say config.toml is refreshed;
+  themes.md and flows.md still say true things (theme.toml, master.md).
+
+### Open
+
+1. Nothing guards the next change to `examples/config.toml`: whoever changes it must copy the
+   released text to `examples/earlier/config-v4.toml` and list it, or untouched files of that
+   release stop being refreshed. master.md has the same manual step. Recommended: leave it for
+   now; a release checklist line in CONTRIBUTING.md (copy the examples that changed since the last
+   tag into `examples/earlier/`) would cover both, as a separate small PR.
+
+### Where to look
+
+1. `src/config.rs` `EXAMPLE` with `src/default_file.rs` `DefaultFile::ensure`: the only behaviour
+   change, a user's config.toml rewritten at server start when it equals a released example.
+2. `src/config/tests.rs` `an_untouched_example_from_a_release_gets_the_current_one`: the
+   regression test for it.
+3. Routine, skim: `Cargo.toml`/`Cargo.lock` (one version), the comment and docs wording,
+   `examples/earlier/*` (verified copies of the tags), CHANGELOG.
+
+### Checks
+
+- `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test` and `cargo deny check`
+  passed at 9f432ca; only CHANGELOG.md and this plan changed since.
