@@ -108,7 +108,7 @@ Fails every run.
 - [x] Add a release step to CONTRIBUTING.md: before tagging, keep the last release's
   `examples/config.toml` in `examples/earlier/` and its `src/server/master.md` as the next
   `master-vN.md`, each listed in its `earlier`, when they changed since that tag (from the review)
-- [ ] End-to-end: `cargo deny check` prints `advisories ok`; a scratch `SAAIO_HOME` with a fresh
+- [x] End-to-end: `cargo deny check` prints `advisories ok`; a scratch `SAAIO_HOME` with a fresh
   `XDG_CONFIG_HOME` running `saaio server` once writes a config.toml whose [agents] lines read
   "Unset, the flow's kind's prompt applies" and "{id} is the flow's id"; then `saaio --stop`
 
