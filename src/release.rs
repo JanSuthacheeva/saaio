@@ -131,11 +131,11 @@ mod tests {
     #[test]
     fn a_build_with_a_release_stamp_is_that_release() {
         assert_eq!(
-            Build::of("v0.1.1-rc.1", "0.1.1"),
+            Build::of("v0.1.1-rc.1", "0.1.1-rc.1"),
             Build::Release(tag("v0.1.1-rc.1"))
         );
         assert_eq!(
-            Build::of("v0.1.1-rc.1", "0.1.1").version(),
+            Build::of("v0.1.1-rc.1", "0.1.1-rc.1").version(),
             &Version::parse("0.1.1-rc.1").unwrap()
         );
         assert_eq!(Build::of("", "0.1.0"), Build::Source(Version::new(0, 1, 0)));
@@ -143,5 +143,11 @@ mod tests {
             Build::of("garbage", "0.1.0"),
             Build::Source(Version::new(0, 1, 0))
         );
+    }
+
+    #[test]
+    fn this_build_names_the_version_saaio_version_prints() {
+        let printed = crate::binaries::BUILD.split(' ').next().unwrap();
+        assert_eq!(Build::running().version().to_string(), printed);
     }
 }

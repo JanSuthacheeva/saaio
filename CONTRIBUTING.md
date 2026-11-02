@@ -149,7 +149,8 @@ plain one. It keeps the symbols: a panic's backtrace in server.log names its fun
 `saaio --version` names the commit `build.rs` takes from git, only from saaio's own checkout;
 `SAAIO_COMMIT` set while building overrides it.
 
-1. Set `version` in `Cargo.toml`. In `CHANGELOG.md`, rename `## [Unreleased]` to the version and
+1. Set `version` in `Cargo.toml` and run `cargo build`, so `Cargo.lock` names it too (the
+   release builds with `--locked`). In `CHANGELOG.md`, rename `## [Unreleased]` to the version and
    its date, such as `## [0.2.0] - 2026-11-03`.
 2. Keep the defaults the last release wrote, so a newer saaio still refreshes an untouched copy:
    when `examples/config.toml` changed since the last tag, add the tag's text as the next
@@ -171,7 +172,10 @@ than the tag's, or `install.sh` fails to install from the built assets. The rele
 version's `CHANGELOG.md` section.
 
 A tag with a `-`, such as `v0.2.0-rc.1`, publishes a pre-release, which the install script skips:
-a trial run. Its `CHANGELOG.md` entry may still read `not released yet`. Delete it after the check:
+a trial run. `Cargo.toml` carries the pre-release too (`version = "0.2.0-rc.1"`), so its
+`saaio --version` names it. Its release notes are the final version's `CHANGELOG.md` section
+(`## [0.2.0]`), which may still read `not released yet`. The final release sets `0.2.0` in
+`Cargo.toml` and dates the entry. Delete a pre-release after the check:
 
 ```sh
 gh release delete v0.2.0-rc.1 --cleanup-tag --yes
