@@ -56,9 +56,6 @@ you defined in config.toml with its own `prompt` now sends it for every kind of 
 
 - A server that started while another saaio process moved server.log aside now writes to the
   new server.log, instead of to server.log.1 for as long as it runs.
-- A release candidate's `saaio --version`, bug report and UI name its pre-release, such as
-  `0.2.0-rc.2`, instead of the version it leads to, and its `saaio update` no longer lists its own
-  server as another build.
 - pulldown-cmark is updated past RUSTSEC-2026-0414. saaio never turned on the wikilinks the
   advisory is about, so it was not affected.
 - A config.toml that still holds the example an earlier saaio wrote, untouched, now gets the
