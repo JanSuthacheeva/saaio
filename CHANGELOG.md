@@ -6,17 +6,7 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
-### Fixed
-
-- A release candidate's `saaio --version`, bug report and UI name its pre-release, such as
-  `0.2.0-rc.2`, instead of the version it leads to, and its `saaio update` no longer lists its own
-  server as another build.
-- pulldown-cmark is updated past RUSTSEC-2026-0414. saaio never turned on the wikilinks the
-  advisory is about, so it was not affected.
-- A config.toml that still holds the example an earlier saaio wrote, untouched, now gets the
-  current example, with kinds of flows. An edited one stays as it is.
-
-## [0.2.0] - not released yet
+## [0.2.0] - 2026-11-02
 
 Updating from 0.1.x: run `saaio update`, then `saaio --stop`. 0.2.0 refuses a 0.1.x server that
 still runs; once it is stopped, the next `saaio` starts the server on the new version. An agent
@@ -66,6 +56,13 @@ you defined in config.toml with its own `prompt` now sends it for every kind of 
 
 - A server that started while another saaio process moved server.log aside now writes to the
   new server.log, instead of to server.log.1 for as long as it runs.
+- A release candidate's `saaio --version`, bug report and UI name its pre-release, such as
+  `0.2.0-rc.2`, instead of the version it leads to, and its `saaio update` no longer lists its own
+  server as another build.
+- pulldown-cmark is updated past RUSTSEC-2026-0414. saaio never turned on the wikilinks the
+  advisory is about, so it was not affected.
+- A config.toml that still holds the example an earlier saaio wrote, untouched, now gets the
+  current example, with kinds of flows. An edited one stays as it is.
 
 ## [0.1.2] - 2026-10-24
 
