@@ -103,7 +103,7 @@ Fails every run.
   (0.1.1/0.1.2) and `config-v3.toml` (0.2.0-rc.1), byte for byte from their tags, and list them in
   `config::EXAMPLE.earlier`; a test writes each into a scratch path and sees `ensure` replace it
   with the current example (fails today: the file is kept)
-- [ ] Add the CHANGELOG lines under `## [Unreleased]`: the pulldown-cmark update, and an untouched
+- [x] Add the CHANGELOG lines under `## [Unreleased]`: the pulldown-cmark update, and an untouched
   config.toml example now updated to the current one
 - [ ] End-to-end: `cargo deny check` prints `advisories ok`; a scratch `SAAIO_HOME` with a fresh
   `XDG_CONFIG_HOME` running `saaio server` once writes a config.toml whose [agents] lines read

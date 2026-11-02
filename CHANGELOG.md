@@ -6,6 +6,13 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- pulldown-cmark is updated past RUSTSEC-2026-0414. saaio never turned on the wikilinks the
+  advisory is about, so it was not affected.
+- A config.toml that still holds the example an earlier saaio wrote, untouched, now gets the
+  current example, with kinds of flows. An edited one stays as it is.
+
 ## [0.2.0] - not released yet
 
 Updating from 0.1.x: run `saaio update`, then `saaio --stop`. 0.2.0 refuses a 0.1.x server that
