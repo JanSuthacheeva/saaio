@@ -145,13 +145,19 @@ A `v*` tag runs `.github/workflows/release.yml`. It builds saaio natively for ma
 runs the tests on each build, attests the tarballs' build provenance and publishes a GitHub
 release with the tarballs, `SHA256SUMS` and `install.sh`. The release profile builds with thin
 LTO, one codegen unit and no debug info, so a release build takes about twice as long as a
-plain one. It keeps the symbols: a panic's backtrace in server.log names its functions. `saaio --version` names the commit `build.rs` takes from git, only from saaio's own
-checkout; `SAAIO_COMMIT` set while building overrides it.
+plain one. It keeps the symbols: a panic's backtrace in server.log names its functions.
+`saaio --version` names the commit `build.rs` takes from git, only from saaio's own checkout;
+`SAAIO_COMMIT` set while building overrides it.
 
 1. Set `version` in `Cargo.toml`. In `CHANGELOG.md`, rename `## [Unreleased]` to the version and
    its date, such as `## [0.2.0] - 2026-11-03`.
-2. Merge that to `main`.
-3. Tag `main` and push the tag:
+2. Keep the defaults the last release wrote, so a newer saaio still refreshes an untouched copy:
+   when `examples/config.toml` changed since the last tag, add the tag's text as the next
+   `examples/earlier/config-vN.toml` and list it in `config::EXAMPLE`; when `src/server/master.md`
+   changed, add it as the next `src/server/master-vN.md` and list it in `master::INSTRUCTIONS`.
+   Skip a text an earlier entry already holds.
+3. Merge that to `main`.
+4. Tag `main` and push the tag:
 
 ```sh
 git tag v0.2.0

@@ -105,7 +105,10 @@ Fails every run.
   with the current example (fails today: the file is kept)
 - [x] Add the CHANGELOG lines under `## [Unreleased]`: the pulldown-cmark update, and an untouched
   config.toml example now updated to the current one
-- [x] End-to-end: `cargo deny check` prints `advisories ok`; a scratch `SAAIO_HOME` with a fresh
+- [x] Add a release step to CONTRIBUTING.md: before tagging, keep the last release's
+  `examples/config.toml` in `examples/earlier/` and its `src/server/master.md` as the next
+  `master-vN.md`, each listed in its `earlier`, when they changed since that tag (from the review)
+- [ ] End-to-end: `cargo deny check` prints `advisories ok`; a scratch `SAAIO_HOME` with a fresh
   `XDG_CONFIG_HOME` running `saaio server` once writes a config.toml whose [agents] lines read
   "Unset, the flow's kind's prompt applies" and "{id} is the flow's id"; then `saaio --stop`
 
@@ -137,6 +140,8 @@ Reviewed in an isolated context against main (95aec22), commits 87bf81e..7129ae0
    release stop being refreshed. master.md has the same manual step. Recommended: leave it for
    now; a release checklist line in CONTRIBUTING.md (copy the examples that changed since the last
    tag into `examples/earlier/`) would cover both, as a separate small PR.
+   Decided (master, 2026-11-02): add the CONTRIBUTING.md line in this PR, covering config.toml
+   and master.md.
 
 ### Where to look
 
