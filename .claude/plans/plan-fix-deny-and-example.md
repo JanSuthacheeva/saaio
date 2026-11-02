@@ -115,45 +115,45 @@ Fails every run.
 
 ## Review
 
-Reviewed in an isolated context against main (95aec22), commits 87bf81e..7129ae0.
+Second review, in an isolated context, of 09726e2..980f89c (the CONTRIBUTING.md release step from
+the first review's open question, and plan updates). The first round (87bf81e..7129ae0) found
+nothing to change; its checks still hold: the `examples/earlier/config-v*.toml` copies match their
+tags byte for byte, and `DefaultFile::ensure` replaces only an exact match.
 
 ### Fixed
 
-- Nothing: no finding needed a change.
+- The release step covered config.toml and master.md but not theme.toml, the third `DefaultFile`
+  (`default_file::THEME_EXAMPLE`, `earlier: &[]`): the first change to `examples/theme.toml` would
+  leave untouched copies of the released text stuck. It now names theme.toml too, and the master.md
+  half says plainly that the tag's text is what gets kept (d94f36e). theme.toml is unchanged since
+  v0.1.0 (sha1 297bd657 at every tag), so nothing is missing today.
 
 ### Checked
 
-- `examples/earlier/config-v1.toml`, `-v2.toml`, `-v3.toml` are byte for byte the tags' examples
-  (sha1 9330ae82 = v0.1.0, b067ef56 = v0.1.1 and v0.1.2, 820ca7de = v0.2.0-rc.1), and main changed
-  `examples/config.toml` only after rc.1 was tagged, so no released text is missing.
-- `DefaultFile::ensure` replaces only an exact match, so a released example with one line edited,
-  or a newline added by an editor, stays as it is. The current example is all comments, so
-  replacing an untouched one changes no setting.
-- `Cargo.lock` moves pulldown-cmark alone, to 0.13.6 (the plan allowed the latest 0.13.x);
-  `Cargo.toml` requires 0.13.5.
-- Docs: configuration.md, files.md, install.md and CLAUDE.md now say config.toml is refreshed;
-  themes.md and flows.md still say true things (theme.toml, master.md).
+- master.md's released texts are all kept already: v0.1.0 and v0.1.2 shipped master-v12.md's text,
+  v0.2.0-rc.1 shipped today's master.md. The repo adds a `master-vN.md` in the PR that changes
+  master.md, so at release time the step usually finds the text held and skips it.
+- The step's names exist: `config::EXAMPLE`, `master::INSTRUCTIONS`, `default_file::THEME_EXAMPLE`,
+  `examples/earlier/`, `src/server/master-vN.md`. Nothing refers to the release steps by number.
+- The rewrapped `saaio --version` paragraph only moves words; every line stays within 100 columns.
 
 ### Open
 
-1. Nothing guards the next change to `examples/config.toml`: whoever changes it must copy the
-   released text to `examples/earlier/config-v4.toml` and list it, or untouched files of that
-   release stop being refreshed. master.md has the same manual step. Recommended: leave it for
-   now; a release checklist line in CONTRIBUTING.md (copy the examples that changed since the last
-   tag into `examples/earlier/`) would cover both, as a separate small PR.
-   Decided (master, 2026-11-02): add the CONTRIBUTING.md line in this PR, covering config.toml
-   and master.md.
+- Nothing.
 
 ### Where to look
 
 1. `src/config.rs` `EXAMPLE` with `src/default_file.rs` `DefaultFile::ensure`: the only behaviour
    change, a user's config.toml rewritten at server start when it equals a released example.
-2. `src/config/tests.rs` `an_untouched_example_from_a_release_gets_the_current_one`: the
-   regression test for it.
-3. Routine, skim: `Cargo.toml`/`Cargo.lock` (one version), the comment and docs wording,
-   `examples/earlier/*` (verified copies of the tags), CHANGELOG.
+2. `src/config/tests.rs` `an_untouched_example_from_a_release_gets_the_current_one`: its
+   regression test.
+3. `CONTRIBUTING.md` Releasing, step 2: the manual step that keeps the mechanism working for the
+   next release; nothing enforces it.
+4. Routine, skim: `Cargo.toml`/`Cargo.lock` (pulldown-cmark 0.13.6), the comment and docs wording,
+   `examples/earlier/*`, CHANGELOG.
 
 ### Checks
 
 - `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test` and `cargo deny check`
-  passed at 9f432ca; only CHANGELOG.md and this plan changed since.
+  passed at 9f432ca; only CHANGELOG.md, CONTRIBUTING.md and this plan changed since. The fix was
+  docs only and was re-read in a separate pass, not by an independent agent.
