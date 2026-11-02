@@ -74,7 +74,8 @@ The first set path wins.
 - The UI writes the file on its first run: every setting commented out at its default, one line
   per setting on what it does. Same content: [examples/config.toml](../examples/config.toml).
 - Remove the `#` in front of a setting to set it.
-- An edited file is never overwritten.
+- An edited file is never overwritten. One still as an earlier saaio wrote it gets the current
+  example.
 - Next to it: `theme.toml` ([themes.md](themes.md)), `master.md`, the master's instructions
   ([flows.md](flows.md#the-master)).
 

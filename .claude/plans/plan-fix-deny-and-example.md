@@ -77,6 +77,11 @@ Fails every run.
   dependency is `cargo deny check` itself.
 - `src/config.rs:340` stays as is.
 
+- The released examples live in `examples/earlier/`, not beside `examples/config.toml`, so a
+  reader browsing the examples does not take them for current ones (changed while building).
+- docs/files.md, docs/configuration.md, docs/install.md and CLAUDE.md say config.toml is refreshed
+  like master.md.
+
 ## Open questions
 
 1. Register the released config.toml examples as earlier defaults (copies of the 0.1.0, 0.1.2 and
@@ -94,7 +99,7 @@ Fails every run.
   clippy pass
 - [x] Complete the `prompt` sentence and add "the" to `{id}` in `examples/config.toml`,
   `docs/configuration.md` and the `src/config.rs:32` comment
-- [ ] Keep the released examples as `examples/config-v1.toml` (0.1.0), `config-v2.toml`
+- [x] Keep the released examples as `examples/earlier/config-v1.toml` (0.1.0), `config-v2.toml`
   (0.1.1/0.1.2) and `config-v3.toml` (0.2.0-rc.1), byte for byte from their tags, and list them in
   `config::EXAMPLE.earlier`; a test writes each into a scratch path and sees `ensure` replace it
   with the current example (fails today: the file is kept)

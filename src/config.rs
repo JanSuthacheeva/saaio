@@ -326,9 +326,14 @@ fn strings(parts: &[&str]) -> Vec<String> {
 }
 
 /// What saaio writes as config.toml on its first run: every setting at its default, commented out.
+/// An example a release wrote, still untouched, gets the current one.
 pub const EXAMPLE: DefaultFile = DefaultFile {
     text: include_str!("../examples/config.toml"),
-    earlier: &[],
+    earlier: &[
+        include_str!("../examples/earlier/config-v1.toml"),
+        include_str!("../examples/earlier/config-v2.toml"),
+        include_str!("../examples/earlier/config-v3.toml"),
+    ],
 };
 
 /// The agent saaio ui runs as its master when there is one and [master] names no other; else the

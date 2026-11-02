@@ -35,6 +35,31 @@ fn the_example_as_it_is_parses_to_the_built_in_config() {
 }
 
 #[test]
+fn an_untouched_example_from_a_release_gets_the_current_one() {
+    let released = [
+        include_str!("../../examples/earlier/config-v1.toml"),
+        include_str!("../../examples/earlier/config-v2.toml"),
+        include_str!("../../examples/earlier/config-v3.toml"),
+    ];
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("config.toml");
+    for text in released {
+        fs::write(&path, text).unwrap();
+
+        EXAMPLE.ensure(&path).unwrap();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), EXAMPLE.text);
+    }
+}
+
+#[test]
+fn every_earlier_example_differs_from_the_current_one() {
+    for earlier in EXAMPLE.earlier {
+        assert_ne!(*earlier, EXAMPLE.text);
+    }
+}
+
+#[test]
 fn knows_claude_code_without_a_config_file() {
     let dir = TempDir::new().unwrap();
     let config = Config::read(Some(&dir.path().join("missing.toml"))).unwrap();
