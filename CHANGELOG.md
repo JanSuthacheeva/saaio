@@ -11,6 +11,10 @@ All notable changes to saaio are listed here. The format follows
 - A release candidate's `saaio --version`, bug report and UI name its pre-release, such as
   `0.2.0-rc.2`, instead of the version it leads to, and its `saaio update` no longer lists its own
   server as another build.
+- pulldown-cmark is updated past RUSTSEC-2026-0414. saaio never turned on the wikilinks the
+  advisory is about, so it was not affected.
+- A config.toml that still holds the example an earlier saaio wrote, untouched, now gets the
+  current example, with kinds of flows. An edited one stays as it is.
 
 ## [0.2.0] - not released yet
 

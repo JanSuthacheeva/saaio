@@ -74,7 +74,8 @@ The first set path wins.
 - The UI writes the file on its first run: every setting commented out at its default, one line
   per setting on what it does. Same content: [examples/config.toml](../examples/config.toml).
 - Remove the `#` in front of a setting to set it.
-- An edited file is never overwritten.
+- An edited file is never overwritten. One still as an earlier saaio wrote it gets the current
+  example.
 - Next to it: `theme.toml` ([themes.md](themes.md)), `master.md`, the master's instructions
   ([flows.md](flows.md#the-master)).
 
@@ -297,13 +298,13 @@ adapter = "claude-code"
 | Key | Required | Effect |
 | --- | --- | --- |
 | `command` | yes | command line that starts a new session, one string per argument |
-| `prompt` | no | first prompt for every kind, filled into `{prompt}`. Unset: the flow's kind's. |
+| `prompt` | no | first prompt for every kind, filled into `{prompt}`. Unset: the flow's kind's prompt. |
 | `resume` | no | command line that continues the session after a restart. Without it: started once, not resumed. |
 | `adapter` | no | `"claude-code"` or `"codex"`: the harness whose hooks report the agent's state. Without it: the UI shows only whether the process runs. |
 
 | Placeholder | Value |
 | --- | --- |
-| `{id}` | flow's id for the session |
+| `{id}` | the flow's id for the session |
 | `{name}` | the flow's name |
 | `{request}` | the request |
 | `{prompt}` | the first prompt, its placeholders filled |
