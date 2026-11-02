@@ -105,6 +105,6 @@ Fails every run.
   with the current example (fails today: the file is kept)
 - [x] Add the CHANGELOG lines under `## [Unreleased]`: the pulldown-cmark update, and an untouched
   config.toml example now updated to the current one
-- [ ] End-to-end: `cargo deny check` prints `advisories ok`; a scratch `SAAIO_HOME` with a fresh
+- [x] End-to-end: `cargo deny check` prints `advisories ok`; a scratch `SAAIO_HOME` with a fresh
   `XDG_CONFIG_HOME` running `saaio server` once writes a config.toml whose [agents] lines read
   "Unset, the flow's kind's prompt applies" and "{id} is the flow's id"; then `saaio --stop`
