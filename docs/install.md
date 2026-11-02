@@ -181,8 +181,8 @@ From source: `cargo install --locked --git https://github.com/JanSuthacheeva/saa
   put the updated binary's folder first on PATH.
 - Unfinished flows resume after the restart.
 - Write a completion script saved to a file again, so it knows the new version's commands.
-- `master.md` is refreshed while it still holds an earlier default. `config.toml` and `theme.toml`
-  are written only when missing. Edited files stay as they are.
+- `master.md` and `config.toml` are refreshed while they still hold an earlier default. `theme.toml`
+  is written only when missing. Edited files stay as they are.
 - New versions: the UI's title row names a newer release once a day, `0.1.1 is out: saaio update`
   ([configuration.md](configuration.md#ui) turns it off). Or GitHub's Watch > Custom > Releases on
   the repository, or the [releases feed](https://github.com/JanSuthacheeva/saaio/releases.atom).

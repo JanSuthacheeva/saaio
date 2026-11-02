@@ -16,7 +16,7 @@ Location: the folder of `$SAAIO_CONFIG` if set, else `$XDG_CONFIG_HOME/saaio`, e
 - `saaio server`, which the UI starts, writes `config.toml`, `theme.toml` and `master.md` when they
   are missing.
 - An edited file is never overwritten.
-- A newer saaio refreshes `master.md` while it still holds an earlier default.
+- A newer saaio refreshes `master.md` and `config.toml` while they still hold an earlier default.
 
 ## The store
 
