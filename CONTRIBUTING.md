@@ -153,9 +153,10 @@ plain one. It keeps the symbols: a panic's backtrace in server.log names its fun
    its date, such as `## [0.2.0] - 2026-11-03`.
 2. Keep the defaults the last release wrote, so a newer saaio still refreshes an untouched copy:
    when `examples/config.toml` changed since the last tag, add the tag's text as the next
-   `examples/earlier/config-vN.toml` and list it in `config::EXAMPLE`; when `src/server/master.md`
-   changed, add it as the next `src/server/master-vN.md` and list it in `master::INSTRUCTIONS`.
-   Skip a text an earlier entry already holds.
+   `examples/earlier/config-vN.toml` and list it in `config::EXAMPLE`; when `examples/theme.toml`
+   changed, as the next `examples/earlier/theme-vN.toml`, listed in `default_file::THEME_EXAMPLE`;
+   when `src/server/master.md` changed, as the next `src/server/master-vN.md`, listed in
+   `master::INSTRUCTIONS`. Skip a text an earlier entry already holds.
 3. Merge that to `main`.
 4. Tag `main` and push the tag:
 
