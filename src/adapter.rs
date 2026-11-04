@@ -210,10 +210,6 @@ impl Adapter {
 
     /// The shell line of a call to the shell tool (Bash in both harnesses) before it runs; None
     /// for any other event or tool.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the hook takes turns in a later commit")
-    )]
     pub fn command(self, payload: &Value) -> Option<&str> {
         match self {
             Adapter::ClaudeCode | Adapter::Codex => {

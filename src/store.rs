@@ -284,10 +284,6 @@ impl Store {
     }
 
     /// The pid of the agent in the flow's pane, as the server last started it.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the hook reads it once it takes turns")
-    )]
     pub fn agent(&self, id: &str) -> Option<u32> {
         self.read_wait(&format!("{id}.agent"))
             .and_then(|text| text.trim().parse().ok())

@@ -48,10 +48,6 @@ mod system;
 mod text;
 mod trust;
 mod turn_watch;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the hook takes turns in a later commit")
-)]
 mod turns;
 mod ui;
 mod update;
