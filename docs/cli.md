@@ -700,10 +700,10 @@ Shared in the shared folder (`$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio
 $ saaio status --all
 count: 3
 needs_you: 2
-flows[3]{project,name,state,phase,tasks,age,services,turn}:
-  shop,shop-221,waiting,plan,"",2s,"",""
-  shop,shop-217,blocked,implement,4/9,2s,"",""
-  shop,scratch,idle,"","",11s,"",""
+flows[3]{project,name,kind,state,phase,tasks,age,services,turn}:
+  shop,shop-221,feature,waiting,plan,"",2s,"",""
+  shop,shop-217,fix,blocked,implement,4/9,2s,"",""
+  shop,scratch,"",idle,"","",11s,"",""
 blockers[2]{project,name,blocker}:
   shop,shop-221,Should refunds count against the original order's totals or the refund date's?
   shop,shop-217,"Task 5: the migration needs a default value"
