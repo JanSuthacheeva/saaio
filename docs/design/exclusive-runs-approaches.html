@@ -1,0 +1,144 @@
+<title>Exclusive Runs Approaches</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+/* One reading column (jasu.dev), cards per approach, mermaid diagrams scroll in their own box */
+:root {
+  color-scheme: light;
+  --surface: #f8f9fb; --card: #eceff4; --ink: #2e3440; --muted: #4c566a; --subtle: #d8dee9;
+  --border: #d8dee9; --code-bg: #e5e9f0; --code-ink: #4b6c8a; --accent: #7b5eaf; --link: #4b6c8a;
+  --constructive: #a3be8c; --warning: #d08770; --critical: #bf616a;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --gap: 24px; --radius: 6px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #2e3440; --card: #3b4252; --ink: #eceff4; --muted: #93b1cc; --subtle: #434c5e;
+  --border: #4c566a; --code-bg: #3b4252; --code-ink: #88c0d0; --accent: #bd93f9; --link: #88c0d0;
+  --warning: #ebcb8b;
+}
+body { background: var(--surface); color: var(--ink); font: 18px/1.6 var(--sans);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 32px; }
+main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--gap); }
+h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+h2 { font-size: 24px; line-height: 1.3; margin: 0; text-wrap: balance; }
+h3 { font-size: 18px; margin: 0; }
+p, ul { margin: 0; }
+ul { padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.meta { font-size: 13px; color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--gap); display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.card.pick { border-color: var(--accent); border-width: 2px; }
+.pill { display: inline-block; font-size: .8rem; font-weight: 600; letter-spacing: .05em; padding: 2px 10px; border-radius: 99px; background: var(--accent); color: var(--surface); vertical-align: middle; }
+code { font-family: var(--mono); font-size: .78em; background: var(--code-bg); color: var(--code-ink); padding: 1px 4px; border-radius: .2rem; }
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.cols > div { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pro h3 { color: var(--ink); } .pro h3::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--constructive); margin-right: 8px; }
+.con h3::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--critical); margin-right: 8px; }
+.legend { font-size: 13px; color: var(--muted); }
+a { color: var(--link); text-underline-offset: .18em; }
+@media (max-width: 560px) { .cols { grid-template-columns: 1fr; } .card { padding: 14px; } body { font-size: 17px; } }
+</style>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:8px">
+  <p class="meta">saaio - design-code, phase 2 - 2026-11-04</p>
+  <h1>One heavy run per project</h1>
+  <p>When a worker's tool call runs a command listed in the repo's <code>[exclusive] commands</code> while another worker of the same project runs one, saaio holds the call until the first run ends. Three ways to build it; pick one.</p>
+</header>
+
+<section class="card">
+  <h2>What exists today</h2>
+  <ul>
+    <li><b>The hook already holds tool calls.</b> <code>saaio hook</code> on PreToolUse sleeps in <code>wait_for_services</code> while a flow's services pause or resume, polling the flow's log every 200 ms (<code>src/cli/commands/hook.rs:121</code>, <code>:158</code>). Its PreToolUse timeout is 150 s for both harnesses (<code>src/adapter/claude_code.rs:28</code>, <code>src/adapter/codex.rs:73</code>).</li>
+    <li><b>Hooks talk to the store, not the server.</b> The hook proves its session (<code>SAAIO_PROOF</code>), appends events to <code>flows/&lt;id&gt;.jsonl</code> and never prints to stdout. It works without a running server.</li>
+    <li><b>Both harnesses give the shell line.</b> Claude Code and Codex send <code>tool_input.command</code> for Bash (<code>src/adapter/codex.rs:176</code>).</li>
+    <li><b>Repo config</b> <code>.saaio/config.toml</code> is read only by <code>Branching::load</code> for <code>[branch]</code> (<code>src/branching.rs:33</code>); <code>RepoConfig</code> is private there.</li>
+    <li><b>The pane's agent leads its own session</b> (portable-pty calls setsid, <code>src/server/host.rs:379</code>), so <code>getsid(0)</code> in the hook is the agent's pid. rustix with <code>process</code> is a dependency; nothing uses flock or reads the process table yet.</li>
+    <li><b>The sidebar</b> shows a working flow's phase name (<code>src/ui/sidebar/labels.rs:68</code>); the board card already adds <code>paused</code> from <code>FlowView.services</code> (<code>src/ui/board/cards.rs:292</code>).</li>
+    <li><b>Store = project.</b> A repository's flows share one store (<code>projects/&lt;name&gt;</code>); the shared folder spans the machine, which is where a machine-wide limit would live.</li>
+  </ul>
+</section>
+
+<section class="card pick">
+  <h2>A. Hook gate, the turn kept by a watcher <span class="pill">Recommended</span></h2>
+  <p>The turn is a flock on a file in the store. The hook takes it (waiting and reporting "waits its turn" meanwhile), then hands the locked file to a small detached <code>saaio</code> process that watches the agent's process tree and lets go once no process under the agent runs a listed command. The kernel drops a flock when its holder dies, so no lock is ever stale.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  H["saaio hook<br/>PreToolUse (modified)"] -->|"take flock, wait"| L[("store/turns/0.lock<br/>(new)")]
+  H -->|"spawn, pass locked fd"| W["turn watcher<br/>saaio hook --keep-turn (new)"]
+  W -->|"ps every 500 ms"| P["agent's process tree"]
+  H -->|"turn-waiting / turn-taken"| E[("flows/id.jsonl")]
+  E --> F["fold -> FlowView.turn (modified)"] --> S["sidebar, board, status"]
+  C["Exclusive<br/>.saaio/config.toml (new)"] --> H
+  C --> W
+  </pre></div>
+  <p class="legend">New: lock file, watcher, Exclusive. Modified: hook, fold, view, sidebar.</p>
+  <p><b>Touches:</b> <code>cli/commands/hook.rs</code>, a new <code>exclusive.rs</code> (config, matching, pure), <code>turns.rs</code> (the lock files, beside <code>store.rs</code>/<code>private.rs</code> which own file creation), a process-tree reader, <code>event.rs</code>, <code>fold.rs</code>, <code>view.rs</code>, sidebar and board labels, both adapters' PreToolUse timeout, docs.</p>
+  <p><b>Fit:</b> extends the existing hold in the hook instead of a new mechanism; state reaches the UI through events like everything else; works without a server like the services hold does.</p>
+  <div class="cols">
+    <div class="pro"><h3>Gains</h3><ul>
+      <li>Same code for Claude Code and Codex; no change to the command the agent or the permission rules see.</li>
+      <li>Background runs, <code>docker compose exec</code> and Sail are covered: the watcher sees the processes, not the tool call.</li>
+      <li>Crash safe by the kernel: watcher killed, agent gone, process killed - all release.</li>
+      <li>Machine-wide later = lock folder in the shared folder, limit N = N lock files.</li>
+    </ul></div>
+    <div class="con"><h3>Costs</h3><ul>
+      <li>Reads the process table (<code>ps</code>) twice a second while a turn is held.</li>
+      <li>A grace window: if no listed process shows up within ~10 s (tool denied or failed to start), the turn is let go; a permission prompt extends it.</li>
+      <li>Waiter order is not strictly first-come.</li>
+      <li>PreToolUse timeout must rise to ~30 min, the longest a call can wait.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>B. Rewrite the command to run under a lock</h2>
+  <p>The hook answers PreToolUse with an <code>updatedInput</code> that wraps the line: <code>saaio exclusive -- sh -c '&lt;line&gt;'</code>. The wrapper takes the flock, runs the line and exits when it ends, so the turn is exactly the run's lifetime.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  H["saaio hook (modified)<br/>prints updatedInput"] --> T["harness runs<br/>saaio exclusive -- sh -c line (new)"]
+  T -->|"flock for its lifetime"| L[("store/turns/0.lock (new)")]
+  T --> R["the heavy run"]
+  </pre></div>
+  <div class="cols">
+    <div class="pro"><h3>Gains</h3><ul>
+      <li>The turn ends exactly when the wrapped line ends; no process-table polling, no grace window.</li>
+    </ul></div>
+    <div class="con"><h3>Costs</h3><ul>
+      <li>Codex's PreToolUse has no verified way to rewrite input; Claude Code only.</li>
+      <li>Permission allowlists (<code>Bash(php artisan test:*)</code>) match the rewritten line, so allowed commands start asking.</li>
+      <li>The wait happens inside the tool: the worker shows working, not waiting its turn, unless the hook also waits.</li>
+      <li>Wrapping in <code>sh -c</code> changes quoting and loses a <code>cd</code> the agent relied on; the hook would print to stdout, which it never does today.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>C. The server hands out turns</h2>
+  <p><code>saaio server</code> owns the turns: the hook asks over the socket, the server already knows every pane's pid, watches the trees and answers when it is the caller's turn. The UI state comes straight from the server.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  H["saaio hook (modified)"] -->|"ask turn (new message)"| S["saaio server<br/>turns.rs (new)"]
+  S --> P["pane process trees"]
+  S --> U["UI board"]
+  </pre></div>
+  <div class="cols">
+    <div class="pro"><h3>Gains</h3><ul>
+      <li>One owner of the state; fair first-come order; no extra process per turn.</li>
+    </ul></div>
+    <div class="con"><h3>Costs</h3><ul>
+      <li>Hooks gain a socket dependency and a new role in <code>proto::allowed</code>; without a server, calls run unheld.</li>
+      <li>One server per store: a machine-wide limit needs servers to coordinate, the growth path the request names.</li>
+      <li>A server restart loses every turn in flight.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Recommendation</h2>
+  <p><b>A.</b> It is the only one that meets every requirement on both harnesses: it holds before the call so the sidebar can say "waits its turn", the kernel makes stale locks impossible, the watcher keeps background runs' turns until their processes end, and moving the lock folder from the store to the shared folder is the whole machine-wide step. Its cost is a <code>ps</code> poll while a turn is held and a short grace window, both small next to a test suite.</p>
+  <p class="meta">Reply with A, B, C or a mix. Questions about matching, timeouts and the sidebar look come on the implementation page.</p>
+</section>
+</main>

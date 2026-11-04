@@ -1,0 +1,550 @@
+<title>Exclusive Runs Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+/* One reading column (jasu.dev); unit cards, code blocks and diagrams scroll inside their own box */
+:root {
+  color-scheme: light;
+  --surface: #f8f9fb; --card: #eceff4; --ink: #2e3440; --muted: #4c566a; --subtle: #d8dee9;
+  --border: #d8dee9; --code-block: #2e3440; --code-text: #eceff4; --code-bg: #e5e9f0; --code-ink: #4b6c8a;
+  --accent: #7b5eaf; --link: #4b6c8a; --constructive: #a3be8c; --warning: #d08770; --critical: #bf616a;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --gap: 24px; --radius: 6px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #2e3440; --card: #3b4252; --ink: #eceff4; --muted: #93b1cc; --subtle: #434c5e;
+  --border: #4c566a; --code-block: #3b4252; --code-bg: #3b4252; --code-ink: #88c0d0; --accent: #bd93f9; --link: #88c0d0;
+  --warning: #ebcb8b;
+}
+body { background: var(--surface); color: var(--ink); font: 18px/1.6 var(--sans);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 32px; }
+main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--gap); }
+h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+h2 { font-size: 24px; line-height: 1.3; margin: 0; text-wrap: balance; }
+h3 { font-size: 18px; margin: 0; font-family: var(--mono); word-break: break-all; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
+.meta { font-size: 13px; color: var(--muted); }
+section { display: flex; flex-direction: column; gap: 16px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--gap); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.tag { display: inline-block; font-size: .72rem; font-weight: 600; letter-spacing: .05em; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); font-family: var(--sans); vertical-align: middle; margin-left: 6px; }
+.tag.new { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+.tag.mod { background: var(--warning); color: #2e3440; border-color: var(--warning); }
+code { font-family: var(--mono); font-size: .82em; background: var(--code-bg); color: var(--code-ink); padding: 1px 4px; border-radius: .2rem; }
+pre.code { background: var(--code-block); color: var(--code-text); border-radius: var(--radius); padding: 14px; overflow-x: auto; margin: 0; font: 13.5px/1.5 var(--mono); }
+pre.code code { background: none; color: inherit; padding: 0; font-size: inherit; }
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
+.steps { font-family: var(--mono); font-size: 14px; }
+.steps li { word-break: break-word; }
+.err { color: var(--critical); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--subtle); }
+.table { overflow-x: auto; }
+.q { border-left: 4px solid var(--accent); padding-left: 12px; }
+a { color: var(--link); text-underline-offset: .18em; }
+@media (max-width: 560px) { .card { padding: 14px; } body { font-size: 17px; } }
+</style>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:8px">
+  <p class="meta">saaio - design-code, phase 3 - 2026-11-04 - approach A</p>
+  <h1>One heavy run per project</h1>
+</header>
+
+<section class="card">
+  <h2>1. Decision recap</h2>
+  <p>A worker's PreToolUse hook takes the project's turn (an flock on <code>&lt;store&gt;/turns/0.lock</code>) before a listed command runs, waiting and saying so while another worker has it. It hands the locked file to a detached <code>saaio turn</code> watcher, which keeps the turn while any process under the worker's agent runs a listed command.</p>
+  <p>Decided in phase 2: approach A. It matches on word boundaries, so Sail and <code>docker compose exec</code> lines are caught. A crash releases the turn through the kernel. A background run keeps it until its process ends. The scope is the project now, and the lock folder and the number of lock files are the knobs for a machine-wide limit later.</p>
+  <p><b>Review round 1:</b> the person's own config.toml gets <code>[exclusive] enabled</code>, a switch for the whole feature on their machine. The repo says which commands are heavy; the person decides whether their machine takes turns.</p>
+  <p><b>Changed since phase 2:</b> Claude Code starts its shells in a new process group (seen in this session: the Bash tool's zsh has its own pgid), so <code>getsid</code> in the hook may not be the agent. Instead the server records each worker pane's agent pid in the store, and the hook checks it is its own ancestor.</p>
+</section>
+
+<section class="card">
+  <h2>2. Structure overview</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart TB
+  subgraph cli["cli/commands"]
+    hook["hook.rs (mod)"]
+    turn["turn.rs (new, hidden)"]
+    start["start.rs (mod)"]
+  end
+  subgraph pure["pure"]
+    excl["exclusive.rs (new)"]
+    watch["turn_watch.rs (new)"]
+    fold["fold.rs (mod)"]
+    adapter["adapter.rs + both adapters (mod)"]
+  end
+  subgraph files["files and processes"]
+    turns["turns.rs (new)"]
+    procs["processes.rs (new)"]
+    store["store.rs (mod)"]
+    repo["repo_config.rs (new)"]
+  end
+  subgraph server["server"]
+    panes["panes.rs + host.rs (mod)"]
+  end
+  subgraph ui["ui + output"]
+    side["sidebar/labels.rs (mod)"]
+    cards["board/cards.rs, detail.rs (mod)"]
+    status["output/status.rs (mod)"]
+  end
+  hook --> adapter
+  hook --> repo --> excl
+  hook --> turns
+  hook --> procs
+  hook --> store
+  hook -->|spawns, locked fd| turn
+  turn --> watch
+  turn --> procs
+  turn --> excl
+  start --> repo
+  panes -->|agent pid| store
+  fold --> side
+  fold --> cards
+  fold --> status
+  </pre></div>
+  <p class="meta">event.rs and view.rs (both modified) carry the two new events and the fold's result between hook, fold and the UI.</p>
+</section>
+
+<section>
+  <h2>3. Units</h2>
+
+  <div class="card">
+    <h3>src/repo_config.rs <span class="tag new">new</span></h3>
+    <p>A repo's <code>.saaio/config.toml</code>, read once for every section. <code>RepoConfig</code> and <code>CONFIG_FILE</code> move here from <code>branching.rs</code>.</p>
+<pre class="code"><code>pub const CONFIG_FILE: &amp;str = ".saaio/config.toml";
+
+#[derive(Debug, Default, Deserialize)]
+pub struct RepoConfig {
+    pub branch: Option&lt;Branching&gt;,
+    pub exclusive: Option&lt;Exclusive&gt;,
+}
+
+impl RepoConfig {
+    /// &lt;repo&gt;/.saaio/config.toml; the default without the file; Err when it cannot be read or parsed.
+    pub fn load(repo: &amp;Path) -&gt; Result&lt;RepoConfig&gt;;
+}</code></pre>
+    <p class="meta">branching.rs loses <code>load</code> and <code>RepoConfig</code>; start.rs and ui.rs call <code>RepoConfig::load(&amp;repo)?.branch</code>.</p>
+  </div>
+
+  <div class="card">
+    <h3>src/config.rs + examples/config.toml <span class="tag mod">modified</span></h3>
+    <p>The person's switch, beside <code>[services]</code>. Later <code>scope</code> and <code>limit</code> would go here too.</p>
+<pre class="code"><code>/// [exclusive] in the person's config.toml.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ExclusiveConfig {
+    /// Calls that run a command the repo lists wait their turn. true unless set.
+    pub enabled: bool,
+}
+
+pub struct Config { ..., pub exclusive: ExclusiveConfig }
+
+// examples/config.toml
+#[exclusive]
+# A tool call that runs a command the repo lists under [exclusive] in .saaio/config.toml
+# waits while another worker of the project runs one. false lets them run at once.
+#enabled = true</code></pre>
+  </div>
+
+  <div class="card">
+    <h3>src/exclusive.rs <span class="tag new">new</span></h3>
+    <p>The commands a repo lists as heavy, and whether a command line runs one (pure).</p>
+<pre class="code"><code>/// [exclusive] in a repo's config.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Exclusive {
+    /// "artisan test", "pint": one or more words each.
+    #[serde(deserialize_with = "commands")]
+    pub commands: Vec&lt;String&gt;,
+}
+
+impl Exclusive {
+    /// The first listed command `line` runs: its words in a row, on word boundaries,
+    /// anywhere in the line ("./vendor/bin/sail pint" runs "pint", "pint.json" does not).
+    pub fn runs(&amp;self, line: &amp;str) -&gt; Option&lt;&amp;str&gt;;
+}
+
+/// Refuses an empty list entry or one that is only spaces.
+fn commands&lt;'de, D: Deserializer&lt;'de&gt;&gt;(de: D) -&gt; Result&lt;Vec&lt;String&gt;, D::Error&gt;;</code></pre>
+  </div>
+
+  <div class="card">
+    <h3>src/turns.rs <span class="tag new">new</span></h3>
+    <p>The lock files that are the turns, and who holds one. It is allowed to create files, as <code>slots.rs</code> does through <code>private::options()</code>.</p>
+<pre class="code"><code>/// Who holds a turn: written into its lock file in place, read by those who wait.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Holder {
+    pub flow: String,    // id
+    pub name: String,    // shown to waiters
+    pub command: String, // the listed command it runs
+}
+
+/// The turns of a scope: `limit` lock files in `dir`.
+#[derive(Debug, Clone)]
+pub struct Turns {
+    dir: PathBuf,
+    limit: u8,
+}
+
+/// A taken turn: its lock file, open and locked; dropping it releases the turn.
+#[derive(Debug)]
+pub struct Turn {
+    file: File,
+}
+
+pub enum Take {
+    Taken(Turn),
+    /// `holder.flow` already holds one: its watcher covers this run too.
+    Own,
+    /// Every turn is held; the holder of the first.
+    Held(Option&lt;Holder&gt;),
+}
+
+impl Turns {
+    /// A project's turn: one, in &lt;store&gt;/turns. (A machine-wide scope later: the
+    /// shared folder's turns/, with its own limit.)
+    pub fn of_project(store: &amp;Store) -&gt; Turns;
+
+    /// Tries every lock file without waiting: Taken with `holder` written in, Own
+    /// when a held one names `holder.flow`, else Held.
+    pub fn try_take(&amp;self, holder: &amp;Holder) -&gt; Result&lt;Take&gt;;
+}
+
+impl Turn {
+    /// The locked file, for the watcher's stdin; the lock lives as long as it is open.
+    pub fn into_file(self) -&gt; File;
+}</code></pre>
+  </div>
+
+  <div class="card">
+    <h3>src/processes.rs <span class="tag new">new</span></h3>
+    <p>The process table as <code>ps</code> prints it, and which processes run under a given one.</p>
+<pre class="code"><code>#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Process {
+    pub pid: u32,
+    pub ppid: u32,
+    /// Its argv joined by spaces.
+    pub command: String,
+}
+
+/// Every process: `ps -A -o pid=,ppid=,command=`, with a 1 s deadline
+/// (workspace::process::output).
+pub fn list() -&gt; Result&lt;Vec&lt;Process&gt;&gt;;
+
+/// `ps` output read; a line that does not parse is skipped.
+fn parse(text: &amp;str) -&gt; Vec&lt;Process&gt;;
+
+/// The processes below `root`, children and theirs.
+pub fn under(all: &amp;[Process], root: u32) -&gt; Vec&lt;&amp;Process&gt;;
+
+/// True when `root` is `pid` or one of its ancestors.
+pub fn descends(all: &amp;[Process], pid: u32, root: u32) -&gt; bool;</code></pre>
+  </div>
+
+  <div class="card">
+    <h3>src/turn_watch.rs <span class="tag new">new</span></h3>
+    <p>When a held turn is let go (pure). The watcher feeds it one look every 500 ms.</p>
+<pre class="code"><code>/// What one look at the processes found.
+#[derive(Debug, Clone, Copy)]
+pub struct Look {
+    pub agent_alive: bool,
+    /// A process under the agent runs a listed command.
+    pub runs: bool,
+    /// The flow waits on a permission prompt (FlowView.permission).
+    pub asks: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Keep {
+    Hold,
+    Release(Release),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Release {
+    AgentGone,
+    RunEnded,
+    /// No listed process showed up within GRACE (denied, failed to start).
+    NeverRan,
+}
+
+/// How long a turn waits for its run to show up; a permission prompt pauses it.
+pub const GRACE: Duration = Duration::from_secs(10);
+
+#[derive(Debug)]
+pub struct TurnWatch { /* since, seen, quiet looks */ }
+
+impl TurnWatch {
+    pub fn new(now: u64) -&gt; TurnWatch;
+    /// Hold or release after `look` at `now`; a run ends after two quiet looks in a row.
+    pub fn step(&amp;mut self, now: u64, look: Look) -&gt; Keep;
+}</code></pre>
+  </div>
+
+  <div class="card">
+    <h3>src/cli/commands/turn.rs <span class="tag new">new, hidden</span></h3>
+    <p><code>saaio turn</code>: the watcher. It keeps the turn on its stdin while the agent runs a listed command. Like Hook and Wait, it runs without a store check in <code>cli::run</code>, and it prints nothing.</p>
+<pre class="code"><code>#[derive(Debug, clap::Args)]
+pub struct Args {
+    /// The flow whose turn it keeps.
+    #[arg(long)]
+    flow: String,
+    /// The pid of its agent.
+    #[arg(long)]
+    agent: u32,
+}
+
+/// Looks every LOOK_STEP (500 ms) until TurnWatch releases; logs why to server.log;
+/// exiting closes stdin, which releases the turn.
+pub fn run(args: &amp;Args, env: &amp;Env, clock: fn() -&gt; u64) -&gt; Document;</code></pre>
+    <p class="meta">cli.rs: <code>#[command(hide = true)] Turn(turn::Args)</code>, dispatched beside Hook. It reads the patterns from the flow's repo itself (<code>RepoConfig::load</code>), so no command line is passed through argv.</p>
+  </div>
+
+  <div class="card">
+    <h3>src/cli/commands/hook.rs <span class="tag mod">modified</span></h3>
+    <p>After <code>wait_for_services</code>, a flow's PreToolUse whose line runs a listed command waits for the turn.</p>
+<pre class="code"><code>/// The longest a tool call waits for its turn, then runs anyway.
+const TURN_WAIT: Duration = Duration::from_mins(30);
+
+/// Before a flow's tool call whose `line` runs a command its repo lists: takes the
+/// project's turn, waiting (TurnWaiting once, TurnTaken at the end) while another flow
+/// has it, and hands it to `saaio turn`. Logs and lets the call run when the config
+/// breaks, the agent is unknown, or TURN_WAIT ran out.
+fn wait_for_turn(store: &amp;Store, id: &amp;str, line: &amp;str, log: &amp;Log, clock: fn() -&gt; u64);
+
+/// Starts `saaio turn --flow id --agent pid` in a process group of its own, `turn` as its
+/// stdin, nothing else open.
+fn keep_turn(turn: Turn, id: &amp;str, agent: u32) -&gt; Result&lt;()&gt;;</code></pre>
+    <p class="meta">In <code>run</code>: <code>if config.exclusive.enabled &amp;&amp; let Some(line) = adapter.command(&amp;payload) { wait_for_turn(...) }</code> after the services wait. The hook already loads the config (the built-in one when it breaks), so a broken config.toml keeps turns on.</p>
+  </div>
+
+  <div class="card">
+    <h3>src/adapter.rs, claude_code.rs, codex.rs <span class="tag mod">modified</span></h3>
+<pre class="code"><code>impl Adapter {
+    /// The shell line of a PreToolUse Bash call; None for any other event or tool.
+    pub fn command(self, payload: &amp;Value) -&gt; Option&lt;&amp;str&gt;;
+}
+
+// both adapters: PreToolUse may now wait for a turn too
+const TOOL_HOOK_TIMEOUT_SECS: u64 = 1_980; // TURN_WAIT + RESUME_WAIT + 60 s</code></pre>
+  </div>
+
+  <div class="card">
+    <h3>src/store.rs <span class="tag mod">modified</span>, src/server/panes.rs + host.rs <span class="tag mod">modified</span></h3>
+<pre class="code"><code>impl Store {
+    /// waits/&lt;id&gt;.agent: the pid of the flow's agent, which the server writes when it
+    /// opens the pane. Removed with the flow.
+    pub fn set_agent(&amp;self, id: &amp;str, pid: u32) -&gt; Result&lt;()&gt;;
+    pub fn agent(&amp;self, id: &amp;str) -&gt; Option&lt;u32&gt;;
+}
+
+impl Host {
+    /// Now returns the child's pid.
+    pub fn open(&amp;mut self, spec: PaneSpec) -&gt; Result&lt;u32&gt;;
+}
+// Panes::open_pane: for PaneKey::Flow(id), store.set_agent(id, pid), an error logged.</code></pre>
+  </div>
+
+  <div class="card">
+    <h3>event.rs, view.rs, fold.rs <span class="tag mod">modified</span></h3>
+    <p>Two events; the fold keeps a <code>turn</code> on the view while the flow waits for one.</p>
+<pre class="code"><code>// fold.rs, Folding::apply
+EventKind::TurnWaiting { command, holder } =&gt; view.turn = Some(TurnWait { .. since: at })
+EventKind::TurnTaken =&gt; view.turn = None
+// also cleared by Idle, Waiting, Blocked and Ended: a hook killed mid-wait leaves no stale label
+
+// fold::changes: TurnWaiting always; TurnTaken only while view.turn is Some</code></pre>
+  </div>
+
+  <div class="card">
+    <h3>ui/sidebar/labels.rs, ui/board/cards.rs + detail.rs, cli/output/status.rs <span class="tag mod">modified</span></h3>
+<pre class="code"><code>// sidebar state_label: flow.turn.is_some() =&gt; "waits turn" (theme.ui.muted), glyph unchanged
+// sidebar note (third row): "after shop-42: pint"
+// board card: "working · waits turn" (like "· paused")
+// detail: "waits its turn for pint since 14:02; shop-42 runs pest"
+// status TOON: turn column, empty or "waiting"; --json: FlowView.turn</code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>4. Data</h2>
+<pre class="code"><code>// event.rs - the log (private to the crate)
+EventKind::TurnWaiting { command: String, holder: String }  // {"kind":"turn-waiting",...}
+EventKind::TurnTaken                                         // the wait ended: taken or given up
+
+// view.rs - crosses to the UI (postcard) and the --json contract
+pub struct FlowView { ..., pub turn: Option&lt;TurnWait&gt; }
+#[serde(rename_all = "camelCase")]
+pub struct TurnWait {
+    pub command: String, // the listed command it waits to run
+    pub holder: String,  // the flow that has the turn, by name
+    pub since: u64,
+}
+
+// &lt;store&gt;/turns/0.lock - holder JSON, written in place while locked (never replaced:
+// a new inode would be a second lock)
+{"flow":"7f3c...","name":"shop-42","command":"pest"}
+
+// &lt;store&gt;/waits/&lt;id&gt;.agent - the agent's pid as text
+
+// ~/.config/saaio/config.toml - the person's switch
+[exclusive]
+enabled = true
+
+// .saaio/config.toml - the repo's heavy commands
+[exclusive]
+commands = ["artisan test", "sail test", "pest", "pint", "phpstan"]</code></pre>
+  <p class="meta">A new <code>turn</code> field with <code>#[serde(default)]</code> is additive, so <code>VIEW_VERSION</code> stays 3. An older binary that reads a log with the new events skips the lines it cannot parse, as <code>Store::events</code> already does.</p>
+</section>
+
+<section>
+  <h2>5. Call chains</h2>
+
+  <div class="card">
+    <h3>a) A listed command, the turn free</h3>
+    <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  participant CC as harness
+  participant H as saaio hook
+  participant T as Turns
+  participant W as saaio turn
+  CC->>H: PreToolUse Bash "./vendor/bin/sail pint"
+  H->>H: wait_for_services
+  H->>H: RepoConfig::load, Exclusive::runs = "pint"
+  H->>T: try_take(holder)
+  T-->>H: Taken(turn)
+  H->>W: spawn, stdin = locked file
+  H-->>CC: exit 0, the tool runs
+  loop every 500 ms
+    W->>W: processes::list, under(agent), runs?
+  end
+  W-->>W: Release(RunEnded), exit, lock gone
+    </pre></div>
+    <ol class="steps">
+      <li>hook::run -&gt; config.exclusive.enabled: true (false: the call runs, nothing else happens)</li>
+      <li>hook::run -&gt; Adapter::command(&amp;payload): Some(line)</li>
+      <li>hook::run -&gt; wait_for_turn(store, id, line, log, clock)</li>
+      <li>wait_for_turn -&gt; fold::fold(id, events): FlowView -&gt; repo_dir(&amp;flow): PathBuf</li>
+      <li>wait_for_turn -&gt; RepoConfig::load(&amp;repo): RepoConfig -&gt; Exclusive::runs(line): Some("pint")</li>
+      <li>wait_for_turn -&gt; Store::agent(id): Some(pid) -&gt; processes::list() -&gt; processes::descends(all, own pid, pid): true</li>
+      <li>wait_for_turn -&gt; Turns::of_project(store).try_take(&amp;holder): Take::Taken(turn)</li>
+      <li>wait_for_turn -&gt; keep_turn(turn, id, pid): Ok</li>
+      <li>turn::run -&gt; TurnWatch::new(now); loop: processes::list -&gt; under(all, agent) -&gt; Exclusive::runs(p.command) -&gt; fold for permission -&gt; TurnWatch::step(now, look): Hold ... Release(RunEnded)</li>
+      <li>turn::run returns Document::Silent; stdin closes; the kernel drops the flock</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>b) Another flow has the turn</h3>
+    <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  participant H as saaio hook (shop-43)
+  participant T as Turns
+  participant L as flows/shop-43.jsonl
+  participant U as server -> UI
+  H->>T: try_take
+  T-->>H: Held(shop-42, pest)
+  H->>L: TurnWaiting{pint, shop-42}
+  L-->>U: refold: "waits turn"
+  loop every 500 ms, up to 30 min
+    H->>T: try_take
+  end
+  T-->>H: Taken(turn)
+  H->>L: TurnTaken
+  H->>H: keep_turn, exit 0
+    </pre></div>
+    <ol class="steps">
+      <li>wait_for_turn -&gt; Turns::try_take(&amp;holder): Take::Held(Some(holder of shop-42))</li>
+      <li>wait_for_turn -&gt; Store::append(id, TurnWaiting { command: "pint", holder: "shop-42" }) (once)</li>
+      <li>server StoreWatch -&gt; fold: FlowView.turn = Some(..) -&gt; Board -&gt; sidebar "waits turn", note "after shop-42: pint"</li>
+      <li>wait_for_turn sleeps TURN_STEP (500 ms) -&gt; Turns::try_take: Held ... Taken(turn)</li>
+      <li>wait_for_turn -&gt; Store::append(id, TurnTaken) -&gt; keep_turn(turn, id, pid)</li>
+      <li class="err">TURN_WAIT ran out -&gt; Store::append(id, TurnTaken) -&gt; log "waited 30m for the turn (shop-42 runs pest); the tool runs" -&gt; return, the call runs unheld</li>
+      <li class="err">the harness kills the hook (Esc) -&gt; no TurnTaken; the next Idle, Waiting, Blocked or Ended clears view.turn</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>c) The same flow already holds the turn</h3>
+    <ol class="steps">
+      <li>wait_for_turn -&gt; Turns::try_take(&amp;holder): Take::Own -&gt; return (its watcher sees this run among the agent's processes too)</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>d) Watcher releases</h3>
+    <ol class="steps">
+      <li>TurnWatch::step(look { agent_alive: false, .. }): Release(AgentGone) - the worker crashed or its pane closed</li>
+      <li>TurnWatch::step(look { runs: false, .. }) twice in a row after a run was seen: Release(RunEnded) - finished, killed, or a background run's process exited</li>
+      <li>TurnWatch::step(look { runs: false, asks: false, .. }) past GRACE, no run seen yet: Release(NeverRan) - log "the turn was not used within 10s"</li>
+      <li class="err">processes::list fails (ps missing or past its deadline) -&gt; log, count as runs: true until 3 failures in a row, then release</li>
+      <li class="err">the watcher is killed -&gt; the kernel drops the flock; nothing to clean</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>e) Errors before a turn</h3>
+    <ol class="steps">
+      <li class="err">RepoConfig::load: Err (broken toml) -&gt; log "{file}: ..." -&gt; the call runs unheld. <code>saaio start</code> already fails loudly on the same file.</li>
+      <li class="err">Store::agent: None (a pane an older server opened) or the pid is not the hook's ancestor -&gt; log -&gt; runs unheld</li>
+      <li class="err">Turns::try_take: Err (folder or file cannot be made) -&gt; log -&gt; runs unheld</li>
+      <li class="err">keep_turn: Err (spawn failed) -&gt; log -&gt; the turn drops when the hook exits; runs unheld</li>
+    </ol>
+    <p class="meta">Every error fails open: a broken turn never stops a worker, and the hook stays silent on stdout as it is today.</p>
+  </div>
+</section>
+
+<section class="card">
+  <h2>6. Conventions followed</h2>
+  <ul>
+    <li>The hook holds a tool call by polling the store, as <code>wait_for_services</code> does (<code>src/cli/commands/hook.rs:158</code>). Its errors go to server.log through <code>Log</code> (<code>:206</code>).</li>
+    <li>The flock on a file opened through <code>private::options()</code>, with std <code>File::lock</code> / <code>try_lock</code>, mirrors <code>Slots::lock</code> (<code>src/slots.rs:73</code>). No unsafe; no new crate.</li>
+    <li>External commands run with a deadline through <code>workspace::process::output</code> (<code>src/workspace/process.rs:31</code>).</li>
+    <li>Hidden subcommands that run without a store check: Hook, Wait (<code>src/cli.rs:74-92</code>).</li>
+    <li>The services state from events, labels on card and detail: <code>EventKind::Services</code> (<code>src/event.rs:142</code>), <code>cards.rs:288</code>, <code>detail.rs:123</code>.</li>
+    <li>Per-session files in <code>waits/</code>, removed with the flow (<code>src/store.rs:347</code>).</li>
+    <li>Deviation: <code>turns.rs</code> writes into a file it holds open (the holder), instead of <code>write_atomic</code>, because replacing the file would make a second lock.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>7. Test seams</h2>
+  <ul>
+    <li><b>exclusive.rs</b>: unit, a table of lines (Sail, compose exec, docker exec, <code>pint.json</code>, quotes, <code>&amp;&amp;</code>, paths, multi-word).</li>
+    <li><b>repo_config.rs</b>: unit with temp dirs; branch and exclusive together, missing file, invalid entries.</li>
+    <li><b>turns.rs</b>: unit with temp dirs: take, held by another open handle, Own, released on drop, holder read back.</li>
+    <li><b>processes.rs</b>: <code>parse</code>, <code>under</code> and <code>descends</code> on fixed text; one test runs <code>list</code> and finds itself.</li>
+    <li><b>turn_watch.rs</b>: unit, every Release path, grace paused by a permission prompt, the two quiet looks.</li>
+    <li><b>fold.rs</b>: TurnWaiting and TurnTaken, cleared by Idle and Ended, <code>changes</code>.</li>
+    <li><b>labels, cards, detail, status</b>: their existing render tests and the golden files.</li>
+    <li><b>tests/cli/turn.rs</b>: end to end with the real binary: two fake flows in a scratch store; flow A's hook takes the turn while a <code>sleep</code> named <code>pint</code> runs under a fake agent; flow B's hook waits, logs TurnWaiting, and goes on after the process is killed.</li>
+    <li><b>E2E</b>: a scratch store, two Claude workers in a repo with <code>[exclusive]</code>; one runs a slow listed command in the background, the other's call waits and the sidebar says so.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>8. Assumptions</h2>
+  <ul>
+    <li>Word boundaries: a listed word is not preceded or followed by a letter, digit, <code>_</code>, <code>.</code> or <code>-</code>, so <code>vendor/bin/pint</code> and <code>test:parallel</code> match but <code>pint.json</code> does not. A line that only mentions a command (<code>git commit -m "fix pint"</code>) also waits; that's rare and harmless.</li>
+    <li><code>sail test</code> is caught only when listed: it never contains <code>artisan test</code>. The docs example lists it.</li>
+    <li>Waiters are not served strictly first come; each polls every 500 ms.</li>
+    <li>Every flow session waits, plain sessions included, when its folder's repository lists commands. The master never waits.</li>
+    <li>The sidebar keeps the spinner, its label says <code>waits turn</code> in the muted color, and its third row says <code>after shop-42: pint</code>.</li>
+    <li>A turn whose run never shows up is let go after 10 s; a permission prompt for that call pauses the clock.</li>
+    <li>Only the Bash tool is matched: Claude Code's Bash and Codex's shell. Other tools (an MCP that runs tests) are not.</li>
+    <li>Using a turn needs no repository trust: listing commands can only make calls wait, never run anything.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>9. Decided</h2>
+  <p>Approved 2026-11-04 with the recommended answers: a call waits at most 30 minutes, then runs anyway; <code>turn</code> in the JSON and TOON output; <code>[exclusive] enabled</code> defaults to <code>true</code>. The questions as they were asked:</p>
+  <div class="q"><p><b>1. How long can a call wait for its turn?</b> I suggest 30 minutes, after which the call runs anyway (logged, and the wait label goes). The PreToolUse timeout rises from 150 s to 33 min for every tool, though only listed commands use it. The alternative is no limit, which needs a timeout of hours. Codex's maximum hook timeout still has to be checked; the first build task verifies it.</p></div>
+  <div class="q"><p><b>2. JSON contract name.</b> <code>FlowView.turn: { command, holder, since }</code> in <code>saaio status --json</code>, and a <code>turn</code> column (empty or <code>waiting</code>) in the TOON output. OK?</p></div>
+  <div class="q"><p><b>3. The switch's default.</b> <code>[exclusive] enabled</code> in your own config.toml. I suggest <code>true</code>: a repo that lists commands already opted in, and a teammate with a big machine turns it off for themselves. With <code>false</code>, nobody waits until they enable it, even in a repo that lists commands. The machine-wide <code>scope</code> would join this section later. Which default?</p></div>
+</section>
+</main>
