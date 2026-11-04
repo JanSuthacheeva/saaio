@@ -336,7 +336,7 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 - [x] Add `turns.rs` (`Turns`, `Turn`, `Holder`, `Take`, `try_take`, `into_file`) with lock tests
 - [x] Add `processes.rs` (`list`, `parse`, `under`, `descends`) with tests
 - [x] Add `turn_watch.rs` (`TurnWatch`, `Look`, `Keep`, `Release`) with tests for every release
-- [ ] Add `TurnWaiting`/`TurnTaken` events, `FlowView.turn`/`TurnWait`, and their fold and `changes`, with fold tests
+- [x] Add `TurnWaiting`/`TurnTaken` events, `FlowView.turn`/`TurnWait`, and their fold and `changes`, with fold tests
 - [ ] Add `Store::set_agent`/`agent` (removed with the flow); `Host::open` returns the pid; `Panes::open_pane` records it; tests
 - [ ] Add `Adapter::command` and raise both adapters' PreToolUse timeout to 1980 s, with adapter tests
 - [ ] Add the hidden `saaio turn` command (`cli/commands/turn.rs`)

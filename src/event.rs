@@ -145,6 +145,14 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
+    /// A tool call that runs `command` waits for the project's turn, which `holder` (a flow's
+    /// name) has.
+    TurnWaiting {
+        command: String,
+        holder: String,
+    },
+    /// The waiting call has its turn, or stopped waiting for it.
+    TurnTaken,
 }
 
 /// A step of pausing or resuming a flow's services.
@@ -269,6 +277,10 @@ impl EventKind {
             EventKind::BaseMerged { base, onto } => {
                 clean(base, TEXT_LIMIT);
                 clean(onto, TEXT_LIMIT);
+            }
+            EventKind::TurnWaiting { command, holder } => {
+                clean(command, TEXT_LIMIT);
+                clean(holder, TEXT_LIMIT);
             }
             EventKind::Message { text }
             | EventKind::Typed { text }
@@ -560,6 +572,27 @@ mod tests {
             )
             .to_line(),
             r#"{"v":1,"at":7,"kind":"typed","text":"/compact"}"#
+        );
+    }
+
+    #[test]
+    fn writes_a_turn_waited_for_and_taken() {
+        let waiting = Event::new(
+            7,
+            EventKind::TurnWaiting {
+                command: "artisan test".into(),
+                holder: "shop-42".into(),
+            },
+        );
+        let line = waiting.to_line();
+        assert_eq!(
+            line,
+            r#"{"v":1,"at":7,"kind":"turn-waiting","command":"artisan test","holder":"shop-42"}"#
+        );
+        assert_eq!(Event::from_line(&line), Some(waiting));
+        assert_eq!(
+            Event::new(8, EventKind::TurnTaken).to_line(),
+            r#"{"v":1,"at":8,"kind":"turn-taken"}"#
         );
     }
 

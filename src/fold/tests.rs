@@ -3,7 +3,7 @@
 use super::*;
 use crate::event::{Question, ServiceStatus};
 use crate::fixtures;
-use crate::view::Services;
+use crate::view::{Services, TurnWait};
 
 const MIN: u64 = 60_000;
 
@@ -1471,6 +1471,79 @@ fn a_failed_pause_or_resume_is_a_problem_in_the_timeline() {
     assert_eq!(services.status, ServiceStatus::ResumeFailed);
     assert_eq!(services.reason.as_deref(), Some("port 8003 is taken"));
     assert_eq!(flow.changed_at, 0);
+}
+
+fn turn_waiting(at_ms: u64) -> Event {
+    at(
+        at_ms,
+        EventKind::TurnWaiting {
+            command: "artisan test".into(),
+            holder: "shop-42".into(),
+        },
+    )
+}
+
+#[test]
+fn a_call_waiting_for_its_turn_shows_until_it_has_it() {
+    let events = [
+        started(0),
+        at(MIN, EventKind::Working),
+        turn_waiting(2 * MIN),
+        at(5 * MIN, EventKind::TurnTaken),
+    ];
+
+    let waiting = view(&events[..3], 3 * MIN);
+    assert_eq!(waiting.state, State::Working);
+    assert_eq!(
+        waiting.turn,
+        Some(TurnWait {
+            command: "artisan test".into(),
+            holder: "shop-42".into(),
+            since: 2 * MIN,
+        })
+    );
+    assert_eq!(
+        waiting.changed_at,
+        view(&events[..2], 3 * MIN).changed_at,
+        "waiting is no change of the flow"
+    );
+    assert_eq!(view(&events, 6 * MIN).turn, None);
+}
+
+#[test]
+fn a_turn_stops_waiting_when_the_flow_stops() {
+    let stops = [
+        EventKind::Idle {
+            note: "Done.".into(),
+        },
+        EventKind::waiting("Which one?"),
+        EventKind::Blocked {
+            reason: "tests fail".into(),
+        },
+        EventKind::Ended,
+    ];
+    for stop in stops {
+        let events = [
+            started(0),
+            at(MIN, EventKind::Working),
+            turn_waiting(2 * MIN),
+            at(3 * MIN, stop.clone()),
+        ];
+        assert_eq!(view(&events, 4 * MIN).turn, None, "{stop:?}");
+    }
+}
+
+#[test]
+fn waiting_for_a_turn_and_having_it_change_the_flow() {
+    let events = [started(0), at(MIN, EventKind::Working)];
+    let waiting = turn_waiting(2 * MIN);
+    assert!(changes("x", &events, &waiting.kind, 2 * MIN));
+    assert!(
+        !changes("x", &events, &EventKind::TurnTaken, 2 * MIN),
+        "nothing waited"
+    );
+    let events = [started(0), at(MIN, EventKind::Working), waiting];
+    assert!(changes("x", &events, &EventKind::TurnTaken, 3 * MIN));
 }
 
 #[test]

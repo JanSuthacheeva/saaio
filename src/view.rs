@@ -69,6 +69,19 @@ pub struct FlowView {
     pub permission: bool,
     /// Where its services stand; None until saaio first pauses them.
     pub services: Option<Services>,
+    /// The tool call that waits for the project's turn; None when none waits.
+    #[serde(default)]
+    pub turn: Option<TurnWait>,
+}
+
+/// A tool call waiting for the project's turn: the listed command it runs, the flow that has the
+/// turn and since when.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnWait {
+    pub command: String,
+    pub holder: String,
+    pub since: u64,
 }
 
 /// Where a flow's services stand since saaio first paused them, since when, and why a pause or
@@ -383,6 +396,7 @@ mod tests {
             questions: Vec::new(),
             permission: false,
             services: None,
+            turn: None,
         }
     }
 

@@ -5,7 +5,7 @@ use crate::store::FlowLog;
 use crate::text;
 use crate::view::{
     Board, FlowView, ReviewCount, Services, Session, State, Step, StepStatus, Tasks, TimelineEntry,
-    Tone, VIEW_VERSION, Workspace,
+    Tone, TurnWait, VIEW_VERSION, Workspace,
 };
 use crate::workflow::Phase;
 use crate::workflow::Workflow;
@@ -82,6 +82,7 @@ fn shown(view: &FlowView) -> impl PartialEq + '_ {
             view.answer.as_deref(),
             view.session.as_ref(),
             &view.questions,
+            view.turn.as_ref(),
         ),
     )
 }
@@ -199,6 +200,7 @@ impl Folding {
             questions: Vec::new(),
             permission: false,
             services: None,
+            turn: None,
         };
         let phases = match (workflow, phases) {
             (Some(workflow), _) => workflow.phases(),
@@ -441,6 +443,14 @@ impl Folding {
                     reason: reason.clone(),
                 });
             }
+            EventKind::TurnWaiting { command, holder } => {
+                self.view.turn = Some(TurnWait {
+                    command: command.clone(),
+                    holder: holder.clone(),
+                    since: at,
+                });
+            }
+            EventKind::TurnTaken => self.view.turn = None,
             EventKind::Ended => {
                 self.pending_permission = None;
                 self.ended = true;
@@ -449,6 +459,16 @@ impl Folding {
                 self.stopped_at.get_or_insert(at);
                 self.note(at, "ended".to_string(), Tone::Neutral);
             }
+        }
+        // A call that waited for its turn is over once the turn stopped.
+        if matches!(
+            event.kind,
+            EventKind::Idle { .. }
+                | EventKind::Waiting { .. }
+                | EventKind::Blocked { .. }
+                | EventKind::Ended
+        ) {
+            self.view.turn = None;
         }
         if self.view.state != State::Waiting {
             self.view.questions.clear();
