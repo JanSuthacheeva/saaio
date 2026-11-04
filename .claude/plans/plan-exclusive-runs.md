@@ -421,7 +421,7 @@ the docs under After review (2026-11-04).
 - Open: whether a harness can fire `UserPromptSubmit` while a hook still waits for its turn (a
   prompt queued or steered mid-turn, notably Codex). Then `waits turn` disappears early while the
   call still waits; cosmetic, the call itself is unaffected. Recommendation: accept; revisit only if
-  seen.
+  seen. Decided: accepted.
 - The hand check (Esc kills the waiting hook, recorded in HANDOVER) was not repeated here.
 
 Checks: `cargo test`, clippy and `cargo fmt --check` passed at e9e0d06; the second review changed
