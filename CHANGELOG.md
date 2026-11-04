@@ -6,6 +6,8 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-05
+
 ### Added
 
 - Heavy commands run one at a time per project: list them in a repository's
