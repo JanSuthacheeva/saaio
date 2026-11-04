@@ -24,8 +24,8 @@ const EVENTS: [&str; 8] = [
 /// Seconds Claude Code waits for `saaio hook` before it goes on without it.
 const HOOK_TIMEOUT_SECS: u64 = 10;
 /// Seconds Claude Code waits for `saaio hook` before a tool call: long enough for paused services
-/// to come back (hook::RESUME_WAIT).
-const TOOL_HOOK_TIMEOUT_SECS: u64 = 150;
+/// to come back (hook::RESUME_WAIT) and a heavy command to wait for its turn (hook::TURN_WAIT).
+const TOOL_HOOK_TIMEOUT_SECS: u64 = 1_980;
 /// Seconds Claude Code lets an asyncRewake waiter sleep before it ends it: a week.
 const WAIT_TIMEOUT_SECS: u64 = 604_800;
 /// The events that arm a session's waiter: its start (the master starts without a prompt) and

@@ -208,6 +208,23 @@ impl Adapter {
         }
     }
 
+    /// The shell line of a call to the shell tool (Bash in both harnesses) before it runs; None
+    /// for any other event or tool.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the hook takes turns in a later commit")
+    )]
+    pub fn command(self, payload: &Value) -> Option<&str> {
+        match self {
+            Adapter::ClaudeCode | Adapter::Codex => {
+                if !self.before_tool(payload) || payload["tool_name"] != "Bash" {
+                    return None;
+                }
+                payload["tool_input"]["command"].as_str()
+            }
+        }
+    }
+
     /// The payload is a tool call that asks the user (Claude Code's AskUserQuestion), so the
     /// flow waits on it rather than works.
     pub fn asks(self, payload: &Value) -> bool {
@@ -256,6 +273,35 @@ pub fn cut(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_shell_line_of_a_bash_call_before_it_runs() {
+        let fixture = |name: &str| -> Value {
+            let path = format!("{}/src/adapter/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+        };
+        assert_eq!(
+            Adapter::Codex.command(&fixture("codex/pre_bash_skill.json")),
+            Some("cat .agents/skills/demo-skill/SKILL.md")
+        );
+        let mut bash = fixture("claude-code/pre_write.json");
+        bash["tool_name"] = "Bash".into();
+        bash["tool_input"] = serde_json::json!({ "command": "php artisan test" });
+        assert_eq!(Adapter::ClaudeCode.command(&bash), Some("php artisan test"));
+
+        assert_eq!(
+            Adapter::ClaudeCode.command(&fixture("claude-code/pre_write.json")),
+            None
+        );
+        assert_eq!(
+            Adapter::ClaudeCode.command(&fixture("claude-code/post_bash.json")),
+            None
+        );
+        assert_eq!(
+            Adapter::Codex.command(&fixture("codex/post_bash.json")),
+            None
+        );
+    }
 
     #[test]
     fn reads_the_same_name_from_a_config_file_and_the_command_line() {
