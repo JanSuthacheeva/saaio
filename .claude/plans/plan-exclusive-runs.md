@@ -334,7 +334,7 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 - [x] Add `exclusive.rs` (`Exclusive`, `runs`, `commands` validation) and `RepoConfig.exclusive`, with the matching table tests
 - [x] Add `ExclusiveConfig` to config.rs and the commented `[exclusive]` block to examples/config.toml, with tests
 - [x] Add `turns.rs` (`Turns`, `Turn`, `Holder`, `Take`, `try_take`, `into_file`) with lock tests
-- [ ] Add `processes.rs` (`list`, `parse`, `under`, `descends`) with tests
+- [x] Add `processes.rs` (`list`, `parse`, `under`, `descends`) with tests
 - [ ] Add `turn_watch.rs` (`TurnWatch`, `Look`, `Keep`, `Release`) with tests for every release
 - [ ] Add `TurnWaiting`/`TurnTaken` events, `FlowView.turn`/`TurnWait`, and their fold and `changes`, with fold tests
 - [ ] Add `Store::set_agent`/`agent` (removed with the flow); `Host::open` returns the pid; `Panes::open_pane` records it; tests
