@@ -351,3 +351,50 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 - [x] Show the wait: sidebar label and note, board card, detail, status `turn` column; update goldens
 - [x] Docs: docs/repository.md (heavy commands section with the Sail example), docs/configuration.md (`[exclusive] enabled`), docs/cli.md and docs/json.md (`turn`), docs/ui.md (sidebar), the Codex caveat in docs/repository.md, CHANGELOG Unreleased Added, ROADMAP Planned future (machine-wide limit), CLAUDE.md architecture lines for the new modules
 - [x] End to end: scratch store, two Claude workers in a repo with `[exclusive]`; one runs a slow listed command in the background, the other's call waits with `waits turn` in the sidebar and goes on when the first process ends; kill a watcher and see the turn free; `enabled = false` lets both run
+
+## Review
+
+Isolated review of `flow/exclusive-runs` against `main` and this plan (2026-11-04).
+
+### Fixed
+
+- docs/json.md: the new Turn section replaced the `### Workspace` heading, leaving the Workspace
+  table under Turn and the `#workspace` link dead (6c17a9b).
+- docs/cli.md: the `saaio status --all` example the branch touched lacked the `kind` column the
+  code prints (`project,name,kind,...`) (6c17a9b).
+
+### Open
+
+- A Claude Code Esc while a call waits for its turn: Claude Code runs no hook on Esc
+  (HANDOVER), so if it kills the waiting hook no `TurnTaken` follows and `waits turn` stays on
+  the flow through its whole next turn, until a Stop (Idle) clears it; if it does not kill the
+  hook, the hook keeps waiting and takes the turn later, released after GRACE. Not proven either
+  way. Recommendation: check it once by hand; if it sticks, clear `turn` on UserPromptSubmit
+  (a prompt event of its own, since `Working` is folded away by `changes`).
+- Parallel heavy calls of one Claude Code turn: if Claude Code runs every PreToolUse hook of a
+  batch before any tool, the second hook waits for a run that cannot start until it returns;
+  NeverRan frees it after 10 s and both then run at once. No deadlock, but a 10 s stall and no
+  exclusivity. Recommendation: accept; note it if seen in practice.
+- `TurnWaiting` names the holder at the first try only; a third flow taking the turn later is
+  not shown, and a holder read mid-write shows as "another flow". Cosmetic; accept.
+- `saaio turn` folds the flow's whole log every 500 ms for `asks` while a run lasts. Fine for
+  today's log sizes; revisit if logs grow large.
+
+### Where to look
+
+1. `src/cli/commands/hook.rs` `wait_for_turn` -> `agent_of` -> `keep_turn`: the lock handed as
+   stdin to a detached `saaio turn`, the harness pids, every fail-open path.
+2. `src/cli/commands/turn.rs` `run` / `look` with `src/turn_watch.rs` `step`: when a turn is let
+   go (agent gone, two quiet looks, 10 s grace paused while asking, 3 failed `ps`).
+3. `src/turns.rs` `try_take`: the holder written in place into the locked file.
+4. `src/fold.rs`: what clears `turn` (TurnTaken, Idle, Waiting, Blocked, Ended).
+
+Routine, skim: repo_config.rs (moved from branching.rs), exclusive.rs matching table, config
+`[exclusive] enabled` and examples/earlier/config-v4.toml (byte-identical to main's example),
+UI labels, status column, docs.
+
+### Checks
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` passed at
+2318ba4; later commits change only the plan and docs. The fixes are docs only, so no production
+code needed a second review.
