@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use crate::branching::Branching;
+use crate::exclusive::Exclusive;
 
 pub const CONFIG_FILE: &str = ".saaio/config.toml";
 
@@ -16,6 +17,12 @@ pub const CONFIG_FILE: &str = ".saaio/config.toml";
 pub struct RepoConfig {
     /// `[branch]`: the branch convention.
     pub branch: Option<Branching>,
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the hook reads it once it takes turns")
+    )]
+    /// `[exclusive]`: the heavy commands, one run at a time across the project.
+    pub exclusive: Option<Exclusive>,
 }
 
 impl RepoConfig {
@@ -50,6 +57,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let config = RepoConfig::load(dir.path()).unwrap();
         assert_eq!(config.branch, None);
+        assert_eq!(config.exclusive, None);
     }
 
     #[test]
@@ -62,6 +70,26 @@ mod tests {
         let branch = RepoConfig::load(dir.path()).unwrap().branch.unwrap();
         assert_eq!(branch.name, "{type}/{ticket}-{slug}");
         assert_eq!(branch.types, ["feature", "bugfix"]);
+    }
+
+    #[test]
+    fn loads_the_exclusive_section_beside_the_branch() {
+        let dir = TempDir::new().unwrap();
+        write(
+            &dir,
+            "[branch]\nname = \"{name}\"\n\n[exclusive]\ncommands = [\"artisan test\", \"pint\"]\n",
+        );
+        let config = RepoConfig::load(dir.path()).unwrap();
+        assert_eq!(config.branch.unwrap().name, "{name}");
+        assert_eq!(config.exclusive.unwrap().commands, ["artisan test", "pint"]);
+    }
+
+    #[test]
+    fn refuses_an_empty_command() {
+        let dir = TempDir::new().unwrap();
+        write(&dir, "[exclusive]\ncommands = [\"pint\", \"\"]\n");
+        let error = format!("{:#}", RepoConfig::load(dir.path()).unwrap_err());
+        assert!(error.contains("a command needs a word"), "{error}");
     }
 
     #[test]

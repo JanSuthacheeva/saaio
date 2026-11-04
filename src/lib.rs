@@ -22,6 +22,7 @@ mod config;
 mod default_file;
 mod deliver;
 mod event;
+mod exclusive;
 #[cfg(test)]
 mod fixtures;
 mod fold;
