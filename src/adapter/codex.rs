@@ -167,7 +167,7 @@ pub fn translate(payload: &Value, workflow: &Workflow, approver: Approver) -> Ve
     let mut kinds: Vec<EventKind> = session(payload).into_iter().collect();
     match event {
         "UserPromptSubmit" => {
-            kinds.push(EventKind::Working);
+            kinds.extend([EventKind::Working, EventKind::Prompted]);
             let skill = payload["prompt"].as_str().and_then(mentioned_skill);
             if let Some(phase) = skill.and_then(|skill| workflow.phase_of(skill)) {
                 kinds.push(EventKind::Phase { phase });

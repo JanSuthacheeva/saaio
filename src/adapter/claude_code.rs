@@ -125,7 +125,7 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
     }
     match payload["hook_event_name"].as_str().unwrap_or("") {
         "UserPromptSubmit" => {
-            let mut kinds = vec![EventKind::Working];
+            let mut kinds = vec![EventKind::Working, EventKind::Prompted];
             let skill = payload["prompt"].as_str().and_then(typed_skill);
             if let Some(phase) = skill.and_then(|skill| workflow.phase_of(skill)) {
                 kinds.push(EventKind::Phase { phase });

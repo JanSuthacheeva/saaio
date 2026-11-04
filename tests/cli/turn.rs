@@ -97,6 +97,15 @@ impl Project {
     }
 
     fn hook_for(&self, id: &str, line: &str, config: Option<&Path>) -> Child {
+        let payload = serde_json::json!({
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": { "command": line },
+        });
+        self.send(id, &payload, config)
+    }
+
+    fn send(&self, id: &str, payload: &serde_json::Value, config: Option<&Path>) -> Child {
         let mut command = hook_command(self.home.path(), &["claude-code"], Some(id));
         if let Some(config) = config {
             command.env("SAAIO_CONFIG", config);
@@ -107,11 +116,6 @@ impl Project {
             .stderr(Stdio::piped())
             .spawn()
             .unwrap();
-        let payload = serde_json::json!({
-            "hook_event_name": "PreToolUse",
-            "tool_name": "Bash",
-            "tool_input": { "command": line },
-        });
         child
             .stdin
             .take()
@@ -186,6 +190,24 @@ fn a_heavy_call_waits_while_another_flow_runs_one_and_goes_on_after_it() {
     let log = project.server_log();
     let ended = format!("turn watch flow {}: the run ended", project.a);
     assert!(log.contains(&ended), "{log}");
+}
+
+#[test]
+fn a_prompt_after_a_call_stopped_waiting_clears_the_wait() {
+    let project = Project::new();
+    ends_silently(project.hook(&project.a, None));
+    let _heavy = project.run_heavy();
+    let mut waiting = project.hook(&project.b, None);
+    project.wait_for(&project.b, "turn-waiting");
+    waiting.kill().unwrap();
+    waiting.wait().unwrap();
+
+    let prompt = serde_json::json!({ "hook_event_name": "UserPromptSubmit", "prompt": "go on" });
+    ends_silently(project.send(&project.b, &prompt, None));
+
+    assert!(project.log(&project.b).contains(r#""kind":"prompted""#));
+    let status = stdout(&saaio(project.home.path(), &["status", "shop-b", "--json"]));
+    assert!(status.contains(r#""turn": null"#), "{status}");
 }
 
 #[test]

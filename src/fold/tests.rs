@@ -1521,6 +1521,7 @@ fn a_turn_stops_waiting_when_the_flow_stops() {
             reason: "tests fail".into(),
         },
         EventKind::Ended,
+        EventKind::Prompted,
     ];
     for stop in stops {
         let events = [
@@ -1544,6 +1545,18 @@ fn waiting_for_a_turn_and_having_it_change_the_flow() {
     );
     let events = [started(0), at(MIN, EventKind::Working), waiting];
     assert!(changes("x", &events, &EventKind::TurnTaken, 3 * MIN));
+}
+
+#[test]
+fn a_prompt_changes_the_flow_only_when_a_call_waited_for_its_turn() {
+    let events = [started(0), at(MIN, EventKind::Working)];
+    assert!(!changes("x", &events, &EventKind::Prompted, 2 * MIN));
+    let events = [
+        started(0),
+        at(MIN, EventKind::Working),
+        turn_waiting(2 * MIN),
+    ];
+    assert!(changes("x", &events, &EventKind::Prompted, 3 * MIN));
 }
 
 #[test]

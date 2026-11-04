@@ -41,12 +41,13 @@ fn after_session(kinds: Vec<EventKind>) -> Vec<EventKind> {
 fn a_prompt_means_working_and_a_mentioned_skill_its_phase() {
     assert_eq!(
         events("user_prompt"),
-        after_session(vec![EventKind::Working])
+        after_session(vec![EventKind::Working, EventKind::Prompted])
     );
     assert_eq!(
         events("user_prompt_skill"),
         after_session(vec![
             EventKind::Working,
+            EventKind::Prompted,
             EventKind::Phase {
                 phase: Phase::of("plan")
             }

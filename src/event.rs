@@ -153,6 +153,9 @@ pub enum EventKind {
     },
     /// The waiting call has its turn, or stopped waiting for it.
     TurnTaken,
+    /// The worker got a prompt: a call that waited for its turn is over, though an Esc that
+    /// killed its hook said nothing.
+    Prompted,
 }
 
 /// A step of pausing or resuming a flow's services.
@@ -593,6 +596,10 @@ mod tests {
         assert_eq!(
             Event::new(8, EventKind::TurnTaken).to_line(),
             r#"{"v":1,"at":8,"kind":"turn-taken"}"#
+        );
+        assert_eq!(
+            Event::new(9, EventKind::Prompted).to_line(),
+            r#"{"v":1,"at":9,"kind":"prompted"}"#
         );
     }
 

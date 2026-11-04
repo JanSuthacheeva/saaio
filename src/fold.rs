@@ -450,7 +450,7 @@ impl Folding {
                     since: at,
                 });
             }
-            EventKind::TurnTaken => self.view.turn = None,
+            EventKind::TurnTaken | EventKind::Prompted => self.view.turn = None,
             EventKind::Ended => {
                 self.pending_permission = None;
                 self.ended = true;
