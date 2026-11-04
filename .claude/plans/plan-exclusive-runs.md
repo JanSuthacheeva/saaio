@@ -24,6 +24,9 @@ implementation https://claude.ai/artifact/Gqofo9iZoZ2syECQ7fMEfi (`docs/design/e
 - Scope is the project (the store). Machine-wide later: `Turns` in the shared folder's `turns/`
   with a `limit`, and `[exclusive] scope`/`limit` in the person's config. Not built now.
 - Every error fails open: the call runs unheld, the reason goes to server.log, stdout stays silent.
+- Decided after the harness check (docs/HANDOVER.md, 2026-11-04): Codex holds like Claude Code,
+  though its model may call a held command slow, send it again or give up; a flow's own second
+  heavy call waits for its first (no `Take::Own`). The docs say so.
 
 ## Units
 
@@ -109,8 +112,6 @@ pub struct Turn { file: File }
 
 pub enum Take {
     Taken(Turn),
-    /// holder.flow already holds one: its watcher covers this run too.
-    Own,
     /// Every turn is held; the holder of the first.
     Held(Option<Holder>),
 }
@@ -280,7 +281,9 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 
 ### The same flow holds the turn
 
-1. wait_for_turn -> Turns::try_take: Own -> return
+1. wait_for_turn -> Turns::try_take: Held(Some(holder)) with holder.flow == id -> waits like any
+   other flow: a second heavy run of one worker (Codex re-sending a held call) never runs beside
+   its first.
 
 ### Watcher releases
 
@@ -303,7 +306,7 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
   `pint.json`, `test:parallel`, quotes, `&&`, multi-word commands, no match.
 - repo_config.rs: temp dirs; branch and exclusive together, missing file, invalid entries.
 - config.rs: `[exclusive] enabled` default and set; the example test covers the commented line.
-- turns.rs: take, held by another handle, Own, released on drop, holder read back.
+- turns.rs: take, held by another handle (the same flow too), released on drop, holder read back.
 - processes.rs: parse, under, descends on fixed text; list finds the test's own pid.
 - turn_watch.rs: every Release path, grace paused while asking, two quiet looks.
 - fold.rs: TurnWaiting/TurnTaken, cleared by Idle and Ended, `changes`.
@@ -326,7 +329,7 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 
 ## Tasks
 
-- [ ] Verify in both harnesses: a PreToolUse hook with a 1980 s timeout is accepted and may run that long (Codex's cap); a hook's process ancestors include the pane's agent pid. Record findings in docs/HANDOVER.md; stop and ask if either fails.
+- [x] Verify in both harnesses: a PreToolUse hook with a 1980 s timeout is accepted and may run that long (Codex's cap); a hook's process ancestors include the pane's agent pid. Record findings in docs/HANDOVER.md; stop and ask if either fails.
 - [x] Add `repo_config.rs` (`RepoConfig::load`, `CONFIG_FILE`), move `Branching` callers onto it, with tests
 - [x] Add `exclusive.rs` (`Exclusive`, `runs`, `commands` validation) and `RepoConfig.exclusive`, with the matching table tests
 - [ ] Add `ExclusiveConfig` to config.rs and the commented `[exclusive]` block to examples/config.toml, with tests
@@ -339,5 +342,5 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 - [ ] Add the hidden `saaio turn` command (`cli/commands/turn.rs`)
 - [ ] Add `wait_for_turn` and `keep_turn` to hook.rs behind `config.exclusive.enabled`; tests/cli/turn.rs end to end
 - [ ] Show the wait: sidebar label and note, board card, detail, status `turn` column; update goldens
-- [ ] Docs: docs/repository.md (heavy commands section with the Sail example), docs/configuration.md (`[exclusive] enabled`), docs/cli.md and docs/json.md (`turn`), docs/ui.md (sidebar), CHANGELOG Unreleased Added, ROADMAP Planned future (machine-wide limit), CLAUDE.md architecture lines for the new modules
+- [ ] Docs: docs/repository.md (heavy commands section with the Sail example), docs/configuration.md (`[exclusive] enabled`), docs/cli.md and docs/json.md (`turn`), docs/ui.md (sidebar), the Codex caveat in docs/repository.md, CHANGELOG Unreleased Added, ROADMAP Planned future (machine-wide limit), CLAUDE.md architecture lines for the new modules
 - [ ] End to end: scratch store, two Claude workers in a repo with `[exclusive]`; one runs a slow listed command in the background, the other's call waits with `waits turn` in the sidebar and goes on when the first process ends; kill a watcher and see the turn free; `enabled = false` lets both run
