@@ -1511,7 +1511,7 @@ fn a_call_waiting_for_its_turn_shows_until_it_has_it() {
 }
 
 #[test]
-fn a_turn_stops_waiting_when_the_flow_stops() {
+fn a_turn_stops_waiting_when_the_flow_stops_or_gets_a_prompt() {
     let stops = [
         EventKind::Idle {
             note: "Done.".into(),
