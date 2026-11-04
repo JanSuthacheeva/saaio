@@ -364,6 +364,9 @@ ancestors and sleeps 170 s (past the 150 s saaio used before):
   native `codex` binary, whose parent is the `node` wrapper the pane started. So the pid the pane
   spawned is always an ancestor of the hook.
 - Claude Code waits quietly: the Bash call stays pending and runs once the hook exits.
+- An Esc in Claude Code while the hook waits interrupts the call and kills the hook, and no hook
+  says so, so nothing follows the flow's `turn-waiting`. The next prompt's `prompted` event clears
+  it.
 - Codex does not look patient. Its shell calls are code-mode `exec` scripts, which yield after
   about 30 s with "Script running with cell ID n" and no output. The model then polled with
   `wait`, issued the same command twice more (each a new hook waiting beside the first) and, after

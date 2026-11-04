@@ -223,6 +223,8 @@ it waits for: `after shop-42: pint`. The board card says `working · waits turn`
 | a call took the turn but no listed process showed within 10 seconds (the tool was refused or failed to start) | the turn is let go. Time spent on a permission prompt doesn't count. |
 | a call waited 30 minutes | it runs anyway. server.log says so. |
 | two calls wait | either may go first |
+| Esc in a Claude Code worker while its call waits | the call is cancelled. `waits turn` stays until the worker's next prompt, since Claude Code says nothing on Esc. |
+| one Claude Code turn runs two heavy calls in parallel | the second may wait about 10 seconds for the first, then both run at once |
 | Codex | its shell yields after about 30 seconds without output, so the model may call a held command slow, send it again (the copy waits too) or give up on it |
 | something goes wrong (the config can't be read, the worker's agent is unknown) | the call runs without waiting. server.log says why. |
 

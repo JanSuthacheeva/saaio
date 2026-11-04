@@ -355,7 +355,7 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 ### After review (decided 2026-11-04)
 
 - [x] Check by hand in a scratch E2E: Esc in a Claude Code worker while its heavy call waits for its turn. If `waits turn` stays through the next prompt, clear `turn` when a new prompt arrives (a prompt event of its own, since a repeated `Working` is folded away), with fold and adapter tests
-- [ ] docs/repository.md: note that two heavy calls one Claude Code turn runs in parallel may stall about 10 s and then run at once
+- [x] docs/repository.md: note that two heavy calls one Claude Code turn runs in parallel may stall about 10 s and then run at once
 
 ## Review
 
