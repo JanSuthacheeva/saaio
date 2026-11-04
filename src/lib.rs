@@ -53,6 +53,11 @@ mod text;
 mod trust;
 #[cfg_attr(
     not(test),
+    expect(dead_code, reason = "saaio turn watches in a later commit")
+)]
+mod turn_watch;
+#[cfg_attr(
+    not(test),
     expect(dead_code, reason = "the hook takes turns in a later commit")
 )]
 mod turns;
