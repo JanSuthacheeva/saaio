@@ -332,7 +332,7 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 - [x] Verify in both harnesses: a PreToolUse hook with a 1980 s timeout is accepted and may run that long (Codex's cap); a hook's process ancestors include the pane's agent pid. Record findings in docs/HANDOVER.md; stop and ask if either fails.
 - [x] Add `repo_config.rs` (`RepoConfig::load`, `CONFIG_FILE`), move `Branching` callers onto it, with tests
 - [x] Add `exclusive.rs` (`Exclusive`, `runs`, `commands` validation) and `RepoConfig.exclusive`, with the matching table tests
-- [ ] Add `ExclusiveConfig` to config.rs and the commented `[exclusive]` block to examples/config.toml, with tests
+- [x] Add `ExclusiveConfig` to config.rs and the commented `[exclusive]` block to examples/config.toml, with tests
 - [ ] Add `turns.rs` (`Turns`, `Turn`, `Holder`, `Take`, `try_take`, `into_file`) with lock tests
 - [ ] Add `processes.rs` (`list`, `parse`, `under`, `descends`) with tests
 - [ ] Add `turn_watch.rs` (`TurnWatch`, `Look`, `Keep`, `Release`) with tests for every release

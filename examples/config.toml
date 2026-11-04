@@ -39,6 +39,11 @@
 # .saaio/pause. Its .saaio/resume runs when the worker works again. 0 never pauses.
 #pause_after_minutes = 5
 
+#[exclusive]
+# A tool call that runs a command the repo lists under [exclusive] in its .saaio/config.toml
+# waits while another worker of the project runs one. false lets them run at once.
+#enabled = true
+
 # The kinds of flow: what a flow walks through, its first prompt and its branch. saaio start
 # --kind and the new-flow dialog pick one. A kind with a built-in name replaces the built-in one
 # whole. Add your own under a new name.
