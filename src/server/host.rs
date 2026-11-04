@@ -85,14 +85,16 @@ impl Host {
         }
     }
 
-    /// Spawns the child in a new PTY with a reader and a waiter thread; on Err the pane is kept as Failed.
-    pub fn open(&mut self, spec: PaneSpec) -> Result<()> {
+    /// Spawns the child in a new PTY with a reader and a waiter thread; its pid. On Err the pane is
+    /// kept as Failed.
+    pub fn open(&mut self, spec: PaneSpec) -> Result<u32> {
         if self.is_running(&spec.key) {
             bail!("{} is already running", spec.key);
         }
         let key = spec.key.clone();
         match self.spawn(spec) {
             Ok(process) => {
+                let pid = process.pid.as_raw_nonzero().get().cast_unsigned();
                 self.panes.insert(
                     key,
                     Pane {
@@ -102,7 +104,7 @@ impl Host {
                         closing: false,
                     },
                 );
-                Ok(())
+                Ok(pid)
             }
             Err(error) => {
                 self.fail(key, format!("{error:#}"));
@@ -441,6 +443,17 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    #[test]
+    fn names_the_pid_of_the_process_it_started() {
+        let (mut host, rx) = host();
+        let key = PaneKey::Flow("a".into());
+
+        let pid = host.open(spec(key.clone(), "echo $$")).unwrap();
+
+        assert_eq!(pump(&mut host, &rx, Duration::from_secs(5)), Some(Some(0)));
+        assert_eq!(screen(&mut host, &key).trim(), pid.to_string());
     }
 
     #[test]

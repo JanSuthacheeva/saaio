@@ -517,6 +517,17 @@ fn opens_a_pane_for_every_started_flow_and_marks_it_hosted() {
         matches!(event.kind, EventKind::Workspace { window: Some(ref w), .. } if w == HOSTED)
     });
     assert!(hosted, "an opened worker is marked hosted");
+    let agent = store
+        .agent(&csv)
+        .expect("an opened worker's agent pid is kept");
+    let processes = crate::processes::list().unwrap();
+    let running = processes.iter().find(|process| process.pid == agent);
+    assert_eq!(running.map(|process| process.command.as_str()), Some("cat"));
+    assert_eq!(
+        store.agent(&odd),
+        None,
+        "a worker that never started has none"
+    );
     let blocked = store
         .events(&later)
         .unwrap()
