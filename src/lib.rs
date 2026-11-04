@@ -33,10 +33,6 @@ mod launch;
 mod layering;
 mod pause;
 mod private;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the turn watch reads it in a later commit")
-)]
 mod processes;
 mod proto;
 mod refusal;
@@ -51,10 +47,6 @@ mod store;
 mod system;
 mod text;
 mod trust;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "saaio turn watches in a later commit")
-)]
 mod turn_watch;
 #[cfg_attr(
     not(test),

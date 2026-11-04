@@ -176,10 +176,14 @@ pub struct Args {
     flow: String,
     #[arg(long)]
     agent: u32,
+    /// The processes between the hook and the agent: the harness itself, never a run
+    #[arg(long, value_delimiter = ',')]
+    harness: Vec<u32>,
 }
 
-/// Looks every LOOK_STEP (500 ms): processes::list, under(agent), Exclusive::runs on each
-/// command, the flow's permission from its fold; TurnWatch::step until it releases; logs why to
+/// Looks every LOOK_STEP (500 ms): processes::list, under(agent) without `harness` (Codex's
+/// native binary under the node agent carries the prompt in its command line), Exclusive::runs
+/// on each command, the flow's permission from its fold; TurnWatch::step until it releases; logs why to
 /// server.log ("turn watch flow <id>: ..."). A failed list counts as a run until 3 in a row fail,
 /// then it releases. Exiting closes stdin, which releases the turn.
 pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document;
@@ -197,9 +201,9 @@ const TURN_STEP: Duration = Duration::from_millis(500);
 /// another flow holds it; hands it to `saaio turn`. Fails open, logged.
 fn wait_for_turn(store: &Store, id: &str, line: &str, log: &Log, clock: fn() -> u64);
 
-/// `current_exe() turn --flow id --agent pid`, process_group(0), stdin = the turn,
-/// stdout and stderr null.
-fn keep_turn(turn: Turn, id: &str, agent: u32) -> Result<()>;
+/// `current_exe() turn --flow id --agent pid --harness <the hook's ancestors below the agent>`,
+/// process_group(0), stdin = the turn, stdout and stderr null.
+fn keep_turn(turn: Turn, id: &str, agent: u32, harness: &[u32]) -> Result<()>;
 ```
 
 In `run`, after `wait_for_services`: `if config.exclusive.enabled && let Some(line) =
@@ -263,9 +267,9 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 3. hook::run -> wait_for_turn(store, id, line, log, clock)
 4. wait_for_turn -> fold::fold(id, events): FlowView -> repo_dir(&flow): PathBuf
 5. wait_for_turn -> RepoConfig::load(&repo): RepoConfig -> Exclusive::runs(line): Some(command)
-6. wait_for_turn -> Store::agent(id): Some(pid) -> processes::list() -> processes::descends(all, own pid, pid): true
+6. wait_for_turn -> Store::agent(id): Some(pid) -> processes::list() -> processes::descends(all, own pid, pid): true; harness = the hook's ancestors below pid
 7. wait_for_turn -> Turns::of_project(store).try_take(&holder): Take::Taken(turn)
-8. wait_for_turn -> keep_turn(turn, id, pid): Ok -> the hook exits 0, the tool runs
+8. wait_for_turn -> keep_turn(turn, id, pid, &harness): Ok -> the hook exits 0, the tool runs
 9. turn::run -> TurnWatch::new(now); every 500 ms: processes::list -> under(all, agent) -> Exclusive::runs -> fold for permission -> TurnWatch::step(now, look): Hold ... Release(RunEnded)
 10. turn::run returns Document::Silent; stdin closes; the flock drops
 
@@ -275,7 +279,7 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 2. wait_for_turn -> Store::append(id, TurnWaiting { command, holder: holder.name }) once
 3. server StoreWatch -> fold: FlowView.turn -> Board -> sidebar `waits turn`, `after shop-42: pint`
 4. every TURN_STEP: Turns::try_take ... Taken(turn)
-5. wait_for_turn -> Store::append(id, TurnTaken) -> keep_turn(turn, id, pid)
+5. wait_for_turn -> Store::append(id, TurnTaken) -> keep_turn(turn, id, pid, &harness)
 6. Error: TURN_WAIT ran out -> append TurnTaken -> log "waited 30m for the turn (<holder> runs <command>); the tool runs" -> return
 7. Error: the harness kills the hook -> no TurnTaken; the next Idle, Waiting, Blocked or Ended clears `turn`
 
@@ -326,6 +330,9 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 - A turn whose run never shows is let go after 10 s; a permission prompt pauses that clock.
 - Only the Bash tool (Claude Code's Bash, Codex's shell) is matched.
 - Taking turns needs no repository trust.
+- A run is a process below the agent. One the agent detaches itself (`cmd &` inside a call,
+  `nohup`) is re-parented away and no longer counts; Claude Code's background shells and Codex's
+  yielded commands stay below the agent and do. The docs say so.
 
 ## Tasks
 
@@ -339,7 +346,7 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 - [x] Add `TurnWaiting`/`TurnTaken` events, `FlowView.turn`/`TurnWait`, and their fold and `changes`, with fold tests
 - [x] Add `Store::set_agent`/`agent` (removed with the flow); `Host::open` returns the pid; `Panes::open_pane` records it; tests
 - [x] Add `Adapter::command` and raise both adapters' PreToolUse timeout to 1980 s, with adapter tests
-- [ ] Add the hidden `saaio turn` command (`cli/commands/turn.rs`)
+- [x] Add the hidden `saaio turn` command (`cli/commands/turn.rs`)
 - [ ] Add `wait_for_turn` and `keep_turn` to hook.rs behind `config.exclusive.enabled`; tests/cli/turn.rs end to end
 - [ ] Show the wait: sidebar label and note, board card, detail, status `turn` column; update goldens
 - [ ] Docs: docs/repository.md (heavy commands section with the Sail example), docs/configuration.md (`[exclusive] enabled`), docs/cli.md and docs/json.md (`turn`), docs/ui.md (sidebar), the Codex caveat in docs/repository.md, CHANGELOG Unreleased Added, ROADMAP Planned future (machine-wide limit), CLAUDE.md architecture lines for the new modules

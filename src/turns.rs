@@ -109,6 +109,8 @@ fn read_holder(file: &mut File) -> Option<Holder> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
     use tempfile::TempDir;
 
     use super::*;
@@ -125,6 +127,19 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let turns = Turns::of_project(&Store::at(dir.path().to_path_buf()));
         (dir, turns)
+    }
+
+    /// Takes the turn once it is free: a process another test forks while it is held keeps the
+    /// lock until its exec.
+    fn take_once_free(turns: &Turns, holder: &Holder) -> Turn {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            if let Take::Taken(turn) = turns.try_take(holder).unwrap() {
+                return turn;
+            }
+            assert!(Instant::now() < deadline, "the turn never came free");
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]
@@ -168,17 +183,17 @@ mod tests {
             Take::Held(_)
         ));
         drop(file);
-        assert!(matches!(
-            turns.try_take(&holder("b", "pest")).unwrap(),
-            Take::Taken(_)
-        ));
+        take_once_free(&turns, &holder("b", "pest"));
     }
 
     #[test]
     fn a_shorter_holder_replaces_a_longer_one_whole() {
         let (_dir, turns) = turns();
-        drop(turns.try_take(&holder("a-long-flow", "artisan test --parallel")));
-        let _taken = turns.try_take(&holder("b", "pint")).unwrap();
+        drop(take_once_free(
+            &turns,
+            &holder("a-long-flow", "artisan test --parallel"),
+        ));
+        let _taken = take_once_free(&turns, &holder("b", "pint"));
         let Take::Held(by) = turns.try_take(&holder("c", "pest")).unwrap() else {
             panic!("the turn is held");
         };

@@ -17,10 +17,6 @@ pub const CONFIG_FILE: &str = ".saaio/config.toml";
 pub struct RepoConfig {
     /// `[branch]`: the branch convention.
     pub branch: Option<Branching>,
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the hook reads it once it takes turns")
-    )]
     /// `[exclusive]`: the heavy commands, one run at a time across the project.
     pub exclusive: Option<Exclusive>,
 }

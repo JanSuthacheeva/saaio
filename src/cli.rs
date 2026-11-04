@@ -11,7 +11,7 @@ use clap::{Parser, Subcommand};
 
 use commands::{
     bug_report, clear, completions, home, hook, new, remove, report, send, server, start, status,
-    stop, trust, ui, update, wait,
+    stop, trust, turn, ui, update, wait,
 };
 use output::{Document, Failure};
 
@@ -79,17 +79,21 @@ enum Command {
     /// What a harness hook runs: reports the event on stdin into $SAAIO_FLOW_ID's flow
     #[command(hide = true)]
     Hook(hook::Args),
+    /// What a hook starts once its flow took the project's turn: keeps it while the run lasts
+    #[command(hide = true)]
+    Turn(turn::Args),
 }
 
 /// Runs the command `cli` names: what to print, or the failure to print instead.
 ///
 /// # Errors
 ///
-/// The command's failure, with its message, next steps and exit code. Hook, Wait, BugReport,
-/// Completions and Update run without a store; every other command fails without one.
+/// The command's failure, with its message, next steps and exit code. Hook, Turn, Wait,
+/// BugReport, Completions and Update run without a store; every other command fails without one.
 pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
     match &cli.command {
         Some(Command::Hook(args)) => return Ok(hook::run(args, env, clock)),
+        Some(Command::Turn(args)) => return Ok(turn::run(args, env, clock)),
         Some(Command::Wait(args)) => return Ok(wait::run(args, env, clock)),
         Some(Command::BugReport) => return bug_report::run(env, clock),
         Some(Command::Completions(args)) => return Ok(completions::run(args)),
@@ -141,6 +145,7 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
         Some(Command::Server) => server::run(store.clone(), env, clock),
         Some(
             Command::Hook(_)
+            | Command::Turn(_)
             | Command::Wait(_)
             | Command::BugReport
             | Command::Completions(_)

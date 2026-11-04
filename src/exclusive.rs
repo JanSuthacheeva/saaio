@@ -12,10 +12,6 @@ pub struct Exclusive {
     pub commands: Vec<String>,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the hook uses it once it takes turns")
-)]
 impl Exclusive {
     /// The first listed command `line` runs: its words in a row, on word boundaries, anywhere in
     /// the line. A boundary: not a letter, digit, `_`, `.` or `-` on either side.
