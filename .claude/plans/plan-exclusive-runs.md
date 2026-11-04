@@ -405,3 +405,24 @@ UI labels, status column, docs.
 `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` passed at
 2318ba4; later commits change only the plan and docs. The fixes are docs only, so no production
 code needed a second review.
+
+### Second review
+
+Isolated review of the commits after 4c3fe47 (387730b, e9e0d06, 0ebd781): the `prompted` event and
+the docs under After review (2026-11-04).
+
+- Fixed: `a_turn_stops_waiting_when_the_flow_stops` now also covers `Prompted`, which does not stop
+  the flow; renamed to `..._or_gets_a_prompt` (test only).
+- Checked, no finding: `prompted` is appended only while `turn` is set (`fold::changes`), so logs do
+  not grow by a line a prompt; an older binary skips the unknown kind (`Event::from_line`);
+  `master_state` ignores it; an ended flow's late `prompted` can only clear `turn`, which `Ended`
+  already cleared; the hook re-reads the log before each kind, so `Working` then `Prompted` from one
+  payload fold in order.
+- Open: whether a harness can fire `UserPromptSubmit` while a hook still waits for its turn (a
+  prompt queued or steered mid-turn, notably Codex). Then `waits turn` disappears early while the
+  call still waits; cosmetic, the call itself is unaffected. Recommendation: accept; revisit only if
+  seen.
+- The hand check (Esc kills the waiting hook, recorded in HANDOVER) was not repeated here.
+
+Checks: `cargo test`, clippy and `cargo fmt --check` passed at e9e0d06; the second review changed
+only a test name (that test and fmt re-run).
