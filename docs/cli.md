@@ -76,10 +76,10 @@ bin: ~/.local/bin/saaio
 description: "Tracks parallel feature flows: what each is doing, where it is blocked, how far it got"
 count: 3
 needs_you: 2
-flows[3]{name,kind,state,phase,tasks,age,services}:
-  shop-221,feature,waiting,plan,"",2s,""
-  shop-217,fix,blocked,implement,4/9,2s,""
-  scratch,"",idle,"","",11s,""
+flows[3]{name,kind,state,phase,tasks,age,services,turn}:
+  shop-221,feature,waiting,plan,"",2s,"",""
+  shop-217,fix,blocked,implement,4/9,2s,"",""
+  scratch,"",idle,"","",11s,"",""
 blockers[2]{name,blocker}:
   shop-221,Should refunds count against the original order's totals or the refund date's?
   shop-217,"Task 5: the migration needs a default value"
@@ -94,6 +94,8 @@ help[2]: "Run `saaio status <name>` for one flow's phases, timeline and decision
 - No flows: `flows: none tracked`. A log that cannot be read adds a `warnings[]` line.
 - `services`: empty while the flow's services run or were never paused; else `pausing`, `paused`,
   `resuming`, `pause-failed` or `resume-failed` ([repository.md](repository.md#pause-and-resume)).
+- `turn`: `waiting` while a heavy command of the flow waits for another worker's run, else empty
+  ([repository.md](repository.md#heavy-commands)).
 
 ### --stop
 
@@ -255,6 +257,7 @@ help[2]: Run `saaio report --flow shop-217 working` once the block is resolved,R
 | `folder` | for a plain session |
 | `answer` | the closing message of the worker's last turn |
 | `services`, `services_error` | while the flow's services are not running: `paused`, `resume-failed`, ..., and the last error line of a failed pause or resume |
+| `turn` | while a heavy command waits for another worker's run: `waits to run pint after shop-42` |
 
 A Claude Code worker that asks with a question dialog (AskUserQuestion) shows its questions and
 options:
@@ -617,6 +620,7 @@ Not listed in `saaio --help`. Not for manual use.
 | --- | --- |
 | `saaio server` | `saaio`, when it opens the UI and no server runs. Owns every session. Log: `server.log` ([files.md](files.md)). |
 | `saaio hook claude-code`, `saaio hook codex` | the hooks saaio adds to each worker. Reads the hook's event on stdin (an event over 16 MiB is skipped) and reports what changes the flow. Never prints to stdout, never fails a worker's turn. Its errors go to `server.log`. For Codex, exits 2 at Stop to hand over news. |
+| `saaio turn` | `saaio hook`, once a worker's heavy command took the project's turn. Keeps it while the run lasts, then exits, which frees it. Says why in `server.log`. |
 | `saaio wait [--master]` | Claude Code sessions, as a background hook. Sleeps until there is news for the session, prints it to stderr and exits 2, which wakes the session. `--master` waits for the master's news. |
 
 ## Output, errors and exit codes
@@ -696,10 +700,10 @@ Shared in the shared folder (`$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio
 $ saaio status --all
 count: 3
 needs_you: 2
-flows[3]{project,name,state,phase,tasks,age,services}:
-  shop,shop-221,waiting,plan,"",2s,""
-  shop,shop-217,blocked,implement,4/9,2s,""
-  shop,scratch,idle,"","",11s,""
+flows[3]{project,name,kind,state,phase,tasks,age,services,turn}:
+  shop,shop-221,feature,waiting,plan,"",2s,"",""
+  shop,shop-217,fix,blocked,implement,4/9,2s,"",""
+  shop,scratch,"",idle,"","",11s,"",""
 blockers[2]{project,name,blocker}:
   shop,shop-221,Should refunds count against the original order's totals or the refund date's?
   shop,shop-217,"Task 5: the migration needs a default value"

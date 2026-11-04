@@ -47,8 +47,8 @@ Workers and plain sessions follow, grouped:
 | Row line | Content |
 | --- | --- |
 | 1 | number (`1` is the top), state, name, agent (after the kind for one other than feature: `fix claude`), age |
-| 2 | steps (`●───●───○───○`), phase, task count. Once finished: its merge request (`PR #42`, `merged`) or its state, and how long it took. Plain session: its state, such as `idle`. |
-| 3 | what it asks or does |
+| 2 | steps (`●───●───○───○`), phase, task count. `waits turn` in place of the phase while a heavy command waits for another worker's run ([repository.md](repository.md#heavy-commands)). Once finished: its merge request (`PR #42`, `merged`) or its state, and how long it took. Plain session: its state, such as `idle`. |
+| 3 | what it asks or does; while it waits its turn, whose run: `after shop-42: pint` |
 
 Rows that do not fit end in `… N more`.
 
@@ -121,6 +121,10 @@ beside its state on its card: `ready · paused`, `working · resuming`, or `work
 when the resume failed. The selected flow's header says since when (`services paused 14:02`),
 `services resuming`, or why the resume failed (`services down: port 8003 is taken`). The
 sidebar does not show it.
+
+A flow whose heavy command waits for another worker's run ([repository.md](repository.md#heavy-commands))
+says `working · waits turn` on its card. Its header says what, since when and whose run:
+`waits its turn for pint since 14:02; shop-42 runs`.
 
 ## Starting a flow
 

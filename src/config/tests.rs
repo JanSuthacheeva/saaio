@@ -427,6 +427,21 @@ fn pauses_services_after_five_minutes_unless_set_and_never_at_zero() {
 }
 
 #[test]
+fn takes_turns_unless_set_off() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("config.toml");
+    let read = |text: &str| {
+        fs::write(&file, text).unwrap();
+        Config::read(Some(&file)).map(|config| config.exclusive.enabled)
+    };
+
+    assert!(read("").unwrap());
+    assert!(!read("[exclusive]\nenabled = false\n").unwrap());
+    let unknown = format!("{:#}", read("[exclusive]\nlimit = 2\n").unwrap_err());
+    assert!(unknown.contains("expected `enabled`"), "{unknown}");
+}
+
+#[test]
 fn reads_the_built_in_config_without_a_file() {
     assert_eq!(Config::read(None).unwrap(), Config::builtin());
 }

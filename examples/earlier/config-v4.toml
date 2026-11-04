@@ -1,0 +1,143 @@
+# saaio's settings.
+#
+# saaio wrote this file on its first run. Every setting is commented out at its default. Remove the
+# # in front of one to change it. Once you've edited this file, saaio never overwrites it.
+#
+# Commands read this file every time they run. The UI and its server read it again when you save
+# it. A running session keeps the command it started with. A broken file keeps the last working
+# settings. A key saaio doesn't know is an error that names the file, line and key.
+# The whole file, explained: https://github.com/JanSuthacheeva/saaio/blob/main/docs/configuration.md
+#
+# To use your own skills instead of the agent-skills set, change the kinds below:
+# https://github.com/JanSuthacheeva/saaio/blob/main/docs/configuration.md#use-your-own-workflow
+
+#[worker]
+# The agent a new flow runs when you don't pick one, by its name under [agents].
+#agent = "claude"
+# The kind of flow a new flow is when you don't pick one, by its name under [kinds].
+#kind = "feature"
+
+#[master]
+# Wakes the master when a worker stops. With false, it only finds out when it runs saaio status.
+#wake = true
+# The agent the UI runs as the master. Unset, it's the built-in "master" agent below.
+# For example: agent = "codex"
+
+#[ui]
+# The key you press before every UI command: "C-space", or "C-a" to "C-z". C-c, C-d, C-h,
+# C-i, C-j, C-m, C-q, C-s and C-z aren't allowed, because a pane needs them.
+#prefix = "C-space"
+# Once a day the UI asks GitHub for the latest release and names a newer one in its title row:
+# "0.1.1 is out: saaio update". The one network call saaio makes on its own. false turns it off.
+#update_check = true
+# A flow that starts waiting or is blocked while you aren't looking at it raises a desktop
+# notification through your terminal. false turns it off.
+#notify = true
+
+#[services]
+# Minutes a flow rests (idle, waiting, blocked, done or ended) before saaio runs the repo's
+# .saaio/pause. Its .saaio/resume runs when the worker works again. 0 never pauses.
+#pause_after_minutes = 5
+
+# The kinds of flow: what a flow walks through, its first prompt and its branch. saaio start
+# --kind and the new-flow dialog pick one. A kind with a built-in name replaces the built-in one
+# whole. Add your own under a new name.
+#
+# phases        one to four phases in order, each with the skills that start it. The UI shows
+#               them as a flow's steps. A flow whose skills match no phase still works. Its steps
+#               stay empty. A phase without skills starts with the flow's first turn.
+# skill         the skill the first prompt calls, as {skill}: /name in Claude Code, $name in Codex
+# prompt        the first prompt. Unset, it's "{skill} {request}", or "{request}" without a skill.
+#               An agent's own prompt wins over it.
+# branch_types  the repo's branch types it means. The first one the repo's .saaio/config.toml
+#               lists wins, else the repo's first.
+# branch        false: no branch to merge. The worker answers in its pane, from a worktree
+#               detached at the base, and the flow is done once it has answered.
+
+#[kinds.feature]
+#skill = "ship-feature"
+#branch_types = ["feature", "feat"]
+#branch = true
+
+#[[kinds.feature.phases]]
+#name = "plan"
+#skills = ["design-code"]
+
+#[[kinds.feature.phases]]
+#name = "implement"
+#skills = ["implement-plan"]
+
+#[[kinds.feature.phases]]
+#name = "review"
+#skills = ["review-changes"]
+
+#[[kinds.feature.phases]]
+#name = "merge-request"
+#skills = ["write-merge-request"]
+
+#[kinds.fix]
+#skill = "ship-fix"
+#branch_types = ["fix", "bugfix", "hotfix"]
+#branch = true
+
+#[[kinds.fix.phases]]
+#name = "diagnose"
+#skills = ["diagnose-bug"]
+
+#[[kinds.fix.phases]]
+#name = "implement"
+#skills = ["implement-plan"]
+
+#[[kinds.fix.phases]]
+#name = "review"
+#skills = ["review-changes"]
+
+#[[kinds.fix.phases]]
+#name = "merge-request"
+#skills = ["write-merge-request"]
+
+#[kinds.research]
+#prompt = "Research this and answer here. Change no code and commit nothing: {request}"
+#branch_types = []
+#branch = false
+
+#[[kinds.research.phases]]
+#name = "research"
+#skills = []
+
+# The agents a flow can run. Any agent you add here shows up in saaio start --agent and the new-flow
+# dialog. An agent with a built-in name replaces the built-in one.
+#
+# command   the command line that starts a new session
+# prompt    the first prompt for every kind, filled into {prompt}. Unset, the flow's kind's
+#           prompt applies
+# resume    the command line that continues a session after a restart. Without it, the agent
+#           starts once and isn't resumed
+# adapter   "claude-code" or "codex", the harness whose hooks tell saaio what the agent is doing.
+#           Without it, the UI only shows whether the process is running.
+#
+# Placeholders: {id} is the flow's id for the session, {name} the flow's name, {request} what you
+# asked for, {prompt} the prompt above, {session} the session id the harness picked (Codex), and
+# {instructions} the path of master.md, the master's instructions.
+
+#[agents.claude]
+#command = ["claude", "-n", "{name}", "--session-id", "{id}", "{prompt}"]
+#resume = ["claude", "-n", "{name}", "--resume", "{id}"]
+#adapter = "claude-code"
+
+#[agents.codex]
+#command = ["codex", "{prompt}"]
+#resume = ["codex", "resume", "{session}"]
+#adapter = "codex"
+
+# The master is Claude Code without a first prompt. saaio adds master.md to its instructions.
+#[agents.master]
+#command = ["claude", "-n", "{name}", "--session-id", "{id}"]
+#prompt = ""
+#resume = ["claude", "-n", "{name}", "--resume", "{id}"]
+#adapter = "claude-code"
+
+# An agent of your own, for example:
+# [agents.aider]
+# command = ["aider", "--message", "{prompt}"]
+# prompt = "{request}"

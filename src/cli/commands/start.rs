@@ -18,6 +18,7 @@ use crate::fold;
 use crate::launch::{name, worktree};
 use crate::proto::Role;
 use crate::registry::Registry;
+use crate::repo_config::{self, RepoConfig};
 use crate::slots::{self, Claim, Slots};
 use crate::store::Store;
 use crate::trust::Trust;
@@ -87,7 +88,7 @@ pub fn run(
     })?;
     let trust = Trust::at(registry);
     refuse_untrusted(&trust, &repo, config, agent_name)?;
-    let branching = Branching::load(&repo)?;
+    let branching = RepoConfig::load(&repo)?.branch;
     let branch_type = pick_branch_type(
         branching.as_ref(),
         (kind_name, kind),
@@ -224,7 +225,7 @@ fn pick_branch_type(
         Some(rules) => rules.pick_type(asked, &kind.branch_types),
         None if asked.is_some() => Err(anyhow::anyhow!(
             "this repo has no {}, so no branch types",
-            branching::CONFIG_FILE
+            repo_config::CONFIG_FILE
         )),
         None => Ok(None),
     }
@@ -233,7 +234,7 @@ fn pick_branch_type(
             format!("{error:#}"),
             vec![format!(
                 "Name the types in {}: [branch] types = [\"feature\", \"bugfix\"]",
-                branching::CONFIG_FILE
+                repo_config::CONFIG_FILE
             )],
         )
     })

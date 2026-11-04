@@ -294,8 +294,9 @@ impl BoardView<'_> {
                 ServiceStatus::ResumeFailed => Some("services down"),
                 ServiceStatus::Running | ServiceStatus::PauseFailed => None,
             });
-        let text = match services {
-            Some(services) if !short => format!("{text} · {services}").into(),
+        let waits = flow.turn.as_ref().map(|_| "waits turn");
+        let text = match waits.or(services) {
+            Some(aside) if !short => format!("{text} · {aside}").into(),
             _ => text,
         };
         Span::styled(text, theme.flow_style(flow))
@@ -643,6 +644,27 @@ mod tests {
             ]
         );
         assert_eq!(short, "ready", "a narrow card keeps the state");
+    }
+
+    #[test]
+    fn says_a_working_flow_waits_its_turn() {
+        let waiting = flow(
+            "shop-240",
+            Mode::Auto,
+            vec![
+                EventKind::Working,
+                EventKind::TurnWaiting {
+                    command: "pint".into(),
+                    holder: "shop-42".into(),
+                },
+            ],
+        );
+
+        let label = with_view(vec![], |view| {
+            view.state_label(Some(&waiting), false).content.to_string()
+        });
+
+        assert_eq!(label, "working · waits turn");
     }
 
     #[test]

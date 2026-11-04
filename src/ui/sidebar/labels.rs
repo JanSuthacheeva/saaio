@@ -73,6 +73,7 @@ impl Sidebar<'_> {
             State::Done => Span::styled("done", theme.state.done),
             State::Ended => Span::styled("ended", theme.state.ended),
             State::NotResponding => Span::styled("not responding", theme.state.blocked),
+            _ if flow.turn.is_some() => Span::styled("waits turn", theme.ui.muted),
             _ => match (&flow.phase, flow.state) {
                 (Some(phase), _) => Span::styled(phase.name().to_string(), theme.ui.text),
                 (None, State::Working) => Span::styled("starting", theme.ui.faint),
@@ -84,7 +85,8 @@ impl Sidebar<'_> {
         }
     }
 
-    /// The third row: why the pane is not running, what the flow asks, or what it does.
+    /// The third row: why the pane is not running, whose run it waits for, what the flow asks, or
+    /// what it does.
     pub(super) fn note(
         &self,
         flow: &FlowView,
@@ -96,6 +98,10 @@ impl Sidebar<'_> {
         }
         if flow.is_finished() {
             return None;
+        }
+        if let Some(turn) = &flow.turn {
+            let text = format!("after {}: {}", turn.holder, turn.command);
+            return Some((text, theme.ui.faint));
         }
         if let Some(blocker) = &flow.blocker {
             return Some((blocker.clone(), theme.ui.faint));
@@ -163,6 +169,41 @@ mod tests {
             prefix: Prefix::default(),
             theme,
         }
+    }
+
+    #[test]
+    fn says_a_flow_waits_its_turn_and_after_whom() {
+        let started = EventKind::Started {
+            name: "shop".into(),
+            request: "x".into(),
+            mode: Mode::Auto,
+            phases: None,
+            kind: None,
+            workflow: None,
+            prompt: None,
+            merges: true,
+        };
+        let waiting = EventKind::TurnWaiting {
+            command: "pint".into(),
+            holder: "shop-42".into(),
+        };
+        let events = [started, EventKind::Working, waiting].map(|kind| Event::new(0, kind));
+        let flow = crate::fold::fold("id", &events, None, 0).unwrap();
+        let theme = Theme::from_palette(Palette::SAAIO);
+        let board = empty_board();
+        let changed = HashMap::new();
+        let sidebar = sidebar(&board, &theme, &changed);
+
+        let label = sidebar.label(&flow);
+        assert_eq!(label.content, "waits turn");
+        assert_eq!(label.style, theme.ui.muted);
+        assert_eq!(
+            sidebar.glyph(flow.state),
+            sidebar.spinner(),
+            "it still works"
+        );
+        let (note, _) = sidebar.note(&flow, None).unwrap();
+        assert_eq!(note, "after shop-42: pint");
     }
 
     #[test]

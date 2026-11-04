@@ -278,6 +278,17 @@ impl Store {
         self.write_wait(&format!("{id}.typed"), &count.to_string())
     }
 
+    /// Keeps the pid of the agent the server started in the flow's pane (waits/<id>.agent).
+    pub fn set_agent(&self, id: &str, pid: u32) -> Result<()> {
+        self.write_wait(&format!("{id}.agent"), &pid.to_string())
+    }
+
+    /// The pid of the agent in the flow's pane, as the server last started it.
+    pub fn agent(&self, id: &str) -> Option<u32> {
+        self.read_wait(&format!("{id}.agent"))
+            .and_then(|text| text.trim().parse().ok())
+    }
+
     /// Marks the session as running a turn, as typed into by the server, or as idle at its
     /// prompt: the server types news and queued lines only into an idle one.
     pub fn set_busy(&self, waiter: &Waiter, busy: Busy) -> Result<()> {
@@ -352,6 +363,7 @@ impl Store {
             waits.join(format!("{id}.typed")),
             waits.join(format!("{id}.busy")),
             waits.join(format!("{id}.key")),
+            waits.join(format!("{id}.agent")),
         ] {
             if let Err(error) = fs::remove_file(&file)
                 && error.kind() != ErrorKind::NotFound
@@ -655,7 +667,7 @@ mod tests {
     }
 
     #[test]
-    fn removing_a_flow_forgets_its_waiter_deliveries_and_typed_lines() {
+    fn removing_a_flow_forgets_its_waiter_deliveries_typed_lines_and_agent() {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
         let id = store.create(&started()).unwrap();
@@ -663,8 +675,12 @@ mod tests {
         store.set_delivered(&id, 2).unwrap();
         fs::write(dir.path().join(format!("waits/{id}.typed")), "1").unwrap();
         store.set_key(&Waiter::Flow(id.clone()), "d1g35t").unwrap();
+        store.set_agent(&id, 4242).unwrap();
+        assert_eq!(store.agent(&id), Some(4242));
 
         store.remove(&id).unwrap();
+
+        assert_eq!(store.agent(&id), None);
 
         assert_eq!(store.key(&Waiter::Flow(id.clone())), None);
         assert_eq!(store.waiter(&Waiter::Flow(id.clone())), None);

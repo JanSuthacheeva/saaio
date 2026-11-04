@@ -21,6 +21,7 @@ mod status;
 mod store;
 mod support;
 mod trust;
+mod turn;
 mod update;
 mod wait;
 

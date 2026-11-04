@@ -9,7 +9,7 @@ the setup starts services.
 
 | File | Purpose |
 | --- | --- |
-| `.saaio/config.toml` | branch name convention |
+| `.saaio/config.toml` | branch name convention, heavy commands |
 | `.saaio/setup` | runs in each new worktree |
 | `.saaio/teardown` | runs when a worktree is removed |
 | `.saaio/pause` | stops a resting flow's services |
@@ -20,6 +20,7 @@ the setup starts services.
 - [Trust](#trust)
 - [Setup and teardown](#setup-and-teardown)
 - [Pause and resume](#pause-and-resume)
+- [Heavy commands](#heavy-commands)
 - [Slots and ports](#slots-and-ports)
 - [A Docker Compose example](#a-docker-compose-example)
 - [The setup-saaio skill](#the-setup-saaio-skill)
@@ -183,6 +184,52 @@ minutes. The model's thinking before its first tool call hides most of a resume.
 | the server stops during a script | the next server runs it again, so both scripts must be idempotent |
 | `saaio remove` or `saaio clear` | teardown runs as always, on the paused services |
 | a plain session, or not responding | never paused |
+
+## Heavy commands
+
+A test suite, a formatter or a static analysis run takes most of a small machine's memory and
+disk. Two workers of one project running one at once both crawl. List them in
+`.saaio/config.toml`, and saaio runs one at a time across the project's workers:
+
+```toml
+[exclusive]
+commands = ["artisan test", "sail test", "pest", "pint", "phpstan"]
+```
+
+- A worker's shell call that runs a listed command while another worker of the same repository
+  runs one waits until that run ends, then goes on.
+- A command matches anywhere in the line, on word boundaries: `php artisan test`,
+  `./vendor/bin/sail pint`, `docker compose exec app php artisan test` and
+  `docker exec shop-app vendor/bin/phpstan analyse` all run a listed command. `pint.json`,
+  `pest-plugin` and `artisan testing` don't. A word is letters, digits, `_`, `.` and `-`.
+- A command of several words matches those words in a row: `artisan test` is not in
+  `sail test`, so list `sail test` on its own.
+- A line that only names a command waits too: `cat pint.log`.
+- The turn lasts while a process below the worker's agent runs a listed command: a run in the
+  background keeps it until its process exits. A process the agent detaches itself (`cmd &`
+  inside a call, `nohup`) leaves the agent's processes and stops counting.
+- A worker's own second heavy call waits for its first.
+- What a container runs by itself (watchers, queues) never counts. Idle stacks:
+  [Pause and resume](#pause-and-resume).
+
+While a call waits, the sidebar says `waits turn` under the flow, and its third row names the run
+it waits for: `after shop-42: pint`. The board card says `working · waits turn`,
+`saaio status` has `turn: waiting`.
+
+| Case | Result |
+| --- | --- |
+| the run ends, or is killed | the waiting call goes on within about a second |
+| the worker that has the turn crashes or its session ends | the turn is free at once |
+| a call took the turn but no listed process showed within 10 seconds (the tool was refused or failed to start) | the turn is let go. Time spent on a permission prompt doesn't count. |
+| a call waited 30 minutes | it runs anyway. server.log says so. |
+| two calls wait | either may go first |
+| Esc in a Claude Code worker while its call waits | the call is cancelled. `waits turn` stays until the worker's next prompt, since Claude Code says nothing on Esc. |
+| one Claude Code turn runs two heavy calls in parallel | the second may wait about 10 seconds for the first, then both run at once |
+| Codex | its shell yields after about 30 seconds without output, so the model may call a held command slow, send it again (the copy waits too) or give up on it |
+| something goes wrong (the config can't be read, the worker's agent is unknown) | the call runs without waiting. server.log says why. |
+
+The repository says what is heavy; each person decides whether their machine takes turns:
+`[exclusive] enabled` in their own config ([configuration.md](configuration.md#exclusive)).
 
 ## Slots and ports
 

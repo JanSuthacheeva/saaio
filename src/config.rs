@@ -1,4 +1,4 @@
-//! `Config` from config.toml: agents, `[worker]`, `[kinds.*]`, `[master]`, `[ui]`, `[services]`
+//! `Config` from config.toml: agents, `[worker]`, `[kinds.*]`, `[master]`, `[ui]`, `[services]`, `[exclusive]`
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -55,6 +55,7 @@ pub struct Config {
     pub master: MasterConfig,
     pub ui: UiConfig,
     pub services: ServicesConfig,
+    pub exclusive: ExclusiveConfig,
 }
 
 /// [worker]: what a flow runs when saaio start names no agent or kind.
@@ -147,6 +148,21 @@ impl ServicesConfig {
     pub fn pause_after(&self) -> Option<Duration> {
         (self.pause_after_minutes > 0)
             .then(|| Duration::from_mins(u64::from(self.pause_after_minutes)))
+    }
+}
+
+/// [exclusive]: whether this machine takes turns at the heavy commands a repo lists.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[cfg_attr(test, derive(Serialize))]
+#[serde(default, deny_unknown_fields)]
+pub struct ExclusiveConfig {
+    /// Calls that run a command the repo lists wait their turn. true unless set.
+    pub enabled: bool,
+}
+
+impl Default for ExclusiveConfig {
+    fn default() -> ExclusiveConfig {
+        ExclusiveConfig { enabled: true }
     }
 }
 
@@ -333,6 +349,7 @@ pub const EXAMPLE: DefaultFile = DefaultFile {
         include_str!("../examples/earlier/config-v1.toml"),
         include_str!("../examples/earlier/config-v2.toml"),
         include_str!("../examples/earlier/config-v3.toml"),
+        include_str!("../examples/earlier/config-v4.toml"),
     ],
 };
 

@@ -39,7 +39,8 @@ flow's store from any folder.
 | --- | --- |
 | `flows/<id>.jsonl` | one flow's events, one JSON line each, append-only |
 | `flows/<id>.alive` | modification time is the flow's last heartbeat |
-| `waits/` | wake-up state: each session's waiter, messages given to a worker, lines typed into a worker's pane, whether a session is busy, what the master last saw, the master's turn and its Codex session id, and a hash of each session's key |
+| `waits/` | wake-up state: each session's waiter, messages given to a worker, lines typed into a worker's pane, whether a session is busy, what the master last saw, the master's turn and its Codex session id, a hash of each session's key, and the pid of each worker's agent |
+| `turns/0.lock` | held by the worker whose heavy command runs ([repository.md](repository.md#heavy-commands)), naming it. Freed when the process that holds it exits. |
 | `server.sock` | the socket between the UI and the server, owner-only. If its path would be 100 bytes or longer: `saaio-<uid>/<hash>.sock` in `$XDG_RUNTIME_DIR`, else `$TMPDIR`, else `/tmp`, with the log next to it as `<hash>.log`. saaio uses that folder only while it is yours and closed to others (`0700`), and talks only to processes of your user. |
 | `server.log` | what the server did and what failed, with the errors of the hooks and the UI. The start line names the versions of saaio, the OS and the tools saaio calls. Moved to `server.log.1` once it passes 1 MiB. |
 | `master.json` | the master's session id and folder, for resuming after a restart |

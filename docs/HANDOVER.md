@@ -353,6 +353,27 @@ the pane (payloads in `src/adapter/fixtures/*/pre_compact.json`, `post_compact.j
   its dialog in the pane. After the first prompt, its hooks report the session and return the flow
   to working.
 
+## Exclusive runs: long PreToolUse holds (checked 2026-11-04)
+
+Claude Code 2.1.318 and Codex 0.163.0, a PreToolUse hook with `timeout` 1980 that records its
+ancestors and sleeps 170 s (past the 150 s saaio used before):
+- Both accept the timeout and let the hook run past 150 s. Codex clamps only SessionEnd and
+  Interrupt hooks (`normalize_command_hook` in codex-rs/hooks/src/engine/discovery.rs); any other
+  event takes its `timeout` as given, 600 s when unset.
+- The hook's parent is the agent: Claude Code runs it straight under `claude`, Codex under its
+  native `codex` binary, whose parent is the `node` wrapper the pane started. So the pid the pane
+  spawned is always an ancestor of the hook.
+- Claude Code waits quietly: the Bash call stays pending and runs once the hook exits.
+- An Esc in Claude Code while the hook waits interrupts the call and kills the hook, and no hook
+  says so, so nothing follows the flow's `turn-waiting`. The next prompt's `prompted` event clears
+  it.
+- Codex does not look patient. Its shell calls are code-mode `exec` scripts, which yield after
+  about 30 s with "Script running with cell ID n" and no output. The model then polled with
+  `wait`, issued the same command twice more (each a new hook waiting beside the first) and, after
+  2.5 min, ended its turn saying the shell never answered; ending the turn cancelled every pending
+  call and killed their hooks. With `echo hi` the model expected an instant answer; a test suite
+  it expects to be slow, but the duplicates and the give-up are the risk.
+
 ## Future improvements
 
 - **Working across repos.** One flow ui already shows every repo's flows and the master can

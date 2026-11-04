@@ -3,7 +3,9 @@
 use std::fmt;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -21,8 +23,11 @@ use crate::event::{Event, EventKind, ServiceStatus, is_uuid};
 use crate::fold;
 use crate::identity;
 use crate::pause;
+use crate::processes;
+use crate::repo_config::RepoConfig;
 use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
+use crate::turns::{self, Holder, Take, Turns};
 use crate::view::{FlowView, MasterTurn, State};
 use crate::wake;
 use crate::workflow::Workflow;
@@ -124,6 +129,11 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
         && adapter.before_tool(&payload)
     {
         wait_for_services(&store, id, !adapter.asks(&payload), &log, clock);
+        if config.exclusive.enabled
+            && let Some(line) = adapter.command(&payload)
+        {
+            wait_for_turn(&store, id, line, &log, clock);
+        }
     }
     match news {
         Some(news) => Document::Wake(news),
@@ -197,6 +207,151 @@ fn wait_for_services(store: &Store, id: &str, works: bool, log: &Log, clock: fn(
         }
         thread::sleep(WAIT_STEP);
     }
+}
+
+/// How long a tool call waits for the project's turn before it runs anyway.
+const TURN_WAIT: Duration = Duration::from_mins(30);
+/// How often a waiting call tries the turn again.
+const TURN_STEP: Duration = Duration::from_millis(500);
+
+/// Before a shell call that runs a command its repository lists under [exclusive]: takes the
+/// project's turn, waiting while another run has it, and hands it to `saaio turn`, which keeps it
+/// while the run lasts. Fails open: whatever goes wrong is logged and the call runs.
+fn wait_for_turn(store: &Store, id: &str, line: &str, log: &Log, clock: fn() -> u64) {
+    let Some((flow, command)) = heavy(store, id, line, log) else {
+        return;
+    };
+    let Some((agent, harness)) = agent_of(store, id, log) else {
+        return;
+    };
+    let holder = Holder {
+        flow: id.to_string(),
+        name: flow.name,
+        command: command.clone(),
+    };
+    let turns = Turns::of_project(store);
+    let deadline = Instant::now() + TURN_WAIT;
+    let mut waited = false;
+    let taken = |log: &Log| {
+        if let Err(error) = store.append(id, &Event::new(clock(), EventKind::TurnTaken)) {
+            log.error(&format!("{error:#}"));
+        }
+    };
+    loop {
+        match turns.try_take(&holder) {
+            Ok(Take::Taken(turn)) => {
+                if waited {
+                    taken(log);
+                }
+                if let Err(error) = keep_turn(turn, id, agent, &harness) {
+                    log.error(&format!("{error:#}; the tool runs without the turn"));
+                }
+                return;
+            }
+            Ok(Take::Held(by)) => {
+                let name = by.as_ref().map_or("another flow", |by| by.name.as_str());
+                if !waited {
+                    waited = true;
+                    let waiting = EventKind::TurnWaiting {
+                        command: command.clone(),
+                        holder: name.to_string(),
+                    };
+                    if let Err(error) = store.append(id, &Event::new(clock(), waiting)) {
+                        log.error(&format!("{error:#}"));
+                    }
+                }
+                if Instant::now() >= deadline {
+                    taken(log);
+                    let runs = by
+                        .as_ref()
+                        .map_or_else(String::new, |by| format!(" ({name} runs {})", by.command));
+                    log.error(&format!("waited 30m for the turn{runs}; the tool runs"));
+                    return;
+                }
+            }
+            Err(error) => {
+                if waited {
+                    taken(log);
+                }
+                log.error(&format!("{error:#}; the tool runs without the turn"));
+                return;
+            }
+        }
+        thread::sleep(TURN_STEP);
+    }
+}
+
+/// The flow and the listed command `line` runs; None, quietly, when its repository lists none
+/// that it runs, and logged when the repository's config cannot be read.
+fn heavy(store: &Store, id: &str, line: &str, log: &Log) -> Option<(FlowView, String)> {
+    let events = store.events(id).ok()?;
+    let flow = fold::fold(id, &events, None, 0)?;
+    let repo = repo_dir(&flow)?;
+    let exclusive = match RepoConfig::load(&repo) {
+        Ok(config) => config.exclusive?,
+        Err(error) => {
+            log.error(&format!("{error:#}; the tool runs without the turn"));
+            return None;
+        }
+    };
+    let command = exclusive.runs(line)?.to_string();
+    Some((flow, command))
+}
+
+/// The flow's agent and the processes between this hook and it (the harness); None, logged,
+/// when the server kept no agent or this hook does not run below it.
+fn agent_of(store: &Store, id: &str, log: &Log) -> Option<(u32, Vec<u32>)> {
+    let Some(agent) = store.agent(id) else {
+        log.error("no agent pid kept for the flow; the tool runs without the turn");
+        return None;
+    };
+    let all = match processes::list() {
+        Ok(all) => all,
+        Err(error) => {
+            log.error(&format!("{error:#}; the tool runs without the turn"));
+            return None;
+        }
+    };
+    let own = std::process::id();
+    if !processes::descends(&all, own, agent) {
+        log.error(&format!(
+            "the hook does not run below the flow's agent {agent}; the tool runs without the turn"
+        ));
+        return None;
+    }
+    let mut harness = Vec::new();
+    let mut at = own;
+    while let Some(parent) = all
+        .iter()
+        .find(|process| process.pid == at)
+        .map(|process| process.ppid)
+        && parent != agent
+    {
+        harness.push(parent);
+        at = parent;
+    }
+    Some((agent, harness))
+}
+
+/// Starts `saaio turn` with the turn's file as its stdin, in a process group of its own so the
+/// harness that ends this hook leaves it running; it holds the turn until it exits.
+fn keep_turn(turn: turns::Turn, id: &str, agent: u32, harness: &[u32]) -> Result<()> {
+    let exe = std::env::current_exe().context("could not find the saaio binary")?;
+    let harness = harness
+        .iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    Command::new(exe)
+        .args(["turn", "--flow", id, "--agent", &agent.to_string()])
+        .args((!harness.is_empty()).then(|| format!("--harness={harness}")))
+        .stdin(Stdio::from(turn.into_file()))
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .process_group(0)
+        .spawn()
+        .context("could not start saaio turn")?;
+    Ok(())
 }
 
 /// Where `saaio hook` says what went wrong: the store's server.log, never stdout or stderr (a

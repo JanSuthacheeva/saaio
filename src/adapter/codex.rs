@@ -22,8 +22,8 @@ struct Hook {
     timeout: u64,
 }
 
-/// The hook events saaio listens to; PreToolUse at 150 s, so a tool call can wait for paused
-/// services, Interrupt at 3 s, the most Codex allows.
+/// The hook events saaio listens to; PreToolUse at 1980 s, so a tool call can wait for paused
+/// services and for its turn, Interrupt at 3 s, the most Codex allows.
 const HOOKS: [Hook; 8] = [
     Hook {
         event: "UserPromptSubmit",
@@ -69,8 +69,8 @@ const HOOKS: [Hook; 8] = [
 /// Seconds Codex waits for `saaio hook` before it goes on without it.
 const HOOK_TIMEOUT_SECS: u64 = 10;
 /// Seconds Codex waits for `saaio hook` before a tool call: long enough for paused services to
-/// come back (hook::RESUME_WAIT).
-const TOOL_HOOK_TIMEOUT_SECS: u64 = 150;
+/// come back (hook::RESUME_WAIT) and a heavy command to wait for its turn (hook::TURN_WAIT).
+const TOOL_HOOK_TIMEOUT_SECS: u64 = 1_980;
 /// The most seconds Codex permits for an Interrupt hook.
 const INTERRUPT_TIMEOUT_SECS: u64 = 3;
 /// Where Codex says hooks passed with `-c` come from, in their trust keys.
@@ -167,7 +167,7 @@ pub fn translate(payload: &Value, workflow: &Workflow, approver: Approver) -> Ve
     let mut kinds: Vec<EventKind> = session(payload).into_iter().collect();
     match event {
         "UserPromptSubmit" => {
-            kinds.push(EventKind::Working);
+            kinds.extend([EventKind::Working, EventKind::Prompted]);
             let skill = payload["prompt"].as_str().and_then(mentioned_skill);
             if let Some(phase) = skill.and_then(|skill| workflow.phase_of(skill)) {
                 kinds.push(EventKind::Phase { phase });

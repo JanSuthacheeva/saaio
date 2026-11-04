@@ -8,7 +8,7 @@
 | [configuration.md](configuration.md) | `config.toml`: your own workflow, every setting |
 | [agents.md](agents.md) | harness setup and recommended worker permissions |
 | [themes.md](themes.md) | `theme.toml`: built-in themes, every color, themes from other tools |
-| [repository.md](repository.md) | per repository: branch names, setup and teardown, slots and ports, Docker |
+| [repository.md](repository.md) | per repository: branch names, setup and teardown, pausing idle services, heavy commands one at a time, slots and ports, Docker |
 | [cli.md](cli.md) | every command and option, exit codes, environment variables, several projects |
 | [json.md](json.md) | the `saaio status --json` contract |
 | [files.md](files.md) | every file saaio reads or writes, removing saaio |

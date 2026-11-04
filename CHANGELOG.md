@@ -6,6 +6,16 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Heavy commands run one at a time per project: list them in a repository's
+  `.saaio/config.toml` (`[exclusive] commands = ["artisan test", "pint", "phpstan"]`), and a
+  worker's shell call that runs one, also through `docker compose exec`, `docker exec` or Laravel
+  Sail, waits while another worker of the project runs one. The sidebar says `waits turn` and
+  whose run it waits for, the board card `working · waits turn`, `saaio status` and `--json` a
+  `turn`. A run in the background keeps the turn until its process exits; a crashed worker or a
+  killed run frees it at once. `[exclusive] enabled = false` in your config.toml turns it off.
+
 ## [0.2.0] - 2026-11-02
 
 Updating from 0.1.x: run `saaio update`, then `saaio --stop`. 0.2.0 refuses a 0.1.x server that

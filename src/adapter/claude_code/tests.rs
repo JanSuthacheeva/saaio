@@ -36,11 +36,15 @@ fn permission(question: &str) -> EventKind {
 
 #[test]
 fn a_prompt_means_working_and_a_typed_skill_its_phase() {
-    assert_eq!(events("user_prompt"), vec![EventKind::Working]);
+    assert_eq!(
+        events("user_prompt"),
+        vec![EventKind::Working, EventKind::Prompted]
+    );
     assert_eq!(
         events("user_prompt_skill"),
         vec![
             EventKind::Working,
+            EventKind::Prompted,
             EventKind::Phase {
                 phase: Phase::of("implement")
             }

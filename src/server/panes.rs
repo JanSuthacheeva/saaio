@@ -149,7 +149,7 @@ impl Server {
 
     /// Opens a pane, forgetting the busy mark (and the master's turn) an earlier process of it may
     /// have left: one killed mid-turn never reached its Stop, and a new process runs no turn yet;
-    /// keeps when it opened.
+    /// keeps when it opened and, for a flow, its agent's pid.
     fn open_pane(&mut self, mut spec: PaneSpec) -> anyhow::Result<()> {
         let waiter = waiter_of(&spec.key);
         self.hand_key(&mut spec)?;
@@ -163,7 +163,12 @@ impl Server {
         }
         let key = spec.key.clone();
         let adapter = spec.adapter;
-        self.host.open(spec)?;
+        let pid = self.host.open(spec)?;
+        if let PaneKey::Flow(id) = &key
+            && let Err(error) = self.store.set_agent(id, pid)
+        {
+            server_log::write((self.clock)(), &format!("{error:#}"));
+        }
         let pane = self.pane_mut(&key);
         pane.adapter = adapter;
         pane.opened_at = Some(Instant::now());
