@@ -40,13 +40,13 @@ use signal_hook::consts::SIGWINCH;
 use signal_hook::iterator::Signals;
 
 use crate::binaries::{self, Binary};
-use crate::branching::Branching;
 use crate::client::Client;
 use crate::config::prefix::Prefix;
 use crate::launch::pane;
 use crate::proto::{Role, ServerMsg};
 use crate::release::source::Releases;
 use crate::release::{Build, Tag};
+use crate::repo_config::RepoConfig;
 use crate::server_log;
 use crate::trust::Trust;
 use crate::update::UpdateCheck;
@@ -244,7 +244,9 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                 Effect::Send(message) => writer.send(&message)?,
                 Effect::Mirror(modes) => outer.mirror(modes)?,
                 Effect::LoadBranching(repo) => {
-                    let branching = Branching::load(&repo).map_err(|error| format!("{error:#}"));
+                    let branching = RepoConfig::load(&repo)
+                        .map(|config| config.branch)
+                        .map_err(|error| format!("{error:#}"));
                     app.on_branching(&repo, branching, git::current_branch(&repo));
                 }
                 Effect::Run(job) => run_job(&env.exe, job, jobs.clone()),

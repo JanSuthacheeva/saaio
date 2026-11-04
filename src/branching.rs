@@ -1,10 +1,6 @@
 //! `Branching`: a repo's `[branch]` convention and the branch name `saaio start` gives a flow
 
-use std::fs;
-use std::io::ErrorKind;
-use std::path::Path;
-
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use serde::Deserialize;
 
 use crate::launch::name;
@@ -21,29 +17,7 @@ pub struct Branching {
     pub types: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct RepoConfig {
-    branch: Option<Branching>,
-}
-
-pub const CONFIG_FILE: &str = ".saaio/config.toml";
-
 impl Branching {
-    /// <repo>/.saaio/config.toml's [branch]; None without the file or the section.
-    pub fn load(repo: &Path) -> Result<Option<Branching>> {
-        let path = repo.join(CONFIG_FILE);
-        let text = match fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(error) => {
-                return Err(error).with_context(|| format!("could not read {}", path.display()));
-            }
-        };
-        let config: RepoConfig =
-            toml::from_str(&text).with_context(|| format!("{} is not valid", path.display()))?;
-        Ok(config.branch)
-    }
-
     /// The type a flow gets: `asked` when the repo lists it, else the first of `preferred` (its
     /// kind's) the repo lists, else the repo's first; None when the repo lists no types.
     pub fn pick_type(&self, asked: Option<&str>, preferred: &[String]) -> Result<Option<String>> {
@@ -57,7 +31,7 @@ impl Branching {
                 Ok(Some(kind.to_string()))
             }
             Some(kind) if self.types.is_empty() => {
-                bail!("{CONFIG_FILE} lists no branch types, so there is no type {kind}")
+                bail!("[branch] lists no types, so there is no type {kind}")
             }
             Some(kind) => bail!(
                 "no branch type {kind}; this repo has {}",
@@ -115,8 +89,6 @@ fn tidy_segment(segment: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use tempfile::TempDir;
-
     use super::*;
 
     fn convention() -> Branching {
@@ -205,27 +177,5 @@ mod tests {
             Some("feature".into()),
             "the asked one wins"
         );
-    }
-
-    #[test]
-    fn loads_the_branch_section_of_the_repo_config() {
-        let dir = TempDir::new().unwrap();
-        assert_eq!(Branching::load(dir.path()).unwrap(), None);
-
-        fs::create_dir_all(dir.path().join(".saaio")).unwrap();
-        let config = dir.path().join(CONFIG_FILE);
-        fs::write(
-            &config,
-            "[branch]\nname = \"{type}/{ticket}-{slug}\"\ntypes = [\"feature\", \"bugfix\"]\n",
-        )
-        .unwrap();
-        assert_eq!(Branching::load(dir.path()).unwrap(), Some(convention()));
-
-        fs::write(&config, "[other]\nx = 1\n").unwrap();
-        assert_eq!(Branching::load(dir.path()).unwrap(), None);
-
-        fs::write(&config, "[branch]\nname = \"x\"\ntipes = []\n").unwrap();
-        let error = format!("{:#}", Branching::load(dir.path()).unwrap_err());
-        assert!(error.contains("tipes"), "{error}");
     }
 }

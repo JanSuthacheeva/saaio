@@ -36,6 +36,7 @@ mod proto;
 mod refusal;
 mod registry;
 mod release;
+mod repo_config;
 mod server;
 mod server_log;
 mod slots;
