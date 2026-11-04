@@ -348,6 +348,6 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 - [x] Add `Adapter::command` and raise both adapters' PreToolUse timeout to 1980 s, with adapter tests
 - [x] Add the hidden `saaio turn` command (`cli/commands/turn.rs`)
 - [x] Add `wait_for_turn` and `keep_turn` to hook.rs behind `config.exclusive.enabled`; tests/cli/turn.rs end to end
-- [ ] Show the wait: sidebar label and note, board card, detail, status `turn` column; update goldens
+- [x] Show the wait: sidebar label and note, board card, detail, status `turn` column; update goldens
 - [ ] Docs: docs/repository.md (heavy commands section with the Sail example), docs/configuration.md (`[exclusive] enabled`), docs/cli.md and docs/json.md (`turn`), docs/ui.md (sidebar), the Codex caveat in docs/repository.md, CHANGELOG Unreleased Added, ROADMAP Planned future (machine-wide limit), CLAUDE.md architecture lines for the new modules
 - [ ] End to end: scratch store, two Claude workers in a repo with `[exclusive]`; one runs a slow listed command in the background, the other's call waits with `waits turn` in the sidebar and goes on when the first process ends; kill a watcher and see the turn free; `enabled = false` lets both run

@@ -15,7 +15,7 @@ pub(crate) fn home(board: &Board, bin: &str, warnings: &[String]) -> Document {
     board_list(board, Some(bin), warnings, false)
 }
 
-/// count, needs_you, flows[n]{name,kind,state,phase,tasks,age}, blockers[n]{name,blocker}, warnings, help;
+/// count, needs_you, flows[n]{name,kind,state,phase,tasks,age,services,turn}, blockers[n]{name,blocker}, warnings, help;
 /// "flows: none tracked" when empty.
 pub(crate) fn list(board: &Board, warnings: &[String], full: bool) -> Document {
     board_list(board, None, warnings, full)
@@ -55,6 +55,7 @@ struct FlowRow<'a> {
     tasks: String,
     age: String,
     services: &'static str,
+    turn: &'static str,
 }
 
 #[derive(Debug, Serialize)]
@@ -82,6 +83,7 @@ fn board_list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool)
                         .unwrap_or_default(),
                     age: short_duration(board.now.saturating_sub(flow.changed_at)),
                     services: services(flow),
+                    turn: turn(flow),
                 })
                 .collect(),
         )
@@ -125,6 +127,11 @@ fn services(flow: &FlowView) -> &'static str {
     }
 }
 
+/// Whether a tool call of the flow waits for the project's turn: waiting, else empty.
+fn turn(flow: &FlowView) -> &'static str {
+    if flow.turn.is_some() { "waiting" } else { "" }
+}
+
 /// Every project's flows in one list with a project column, blockers likewise.
 pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Document {
     #[derive(Serialize)]
@@ -154,6 +161,7 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
         tasks: String,
         age: String,
         services: &'static str,
+        turn: &'static str,
     }
     #[derive(Serialize)]
     struct AllBlockerRow<'a> {
@@ -187,6 +195,7 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
                 .unwrap_or_default(),
             age: short_duration(projects.now.saturating_sub(flow.changed_at)),
             services: services(flow),
+            turn: turn(flow),
         })
         .collect::<Vec<_>>();
     let blockers = flows
@@ -254,6 +263,8 @@ pub(crate) fn detail(
         services: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
         services_error: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        turn: Option<String>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         questions: Vec<QuestionRow>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -337,6 +348,12 @@ pub(crate) fn detail(
             .as_ref()
             .and_then(|services| services.reason.as_deref())
             .map(cut),
+        turn: flow.turn.as_ref().map(|turn| {
+            cut(&format!(
+                "waits to run {} after {}",
+                turn.command, turn.holder
+            ))
+        }),
         questions: (1..)
             .zip(&flow.questions)
             .map(|(n, asked)| QuestionRow {
@@ -451,10 +468,10 @@ mod tests {
                 "description: \"Tracks parallel feature flows: what each is doing, where it is blocked, how far it got\"",
                 "count: 3",
                 "needs_you: 1",
-                "flows[3]{name,kind,state,phase,tasks,age,services}:",
-                "  shop-221,fix,blocked,implement,4/9,7m,\"\"",
-                "  shop-230,feature,working,plan,\"\",9m,\"\"",
-                "  export-csv,\"\",done,merge-request,\"\",9m,paused",
+                "flows[3]{name,kind,state,phase,tasks,age,services,turn}:",
+                "  shop-221,fix,blocked,implement,4/9,7m,\"\",\"\"",
+                "  shop-230,feature,working,plan,\"\",9m,\"\",\"\"",
+                "  export-csv,\"\",done,merge-request,\"\",9m,paused,\"\"",
                 "blockers[1]{name,blocker}:",
                 "  shop-221,\"Task 5: migration needs a default value\"",
                 "help[2]: \"Run `saaio status <name>` for one flow's phases, timeline and decisions\",Run `saaio new --name <name> --request <text>` to track a new flow",
@@ -544,7 +561,7 @@ mod tests {
 
         assert!(text.starts_with("count: 4\nneeds_you: 1\n"), "{text}");
         assert!(
-            text.contains("flows[4]{project,name,kind,state,phase,tasks,age,services}:"),
+            text.contains("flows[4]{project,name,kind,state,phase,tasks,age,services,turn}:"),
             "{text}"
         );
         assert!(text.contains("  api,api-7,\"\",working,"), "{text}");
@@ -610,6 +627,36 @@ mod tests {
         );
         let running = text(vec![services(ServiceStatus::Running, None)]);
         assert!(!running.contains("services"), "{running}");
+    }
+
+    #[test]
+    fn says_a_flow_waits_for_its_turn_in_the_list_and_the_detail() {
+        let waiting = flow(
+            "shop-221",
+            vec![
+                EventKind::Working,
+                EventKind::TurnWaiting {
+                    command: "artisan test".into(),
+                    holder: "shop-230".into(),
+                },
+            ],
+            9 * MIN,
+        );
+        let board = crate::fold::board(vec![waiting.clone()], 9 * MIN);
+
+        let listed = list(&board, &[], false).text().to_string();
+        assert!(
+            listed.contains("{name,kind,state,phase,tasks,age,services,turn}"),
+            "{listed}"
+        );
+        assert!(listed.contains(",waiting\n"), "{listed}");
+        let shown = detail(&waiting, 9 * MIN, false, None, Prefix::default())
+            .text()
+            .to_string();
+        assert!(
+            shown.contains("\nturn: waits to run artisan test after shop-230\n"),
+            "{shown}"
+        );
     }
 
     #[test]

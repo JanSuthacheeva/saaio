@@ -47,6 +47,7 @@ impl BoardView<'_> {
         };
         let mut facts: Vec<String> = project.into_iter().cloned().collect();
         // First: it changes, and a long request would cut it off.
+        facts.extend(self.turn(flow));
         facts.extend(self.services(flow));
         if !flow.request.is_empty() {
             facts.push(flow.request.clone());
@@ -113,6 +114,18 @@ impl BoardView<'_> {
         );
         self.render_timeline(flow, left, buf);
         self.render_answer(flow, right, buf);
+    }
+
+    /// The header's word on a call waiting for the project's turn: what it runs, since when, and
+    /// who has the turn.
+    fn turn(&self, flow: &FlowView) -> Option<String> {
+        let turn = flow.turn.as_ref()?;
+        Some(format!(
+            "waits its turn for {} since {}; {} runs",
+            turn.command,
+            clock(turn.since, self.offset_secs),
+            turn.holder
+        ))
     }
 
     /// The header's word on the flow's services: paused since when, resuming, or down and why;
@@ -538,6 +551,14 @@ mod tests {
         );
         let running = services(ServiceStatus::Running, None);
         assert!(!running.contains("services"), "{running}");
+        let waiting = header(EventKind::TurnWaiting {
+            command: "pint".into(),
+            holder: "shop-42".into(),
+        });
+        assert!(
+            waiting.contains(" 1 shop-221  waits its turn for pint since 00:01; shop-42 runs · "),
+            "{waiting}"
+        );
         let stacked = header(EventKind::BaseMerged {
             base: "flow/shop-220".into(),
             onto: "main".into(),
