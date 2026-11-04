@@ -63,7 +63,8 @@ saaio status shop-217 --json # a board with just that flow
       "session": null,
       "questions": [],
       "permission": false,
-      "services": null
+      "services": null,
+      "turn": null
     },
     {
       "id": "5418e55e-581e-4117-a46c-0824b8e475d9",
@@ -97,7 +98,8 @@ saaio status shop-217 --json # a board with just that flow
       "session": null,
       "questions": [],
       "permission": false,
-      "services": null
+      "services": null,
+      "turn": null
     }
   ]
 }
@@ -142,6 +144,7 @@ All times are Unix milliseconds.
 | `questions` | array | the questions of the dialog a `waiting` flow shows. Empty when it waits on none. See [Questions](#questions). |
 | `permission` | boolean | the flow is `waiting` on a permission prompt in its pane; `blocker` names the tool call. A Codex request counts once it is `waiting`, three seconds in. |
 | `services` | object or null | where the flow's services stand. Null until saaio first pauses them. See [Services](#services). |
+| `turn` | object or null | a heavy command of the flow that waits for another worker's run. Null when none waits. See [Turn](#turn). |
 
 ### States
 
@@ -201,7 +204,17 @@ The repo's `.saaio/pause` and `.saaio/resume` ([repository.md](repository.md#pau
 | `since` | number | when it got there |
 | `reason` | string or null | the script's last error line, for `pause-failed` and `resume-failed` |
 
-### Workspace
+### Turn
+
+A shell call that runs a command the repository lists under `[exclusive]`
+([repository.md](repository.md#heavy-commands)) and waits while another worker runs one.
+
+| Key | Type | Holds |
+| --- | --- | --- |
+| `command` | string | the listed command it runs |
+| `holder` | string | the name of the flow whose run has the turn |
+| `since` | number | when it began to wait |
+
 
 | Key | Type | Holds |
 | --- | --- | --- |

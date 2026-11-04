@@ -9,6 +9,7 @@ File: `~/.config/saaio/config.toml`. Optional. Every key has a default.
 - [\[master\]](#master)
 - [\[ui\]](#ui)
 - [\[services\]](#services)
+- [\[exclusive\]](#exclusive)
 - [Kinds of flows](#kinds-of-flows)
 - [Agents](#agents)
 - [The first prompt](#the-first-prompt)
@@ -96,6 +97,7 @@ of a save. No restart.
 | `[ui] update_check` | off: at once, the line goes. On: the line shows at once, and the next look follows within the hour once a day has passed. |
 | `[ui] notify` | at once, from the next change of a flow |
 | `[services] pause_after_minutes` | at once, for every resting flow |
+| `[exclusive] enabled` | at the next tool call |
 | an added or removed agent in the new-flow dialog | the next time the dialog opens |
 
 ## [worker]
@@ -164,6 +166,19 @@ pause_after_minutes = 15
 | `pause_after_minutes` | `5` | minutes a flow rests (idle, waiting, blocked, done or ended) before `saaio server` runs the repo's `.saaio/pause`. `.saaio/resume` runs when its worker works again. `0` never pauses. |
 
 Only repos with both scripts are paused: [repository.md](repository.md#pause-and-resume).
+
+## [exclusive]
+
+```toml
+[exclusive]
+enabled = false
+```
+
+| Key | Default | Effect |
+| --- | --- | --- |
+| `enabled` | `true` | a worker's shell call that runs a command its repository lists under `[exclusive]` waits while another worker of the project runs one. `false`: they run at once. |
+
+The repository lists the commands: [repository.md](repository.md#heavy-commands).
 
 ## Kinds of flows
 
