@@ -352,6 +352,11 @@ clear it. `fold::changes`: TurnWaiting always; TurnTaken only while `turn` is So
 - [x] Docs: docs/repository.md (heavy commands section with the Sail example), docs/configuration.md (`[exclusive] enabled`), docs/cli.md and docs/json.md (`turn`), docs/ui.md (sidebar), the Codex caveat in docs/repository.md, CHANGELOG Unreleased Added, ROADMAP Planned future (machine-wide limit), CLAUDE.md architecture lines for the new modules
 - [x] End to end: scratch store, two Claude workers in a repo with `[exclusive]`; one runs a slow listed command in the background, the other's call waits with `waits turn` in the sidebar and goes on when the first process ends; kill a watcher and see the turn free; `enabled = false` lets both run
 
+### After review (decided 2026-11-04)
+
+- [ ] Check by hand in a scratch E2E: Esc in a Claude Code worker while its heavy call waits for its turn. If `waits turn` stays through the next prompt, clear `turn` when a new prompt arrives (a prompt event of its own, since a repeated `Working` is folded away), with fold and adapter tests
+- [ ] docs/repository.md: note that two heavy calls one Claude Code turn runs in parallel may stall about 10 s and then run at once
+
 ## Review
 
 Isolated review of `flow/exclusive-runs` against `main` and this plan (2026-11-04).
@@ -371,14 +376,16 @@ Isolated review of `flow/exclusive-runs` against `main` and this plan (2026-11-0
   hook, the hook keeps waiting and takes the turn later, released after GRACE. Not proven either
   way. Recommendation: check it once by hand; if it sticks, clear `turn` on UserPromptSubmit
   (a prompt event of its own, since `Working` is folded away by `changes`).
+  Decided: check it by hand, fix if it sticks (task under After review).
 - Parallel heavy calls of one Claude Code turn: if Claude Code runs every PreToolUse hook of a
   batch before any tool, the second hook waits for a run that cannot start until it returns;
   NeverRan frees it after 10 s and both then run at once. No deadlock, but a 10 s stall and no
   exclusivity. Recommendation: accept; note it if seen in practice.
+  Decided: accept, documented in docs/repository.md (task under After review).
 - `TurnWaiting` names the holder at the first try only; a third flow taking the turn later is
-  not shown, and a holder read mid-write shows as "another flow". Cosmetic; accept.
+  not shown, and a holder read mid-write shows as "another flow". Cosmetic; accept. Decided: accepted.
 - `saaio turn` folds the flow's whole log every 500 ms for `asks` while a run lasts. Fine for
-  today's log sizes; revisit if logs grow large.
+  today's log sizes; revisit if logs grow large. Decided: accepted.
 
 ### Where to look
 
