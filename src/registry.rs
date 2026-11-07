@@ -155,7 +155,7 @@ impl Registry {
 }
 
 /// `root` spelled one way: no trailing slash, no `.` folders.
-fn normal(root: &Path) -> PathBuf {
+pub fn normal(root: &Path) -> PathBuf {
     root.components().collect()
 }
 
