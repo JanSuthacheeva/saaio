@@ -305,7 +305,7 @@ environment `github-pages` deploys from main only. No CNAME file in the build.
 
 - [x] Cargo.toml `site` feature and `[[bin]]` entries; `src/bin/site/main.rs` with `Args` and a stub build; `.gitignore` `/_site`; ci.yml `--all-features` for clippy and test
 - [x] `slug.rs`: `Slugs::new`, `Slugs::next` with unit tests on real headings and repeats
-- [ ] `pages.rs`: `Page`, `Pages::read`, `by_source`, `iter`, `url_of`, `render::title` with tests for nav order, unlisted page, urls
+- [x] `pages.rs`: `Page`, `Pages::read`, `by_source`, `iter`, `url_of`, `render::title` with tests for nav order, unlisted page, urls
 - [ ] `links.rs`: `Target`, `Target::href`, `resolve`, `Link`, `Broken`, `Reason`, Display, with tempfile tests for every target kind and failure
 - [ ] `render.rs`: `render`, `Rendered`, `Heading` with tests for ids, alerts, tables, hrefs, Broken lines
 - [ ] `output.rs`: `Output::create`, `page`, `file`, `copy` with marker tests

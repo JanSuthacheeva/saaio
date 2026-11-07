@@ -1,11 +1,18 @@
 //! saaio-site: builds the saaio.dev docs site from the Markdown in a checkout.
-#![allow(dead_code, reason = "temporary: site::build wires the modules in a later task")]
+#![allow(
+    dead_code,
+    reason = "temporary: site::build wires the modules in a later task"
+)]
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
 
+#[cfg(test)]
+mod fixtures;
+mod pages;
+mod render;
 mod slug;
 
 /// Builds the saaio.dev docs site from the Markdown in a checkout.
