@@ -69,3 +69,28 @@ Fixing in the registry, not deduplicating in `update::others`, fixes every reade
 - [x] Add `registers_a_store_once_with_or_without_a_trailing_slash` in `src/registry.rs` (also: an entry left as `<root>/` is moved to the root's name; before normalising, `entry("<root>/")` is a name of its own, so this case belongs here), then normalise the root in `Registry::register()` and `Registry::entry()`
 - [x] CHANGELOG: a `### Fixed` line under `## [Unreleased]`: `saaio update` and `saaio status --all` list each store once, and a registry with an entry left by an earlier path is repaired
 - [x] End-to-end: run the reproduction again (both the stale entry and `SAAIO_HOME=$H/`) and see `servers[1]` with the 0.2.1 server once, and one file in `$XDG_STATE_HOME/saaio/stores`
+
+## Review
+
+Reviewed in isolation against `main`. The three new tests fail with `main`'s `src/registry.rs` (production code swapped back, tests kept) and pass with the fix.
+
+**Fixed**
+
+- `docs/files.md` still said a `stores/<hash>` entry is dropped only when its folder is gone; it now also says a second entry of the same folder is dropped (commit `docs: a store's registry entry is dropped for a second of one folder`). Docs only, no code changed.
+
+**Open**
+
+- Long store paths reached through two spellings. `Registry::stores()` now returns the root normalised (`$H/` read as `$H`) and keeps one spelling per canonical folder, while `client::private_socket` still hashes the root as `SAAIO_HOME` spelled it. For a store whose `server.sock` path is over 100 bytes, a server started with `SAAIO_HOME=$H/` (or through a symlink, when the other spelling's entry is the one kept) is now looked up at the other spelling's socket and missed by `saaio update`; before, it was found (twice). Narrow (needs a long store path plus an odd spelling; the default `~/.local/state/saaio/projects/<name>` is short), and the plan already names the socket hashing as a pre-existing issue. Recommendation: leave it for this fix; a follow-up normalises the root once in `Env::store` so the store, its socket and its entry agree.
+- Symlink spellings churn: if two commands register one folder under two correctly hashed spellings (a symlink), each `register` rewrites its entry and the next `stores()` removes it again. Harmless (a small file write per command), noted only.
+
+**Where to look**
+
+1. `src/registry.rs` `Registry::stores()`: the sort key `(file != entry(root), file)` decides which entry survives, then the loop removes duplicates and moves a stale-named entry (write the right name first, remove the stale file only when that write succeeded, so no entry is lost).
+2. `src/registry.rs` `normal`, `entry_line`, `read_entry`: every name and line goes through `normal`, so old `$H/` lines are read as `$H`.
+3. `src/cli/commands/update.rs` `names_a_server_once_when_its_store_is_registered_twice`: the regression test over a real socket.
+
+Routine, can be skimmed: the registry unit tests and the CHANGELOG line.
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt` passed at `a8170c3`; production code has not changed since (only CHANGELOG.md, docs/files.md and this plan).
