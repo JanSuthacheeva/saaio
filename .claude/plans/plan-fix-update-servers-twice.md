@@ -68,7 +68,12 @@ Fixing in the registry, not deduplicating in `update::others`, fixes every reade
 - [x] Add `names_a_server_once_when_its_store_is_registered_twice` in `src/cli/commands/update.rs` (a store registered by `register` plus the same root under a stale entry name and as `<root>/`; fails today with `servers` holding 3 rows instead of 1), plus `lists_a_store_once_however_its_entries_name_it` in `src/registry.rs` (stale-named entries: one root each returned, one file left per store, named `fnv1a` of the root); then fix `Registry::stores()`
 - [x] Add `registers_a_store_once_with_or_without_a_trailing_slash` in `src/registry.rs` (also: an entry left as `<root>/` is moved to the root's name; before normalising, `entry("<root>/")` is a name of its own, so this case belongs here), then normalise the root in `Registry::register()` and `Registry::entry()`
 - [x] CHANGELOG: a `### Fixed` line under `## [Unreleased]`: `saaio update` and `saaio status --all` list each store once, and a registry with an entry left by an earlier path is repaired
-- [x] End-to-end: run the reproduction again (both the stale entry and `SAAIO_HOME=$H/`) and see `servers[1]` with the 0.2.1 server once, and one file in `$XDG_STATE_HOME/saaio/stores`
+- [ ] Add `spells_saaio_home_one_way` in `src/cli/env.rs` (`SAAIO_HOME=/s/` gives the store `/s` and the same socket as `/s`; fails today with root `/s/`), then normalise `SAAIO_HOME` in `Env::store` with `registry::normal`, so the store, its socket and its registry entry share one spelling (review decision 1)
+- [ ] End-to-end: run the reproduction again (both the stale entry and `SAAIO_HOME=$H/`) and see `servers[1]` with the 0.2.1 server once, and one file in `$XDG_STATE_HOME/saaio/stores`
+
+## Follow-ups
+
+- A store reached through a symlink still gets a socket path of its own spelling when its path is long (`client::private_socket` hashes the root as spelled), so `saaio update` can miss such a server. Pre-existing; canonicalising the store root once would settle it.
 
 ## Review
 
@@ -82,6 +87,11 @@ Reviewed in isolation against `main`. The three new tests fail with `main`'s `sr
 
 - Long store paths reached through two spellings. `Registry::stores()` now returns the root normalised (`$H/` read as `$H`) and keeps one spelling per canonical folder, while `client::private_socket` still hashes the root as `SAAIO_HOME` spelled it. For a store whose `server.sock` path is over 100 bytes, a server started with `SAAIO_HOME=$H/` (or through a symlink, when the other spelling's entry is the one kept) is now looked up at the other spelling's socket and missed by `saaio update`; before, it was found (twice). Narrow (needs a long store path plus an odd spelling; the default `~/.local/state/saaio/projects/<name>` is short), and the plan already names the socket hashing as a pre-existing issue. Recommendation: leave it for this fix; a follow-up normalises the root once in `Env::store` so the store, its socket and its entry agree.
 - Symlink spellings churn: if two commands register one folder under two correctly hashed spellings (a symlink), each `register` rewrites its entry and the next `stores()` removes it again. Harmless (a small file write per command), noted only.
+
+**Decided**
+
+- Long store paths: normalise `SAAIO_HOME` in `Env::store` in this PR (task above).
+- Symlink churn: no change; the symlinked-store case is under Follow-ups.
 
 **Where to look**
 
