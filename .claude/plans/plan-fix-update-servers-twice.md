@@ -104,3 +104,27 @@ Routine, can be skimmed: the registry unit tests and the CHANGELOG line.
 **Checks**
 
 `cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt` passed at `a8170c3`; production code has not changed since (only CHANGELOG.md, docs/files.md and this plan).
+
+### Second round (b88f671..9d46c83)
+
+Reviewed in isolation: `1c99603` (`Env::store` normalises `SAAIO_HOME` with `registry::normal`, now `pub`) and the plan commits. `spells_saaio_home_one_way` fails with the production line reverted (root kept as `.../store/`) and passes with it. Every reader of the store root (`Env::socket`, `ui.rs`'s pinned `SAAIO_HOME`, the pane's `SAAIO_HOME` in `launch/pane.rs`, `server.rs`, `stop.rs`, `bug_report.rs`, `status.rs`) goes through `Env::store`, so a binary of this branch spells one store one way everywhere. Relative and `..` spellings are kept as they were (`components()` keeps a leading `.` and `..`).
+
+**Fixed**
+
+- Nothing.
+
+**Open**
+
+- Upgrade over a running server with an odd long spelling. A server of 0.2.1 or earlier started with `SAAIO_HOME=$H/` on a store whose `server.sock` path is over 100 bytes listens at the socket hashed from `$H/`; this build looks for `$H`'s. After the update, `saaio`, `saaio --stop` and `saaio update` with that same `SAAIO_HOME` miss it, and the UI would start a second server on the same store (there is no store lock, only the socket). Needs a hand-set `SAAIO_HOME` that is long and ends in `/` or holds `/./`; the stores saaio picks itself are short and come normalised from the registry. Recommendation: accept; `saaio update` already tells the user to restart servers of another build, which ends it.
+- The socket assertion in `spells_saaio_home_one_way` follows from the root assertion (same root, same socket); harmless, kept as the statement of intent.
+
+**Where to look**
+
+1. `src/cli/env.rs` `Env::store`: the one line that normalises `SAAIO_HOME`; everything else derives from the `Store` it returns.
+2. `src/client.rs` `socket_path` / `private_socket`: still hashes the root as given, so a symlinked long store keeps its own socket (the Follow-up).
+
+Routine: the test and the plan edits.
+
+**Checks**
+
+`cargo test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt` passed at `1c99603`; only this plan changed since.
