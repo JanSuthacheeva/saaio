@@ -80,7 +80,9 @@ kinds of your own under new names. Details: [Use your own workflow](docs/configu
 ## Set up each project
 
 Recommended once per project: the `setup-saaio` skill writes `.saaio/setup` and `.saaio/teardown`,
-so each worktree gets its own ports, `.env` and services and workers do not collide.
+so each worktree gets its own ports, `.env` and services and workers do not collide. When the setup
+starts services, it also writes `.saaio/pause` and `.saaio/resume`, which pause them while the flow
+rests.
 
 ```sh
 npx skills add JanSuthacheeva/agent-skills -g --skill setup-saaio   # included in the command above
@@ -89,6 +91,10 @@ npx skills add JanSuthacheeva/agent-skills -g --skill setup-saaio   # included i
 Then ask the agent in the project: "set up saaio for this project". Once you have read the scripts,
 run `saaio trust` in the project in your terminal, so saaio runs them (the new-flow dialog in
 `saaio` asks too). Details: [Repository setup](docs/repository.md#the-setup-saaio-skill).
+
+List the project's heavy commands (test suites, formatters, static analysis) in
+`.saaio/config.toml`, so its workers run them one at a time:
+[Heavy commands](docs/repository.md#heavy-commands).
 
 ## Usage
 
@@ -117,6 +123,8 @@ commented out at its default.
 | --- | --- |
 | Master | starts workers, answers them with `saaio send`, is woken when a worker's turn ends, it waits, is blocked, stops responding or opens its merge request. Guided flows bring every question to you. Auto flows let the master answer what the code and plan settle. |
 | Worktrees | one branch and worktree per flow. `.saaio/setup` and `.saaio/teardown` run in each, once you trusted the repository (`saaio trust`, or the new-flow dialog asks). `SAAIO_SLOT` (1 to 20, unique across all projects) gives each worktree its own ports. The `setup-saaio` skill writes both scripts. |
+| Heavy commands | one at a time across a project's workers. A repo lists them under `[exclusive] commands` in `.saaio/config.toml` (`artisan test`, `pint`, `phpstan`); a run through `docker compose exec`, `docker exec` or Laravel Sail counts too. A worker's call waits while another worker runs one, and the sidebar says `waits turn`. `[exclusive] enabled = false` in your own config.toml turns it off. [Heavy commands](docs/repository.md#heavy-commands), [`[exclusive]`](docs/configuration.md#exclusive) |
+| Idle services | `.saaio/pause` stops the services of a flow that rested for `[services] pause_after_minutes` (5 by default), `.saaio/resume` starts them again when its worker works. [Pause and resume](docs/repository.md#pause-and-resume), [`[services]`](docs/configuration.md#services) |
 | Hooks | Claude Code and Codex (experimental) report through their own hooks, no screen reading. Codex workers trust saaio's hooks, and their own worktree once you trusted the repository, for that launch; a startup dialog that prevents the first turn shows as waiting. Any other command runs as a worker, shown as running or not. If any worker process exits while its flow is working, the flow shows blocked with its exit code and a short tail of pane output. |
 | Projects | one store, master and sidebar per git repository, picked from the folder saaio runs in. `saaio status --all` and the board show every project. |
 | Plain sessions | an agent in any folder, no worktree, no flow |
