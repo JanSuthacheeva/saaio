@@ -56,7 +56,7 @@ the store outside a repository.
 | File | Holds |
 | --- | --- |
 | `projects/<repository>/` | one repository's store |
-| `stores/<hash>` | one store's folder, so `saaio status --all` finds every project. Dropped when the folder is gone. |
+| `stores/<hash>` | one store's folder, so `saaio status --all` finds every project; `<hash>` is the folder's path hashed. Dropped when the folder is gone, and when another entry names the same folder. |
 | `slots/<n>` | the flow holding slot `n`. Counts only while that flow is unfinished. |
 | `slots/.lock` | held while a slot is claimed, so two starts never get the same slot |
 | `trusted/<hash>` | one repository you trusted with `saaio trust` or in the new-flow dialog ([repository.md](repository.md#trust)) |
