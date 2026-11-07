@@ -8,6 +8,24 @@ description = "Orchestrate coding agents from one terminal: a master agent and o
 repository = "https://github.com/JanSuthacheeva/saaio"
 # Installed from GitHub releases or with cargo install --git, never from crates.io.
 publish = false
+# Two binaries: plain cargo run and cargo install mean saaio.
+default-run = "saaio"
+autobins = false
+
+[[bin]]
+name = "saaio"
+path = "src/main.rs"
+
+# The docs site generator: built in CI and for a local preview, never by cargo install, which
+# skips a binary whose features are off. A package of its own is no option: cargo install --git
+# refuses a repository with two packages that have binaries.
+[[bin]]
+name = "saaio-site"
+path = "src/bin/site/main.rs"
+required-features = ["site"]
+
+[features]
+site = []
 
 [dependencies]
 alacritty_terminal = "0.26"
