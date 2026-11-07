@@ -139,22 +139,28 @@ pub enum Target {
     Asset { source: PathBuf },
     /// Any other repo file or folder: {REPO}/blob/main/<path> or {REPO}/tree/main/<path>.
     Repo { url: String },
-    /// http(s), mailto: left as written.
-    External,
+    /// http(s), mailto: and the like, as written.
+    External(String),
 }
 
 impl Target {
     pub fn href(&self) -> Cow<'_, str>;
 }
 
-/// Resolves href against the folder of `from`. "#x" is the page itself.
+/// Resolves href against the folder of `from`. "#x" is the page itself; "/x" starts at the
+/// checkout, as on GitHub.
 pub fn resolve(from: &Path, href: &str, pages: &Pages, root: &Path) -> Result<Target, Reason>;
 
 pub struct Link { pub line: usize, pub href: String, pub target: Target }
 
 pub struct Broken { pub source: PathBuf, pub line: usize, pub href: String, pub reason: Reason }
 
-pub enum Reason { NoFile, NoAnchor, OutsideRepo }
+pub enum Reason {
+    NoFile,
+    /// The page it names has no heading with that id.
+    NoAnchor(PathBuf),
+    OutsideRepo,
+}
 
 impl fmt::Display for Broken; // docs/ui.md:12: configuration.md#nope: no heading #nope in docs/configuration.md
 ```
@@ -306,7 +312,7 @@ environment `github-pages` deploys from main only. No CNAME file in the build.
 - [x] Cargo.toml `site` feature and `[[bin]]` entries; `src/bin/site/main.rs` with `Args` and a stub build; `.gitignore` `/_site`; ci.yml `--all-features` for clippy and test
 - [x] `slug.rs`: `Slugs::new`, `Slugs::next` with unit tests on real headings and repeats
 - [x] `pages.rs`: `Page`, `Pages::read`, `by_source`, `iter`, `url_of`, `render::title` with tests for nav order, unlisted page, urls
-- [ ] `links.rs`: `Target`, `Target::href`, `resolve`, `Link`, `Broken`, `Reason`, Display, with tempfile tests for every target kind and failure
+- [x] `links.rs`: `Target`, `Target::href`, `resolve`, `Link`, `Broken`, `Reason`, Display, with tempfile tests for every target kind and failure
 - [ ] `render.rs`: `render`, `Rendered`, `Heading` with tests for ids, alerts, tables, hrefs, Broken lines
 - [ ] `output.rs`: `Output::create`, `page`, `file`, `copy` with marker tests
 - [ ] `layout.rs` with `page.html`, `site.css`, `site.js` in the jasu.dev look: `page`, `not_found`, `fill`, tests for placeholders and the current page

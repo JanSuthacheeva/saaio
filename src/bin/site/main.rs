@@ -11,6 +11,7 @@ use clap::Parser;
 
 #[cfg(test)]
 mod fixtures;
+mod links;
 mod pages;
 mod render;
 mod slug;
