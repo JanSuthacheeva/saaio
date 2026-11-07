@@ -1,0 +1,524 @@
+<title>saaio.dev Site Build</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+:root {
+  color-scheme: light;
+  --surface: #f8f9fb; --card: #eceff4; --ink: #2e3440; --muted: #4c566a; --subtle: #d8dee9;
+  --border: #d8dee9; --code-block: #2e3440; --code-bg: #e5e9f0; --code-ink: #4b6c8a;
+  --accent: #7b5eaf; --link: #4b6c8a; --constructive: #a3be8c; --warning: #d08770; --critical: #bf616a;
+  --on-accent: #f8f9fb; --block-ink: #eceff4;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --gap: 24px; --radius: 6px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #2e3440; --card: #3b4252; --ink: #eceff4; --muted: #93b1cc; --subtle: #434c5e;
+  --border: #4c566a; --code-block: #3b4252; --code-bg: #3b4252; --code-ink: #88c0d0;
+  --accent: #bd93f9; --link: #88c0d0; --warning: #ebcb8b; --on-accent: #2e3440;
+}
+body { background: var(--surface); color: var(--ink); font: 18px/1.6 var(--sans);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; }
+main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--gap); }
+h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+h2 { font-size: 24px; line-height: 1.3; margin: 20px 0 0; text-wrap: balance; }
+h3 { font-size: 19px; margin: 0; }
+h4 { font-size: 16px; margin: 0; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.3em; display: flex; flex-direction: column; gap: 4px; }
+.meta { font-size: 13px; color: var(--muted); }
+a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+code { font-family: var(--mono); font-size: 0.78em; background: var(--code-bg); color: var(--code-ink); border-radius: 0.2rem; padding: 0.1em 0.3em; overflow-wrap: anywhere; }
+pre:not(.mermaid) { background: var(--code-block); color: var(--block-ink); border-radius: var(--radius); padding: 14px 16px; overflow-x: auto; margin: 0; font: 0.74em/1.55 var(--mono); }
+pre code { background: none; color: inherit; padding: 0; font-size: 1em; overflow-wrap: normal; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--gap); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 10px; }
+.pill { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; border-radius: 99px; padding: 2px 10px; background: var(--accent); color: var(--on-accent); }
+.pill.mod { background: var(--subtle); color: var(--ink); }
+.path { font: 14px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 15px; width: 100%; }
+th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--subtle); }
+pre.mermaid { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin: 0; overflow-x: auto; }
+ol.steps { font-size: 15px; }
+ol.steps code { font-size: 0.85em; }
+.err { border-left: 4px solid var(--critical); padding-left: 12px; font-size: 15px; display: flex; flex-direction: column; gap: 4px; }
+.warn { border-left: 4px solid var(--warning); padding-left: 12px; }
+nav.toc { font-size: 15px; }
+nav.toc ol { flex-direction: row; flex-wrap: wrap; gap: 4px 16px; padding: 0; list-style: none; }
+@media (max-width: 560px) { .card { padding: 14px; } body { font-size: 17px; } }
+</style>
+
+<main>
+  <div>
+    <p class="meta">saaio / flow docs-site / design-code, step 2 of 2: implementation</p>
+    <h1>saaio.dev Site Build</h1>
+  </div>
+  <nav class="toc card"><ol>
+    <li><a href="#recap">1 Decision</a></li><li><a href="#overview">2 Structure</a></li><li><a href="#units">3 Units</a></li>
+    <li><a href="#data">4 Data</a></li><li><a href="#chains">5 Call chains</a></li><li><a href="#manual">6 By hand</a></li>
+    <li><a href="#conventions">7 Conventions</a></li><li><a href="#tests">8 Tests</a></li><li><a href="#assumptions">9 Assumptions</a></li><li><a href="#questions">10 Questions</a></li>
+  </ol></nav>
+
+  <h2 id="recap">1. Decision recap</h2>
+  <div class="card">
+    <p>A feature-gated binary, <code>saaio-site</code>, renders <code>README.md</code>, <code>docs/*.md</code>, <code>CHANGELOG.md</code> and <code>ROADMAP.md</code> into static HTML in the jasu.dev look. It rewrites and checks every link. Pagefind indexes the result. A GitHub Actions workflow deploys it to GitHub Pages at saaio.dev on every push to main, with Cloudflare as DNS only.</p>
+    <p class="meta">Decided: generator A (own), hosting GitHub Pages from Actions, Cloudflare DNS only, theme follows the device with a remembered toggle, the Laravel-style rewrite is a separate flow after this one (2a). Alternative noted: Cloudflare Pages deployed from Actions with <code>wrangler pages deploy</code> would add a preview URL per PR, at the cost of a Cloudflare API token in the repo's secrets.</p>
+  </div>
+
+  <h2 id="overview">2. Structure overview</h2>
+  <div class="card">
+<pre class="mermaid">
+flowchart TB
+  subgraph bin["src/bin/site/ (new, --features site)"]
+    main["main.rs<br/>Args, exit codes"] --> site["site.rs<br/>build()"]
+    site --> pages["pages.rs<br/>Pages, Page"]
+    site --> render["render.rs<br/>render(), title()"]
+    site --> layout["layout.rs<br/>page(), not_found()"]
+    site --> output["output.rs<br/>Output"]
+    render --> links["links.rs<br/>resolve(), Target, Broken"]
+    render --> slug["slug.rs<br/>Slugs"]
+    pages --> render
+    layout --> files["page.html, site.css, site.js"]
+  end
+  pc["pulldown-cmark 0.13<br/>(existing dep)"] --> render
+  clap["clap (existing dep)"] --> main
+  subgraph ci[".github/workflows"]
+    docs["docs.yml (new)<br/>build, Pagefind, deploy"]
+    ciy["ci.yml (modified)<br/>--all-features"]
+  end
+  docs --> main
+  cargo["Cargo.toml (modified)<br/>[features] site, [[bin]]"] --> main
+  classDef new fill:#d9cdef,stroke:#7b5eaf,color:#2e3440
+  classDef mod fill:#f3dfd7,stroke:#d08770,color:#2e3440
+  classDef old fill:#eceff4,stroke:#4c566a,color:#2e3440
+  class main,site,pages,render,layout,output,links,slug,files,docs new
+  class ciy,cargo mod
+  class pc,clap old
+</pre>
+    <p class="meta">Purple: new. Orange: modified. Grey: existing, unchanged. The binary never touches the saaio library (<code>lib.rs</code> exports only <code>cli</code>); it shares only the package's dependencies.</p>
+  </div>
+
+  <h2 id="units">3. Units</h2>
+
+  <div class="card">
+    <div class="head"><h3>Cargo.toml</h3><span class="pill mod">modified</span></div>
+    <p>Declares the site binary so only an explicit <code>--features site</code> builds it. No new dependency: pulldown-cmark's default <code>html</code> feature is already in <code>Cargo.lock</code>.</p>
+<pre><code>[features]
+# The docs site generator, built in CI and for a local preview, never by cargo install.
+site = []
+
+[[bin]]
+name = "saaio"
+path = "src/main.rs"
+
+[[bin]]
+name = "saaio-site"
+path = "src/bin/site/main.rs"
+required-features = ["site"]</code></pre>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>main.rs</h3><span class="pill">new</span></div>
+    <p class="path">src/bin/site/main.rs</p>
+    <p>The process boundary: parses the arguments, runs the build, prints, and maps the result to an exit code.</p>
+<pre><code>/// Builds the saaio.dev docs site from the Markdown in a checkout.
+#[derive(clap::Parser)]
+struct Args {
+    /// The checkout to read.
+    #[arg(long, default_value = ".")]
+    root: PathBuf,
+    /// The folder to write the site to; empty, missing, or an earlier build.
+    out: PathBuf,
+}
+
+fn main() -&gt; ExitCode;   // 0 built, 1 broken links or an I/O error, 2 usage</code></pre>
+    <p>On success it prints one line to stdout: <code>built 15 pages and 1 asset into _site</code>. On failure it prints each <code>Broken</code> or the error to stderr.</p>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>site.rs</h3><span class="pill">new</span></div>
+    <p class="path">src/bin/site/site.rs</p>
+    <p>Runs one whole build. Every page renders before anything is written, so a broken link leaves the old output untouched.</p>
+<pre><code>pub struct Built { pub pages: usize, pub assets: usize }
+
+pub enum Failure {
+    Broken(Vec&lt;Broken&gt;),
+    Io(anyhow::Error),
+}
+
+/// Reads the pages, renders them, checks every anchor, then writes the site.
+pub fn build(root: &amp;Path, out: &amp;Path) -&gt; Result&lt;Built, Failure&gt;;
+
+/// The anchors a link names that its page does not have.
+fn missing_anchors(rendered: &amp;[(&amp;Page, Rendered)]) -&gt; Vec&lt;Broken&gt;;</code></pre>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>pages.rs</h3><span class="pill">new</span></div>
+    <p class="path">src/bin/site/pages.rs</p>
+    <p>Lists the pages the site publishes, in nav order, and where each one is served.</p>
+<pre><code>pub struct Page {
+    pub source: PathBuf,   // repo-relative: docs/ui.md
+    pub url: String,       // /docs/ui/
+    pub title: String,     // the page's first # heading: "The terminal UI"
+}
+
+pub struct Pages { list: Vec&lt;Page&gt; }
+
+impl Pages {
+    /// README.md, docs/README.md, the docs pages in the order docs/README.md's
+    /// table links them, then CHANGELOG.md and ROADMAP.md. Errors when a
+    /// docs/*.md other than HANDOVER.md is missing from that table.
+    pub fn read(root: &amp;Path) -&gt; anyhow::Result&lt;Pages&gt;;
+    pub fn by_source(&amp;self, source: &amp;Path) -&gt; Option&lt;&amp;Page&gt;;
+    pub fn iter(&amp;self) -&gt; impl Iterator&lt;Item = &amp;Page&gt;;
+}
+
+/// README.md -&gt; "/", docs/README.md -&gt; "/docs/", docs/ui.md -&gt; "/docs/ui/",
+/// CHANGELOG.md -&gt; "/changelog/", ROADMAP.md -&gt; "/roadmap/".
+fn url_of(source: &amp;Path) -&gt; String;
+
+/// Files under docs/ that are not pages: HANDOVER.md (and docs/design/, not *.md).
+const UNPUBLISHED: &amp;[&amp;str] = &amp;["docs/HANDOVER.md"];</code></pre>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>render.rs</h3><span class="pill">new</span></div>
+    <p class="path">src/bin/site/render.rs</p>
+    <p>Turns one page's Markdown into its HTML body. It does this through pulldown-cmark's event stream, so the HTML matches what GitHub renders.</p>
+<pre><code>pub struct Rendered {
+    pub body: String,
+    pub outline: Vec&lt;Heading&gt;,      // its ## headings, for "On this page"
+    pub anchors: HashSet&lt;String&gt;,   // every heading id
+    pub links: Vec&lt;Link&gt;,           // links into other pages, their anchors checked later
+    pub assets: Vec&lt;PathBuf&gt;,       // repo files its images show
+}
+
+/// Renders with tables, strikethrough, task lists and GitHub alerts (Options::ENABLE_GFM).
+/// Headings get Slugs ids, links go through links::resolve, tables sit in a
+/// scroll box, a leading # heading is the page title. Errors list every
+/// link whose file does not exist.
+pub fn render(page: &amp;Page, markdown: &amp;str, pages: &amp;Pages, root: &amp;Path)
+    -&gt; Result&lt;Rendered, Vec&lt;Broken&gt;&gt;;
+
+/// The text of the first # heading.
+pub fn title(markdown: &amp;str) -&gt; Option&lt;String&gt;;</code></pre>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>links.rs</h3><span class="pill">new</span></div>
+    <p class="path">src/bin/site/links.rs</p>
+    <p>Decides where one Markdown link points on the site, using the rule the approaches page set.</p>
+<pre><code>pub const REPO: &amp;str = "https://github.com/JanSuthacheeva/saaio";
+
+pub enum Target {
+    /// A published page: its url plus "#anchor".
+    Page { source: PathBuf, url: String, anchor: Option&lt;String&gt; },
+    /// A repo file an image shows, copied to the same path on the site.
+    Asset { source: PathBuf },
+    /// Any other repo file or folder: {REPO}/blob/main/path or /tree/main/path.
+    Repo { url: String },
+    /// http(s), mailto: left as written.
+    External,
+}
+
+impl Target {
+    pub fn href(&amp;self) -&gt; Cow&lt;'_, str&gt;;
+}
+
+/// Resolves href against the folder of `from`. "#x" is the page itself.
+/// A path that leaves the checkout or names no file is Broken.
+pub fn resolve(from: &amp;Path, href: &amp;str, image: bool, pages: &amp;Pages, root: &amp;Path)
+    -&gt; Result&lt;Target, Reason&gt;;
+
+pub struct Link { pub line: usize, pub href: String, pub target: Target }
+
+pub struct Broken { pub source: PathBuf, pub line: usize, pub href: String, pub reason: Reason }
+
+pub enum Reason { NoFile, NoAnchor, OutsideRepo }
+
+impl fmt::Display for Broken;   // docs/ui.md:12: configuration.md#nope: no heading #nope</code></pre>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>slug.rs</h3><span class="pill">new</span></div>
+    <p class="path">src/bin/site/slug.rs</p>
+    <p>Gives headings GitHub's ids, so <code>#anchor</code> links work the same on the site and on GitHub.</p>
+<pre><code>pub struct Slugs { seen: HashMap&lt;String, usize&gt; }
+
+impl Slugs {
+    pub fn new() -&gt; Slugs;
+    /// GitHub's slug of a heading's text: lowercased, characters other than letters,
+    /// digits, "-", "_" and spaces dropped, spaces to "-"; a repeat gets "-1", "-2".
+    pub fn next(&amp;mut self, text: &amp;str) -&gt; String;
+}</code></pre>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>layout.rs</h3><span class="pill">new</span></div>
+    <p class="path">src/bin/site/layout.rs, page.html, site.css, site.js</p>
+    <p>Wraps a rendered body in the site's page frame.</p>
+<pre><code>const TEMPLATE: &amp;str = include_str!("page.html");
+pub const CSS: &amp;str = include_str!("site.css");
+pub const JS: &amp;str = include_str!("site.js");
+
+/// page.html with {{title}}, {{nav}} (this page marked current), {{body}},
+/// {{outline}} and {{edit}} ({REPO}/edit/main/{source}) filled in one pass.
+pub fn page(page: &amp;Page, pages: &amp;Pages, rendered: &amp;Rendered) -&gt; String;
+
+/// 404.html: the frame with "Page not found" and the nav.
+pub fn not_found(pages: &amp;Pages) -&gt; String;
+
+/// One pass over {{key}} placeholders; a key the template lacks panics in tests.
+fn fill(template: &amp;str, values: &amp;[(&amp;str, &amp;str)]) -&gt; String;</code></pre>
+    <p>The frame has a header (the <code>saaio</code> wordmark, the search box, a theme toggle, a GitHub link), a left nav, the content (<code>data-pagefind-body</code>), an "On this page" outline on wide screens, and a footer (Edit this page, licence). Under 900px the nav folds behind a menu button, and the outline hides under 1200px. <code>site.js</code> holds the toggle (stored in <code>localStorage</code>, read in an inline head script before the first paint), the menu, and <code>new PagefindUI(...)</code>.</p>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>output.rs</h3><span class="pill">new</span></div>
+    <p class="path">src/bin/site/output.rs</p>
+    <p>Writes the site folder. It's the binary's one place that creates files, behind a local <code>#[allow(clippy::disallowed_methods, reason = "the site is public output, not the user's private files")]</code>.</p>
+<pre><code>pub struct Output { dir: PathBuf }
+
+impl Output {
+    /// Empties `dir`, or creates it. Refuses a non-empty folder without the
+    /// .saaio-site marker an earlier build left, so a wrong path can't wipe a repo.
+    pub fn create(dir: &amp;Path) -&gt; anyhow::Result&lt;Output&gt;;
+    /// "/docs/ui/" -&gt; dir/docs/ui/index.html
+    pub fn page(&amp;self, url: &amp;str, html: &amp;str) -&gt; anyhow::Result&lt;()&gt;;
+    pub fn file(&amp;self, path: &amp;str, text: &amp;str) -&gt; anyhow::Result&lt;()&gt;;
+    pub fn copy(&amp;self, root: &amp;Path, source: &amp;Path) -&gt; anyhow::Result&lt;()&gt;;
+}</code></pre>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>docs.yml</h3><span class="pill">new</span></div>
+    <p class="path">.github/workflows/docs.yml</p>
+    <p>Builds the site on pull requests and deploys it on main.</p>
+<pre><code>on:
+  pull_request:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency: { group: pages-${{ github.ref }}, cancel-in-progress: false }
+
+jobs:
+  site:                   # named check, every PR: build + link check
+    steps: checkout, rustup toolchain install, rust-cache,
+      cargo run --locked --features site --bin saaio-site -- _site,
+      Pagefind 1.x: pinned linux-x86_64 tarball, sha256sum -c, pagefind --site _site,
+      (main only) actions/configure-pages, actions/upload-pages-artifact (path: _site)
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: site
+    permissions: { pages: write, id-token: write }
+    environment: { name: github-pages, url: ${{ steps.deployment.outputs.page_url }} }
+    steps: actions/deploy-pages</code></pre>
+    <p class="meta">Every action is pinned to a commit with a <code># vX</code> comment, as in ci.yml.</p>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>Modified files</h3><span class="pill mod">modified</span></div>
+    <ul>
+      <li><code>ci.yml</code>: clippy runs <code>--all-targets --all-features</code> and test runs <code>--all-features</code>, so the binary is linted and its tests, the whole-repo link check included, run on both OSes.</li>
+      <li><code>.gitignore</code>: <code>/_site</code>.</li>
+      <li><code>CLAUDE.md</code>: build commands, the binary in Structure and Architecture, and the <code>cargo install --git</code> constraint.</li>
+      <li><code>CONTRIBUTING.md</code>: a "Docs site" section (preview locally, what deploys, a page needs a row in <code>docs/README.md</code>, links are checked), the CI table gains <code>site</code>, and the commands use <code>--all-features</code>.</li>
+      <li><code>README.md</code>: the Documentation section opens with "Read online at <a href="https://saaio.dev">saaio.dev</a>".</li>
+      <li><code>ROADMAP.md</code>: the "Docs site at saaio.dev" row leaves Planned soon. A new "Docs in the Laravel style" row is added (Implementing once that flow starts).</li>
+      <li><code>CHANGELOG.md</code>: under Unreleased, Added: "The documentation is online at saaio.dev: searchable, in light and dark, built from the Markdown in the repository on every merge."</li>
+    </ul>
+  </div>
+
+  <h2 id="data">4. Data</h2>
+  <div class="card scroll">
+    <table>
+      <tr><th>Type</th><th>Fields</th><th>Crosses</th></tr>
+      <tr><td><code>Page</code></td><td>source, url, title</td><td>pages -&gt; render, layout, links</td></tr>
+      <tr><td><code>Rendered</code></td><td>body, outline, anchors, links, assets</td><td>render -&gt; site, layout</td></tr>
+      <tr><td><code>Heading</code></td><td>level: u8, text, id</td><td>render -&gt; layout (outline)</td></tr>
+      <tr><td><code>Target</code></td><td>Page / Asset / Repo / External</td><td>links -&gt; render, site</td></tr>
+      <tr><td><code>Link</code></td><td>line, href, target</td><td>render -&gt; site (anchor check)</td></tr>
+      <tr><td><code>Broken</code>, <code>Reason</code></td><td>source, line, href, reason</td><td>links, site -&gt; main (stderr)</td></tr>
+      <tr><td><code>Built</code>, <code>Failure</code></td><td>pages, assets / Broken or Io</td><td>site -&gt; main</td></tr>
+    </table>
+    <p>Site layout on disk: <code>/index.html</code> (README), <code>/docs/index.html</code>, <code>/docs/&lt;page&gt;/index.html</code>, <code>/changelog/</code>, <code>/roadmap/</code>, <code>/docs/media/saaio-ui.png</code> (only images a page shows), <code>/site.css</code>, <code>/site.js</code>, <code>/404.html</code>, <code>/pagefind/</code> (written by Pagefind), <code>/.saaio-site</code>.</p>
+  </div>
+
+  <h2 id="chains">5. Call chains</h2>
+
+  <div class="card">
+    <h3>saaio-site _site</h3>
+<pre class="mermaid">
+sequenceDiagram
+  participant M as main
+  participant S as site
+  participant P as Pages
+  participant R as render
+  participant L as links
+  participant O as Output
+  M->>S: build(root, out)
+  S->>P: Pages::read(root)
+  P->>R: title(markdown) per page
+  P-->>S: Pages
+  loop each page
+    S->>R: render(page, markdown, pages, root)
+    R->>L: resolve(from, href, image, pages, root)
+    L-->>R: Target or Reason
+    R-->>S: Rendered or Vec of Broken
+  end
+  S->>S: missing_anchors(rendered)
+  alt any Broken
+    S-->>M: Failure::Broken
+    M-->>M: print each, exit 1
+  else
+    S->>O: create(out)
+    S->>O: page(url, layout::page(..)) per page
+    S->>O: copy(asset), file(css, js), page(404)
+    S-->>M: Built
+    M-->>M: print summary, exit 0
+  end
+</pre>
+    <ol class="steps">
+      <li><code>main -&gt; Args::parse(): Args</code> (a usage error exits 2)</li>
+      <li><code>main -&gt; site::build(&amp;args.root, &amp;args.out): Result&lt;Built, Failure&gt;</code></li>
+      <li><code>site::build -&gt; Pages::read(root): anyhow::Result&lt;Pages&gt;</code>, which calls <code>render::title(markdown)</code> per file</li>
+      <li>per page: <code>site::build -&gt; render::render(page, markdown, &amp;pages, root): Result&lt;Rendered, Vec&lt;Broken&gt;&gt;</code></li>
+      <li>per heading: <code>render -&gt; Slugs::next(text): String</code>; per link or image: <code>render -&gt; links::resolve(from, href, image, &amp;pages, root): Result&lt;Target, Reason&gt;</code></li>
+      <li><code>site::build -&gt; missing_anchors(&amp;rendered): Vec&lt;Broken&gt;</code>, which looks up each <code>Target::Page { anchor }</code> in the target's <code>Rendered.anchors</code></li>
+      <li><code>site::build -&gt; Output::create(out)</code>, then per page <code>Output::page(&amp;page.url, &amp;layout::page(page, &amp;pages, &amp;rendered))</code></li>
+      <li><code>site::build -&gt; Output::copy(root, asset)</code> per image; <code>Output::file("site.css", CSS)</code>, <code>("site.js", JS)</code>, <code>("404.html", &amp;layout::not_found(&amp;pages))</code></li>
+      <li><code>main</code> prints <code>Built</code> and returns <code>ExitCode::SUCCESS</code></li>
+    </ol>
+    <div class="err">
+      <strong>Error paths</strong>
+      <span>A file is missing from the docs/README.md table: <code>Pages::read</code> returns an error. <code>main</code> prints <code>docs/new.md is not listed in docs/README.md</code> and exits 1.</span>
+      <span>A link names no file, or leaves the checkout: <code>render</code> collects <code>Broken { NoFile | OutsideRepo }</code> for every page, so one run lists them all, and exits 1 before anything is written.</span>
+      <span>A link names a heading that doesn't exist: <code>missing_anchors</code> returns <code>Broken { NoAnchor }</code>, and it exits 1. The output reads <code>docs/ui.md:41: flows.md#stacked: no heading #stacked in docs/flows.md</code>.</span>
+      <span>The out folder isn't empty and has no marker: <code>Output::create</code> refuses, and it exits 1 with nothing removed.</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>A push to main, and a pull request</h3>
+<pre class="mermaid">
+sequenceDiagram
+  participant G as GitHub
+  participant J as docs.yml site
+  participant B as saaio-site
+  participant F as pagefind
+  participant D as docs.yml deploy
+  G->>J: push main / pull_request
+  J->>B: cargo run --features site -- _site
+  B-->>J: exit 0, or 1 with broken links
+  J->>F: pagefind --site _site
+  alt main
+    J->>D: upload-pages-artifact
+    D->>G: deploy-pages
+    G-->>G: saaio.dev serves the new build
+  else pull request
+    J-->>G: check passes or fails
+  end
+</pre>
+    <ol class="steps">
+      <li><code>GitHub -&gt; docs.yml site</code> on every PR and every push to main</li>
+      <li><code>site job -&gt; cargo run --locked --features site --bin saaio-site -- _site</code>: exit 1 fails the check, and nothing deploys</li>
+      <li><code>site job -&gt; curl pagefind tarball; sha256sum -c; pagefind --site _site</code>: a checksum mismatch fails the job</li>
+      <li>main only: <code>site job -&gt; actions/upload-pages-artifact(path: _site)</code>, then <code>deploy job -&gt; actions/deploy-pages</code></li>
+      <li>In parallel, <code>ci.yml test (linux|macos) -&gt; cargo test --all-features</code> runs <code>site::tests::the_repository_builds</code>, so a broken docs link also fails the required test checks</li>
+    </ol>
+    <div class="err"><span>A deploy that fails (say Pages isn't set up yet) fails only <code>deploy</code>. The site keeps serving the previous build.</span></div>
+  </div>
+
+  <div class="card">
+    <h3>A reader opens saaio.dev</h3>
+    <ol class="steps">
+      <li>An inline head script runs <code>document.documentElement.dataset.theme = localStorage.theme</code> when one is stored. Otherwise no attribute is set and <code>prefers-color-scheme</code> decides.</li>
+      <li>The toggle sets <code>data-theme</code> to the opposite of the theme currently shown and stores it (inside try/catch: a blocked storage just doesn't remember).</li>
+      <li>The search box: <code>site.js -&gt; new PagefindUI({ element: "#search", showSubResults: true })</code>. Results link to <code>/docs/x/#heading</code>. Without JavaScript the box is hidden and the nav still works.</li>
+    </ol>
+  </div>
+
+  <h2 id="manual">6. What Jan does by hand</h2>
+  <div class="card">
+    <h3>Cloudflare, DNS for saaio.dev</h3>
+    <div class="scroll"><table>
+      <tr><th>Type</th><th>Name</th><th>Content</th><th>Proxy</th></tr>
+      <tr><td>A</td><td><code>@</code></td><td>185.199.108.153</td><td>DNS only</td></tr>
+      <tr><td>A</td><td><code>@</code></td><td>185.199.109.153</td><td>DNS only</td></tr>
+      <tr><td>A</td><td><code>@</code></td><td>185.199.110.153</td><td>DNS only</td></tr>
+      <tr><td>A</td><td><code>@</code></td><td>185.199.111.153</td><td>DNS only</td></tr>
+      <tr><td>AAAA</td><td><code>@</code></td><td>2606:50c0:8000::153</td><td>DNS only</td></tr>
+      <tr><td>AAAA</td><td><code>@</code></td><td>2606:50c0:8001::153</td><td>DNS only</td></tr>
+      <tr><td>AAAA</td><td><code>@</code></td><td>2606:50c0:8002::153</td><td>DNS only</td></tr>
+      <tr><td>AAAA</td><td><code>@</code></td><td>2606:50c0:8003::153</td><td>DNS only</td></tr>
+      <tr><td>CNAME</td><td><code>www</code></td><td>jansuthacheeva.github.io</td><td>DNS only</td></tr>
+      <tr><td>TXT</td><td><code>_github-pages-challenge-JanSuthacheeva</code></td><td>the code GitHub shows in step 1 below</td><td>-</td></tr>
+    </table></div>
+    <ul>
+      <li><strong>Proxy off (grey cloud) on every record.</strong> GitHub Pages gets its Let's Encrypt certificate only when saaio.dev resolves to its own IPs. With the orange cloud on, Cloudflare answers instead, the certificate is never issued, and "Enforce HTTPS" stays greyed out.</li>
+      <li><strong>SSL/TLS mode: Full (strict).</strong> It does nothing for DNS-only records. It's a guard in case the proxy is ever switched on: "Flexible" with Pages' HTTPS redirect makes an endless redirect loop.</li>
+      <li>Delete any record already at <code>@</code> or <code>www</code> (the registrar's parking ones). If DNS → Records lists a CAA record, keep or add <code>0 issue "letsencrypt.org"</code>.</li>
+    </ul>
+    <h3>GitHub</h3>
+    <ol>
+      <li><strong>Verify the domain</strong> (stops anyone else's Pages site from claiming it): github.com → your avatar → Settings → Pages → Add a domain → <code>saaio.dev</code>. Put the TXT record it shows into Cloudflare, then click Verify.</li>
+      <li><strong>Repository</strong>: JanSuthacheeva/saaio → Settings → Pages → Build and deployment → Source: <strong>GitHub Actions</strong>.</li>
+      <li>After this PR merges and the first deploy ran: the same page → Custom domain: <code>saaio.dev</code> → Save. Wait for "DNS check successful", then tick <strong>Enforce HTTPS</strong> once the certificate is issued (minutes, up to an hour).</li>
+      <li>Settings → Environments → <code>github-pages</code>: the deployment branch rule is "main" (Pages creates this. Check it, don't widen it).</li>
+    </ol>
+    <p class="warn">No <code>CNAME</code> file in the build: with Actions deployment, GitHub ignores it and reads the custom domain from the settings. <code>www.saaio.dev</code> redirects to <code>saaio.dev</code> by itself once both resolve to Pages.</p>
+  </div>
+
+  <h2 id="conventions">7. Conventions followed</h2>
+  <div class="card">
+    <ul>
+      <li>A thin entry point that only parses, prints and maps exit codes: mirrors <code>src/main.rs</code> and the CLAUDE.md "main.rs" rule.</li>
+      <li>One responsibility per file, named as nouns (<code>pages</code>, <code>links</code>, <code>slug</code>, <code>output</code>): CLAUDE.md Structure.</li>
+      <li>File creation in one file behind a local allow with a reason: mirrors <code>workspace.rs</code>'s git info/exclude exception (CLAUDE.md, clippy.toml:10-18).</li>
+      <li>pulldown-cmark's event stream: mirrors <code>src/ui/markdown.rs:3</code>.</li>
+      <li>Actions pinned to a commit with a version comment, <code>timeout-minutes</code>, <code>permissions: contents: read</code> at the top: mirrors <code>.github/workflows/ci.yml:12-29</code>.</li>
+      <li><strong>Deviation:</strong> a second binary in a crate whose rule is "a library with a thin binary". Forced by <code>cargo install --git</code>, which refuses a repo with two packages that have binaries (shown on the approaches page). CLAUDE.md states this.</li>
+      <li><strong>Deviation:</strong> the binary doesn't use the saaio library (<code>text::fill</code> would fit, but <code>lib.rs</code> exports only <code>cli</code>). Its own 10-line <code>fill</code> keeps the library's surface closed.</li>
+    </ul>
+  </div>
+
+  <h2 id="tests">8. Test seams</h2>
+  <div class="card">
+    <ul>
+      <li><code>slug</code>: unit tests against GitHub's slugs of real saaio headings (<code>`[ui]`</code> -&gt; <code>ui</code>, <code>saaio --stop</code> -&gt; <code>saaio---stop</code>, repeats).</li>
+      <li><code>links</code>: unit tests over a <code>tempfile</code> checkout: page, anchor-only, <code>../examples</code>, folder, image, external, missing, outside the repo.</li>
+      <li><code>render</code>: unit tests on Markdown strings: heading ids, alert markup, table wrapper, rewritten hrefs, Broken with line numbers.</li>
+      <li><code>pages</code>: nav order from a scratch <code>docs/README.md</code>; an unlisted page errors; <code>url_of</code>.</li>
+      <li><code>output</code>: refuses a non-empty unmarked folder, replaces a marked one.</li>
+      <li><code>layout</code>: every placeholder filled, the current page marked, the outline present.</li>
+      <li><code>site::tests::the_repository_builds</code>: builds the real checkout (<code>env!("CARGO_MANIFEST_DIR")</code>) into a temp folder and asserts no Broken. This is the link check every PR runs.</li>
+      <li>End to end: build, <code>pagefind --site _site --serve</code>, then look at it in a browser at desktop and phone width, light and dark, and try search and the 404 page.</li>
+    </ul>
+  </div>
+
+  <h2 id="assumptions">9. Assumptions</h2>
+  <div class="card">
+    <ol>
+      <li>CHANGELOG.md and ROADMAP.md are pages (<code>/changelog/</code>, <code>/roadmap/</code>), the recommendation from question 4.</li>
+      <li>README.md is the home page as written, the screenshot and install snippet with its <code>--tag v0.2.1</code> pin included. Pins stay in the Markdown, and the site doesn't fill in a version.</li>
+      <li>Nav order and membership come from the <code>docs/README.md</code> table, the single list. A page missing from it fails the build.</li>
+      <li>No syntax highlighting: code blocks render in the jasu.dev <code>code-block</code> style, plain. The Laravel rewrite can add it.</li>
+      <li>The site is built on every PR and fails it on a broken link, as a new <code>site</code> check (and through <code>cargo test --all-features</code>).</li>
+      <li>No web fonts: the system sans and mono stacks of the design system.</li>
+      <li>An "Edit this page" link per page, to GitHub's editor on main.</li>
+      <li>Pagefind is pinned to the latest 1.x release that's at least two weeks old, checked by SHA-256.</li>
+    </ol>
+  </div>
+
+  <h2 id="questions">10. Open questions</h2>
+  <div class="card">
+    <ol>
+      <li><strong>URL shape</strong>, public once shared: <code>saaio.dev/docs/ui/</code> (recommended: it mirrors the repo, and <code>/</code> stays the README) or <code>saaio.dev/ui/</code> (shorter)?</li>
+      <li><strong>The GIF.</strong> <code>docs/media/saaio-ui.gif</code> is 1.9 MB and only the README links it, as a "watch it" link. Copy it to the site (recommended) or link it to GitHub?</li>
+    </ol>
+  </div>
+</main>

@@ -1,0 +1,188 @@
+<title>saaio.dev Docs Site</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>document.documentElement.dataset.theme ||= "light"</script>
+<style>
+:root {
+  color-scheme: light;
+  --surface: #f8f9fb; --card: #eceff4; --ink: #2e3440; --muted: #4c566a; --subtle: #d8dee9;
+  --border: #d8dee9; --code-block: #2e3440; --code-bg: #e5e9f0; --code-ink: #4b6c8a;
+  --accent: #7b5eaf; --link: #4b6c8a; --constructive: #a3be8c; --warning: #d08770; --critical: #bf616a;
+  --on-accent: #f8f9fb; --block-ink: #eceff4;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --gap: 24px; --content-gap: 20px; --radius: 6px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #2e3440; --card: #3b4252; --ink: #eceff4; --muted: #93b1cc; --subtle: #434c5e;
+  --border: #4c566a; --code-block: #3b4252; --code-bg: #3b4252; --code-ink: #88c0d0;
+  --accent: #bd93f9; --link: #88c0d0; --warning: #ebcb8b; --on-accent: #2e3440;
+}
+body { background: var(--surface); color: var(--ink); font: 18px/1.6 var(--sans);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; }
+main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--gap); }
+h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+h2 { font-size: 24px; line-height: 1.3; margin: 16px 0 0; text-wrap: balance; }
+h3 { font-size: 19px; margin: 0; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.3em; display: flex; flex-direction: column; gap: 4px; }
+.meta { font-size: 13px; color: var(--muted); }
+a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+code { font-family: var(--mono); font-size: 0.78em; background: var(--code-bg); color: var(--code-ink); border-radius: 0.2rem; padding: 0.1em 0.3em; }
+pre:not(.mermaid) { background: var(--code-block); color: var(--block-ink); border-radius: var(--radius); padding: 14px 16px; overflow-x: auto; margin: 0; font: 0.78em/1.5 var(--mono); }
+pre code { background: none; color: inherit; padding: 0; font-size: 1em; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--gap); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card.rec { border-color: var(--accent); }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.pill { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em; border-radius: 99px; padding: 2px 10px; background: var(--accent); color: var(--on-accent); }
+.pill.q { background: var(--subtle); color: var(--ink); }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.cols > div { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.lbl { font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.plus li::marker { color: var(--constructive); }
+.minus li::marker { color: var(--critical); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 15px; width: 100%; }
+th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--subtle); }
+pre.mermaid { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin: 0; overflow-x: auto; }
+.q-item { display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 560px) { .cols { grid-template-columns: 1fr; } .card { padding: 14px; } body { font-size: 17px; } }
+</style>
+
+<main>
+  <div>
+    <p class="meta">saaio / flow docs-site / design-code, step 1 of 2: approaches</p>
+    <h1>saaio.dev Docs Site</h1>
+  </div>
+  <p>A searchable docs site at saaio.dev, generated from <code>docs/*.md</code> and <code>README.md</code> on every merge to main. The master also passed on that the docs should read like the Laravel documentation. Two decisions on this page: <strong>how the site is built</strong> and <strong>how the rewrite is cut</strong>.</p>
+
+  <h2>What exists today</h2>
+  <div class="card">
+    <ul>
+      <li>12 user pages: <code>README.md</code> (pitch, screenshot, the install snippet pinned to <code>--tag v0.2.1</code>) and 11 in <code>docs/</code>, about 3,000 lines. <code>docs/README.md</code> is a table of the pages in reading order. <code>docs/HANDOVER.md</code> and <code>docs/design/*.html</code> are for contributors and stay off the site.</li>
+      <li>Links are relative and work on GitHub: <code>configuration.md#ui</code>, <code>media/saaio-ui.png</code>, and 9 that leave <code>docs/</code> (<code>../examples/config.toml</code>, <code>../CHANGELOG.md</code>, <code>../ROADMAP.md</code>). README links <code>docs/install.md</code> and <code>examples/config.toml</code>.</li>
+      <li>Anchors are GitHub's heading slugs, around 120 of them. README uses a GitHub alert (<code>&gt; [!IMPORTANT]</code>).</li>
+      <li><code>pulldown-cmark 0.13</code> is already a dependency (the UI's peek renders Markdown). It parses GitHub alerts (<code>ENABLE_GFM</code>) and renders HTML.</li>
+      <li>CI is <code>ci.yml</code> (fmt, clippy, test, deny) and <code>release.yml</code>; every action is pinned to a commit. Nothing deploys a site yet.</li>
+      <li>The current voice comes from <code>plan-flow-docs-voice.md</code> (ripgrep/zoxide models, "every page opens with something to run").</li>
+    </ul>
+    <p><strong>A constraint found while checking:</strong> a second Cargo package anywhere in the repo breaks the documented install. I tried it in a scratch repo: <code>cargo install --git</code> searches the whole repo and fails with <code>multiple packages with binaries found: app, site</code>. So a Rust generator can't be its own crate or an <code>xtask</code>. It has to be a feature-gated binary of saaio itself, which <code>cargo install</code> skips.</p>
+  </div>
+
+  <h2>Decision 1: the generator</h2>
+
+  <div class="card rec">
+    <div class="head"><h3>A. Our own generator, search by Pagefind</h3><span class="pill">Recommended</span></div>
+    <p>A small Rust binary, <code>saaio-site</code>, under <code>src/bin/site/</code>. It only builds with <code>--features site</code>, so users never compile it. It renders the pages with the pulldown-cmark we already use, gives headings GitHub's slugs, and rewrites every link. A link to a page goes to its URL on the site; anything else in the repo goes to its file on GitHub. Broken links and anchors fail the build. The template and CSS are the jasu.dev look, hand-written. Pagefind (one pinned binary) indexes the HTML for search.</p>
+<pre class="mermaid">
+flowchart LR
+  md["docs/*.md, README.md<br/>(existing)"] --> gen["saaio-site<br/>src/bin/site/ (new)"]
+  pc["pulldown-cmark<br/>(existing dep)"] --> gen
+  gen --> html["_site/*.html + CSS (new)"]
+  html --> pf["Pagefind<br/>(new, pinned)"]
+  pf --> wf["docs.yml (new)<br/>GitHub Pages"]
+  classDef new fill:#d9cdef,stroke:#7b5eaf,color:#2e3440
+  classDef old fill:#eceff4,stroke:#4c566a,color:#2e3440
+  class gen,html,pf,wf new
+  class md,pc old
+</pre>
+    <div class="cols">
+      <div><span class="lbl">Benefits</span><ul class="plus">
+        <li>Links behave the same everywhere: one rule for all of them, checked on every PR. No link in the Markdown changes.</li>
+        <li>Same slugs and alerts as GitHub, from the parser saaio already uses.</li>
+        <li>The jasu.dev look exactly, with no theme to fight or upgrade.</li>
+        <li>Tested with <code>cargo test</code>, linted with clippy, like the rest of saaio.</li>
+        <li>Pagefind is the strongest static search: it indexes headings and shows excerpts, the index loads in chunks, and it needs no server.</li>
+      </ul></div>
+      <div><span class="lbl">Costs</span><ul class="minus">
+        <li>We own roughly 500 lines plus CSS, nav and the search UI glue.</li>
+        <li>A second binary in a crate whose rule is "a library with a thin binary". CI runs clippy and the tests with <code>--all-features</code>.</li>
+        <li>Pagefind is a pinned download in CI, checked by SHA.</li>
+      </ul></div>
+    </div>
+    <p class="meta">Touches: Cargo.toml ([features], [[bin]]), src/bin/site/*, site/ (template, CSS), .github/workflows/docs.yml, ci.yml (--all-features), CLAUDE.md, CONTRIBUTING.md.</p>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>B. mdBook with a custom theme</h3></div>
+    <p>The rust-lang docs tool (0.5.4, installed as a pinned binary). It already has search, a theme toggle, a mobile layout and <code>.md</code> to <code>.html</code> link rewriting. <code>book.toml</code> points at <code>docs/</code>, and the jasu.dev look comes from overriding its handlebars theme and CSS.</p>
+<pre class="mermaid">
+flowchart LR
+  md["docs/*.md<br/>(existing)"] --> mb["mdBook 0.5<br/>(new, pinned)"]
+  sum["docs/SUMMARY.md<br/>(new)"] --> mb
+  th["theme/ index.hbs, css<br/>(new override)"] --> mb
+  mb --> wf["docs.yml (new)<br/>GitHub Pages"]
+  classDef new fill:#d9cdef,stroke:#7b5eaf,color:#2e3440
+  classDef old fill:#eceff4,stroke:#4c566a,color:#2e3440
+  class mb,sum,th,wf new
+  class md old
+</pre>
+    <div class="cols">
+      <div><span class="lbl">Benefits</span><ul class="plus">
+        <li>Almost no code. Search, nav, toggle and print come with it.</li>
+        <li>A well-known Rust tool, maintained by the Rust project.</li>
+      </ul></div>
+      <div><span class="lbl">Costs</span><ul class="minus">
+        <li>A <code>SUMMARY.md</code> that repeats the <code>docs/README.md</code> table and shows on GitHub as a stray page.</li>
+        <li>The 9 links out of <code>docs/</code> break on the site. They'd become absolute GitHub URLs, or need a preprocessor, which is code again. README can't be the home page without rewriting its <code>docs/</code> links.</li>
+        <li>A missing anchor isn't caught. That needs mdbook-linkcheck, a third tool.</li>
+        <li>An overridden <code>index.hbs</code> breaks on mdBook upgrades. The page shape stays mdBook's (menu bar, left chapter list).</li>
+        <li>Its search index is one JSON file of the whole book. That's fine at this size.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>C. VitePress</h3></div>
+    <p>A Vue/Vite docs generator. It has search, a right-hand "on this page" outline (what laravel.com has), GitHub alerts, and a dead-link check out of the box. The look comes from CSS variables over its default theme.</p>
+    <div class="cols">
+      <div><span class="lbl">Benefits</span><ul class="plus">
+        <li>The richest default UX, and the closest to laravel.com's layout.</li>
+        <li>Relative <code>.md</code> links work, and dead links fail the build.</li>
+      </ul></div>
+      <div><span class="lbl">Costs</span><ul class="minus">
+        <li>A Node toolchain in a Rust repo: package.json, a lockfile, npm advisories that <code>cargo deny</code> doesn't see.</li>
+        <li>Its slugs differ from GitHub's on edge cases unless github-slugger is wired in.</li>
+        <li>Same problem with links out of <code>docs/</code> and with README as the home page.</li>
+        <li>It still looks like VitePress: the jasu.dev look only reaches as far as its CSS variables.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Hosting (one sensible option)</h3>
+    <p><strong>GitHub Pages, deployed from Actions</strong> (<code>actions/upload-pages-artifact</code> + <code>actions/deploy-pages</code>, no <code>gh-pages</code> branch). It runs on every push to main that touches the docs, and on demand. The custom domain is set in the repo settings, and GitHub issues the HTTPS certificate. That certificate matters because <code>.dev</code> is HSTS-preloaded and loads over HTTPS only. Cloudflare Pages and Netlify were rejected: they mean another account, another set of secrets and nothing gained at this size.</p>
+  </div>
+
+  <h2>Decision 2: the Laravel-style docs</h2>
+  <div class="card">
+    <p>What laravel.com/docs does, and what it means here. Every page starts with <strong>Introduction</strong> and opens with a nested <strong>table of contents</strong>. Sections build from the common case to the advanced one. The prose is friendly and says <strong>why before how</strong>, with a <strong>code example right after each concept</strong>, and uses <code>&gt; [!NOTE]</code> / <code>&gt; [!WARNING]</code> callouts. Laravel's own Markdown source uses exactly these. On GitHub, the TOC is a plain nested list of <code>#slug</code> links, and the callouts are GitHub alerts, which it renders natively. So nothing GitHub-only or site-only goes into the Markdown.</p>
+    <ul>
+      <li><strong>Rewritten:</strong> all 11 <code>docs/*.md</code> pages. The guide pages (install, ui, flows, configuration, agents, themes, repository, troubleshooting) get the full treatment: Introduction, why-then-how prose, an example per concept. The reference pages (cli, json, files) get the structure (Introduction, TOC, callouts, common before advanced) and keep their lookup tables. <code>docs/README.md</code> becomes the docs index page.</li>
+      <li><strong>Kept close to as is:</strong> the root <code>README.md</code>, which is GitHub's landing page and the site's home. It gets one callout pass at most.</li>
+      <li><strong>Superseded:</strong> the docs-voice rule "every page opens with something to run" becomes "every page opens with an Introduction that shows something to run". The other rules stay: "you", no em dash, tables only for lookups, facts unchanged.</li>
+      <li><strong>Unchanged:</strong> every heading that something links to keeps its slug, or every link to it moves with it. The generator's link check proves this on both versions.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="head"><h3>How to cut it</h3><span class="pill">Recommend 2a</span></div>
+    <ol>
+      <li><strong>2a. Two PRs in sequence.</strong> This flow ships the site with the current text. A second flow then rewrites the pages, and its diff is prose only, with the site's link check guarding every anchor. Each diff can be reviewed on its own merits, and the site goes live sooner.</li>
+      <li><strong>2b. One PR, two milestones.</strong> Site first, then the rewrite on the same branch. That's one review of about 3,000 changed lines of prose plus the generator.</li>
+    </ol>
+  </div>
+
+  <h2>Recommendation</h2>
+  <div class="card rec">
+    <p><strong>A + GitHub Pages + 2a.</strong> The requirements that matter most here are links that work on the site and on GitHub, and the jasu.dev look kept exact. A meets both by construction, where B and C meet them with workarounds. A also gets tested and linted like the rest of saaio. The extra code is small and owned. Splitting the rewrite off keeps two very different reviews apart.</p>
+  </div>
+
+  <h2>Questions before the implementation page</h2>
+  <div class="card">
+    <div class="q-item"><span class="pill q">1</span><p>Generator A, B or C?</p></div>
+    <div class="q-item"><span class="pill q">2</span><p>Rewrite cut 2a (separate flow) or 2b (same PR)?</p></div>
+    <div class="q-item"><span class="pill q">3</span><p>Dark mode: Jan's design system opens pages in light even on a dark device, and dark only on an explicit pick. For a public docs site I'd follow the device's setting, with a toggle that's remembered. Follow the device, or keep light by default?</p></div>
+    <div class="q-item"><span class="pill q">4</span><p>Should CHANGELOG.md and ROADMAP.md also be pages on the site, or stay links to GitHub? I recommend pages: they're user docs and are already listed in the README's Documentation section.</p></div>
+  </div>
+</main>
