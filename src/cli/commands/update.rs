@@ -143,6 +143,7 @@ fn install(releases: &Releases, tag: &Tag, dir: &Path) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::os::unix::ffi::OsStrExt;
     use std::os::unix::net::UnixListener;
     use std::path::PathBuf;
     use std::thread;
@@ -155,6 +156,7 @@ mod tests {
     use crate::fixtures::executable;
     use crate::private;
     use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, ServerMsg};
+    use crate::registry;
     use crate::store::Store;
 
     /// How long a test's fake saaio gets to print its version: a fresh script's first exec is slow
@@ -307,6 +309,40 @@ mod tests {
             )]
         );
         assert_eq!(others(&env, "0.1.2", PATIENCE).servers, Vec::new());
+        listening.join().unwrap();
+    }
+
+    #[test]
+    fn names_a_server_once_when_its_store_is_registered_twice() {
+        let home = tempfile::Builder::new().tempdir_in("/tmp").unwrap();
+        let store = Store::at(home.path().join("s"));
+        private::create_dir(store.root()).unwrap();
+        let env = Env {
+            home: Some(home.path().to_path_buf()),
+            xdg_state_home: Some(home.path().join("state")),
+            ..Env::default()
+        };
+        let registry = env.registry().unwrap();
+        registry.register(&store).unwrap();
+        let stale = registry.root().join("stores/7ee7933b94a1383c");
+        let slashed = registry.root().join(format!(
+            "stores/{:016x}",
+            registry::fnv1a(home.path().join("s/").as_os_str().as_bytes())
+        ));
+        fs::write(&stale, format!("{}\n", store.root().display())).unwrap();
+        fs::write(&slashed, format!("{}/\n", store.root().display())).unwrap();
+        let server = Binary {
+            exe: home.path().join(".local/bin/saaio"),
+            build: "0.1.2 (45630ee)".into(),
+        };
+        let calls = 3;
+        let listening = welcoming(&env.socket(&store), server, calls);
+
+        for _ in 0..calls {
+            let servers = others(&env, "0.2.0", PATIENCE).servers;
+            let stores: Vec<&Path> = servers.iter().map(|(store, _)| store.as_path()).collect();
+            assert_eq!(stores, vec![Path::new("~/s")]);
+        }
         listening.join().unwrap();
     }
 

@@ -6,6 +6,12 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `saaio update` names each server of another version once, and `saaio status --all` each
+  project once: a store registered twice (by a shared folder moved by hand, or `SAAIO_HOME`
+  with a trailing slash) no longer shows up twice, and its extra entry is cleaned up.
+
 ## [0.2.1] - 2026-11-05
 
 ### Added
