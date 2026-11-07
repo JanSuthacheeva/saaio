@@ -69,7 +69,7 @@ Fixing in the registry, not deduplicating in `update::others`, fixes every reade
 - [x] Add `registers_a_store_once_with_or_without_a_trailing_slash` in `src/registry.rs` (also: an entry left as `<root>/` is moved to the root's name; before normalising, `entry("<root>/")` is a name of its own, so this case belongs here), then normalise the root in `Registry::register()` and `Registry::entry()`
 - [x] CHANGELOG: a `### Fixed` line under `## [Unreleased]`: `saaio update` and `saaio status --all` list each store once, and a registry with an entry left by an earlier path is repaired
 - [x] Add `spells_saaio_home_one_way` in `src/cli/env.rs` (`SAAIO_HOME=/s/` gives the store `/s` and the same socket as `/s`; fails today with root `/s/`), then normalise `SAAIO_HOME` in `Env::store` with `registry::normal`, so the store, its socket and its registry entry share one spelling (review decision 1)
-- [ ] End-to-end: run the reproduction again (both the stale entry and `SAAIO_HOME=$H/`) and see `servers[1]` with the 0.2.1 server once, and one file in `$XDG_STATE_HOME/saaio/stores`
+- [x] End-to-end: run the reproduction again (both the stale entry and `SAAIO_HOME=$H/`) and see `servers[1]` with the 0.2.1 server once, and one file in `$XDG_STATE_HOME/saaio/stores`
 
 ## Follow-ups
 
