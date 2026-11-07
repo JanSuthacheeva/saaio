@@ -149,14 +149,19 @@ impl Registry {
     fn entry(&self, root: &Path) -> PathBuf {
         self.root.join("stores").join(format!(
             "{:016x}",
-            fnv1a(root.as_os_str().as_encoded_bytes())
+            fnv1a(normal(root).as_os_str().as_encoded_bytes())
         ))
     }
 }
 
+/// `root` spelled one way: no trailing slash, no `.` folders.
+fn normal(root: &Path) -> PathBuf {
+    root.components().collect()
+}
+
 /// What a registry entry holds: the store's root and a newline.
 fn entry_line(root: &Path) -> Vec<u8> {
-    let mut line = root.as_os_str().as_bytes().to_vec();
+    let mut line = normal(root).as_os_str().as_bytes().to_vec();
     line.push(b'\n');
     line
 }
@@ -164,7 +169,9 @@ fn entry_line(root: &Path) -> Vec<u8> {
 /// The store root a registry entry names; None when it cannot be read or lacks its newline.
 fn read_entry(file: &Path) -> Option<PathBuf> {
     let line = fs::read(file).ok()?;
-    Some(PathBuf::from(OsStr::from_bytes(line.strip_suffix(b"\n")?)))
+    Some(normal(Path::new(OsStr::from_bytes(
+        line.strip_suffix(b"\n")?,
+    ))))
 }
 
 /// The project name of a git dir: the repository's folder for <repo>/.git, else the dir's own
@@ -282,6 +289,45 @@ mod tests {
             .map(|store| store.root().to_path_buf())
             .collect();
         assert_eq!(roots, vec![shop.root().to_path_buf()]);
+    }
+
+    #[test]
+    fn registers_a_store_once_with_or_without_a_trailing_slash() {
+        let dir = TempDir::new().unwrap();
+        let registry = registry(&dir);
+        let shop = store(&dir, "shop");
+        let blog = store(&dir, "blog");
+        let slashed = |store: &Store| store.root().join("");
+        let stores = registry.root().join("stores");
+        fs::create_dir_all(&stores).unwrap();
+        let earlier = format!("{:016x}", fnv1a(slashed(&blog).as_os_str().as_bytes()));
+        fs::write(
+            stores.join(earlier),
+            format!("{}\n", slashed(&blog).display()),
+        )
+        .unwrap();
+
+        registry.register(&shop).unwrap();
+        registry.register(&Store::at(slashed(&shop))).unwrap();
+
+        let roots: Vec<PathBuf> = registry
+            .stores()
+            .iter()
+            .map(|store| store.root().to_path_buf())
+            .collect();
+        assert_eq!(
+            roots,
+            vec![blog.root().to_path_buf(), shop.root().to_path_buf()]
+        );
+        let mut lines: Vec<String> = fs::read_dir(&stores)
+            .unwrap()
+            .map(|entry| fs::read_to_string(entry.unwrap().path()).unwrap())
+            .collect();
+        lines.sort();
+        assert_eq!(
+            lines,
+            [blog.root(), shop.root()].map(|root| format!("{}\n", root.display()))
+        );
     }
 
     #[test]

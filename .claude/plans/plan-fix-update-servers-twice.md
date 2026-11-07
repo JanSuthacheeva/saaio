@@ -41,7 +41,7 @@ The store registry came in with `c7acbfd` (one store per repository); `stores()`
 - `Registry::stores()` lists each folder once and repairs the registry while it reads it, as it already drops vanished stores: it reads every entry, keys it by the folder's canonical path (`fs::canonicalize`, which the existing `is_dir` check guarantees exists), keeps one entry per folder, preferring the one whose name is `fnv1a` of its own line, and
   - removes the other entries of that folder,
   - and, when the kept entry's name is not `fnv1a` of its line (only a stale name exists), writes the entry under the right name with `write_atomic` and removes the stale file.
-  The `Store` it returns keeps the root as its kept entry spells it (not the canonical path), so the socket path `client::socket_path` derives for a long store stays the server's.
+  The `Store` it returns keeps the root as its kept entry spells it, lexically normalised like `register`'s (not the canonical path), so the socket path `client::socket_path` derives for a long store stays the server's.
 - `Registry::register()` and `Registry::entry()` work on the root lexically normalised (`root.components().collect::<PathBuf>()`: no trailing slash, no `.`), and `register` writes that normalised line, so `SAAIO_HOME=$H/` and `$H` share one entry. Signature unchanged: `fn entry(&self, root: &Path) -> PathBuf`.
 
 Fixing in the registry, not deduplicating in `update::others`, fixes every reader at once.
@@ -66,6 +66,6 @@ Fixing in the registry, not deduplicating in `update::others`, fixes every reade
 ## Tasks
 
 - [x] Add `names_a_server_once_when_its_store_is_registered_twice` in `src/cli/commands/update.rs` (a store registered by `register` plus the same root under a stale entry name and as `<root>/`; fails today with `servers` holding 3 rows instead of 1), plus `lists_a_store_once_however_its_entries_name_it` in `src/registry.rs` (stale-named entries: one root each returned, one file left per store, named `fnv1a` of the root); then fix `Registry::stores()`
-- [ ] Add `registers_a_store_once_with_or_without_a_trailing_slash` in `src/registry.rs` (also: an entry left as `<root>/` is moved to the root's name; before normalising, `entry("<root>/")` is a name of its own, so this case belongs here), then normalise the root in `Registry::register()` and `Registry::entry()`
+- [x] Add `registers_a_store_once_with_or_without_a_trailing_slash` in `src/registry.rs` (also: an entry left as `<root>/` is moved to the root's name; before normalising, `entry("<root>/")` is a name of its own, so this case belongs here), then normalise the root in `Registry::register()` and `Registry::entry()`
 - [ ] CHANGELOG: a `### Fixed` line under `## [Unreleased]`: `saaio update` and `saaio status --all` list each store once, and a registry with an entry left by an earlier path is repaired
 - [ ] End-to-end: run the reproduction again (both the stale entry and `SAAIO_HOME=$H/`) and see `servers[1]` with the 0.2.1 server once, and one file in `$XDG_STATE_HOME/saaio/stores`
