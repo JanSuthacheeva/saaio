@@ -189,6 +189,8 @@ saaio detects it), phone access. macOS and Linux only.
 
 ## Documentation
 
+Read it online at [saaio.dev](https://saaio.dev), or here:
+
 - [Install](docs/install.md)
 - [The terminal UI](docs/ui.md)
 - [Flows and the master](docs/flows.md)

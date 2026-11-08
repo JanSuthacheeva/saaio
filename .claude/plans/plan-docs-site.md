@@ -325,6 +325,6 @@ environment `github-pages` deploys from main only. No CNAME file in the build.
 
 ### Deploy and docs
 
-- [ ] `.github/workflows/docs.yml` with pinned actions and Pagefind checksum
-- [ ] CLAUDE.md, CONTRIBUTING.md (Docs site section, CI table, manual setup), README Documentation, ROADMAP rows, CHANGELOG line
+- [x] `.github/workflows/docs.yml` with pinned actions and Pagefind checksum
+- [x] CLAUDE.md, CONTRIBUTING.md (Docs site section, CI table, manual setup), README Documentation, ROADMAP rows, CHANGELOG line
 - [ ] End to end: build, `pagefind --site _site --serve`, check in a browser at desktop and phone width, light and dark, toggle remembered, search, links across pages and anchors, the GIF, 404; `cargo install --path .` still installs only `saaio`

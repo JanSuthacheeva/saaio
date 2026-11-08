@@ -6,6 +6,7 @@ approach is agreed before the code.
 - [Build and test](#build-and-test)
 - [Checking the UI by hand](#checking-the-ui-by-hand)
 - [CI](#ci)
+- [Docs site](#docs-site)
 - [Project rules](#project-rules)
 - [Pull requests](#pull-requests)
 - [Releasing](#releasing)
@@ -18,9 +19,9 @@ installs it on the first `cargo` command.
 ```sh
 cargo build                                  # debug build
 cargo run -- status                          # run a command
-cargo test                                   # unit and integration tests
+cargo test --all-features                    # unit and integration tests, the docs' link check too
 cargo fmt                                    # format
-cargo clippy --all-targets -- -D warnings    # lint, warnings fail
+cargo clippy --all-targets --all-features -- -D warnings    # lint, warnings fail
 cargo deny check                             # advisories, licences, sources
 cargo install --path .                       # install the saaio binary
 ```
@@ -64,9 +65,10 @@ job of its own, named so branch protection can require it:
 | Check | Runs |
 | --- | --- |
 | `fmt` | `cargo fmt --check` on Linux |
-| `clippy (linux)`, `clippy (macos)` | `cargo clippy --all-targets --locked -- -D warnings` |
-| `test (linux)`, `test (macos)` | `cargo test --locked`, then fails if a test changed or left a file in the tree |
+| `clippy (linux)`, `clippy (macos)` | `cargo clippy --all-targets --all-features --locked -- -D warnings` |
+| `test (linux)`, `test (macos)` | `cargo test --all-features --locked`, then fails if a test changed or left a file in the tree |
 | `deny` | `cargo deny --locked check` with `deny.toml`: advisories, licences, bans, sources |
+| `site` | `.github/workflows/docs.yml`: builds the docs site, fails on a broken link or anchor |
 
 `deny` also runs alone every day at 06:00 UTC, since an advisory can appear without a commit. A
 failure there means a dependency needs an update or, when none exists yet, an `ignore` entry in
@@ -100,6 +102,44 @@ docker run --rm --cpus=2 -v /tmp/saaio.tgz:/src.tgz:ro rust:1.95 bash -c \
   'useradd -m runner && su runner -c "mkdir ~/w && cd ~/w && tar xzf /src.tgz &&
    for i in \$(seq 60); do cargo test -q --lib -- --test-threads=32 2>&1 | grep -A8 \"^---- \"; done"'
 ```
+
+## Docs site
+
+saaio.dev is built from `README.md`, `docs/*.md`, `CHANGELOG.md` and `ROADMAP.md` by
+`saaio-site`, a second binary in `src/bin/site/` that only `--features site` builds, and indexed
+for search by [Pagefind](https://pagefind.app). `.github/workflows/docs.yml` builds it on every
+pull request and deploys it to GitHub Pages on every push to `main`. The Markdown stays the
+source: write links as relative `.md` links, as GitHub reads them, and the site turns them into
+its own URLs.
+
+To look at it before you push:
+
+```sh
+cargo run --features site --bin saaio-site -- _site
+npx -y pagefind@1.5.2 --site _site --serve    # http://localhost:1414
+```
+
+- A new page in `docs/` needs its row in `docs/README.md`, which orders the page list; the build
+  fails on a page it does not list. `docs/HANDOVER.md` and `docs/design/` stay off the site.
+- A link to a missing file or a heading that does not exist fails the build, and the test
+  `the_repository_builds` with it, naming the file and line.
+- An image a page shows or links is copied to the site; any other file of the repository links
+  to GitHub.
+
+Set up once, by hand. At Cloudflare, DNS for saaio.dev, every record DNS only (grey cloud, so
+GitHub can issue the certificate), SSL/TLS mode Full (strict):
+
+| Type | Name | Content |
+| --- | --- | --- |
+| A | `@` | `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153` (one record each) |
+| AAAA | `@` | `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153` (one record each) |
+| CNAME | `www` | `jansuthacheeva.github.io` |
+| TXT | `_github-pages-challenge-JanSuthacheeva` | the code GitHub shows when you verify the domain |
+
+On GitHub: verify saaio.dev under your account's Settings, Pages; in the repository's Settings,
+Pages, set Source to GitHub Actions; after the first deploy, set the custom domain to saaio.dev
+and tick Enforce HTTPS once the certificate is issued. The `github-pages` environment deploys
+from `main` only.
 
 ## Project rules
 
