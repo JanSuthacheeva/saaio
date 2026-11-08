@@ -314,7 +314,7 @@ environment `github-pages` deploys from main only. No CNAME file in the build.
 - [x] `pages.rs`: `Page`, `Pages::read`, `by_source`, `iter`, `url_of`, `render::title` with tests for nav order, unlisted page, urls
 - [x] `links.rs`: `Target`, `Target::href`, `resolve`, `Link`, `Broken`, `Reason`, Display, with tempfile tests for every target kind and failure
 - [x] `render.rs`: `render`, `Rendered`, `Heading` with tests for ids, alerts, tables, hrefs, Broken lines
-- [ ] `output.rs`: `Output::create`, `page`, `file`, `copy` with marker tests
+- [x] `output.rs`: `Output::create`, `page`, `file`, `copy` with marker tests
 - [ ] `layout.rs` with `page.html`, `site.css`, `site.js` in the jasu.dev look: `page`, `not_found`, `fill`, tests for placeholders and the current page
 - [ ] `site.rs`: `build`, `missing_anchors`, `Built`, `Failure`; main prints and maps exit codes; `the_repository_builds` test; fix any broken link it finds in the docs
 
