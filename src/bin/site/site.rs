@@ -57,6 +57,7 @@ pub fn build(root: &Path, out: &Path) -> Result<Built, Failure> {
     }
     output.file("site.css", layout::CSS)?;
     output.file("site.js", layout::JS)?;
+    output.file("favicon.svg", layout::FAVICON)?;
     output.file("404.html", &layout::not_found(&pages))?;
     Ok(Built {
         pages: rendered.len(),
@@ -130,6 +131,7 @@ mod tests {
             "docs/media/shot.png",
             "site.css",
             "site.js",
+            "favicon.svg",
             "404.html",
         ] {
             assert!(out.join(path).is_file(), "{path}");

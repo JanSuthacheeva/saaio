@@ -17,6 +17,12 @@ document.querySelector(".theme").addEventListener("click", () => {
   }
 });
 
+// Touch screens have no keyboard shortcut to show. Runs before Pagefind's module upgrades
+// the trigger, since a deferred script runs before a module placed after it.
+if (window.matchMedia("(hover: none)").matches) {
+  document.querySelector("pagefind-modal-trigger")?.setAttribute("hide-shortcut", "");
+}
+
 const menu = document.querySelector(".menu");
 const nav = document.getElementById("nav");
 
@@ -32,22 +38,3 @@ document.addEventListener("keydown", (event) => {
 nav.addEventListener("click", (event) => {
   if (event.target.closest("a")) setMenu(false);
 });
-
-if (window.PagefindUI) {
-  new window.PagefindUI({
-    element: "#search",
-    showSubResults: true,
-    showImages: false,
-    resetStyles: false,
-    translations: { placeholder: "Search the docs" },
-  });
-  document.addEventListener("keydown", (event) => {
-    const typing = event.target.closest("input, textarea, [contenteditable]");
-    if (event.key === "/" && !typing) {
-      event.preventDefault();
-      document.querySelector("#search input")?.focus();
-    }
-  });
-} else {
-  document.getElementById("search").hidden = true;
-}

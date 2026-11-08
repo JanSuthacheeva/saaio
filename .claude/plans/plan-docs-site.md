@@ -199,10 +199,14 @@ fn fill(template: &str, values: &[(&str, &str)]) -> String;
 Frame: header (wordmark `saaio`, search box, theme toggle, GitHub link), left nav, content
 (`data-pagefind-body`), "On this page" outline, footer (Edit this page, licence). Under 900px the
 nav folds behind a menu button; the outline hides under 1200px. Head: inline script reading
-`localStorage.theme` (try/catch) into `data-theme` before paint; `/pagefind/pagefind-ui.css`,
-`/pagefind/pagefind-ui.js`. Tokens from `~/projects/dotfiles-v2/agents/design-system/tokens.json`:
+`localStorage.theme` (try/catch) into `data-theme` before paint; `/favicon.svg` (`layout::FAVICON`,
+an "s" on the accent); Pagefind's Component UI (`/pagefind/pagefind-component-ui.css` and `.js`,
+the Default UI is legacy since 1.5): `<pagefind-modal-trigger>` in the header opens
+`<pagefind-modal>`, Cmd/Ctrl+K too, the shortcut hint hidden on touch screens; themed through its
+`--pf-*` variables from the tokens. Tables of three or more columns keep a 640px minimum under 700px
+and scroll in their box. Tokens from `~/projects/dotfiles-v2/agents/design-system/tokens.json`:
 light on `:root`, dark under `@media (prefers-color-scheme: dark) :root:not([data-theme="light"])`
-and `:root[data-theme="dark"]`. Pagefind UI themed through its CSS variables. GitHub alerts
+and `:root[data-theme="dark"]`. GitHub alerts
 (`blockquote.markdown-alert-*`) styled as callouts with their label.
 
 `src/bin/site/output.rs` - the binary's one file that creates files, behind
@@ -245,7 +249,7 @@ style" row in), `CHANGELOG.md` (Unreleased, Added).
 
 Site on disk: `/index.html`, `/docs/index.html`, `/docs/<page>/index.html`, `/changelog/`,
 `/roadmap/`, `/docs/media/saaio-ui.png`, `/docs/media/saaio-ui.gif`, `/site.css`, `/site.js`,
-`/404.html`, `/pagefind/` (from Pagefind), `/.saaio-site`.
+`/favicon.svg`, `/404.html`, `/pagefind/` (from Pagefind), `/.saaio-site`.
 
 ## Call chains
 
@@ -271,7 +275,7 @@ CI: PR and main -> `site` job: `cargo run --locked --features site --bin saaio-s
 served. `ci.yml` `cargo test --all-features` runs `the_repository_builds`.
 
 Reader: head script applies a stored theme; the toggle flips `data-theme` against the shown theme
-and stores it; `new PagefindUI({ element: "#search", showSubResults: true })`.
+and stores it; the search trigger or Cmd/Ctrl+K opens Pagefind's modal.
 
 ## By hand (Jan)
 
@@ -304,7 +308,7 @@ environment `github-pages` deploys from main only. No CNAME file in the build.
 5. The site builds on every PR (`site` check, and `cargo test --all-features`).
 6. No web fonts: the design system's system stacks.
 7. "Edit this page" per page.
-8. Pagefind pinned to the latest 1.x at least two weeks old, SHA-256 checked.
+8. Pagefind pinned to the latest 1.x at least two weeks old (v1.5.2), SHA-256 checked.
 
 ## Tasks
 

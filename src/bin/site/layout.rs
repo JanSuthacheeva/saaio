@@ -8,6 +8,7 @@ use crate::render::{Heading, Rendered};
 const TEMPLATE: &str = include_str!("page.html");
 pub const CSS: &str = include_str!("site.css");
 pub const JS: &str = include_str!("site.js");
+pub const FAVICON: &str = include_str!("favicon.svg");
 
 /// A page in the site's frame: header, the page list with this page marked, its body, its
 /// outline and a link to edit it on GitHub.
