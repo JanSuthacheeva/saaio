@@ -114,7 +114,8 @@ pub struct Rendered {
     pub assets: Vec<PathBuf>,     // repo files copied to the site
 }
 
-pub struct Heading { pub level: u8, pub text: String, pub id: String }
+/// A ## heading of the outline.
+pub struct Heading { pub text: String, pub id: String }
 
 /// Options: tables, strikethrough, task lists, GitHub alerts (ENABLE_GFM). Headings get
 /// Slugs ids, links and images go through links::resolve, tables sit in a scroll box, the
@@ -316,7 +317,7 @@ environment `github-pages` deploys from main only. No CNAME file in the build.
 - [x] `render.rs`: `render`, `Rendered`, `Heading` with tests for ids, alerts, tables, hrefs, Broken lines
 - [x] `output.rs`: `Output::create`, `page`, `file`, `copy` with marker tests
 - [x] `layout.rs` with `page.html`, `site.css`, `site.js` in the jasu.dev look: `page`, `not_found`, `fill`, tests for placeholders and the current page
-- [ ] `site.rs`: `build`, `missing_anchors`, `Built`, `Failure`; main prints and maps exit codes; `the_repository_builds` test; fix any broken link it finds in the docs
+- [x] `site.rs`: `build`, `missing_anchors`, `Built`, `Failure`; main prints and maps exit codes; `the_repository_builds` test; fix any broken link it finds in the docs
 
 ### Deploy and docs
 

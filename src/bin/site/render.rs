@@ -24,7 +24,6 @@ pub struct Rendered {
 }
 
 pub struct Heading {
-    pub level: u8,
     pub text: String,
     pub id: String,
 }
@@ -161,7 +160,6 @@ impl<'a> Renderer<'a> {
         });
         if level == HeadingLevel::H2 {
             self.rendered.outline.push(Heading {
-                level: 2,
                 text,
                 id: id.clone(),
             });

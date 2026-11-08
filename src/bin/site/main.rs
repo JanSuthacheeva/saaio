@@ -1,13 +1,11 @@
 //! saaio-site: builds the saaio.dev docs site from the Markdown in a checkout.
-#![allow(
-    dead_code,
-    reason = "temporary: site::build wires the modules in a later task"
-)]
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
+
+use site::Failure;
 
 #[cfg(test)]
 mod fixtures;
@@ -16,6 +14,7 @@ mod links;
 mod output;
 mod pages;
 mod render;
+mod site;
 mod slug;
 
 /// Builds the saaio.dev docs site from the Markdown in a checkout.
@@ -40,7 +39,27 @@ fn main() -> ExitCode {
             };
         }
     };
-    println!("nothing built into {} yet", args.out.display());
-    let _ = args.root;
-    ExitCode::SUCCESS
+    match site::build(&args.root, &args.out) {
+        Ok(built) => {
+            let assets = if built.assets == 1 { "asset" } else { "assets" };
+            println!(
+                "built {} pages and {} {assets} into {}",
+                built.pages,
+                built.assets,
+                args.out.display()
+            );
+            ExitCode::SUCCESS
+        }
+        Err(Failure::Broken(broken)) => {
+            for link in &broken {
+                eprintln!("{link}");
+            }
+            eprintln!("{} broken links, nothing built", broken.len());
+            ExitCode::FAILURE
+        }
+        Err(Failure::Io(error)) => {
+            eprintln!("saaio-site: {error:#}");
+            ExitCode::FAILURE
+        }
+    }
 }
