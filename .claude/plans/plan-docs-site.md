@@ -1,7 +1,8 @@
 # Docs site at saaio.dev
 
 Review pages: approaches https://claude.ai/artifact/V2sCYqmLwBcqhuH1AWm3vd (`docs/design/docs-site-approaches.html`),
-implementation https://claude.ai/artifact/9vkwBewuEb9YBnF36Ycem3 (`docs/design/docs-site-implementation.html`).
+implementation https://claude.ai/artifact/9vkwBewuEb9YBnF36Ycem3 (`docs/design/docs-site-implementation.html`),
+look https://claude.ai/artifact/S7WJNmjbQWSKi3Y6YzhE3e (`docs/design/docs-site-look.html`).
 
 ## Decision
 
@@ -22,6 +23,30 @@ implementation https://claude.ai/artifact/9vkwBewuEb9YBnF36Ycem3 (`docs/design/d
 - The Laravel-style rewrite of the docs is a separate flow after this one; ROADMAP gets its row.
 - Alternative noted, not built: Cloudflare Pages deployed from Actions (`wrangler pages deploy`),
   which would add PR previews at the cost of a Cloudflare token in the repo secrets.
+
+## The look (approved 2026-11-09)
+
+Laravel-docs layout in the jasu.dev tokens, approved on the look page; its CSS and JS are the
+reference for `site.css` and `site.js`.
+
+- Sticky translucent header (blur): wordmark and `vX.Y.Z` (`env!("CARGO_PKG_VERSION")`), a wide
+  search button with the shortcut (`⌘K`, `Ctrl K` elsewhere) that opens `<pagefind-modal>`, Docs
+  and Changelog links, theme toggle, GitHub. Phone: menu, name, search icon, theme, GitHub.
+- Left nav by section: `docs/README.md` holds four `##` sections (Getting started, Guides,
+  Reference, Project), each a table of its pages; Overview (README) leads Getting started; the
+  Project table lists `../CHANGELOG.md` and `../ROADMAP.md`. Phone: a drawer over a scrim.
+- Page head: the page's section as an accent eyebrow, the title, the first paragraph as a lead.
+- `##` headings open with a hairline; `##`-`####` show a `#` link on hover. Same-page links are
+  `#x`. The page's own list of in-page links is `ul.toc`: a card below 1240px, hidden beside the
+  outline.
+- Right rail: "On this page" following the section in view, and "Edit this page on GitHub".
+- Pager to the previous and next page in nav order (none on docs/README.md and 404).
+- Code blocks: a head with the language and Copy (Copied), shell and TOML comments dimmed, built
+  by site.js from `pre > code.language-*`.
+- Callouts: GitHub alerts with an icon in a tinted square per kind.
+- Home (`body.home`): larger title and lead, the first list as cards.
+- No shadows (the design system's rule); 17px body; 10px radius on large blocks, 6px on small;
+  150ms transitions, off under reduced motion.
 
 ## Units
 
@@ -328,3 +353,10 @@ environment `github-pages` deploys from main only. No CNAME file in the build.
 - [x] `.github/workflows/docs.yml` with pinned actions and Pagefind checksum
 - [x] CLAUDE.md, CONTRIBUTING.md (Docs site section, CI table, manual setup), README Documentation, ROADMAP rows, CHANGELOG line
 - [x] End to end: build, `pagefind --site _site --serve`, check in a browser at desktop and phone width, light and dark, toggle remembered, search, links across pages and anchors, the GIF, 404; `cargo install --path .` still installs only `saaio`
+
+### Look
+
+- [ ] `docs/README.md` in four sections; `Pages::read` takes each page and its section from the tables under its `##` headings (`Page::section`, CHANGELOG and ROADMAP from the Project table), `Pages::neighbours(page)`; tests for sections, order, neighbours and an unlisted page
+- [ ] `render`: same-page links as `#x`, a `#` link in each `##`-`####` heading, the page's own list of in-page links as `ul.toc`; tests
+- [ ] `layout`, `page.html`, `site.css`, `site.js` to the approved look: header with version, search button and links, sectioned nav, eyebrow, pager, outline with edit link, drawer scrim, `body.home`; Cmd/Ctrl+K, copy buttons, scrollspy, drawer; tests for nav sections, eyebrow, pager and the current page
+- [ ] End to end again: screenshots at desktop, laptop and phone in light and dark against the look page, search, copy, drawer, theme kept, the link crawl, `cargo install --path .`
