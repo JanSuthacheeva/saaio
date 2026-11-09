@@ -265,7 +265,10 @@ mod tests {
 
     fn rendered(markdown: &str) -> Result<Rendered, Vec<Broken>> {
         let repo = checkout(&[
-            ("docs/README.md", "# Docs\n\n[ui](ui.md)\n"),
+            (
+                "docs/README.md",
+                "# Docs\n\n[ui](ui.md) [log](../CHANGELOG.md)\n",
+            ),
             ("docs/ui.md", markdown),
             ("docs/media/shot.png", ""),
         ]);

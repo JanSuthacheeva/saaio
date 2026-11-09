@@ -131,7 +131,7 @@ fn is_external(href: &str) -> bool {
 }
 
 /// The path without "." and "..", or None when it climbs above the checkout.
-fn normal(path: &Path) -> Option<PathBuf> {
+pub fn normal(path: &Path) -> Option<PathBuf> {
     let mut parts: Vec<&std::ffi::OsStr> = Vec::new();
     for component in path.components() {
         match component {
@@ -161,7 +161,10 @@ mod tests {
 
     fn resolved(from: &str, href: &str) -> Result<Target, Reason> {
         let repo = checkout(&[
-            ("docs/README.md", "# Docs\n\n[ui](ui.md)\n"),
+            (
+                "docs/README.md",
+                "# Docs\n\n[ui](ui.md) [log](../CHANGELOG.md)\n",
+            ),
             ("docs/ui.md", "# UI\n"),
             ("docs/media/shot.png", ""),
             ("docs/media/record.sh", ""),

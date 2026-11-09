@@ -108,15 +108,19 @@ pub struct Page {
     pub source: PathBuf, // repo-relative: docs/ui.md
     pub url: String,     // /docs/ui/
     pub title: String,   // the page's first # heading
+    pub section: Option<String>, // the docs/README.md ## section listing it; None outside the nav
 }
 
 pub struct Pages { list: Vec<Page> }
 
 impl Pages {
-    /// README.md, docs/README.md, the docs pages in the order docs/README.md's table links
-    /// them, then CHANGELOG.md and ROADMAP.md. Errors when a docs/*.md other than
-    /// UNPUBLISHED is missing from that table.
+    /// README.md (in the first section), docs/README.md (no section), then every Markdown file
+    /// docs/README.md links, in its order, each in the ## section that links it (CHANGELOG.md
+    /// and ROADMAP.md from the Project table). Errors when a docs/*.md other than UNPUBLISHED
+    /// is missing from it.
     pub fn read(root: &Path) -> anyhow::Result<Pages>;
+    /// The pages before and after this one among the pages with a section, for the pager.
+    pub fn neighbours(&self, page: &Page) -> (Option<&Page>, Option<&Page>);
     pub fn by_source(&self, source: &Path) -> Option<&Page>;
     pub fn iter(&self) -> impl Iterator<Item = &Page>;
 }
@@ -356,7 +360,7 @@ environment `github-pages` deploys from main only. No CNAME file in the build.
 
 ### Look
 
-- [ ] `docs/README.md` in four sections; `Pages::read` takes each page and its section from the tables under its `##` headings (`Page::section`, CHANGELOG and ROADMAP from the Project table), `Pages::neighbours(page)`; tests for sections, order, neighbours and an unlisted page
+- [x] `docs/README.md` in four sections; `Pages::read` takes each page and its section from the tables under its `##` headings (`Page::section`, CHANGELOG and ROADMAP from the Project table), `Pages::neighbours(page)`; tests for sections, order, neighbours and an unlisted page
 - [ ] `render`: same-page links as `#x`, a `#` link in each `##`-`####` heading, the page's own list of in-page links as `ul.toc`; tests
 - [ ] `layout`, `page.html`, `site.css`, `site.js` to the approved look: header with version, search button and links, sectioned nav, eyebrow, pager, outline with edit link, drawer scrim, `body.home`; Cmd/Ctrl+K, copy buttons, scrollspy, drawer; tests for nav sections, eyebrow, pager and the current page
 - [ ] End to end again: screenshots at desktop, laptop and phone in light and dark against the look page, search, copy, drawer, theme kept, the link crawl, `cargo install --path .`

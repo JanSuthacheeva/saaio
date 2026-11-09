@@ -111,7 +111,10 @@ mod tests {
     #[test]
     fn builds_every_page_its_images_and_the_frame() {
         let repo = checkout(&[
-            ("docs/README.md", "# Docs\n\n[ui](ui.md)\n"),
+            (
+                "docs/README.md",
+                "# Docs\n\n[ui](ui.md) [log](../CHANGELOG.md) [plans](../ROADMAP.md)\n",
+            ),
             (
                 "docs/ui.md",
                 "# UI\n\n![shot](media/shot.png)\n\n[keys](#keys)\n\n## Keys\n",
@@ -162,7 +165,10 @@ mod tests {
     #[test]
     fn names_broken_files_across_pages() {
         let repo = checkout(&[
-            ("docs/README.md", "# Docs\n\n[ui](ui.md)\n"),
+            (
+                "docs/README.md",
+                "# Docs\n\n[ui](ui.md) [plans](../ROADMAP.md)\n",
+            ),
             ("docs/ui.md", "# UI\n\n[a](gone.md)\n"),
             ("ROADMAP.md", "# Roadmap\n\n[b](missing/)\n"),
         ]);

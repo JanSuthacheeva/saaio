@@ -119,8 +119,9 @@ cargo run --features site --bin saaio-site -- _site
 npx -y pagefind@1.5.2 --site _site --serve    # http://localhost:1414
 ```
 
-- A new page in `docs/` needs its row in `docs/README.md`, which orders the page list; the build
-  fails on a page it does not list. `docs/HANDOVER.md` and `docs/design/` stay off the site.
+- A new page in `docs/` needs its row in a section of `docs/README.md` (Getting started, Guides,
+  Reference, Project), which orders and groups the page list; the build fails on a page it does
+  not list. `docs/HANDOVER.md` and `docs/design/` stay off the site.
 - A link to a missing file or a heading that does not exist fails the build, and the test
   `the_repository_builds` with it, naming the file and line.
 - An image a page shows or links is copied to the site; any other file of the repository links

@@ -1,5 +1,4 @@
 use std::fmt::Write as _;
-use std::path::Path;
 
 use crate::links::REPO;
 use crate::pages::{Page, Pages};
@@ -52,21 +51,24 @@ pub fn not_found(pages: &Pages) -> String {
     )
 }
 
-/// The page list: the overview and contents, the docs pages, then the project's pages.
+/// The page list by the sections docs/README.md gives, the home page leading the first.
 fn nav(pages: &Pages, current: Option<&Page>) -> String {
     let mut html = String::new();
     let mut open: Option<&str> = None;
     for page in pages.iter() {
-        let group = group_of(&page.source);
-        if open != Some(group) {
+        let Some(section) = page.section.as_deref() else {
+            continue;
+        };
+        if open != Some(section) {
             if open.is_some() {
-                html.push_str("    </ul>\n");
+                html.push_str("    </ul></div>\n");
             }
-            if !group.is_empty() {
-                let _ = writeln!(html, "    <p class=\"nav-group\">{group}</p>");
-            }
-            html.push_str("    <ul>\n");
-            open = Some(group);
+            let _ = writeln!(
+                html,
+                "    <div class=\"nav-section\"><p class=\"nav-title\">{}</p><ul>",
+                escape(section)
+            );
+            open = Some(section);
         }
         let marked = if current.is_some_and(|current| current.source == page.source) {
             " aria-current=\"page\""
@@ -81,24 +83,16 @@ fn nav(pages: &Pages, current: Option<&Page>) -> String {
         );
     }
     if open.is_some() {
-        html.push_str("    </ul>");
+        html.push_str("    </ul></div>");
     }
     html
 }
 
-fn group_of(source: &Path) -> &'static str {
-    match source.to_str() {
-        Some("README.md" | "docs/README.md") => "",
-        Some("CHANGELOG.md" | "ROADMAP.md") => "Project",
-        _ => "Guide",
-    }
-}
-
 fn label(page: &Page) -> &str {
-    match page.source.to_str() {
-        Some("README.md") => "Overview",
-        Some("docs/README.md") => "All pages",
-        _ => &page.title,
+    if page.url == "/" {
+        "Overview"
+    } else {
+        &page.title
     }
 }
 
@@ -157,6 +151,8 @@ fn escape(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
     use crate::fixtures::checkout;
     use crate::render::render;
@@ -165,7 +161,7 @@ mod tests {
         let repo = checkout(&[
             (
                 "docs/README.md",
-                "# Docs\n\n[ui](ui.md) [flows](flows.md)\n",
+                "# Docs\n\n## Guides\n\n[ui](ui.md) [flows](flows.md)\n\n## Project\n\n[log](../CHANGELOG.md)\n",
             ),
             ("docs/ui.md", "# Keys & mouse\n\n## Keys\n\n## The peek\n"),
             ("docs/flows.md", "# Flows\n"),
@@ -190,17 +186,16 @@ mod tests {
     }
 
     #[test]
-    fn marks_the_current_page_in_groups() {
+    fn groups_the_nav_by_section_and_marks_the_current_page() {
         let html = built("docs/ui.md");
         assert!(html.contains("<a href=\"/docs/ui/\" aria-current=\"page\">Keys &amp; mouse</a>"));
         assert!(html.contains("<a href=\"/docs/flows/\">Flows</a>"));
-        assert!(html.contains("<a href=\"/\">Overview</a>"));
-        assert!(html.contains("<a href=\"/docs/\">All pages</a>"));
-        let guide = html.find("<p class=\"nav-group\">Guide</p>").unwrap();
-        let project = html.find("<p class=\"nav-group\">Project</p>").unwrap();
+        let guides = html.find("<p class=\"nav-title\">Guides</p>").unwrap();
+        let overview = html.find("<a href=\"/\">Overview</a>").unwrap();
+        let project = html.find("<p class=\"nav-title\">Project</p>").unwrap();
         let changelog = html.find("<a href=\"/changelog/\">").unwrap();
-        assert!(html.find("<a href=\"/docs/\">").unwrap() < guide);
-        assert!(guide < project && project < changelog);
+        assert!(guides < overview && overview < project && project < changelog);
+        assert!(!html.contains("<a href=\"/docs/\">"));
         assert_eq!(html.matches("<ul>").count(), html.matches("</ul>").count());
     }
 
