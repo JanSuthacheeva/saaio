@@ -368,3 +368,43 @@ environment `github-pages` deploys from main only. No CNAME file in the build.
 - [x] `render`: same-page links as `#x`, a `#` link in each `##`-`####` heading, the page's own list of in-page links as `ul.toc`; tests
 - [x] `layout`, `page.html`, `site.css`, `site.js` to the approved look: header with version, search button and links, sectioned nav, eyebrow, pager, outline with edit link, drawer scrim, `body.home`; Cmd/Ctrl+K, copy buttons, scrollspy, drawer; tests for nav sections, eyebrow, pager and the current page
 - [x] End to end again: screenshots at desktop, laptop and phone in light and dark against the look page, search, copy, drawer, theme kept, the link crawl, `cargo install --path .`
+
+## Review
+
+Reviewed 2026-11-09 in an isolated context against this plan, CLAUDE.md and CONTRIBUTING.md.
+
+Fixed:
+
+- `docs.yml` ran `actions/configure-pages` in the `site` job, whose token holds only
+  `contents: read`. The action calls the Pages API (`repos.getPages`), which needs `pages: read`
+  (unauthenticated it 404s even for a public repo with Pages, e.g. octocat/octocat.github.io), and
+  throws without `enablement`, so on main the job would fail before the upload and nothing would
+  ever deploy. Its outputs were unused; the step is gone (d87bd98). actionlint passes.
+
+Open:
+
+- The CHANGELOG line says the docs are online at saaio.dev; that holds only once the DNS and
+  Pages setup by hand is done. Recommendation: do the setup before the next release cuts
+  Unreleased, or soften the line until then.
+- The site deploys from main, so it can describe features newer than the latest release (the
+  header shows `CARGO_PKG_VERSION` of main). Acceptable as decided; worth knowing.
+- The first real deploy is untested until it runs on main: watch the first `Docs` run after the
+  merge, and that `deploy` gets the `github-pages` environment.
+
+Where to look:
+
+1. `src/bin/site/links.rs` `resolve` and `src/bin/site/render.rs` `Renderer::href`: every link's
+   fate (page, same-page `#x`, asset, GitHub, broken).
+2. `src/bin/site/pages.rs` `listed`: nav order and sections parsed from docs/README.md.
+3. `src/bin/site/output.rs` `Output::create`: the only `remove_dir_all`, guarded by the
+   `.saaio-site` marker.
+4. `.github/workflows/docs.yml`: permissions split between `site` and `deploy`.
+
+Routine, skim: `slug.rs` (matches github-slugger, repeats included), `layout.rs` and
+`page.html`, `site.css`, `site.js`, the docs and CLAUDE.md edits. Checked by hand: the real build
+writes 15 pages and 2 assets with no relative href left; the comment dimming in site.js only hits
+real shell and TOML comments in the current docs; the Pagefind tarball's SHA-256 matches and it
+holds `pagefind` at its root.
+
+Checks: fmt, clippy, the full test suite, deny and actionlint passed at 6a45564; after the fix
+only `docs.yml` changed, and actionlint passes at d87bd98. Rust code unchanged by the review.
