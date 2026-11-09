@@ -59,10 +59,6 @@ impl Pages {
     }
 
     /// The pages before and after this one in the nav, for the pager.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the pager uses it from the layout task on")
-    )]
     pub fn neighbours(&self, page: &Page) -> (Option<&Page>, Option<&Page>) {
         if page.section.is_none() {
             return (None, None);

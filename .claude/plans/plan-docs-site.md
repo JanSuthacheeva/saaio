@@ -217,8 +217,10 @@ const TEMPLATE: &str = include_str!("page.html");
 pub const CSS: &str = include_str!("site.css");
 pub const JS: &str = include_str!("site.js");
 
-/// page.html with {{title}}, {{nav}} (this page marked current), {{body}}, {{outline}} and
-/// {{edit}} ({REPO}/edit/main/{source}) filled in one pass.
+/// page.html with {{title}}, {{url}}, {{kind}} (home or doc), {{version}}, {{docs_current}},
+/// {{changelog_current}}, {{nav}} (by section, this page marked), {{eyebrow}} (its section),
+/// {{body}}, {{pager}} (Pages::neighbours) and {{outline}} (the ## headings, then the edit link
+/// {REPO}/edit/main/{source}) filled in one pass.
 pub fn page(page: &Page, pages: &Pages, rendered: &Rendered) -> String;
 
 /// 404.html: the frame with "Page not found" and the nav.
@@ -364,5 +366,5 @@ environment `github-pages` deploys from main only. No CNAME file in the build.
 
 - [x] `docs/README.md` in four sections; `Pages::read` takes each page and its section from the tables under its `##` headings (`Page::section`, CHANGELOG and ROADMAP from the Project table), `Pages::neighbours(page)`; tests for sections, order, neighbours and an unlisted page
 - [x] `render`: same-page links as `#x`, a `#` link in each `##`-`####` heading, the page's own list of in-page links as `ul.toc`; tests
-- [ ] `layout`, `page.html`, `site.css`, `site.js` to the approved look: header with version, search button and links, sectioned nav, eyebrow, pager, outline with edit link, drawer scrim, `body.home`; Cmd/Ctrl+K, copy buttons, scrollspy, drawer; tests for nav sections, eyebrow, pager and the current page
+- [x] `layout`, `page.html`, `site.css`, `site.js` to the approved look: header with version, search button and links, sectioned nav, eyebrow, pager, outline with edit link, drawer scrim, `body.home`; Cmd/Ctrl+K, copy buttons, scrollspy, drawer; tests for nav sections, eyebrow, pager and the current page
 - [ ] End to end again: screenshots at desktop, laptop and phone in light and dark against the look page, search, copy, drawer, theme kept, the link crawl, `cargo install --path .`

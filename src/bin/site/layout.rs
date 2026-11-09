@@ -9,27 +9,37 @@ pub const CSS: &str = include_str!("site.css");
 pub const JS: &str = include_str!("site.js");
 pub const FAVICON: &str = include_str!("favicon.svg");
 
-/// A page in the site's frame: header, the page list with this page marked, its body, its
-/// outline and a link to edit it on GitHub.
+/// A page in the site's frame: header, the page list with this page marked, its section, its
+/// body, the pager, and its outline with a link to edit it on GitHub.
 pub fn page(page: &Page, pages: &Pages, rendered: &Rendered) -> String {
-    let edit = format!(
-        "    <p class=\"edit\" data-pagefind-ignore><a href=\"{REPO}/edit/main/{}\">Edit this page on GitHub</a></p>",
-        escape(&page.source.to_string_lossy())
-    );
     let title = if page.url == "/" {
         "saaio - orchestrate coding agents from one terminal".to_owned()
     } else {
         format!("{} - saaio", page.title)
     };
+    let eyebrow = match (&page.section, page.url.as_str()) {
+        (_, "/") | (None, _) => String::new(),
+        (Some(section), _) => format!("    <p class=\"eyebrow\">{}</p>", escape(section)),
+    };
+    let (before, after) = pages.neighbours(page);
+    let edit = format!(
+        "{REPO}/edit/main/{}",
+        escape(&page.source.to_string_lossy())
+    );
     fill(
         TEMPLATE,
         &[
             ("title", &escape(&title)),
             ("url", &page.url),
+            ("kind", if page.url == "/" { "home" } else { "doc" }),
+            ("version", env!("CARGO_PKG_VERSION")),
+            ("docs_current", current_if(page.url.starts_with("/docs/"))),
+            ("changelog_current", current_if(page.url == "/changelog/")),
             ("nav", &nav(pages, Some(page))),
+            ("eyebrow", &eyebrow),
             ("body", &rendered.body),
-            ("edit", &edit),
-            ("outline", &outline(&rendered.outline)),
+            ("pager", &pager(before, after)),
+            ("outline", &outline(&rendered.outline, &edit)),
         ],
     )
 }
@@ -43,12 +53,47 @@ pub fn not_found(pages: &Pages) -> String {
         &[
             ("title", "Page not found - saaio"),
             ("url", "/404.html"),
+            ("kind", "doc"),
+            ("version", env!("CARGO_PKG_VERSION")),
+            ("docs_current", ""),
+            ("changelog_current", ""),
             ("nav", &nav(pages, None)),
+            ("eyebrow", ""),
             ("body", body),
-            ("edit", ""),
+            ("pager", ""),
             ("outline", ""),
         ],
     )
+}
+
+fn current_if(current: bool) -> &'static str {
+    if current {
+        " aria-current=\"page\""
+    } else {
+        ""
+    }
+}
+
+/// Links to the previous and next page, or nothing for a page outside the nav.
+fn pager(before: Option<&Page>, after: Option<&Page>) -> String {
+    if before.is_none() && after.is_none() {
+        return String::new();
+    }
+    let mut html = String::from(
+        "    <nav class=\"pager\" aria-label=\"Previous and next\" data-pagefind-ignore>\n",
+    );
+    for (class, word, page) in [("prev", "Previous", before), ("next", "Next", after)] {
+        if let Some(page) = page {
+            let _ = writeln!(
+                html,
+                "      <a class=\"{class}\" href=\"{}\"><small>{word}</small><strong>{}</strong></a>",
+                page.url,
+                escape(label(page))
+            );
+        }
+    }
+    html.push_str("    </nav>");
+    html
 }
 
 /// The page list by the sections docs/README.md gives, the home page leading the first.
@@ -96,21 +141,25 @@ fn label(page: &Page) -> &str {
     }
 }
 
-/// "On this page": the ## headings, or nothing for a page without any.
-fn outline(headings: &[Heading]) -> String {
-    if headings.is_empty() {
-        return String::new();
+/// "On this page": the ## headings, then the link to edit the page.
+fn outline(headings: &[Heading], edit: &str) -> String {
+    let mut html = String::new();
+    if !headings.is_empty() {
+        html.push_str("    <p class=\"outline-title\">On this page</p>\n    <ul>\n");
+        for heading in headings {
+            let _ = writeln!(
+                html,
+                "      <li><a href=\"#{}\">{}</a></li>",
+                heading.id,
+                escape(&heading.text)
+            );
+        }
+        html.push_str("    </ul>\n");
     }
-    let mut html = String::from("    <p class=\"outline-title\">On this page</p>\n    <ul>\n");
-    for heading in headings {
-        let _ = writeln!(
-            html,
-            "      <li><a href=\"#{}\">{}</a></li>",
-            heading.id,
-            escape(&heading.text)
-        );
-    }
-    html.push_str("    </ul>");
+    let _ = write!(
+        html,
+        "    <p class=\"outline-edit\"><a href=\"{edit}\"><svg class=\"i\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z\"/></svg> Edit this page on GitHub</a></p>"
+    );
     html
 }
 
@@ -200,12 +249,50 @@ mod tests {
     }
 
     #[test]
+    fn heads_a_page_with_its_section_and_closes_it_with_the_pager() {
+        let html = built("docs/ui.md");
+        assert!(html.contains("<p class=\"eyebrow\">Guides</p>"));
+        assert!(html.contains("<body class=\"doc\">"));
+        assert!(html.contains(&format!(
+            "<span class=\"version\">v{}</span>",
+            env!("CARGO_PKG_VERSION")
+        )));
+        assert!(html.contains("<a class=\"text\" href=\"/docs/\" aria-current=\"page\">Docs</a>"));
+        assert!(html.contains(
+            "<a class=\"prev\" href=\"/\"><small>Previous</small><strong>Overview</strong></a>"
+        ));
+        assert!(html.contains(
+            "<a class=\"next\" href=\"/docs/flows/\"><small>Next</small><strong>Flows</strong></a>"
+        ));
+    }
+
+    #[test]
+    fn the_home_page_has_no_eyebrow_and_its_own_body_class() {
+        let html = built("README.md");
+        assert!(html.contains("<body class=\"home\">"));
+        assert!(!html.contains("class=\"eyebrow\""));
+        assert!(!html.contains("class=\"prev\""));
+        assert!(html.contains("<a class=\"next\" href=\"/docs/ui/\">"));
+        assert!(html.contains("<a class=\"text\" href=\"/docs/\">Docs</a>"));
+    }
+
+    #[test]
+    fn the_docs_index_has_no_pager() {
+        let html = built("docs/README.md");
+        assert!(!html.contains("class=\"pager\""));
+        assert!(!html.contains("class=\"eyebrow\""));
+    }
+
+    #[test]
     fn outlines_the_level_two_headings() {
         let html = built("docs/ui.md");
         assert!(html.contains("<p class=\"outline-title\">On this page</p>"));
         assert!(html.contains("<li><a href=\"#keys\">Keys</a></li>"));
         assert!(html.contains("<li><a href=\"#the-peek\">The peek</a></li>"));
-        assert!(!built("docs/flows.md").contains("outline-title"));
+        assert!(html.contains("class=\"outline-edit\""));
+        let flows = built("docs/flows.md");
+        assert!(!flows.contains("outline-title"));
+        assert!(flows.contains("Edit this page on GitHub"));
     }
 
     #[test]
