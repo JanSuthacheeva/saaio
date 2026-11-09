@@ -179,7 +179,7 @@ mod tests {
         assert!(!html.contains("{{"), "{html}");
         assert!(html.contains("<title>Keys &amp; mouse - saaio</title>"));
         assert!(html.contains("<link rel=\"canonical\" href=\"https://saaio.dev/docs/ui/\">"));
-        assert!(html.contains("<h2 id=\"keys\">Keys</h2>"));
+        assert!(html.contains("<h2 id=\"keys\"><a class=\"anchor\" href=\"#keys\""));
         assert!(
             html.contains("href=\"https://github.com/JanSuthacheeva/saaio/edit/main/docs/ui.md\"")
         );

@@ -147,8 +147,10 @@ pub struct Rendered {
 pub struct Heading { pub text: String, pub id: String }
 
 /// Options: tables, strikethrough, task lists, GitHub alerts (ENABLE_GFM). Headings get
-/// Slugs ids, links and images go through links::resolve, tables sit in a scroll box, the
-/// leading # heading stays the page's h1. Errors list every link whose file is missing.
+/// Slugs ids and, from ## on, a "#" link (`a.anchor`, data-pagefind-ignore); links and images
+/// go through links::resolve, a link within the page as "#x"; tables sit in a scroll box; the
+/// first list of only "#x" links is `ul.toc` (mark_toc); the leading # heading stays the
+/// page's h1. Errors list every link whose file is missing.
 pub fn render(page: &Page, markdown: &str, pages: &Pages, root: &Path)
     -> Result<Rendered, Vec<Broken>>;
 
@@ -361,6 +363,6 @@ environment `github-pages` deploys from main only. No CNAME file in the build.
 ### Look
 
 - [x] `docs/README.md` in four sections; `Pages::read` takes each page and its section from the tables under its `##` headings (`Page::section`, CHANGELOG and ROADMAP from the Project table), `Pages::neighbours(page)`; tests for sections, order, neighbours and an unlisted page
-- [ ] `render`: same-page links as `#x`, a `#` link in each `##`-`####` heading, the page's own list of in-page links as `ul.toc`; tests
+- [x] `render`: same-page links as `#x`, a `#` link in each `##`-`####` heading, the page's own list of in-page links as `ul.toc`; tests
 - [ ] `layout`, `page.html`, `site.css`, `site.js` to the approved look: header with version, search button and links, sectioned nav, eyebrow, pager, outline with edit link, drawer scrim, `body.home`; Cmd/Ctrl+K, copy buttons, scrollspy, drawer; tests for nav sections, eyebrow, pager and the current page
 - [ ] End to end again: screenshots at desktop, laptop and phone in light and dark against the look page, search, copy, drawer, theme kept, the link crawl, `cargo install --path .`

@@ -67,12 +67,13 @@ pub fn render(
     let Renderer {
         mut rendered,
         broken,
-        events,
+        mut events,
         ..
     } = renderer;
     if !broken.is_empty() {
         return Err(broken);
     }
+    mark_toc(&mut events);
     html::push_html(&mut rendered.body, events.into_iter());
     Ok(rendered)
 }
@@ -158,6 +159,14 @@ impl<'a> Renderer<'a> {
             classes: Vec::new(),
             attrs: Vec::new(),
         });
+        if level != HeadingLevel::H1 {
+            self.events.insert(
+                start + 1,
+                Event::Html(CowStr::from(format!(
+                    "<a class=\"anchor\" href=\"#{id}\" aria-label=\"Link to this section\" data-pagefind-ignore>#</a>"
+                ))),
+            );
+        }
         if level == HeadingLevel::H2 {
             self.rendered.outline.push(Heading {
                 text,
@@ -173,7 +182,14 @@ impl<'a> Renderer<'a> {
         let line = self.lines.line(range.start);
         match links::resolve(&self.page.source, &href, self.pages, self.root) {
             Ok(target) => {
-                let site_href = CowStr::from(target.href().into_owned());
+                let site_href = match &target {
+                    Target::Page {
+                        source,
+                        anchor: Some(anchor),
+                        ..
+                    } if *source == self.page.source => CowStr::from(format!("#{anchor}")),
+                    _ => CowStr::from(target.href().into_owned()),
+                };
                 match target {
                     Target::Asset { source } => self.rendered.assets.push(source),
                     Target::Page {
@@ -198,6 +214,80 @@ impl<'a> Renderer<'a> {
             }
         }
     }
+}
+
+/// Marks the page's own list of sections, the first list whose every item is only a link to a
+/// heading of this page, as `ul.toc`.
+fn mark_toc(events: &mut [Event]) {
+    let mut start = 0;
+    while let Some(offset) = events[start..]
+        .iter()
+        .position(|event| matches!(event, Event::Start(Tag::List(None))))
+    {
+        let open = start + offset;
+        let Some(close) = list_end(events, open) else {
+            return;
+        };
+        if only_anchor_links(&events[open + 1..close]) {
+            events[open] = Event::Html(CowStr::from("<ul class=\"toc\">\n"));
+            events[close] = Event::Html(CowStr::from("</ul>\n"));
+            return;
+        }
+        start = open + 1;
+    }
+}
+
+/// Where the list opened at `open` ends.
+fn list_end(events: &[Event], open: usize) -> Option<usize> {
+    let mut depth = 0;
+    for (at, event) in events.iter().enumerate().skip(open) {
+        match event {
+            Event::Start(Tag::List(_)) => depth += 1,
+            Event::End(TagEnd::List(_)) => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(at);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Whether a list's items are each exactly one link to "#heading".
+fn only_anchor_links(items: &[Event]) -> bool {
+    let mut rest = items;
+    let mut count = 0;
+    while !rest.is_empty() {
+        let [
+            Event::Start(Tag::Item),
+            Event::Start(Tag::Link { dest_url, .. }),
+            tail @ ..,
+        ] = rest
+        else {
+            return false;
+        };
+        if !dest_url.starts_with('#') {
+            return false;
+        }
+        let Some(end) = tail
+            .iter()
+            .position(|event| matches!(event, Event::End(TagEnd::Link)))
+        else {
+            return false;
+        };
+        if !tail[..end]
+            .iter()
+            .all(|event| matches!(event, Event::Text(_) | Event::Code(_)))
+            || !matches!(tail.get(end + 1), Some(Event::End(TagEnd::Item)))
+        {
+            return false;
+        }
+        rest = &tail[end + 2..];
+        count += 1;
+    }
+    count > 0
 }
 
 fn label(kind: BlockQuoteKind) -> &'static str {
@@ -284,8 +374,13 @@ mod tests {
             page.body
                 .contains("<h1 id=\"the-saaio-ui\">The <code>saaio</code> UI</h1>")
         );
-        assert!(page.body.contains("<h3 id=\"mouse\">Mouse</h3>"));
-        assert!(page.body.contains("<h2 id=\"keys-1\">Keys</h2>"));
+        assert!(page.body.contains(
+            "<h3 id=\"mouse\"><a class=\"anchor\" href=\"#mouse\" aria-label=\"Link to this section\" data-pagefind-ignore>#</a>Mouse</h3>"
+        ));
+        assert!(
+            page.body
+                .contains("<h2 id=\"keys-1\"><a class=\"anchor\" href=\"#keys-1\"")
+        );
         let outline: Vec<(&str, &str)> = page
             .outline
             .iter()
@@ -295,6 +390,45 @@ mod tests {
         let mut anchors: Vec<&str> = page.anchors.iter().map(String::as_str).collect();
         anchors.sort_unstable();
         assert_eq!(anchors, ["keys", "keys-1", "mouse", "the-saaio-ui"]);
+    }
+
+    #[test]
+    fn keeps_a_link_within_the_page_as_its_anchor() {
+        let page = rendered(
+            "# UI\n\n[keys](#keys) [again](ui.md#keys) [docs](README.md#docs)\n\n## Keys\n",
+        )
+        .unwrap();
+        assert_eq!(
+            page.body.matches("href=\"#keys\"").count(),
+            3,
+            "{}",
+            page.body
+        );
+        assert!(page.body.contains("href=\"/docs/#docs\""));
+        assert_eq!(page.links.len(), 3);
+    }
+
+    #[test]
+    fn marks_the_first_list_of_only_section_links_as_the_toc() {
+        let page = rendered(
+            "# UI\n\n- [mixed](#keys) and text\n\n---\n\n- [Keys](#keys)\n- [The `peek`](#the-peek)\n\ntext\n\n- [Keys](#keys)\n\n## Keys\n\n## The peek\n",
+        )
+        .unwrap();
+        assert_eq!(
+            page.body.matches("<ul class=\"toc\">").count(),
+            1,
+            "{}",
+            page.body
+        );
+        let toc = page.body.split("<ul class=\"toc\">").nth(1).unwrap();
+        assert!(
+            toc.starts_with("\n<li><a href=\"#keys\">Keys</a></li>"),
+            "{toc}"
+        );
+        assert!(
+            page.body
+                .contains("<li><a href=\"#keys\">mixed</a> and text</li>")
+        );
     }
 
     #[test]
