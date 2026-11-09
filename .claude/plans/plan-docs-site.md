@@ -263,9 +263,9 @@ impl Output {
 ```yaml
 on: { pull_request, push: { branches: [main] }, workflow_dispatch }
 permissions: { contents: read }
-concurrency: { group: pages-${{ github.ref }}, cancel-in-progress: false }
+concurrency: { group: docs-${{ github.ref }}, cancel-in-progress: pull requests only }
 jobs:
-  site:     # every PR and main: build, link check, Pagefind; on main also configure-pages + upload-pages-artifact (path: _site)
+  site:     # every PR and main: build, link check, Pagefind; on main also upload-pages-artifact (path: _site); no configure-pages, whose Pages API call needs `pages: read` this job does not have
   deploy:   # main only, needs: site; permissions pages: write, id-token: write; environment github-pages; actions/deploy-pages
 ```
 
