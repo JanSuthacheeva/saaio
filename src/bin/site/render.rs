@@ -115,7 +115,9 @@ impl<'a> Renderer<'a> {
             }) => {
                 let written = dest_url.to_string();
                 let (href, name) = self.href(dest_url, range);
-                self.link = name.map(|name| (self.events.len(), written, name));
+                self.link = name
+                    .filter(|_| self.heading.is_none())
+                    .map(|name| (self.events.len(), written, name));
                 Event::Start(Tag::Link {
                     link_type,
                     dest_url: href,
@@ -189,8 +191,9 @@ impl<'a> Renderer<'a> {
         self.rendered.anchors.insert(id);
     }
 
-    /// A link whose text is its own href, that href's path or its file name, reads as a file name on the
-    /// site: it shows the name of the page or heading it points to instead.
+    /// A link whose text is its own href, that href's path or its file name, reads as a file name
+    /// on the site: it shows the name of the page or heading it points to instead. Not in a
+    /// heading, whose id GitHub takes from the text as written.
     fn name_link(&mut self) {
         let Some((start, written, name)) = self.link.take() else {
             return;
@@ -524,6 +527,17 @@ mod tests {
             "{}",
             page.body
         );
+    }
+
+    #[test]
+    fn keeps_a_file_name_in_a_heading_so_its_id_stays_github_s() {
+        let page = rendered("# UI\n\n## See [README.md](README.md)\n").unwrap();
+        assert!(
+            page.body.contains("<h2 id=\"see-readmemd\">"),
+            "{}",
+            page.body
+        );
+        assert!(page.body.contains(">README.md</a></h2>"), "{}", page.body);
     }
 
     #[test]
