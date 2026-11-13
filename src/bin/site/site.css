@@ -305,8 +305,10 @@ article blockquote { padding: 4px 0 4px 18px; border-left: 3px solid var(--borde
 article blockquote > :last-child { margin-bottom: 0; }
 
 /* Callouts: GitHub alerts */
-article [class^="markdown-alert-"] {
+article blockquote[class^="markdown-alert-"] {
   --tone: var(--link);
+  margin-left: 0;
+  margin-right: 0;
   position: relative;
   padding: 16px 20px 16px 60px;
   border: 1px solid var(--border);
@@ -315,7 +317,7 @@ article [class^="markdown-alert-"] {
   color: var(--ink);
   font-size: 16px;
 }
-article [class^="markdown-alert-"]::before {
+article blockquote[class^="markdown-alert-"]::before {
   content: "";
   position: absolute;
   left: 18px;
@@ -325,7 +327,7 @@ article [class^="markdown-alert-"]::before {
   border-radius: 8px;
   background: color-mix(in srgb, var(--tone) 22%, transparent);
 }
-article [class^="markdown-alert-"]::after {
+article blockquote[class^="markdown-alert-"]::after {
   content: "";
   position: absolute;
   left: 23px;
@@ -336,13 +338,13 @@ article [class^="markdown-alert-"]::after {
   -webkit-mask: var(--glyph) center / contain no-repeat;
   mask: var(--glyph) center / contain no-repeat;
 }
-article .markdown-alert-note, article .markdown-alert-important { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v5M12 7.5v.5'/%3E%3C/svg%3E"); }
-article .markdown-alert-tip { --tone: var(--constructive); --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0 0 12 3z'/%3E%3C/svg%3E"); }
-article .markdown-alert-important { --tone: var(--accent); }
-article .markdown-alert-warning, article .markdown-alert-caution { --tone: var(--warning); --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3 2 20h20L12 3z'/%3E%3Cpath d='M12 10v4M12 17v.5'/%3E%3C/svg%3E"); }
-article .markdown-alert-caution { --tone: var(--critical); }
+article blockquote.markdown-alert-note { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v5M12 7.5v.5'/%3E%3C/svg%3E"); }
+article blockquote.markdown-alert-tip { --tone: var(--constructive); --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0 0 12 3z'/%3E%3C/svg%3E"); }
+article blockquote.markdown-alert-important { --tone: var(--accent); --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v6M12 16.5v.5'/%3E%3C/svg%3E"); }
+article blockquote.markdown-alert-warning, article blockquote.markdown-alert-caution { --tone: var(--warning); --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3 2 20h20L12 3z'/%3E%3Cpath d='M12 10v4M12 17v.5'/%3E%3C/svg%3E"); }
+article blockquote.markdown-alert-caution { --tone: var(--critical); }
 article .markdown-alert-title { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--ink); line-height: 28px; }
-article [class^="markdown-alert-"] > :last-child { margin-bottom: 0; }
+article blockquote[class^="markdown-alert-"] > :last-child { margin-bottom: 0; }
 
 /* Previous and next */
 .pager { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 64px; }
