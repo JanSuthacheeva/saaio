@@ -369,6 +369,16 @@ environment `github-pages` deploys from main only. No CNAME file in the build.
 - [x] `layout`, `page.html`, `site.css`, `site.js` to the approved look: header with version, search button and links, sectioned nav, eyebrow, pager, outline with edit link, drawer scrim, `body.home`; Cmd/Ctrl+K, copy buttons, scrollspy, drawer; tests for nav sections, eyebrow, pager and the current page
 - [x] End to end again: screenshots at desktop, laptop and phone in light and dark against the look page, search, copy, drawer, theme kept, the link crawl, `cargo install --path .`
 
+### Reading on the site (decided 2026-11-13: approach A)
+
+The site read like GitHub: link texts that are file names (`cli.md`, `docs/configuration.md`) and
+the README's Documentation section ("Read it online at saaio.dev, or here:" and a list of every
+docs file). The generator fixes it; the Markdown stays as GitHub reads it.
+
+- [ ] `Pages::read` reads each page once into `Page::markdown`, leaving out what sits between `<!-- github-only -->` and `<!-- /github-only -->` (its lines kept blank, so line numbers hold), and keeps its headings (`Page::headings`: id and text); `site::build` renders `page.markdown`; tests
+- [ ] `render`: a link to a page whose text is its own href or that href's path shows the target's name instead: the heading's text when the href names an anchor, else the page's title; tests
+- [ ] README's Documentation section between the github-only markers; CONTRIBUTING names the markers and the link-text rule; end to end: no file name left as link text on the site, the README's section gone there, the link crawl
+
 ## Review
 
 Reviewed 2026-11-09 in an isolated context against this plan, CLAUDE.md and CONTRIBUTING.md.
