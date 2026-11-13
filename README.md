@@ -195,7 +195,10 @@ own setup, teardown and port slot.
 Not in saaio: a diff viewer, a pull request button (the worker's skill opens the merge request and
 saaio detects it), phone access. macOS and Linux only.
 
+<!-- github-only -->
 ## Documentation
+
+Read it online at [saaio.dev](https://saaio.dev), or here:
 
 - [Install](docs/install.md)
 - [The terminal UI](docs/ui.md)
@@ -211,6 +214,7 @@ saaio detects it), phone access. macOS and Linux only.
 - [Changelog](CHANGELOG.md)
 - [Roadmap](ROADMAP.md)
 - [Contributing](CONTRIBUTING.md)
+<!-- /github-only -->
 
 ## License
 

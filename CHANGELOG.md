@@ -6,6 +6,11 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The documentation is online at [saaio.dev](https://saaio.dev): searchable, in light and dark,
+  readable on a phone, and built from the Markdown in the repository on every merge.
+
 ### Fixed
 
 - `saaio update` names each server of another version once, and `saaio status --all` each
