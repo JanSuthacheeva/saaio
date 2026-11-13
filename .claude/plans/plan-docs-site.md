@@ -420,3 +420,40 @@ holds `pagefind` at its root.
 
 Checks: fmt, clippy, the full test suite, deny and actionlint passed at 6a45564; after the fix
 only `docs.yml` changed, and actionlint passes at d87bd98. Rust code unchanged by the review.
+
+### Second round
+
+Reviewed 2026-11-13 in an isolated context: the commits after d36653b (callout fix, link names,
+github-only parts, rustix 1.1.6), against this plan, CLAUDE.md and CONTRIBUTING.md.
+
+Fixed:
+
+- A file-name link inside a heading was renamed before the heading's id was taken from its text:
+  `## See [README.md](README.md)` got `see-docs`, not GitHub's `see-readmemd`, and
+  `render::headings`, which names cross-page links, disagreed with the rendered id. Links in a
+  heading keep their text now (586fe1c). No current heading holds a link, so nothing showed it yet.
+- An opening `<!-- github-only -->` without its end marker silently dropped the rest of the page
+  from the site. The build now refuses it as `file:line: ...`, naming the opening line (b8f5cdf).
+
+Both fixes were reviewed again by a separate agent; they hold.
+
+Open:
+
+- A marker line inside a fenced code block still counts as a marker. No doc has one; leave it
+  unless a page ever shows the markers in a code block.
+- A link to a missing anchor on another page (`README.md#nope`) is not flagged and shows the
+  page's title. As before this branch; worth a check in links::resolve some day.
+
+Where to look:
+
+1. `src/bin/site/render.rs` `Renderer::push` (Link start and end) to `name_link`: which links
+   get renamed.
+2. `src/bin/site/pages.rs` `for_site` and `page`: what the site leaves out of a page.
+
+Routine, skim: `site.css` (callouts scoped to blockquotes, the h1 + h2 spacing), README and
+CONTRIBUTING edits, Cargo.lock (rustix 1.1.6, windows-sys 0.59 only for Windows targets). Checked
+by hand: the real build writes 15 pages and 2 assets, no link text ending in `.md` is left, and
+"Read it online" is gone from the home page.
+
+Checks: fmt, clippy and the full test suite pass at b8f5cdf; Cargo.lock and the workflows are
+unchanged since 3b77969, where deny and actionlint passed.
