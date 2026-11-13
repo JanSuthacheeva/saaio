@@ -93,7 +93,12 @@ impl Pages {
 fn page(root: &Path, source: PathBuf, section: Option<String>) -> anyhow::Result<Page> {
     let path = root.join(&source);
     let text = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-    let markdown = for_site(&text);
+    let markdown = for_site(&text).map_err(|line| {
+        anyhow::anyhow!(
+            "{}:{line}: {GITHUB_ONLY} has no {GITHUB_ONLY_END} after it",
+            source.display()
+        )
+    })?;
     let Some(title) = render::title(&markdown) else {
         bail!("{} has no # heading to title it", source.display());
     };
@@ -111,25 +116,29 @@ const GITHUB_ONLY: &str = "<!-- github-only -->";
 const GITHUB_ONLY_END: &str = "<!-- /github-only -->";
 
 /// The Markdown without what sits between the github-only markers, each line of it left blank,
-/// so a broken link's line number still points into the file.
-fn for_site(markdown: &str) -> String {
-    let mut hidden = false;
+/// so a broken link's line number still points into the file. A part that never ends is refused
+/// with the line it starts on, so it cannot drop the rest of the page.
+fn for_site(markdown: &str) -> Result<String, usize> {
+    let mut opened: Option<usize> = None;
     let mut out = String::with_capacity(markdown.len());
-    for line in markdown.split_inclusive('\n') {
+    for (index, line) in markdown.split_inclusive('\n').enumerate() {
         let marker = line.trim();
-        if marker == GITHUB_ONLY {
-            hidden = true;
+        if marker == GITHUB_ONLY && opened.is_none() {
+            opened = Some(index + 1);
         }
-        if hidden {
+        if opened.is_some() {
             out.push_str(if line.ends_with('\n') { "\n" } else { "" });
         } else {
             out.push_str(line);
         }
         if marker == GITHUB_ONLY_END {
-            hidden = false;
+            opened = None;
         }
     }
-    out
+    match opened {
+        Some(line) => Err(line),
+        None => Ok(out),
+    }
 }
 
 /// The Markdown files docs/README.md links, in the order it first links them, each with the
@@ -295,8 +304,23 @@ mod tests {
     #[test]
     fn leaves_out_the_github_only_parts_but_keeps_their_lines() {
         let markdown = "# A\nseen\n<!-- github-only -->\n## Docs\nRead it here\n<!-- /github-only -->\nafter\n";
-        assert_eq!(for_site(markdown), "# A\nseen\n\n\n\n\nafter\n");
-        assert_eq!(for_site("no markers"), "no markers");
+        assert_eq!(for_site(markdown).unwrap(), "# A\nseen\n\n\n\n\nafter\n");
+        assert_eq!(for_site("no markers").unwrap(), "no markers");
+    }
+
+    #[test]
+    fn refuses_a_github_only_part_that_never_ends() {
+        let repo = checkout(&[
+            ("docs/README.md", "# Docs\n\n[a](a.md)\n"),
+            (
+                "docs/a.md",
+                "# A\n\n<!-- github-only -->\n## Docs\n\nThe rest\n",
+            ),
+        ]);
+        let Err(error) = Pages::read(repo.path()) else {
+            panic!("the unclosed github-only part was read");
+        };
+        assert!(format!("{error:#}").contains("docs/a.md:3: "), "{error:#}");
     }
 
     #[test]
