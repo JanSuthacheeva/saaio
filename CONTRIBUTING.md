@@ -126,6 +126,11 @@ npx -y pagefind@1.5.2 --site _site --serve    # http://localhost:1414
   `the_repository_builds` with it, naming the file and line.
 - An image a page shows or links is copied to the site; any other file of the repository links
   to GitHub.
+- A link whose text is its own path (`[cli.md](cli.md#saaio-remove)`) shows the name of the page
+  or heading it points to on the site; descriptive link text stays as written.
+- What only makes sense on GitHub, such as the README's list of the docs, goes between
+  `<!-- github-only -->` and `<!-- /github-only -->`, each on a line of its own: GitHub shows it,
+  the site leaves it out.
 
 Set up once, by hand. At Cloudflare, DNS for saaio.dev, every record DNS only (grey cloud, so
 GitHub can issue the certificate), SSL/TLS mode Full (strict):

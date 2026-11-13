@@ -244,6 +244,8 @@ article h2 { position: relative; font-size: 26px; line-height: 1.25; font-weight
 article h3 { position: relative; font-size: 20px; line-height: 1.35; font-weight: 700; letter-spacing: -0.01em; margin: 40px 0 12px; }
 article h4 { position: relative; font-size: 17px; font-weight: 700; margin: 28px 0 8px; }
 
+article h1 + h2 { margin-top: 28px; padding-top: 0; border-top: 0; }
+article h1 + h2 .anchor { top: 0; }
 .anchor { position: absolute; left: -1.1em; width: 1em; color: var(--subtle); text-decoration: none; font-weight: 500; opacity: 0; transition: opacity 150ms var(--ease), color 150ms var(--ease); }
 article h2 .anchor { top: 28px; }
 h2:hover .anchor, h3:hover .anchor, h4:hover .anchor, .anchor:focus-visible { opacity: 1; }
