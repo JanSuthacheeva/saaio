@@ -109,6 +109,8 @@ pub struct Page {
     pub url: String,     // /docs/ui/
     pub title: String,   // the page's first # heading
     pub section: Option<String>, // the docs/README.md ## section listing it; None outside the nav
+    pub markdown: String,        // as rendered: the github-only parts blanked, lines kept
+    pub headings: Vec<(String, String)>, // every heading's id and text (render::headings)
 }
 
 pub struct Pages { list: Vec<Page> }

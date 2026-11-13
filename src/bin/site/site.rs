@@ -1,7 +1,4 @@
-use std::fs;
 use std::path::{Path, PathBuf};
-
-use anyhow::Context;
 
 use crate::layout;
 use crate::links::{Broken, Reason, Target};
@@ -32,10 +29,7 @@ pub fn build(root: &Path, out: &Path) -> Result<Built, Failure> {
     let mut rendered = Vec::new();
     let mut broken = Vec::new();
     for page in pages.iter() {
-        let path = root.join(&page.source);
-        let markdown =
-            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-        match render::render(page, &markdown, &pages, root) {
+        match render::render(page, &page.markdown, &pages, root) {
             Ok(done) => rendered.push((page, done)),
             Err(found) => broken.extend(found),
         }

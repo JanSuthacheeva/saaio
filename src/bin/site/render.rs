@@ -60,6 +60,7 @@ pub fn render(
         broken: Vec::new(),
         events: Vec::new(),
         heading: None,
+        link: None,
     };
     for (event, range) in Parser::new_ext(markdown, options()).into_offset_iter() {
         renderer.push(event, &range);
@@ -90,6 +91,9 @@ struct Renderer<'a> {
     events: Vec<Event<'a>>,
     /// Where the heading being read starts in events, and its level.
     heading: Option<(usize, HeadingLevel)>,
+    /// The link being read: where it starts in events, its href as written, and the name of the
+    /// page or heading it points to.
+    link: Option<(usize, String, String)>,
 }
 
 impl<'a> Renderer<'a> {
@@ -108,12 +112,21 @@ impl<'a> Renderer<'a> {
                 dest_url,
                 title,
                 id,
-            }) => Event::Start(Tag::Link {
-                link_type,
-                dest_url: self.href(dest_url, range),
-                title,
-                id,
-            }),
+            }) => {
+                let written = dest_url.to_string();
+                let (href, name) = self.href(dest_url, range);
+                self.link = name.map(|name| (self.events.len(), written, name));
+                Event::Start(Tag::Link {
+                    link_type,
+                    dest_url: href,
+                    title,
+                    id,
+                })
+            }
+            Event::End(TagEnd::Link) => {
+                self.name_link();
+                event
+            }
             Event::Start(Tag::Image {
                 link_type,
                 dest_url,
@@ -121,7 +134,7 @@ impl<'a> Renderer<'a> {
                 id,
             }) => Event::Start(Tag::Image {
                 link_type,
-                dest_url: self.href(dest_url, range),
+                dest_url: self.href(dest_url, range).0,
                 title,
                 id,
             }),
@@ -176,12 +189,49 @@ impl<'a> Renderer<'a> {
         self.rendered.anchors.insert(id);
     }
 
-    /// The site's href for a link or image, recording what the build needs from it. A broken
-    /// one is recorded and kept as written.
-    fn href(&mut self, href: CowStr<'a>, range: &Range<usize>) -> CowStr<'a> {
+    /// A link whose text is its own href, that href's path or its file name, reads as a file name on the
+    /// site: it shows the name of the page or heading it points to instead.
+    fn name_link(&mut self) {
+        let Some((start, written, name)) = self.link.take() else {
+            return;
+        };
+        let path = written.split('#').next().unwrap_or_default();
+        let file = path.rsplit('/').next().unwrap_or_default();
+        let named_by_path = match &self.events[start + 1..] {
+            [Event::Text(text) | Event::Code(text)] => {
+                let text = text.trim();
+                text == written || text == path || (!file.is_empty() && text == file)
+            }
+            _ => false,
+        };
+        if named_by_path {
+            self.events.truncate(start + 1);
+            self.events.push(Event::Text(CowStr::from(name)));
+        }
+    }
+
+    /// The name of the page or heading a page link points to.
+    fn name_of(&self, source: &Path, anchor: Option<&str>) -> Option<String> {
+        let page = self.pages.by_source(source)?;
+        let heading = anchor.and_then(|anchor| {
+            page.headings
+                .iter()
+                .find(|(id, _)| id == anchor)
+                .map(|(_, text)| text.clone())
+        });
+        Some(heading.unwrap_or_else(|| page.title.clone()))
+    }
+
+    /// The site's href for a link or image and, for a page, the name it points to, recording
+    /// what the build needs from it. A broken one is recorded and kept as written.
+    fn href(&mut self, href: CowStr<'a>, range: &Range<usize>) -> (CowStr<'a>, Option<String>) {
         let line = self.lines.line(range.start);
         match links::resolve(&self.page.source, &href, self.pages, self.root) {
             Ok(target) => {
+                let name = match &target {
+                    Target::Page { source, anchor, .. } => self.name_of(source, anchor.as_deref()),
+                    _ => None,
+                };
                 let site_href = match &target {
                     Target::Page {
                         source,
@@ -201,7 +251,7 @@ impl<'a> Renderer<'a> {
                     }),
                     _ => {}
                 }
-                site_href
+                (site_href, name)
             }
             Err(reason) => {
                 self.broken.push(Broken {
@@ -210,7 +260,7 @@ impl<'a> Renderer<'a> {
                     href: href.to_string(),
                     reason,
                 });
-                href
+                (href, None)
             }
         }
     }
@@ -309,6 +359,28 @@ fn plain_text(events: &[Event]) -> String {
         }
     }
     text
+}
+
+/// Every heading's id and text, as render gives them.
+pub fn headings(markdown: &str) -> Vec<(String, String)> {
+    let mut slugs = Slugs::new();
+    let mut found = Vec::new();
+    let mut text: Option<String> = None;
+    for event in Parser::new_ext(markdown, options()) {
+        match event {
+            Event::Start(Tag::Heading { .. }) => text = Some(String::new()),
+            Event::Text(part) | Event::Code(part) if text.is_some() => {
+                text.get_or_insert_default().push_str(&part);
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                if let Some(text) = text.take() {
+                    found.push((slugs.next(&text), text));
+                }
+            }
+            _ => {}
+        }
+    }
+    found
 }
 
 /// The text of the first # heading.
@@ -428,6 +500,29 @@ mod tests {
         assert!(
             page.body
                 .contains("<li><a href=\"#keys\">mixed</a> and text</li>")
+        );
+    }
+
+    #[test]
+    fn names_a_link_whose_text_is_a_file_path() {
+        let page = rendered(
+            "# UI\n\n[README.md](README.md) [../CHANGELOG.md#x](../CHANGELOG.md#x) [the docs](README.md) [`README.md`](README.md#docs) [README.md#nope](README.md#nope) [ui.md](#keys)\n\n## Keys\n",
+        );
+        let body = match page {
+            Ok(page) => page.body,
+            Err(broken) => panic!("{}", broken.len()),
+        };
+        assert!(body.contains("<a href=\"/docs/\">Docs</a>"), "{body}");
+        assert!(body.contains("<a href=\"/docs/\">the docs</a>"));
+        assert!(body.contains("<a href=\"/docs/#docs\">Docs</a>"), "{body}");
+        assert!(body.contains("<a href=\"/docs/#nope\">Docs</a>"), "{body}");
+        assert!(body.contains("<a href=\"#keys\">ui.md</a>"), "{body}");
+        let page =
+            rendered("# UI\n\n[CHANGELOG.md](../CHANGELOG.md)\n").unwrap_or_else(|_| panic!());
+        assert!(
+            page.body.contains("<a href=\"/changelog/\">Changelog</a>"),
+            "{}",
+            page.body
         );
     }
 

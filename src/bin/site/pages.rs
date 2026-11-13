@@ -18,6 +18,10 @@ pub struct Page {
     /// The docs/README.md section that lists it, which the nav groups it under; the home page
     /// leads the first section. None for a page outside the nav.
     pub section: Option<String>,
+    /// Its Markdown as the site renders it: without the github-only parts.
+    pub markdown: String,
+    /// Every heading's id and text, for links that name one.
+    pub headings: Vec<(String, String)>,
 }
 
 /// The pages the site publishes, in nav order.
@@ -88,8 +92,8 @@ impl Pages {
 
 fn page(root: &Path, source: PathBuf, section: Option<String>) -> anyhow::Result<Page> {
     let path = root.join(&source);
-    let markdown =
-        fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let text = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let markdown = for_site(&text);
     let Some(title) = render::title(&markdown) else {
         bail!("{} has no # heading to title it", source.display());
     };
@@ -98,7 +102,34 @@ fn page(root: &Path, source: PathBuf, section: Option<String>) -> anyhow::Result
         source,
         title,
         section,
+        headings: render::headings(&markdown),
+        markdown,
     })
+}
+
+const GITHUB_ONLY: &str = "<!-- github-only -->";
+const GITHUB_ONLY_END: &str = "<!-- /github-only -->";
+
+/// The Markdown without what sits between the github-only markers, each line of it left blank,
+/// so a broken link's line number still points into the file.
+fn for_site(markdown: &str) -> String {
+    let mut hidden = false;
+    let mut out = String::with_capacity(markdown.len());
+    for line in markdown.split_inclusive('\n') {
+        let marker = line.trim();
+        if marker == GITHUB_ONLY {
+            hidden = true;
+        }
+        if hidden {
+            out.push_str(if line.ends_with('\n') { "\n" } else { "" });
+        } else {
+            out.push_str(line);
+        }
+        if marker == GITHUB_ONLY_END {
+            hidden = false;
+        }
+    }
+    out
 }
 
 /// The Markdown files docs/README.md links, in the order it first links them, each with the
@@ -259,6 +290,34 @@ mod tests {
         );
         assert_eq!(titles("CHANGELOG.md"), (Some("A".to_owned()), None));
         assert_eq!(titles("docs/README.md"), (None, None));
+    }
+
+    #[test]
+    fn leaves_out_the_github_only_parts_but_keeps_their_lines() {
+        let markdown = "# A\nseen\n<!-- github-only -->\n## Docs\nRead it here\n<!-- /github-only -->\nafter\n";
+        assert_eq!(for_site(markdown), "# A\nseen\n\n\n\n\nafter\n");
+        assert_eq!(for_site("no markers"), "no markers");
+    }
+
+    #[test]
+    fn keeps_each_page_s_markdown_and_headings() {
+        let repo = checkout(&[
+            ("docs/README.md", "# Docs\n\n[a](a.md)\n"),
+            (
+                "docs/a.md",
+                "# A\n\n## The `peek`\n\n<!-- github-only -->\n## Gone\n<!-- /github-only -->\n",
+            ),
+        ]);
+        let pages = Pages::read(repo.path()).unwrap();
+        let page = pages.by_source(Path::new("docs/a.md")).unwrap();
+        assert!(!page.markdown.contains("Gone"));
+        assert_eq!(
+            page.headings,
+            [
+                ("a".to_owned(), "A".to_owned()),
+                ("the-peek".to_owned(), "The peek".to_owned())
+            ]
+        );
     }
 
     #[test]
