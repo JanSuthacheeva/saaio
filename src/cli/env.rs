@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::client;
 use crate::config::{self, Config};
-use crate::registry::Registry;
+use crate::registry::{self, Registry};
 use crate::release::source::Releases;
 use crate::server_log;
 use crate::store::Store;
@@ -86,7 +86,7 @@ impl Env {
             .as_ref()
             .filter(|home| !home.as_os_str().is_empty())
         {
-            return Ok(Some(Store::at(home.clone())));
+            return Ok(Some(Store::at(registry::normal(home))));
         }
         let Some(registry) = self.registry() else {
             return Ok(None);
@@ -261,6 +261,25 @@ mod tests {
 
         assert_eq!(root(&env, &shop), Path::new("/flows"));
         assert!(Env::default().store(Some(&shop)).unwrap().is_none());
+    }
+
+    #[test]
+    fn spells_saaio_home_one_way() {
+        let long = PathBuf::from(format!("/{}/store", "s".repeat(120)));
+        let at = |home: &Path| Env {
+            saaio_home: Some(home.to_path_buf()),
+            tmpdir: Some(PathBuf::from("/tmp")),
+            ..Env::default()
+        };
+        let store = |home: &Path| at(home).store(None).unwrap().unwrap();
+
+        let slashed = store(&long.join(""));
+
+        assert_eq!(slashed.root().as_os_str(), long.as_os_str());
+        assert_eq!(
+            at(&long.join("")).socket(&slashed),
+            at(&long).socket(&store(&long))
+        );
     }
 
     #[test]

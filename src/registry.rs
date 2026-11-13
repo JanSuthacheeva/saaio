@@ -68,32 +68,47 @@ impl Registry {
         let stores = self.root.join("stores");
         private::create_dir(&stores)
             .with_context(|| format!("could not create {}", stores.display()))?;
-        let mut line = store.root().as_os_str().as_bytes().to_vec();
-        line.push(b'\n');
-        write_atomic(&entry, &line)
+        write_atomic(&entry, &entry_line(store.root()))
             .with_context(|| format!("could not register {}", store.root().display()))
     }
 
-    /// Every registered store whose folder still exists, sorted by project name; a vanished one is
-    /// dropped from the registry.
+    /// Every registered store whose folder still exists, once each, sorted by project name. Repairs
+    /// the registry on the way: drops a vanished store's entry and a second entry of one folder,
+    /// and moves an entry named after another path (a moved shared folder) to its root's name.
     pub fn stores(&self) -> Vec<Store> {
         let Ok(entries) = fs::read_dir(self.root.join("stores")) else {
             return Vec::new();
         };
-        let mut stores: Vec<Store> = entries
+        let mut listed: Vec<(PathBuf, PathBuf, PathBuf)> = entries
             .flatten()
             .filter(|entry| !entry.file_name().to_string_lossy().contains('.'))
             .filter_map(|entry| {
-                let line = fs::read(entry.path()).ok()?;
-                let root = PathBuf::from(OsStr::from_bytes(line.strip_suffix(b"\n")?));
-                if root.is_dir() {
-                    Some(Store::at(root))
-                } else {
-                    let _ = fs::remove_file(entry.path());
-                    None
+                let file = entry.path();
+                let root = read_entry(&file)?;
+                match fs::canonicalize(&root) {
+                    Ok(folder) if folder.is_dir() => Some((file, root, folder)),
+                    _ => {
+                        let _ = fs::remove_file(&file);
+                        None
+                    }
                 }
             })
             .collect();
+        listed.sort_by_cached_key(|(file, root, _)| (*file != self.entry(root), file.clone()));
+        let mut folders: Vec<PathBuf> = Vec::new();
+        let mut stores: Vec<Store> = Vec::new();
+        for (file, root, folder) in listed {
+            if folders.contains(&folder) {
+                let _ = fs::remove_file(&file);
+                continue;
+            }
+            let named = self.entry(&root);
+            if file != named && write_atomic(&named, &entry_line(&root)).is_ok() {
+                let _ = fs::remove_file(&file);
+            }
+            folders.push(folder);
+            stores.push(Store::at(root));
+        }
         stores.sort_by_cached_key(|store| (project_name(store, self), store.root().to_path_buf()));
         stores
     }
@@ -134,9 +149,29 @@ impl Registry {
     fn entry(&self, root: &Path) -> PathBuf {
         self.root.join("stores").join(format!(
             "{:016x}",
-            fnv1a(root.as_os_str().as_encoded_bytes())
+            fnv1a(normal(root).as_os_str().as_encoded_bytes())
         ))
     }
+}
+
+/// `root` spelled one way: no trailing slash, no `.` folders.
+pub fn normal(root: &Path) -> PathBuf {
+    root.components().collect()
+}
+
+/// What a registry entry holds: the store's root and a newline.
+fn entry_line(root: &Path) -> Vec<u8> {
+    let mut line = normal(root).as_os_str().as_bytes().to_vec();
+    line.push(b'\n');
+    line
+}
+
+/// The store root a registry entry names; None when it cannot be read or lacks its newline.
+fn read_entry(file: &Path) -> Option<PathBuf> {
+    let line = fs::read(file).ok()?;
+    Some(normal(Path::new(OsStr::from_bytes(
+        line.strip_suffix(b"\n")?,
+    ))))
 }
 
 /// The project name of a git dir: the repository's folder for <repo>/.git, else the dir's own
@@ -254,6 +289,82 @@ mod tests {
             .map(|store| store.root().to_path_buf())
             .collect();
         assert_eq!(roots, vec![shop.root().to_path_buf()]);
+    }
+
+    #[test]
+    fn registers_a_store_once_with_or_without_a_trailing_slash() {
+        let dir = TempDir::new().unwrap();
+        let registry = registry(&dir);
+        let shop = store(&dir, "shop");
+        let blog = store(&dir, "blog");
+        let slashed = |store: &Store| store.root().join("");
+        let stores = registry.root().join("stores");
+        fs::create_dir_all(&stores).unwrap();
+        let earlier = format!("{:016x}", fnv1a(slashed(&blog).as_os_str().as_bytes()));
+        fs::write(
+            stores.join(earlier),
+            format!("{}\n", slashed(&blog).display()),
+        )
+        .unwrap();
+
+        registry.register(&shop).unwrap();
+        registry.register(&Store::at(slashed(&shop))).unwrap();
+
+        let roots: Vec<PathBuf> = registry
+            .stores()
+            .iter()
+            .map(|store| store.root().to_path_buf())
+            .collect();
+        assert_eq!(
+            roots,
+            vec![blog.root().to_path_buf(), shop.root().to_path_buf()]
+        );
+        let mut lines: Vec<String> = fs::read_dir(&stores)
+            .unwrap()
+            .map(|entry| fs::read_to_string(entry.unwrap().path()).unwrap())
+            .collect();
+        lines.sort();
+        assert_eq!(
+            lines,
+            [blog.root(), shop.root()].map(|root| format!("{}\n", root.display()))
+        );
+    }
+
+    #[test]
+    fn lists_a_store_once_however_its_entries_name_it() {
+        let dir = TempDir::new().unwrap();
+        let registry = registry(&dir);
+        let shop = store(&dir, "shop");
+        let blog = store(&dir, "blog");
+        let stores = registry.root().join("stores");
+        fs::create_dir_all(&stores).unwrap();
+        let line = |root: &Path| format!("{}\n", root.display());
+        fs::write(stores.join("7ee7933b94a1383c"), line(shop.root())).unwrap();
+        fs::write(stores.join("17da5030b876d0ba"), line(blog.root())).unwrap();
+        registry.register(&shop).unwrap();
+
+        let roots: Vec<PathBuf> = registry
+            .stores()
+            .iter()
+            .map(|store| store.root().to_path_buf())
+            .collect();
+
+        assert_eq!(
+            roots,
+            vec![blog.root().to_path_buf(), shop.root().to_path_buf()]
+        );
+        let mut entries: Vec<PathBuf> = fs::read_dir(&stores)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        entries.sort();
+        let mut expected = vec![registry.entry(blog.root()), registry.entry(shop.root())];
+        expected.sort();
+        assert_eq!(entries, expected);
+        assert_eq!(
+            fs::read_to_string(registry.entry(blog.root())).unwrap(),
+            line(blog.root())
+        );
     }
 
     #[test]

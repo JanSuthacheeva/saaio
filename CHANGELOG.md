@@ -11,6 +11,12 @@ All notable changes to saaio are listed here. The format follows
 - The documentation is online at [saaio.dev](https://saaio.dev): searchable, in light and dark,
   readable on a phone, and built from the Markdown in the repository on every merge.
 
+### Fixed
+
+- `saaio update` names each server of another version once, and `saaio status --all` each
+  project once: a store registered twice (by a shared folder moved by hand, or `SAAIO_HOME`
+  with a trailing slash) no longer shows up twice, and its extra entry is cleaned up.
+
 ## [0.2.1] - 2026-11-05
 
 ### Added
