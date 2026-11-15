@@ -34,7 +34,7 @@ version and commit, the OS and the versions of `claude`, `codex`, `gh` and `glab
 
 ## The terminal UI
 
-Most problems with the UI come from a server that still runs an earlier saaio, or from a folder
+Many problems with the UI come from a server that still runs an earlier saaio, or from a folder
 saaio runs in that is not the one you expect. The fix for the first is nearly always the same:
 
 ```sh
@@ -82,7 +82,9 @@ in what the harness reports:
 
 ## Starting flows
 
-`saaio start` checks everything before it creates anything, and its error says what is missing:
+`saaio start` checks the repository, its trust, the slots and the config before it creates
+anything, and its error says what is missing. A failing setup comes later: the flow exists,
+blocked, with its worker open:
 
 | Problem | Cause | Fix |
 | --- | --- | --- |

@@ -65,7 +65,7 @@ shows the active ones. It also accepts `--permission-mode` for a session.
 
 ## Codex
 
-Codex has four settings that decide how often a worker stops:
+These Codex settings are recommended for workers:
 
 | Setting | Location | Effect |
 | --- | --- | --- |

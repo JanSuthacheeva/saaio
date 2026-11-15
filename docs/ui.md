@@ -211,9 +211,9 @@ waits its turn for pint since 14:02; shop-42 runs
 
 ## History
 
-A session's output scrolls on, but nothing is lost. `C-space [` scrolls back through it, and so
-does the wheel over a pane whose session leaves the mouse to saaio and is not on the alternate
-screen:
+A session's output scrolls on, and saaio keeps its last 10,000 lines. `C-space [` scrolls back
+through them, and so does the wheel over a pane whose session leaves the mouse to saaio and is not
+on the alternate screen:
 
 | Key | Does |
 | --- | --- |
@@ -394,6 +394,6 @@ The UI only warns: `saaio --stop` ends every session, so you choose when
 
 ## After a crash or a reboot
 
-Nothing is lost when the machine goes down. The next `saaio` restarts the server and resumes the
-master and every unfinished worker in its conversation (`claude --resume`, `codex resume`). After a
+A crash or a reboot does not cost you your flows. The next `saaio` restarts the server and resumes
+the master and every unfinished worker in its conversation (`claude --resume`, `codex resume`). After a
 stop, the master starts a new conversation, and the workers still resume.
