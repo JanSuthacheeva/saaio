@@ -222,7 +222,7 @@ Same chain for `remove::unmerged` (`Refusal::Unmerged`) and `trust::untrusted` f
       `running` against a refusing fake server
 - [x] `Refusal` serde (lowercase) with a round-trip test; `Failure.refusal`, `Failure::refused`,
       `to_toon` prints the key; unit tests for the key's place and absence
-- [ ] `remove::uncommitted`/`unmerged` and `trust::untrusted` through `Failure::refused`; their
+- [x] `remove::uncommitted`/`unmerged` and `trust::untrusted` through `Failure::refused`; their
       tests assert the refusal field
 - [ ] `effect::outcome` reads the whole document through `printed_error`; remove `Refusal::of`,
       `Refusal::phrase` and `error_message`; UI tests for the key, a reworded message and the

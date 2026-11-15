@@ -12,12 +12,9 @@ use crate::workspace::hooks::Hook;
 /// and whether Codex would trust its worktrees.
 pub(crate) fn untrusted(repo: &Path, hooks: &[Hook], codex: bool) -> Failure {
     let repo = repo.display();
-    Failure::error(
-        format!(
-            "{repo} {}: {}",
-            Refusal::Untrusted.phrase(),
-            consequences(hooks, codex)
-        ),
+    Failure::refused(
+        Refusal::Untrusted,
+        format!("{repo} is not trusted: {}", consequences(hooks, codex)),
         vec![
             format!(
                 "Ask the person to read its .saaio scripts, then run `saaio trust` in {repo} in their terminal"
@@ -134,7 +131,8 @@ mod tests {
             failure.help[0],
             "Ask the person to read its .saaio scripts, then run `saaio trust` in /shop in their terminal"
         );
-        assert_eq!(Refusal::of(&failure.message), Some(Refusal::Untrusted));
+        assert_eq!(failure.refusal, Some(Refusal::Untrusted));
+        assert_eq!(not_a_person(Path::new("/shop")).refusal, None);
         assert_eq!(
             untrusted(
                 Path::new("/shop"),

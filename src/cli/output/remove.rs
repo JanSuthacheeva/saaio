@@ -11,8 +11,9 @@ use crate::text::plural;
 
 /// The refusal of flow `name`'s removal while its worktree at `path` has uncommitted work.
 pub(crate) fn uncommitted(name: &str, path: &str) -> Failure {
-    Failure::error(
-        format!("{name} {} in {path}", Refusal::Uncommitted.phrase()),
+    Failure::refused(
+        Refusal::Uncommitted,
+        format!("{name} has uncommitted work in {path}"),
         vec![
             format!("Commit or stash it in {path}, then run `saaio remove {name}` again"),
             format!("Run `saaio remove {name} --force` to discard the uncommitted work"),
@@ -39,11 +40,11 @@ pub(crate) fn unmerged(name: &str, branch: &str, count: u32, stacked: &[&str]) -
         format!("Run `saaio remove {name} --delete-unmerged` to delete it with its commits"),
     ];
     help.extend(standing(branch, stacked));
-    Failure::error(
+    Failure::refused(
+        Refusal::Unmerged,
         format!(
-            "{branch} has {count} commit{} {}",
-            plural(count),
-            Refusal::Unmerged.phrase()
+            "{branch} has {count} commit{} on no other branch",
+            plural(count)
         ),
         help,
     )
@@ -227,16 +228,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reads_each_refusal_back_from_its_own_message() {
+    fn carries_each_refusal_beside_its_message() {
         let uncommitted = uncommitted("shop-230", "/shop/.saaio/worktrees/shop-230");
         let unmerged = unmerged("shop-230", "flow/shop-230", 2, &["shop-231"]);
-
-        assert_eq!(
-            Refusal::of(&uncommitted.message),
-            Some(Refusal::Uncommitted)
+        let unchecked = unchecked(
+            "shop-230",
+            "/shop/.saaio/worktrees/shop-230",
+            &anyhow::anyhow!("git failed"),
         );
-        assert_eq!(Refusal::of(&unmerged.message), Some(Refusal::Unmerged));
-        assert_eq!(Refusal::of("no flow named shop-230"), None);
+
+        assert_eq!(uncommitted.refusal, Some(Refusal::Uncommitted));
+        assert_eq!(
+            uncommitted.message,
+            "shop-230 has uncommitted work in /shop/.saaio/worktrees/shop-230"
+        );
+        assert_eq!(unmerged.refusal, Some(Refusal::Unmerged));
+        assert_eq!(
+            unmerged.message,
+            "flow/shop-230 has 2 commits on no other branch"
+        );
+        assert_eq!(unchecked.refusal, None);
     }
 
     #[test]
