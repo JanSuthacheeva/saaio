@@ -500,6 +500,7 @@ or the branch has commits on no other branch, local or pushed:
 ```
 $ saaio remove shop-221
 error: flow/shop-221 has 1 commit on no other branch
+refusal: unmerged
 help[2]: "Merge or push flow/shop-221, then run `saaio remove shop-221` again",Run `saaio remove shop-221 --delete-unmerged` to delete it with its commits
 ```
 
@@ -682,6 +683,18 @@ The exit code tells a script how it went:
 | 0 | success |
 | 1 | an error, such as a flow that does not exist |
 | 2 | a usage error, such as an unknown option. `saaio wait` also exits 2 when it has news. |
+
+When saaio refuses to do something that only a person may allow, the error says which refusal it
+is in a `refusal` line between `error` and `help`. A program reads that line, not the wording of
+the message, which may change. The values are stable:
+
+| `refusal` | Means | Allowed by |
+| --- | --- | --- |
+| `uncommitted` | `saaio remove`: the worktree has uncommitted work | `--force` |
+| `unmerged` | `saaio remove`: the branch has commits on no other branch | `--delete-unmerged` |
+| `untrusted` | `saaio start`: the repository is not trusted to run its `.saaio` scripts | `saaio trust`, in the person's terminal |
+
+Other errors have no `refusal` line.
 
 ## Environment variables
 

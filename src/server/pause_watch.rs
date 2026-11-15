@@ -6,11 +6,12 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
-use super::{Event, Server, spawn_named};
+use super::{Event, Server};
 use crate::event::{Event as LogEvent, EventKind, ServiceStatus};
 use crate::launch::worktree;
 use crate::pause::{self, Job};
 use crate::server_log;
+use crate::threads;
 use crate::trust::Trust;
 use crate::view::FlowView;
 use crate::workspace::hooks::{self, Hook};
@@ -175,7 +176,7 @@ fn run_in_background(
     job: Job,
     events: Sender<Event>,
 ) -> io::Result<()> {
-    spawn_named(format!("pause {}", flow.name), move || {
+    threads::spawn(format!("pause {}", flow.name), move || {
         let Some(space) = &flow.workspace else {
             return;
         };
@@ -192,6 +193,7 @@ fn run_in_background(
             result,
         }));
     })
+    .map(drop)
 }
 
 #[cfg(test)]

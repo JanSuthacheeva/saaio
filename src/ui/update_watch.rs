@@ -1,12 +1,12 @@
 //! `UpdateWatch`: the UI's look at the latest release, once a day while it is turned on
 
 use std::sync::mpsc::Sender;
-use std::thread;
 use std::time::Duration;
 
 use super::Event;
 use crate::release::source::Releases;
 use crate::release::{Build, Tag};
+use crate::threads;
 use crate::update::{self, UpdateCheck};
 
 /// How long curl gets to name the latest release.
@@ -51,12 +51,12 @@ impl UpdateWatch {
         if !check.due(now) || check.record(now, None).is_err() {
             return;
         }
-        self.asking = true;
         let releases = self.releases.clone();
         let events = events.clone();
-        thread::spawn(move || {
+        let asked = threads::spawn("ui update", move || {
             let _ = events.send(Event::Latest(releases.latest(LIMIT).ok()));
         });
+        self.asking = asked.is_ok();
     }
 
     /// Records what the look found; a look that found nothing keeps the earlier answer.

@@ -17,8 +17,8 @@ use super::backlog::Backlog;
 use super::pane_input::PaneInput;
 use crate::launch::pane::PaneSpec;
 use crate::proto::{Frame, PaneInfo, PaneKey, PaneStatus, Size};
-use crate::server::spawn_named;
 use crate::server::terminal::Terminal;
+use crate::threads;
 
 /// Lines of scrollback each pane keeps.
 const HISTORY: usize = 10_000;
@@ -205,7 +205,7 @@ impl Host {
         let pid = process.pid;
         let exited = process.exited.clone();
         signal_group(pid, Signal::HUP);
-        let grace = spawn_named(format!("pane {key} close"), move || {
+        let grace = threads::spawn(format!("pane {key} close"), move || {
             thread::sleep(CLOSE_GRACE);
             if !exited.load(Ordering::SeqCst) {
                 signal_group(pid, Signal::KILL);
@@ -322,7 +322,7 @@ impl Host {
         let events = self.events.clone();
         let backlog = Arc::clone(&self.backlog);
         let key = spec.key.clone();
-        let output = spawn_named(format!("pane {key} output"), move || {
+        let output = threads::spawn(format!("pane {key} output"), move || {
             let mut buf = vec![0u8; 64 * 1024];
             loop {
                 match reader.read(&mut buf) {
@@ -349,7 +349,7 @@ impl Host {
         let events = self.events.clone();
         let key = spec.key;
         let done = exited.clone();
-        let waiting = spawn_named(format!("pane {key} wait"), move || {
+        let waiting = threads::spawn(format!("pane {key} wait"), move || {
             let code = child.wait().ok().map(|status| status.exit_code());
             let _ = drained_rx.recv_timeout(DRAIN);
             done.store(true, Ordering::SeqCst);

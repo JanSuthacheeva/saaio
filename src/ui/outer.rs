@@ -74,11 +74,14 @@ fn restore() {
 }
 
 /// A panic restores the terminal before its message prints; the server and its panes keep running.
+/// stdout stays locked through the hooks after it, which end the process, so the loop draws
+/// nothing into the restored terminal meanwhile.
 fn install_panic_restore() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
         let previous = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
+            let _drawing = io::stdout().lock();
             restore();
             previous(info);
         }));

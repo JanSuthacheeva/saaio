@@ -9,12 +9,12 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context as _, Result, anyhow, bail};
 use serde_json::Value;
 
 use super::{of_own_repo, repo_dir, views};
 use crate::adapter::{Adapter, LineMatch, Turn};
-use crate::cli::Env;
+use crate::cli::context::Context;
 use crate::cli::output::Document;
 use crate::config::Config;
 use crate::config::kind::DEFAULT_KIND;
@@ -71,20 +71,20 @@ impl fmt::Display for Hooked {
 /// `saaio hook`: never prints to stdout (a hook's stdout can reach the model) and never fails (a
 /// failing hook shows the user a notice); what goes wrong goes to the store's server.log. A Stop
 /// that hands news over wakes the session with it (exit 2, the news on stderr).
-pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
+pub fn run(args: &Args, ctx: &Context) -> Document {
     let cwd = std::env::current_dir().ok();
     // Without a store there is no server.log to say it in.
-    let Ok(Some(store)) = env.store(cwd.as_deref()) else {
+    let Ok(Some(store)) = ctx.env.store(cwd.as_deref()) else {
         return Document::Silent;
     };
-    let hooked = match env.flow_id() {
-        _ if env.is_master() => Hooked::Master,
+    let hooked = match ctx.env.flow_id() {
+        _ if ctx.env.is_master() => Hooked::Master,
         Some(id) if !is_uuid(id) => {
             Log::new(
-                env.server_log(&store),
+                ctx.env.server_log(&store),
                 &args.adapter,
                 &Hooked::Nobody,
-                clock,
+                ctx.clock,
             )
             .error(&format!("SAAIO_FLOW_ID {id:?} is no flow id"));
             return Document::Silent;
@@ -92,20 +92,25 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
         Some(id) => Hooked::Flow(id.to_string()),
         None => Hooked::Nobody,
     };
-    let log = Log::new(env.server_log(&store), &args.adapter, &hooked, clock);
-    if hooked.waiter().is_some() && env.key().is_none() {
+    let log = Log::new(
+        ctx.env.server_log(&store),
+        &args.adapter,
+        &hooked,
+        ctx.clock,
+    );
+    if hooked.waiter().is_some() && ctx.env.key().is_none() {
         log.error("no SAAIO_PROOF: an earlier saaio server opened this pane; saaio --stop");
         return Document::Silent;
     }
     if let Some(claimed) = hooked.waiter()
-        && !identity::proves(&store, &claimed, env.key())
+        && !identity::proves(&store, &claimed, ctx.env.key())
     {
         log.error(&format!("SAAIO_PROOF does not prove {hooked}"));
         return Document::Silent;
     }
     // A broken config must not stop running workers from reporting; the server logs it, start and
     // ui say it loudly.
-    let config = env.config().unwrap_or_else(|_| Config::builtin());
+    let config = ctx.env.config().unwrap_or_else(|_| Config::builtin());
     let Some(adapter) = Adapter::named(&args.adapter) else {
         log.error(&format!("no adapter named {}", args.adapter));
         return Document::Silent;
@@ -124,15 +129,15 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
             return Document::Silent;
         }
     };
-    let news = hook(&store, &config, adapter, &hooked, &payload, &log, clock());
+    let news = hook(&store, &config, adapter, &hooked, &payload, &log, ctx.now());
     if let Hooked::Flow(id) = &hooked
         && adapter.before_tool(&payload)
     {
-        wait_for_services(&store, id, !adapter.asks(&payload), &log, clock);
+        wait_for_services(&store, id, !adapter.asks(&payload), &log, ctx.clock);
         if config.exclusive.enabled
             && let Some(line) = adapter.command(&payload)
         {
-            wait_for_turn(&store, id, line, &log, clock);
+            wait_for_turn(&store, id, line, &log, ctx.clock);
         }
     }
     match news {

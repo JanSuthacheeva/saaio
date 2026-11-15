@@ -4,7 +4,7 @@
     test,
     allow(
         clippy::disallowed_methods,
-        reason = "tests set up their files and read PATH directly"
+        reason = "tests set up their files, read PATH and start threads directly"
     )
 )]
 
@@ -46,6 +46,7 @@ mod stack;
 mod store;
 mod system;
 mod text;
+mod threads;
 mod trust;
 mod turn_watch;
 mod turns;

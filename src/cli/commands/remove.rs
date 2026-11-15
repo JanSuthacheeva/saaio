@@ -1,17 +1,15 @@
 //! `saaio remove`: stops a flow's worker, tears down its worktree and branch, forgets the flow
 
-use std::path::Path;
-
 use super::retire::{
     Uncommitted, Unmerged, close_pane, drop_branch, refuse_uncommitted_work,
     refuse_unmerged_commits, restack, retire_worktree,
 };
 use super::{no_flow, views};
+use crate::cli::context::{Context, Opened};
 use crate::cli::output::remove::{self, BranchFate, Retired};
 use crate::cli::output::{Document, Failure};
 use crate::fold;
 use crate::stack;
-use crate::store::Store;
 use crate::trust::Trust;
 
 #[derive(Debug, clap::Args)]
@@ -27,13 +25,11 @@ pub struct Args {
 }
 
 /// Stops a flow's worker, tears down its worktree, deletes a merged branch and forgets the flow.
-pub fn run(
-    args: &Args,
-    store: &Store,
-    socket: &Path,
-    trust: &Trust,
-    now: u64,
-) -> Result<Document, Failure> {
+pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
+    let Opened { store, registry } = ctx.open()?;
+    let socket = ctx.env.socket(&store);
+    let trust = Trust::at(&registry);
+    let now = ctx.now();
     let uncommitted = if args.force {
         Uncommitted::Discard
     } else {
@@ -44,7 +40,7 @@ pub fn run(
     } else {
         Unmerged::Keep
     };
-    let (flows, _) = views(store, now);
+    let (flows, _) = views(&store, now);
     let flow = fold::resolve(&flows, &args.flow).ok_or_else(|| no_flow(&args.flow))?;
     let stacked: Vec<&str> = stack::standing_on(&flows, flow)
         .iter()
@@ -56,13 +52,13 @@ pub fn run(
     if unmerged == Unmerged::Keep {
         refuse_unmerged_commits(flow, &stacked)?;
     }
-    let pane = close_pane(socket, flow)?;
-    let retired = retire_worktree(trust, flow, uncommitted);
+    let pane = close_pane(&socket, flow)?;
+    let retired = retire_worktree(&trust, flow, uncommitted);
     let branch = match retired.0 {
         Retired::Kept(_) => BranchFate::Kept,
         Retired::NoWorktree | Retired::Removed => drop_branch(flow, unmerged),
     };
-    restack(store, &flows, flow, now)?;
+    restack(&store, &flows, flow, now)?;
     store
         .remove(&flow.id)
         .map_err(|error| Failure::from(error.context(format!("could not remove {}", flow.name))))?;

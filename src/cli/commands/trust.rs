@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::cli::Env;
+use crate::cli::context::Context;
 use crate::cli::output::{Document, Failure, trust as output};
 use crate::trust::Trust;
 use crate::workspace::git;
@@ -23,8 +23,8 @@ pub struct Args {
 
 /// Trusts the repository of `folder` (or the current one), only for a person at a terminal;
 /// revokes it with --revoke, lists every trusted one with --list. Runs without a store.
-pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
-    let Some(registry) = env.registry() else {
+pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
+    let Some(registry) = ctx.env.registry() else {
         return Err(Failure::error(
             "cannot find a state directory",
             vec!["Set HOME or XDG_STATE_HOME to a directory".to_string()],
@@ -46,7 +46,7 @@ pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
         return Ok(output::revoked(&root, trust.revoke(&root)?));
     }
     let root = root(&folder)?;
-    if !env.is_person() {
+    if !ctx.env.is_person() {
         return Err(output::not_a_person(&root));
     }
     trust.grant(&root)?;

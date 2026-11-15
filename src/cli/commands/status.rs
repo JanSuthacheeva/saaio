@@ -4,6 +4,7 @@ use std::path::Path;
 
 use super::{no_flow, views};
 use crate::cli::Env;
+use crate::cli::context::{Context, Opened};
 use crate::cli::output::{self, Document, Failure};
 use crate::fold;
 use crate::registry::{self, Registry};
@@ -26,17 +27,13 @@ pub struct Args {
 }
 
 /// Every flow, or one flow with its phases, timeline and decisions; --all for every project.
-pub fn run(
-    args: &Args,
-    store: &Store,
-    registry: &Registry,
-    env: &Env,
-    now: u64,
-) -> Result<Document, Failure> {
+pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
+    let Opened { store, registry } = ctx.open()?;
+    let now = ctx.now();
     if args.all {
-        return all_stores(registry, args.json, args.full, now);
+        return all_stores(&registry, args.json, args.full, now);
     }
-    one_store(args, store, env, now)
+    one_store(args, &store, ctx.env, now)
 }
 
 fn one_store(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, Failure> {

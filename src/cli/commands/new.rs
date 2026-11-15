@@ -1,11 +1,10 @@
 //! `saaio new`: tracks a new flow, or returns the unfinished flow of that name
 
 use super::{check_request, pick_kind, views};
+use crate::cli::context::{Context, Opened};
 use crate::cli::output::{Document, Failure, flow};
-use crate::config::Config;
 use crate::event::{Event, EventKind, Mode};
 use crate::fold;
-use crate::store::Store;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -21,10 +20,13 @@ pub struct Args {
 }
 
 /// Tracks a new flow, or returns the unfinished flow of that name.
-pub fn run(args: Args, store: &Store, config: &Config, now: u64) -> Result<Document, Failure> {
+pub fn run(args: Args, ctx: &Context) -> Result<Document, Failure> {
+    let Opened { store, .. } = ctx.open()?;
+    let config = ctx.env.config()?;
+    let now = ctx.now();
     check_request(&args.request)?;
-    let (kind_name, kind) = pick_kind(config, args.kind.as_deref())?;
-    let (flows, _) = views(store, now);
+    let (kind_name, kind) = pick_kind(&config, args.kind.as_deref())?;
+    let (flows, _) = views(&store, now);
     if let Some(existing) = fold::resolve(&flows, &args.name).filter(|flow| !flow.is_finished()) {
         return Ok(flow::created(existing, true));
     }

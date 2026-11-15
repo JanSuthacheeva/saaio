@@ -54,8 +54,8 @@ impl Client {
         // Before the hello: macOS refuses socket options once a refusing server hung up.
         let pid = peer_pid(&stream).ok();
         let server = match hello(&mut stream, role)? {
-            Ok(server) => server,
-            Err(reason) => bail!("{reason}. {}", another_saaio(pid)),
+            Answer::Welcome(server) => server,
+            Answer::Refused(reason) => bail!("{reason}. {}", another_saaio(pid)),
         };
         // macOS refuses socket options once the server hung up (EINVAL); the next recv says so.
         let _ = stream.set_read_timeout(None);
@@ -67,12 +67,12 @@ impl Client {
         &self.server
     }
 
-    pub fn send(&mut self, message: &ClientMsg) -> Result<()> {
+    pub fn send(&mut self, message: &ClientMsg) -> Result<(), proto::Error> {
         proto::write_msg(&mut self.stream, message)
     }
 
     /// The next server message; None when the server closed the connection.
-    pub fn recv(&mut self) -> Result<Option<ServerMsg>> {
+    pub fn recv(&mut self) -> Result<Option<ServerMsg>, proto::Error> {
         proto::read_msg(&mut self.stream)
     }
 
@@ -104,15 +104,25 @@ pub fn running(socket: &Path) -> Result<Option<Running>> {
             socket.display()
         )
     })?;
-    let server = hello(&mut stream, Role::Control)?.ok();
+    let server = match hello(&mut stream, Role::Control)? {
+        Answer::Welcome(server) => Some(server),
+        Answer::Refused(_) => None,
+    };
     Ok(Some(Running {
         pid: pid.as_raw_nonzero().get().unsigned_abs(),
         server,
     }))
 }
 
-/// Says hello on `stream`: the server's binary from its Welcome, or the reason it refused.
-fn hello(stream: &mut UnixStream, role: Role) -> Result<Result<Binary, String>> {
+/// What the server said to a hello.
+enum Answer {
+    Welcome(Binary),
+    /// It speaks another protocol, and why.
+    Refused(String),
+}
+
+/// Says hello on `stream`: Err only when the exchange itself failed.
+fn hello(stream: &mut UnixStream, role: Role) -> Result<Answer> {
     stream.set_read_timeout(Some(HELLO_WAIT))?;
     proto::write_msg(
         stream,
@@ -123,8 +133,8 @@ fn hello(stream: &mut UnixStream, role: Role) -> Result<Result<Binary, String>> 
         },
     )?;
     match proto::read_msg::<_, ServerMsg>(stream).context("the saaio server did not answer")? {
-        Some(ServerMsg::Welcome { server, .. }) => Ok(Ok(server)),
-        Some(ServerMsg::Refused { reason }) => Ok(Err(reason)),
+        Some(ServerMsg::Welcome { server, .. }) => Ok(Answer::Welcome(server)),
+        Some(ServerMsg::Refused { reason }) => Ok(Answer::Refused(reason)),
         Some(other) => bail!("the saaio server answered {other:?} instead of a welcome"),
         None => bail!("the saaio server closed the connection"),
     }
@@ -285,18 +295,10 @@ pub fn close_flow(socket: &Path, id: &str, timeout: Duration) -> Result<Closing>
             Ok(Some(ServerMsg::NotOpen(open))) if open == id => return Ok(Closing::NoPane),
             Ok(Some(_)) => {}
             Ok(None) => return Ok(Closing::Closed),
-            Err(error) if timed_out(&error) => return Ok(Closing::TimedOut),
-            Err(error) => return Err(error),
+            Err(error) if error.timed_out() => return Ok(Closing::TimedOut),
+            Err(error) => return Err(error.into()),
         }
     }
-}
-
-fn timed_out(error: &anyhow::Error) -> bool {
-    error.chain().any(|cause| {
-        cause
-            .downcast_ref::<std::io::Error>()
-            .is_some_and(|io| matches!(io.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut))
-    })
 }
 
 /// Unix sockets paths must be shorter than this (104 bytes on macOS, 108 on Linux).
@@ -565,6 +567,29 @@ mod tests {
             })
         ));
         assert_eq!(running(&dir.path().join("none.sock")).unwrap(), None);
+    }
+
+    #[test]
+    fn reads_who_listens_when_it_refuses_this_protocol() {
+        let dir = private_dir();
+        let socket = dir.path().join("server.sock");
+        let server = fake_server(
+            &socket,
+            ServerMsg::Refused {
+                reason: "saaio server runs protocol 9".into(),
+            },
+        );
+
+        let found = running(&socket).unwrap();
+
+        assert_eq!(
+            found,
+            Some(Running {
+                pid: std::process::id(),
+                server: None,
+            })
+        );
+        server.join().unwrap();
     }
 
     #[test]

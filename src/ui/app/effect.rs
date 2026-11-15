@@ -3,6 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
+use serde::de::IntoDeserializer;
+use serde::de::value::{self, StringDeserializer};
 
 use crate::event::Mode;
 use crate::proto::{ClientMsg, Modes};
@@ -149,27 +151,33 @@ impl JobError {
     }
 }
 
-/// What a flow command printed: its first line when it worked, the error without "error: " when not.
+/// What a flow command printed: its first line when it worked; when not, the error and its
+/// refusal from the whole document, else the first line without "error: ".
 pub fn outcome(success: bool, stdout: &str) -> Result<String, JobError> {
     let first = stdout.lines().next().unwrap_or("").trim();
     if success {
         return Ok(first.to_string());
     }
-    let message = error_message(first)
-        .unwrap_or_else(|| first.strip_prefix("error: ").unwrap_or(first).to_string());
-    Err(JobError {
-        refusal: Refusal::of(&message),
-        message,
-    })
+    Err(printed_error(stdout)
+        .unwrap_or_else(|| JobError::other(first.strip_prefix("error: ").unwrap_or(first))))
 }
 
-/// The value of an `error: ...` line, decoded as TOON writes it (quoted when it holds `: `).
-fn error_message(line: &str) -> Option<String> {
+/// The `error` and `refusal` of a printed error document; None when it is not one. A refusal
+/// saaio ui does not know is no refusal.
+fn printed_error(stdout: &str) -> Option<JobError> {
+    // serde_toon decodes no enum from a string, so the key goes through Refusal's own names.
     #[derive(Deserialize)]
     struct Printed {
         error: String,
+        refusal: Option<String>,
     }
-    serde_toon::from_str::<Printed>(line)
-        .ok()
-        .map(|printed| printed.error)
+    let printed = serde_toon::from_str::<Printed>(stdout).ok()?;
+    let refusal = printed.refusal.and_then(|key| {
+        let key: StringDeserializer<value::Error> = key.into_deserializer();
+        Refusal::deserialize(key).ok()
+    });
+    Some(JobError {
+        message: printed.error,
+        refusal,
+    })
 }

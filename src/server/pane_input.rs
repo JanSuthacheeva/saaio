@@ -8,8 +8,8 @@ use std::sync::mpsc::{self, Sender};
 
 use anyhow::{Result, anyhow, bail};
 
-use super::spawn_named;
 use crate::proto::PaneKey;
+use crate::threads;
 
 /// Past this many bytes queued for one pane, more input is refused: its program stopped reading.
 const MAX_QUEUED: usize = 16 << 20;
@@ -28,7 +28,7 @@ impl PaneInput {
         let (bytes, queue) = mpsc::channel::<Vec<u8>>();
         let queued = Arc::new(AtomicUsize::new(0));
         let written = Arc::clone(&queued);
-        spawn_named(format!("pane {key} input"), move || {
+        threads::spawn(format!("pane {key} input"), move || {
             for chunk in queue {
                 if writer.write_all(&chunk).is_err() {
                     return;

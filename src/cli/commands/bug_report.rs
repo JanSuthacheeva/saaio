@@ -5,7 +5,7 @@ use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
 
 use crate::bug_report::{self, Facts, FileCheck, Loaded, LogTail, TAIL_LINES};
-use crate::cli::Env;
+use crate::cli::context::Context;
 use crate::cli::output::{self, Document, Failure};
 use crate::config::Config;
 use crate::private;
@@ -19,8 +19,8 @@ const REPORTS_DIR: &str = "reports";
 /// `saaio bug-report`: gathers the Facts, writes bug_report::text to file_name in reports/ of the
 /// shared folder, never into a repository; its path and the check before uploading. Runs without
 /// a store.
-pub fn run(env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
-    let Some(registry) = env.registry() else {
+pub fn run(ctx: &Context) -> Result<Document, Failure> {
+    let Some(registry) = ctx.env.registry() else {
         return Err(Failure::error(
             "cannot find a state directory",
             vec!["Set HOME or XDG_STATE_HOME to a directory".to_string()],
@@ -28,28 +28,31 @@ pub fn run(env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
     };
     let dir = registry.root().join(REPORTS_DIR);
     let cwd = std::env::current_dir()?;
-    let store = match env.store(Some(&cwd)) {
+    let store = match ctx.env.store(Some(&cwd)) {
         Ok(Some(store)) => Ok(store),
         Ok(None) => Err("cannot find a state directory".to_string()),
         Err(error) => Err(format!("{error:#}")),
     };
     let logs = match &store {
         Ok(store) => {
-            let log = env.server_log(store);
+            let log = ctx.env.server_log(store);
             let mut older = log.clone().into_os_string();
             older.push(".1");
             vec![tail(PathBuf::from(older)), tail(log)]
         }
         Err(_) => Vec::new(),
     };
-    let config_file = env.config_file();
+    let config_file = ctx.env.config_file();
     let config = FileCheck {
         loaded: loaded(config_file.as_deref(), |file| {
             Config::read(Some(file)).map(|_| ())
         }),
         path: config_file,
     };
-    let theme_file = env.config_dir().map(|dir| dir.join(theme_file::THEME_FILE));
+    let theme_file = ctx
+        .env
+        .config_dir()
+        .map(|dir| dir.join(theme_file::THEME_FILE));
     let theme = FileCheck {
         loaded: loaded(theme_file.as_deref(), |file| {
             let dir = file.parent().unwrap_or(Path::new("."));
@@ -57,7 +60,7 @@ pub fn run(env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
         }),
         path: theme_file,
     };
-    let now = clock();
+    let now = ctx.now();
     let offset_secs = text::local_offset_secs();
     let facts = Facts {
         at: now,
@@ -68,7 +71,7 @@ pub fn run(env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
         theme,
         logs,
     };
-    let text = bug_report::text(&facts, &homes(env.user_home()));
+    let text = bug_report::text(&facts, &homes(ctx.env.user_home()));
     let could_not = |path: &Path, error: io::Error| {
         Failure::error(
             format!("could not write {}: {error}", path.display()),

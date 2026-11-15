@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use super::{check_request, pick_kind, views};
 use crate::adapter::Adapter;
 use crate::branching::{self, Branching};
-use crate::cli::Env;
+use crate::cli::context::{Context, Opened};
 use crate::cli::output::start::{self, Opening, Setup};
 use crate::cli::output::{self, Document, Failure};
 use crate::client::Client;
@@ -60,34 +60,30 @@ pub struct Args {
 
 /// Starts a worker: a flow, a worktree, the setup hook, and the agent saaio ui opens; with --plain,
 /// plain::open.
-pub fn run(
-    args: &Args,
-    store: &Store,
-    registry: &Registry,
-    config: &Config,
-    cwd: &Path,
-    env: &Env,
-    now: u64,
-) -> Result<Document, Failure> {
-    let socket = env.socket(store);
+pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
+    let Opened { store, registry } = ctx.open()?;
+    let config = ctx.env.config()?;
+    let cwd = std::env::current_dir()?;
+    let now = ctx.now();
+    let socket = ctx.env.socket(&store);
     if let Some(folder) = &args.plain {
-        return plain::open(folder, args, store, config, cwd, env, now);
+        return plain::open(folder, args, &store, &config, &cwd, ctx.env, now);
     }
     let request = args
         .request
         .as_deref()
         .expect("clap requires a request without --plain");
     check_request(request)?;
-    let (kind_name, kind) = pick_kind(config, args.kind.as_deref())?;
-    let (agent_name, agent) = pick_agent(config, args.agent.as_deref())?;
-    let repo = git::repo_root(cwd).map_err(|_| {
+    let (kind_name, kind) = pick_kind(&config, args.kind.as_deref())?;
+    let (agent_name, agent) = pick_agent(&config, args.agent.as_deref())?;
+    let repo = git::repo_root(&cwd).map_err(|_| {
         Failure::error(
             "saaio start needs a git repository",
             vec!["Run it inside the repository the flow works on".to_string()],
         )
     })?;
-    let trust = Trust::at(registry);
-    refuse_untrusted(&trust, &repo, config, agent_name)?;
+    let trust = Trust::at(&registry);
+    refuse_untrusted(&trust, &repo, &config, agent_name)?;
     let branching = RepoConfig::load(&repo)?.branch;
     let branch_type = pick_branch_type(
         branching.as_ref(),
@@ -95,7 +91,7 @@ pub fn run(
         args.branch_type.as_deref(),
     )?;
     let from = pick_base(&repo, args.base.as_deref())?;
-    let (flows, _) = views(store, now);
+    let (flows, _) = views(&store, now);
     let name = name::choose(args.name.as_deref(), request, &live_names(&flows));
     let first = Event::new(
         now,
@@ -111,14 +107,14 @@ pub fn run(
         },
     );
     let id = store.create(&first)?;
-    let mut rollback = Rollback::new(store, registry, &id);
+    let mut rollback = Rollback::new(&store, &registry, &id);
 
     // Claimed before the worktree and setup, so a second start cannot take the same slot meanwhile.
     let claim = Claim {
         store: store.root().to_path_buf(),
         flow: id.clone(),
     };
-    let slot = claim_slot(registry, &claim, &flows, now)?;
+    let slot = claim_slot(&registry, &claim, &flows, now)?;
     rollback.slot = Some((slot, claim));
     let branch = kind.branch.then(|| {
         let wanted =
@@ -149,7 +145,7 @@ pub fn run(
     };
 
     // Only now, so saaio server opens the worker once setup is done.
-    append_workspace(store, &id, &space, now)?;
+    append_workspace(&store, &id, &space, now)?;
 
     let events = store.events(&id)?;
     let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");

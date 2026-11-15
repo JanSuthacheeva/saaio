@@ -6,12 +6,13 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 
-use super::{Event, Server, spawn_named};
+use super::{Event, Server};
 use crate::event::{Event as LogEvent, EventKind};
 use crate::fold;
 use crate::forge::{self, Ask, Forge, Found};
 use crate::server_log;
 use crate::stack;
+use crate::threads;
 use crate::view::FlowView;
 use crate::workspace;
 
@@ -89,7 +90,7 @@ impl ForgeWatch {
 
 /// Asks about each flow in turn on the "forge" thread, sending an Answer for each and Done last.
 pub fn ask_in_background(asks: Vec<Ask>, events: Sender<Event>) -> io::Result<()> {
-    spawn_named("forge".to_string(), move || {
+    threads::spawn("forge", move || {
         for one in asks {
             let answer = match ask(&one) {
                 Ok(Lookup::Listed(found)) => Answer::Found { id: one.id, found },
@@ -102,6 +103,7 @@ pub fn ask_in_background(asks: Vec<Ask>, events: Sender<Event>) -> io::Result<()
         }
         let _ = events.send(Event::Forge(Answer::Done));
     })
+    .map(drop)
 }
 
 /// One flow's question, asked in the main checkout: its remotes -> Forge::of -> gh or glab ->

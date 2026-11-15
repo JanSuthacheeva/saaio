@@ -10,6 +10,9 @@ All notable changes to saaio are listed here. The format follows
 
 - The documentation is online at [saaio.dev](https://saaio.dev): searchable, in light and dark,
   readable on a phone, and built from the Markdown in the repository on every merge.
+- An error that only a person may overrule says so in a `refusal` line (`uncommitted`,
+  `unmerged` or `untrusted`), so a script or agent can tell it apart without reading the
+  message ([cli.md](docs/cli.md#output-errors-and-exit-codes)).
 
 ### Fixed
 
@@ -17,6 +20,9 @@ All notable changes to saaio are listed here. The format follows
   board show review and merge-request as stale until they run again, instead of staying at review
   or showing every step finished. A phase skill the worker runs after the merge request opened
   moves the flow too. `saaio status --json` is version 4, since a step can be `stale`.
+- A panic in the terminal UI ends it and gives the terminal back, with a line that says where its
+  backtrace is, instead of leaving it running unresponsive; the server and its sessions keep
+  running, so `saaio` attaches again.
 - `saaio update` names each server of another version once, and `saaio status --all` each
   project once: a store registered twice (by a shared folder moved by hand, or `SAAIO_HOME`
   with a trailing slash) no longer shows up twice, and its extra entry is cleaned up.

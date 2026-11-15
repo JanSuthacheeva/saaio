@@ -4,8 +4,10 @@ use std::ffi::OsStr;
 use std::io::{self, BufRead, BufReader, ErrorKind};
 use std::process::{ChildStdout, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
-use std::thread;
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+
+use crate::threads;
 
 /// The tools whose versions a report names.
 pub const TOOLS: [&str; 4] = ["claude", "codex", "gh", "glab"];
@@ -36,13 +38,17 @@ impl System {
     /// Asks the OS and every tool of TOOLS at once, waiting at most DEADLINE.
     pub fn probe() -> System {
         let deadline = Instant::now() + DEADLINE;
-        let os = thread::spawn(move || run("uname", &["-srm"], deadline));
+        let os = threads::spawn("probe uname", move || run("uname", &["-srm"], deadline));
         let tools: Vec<_> = TOOLS
             .iter()
-            .map(|&tool| (tool, thread::spawn(move || version(tool, deadline))))
+            .map(|&tool| {
+                let probe =
+                    threads::spawn(format!("probe {tool}"), move || version(tool, deadline));
+                (tool, probe)
+            })
             .collect();
-        let os = match os.join() {
-            Ok(Probe::Version(os)) => Some(os),
+        let os = match os.map(JoinHandle::join) {
+            Ok(Ok(Probe::Version(os))) => Some(os),
             _ => None,
         };
         System {
@@ -50,9 +56,11 @@ impl System {
             tools: tools
                 .into_iter()
                 .map(|(tool, probe)| {
-                    let probe = probe
-                        .join()
-                        .unwrap_or_else(|_| Probe::Failed("the probe panicked".to_string()));
+                    let probe = match probe.map(JoinHandle::join) {
+                        Ok(Ok(probe)) => probe,
+                        Ok(Err(_)) => Probe::Failed("the probe panicked".to_string()),
+                        Err(error) => Probe::Failed(format!("could not start a thread: {error}")),
+                    };
                     (tool, probe)
                 })
                 .collect(),
@@ -95,6 +103,7 @@ pub(crate) fn version(program: impl AsRef<OsStr>, deadline: Instant) -> Probe {
 /// Runs `program args`, killed at `deadline`; the first line it prints as Probe::Version. The
 /// line is read on its own thread: a child it leaves running can hold its output open.
 fn run(program: impl AsRef<OsStr>, args: &[&str], deadline: Instant) -> Probe {
+    let name = format!("probe {} stdout", program.as_ref().to_string_lossy());
     let spawned = Command::new(program)
         .args(args)
         .stdin(Stdio::null())
@@ -106,7 +115,19 @@ fn run(program: impl AsRef<OsStr>, args: &[&str], deadline: Instant) -> Probe {
         Err(error) if error.kind() == ErrorKind::NotFound => return Probe::Missing,
         Err(error) => return Probe::Failed(error.to_string()),
     };
-    let first_line = child.stdout.take().map(read_first_line);
+    let first_line = match child
+        .stdout
+        .take()
+        .map(|out| read_first_line(out, name))
+        .transpose()
+    {
+        Ok(first_line) => first_line,
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Probe::Failed(format!("could not start a thread: {error}"));
+        }
+    };
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
@@ -135,9 +156,9 @@ const NO_ANSWER: &str = "no answer in time";
 
 /// The first non-empty line `out` gives, trimmed (None at its end without one), sent once it is
 /// read; the rest is drained so the program never blocks on a full pipe.
-fn read_first_line(out: ChildStdout) -> Receiver<Option<String>> {
+fn read_first_line(out: ChildStdout, name: String) -> io::Result<Receiver<Option<String>>> {
     let (sender, receiver) = mpsc::channel();
-    thread::spawn(move || {
+    threads::spawn(name, move || {
         let mut out = BufReader::new(out);
         let mut line = String::new();
         loop {
@@ -153,8 +174,8 @@ fn read_first_line(out: ChildStdout) -> Receiver<Option<String>> {
         }
         let _ = sender.send(Some(line.trim().to_string()));
         let _ = io::copy(&mut out, &mut io::sink());
-    });
-    receiver
+    })?;
+    Ok(receiver)
 }
 
 /// The version part of a `--version` line.

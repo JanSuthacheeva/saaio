@@ -4,10 +4,10 @@
 use std::thread;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::{Context as _, Result};
 
 use super::repo_dir;
-use crate::cli::Env;
+use crate::cli::context::Context;
 use crate::cli::output::Document;
 use crate::exclusive::Exclusive;
 use crate::fold;
@@ -38,14 +38,14 @@ pub struct Args {
 
 /// `saaio turn`: looks every LOOK_STEP until TurnWatch lets the turn go, then exits, which closes
 /// stdin and so frees the turn; says why in server.log. Prints nothing.
-pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
+pub fn run(args: &Args, ctx: &Context) -> Document {
     let cwd = std::env::current_dir().ok();
-    let Ok(Some(store)) = env.store(cwd.as_deref()) else {
+    let Ok(Some(store)) = ctx.env.store(cwd.as_deref()) else {
         return Document::Silent;
     };
     let log = |text: &str| {
         let line = format!("turn watch flow {}: {text}", args.flow);
-        let _ = server_log::append(&env.server_log(&store), clock(), &line);
+        let _ = server_log::append(&ctx.env.server_log(&store), ctx.now(), &line);
     };
     let exclusive = match exclusive(&store, &args.flow) {
         Ok(Some(exclusive)) => exclusive,
@@ -58,7 +58,7 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
             return Document::Silent;
         }
     };
-    let mut watch = TurnWatch::new(clock());
+    let mut watch = TurnWatch::new(ctx.now());
     let mut failures = 0;
     loop {
         thread::sleep(LOOK_STEP);
@@ -78,7 +78,7 @@ pub fn run(args: &Args, env: &Env, clock: fn() -> u64) -> Document {
         };
         let asks = asks(&store, &args.flow);
         let found = look(&all, args, &exclusive, asks);
-        if let Keep::Release(why) = watch.step(clock(), found) {
+        if let Keep::Release(why) = watch.step(ctx.now(), found) {
             log(match why {
                 Release::AgentGone => "the agent is gone; the turn is let go",
                 Release::RunEnded => "the run ended; the turn is let go",

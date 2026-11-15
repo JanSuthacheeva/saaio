@@ -7,7 +7,6 @@ use std::ops::BitOr;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, bail};
 use nix::sys::socket::{getsockopt, sockopt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -299,11 +298,33 @@ pub enum Mouse {
     Motion,
 }
 
+/// Why a message could not be written or read.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Io(#[from] io::Error),
+    #[error("message of {0} bytes is over the limit")]
+    TooLarge(usize),
+    #[error("the stream ended inside a message")]
+    Cut,
+    #[error("could not encode a message")]
+    Encode(#[source] postcard::Error),
+    #[error("could not decode a message")]
+    Decode(#[source] postcard::Error),
+}
+
+impl Error {
+    /// The read's deadline passed (WouldBlock or TimedOut): the stream is fine, it was quiet.
+    pub fn timed_out(&self) -> bool {
+        matches!(self, Error::Io(io) if matches!(io.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut))
+    }
+}
+
 /// A message as its u32 length and postcard bytes, ready to write; Err past MAX_MESSAGE.
-pub fn encode<T: Serialize>(message: &T) -> Result<Vec<u8>> {
-    let body = postcard::to_stdvec(message).context("could not encode a message")?;
+pub fn encode<T: Serialize>(message: &T) -> Result<Vec<u8>, Error> {
+    let body = postcard::to_stdvec(message).map_err(Error::Encode)?;
     if body.len() > MAX_MESSAGE {
-        bail!("message of {} bytes is over the limit", body.len());
+        return Err(Error::TooLarge(body.len()));
     }
     let len = u32::try_from(body.len()).expect("MAX_MESSAGE fits in u32");
     let mut bytes = Vec::with_capacity(4 + body.len());
@@ -313,7 +334,7 @@ pub fn encode<T: Serialize>(message: &T) -> Result<Vec<u8>> {
 }
 
 /// Each message as a u32 length followed by its postcard bytes.
-pub fn write_msg<W: Write, T: Serialize>(writer: &mut W, message: &T) -> Result<()> {
+pub fn write_msg<W: Write, T: Serialize>(writer: &mut W, message: &T) -> Result<(), Error> {
     writer.write_all(&encode(message)?)?;
     writer.flush()?;
     Ok(())
@@ -322,31 +343,31 @@ pub fn write_msg<W: Write, T: Serialize>(writer: &mut W, message: &T) -> Result<
 /// The next message; None on a clean end of stream; Err on a message over MAX_MESSAGE or bytes
 /// that do not decode. The buffer grows with the bytes that arrive, so a length alone allocates
 /// nothing.
-pub fn read_msg<R: Read, T: DeserializeOwned>(reader: &mut R) -> Result<Option<T>> {
+pub fn read_msg<R: Read, T: DeserializeOwned>(reader: &mut R) -> Result<Option<T>, Error> {
     let mut len = [0u8; 4];
     if !read_full(reader, &mut len)? {
         return Ok(None);
     }
     let len = u32::from_le_bytes(len) as usize;
     if len > MAX_MESSAGE {
-        bail!("message of {len} bytes is over the limit");
+        return Err(Error::TooLarge(len));
     }
     let mut bytes = Vec::new();
     reader.take(len as u64).read_to_end(&mut bytes)?;
     if bytes.len() < len {
-        bail!("the stream ended inside a message");
+        return Err(Error::Cut);
     }
-    let message = postcard::from_bytes(&bytes).context("could not decode a message")?;
+    let message = postcard::from_bytes(&bytes).map_err(Error::Decode)?;
     Ok(Some(message))
 }
 
 /// Fills buf; false when the stream ended before the first byte, Err when it ended in the middle.
-fn read_full<R: Read>(reader: &mut R, buf: &mut [u8]) -> Result<bool> {
+fn read_full<R: Read>(reader: &mut R, buf: &mut [u8]) -> Result<bool, Error> {
     let mut filled = 0;
     while filled < buf.len() {
         match reader.read(&mut buf[filled..]) {
             Ok(0) if filled == 0 => return Ok(false),
-            Ok(0) => bail!("the stream ended inside a message"),
+            Ok(0) => return Err(Error::Cut),
             Ok(read) => filled += read,
             Err(error) if error.kind() == ErrorKind::Interrupted => {}
             Err(error) => return Err(error.into()),
@@ -667,8 +688,12 @@ mod tests {
         write_msg(&mut wire, &ClientMsg::CloseFlow("abc".into())).unwrap();
         wire.truncate(wire.len() - 1);
 
-        assert!(read_msg::<_, ClientMsg>(&mut Cursor::new(wire)).is_err());
-        assert!(read_msg::<_, ClientMsg>(&mut Cursor::new(vec![9, 0])).is_err());
+        let inside = read_msg::<_, ClientMsg>(&mut Cursor::new(wire)).unwrap_err();
+        let length = read_msg::<_, ClientMsg>(&mut Cursor::new(vec![9, 0])).unwrap_err();
+
+        assert!(matches!(inside, Error::Cut), "{inside:?}");
+        assert!(matches!(length, Error::Cut), "{length:?}");
+        assert_eq!(inside.to_string(), "the stream ended inside a message");
     }
 
     /// Ends after `left` bytes, remembering the largest buffer it was handed.
@@ -723,13 +748,38 @@ mod tests {
     fn refuses_oversized_and_undecodable_messages() {
         let oversized = ((MAX_MESSAGE + 1) as u32).to_le_bytes().to_vec();
         let error = read_msg::<_, ClientMsg>(&mut Cursor::new(oversized)).unwrap_err();
-        assert!(error.to_string().contains("over the limit"), "{error}");
+        assert!(
+            matches!(error, Error::TooLarge(len) if len == MAX_MESSAGE + 1),
+            "{error:?}"
+        );
+        assert_eq!(
+            error.to_string(),
+            format!("message of {} bytes is over the limit", MAX_MESSAGE + 1)
+        );
 
         let mut garbage = 3u32.to_le_bytes().to_vec();
         garbage.extend([0xff, 0xff, 0xff]);
-        assert!(read_msg::<_, ClientMsg>(&mut Cursor::new(garbage)).is_err());
+        let error = read_msg::<_, ClientMsg>(&mut Cursor::new(garbage)).unwrap_err();
+        assert!(matches!(error, Error::Decode(_)), "{error:?}");
+        assert_eq!(error.to_string(), "could not decode a message");
 
         let huge = ClientMsg::Input(vec![0; MAX_MESSAGE + 1]);
-        assert!(write_msg(&mut Vec::new(), &huge).is_err());
+        let error = write_msg(&mut Vec::new(), &huge).unwrap_err();
+        assert!(matches!(error, Error::TooLarge(_)), "{error:?}");
+    }
+
+    #[test]
+    fn only_a_passed_deadline_is_a_time_out() {
+        let quiet = [ErrorKind::WouldBlock, ErrorKind::TimedOut];
+        let broken = [ErrorKind::BrokenPipe, ErrorKind::ConnectionReset];
+
+        for kind in quiet {
+            assert!(Error::from(io::Error::from(kind)).timed_out(), "{kind:?}");
+        }
+        for kind in broken {
+            assert!(!Error::from(io::Error::from(kind)).timed_out(), "{kind:?}");
+        }
+        assert!(!Error::Cut.timed_out());
+        assert!(!Error::TooLarge(1).timed_out());
     }
 }
