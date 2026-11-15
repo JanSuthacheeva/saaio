@@ -84,7 +84,9 @@ skills = ["my-pr"]
 `skill` is the skill the first prompt calls: `saaio start "SHOP-217 add CSV export"` now sends
 `/my-feature SHOP-217 add CSV export` in Claude Code, and `$my-feature ...` in Codex. `phases` are
 the flow's steps, 1 to 4 of them, and a skill the worker runs moves the flow to the phase that
-lists it. The prompt starts the work; the phases only track it.
+lists it. The prompt starts the work; the phases only track it. A phase named `implement` is the
+one a change asked for after the review goes back to
+([flows.md](flows.md#going-back-to-implement)); a workflow without one moves only on its skills.
 
 A kind with a built-in name replaces the built-in one whole, so name its `phases`, and its
 `branch_types` if you want them. The change applies at the next `saaio start`; a running flow

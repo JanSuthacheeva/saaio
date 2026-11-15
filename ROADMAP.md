@@ -13,6 +13,7 @@ Nothing in progress.
 | More agents | Claude Code and Codex are followed through their hooks | other harnesses followed the same way |
 | Every subagent in the sidebar | a worker's background subagents do not show: it looks working while its turn runs, idle or waiting once it ends. | the sidebar counts every running subagent, the board lists their tasks |
 | Working across repositories | each repository has its own UI. In one store shared through `SAAIO_HOME`, the new-flow dialog starts flows in the repository of the session in view. | pick the repository in the dialog, sidebar and board show each flow's repository, `saaio start --repo <path>` |
+| Codex changes going back to implement | a Codex worker asked for another change after the review stays at review: saaio does not see the files it changes, only a skill read moves it | Codex's file changes take its flow back to implement, as Claude Code's do |
 | Codex phases from the skill it starts | a Codex worker that reads a later skill's `SKILL.md` early seems to start that phase early | the phase follows the skill actually started |
 | `saaio example config`, `saaio example theme` | the examples exist only as written on the first run | print every setting with its default |
 | Docs in the Laravel style | the docs are terse reference pages | every page opens with an introduction and a table of contents, builds from the common case to the advanced one, explains why before how with an example after each concept, and uses note and warning callouts |

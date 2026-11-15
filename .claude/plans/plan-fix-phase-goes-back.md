@@ -162,7 +162,7 @@ Approved by the user with the recommendations:
 - [x] End-to-end test in `tests/cli/` driving `saaio hook claude-code` through the reproduction's
   review scenario, asserting `phase: implement` and the stale steps
 - [ ] Docs: flows.md, json.md, cli.md, configuration.md; CHANGELOG Fixed; ROADMAP Planned soon for
-  Codex edit detection
+  Codex edit detection (cli.md lists no step statuses, only an example with none stale: unchanged)
 - [ ] End-to-end: run the reproduction again with the new binary and see, for review: while
   editing `phase: implement` with `review,stale`, after the turn `phase: implement`; for mr: phase
   `merge-request`, state working (as decided in question 1); for mr-skill: `phase: implement`,

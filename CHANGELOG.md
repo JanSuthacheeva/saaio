@@ -13,6 +13,10 @@ All notable changes to saaio are listed here. The format follows
 
 ### Fixed
 
+- A flow asked for another change after its review goes back to `implement`: the sidebar and the
+  board show review and merge-request as stale until they run again, instead of staying at review
+  or showing every step finished. A phase skill the worker runs after the merge request opened
+  moves the flow too. `saaio status --json` is version 4, since a step can be `stale`.
 - `saaio update` names each server of another version once, and `saaio status --all` each
   project once: a store registered twice (by a shared folder moved by hand, or `SAAIO_HOME`
   with a trailing slash) no longer shows up twice, and its extra entry is cleaned up.

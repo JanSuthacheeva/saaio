@@ -5,6 +5,8 @@
 - [Kinds](#kinds)
     - [Research flows](#research-flows)
 - [Phases](#phases)
+    - [Going back to implement](#going-back-to-implement)
+    - [Keeping the phases](#keeping-the-phases)
 - [States](#states)
 - [Guided and auto](#guided-and-auto)
 - [The master](#the-master)
@@ -130,6 +132,28 @@ when the worker runs the skill that begins it. For the feature kind:
 | `implement` | `implement-plan` |
 | `review` | `review-changes` |
 | `merge-request` | `write-merge-request` |
+
+### Going back to implement
+
+Asking a worker for another change after the review sends the flow back to `implement`. This
+happens when the worker's main agent changes a file in the flow's worktree after the turn that
+started a later phase has ended. The review and merge-request steps it had passed are then
+`stale`, drawn as finished but faint (`●───●───●───○`, the third dot faint), until they run again:
+
+| What happens after `implement` | The phase |
+| --- | --- |
+| the review fixes its own findings, in a fresh agent or in the turn that started it | stays `review` |
+| you ask for a change once the review's turn ended, before a merge request opened | back to `implement` |
+| a change once the merge request is open, such as answering reviewer comments | stays `merge-request`, the flow shows `working` |
+| the worker runs a phase skill (`implement-plan`, ...), even after the merge request opened | that skill's phase |
+| anything once the merge request merged | stays `merge-request` |
+
+Only the phase named `implement` is gone back to, so a [kind](configuration.md#kinds-of-flows)
+without one moves only on its skills. saaio sees the changes Claude Code's Edit, Write, MultiEdit
+and NotebookEdit tools make; a file written through a shell command, and a Codex worker's changes,
+are not seen, so those flows go back only on a skill.
+
+### Keeping the phases
 
 A flow keeps the phases it started with, even when you change them in your config later. Custom
 phases and skills are set in [configuration.md](configuration.md#kinds-of-flows), and if your
@@ -332,8 +356,10 @@ GitHub or GitLab about each flow's branch and acts on what it finds:
   `PR #42 closed`. Its worker does not restart or reclaim a slot.
 - **Nothing, or a closed one the flow does not show:** no change.
 
-An open or merged request keeps the workflow's last phase, even if later worker hooks mention an
-earlier skill. Later questions and work can still update the state while the worker remains live.
+An open request keeps the workflow's last phase while the worker answers reviewer comments, and a
+merged one keeps it for good. Only a phase skill the worker runs before the merge takes an open
+one's flow back ([Going back to implement](#going-back-to-implement)). Later questions and work can
+still update the state while the worker remains live.
 
 Only merge requests opened after the flow started count. One from an earlier branch of the same
 name, such as a cleared flow's, is ignored.
@@ -391,7 +417,7 @@ With `adapter = "claude-code"`, saaio passes its hooks with `--settings`:
 | the Agent tool, not in the background | `delegated <description>` |
 | AskUserQuestion | `waiting <the question>` |
 | a permission prompt | `waiting permission: Bash(rm -rf build)` |
-| a tool finishing | `working`. Task counts and blocks from a plan-progress tool (`mcp__plan-progress__report`), when the worker has one. A merge request printed by `gh pr create` or `glab mr create`, when it belongs to a remote of the worktree (origin, or a fork's upstream). |
+| a tool finishing | `working`. A file the main agent changed with Edit, Write, MultiEdit or NotebookEdit, which can take the flow [back to implement](#going-back-to-implement). Task counts and blocks from a plan-progress tool (`mcp__plan-progress__report`), when the worker has one. A merge request printed by `gh pr create` or `glab mr create`, when it belongs to a remote of the worktree (origin, or a fork's upstream). |
 | the end of a turn | `waiting <the question>` when the last line asks one, else `idle <the last sentence>`, even while a background task runs. The closing message, up to 4000 characters, becomes the flow's `answer`. |
 | `/exit` | `ended` |
 

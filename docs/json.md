@@ -35,7 +35,7 @@ saaio status shop-217 --json # a board with just that flow
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "now": 1792214602016,
   "count": 2,
   "needsYou": 1,
@@ -129,7 +129,7 @@ The board's own keys:
 
 | Key | Type | Holds |
 | --- | --- | --- |
-| `version` | number | the contract's version, 3 today |
+| `version` | number | the contract's version, 4 today |
 | `now` | number | when the board was made, in Unix milliseconds |
 | `count` | number | how many flows there are |
 | `needsYou` | number | how many are `waiting`, `blocked` or `not-responding` |
@@ -194,7 +194,7 @@ Each entry of `steps` is one phase of the flow's workflow, in order:
 | Key | Type | Holds |
 | --- | --- | --- |
 | `phase` | string | the phase's name, as the flow's workflow names it |
-| `status` | string | `done`, `current` or `open` |
+| `status` | string | `done`, `current`, `open` or `stale`: done before, but the flow went back to an earlier phase since ([flows.md](flows.md#going-back-to-implement)) |
 | `durationMs` | number or null | the time spent in the phase. The current phase counts up to now, or up to when the merge request opened or the flow ended. Null for a phase not reached |
 
 Once a merge request is open or merged, every step is `done`, and a phase skipped on the way has
@@ -207,7 +207,7 @@ Each entry of `timeline` is one thing that happened, oldest first:
 | Key | Type | Holds |
 | --- | --- | --- |
 | `at` | number | when it happened |
-| `text` | string | what happened: `started`, `phase: plan`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `PR #42 merged` (`MR !88 merged` on GitLab), `PR #42 closed`, `master: ...` (a message from the master), `master typed: ...` (a line typed into its pane), `pause failed: ...`, `resume failed: ...`, `ended` |
+| `text` | string | what happened: `started`, `phase: plan`, `phase: implement (back)`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `PR #42 merged` (`MR !88 merged` on GitLab), `PR #42 closed`, `master: ...` (a message from the master), `master typed: ...` (a line typed into its pane), `pause failed: ...`, `resume failed: ...`, `ended` |
 | `tone` | string | `neutral`, `progress`, `attention`, `problem` or `success` |
 
 ### Questions
@@ -263,10 +263,10 @@ per question, and `blocker` holds the first question:
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "now": 1792214602016,
   "projects": [
-    { "name": "shop", "root": "/Users/jan/.local/state/saaio/projects/shop", "board": { "version": 3, "...": "..." } }
+    { "name": "shop", "root": "/Users/jan/.local/state/saaio/projects/shop", "board": { "version": 4, "...": "..." } }
   ]
 }
 ```
@@ -284,10 +284,11 @@ Each project holds:
 `version` increases when a change could break a reader. New keys can appear without a new version,
 so your reader should ignore keys it does not know.
 
-So far, the contract has had three versions:
+So far, the contract has had four versions:
 
 | Version | Changed |
 | --- | --- |
 | 1 | the first contract |
 | 2 | plain sessions: `workspace.branch` and `workspace.slot` can be null, and `mode` can be `plain` |
 | 3 | `phase` and `steps[].phase` are the names of the flow's own workflow, not always the built-in four |
+| 4 | `steps[].status` can be `stale` |
