@@ -43,9 +43,11 @@ jobs:
             *-*) prerelease=true ;;
             *) prerelease=false ;;
           esac
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "notes=${version%%-*}" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$version"
+            echo "notes=${version%%-*}"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
       - name: Take the release notes from CHANGELOG.md
         env:
           NOTES: ${{ steps.version.outputs.notes }}
