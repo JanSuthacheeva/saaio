@@ -235,3 +235,41 @@ Same chain for `remove::unmerged` (`Refusal::Unmerged`) and `trust::untrusted` f
 - [x] End to end: in a scratch store, `saaio remove` a flow with uncommitted work from the
       command line (sees `refusal: uncommitted`) and from saaio ui in a PTY (the discard dialog
       opens); end with `saaio --stop`
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and the code the diff calls.
+
+**Fixed** - nothing: no finding could be proven.
+
+Probed and let go:
+- `printed_error` now decodes the whole stdout, so a help line serde_toon could not read would
+  lose the refusal (the old code read the first line only). A scratch test ran all three
+  refusals through `outcome` with paths holding spaces, quotes, commas, colons, `[1]:`, tabs,
+  newlines, backslashes, `#`, `|`, braces, unicode, a leading dash, `true`, `null`, digits and
+  the empty string, and `unmerged` with three stacked flows: every message and refusal came back
+  intact.
+- `#[error(transparent)] Io` leaves `io::Error` out of an anyhow chain built from a
+  `proto::Error`. Nothing downcasts one any more (`client::timed_out` was the only caller), and
+  `{:#}` prints the same words, so server.log lines and printed errors are unchanged.
+- `saaio clear` shares `retire.rs` but never refuses, so the docs' table naming only `saaio remove`
+  and `saaio start` is right.
+
+**Open**
+- `remove::unchecked` (git cannot check the worktree; `--force` overrules it) prints no `refusal`
+  key, as the plan's assumption says. Recommendation: keep it so; saaio ui shows it instead of
+  asking, and adding a value later is backward compatible.
+- `proto::Error::Encode` has no test: postcard does not fail to encode any message type saaio
+  has. Recommendation: leave it.
+
+**Where to look**
+1. `src/ui/app/effect.rs` `outcome` -> `printed_error`: the UI's only reader of the new key, and
+   its fallback for stdout that is not an error document.
+2. `src/cli/output.rs` `Failure::refused` and `to_toon`: the public contract, `refusal` between
+   `error` and `help`; `docs/cli.md` "Output, errors and exit codes" names the values as stable.
+3. `src/client.rs` `close_flow`: `error.timed_out()` replacing the anyhow chain walk.
+
+Routine, skim: `proto.rs` (`bail!` to variants, same words), `client::Answer`, the test and docs
+updates.
+
+**Checks** - tests, clippy, fmt and deny passed at 6589fc6; only this plan changed since.
