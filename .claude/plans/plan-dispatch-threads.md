@@ -43,7 +43,8 @@ impl Context<'_> {
 }
 ```
 
-Commands reach it as `crate::cli::context::{Context, Opened}`.
+Commands reach it as `crate::cli::context::{Context, Opened}`; a command that also uses anyhow's
+trait imports it as `anyhow::Context as _`.
 
 ### src/cli.rs (modified)
 
@@ -75,7 +76,7 @@ clear::run(ctx: &Context) -> Result<Document, Failure>;
 server::run(ctx: &Context) -> Result<Document, Failure>;
 stop::run(ctx: &Context) -> Result<Document, Failure>;
 ui::run(ctx: &Context) -> Result<Document, Failure>;
-home::run(ctx: &Context) -> Document;   // drops its #[expect(clippy::unnecessary_wraps)]
+home::run(ctx: &Context) -> Result<Document, Failure>; // opens the store, so its expect(unnecessary_wraps) goes
 ```
 
 Inner helpers (`start::plain::open`, `status::one_store`, `retire::*`) keep explicit arguments.
@@ -170,7 +171,8 @@ A UI thread panics:
 
 ## Assumptions
 
-- Infallible commands return `Document`; `completions::run` takes no Context.
+- Infallible commands return `Document`; `completions::run` takes no Context. `home::run` opens the
+  store, so it returns a Result (build: the plan had it as Document).
 - Store commands open the store first, so a missing store fails before anything else.
 - Registration stays best effort.
 - Each command reads `ctx.now()` once.
@@ -185,6 +187,6 @@ A UI thread panics:
 - [x] Ban `std::thread::spawn` and `Builder::spawn` in clippy.toml; clippy clean
 - [x] Replace `append_on_panic` with `server_log::append_and_exit_on_panic` and use it in commands/ui.rs
 - [x] Add `cli::context::{Context, Opened}` with unit tests for `open`
-- [ ] Move every command to `run(args, &Context)` and make `cli::run` one match; tests/cli green
+- [x] Move every command to `run(args, &Context)` and make `cli::run` one match; tests/cli green
 - [ ] CLAUDE.md (threads.rs, cli/context.rs, server spawn note) and the CHANGELOG Fixed line
 - [ ] End to end: the PTY script with an injected reader panic exits in a second with 'ui server' in server.log; without it `saaio --stop` still ends the UI; a few commands (status, start, remove, hook) on a scratch store

@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::cli::Env;
+use crate::cli::context::{Context, Opened};
 use crate::cli::output::{Document, Failure};
 use crate::client;
 use crate::server_log;
@@ -12,15 +13,16 @@ use crate::ui;
 use crate::update::UpdateCheck;
 
 /// Opens the terminal UI, starting the server first; what fails, a panic too, goes to server.log.
-pub fn run(store: &Store, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
+pub fn run(ctx: &Context) -> Result<Document, Failure> {
+    let Opened { store, .. } = ctx.open()?;
     // A broken config.toml stops the UI here: there is no last good one to keep yet.
-    env.config()?;
-    let log = env.server_log(store);
-    server_log::append_and_exit_on_panic(log.clone(), "ui", clock);
-    match attach(store, env, log.clone(), clock) {
+    ctx.env.config()?;
+    let log = ctx.env.server_log(&store);
+    server_log::append_and_exit_on_panic(log.clone(), "ui", ctx.clock);
+    match attach(&store, ctx.env, log.clone(), ctx.clock) {
         Ok(message) => Ok(Document::Text(message)),
         Err(error) => {
-            let _ = server_log::append(&log, clock(), &format!("ui: failed: {error:#}"));
+            let _ = server_log::append(&log, ctx.now(), &format!("ui: failed: {error:#}"));
             Err(error.into())
         }
     }

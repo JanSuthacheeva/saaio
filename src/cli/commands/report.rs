@@ -4,10 +4,10 @@ use clap::Subcommand;
 
 use super::{no_flow, of_own_repo, repo_dir, views};
 use crate::adapter::calls;
+use crate::cli::context::{Context, Opened};
 use crate::cli::output::{Document, Failure, flow};
 use crate::event::{Event, EventKind};
 use crate::fold;
-use crate::store::Store;
 use crate::view::FlowView;
 use crate::workflow::Phase;
 
@@ -115,11 +115,13 @@ fn foreign_merge_request(flow: &FlowView, url: &str) -> Failure {
 /// Appends one event to a flow; skipped without a flow, so an agent outside saaio can report. A
 /// merge request is kept in its canonical form and must be one of the flow's repository, its
 /// remotes read in its main checkout, else in the current folder for a flow without one.
-pub fn run(mut args: Args, store: &Store, now: u64) -> Result<Document, Failure> {
+pub fn run(mut args: Args, ctx: &Context) -> Result<Document, Failure> {
+    let Opened { store, .. } = ctx.open()?;
+    let now = ctx.now();
     let Some(name) = args.flow.filter(|name| !name.is_empty()) else {
         return Ok(flow::skipped());
     };
-    let (flows, _) = views(store, now);
+    let (flows, _) = views(&store, now);
     let flow = fold::resolve(&flows, &name).ok_or_else(|| no_flow(&name))?;
     if let ReportEvent::Phase { phase } = &args.event
         && !flow.steps.iter().any(|step| step.phase == *phase)

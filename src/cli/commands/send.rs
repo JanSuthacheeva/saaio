@@ -2,6 +2,7 @@
 
 use super::{no_flow, views};
 use crate::cli::Env;
+use crate::cli::context::{Context, Opened};
 use crate::cli::output::{self, Document, Failure};
 use crate::event::{Event, EventKind, LONG_TEXT_LIMIT};
 use crate::fold;
@@ -23,8 +24,10 @@ pub struct Args {
 
 /// Appends the master's message to a flow its worker reads when flow wakes it, or with --type a
 /// line saaio server types into its pane; only the master sends (its pane's key proves it).
-pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, Failure> {
-    if env.saaio_master && env.key().is_none() {
+pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
+    let Opened { store, .. } = ctx.open()?;
+    let now = ctx.now();
+    if ctx.env.saaio_master && ctx.env.key().is_none() {
         return Err(Failure::error(
             "this pane has no key: an earlier saaio server opened it",
             vec![
@@ -33,7 +36,7 @@ pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, 
             ],
         ));
     }
-    if !identity::proves(store, &Waiter::Master, env.key()) {
+    if !identity::proves(&store, &Waiter::Master, ctx.env.key()) {
         return Err(Failure::error(
             "only the master sends",
             vec!["End your turn with the question; saaio wakes the master".to_string()],
@@ -56,7 +59,7 @@ pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, 
             vec!["Queue one `saaio send --type` per line".to_string()],
         ));
     }
-    let (flows, _) = views(store, now);
+    let (flows, _) = views(&store, now);
     let flow = fold::resolve(&flows, &args.flow).ok_or_else(|| no_flow(&args.flow))?;
     if flow.is_finished() {
         return Err(Failure::error(
@@ -80,7 +83,7 @@ pub fn run(args: &Args, store: &Store, env: &Env, now: u64) -> Result<Document, 
         ));
     }
     if args.typed {
-        return queue(store, env, flow, text, now);
+        return queue(&store, ctx.env, flow, text, now);
     }
     let message = EventKind::Message {
         text: text.to_string(),

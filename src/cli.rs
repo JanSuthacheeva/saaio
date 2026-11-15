@@ -14,9 +14,8 @@ use commands::{
     bug_report, clear, completions, home, hook, new, remove, report, send, server, start, status,
     stop, trust, turn, ui, update, wait,
 };
+use context::Context;
 use output::{Document, Failure};
-
-use crate::trust::Trust;
 
 /// Tracks parallel feature flows: what each is doing, where it is blocked, how far it got.
 #[derive(Debug, Parser)]
@@ -89,70 +88,29 @@ enum Command {
 ///
 /// # Errors
 ///
-/// The command's failure, with its message, next steps and exit code. Hook, Turn, Wait,
-/// BugReport, Completions and Update run without a store; every other command fails without one.
+/// The command's failure, with its message, next steps and exit code. A command that needs the
+/// store fails without one.
 pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure> {
-    match &cli.command {
-        Some(Command::Hook(args)) => return Ok(hook::run(args, env, clock)),
-        Some(Command::Turn(args)) => return Ok(turn::run(args, env, clock)),
-        Some(Command::Wait(args)) => return Ok(wait::run(args, env, clock)),
-        Some(Command::BugReport) => return bug_report::run(env, clock),
-        Some(Command::Completions(args)) => return Ok(completions::run(args)),
-        Some(Command::Update(args)) => return update::run(args, env),
-        Some(Command::Trust(args)) => return trust::run(args, env),
-        _ => {}
-    }
-    let cwd = std::env::current_dir().ok();
-    let store = env.store(cwd.as_deref()).map_err(|error| {
-        Failure::error(
-            format!("could not open the store: {error:#}"),
-            vec!["Set SAAIO_HOME to a directory".to_string()],
-        )
-    })?;
-    let Some(store) = store else {
-        return Err(Failure::error(
-            "cannot find a state directory",
-            vec!["Set SAAIO_HOME to a directory".to_string()],
-        ));
-    };
-    let Some(registry) = env.registry() else {
-        return Err(Failure::error(
-            "cannot find a state directory",
-            vec!["Set HOME or XDG_STATE_HOME to a directory".to_string()],
-        ));
-    };
-    // Only for the overview and the slots; a command works without it.
-    let _ = registry.register(&store);
-    let now = clock();
-    let store = &store;
-    let registry = &registry;
+    let ctx = Context { env, clock };
     match cli.command {
-        None if cli.stop => stop::run(store, env, clock),
-        None if env.is_person() => ui::run(store, env, clock),
-        None => home::run(store, &env.bin_path(), now),
-        Some(Command::New(args)) => new::run(args, store, &env.config()?, now),
-        Some(Command::Report(args)) => report::run(args, store, now),
-        Some(Command::Status(args)) => status::run(&args, store, registry, env, now),
-        Some(Command::Start(args)) => {
-            let config = env.config()?;
-            let cwd = std::env::current_dir()?;
-            start::run(&args, store, registry, &config, &cwd, env, now)
-        }
-        Some(Command::Remove(args)) => {
-            remove::run(&args, store, &env.socket(store), &Trust::at(registry), now)
-        }
-        Some(Command::Send(args)) => send::run(&args, store, env, now),
-        Some(Command::Clear) => clear::run(store, &env.socket(store), &Trust::at(registry), now),
-        Some(Command::Server) => server::run(store.clone(), env, clock),
-        Some(
-            Command::Hook(_)
-            | Command::Turn(_)
-            | Command::Wait(_)
-            | Command::BugReport
-            | Command::Completions(_)
-            | Command::Trust(_)
-            | Command::Update(_),
-        ) => Ok(Document::Silent),
+        None if cli.stop => stop::run(&ctx),
+        None if env.is_person() => ui::run(&ctx),
+        None => home::run(&ctx),
+        Some(Command::New(args)) => new::run(args, &ctx),
+        Some(Command::Report(args)) => report::run(args, &ctx),
+        Some(Command::Status(args)) => status::run(&args, &ctx),
+        Some(Command::Start(args)) => start::run(&args, &ctx),
+        Some(Command::Remove(args)) => remove::run(&args, &ctx),
+        Some(Command::Send(args)) => send::run(&args, &ctx),
+        Some(Command::Clear) => clear::run(&ctx),
+        Some(Command::BugReport) => bug_report::run(&ctx),
+        Some(Command::Completions(args)) => Ok(completions::run(&args)),
+        Some(Command::Trust(args)) => trust::run(&args, &ctx),
+        Some(Command::Update(args)) => update::run(&args, &ctx),
+        Some(Command::Wait(args)) => Ok(wait::run(&args, &ctx)),
+        Some(Command::Server) => server::run(&ctx),
+        Some(Command::Hook(args)) => Ok(hook::run(&args, &ctx)),
+        Some(Command::Turn(args)) => Ok(turn::run(&args, &ctx)),
     }
 }
 
