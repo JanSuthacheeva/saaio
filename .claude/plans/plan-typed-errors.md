@@ -218,7 +218,7 @@ Same chain for `remove::unmerged` (`Refusal::Unmerged`) and `trust::untrusted` f
       `read_full` return it; unit tests for TooLarge, Cut, Decode and `timed_out`
 - [x] `Client::send`/`recv` return `proto::Error`; `close_flow` uses `error.timed_out()`; remove
       `client::timed_out`
-- [ ] `client::Answer` and `hello -> Result<Answer>`; `connect` and `running` match on it; test
+- [x] `client::Answer` and `hello -> Result<Answer>`; `connect` and `running` match on it; test
       `running` against a refusing fake server
 - [ ] `Refusal` serde (lowercase) with a round-trip test; `Failure.refusal`, `Failure::refused`,
       `to_toon` prints the key; unit tests for the key's place and absence
