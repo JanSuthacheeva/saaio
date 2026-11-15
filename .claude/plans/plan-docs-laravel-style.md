@@ -73,6 +73,6 @@ start; only the prose of its docs-like sections changes, without an Introduction
 - [x] Rewrite `docs/cli.md`: the bullets above the list become the Introduction, the commands a proper nested section list
 - [x] Rewrite `docs/json.md`
 - [x] Rewrite `docs/files.md`
-- [ ] Update `docs/README.md` "Covers", and the prose of `README.md`'s docs-like sections
+- [x] Update `docs/README.md` "Covers", and the prose of `README.md`'s docs-like sections
 - [ ] CHANGELOG `Fixed` line for any doc fact corrected
 - [ ] End to end: build the site (`cargo run --features site --bin saaio-site -- _site`), `cargo test --all-features`, read every rendered page and the GitHub rendering of two pages (alerts, nested lists)
