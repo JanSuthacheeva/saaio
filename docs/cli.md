@@ -1,14 +1,17 @@
 # The command line
 
-- Output: [TOON](https://toonformat.dev), ending in `help[]` lines with suggested next commands.
-- Programs read `saaio status --json` ([json.md](json.md)).
-- Output below is from real runs, paths shortened.
-
+- [Introduction](#introduction)
 - [Commands at a glance](#commands-at-a-glance)
 - [saaio](#saaio)
+    - [In a terminal](#in-a-terminal)
+    - [Run by an agent or a script](#run-by-an-agent-or-a-script)
+    - [--stop](#--stop)
 - [saaio start](#saaio-start)
+    - [Stacked flows](#stacked-flows)
+    - [Plain sessions](#plain-sessions)
 - [saaio status](#saaio-status)
 - [saaio send](#saaio-send)
+    - [--type](#--type)
 - [saaio report](#saaio-report)
 - [saaio new](#saaio-new)
 - [saaio remove](#saaio-remove)
@@ -22,7 +25,27 @@
 - [Environment variables](#environment-variables)
 - [Several projects](#several-projects)
 
+## Introduction
+
+saaio's main user is an agent, so its commands are built to be read by one. Every command prints
+[TOON](https://toonformat.dev), a compact format agents read with few tokens, and ends in `help[]`
+lines that suggest the next commands to run. Programs read `saaio status --json` instead, whose
+shape is a contract ([json.md](json.md)).
+
+This page lists every command and option. The output shown is from real runs, with paths
+shortened:
+
+```
+$ saaio send shop-221 "Count them against the refund date."
+sent: shop-221
+state: waiting
+help[2]: "saaio wakes its worker with it now, or once its session runs again",saaio wakes you when shop-221 changes again
+```
+
 ## Commands at a glance
+
+Most of the time, you only type `saaio` and let the master run the rest. Here is everything there
+is:
 
 | Command | Does |
 | --- | --- |
@@ -42,13 +65,17 @@
 | `saaio completions <shell>` | print the completion script for a shell |
 | `saaio update [--version <tag>]` | install the latest release over this binary |
 
-- `<flow>`: a flow's name or id. A name means the unfinished flow of that name, else the most recent
-  finished one.
-- `saaio --version` prints the version and commit: `saaio 0.1.0 (e035b96)`, a pre-release with its
-  suffix (`saaio 0.2.0-rc.2 (95aec22)`), or `unknown` for the commit of a build from source outside
-  a git checkout of saaio ([install.md](install.md#from-source)). Every command takes `--help`.
+Wherever a command takes a `<flow>`, you can give a flow's name or its id. A name means the
+unfinished flow of that name, else the most recent finished one.
+
+`saaio --version` prints the version and commit: `saaio 0.1.0 (e035b96)`, a pre-release with its
+suffix (`saaio 0.2.0-rc.2 (95aec22)`), or `unknown` for the commit of a build from source outside
+a git checkout of saaio ([install.md](install.md#from-source)). Every command takes `--help`.
 
 ## saaio
+
+Bare `saaio` does what fits whoever runs it: it opens the UI for you, and prints every flow for an
+agent:
 
 ```
 saaio
@@ -57,18 +84,17 @@ saaio --stop
 
 ### In a terminal
 
-- Opens the terminal UI ([ui.md](ui.md)). Starts the session server if none runs.
-- On leaving, prints what happened, such as
-  ``detached - the agents keep running; run `saaio` to attach again``.
-- A broken `config.toml` stops it before the server starts.
+Typed in your terminal, `saaio` opens the terminal UI ([ui.md](ui.md)), and starts the session
+server if none runs. When you leave, it prints what happened, such as
+``detached - the agents keep running; run `saaio` to attach again``. A broken `config.toml` stops
+it before the server starts.
 
 ### Run by an agent or a script
 
-Flow counts, one line per flow, and the question or reason of each waiting or blocked flow.
-
-- An agent or a script: stdin or stdout is not a terminal, or `SAAIO_FLOW_ID`, `SAAIO_MASTER=1`,
-  `CLAUDECODE` or `CODEX_THREAD_ID` is set.
-- The UI never opens there, so a worker or the master can run `saaio` safely.
+saaio counts as run by an agent or a script when stdin or stdout is not a terminal, or when
+`SAAIO_FLOW_ID`, `SAAIO_MASTER=1`, `CLAUDECODE` or `CODEX_THREAD_ID` is set. The UI never opens
+there, so a worker or the master can run `saaio` safely. Instead, it prints the flow counts, one
+line per flow, and the question or reason of each waiting or blocked flow:
 
 ```
 $ saaio
@@ -86,8 +112,9 @@ blockers[2]{name,blocker}:
 help[2]: "Run `saaio status <name>` for one flow's phases, timeline and decisions",Run `saaio new --name <name> --request <text>` to track a new flow
 ```
 
-- Order: needs you, ready (turn ended, nothing asked), running, finished. Most recent change first
-  within each group.
+The flows are ordered as in the sidebar: needs you, ready (turn ended, nothing asked), running,
+finished, with the most recent change first within each group.
+
 - `kind`: `feature`, `fix`, `research` or one of the config's; empty for a plain session and a
   flow from before kinds.
 - `age`: time since the flow's state, phase or blocker last changed.
@@ -99,11 +126,13 @@ help[2]: "Run `saaio status <name>` for one flow's phases, timeline and decision
 
 ### --stop
 
-- Stops the server and every session, typed in a terminal or run by an agent or a script.
-- Unfinished flows are kept and resume the next time `saaio` opens the UI.
-- Prints `stopped the saaio server and every session in it` or `no saaio server runs`.
-- Inside a worker, refused on the worker's own store (it would end your sessions). Set
-  `SAAIO_HOME` to another folder to stop a server there.
+`saaio --stop` stops the server and every session, typed in a terminal or run by an agent or a
+script. Unfinished flows are kept, and resume the next time `saaio` opens the UI. It prints
+`stopped the saaio server and every session in it`, or `no saaio server runs`.
+
+> [!NOTE]
+> Inside a worker, `--stop` is refused on the worker's own store, since it would end your
+> sessions. Set `SAAIO_HOME` to another folder to stop a server there.
 
 ## saaio start
 
@@ -112,7 +141,8 @@ saaio start <request> [--name <name>] [--mode guided|auto] [--kind <kind>] [--ag
 saaio start --plain <folder> [--name <name>] [--agent <agent>]
 ```
 
-Run in the repository the flow works on. Steps:
+`saaio start` begins a flow. Run it in the repository the flow works on, and it takes these
+steps:
 
 1. refuses a repository not [trusted](repository.md#trust) yet when it has `.saaio` scripts or the
    agent is Codex
@@ -159,9 +189,9 @@ The branch is `flow/<name>` unless the repository sets a convention. An existing
 
 ### Stacked flows
 
-`--base <branch>`: the worktree starts from that branch instead of what the repository has checked
-out, so each merge request of a stack runs as a flow of its own. The base is often another flow's
-branch.
+With `--base <branch>`, the worktree starts from that branch instead of what the repository has
+checked out, so each merge request of a stack runs as a flow of its own. The base is often another
+flow's branch:
 
 ```
 $ saaio start "SHOP-218 export button" --base flow/shop-217
@@ -190,8 +220,8 @@ help[2]: Run `saaio` in a terminal to open the worker,Run `saaio` for all flows
 
 ### Plain sessions
 
-`--plain <folder>`: an agent in any folder, repository or not. No worktree, branch, slot or first
-prompt. Ignored by the master ([flows.md](flows.md#plain-sessions)).
+With `--plain <folder>`, saaio opens an agent in any folder, repository or not, with no worktree,
+branch, slot or first prompt. The master ignores it ([flows.md](flows.md#plain-sessions)):
 
 ```
 $ saaio start --plain ~/projects/scratch
@@ -203,9 +233,8 @@ pane: when saaio opens
 help[2]: Run `saaio` in a terminal to open the session,Run `saaio` for all flows
 ```
 
-- Name: the folder's name, unless `--name`.
-- A leading `~` is the home folder.
-- Not combinable with a request, `--mode`, `--kind`, `--type` or `--base`.
+The session is named after the folder, unless you pass `--name`, and a leading `~` is the home
+folder. `--plain` is not combinable with a request, `--mode`, `--kind`, `--type` or `--base`.
 
 ## saaio status
 
@@ -213,8 +242,9 @@ help[2]: Run `saaio` in a terminal to open the session,Run `saaio` for all flows
 saaio status [<flow>] [--json] [--full] [--all]
 ```
 
-Without a flow: every flow, as `saaio`. With a flow: its request, mode, state, phases with time
-spent, tasks, decisions and timeline.
+`saaio status` tells you where flows stand. Without a flow, it prints every flow, as `saaio` does.
+With a flow, it prints its request, mode, state, phases with time spent, tasks, decisions and
+timeline:
 
 ```
 $ saaio status shop-217
@@ -243,6 +273,8 @@ timeline[5]{ago,text}:
   2s,"blocked: Task 5: the migration needs a default value"
 help[2]: Run `saaio report --flow shop-217 working` once the block is resolved,Run `saaio` for all flows
 ```
+
+Some fields show only when they apply:
 
 | Field | Shown |
 | --- | --- |
@@ -289,8 +321,9 @@ options[6]{question,n,label,description}:
 saaio send <flow> <text>
 ```
 
-The master's message to a worker: an answer, instruction or correction. Adds `master: <text>` to
-the timeline and wakes the worker, or delivers it when the worker's session runs again.
+`saaio send` is how the master talks to a worker: an answer, an instruction or a correction. It
+adds `master: <text>` to the timeline and wakes the worker, or delivers the message when the
+worker's session runs again:
 
 ```
 $ saaio send shop-221 "Count them against the refund date."
@@ -337,8 +370,10 @@ help[2]: shop-217's permission prompt is open in its pane. Its worker reads this
 saaio send --type <flow> <line>
 ```
 
-Types the line and Enter into the worker's pane, as if the user typed it there, so a slash command
-or a skill runs: `/compact`, `/review`. Adds `master typed: <line>` to the timeline.
+A message reaches the model as words, so a slash command sent with `saaio send` does not run.
+`--type` types the line and Enter into the worker's pane instead, as if the user typed it there,
+so a slash command or a skill runs: `/compact`, `/review`. It adds `master typed: <line>` to the
+timeline:
 
 ```
 $ saaio send --type shop-221 /compact
@@ -360,6 +395,8 @@ help[2]: saaio types it into shop-221's pane once its session is idle,"Queue the
   next prompt typed in that pane ends its turn.
 - Lines wait while the UI is closed and are typed once it opens again.
 
+To compact a worker and then let it go on, queue two lines:
+
 ```sh
 saaio send --type shop-221 /compact
 saaio send --type shop-221 "continue shipping"
@@ -377,10 +414,11 @@ saaio send --type shop-221 "continue shipping"
 saaio report [--flow <flow>] <event>
 ```
 
-- Adds one event to a flow. For scripts, other tools and manual fixes. Workers report through their
-  hooks ([flows.md](flows.md#how-a-worker-reports)).
-- The flow: `--flow`, else `$SAAIO_FLOW_ID` (set in every worker). With neither, it does nothing and
-  succeeds, so a skill can report outside a flow:
+Workers report through their hooks ([flows.md](flows.md#how-a-worker-reports)), so you rarely need
+`saaio report`. It adds one event to a flow, for scripts, other tools and manual fixes.
+
+The flow is `--flow`, else `$SAAIO_FLOW_ID`, which is set in every worker. With neither, it does
+nothing and succeeds, so a skill can report outside a flow:
 
 ```
 $ saaio report working
@@ -403,7 +441,7 @@ help[1]: Set SAAIO_FLOW_ID or pass --flow <name>
 | `ended` | the worker's session ended. The UI does not reopen it. |
 | `heartbeat` | the worker is alive. Adds no event (see `not-responding` in [flows.md](flows.md#states)). |
 
-Each answers with the flow's new state:
+Each event answers with the flow's new state:
 
 ```
 $ saaio report --flow shop-217 blocked "Task 5: the migration needs a default value"
@@ -413,9 +451,9 @@ phase: implement
 help[1]: Run `saaio report working` once the block is resolved
 ```
 
-- The same state, phase, tasks or decision reported twice changes nothing. Retries are safe.
-- `review`, `merge-request` and `ended` add a timeline entry every time.
-- Texts are kept up to 500 characters.
+The same state, phase, tasks or decision reported twice changes nothing, so retries are safe.
+`review`, `merge-request` and `ended` add a timeline entry every time. Texts are kept up to 500
+characters.
 
 ## saaio new
 
@@ -423,9 +461,9 @@ help[1]: Run `saaio report working` once the block is resolved
 saaio new --name <name> --request <text> [--mode guided|auto] [--kind <kind>]
 ```
 
-Tracks a flow without a worktree or worker, for a worker run by hand. An existing unfinished flow
-of that name is returned (`existing: true`). The request: up to 20000 characters, as for
-`saaio start`. `--kind` records the kind's phases, as `saaio start` does.
+`saaio new` tracks a flow without a worktree or worker, for a worker you run by hand. An existing
+unfinished flow of that name is returned (`existing: true`). The request: up to 20000 characters,
+as for `saaio start`. `--kind` records the kind's phases, as `saaio start` does:
 
 ```
 $ saaio new --name shop-230 --request "SHOP-230 tracked by hand"
@@ -442,8 +480,8 @@ help[2]: Run `saaio report --flow shop-230 phase plan` when plan starts,Or set S
 saaio remove <flow> [--force] [--delete-unmerged]
 ```
 
-Ends one flow in any state: closes the worker's session in the UI, runs `.saaio/teardown`, removes
-the worktree, deletes the branch, forgets the flow.
+`saaio remove` ends one flow in any state. It closes the worker's session in the UI, runs
+`.saaio/teardown`, removes the worktree, deletes the branch and forgets the flow:
 
 ```
 $ saaio remove shop-217
@@ -455,15 +493,17 @@ branch: deleted
 help[1]: Run `saaio` to see what is left
 ```
 
-Refuses and changes nothing when the worktree has uncommitted work, git cannot check it (git does
-not list it as a worktree of the repository), or the branch has commits on no other branch, local
-or pushed:
+Your work is safe with it, though. `saaio remove` refuses and changes nothing when the worktree
+has uncommitted work, git cannot check it (git does not list it as a worktree of the repository),
+or the branch has commits on no other branch, local or pushed:
 
 ```
 $ saaio remove shop-221
 error: flow/shop-221 has 1 commit on no other branch
 help[2]: "Merge or push flow/shop-221, then run `saaio remove shop-221` again",Run `saaio remove shop-221 --delete-unmerged` to delete it with its commits
 ```
+
+Its output fields:
 
 | Field | Values |
 | --- | --- |
@@ -484,7 +524,7 @@ refusal for unmerged commits names them too. When saaio saw the base merge, `saa
 | `--force` | also remove a worktree with uncommitted work, discarding it, or one git cannot check |
 | `--delete-unmerged` | also delete a branch whose commits are on no other branch |
 
-A plain session: only the session is forgotten. The folder is never touched.
+For a plain session, only the session is forgotten. The folder is never touched.
 
 ## saaio clear
 
@@ -492,8 +532,8 @@ A plain session: only the session is forgotten. The folder is never touched.
 saaio clear
 ```
 
-Forgets every ended flow, and every research flow that answered (`done`), and tears down its
-worktree like `saaio remove`, except:
+`saaio clear` cleans up after finished work. It forgets every ended flow, and every research flow
+that answered (`done`), and tears down its worktree like `saaio remove`, except:
 
 - a worktree with uncommitted work is kept and listed under `kept`
 - a flow whose teardown did not run, since the repository is no longer trusted, is listed under
@@ -517,9 +557,9 @@ saaio trust [<folder>] [--revoke]
 saaio trust --list
 ```
 
-Trusts the repository `<folder>` is in (default: the current folder), so saaio runs its `.saaio`
-scripts and lets Codex workers trust its worktrees ([repository.md](repository.md#trust)). Only a
-person trusts: run without a terminal, or in an agent's or a worker's shell, it refuses.
+`saaio trust` trusts the repository `<folder>` is in (default: the current folder), so saaio runs
+its `.saaio` scripts and lets Codex workers trust its worktrees ([repository.md](repository.md#trust)).
+Only a person trusts: run without a terminal, or in an agent's or a worker's shell, it refuses.
 
 ```
 $ saaio trust
@@ -539,7 +579,7 @@ help[1]: Run `saaio trust --revoke ~/projects/shop` to take it back
 saaio bug-report
 ```
 
-Writes `saaio-report-<date>.txt` in `reports/` of the shared folder
+`saaio bug-report` writes `saaio-report-<date>.txt` in `reports/` of the shared folder
 ([files.md](files.md#the-shared-folder)), or `saaio-report-<date>-2.txt` and on when that name is
 taken, readable only by you, never into the current folder or a repository: the
 versions of saaio, the OS, `claude`, `codex`, `gh` and `glab`, the store's path, whether
@@ -562,9 +602,10 @@ How to report a bug: [troubleshooting.md](troubleshooting.md#reporting-a-bug).
 saaio completions <shell>
 ```
 
-Prints the completion script for `bash`, `zsh`, `fish`, `elvish` or `powershell` on stdout, as
-the shell reads it, not as TOON. It covers every command `saaio --help` lists, with their options
-and values. Works without a store. Where each shell keeps it: [install.md](install.md#shell-completions).
+`saaio completions` prints the completion script for `bash`, `zsh`, `fish`, `elvish` or
+`powershell` on stdout, as the shell reads it, not as TOON. It covers every command `saaio --help`
+lists, with their options and values. Works without a store. Where each shell keeps it:
+[install.md](install.md#shell-completions).
 
 ```
 $ saaio completions tcsh
@@ -578,9 +619,9 @@ help[1]: Run `saaio completions --help` for the usage
 saaio update [--version <tag>]
 ```
 
-Installs the latest release, or the tag `--version` names (a pre-release too), over the `saaio`
-being run, in the folder it is in. It runs that release's `install.sh`, which checks the download
-against `SHA256SUMS` and renames the new binary over the old one. Works without a store.
+`saaio update` installs the latest release, or the tag `--version` names (a pre-release too), over
+the `saaio` being run, in the folder it is in. It runs that release's `install.sh`, which checks the
+download against `SHA256SUMS` and renames the new binary over the old one. Works without a store.
 
 ```
 $ saaio update
@@ -614,7 +655,8 @@ help[2]: "Run `cargo install --locked --git https://github.com/JanSuthacheeva/sa
 
 ## Commands saaio runs itself
 
-Not listed in `saaio --help`. Not for manual use.
+saaio runs a few commands of its own, behind the scenes. They are not listed in `saaio --help`,
+and are not for manual use:
 
 | Command | Run by |
 | --- | --- |
@@ -625,13 +667,15 @@ Not listed in `saaio --help`. Not for manual use.
 
 ## Output, errors and exit codes
 
-Errors are TOON on stdout, with next steps:
+Errors are TOON on stdout too, with next steps, so an agent knows what to do about them:
 
 ```
 $ saaio report --flow shop-999 working
 error: no flow named shop-999
 help[2]: Run `saaio` to list the flows,Run `saaio new --name shop-999 --request <text>` to start it
 ```
+
+The exit code tells a script how it went:
 
 | Exit code | Means |
 | --- | --- |
@@ -641,7 +685,7 @@ help[2]: Run `saaio` to list the flows,Run `saaio new --name shop-999 --request 
 
 ## Environment variables
 
-Read by saaio:
+saaio reads these variables:
 
 | Variable | Effect |
 | --- | --- |
@@ -660,7 +704,7 @@ Read by saaio:
 | `CODEX_HOME` | Codex's folder. The UI reads a Codex worker's transcript for the peek only from its `sessions` folder. Default: `~/.codex`. |
 | `SAAIO_RELEASES_URL` | a mirror of the [releases page](https://github.com/JanSuthacheeva/saaio/releases), laid out like it (`latest/download/VERSION`, `download/<tag>/...`; `file://` works). Read by the UI's update check and `saaio update`. |
 
-Set by saaio in every worker's session and in the setup, teardown, pause and resume hooks:
+saaio sets these in every worker's session, and in the setup, teardown, pause and resume hooks:
 
 | Variable | Value |
 | --- | --- |
@@ -678,9 +722,10 @@ Set by saaio in every worker's session and in the setup, teardown, pause and res
 
 ## Several projects
 
-Default: one store per git repository, picked from the folder saaio runs in
-([files.md](files.md#the-store)). Each store has its own flows, server and master: run `saaio`
-in a repository for its sidebar and master. Outside a repository saaio uses the shared folder.
+saaio keeps one store per git repository, picked from the folder it runs in
+([files.md](files.md#the-store)). Each store has its own flows, server and master, so you run
+`saaio` in a repository for its sidebar and master. Outside a repository, saaio uses the shared
+folder.
 
 `SAAIO_HOME` overrides the choice, for example to keep several repositories in one store:
 
@@ -688,13 +733,16 @@ in a repository for its sidebar and master. Outside a repository saaio uses the 
 export SAAIO_HOME=~/.local/state/saaio-work
 ```
 
-Shared in the shared folder (`$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`) regardless of
-`SAAIO_HOME`:
+What ties the stores together lives in the shared folder (`$XDG_STATE_HOME/saaio`, else
+`~/.local/state/saaio`), regardless of `SAAIO_HOME`
+([files.md](files.md#the-shared-folder)):
 
 | Shared | Purpose |
 | --- | --- |
 | store registry | `saaio status --all` and the board's `a` key find every store |
 | slots | no two unfinished flows in any project share a slot |
+
+So `saaio status --all` shows every project's flows at once:
 
 ```
 $ saaio status --all

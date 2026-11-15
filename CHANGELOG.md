@@ -16,6 +16,9 @@ All notable changes to saaio are listed here. The format follows
 - `saaio update` names each server of another version once, and `saaio status --all` each
   project once: a store registered twice (by a shared folder moved by hand, or `SAAIO_HOME`
   with a trailing slash) no longer shows up twice, and its extra entry is cleaned up.
+- The docs no longer say that `cat pint.log` waits for a heavy command's turn: a word such as
+  `pint.log` does not match `pint`, and `files.md` names the heavy commands among what a
+  repository's `.saaio/config.toml` holds.
 
 ## [0.2.1] - 2026-11-05
 

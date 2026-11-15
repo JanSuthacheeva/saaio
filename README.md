@@ -42,18 +42,19 @@ More: [docs/install.md](docs/install.md).
 
 ## Workflow
 
-Each flow has a kind: `feature` (the default), `fix` or `research`. A feature worker's first prompt
-is `/ship-feature <request>`, a fix's `/ship-fix <request>` (`$ship-feature`, `$ship-fix` in Codex),
-and a research flow answers a question without a branch. Pick the skills:
+saaio tracks the work, but your skills do it. Each flow has a kind: `feature` (the default), `fix`
+or `research`. A feature worker's first prompt is `/ship-feature <request>`, a fix's
+`/ship-fix <request>` (`$ship-feature`, `$ship-fix` in Codex), and a research flow answers a
+question without a branch. You can run these skills, your own, or none at all.
 
-**agent-skills.** Installs `ship-feature`, `ship-fix` and the skills they run, from
+**agent-skills.** This installs `ship-feature`, `ship-fix` and the skills they run, from
 [agent-skills](https://github.com/JanSuthacheeva/agent-skills):
 
 ```sh
 npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature ship-fix design-code diagnose-bug implement-plan review-changes write-merge-request commit setup-saaio
 ```
 
-**Your own skills.** In `~/.config/saaio/config.toml`:
+**Your own skills.** Name them in `~/.config/saaio/config.toml`:
 
 ```toml
 [kinds.feature]
@@ -72,17 +73,18 @@ name = "ship"
 skills = ["my-pr"]
 ```
 
-A phase starts when the worker runs one of its skills. Your kind replaces the built-in one; add
-kinds of your own under new names. Details: [Use your own workflow](docs/configuration.md#use-your-own-workflow).
+A phase starts when the worker runs one of its skills. Your kind replaces the built-in one, and you
+can add kinds of your own under new names. Details: [Use your own workflow](docs/configuration.md#use-your-own-workflow).
 
-**Neither.** The flow still works. States show as usual. The steps stay `○───○───○───○`.
+**Neither.** The flow still works, and its states show as usual. Only the steps stay
+`○───○───○───○`.
 
 ## Set up each project
 
-Recommended once per project: the `setup-saaio` skill writes `.saaio/setup` and `.saaio/teardown`,
-so each worktree gets its own ports, `.env` and services and workers do not collide. When the setup
-starts services, it also writes `.saaio/pause` and `.saaio/resume`, which pause them while the flow
-rests.
+Several workers in one project need their own ports, `.env` and services, or they collide. Once per
+project, let the `setup-saaio` skill write `.saaio/setup` and `.saaio/teardown`, which give each
+worktree its own. When the setup starts services, it also writes `.saaio/pause` and
+`.saaio/resume`, which pause them while the flow rests.
 
 ```sh
 npx skills add JanSuthacheeva/agent-skills -g --skill setup-saaio   # included in the command above
@@ -92,11 +94,14 @@ Then ask the agent in the project: "set up saaio for this project". Once you hav
 run `saaio trust` in the project in your terminal, so saaio runs them (the new-flow dialog in
 `saaio` asks too). Details: [Repository setup](docs/repository.md#the-setup-saaio-skill).
 
-List the project's heavy commands (test suites, formatters, static analysis) in
-`.saaio/config.toml`, so its workers run them one at a time:
+Two test suites at once can bring a small machine to a crawl. List the project's heavy commands
+(test suites, formatters, static analysis) in `.saaio/config.toml`, and its workers run them one
+at a time:
 [Heavy commands](docs/repository.md#heavy-commands).
 
 ## Usage
+
+Open saaio in a repository. The master greets you in the big pane, and you tell it what to build:
 
 ```sh
 saaio    # in a repository
@@ -137,13 +142,14 @@ A flow is one unit of work: one feature or ticket, from request to merge request
 git worktree and branch, a worker (the agent session doing the work) and the phases the worker
 walks through (plan, implement, review, merge request by default).
 
-Every flow is an append-only event log. The agents' hooks run `saaio hook`, which turns hook events
-into flow events (phase started, question waiting, merge request opened). saaio folds the logs into
-each flow's state. `saaio server` runs each agent in its own terminal. `saaio` attaches to it.
+Every flow is an append-only event log, so its history is never rewritten. The agents' hooks run
+`saaio hook`, which turns hook events into flow events (phase started, question waiting, merge
+request opened). saaio folds the logs into each flow's state. `saaio server` runs each agent in its own terminal. `saaio` attaches to it.
 
 ## CLI
 
-Every command answers in [TOON](https://toonformat.dev) with suggested next commands:
+saaio's main user is an agent, so every command answers in [TOON](https://toonformat.dev), with
+suggested next commands:
 
 ```
 $ saaio status

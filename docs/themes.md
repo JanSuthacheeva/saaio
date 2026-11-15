@@ -1,7 +1,24 @@
 # Themes
 
-File: `theme.toml`, next to `config.toml` (`~/.config/saaio/theme.toml` by default). Default: the
-terminal's own colors.
+- [Introduction](#introduction)
+- [The built-in themes](#the-built-in-themes)
+- [The file](#the-file)
+- [Colors](#colors)
+- [Top-level keys](#top-level-keys)
+    - [Phase colors](#phase-colors)
+- [\[ui\]](#ui)
+- [\[state\]](#state)
+- [\[phase\]](#phase)
+- [Themes of your own](#themes-of-your-own)
+- [Errors](#errors)
+
+## Introduction
+
+Out of the box, saaio draws in your terminal's own colors, so it fits whatever theme your terminal
+already has. When you want saaio's own look, or colors of your own, you set them in `theme.toml`,
+next to `config.toml` (`~/.config/saaio/theme.toml` by default).
+
+A theme extends another one and changes only the colors you name:
 
 ```toml
 extends = "saaio"
@@ -16,28 +33,36 @@ ended = "faint"
 merge-request = "#d08ad6"
 ```
 
-- A key left out keeps the color of the extended theme.
-- The UI repaints within a second of saving `theme.toml` or a theme it extends.
-- saaio's mark is always `▚▄▞`, drawn with block characters in the accent color.
+A key you leave out keeps the color of the extended theme. The UI repaints within a second of
+saving `theme.toml` or a theme it extends, so you can try colors while it runs. saaio's mark is
+always `▚▄▞`, drawn with block characters in the accent color.
 
-- [The file](#the-file)
-- [Colors](#colors)
-- [Top-level keys](#top-level-keys)
-- [\[ui\]](#ui)
-- [\[state\]](#state)
-- [\[phase\]](#phase)
-- [The built-in themes](#the-built-in-themes)
-- [Themes of your own](#themes-of-your-own)
-- [Errors](#errors)
+## The built-in themes
+
+saaio comes with three themes:
+
+| Theme | Colors |
+| --- | --- |
+| `terminal` (default) | the terminal's own colors, fixed shades for panel, selection, accent and phases |
+| `saaio` | saaio's dark colors |
+| `saaio-light` | saaio's light colors |
+
+To switch to one, a single line is enough:
+
+```toml
+extends = "saaio-light"
+```
 
 ## The file
 
-- The UI writes it on its first run: every setting commented out at its default (the terminal
-  theme). Same content: [examples/theme.toml](../examples/theme.toml).
-- Remove the `#` in front of a setting to set it.
-- An edited file is never overwritten.
+You don't have to start from an empty file. The UI writes `theme.toml` on its first run, with every
+setting commented out at its default (the terminal theme). To set one, remove the `#` in front of
+it. The same content is in [examples/theme.toml](../examples/theme.toml), and an edited file is
+never overwritten.
 
 ## Colors
+
+Every color key takes one of these values:
 
 | Value | Means |
 | --- | --- |
@@ -46,14 +71,26 @@ merge-request = "#d08ad6"
 | `"default"` | the terminal's foreground or background |
 | a key's name | that key's color, such as `"faint"`, from this file or the extended theme |
 
-A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase color.
+A `[phase]` color can name a `[ui]` or `[state]` key, but no key can name a phase color.
 
 ## Top-level keys
+
+Two keys stand above the tables:
 
 | Key | Default | Effect |
 | --- | --- | --- |
 | `extends` | `"terminal"` | base theme: `"terminal"`, `"saaio"`, `"saaio-light"`, or a file name in `themes/` next to `theme.toml`, without `.toml` |
 | `phase_colors` | `"off"` | how much of a working flow takes its phase's color, see below |
+
+### Phase colors
+
+By default, a flow is drawn in the color of its state. With `phase_colors`, a working flow can
+show the color of its phase instead, so you see at a glance which flows are planning and which are
+in review:
+
+```toml
+phase_colors = "steps"
+```
 
 | `phase_colors` | A working flow shows its phase color in |
 | --- | --- |
@@ -61,13 +98,14 @@ A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase co
 | `"steps"` | the current step dot. Spinner, label, rail and title row keep the state color. |
 | `"full"` | the current step dot, spinner, label, rail and title row |
 
-- At every level: finished steps are plain in the sidebar, a `✓` in the `done` color in the
-  board's detail. A waiting, blocked or done flow keeps its state color.
-- Before its first phase, a flow takes the `working` color.
-- `phase_colors` comes from the nearest file that sets it. `theme.toml` wins over
-  the themes it extends.
+At every level, finished steps are plain in the sidebar and a `✓` in the `done` color in the
+board's detail, and a waiting, blocked or done flow keeps its state color. Before its first phase,
+a flow takes the `working` color. `phase_colors` comes from the nearest file that sets it, so
+`theme.toml` wins over the themes it extends.
 
 ## [ui]
+
+The `[ui]` table colors saaio's frame:
 
 | Key | Colors | `terminal` | `saaio` | `saaio-light` |
 | --- | --- | --- | --- | --- |
@@ -83,6 +121,8 @@ A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase co
 
 ## [state]
 
+The `[state]` table colors a flow by where it stands:
+
 | Key | Colors a flow that | `terminal` | `saaio` | `saaio-light` |
 | --- | --- | --- | --- | --- |
 | `working` | is at work | `4` | `#7aa7ff` | `#2f5fd0` |
@@ -93,8 +133,8 @@ A `[phase]` color can name a `[ui]` or `[state]` key. No key can name a phase co
 
 ## [phase]
 
-Keys: the phase names of your [workflow](configuration.md#kinds-of-flows). A phase without a
-color takes the color of its place:
+The keys of `[phase]` are the phase names of your [workflow](configuration.md#kinds-of-flows). A
+phase without a color takes the color of its place:
 
 | Place | Built-in phase | `terminal` | `saaio` | `saaio-light` |
 | --- | --- | --- | --- | --- |
@@ -103,27 +143,21 @@ color takes the color of its place:
 | 3rd | `review` | `80` | `#56c2c2` | `#13807f` |
 | 4th | `merge-request` | `176` | `#e07fd0` | `#b0399c` |
 
-- The terminal theme uses indexes above 15, since terminals often repaint their own blue, magenta
-  and cyan.
-- Phase colors show only with `phase_colors` set to `"steps"` or `"full"`.
+The terminal theme uses indexes above 15, since terminals often repaint their own blue, magenta
+and cyan.
 
-## The built-in themes
-
-| Theme | Colors |
-| --- | --- |
-| `terminal` (default) | the terminal's own colors, fixed shades for panel, selection, accent and phases |
-| `saaio` | saaio's dark colors |
-| `saaio-light` | saaio's light colors |
+> [!NOTE]
+> Phase colors show only with [`phase_colors`](#phase-colors) set to `"steps"` or `"full"`.
 
 ## Themes of your own
 
-- Path: `~/.config/saaio/themes/<name>.toml`. Named by `extends = "<name>"`.
-- Same keys as `theme.toml`.
-- Can extend another theme, up to four files deep counting `theme.toml`.
-- Lets another tool write saaio's colors.
+A theme of your own is a file in `~/.config/saaio/themes/<name>.toml`, with the same keys as
+`theme.toml`, and `extends = "<name>"` names it. It can extend another theme in turn, up to four
+files deep counting `theme.toml`.
 
-Example: a [Noctalia](https://github.com/noctalia-dev/noctalia-shell) template, rendered on every
-theme change. Save as `~/.config/noctalia/templates/saaio.toml`:
+This is how another tool can write saaio's colors. Here is a
+[Noctalia](https://github.com/noctalia-dev/noctalia-shell) template, rendered on every theme
+change. Save it as `~/.config/noctalia/templates/saaio.toml`:
 
 ```toml
 # saaio theme, written by Noctalia on every theme change.
@@ -144,7 +178,7 @@ accent     = "{{colors.primary.default.hex}}"
 working = "#7aa7ff"
 ```
 
-Add it to Noctalia's user templates:
+Then add it to Noctalia's user templates:
 
 ```toml
 [theme.templates.user.saaio]
@@ -152,18 +186,23 @@ input_path = '~/.config/noctalia/templates/saaio.toml'
 output_path = '~/.config/saaio/themes/noctalia.toml'
 ```
 
-Set `extends = "noctalia"` in `theme.toml`.
+And finally point `theme.toml` at it:
+
+```toml
+extends = "noctalia"
+```
 
 ## Errors
 
-A broken theme keeps the last working colors. The title row shows the file, the line where there
-is one, and the reason until the file reads again. The error also goes to `server.log`:
+A broken theme never leaves you with a broken screen: saaio keeps the last working colors. The
+title row shows the file, the line where there is one, and the reason until the file reads again.
+The error also goes to `server.log`:
 
 ```
 theme: ~/.config/saaio/theme.toml:3: accent belongs in [ui], not [state]
 ```
 
-Other messages, after the file and the line where there is one, with the key first for a color
+The other messages follow the file and the line where there is one, with the key first for a color
 (`theme.toml:3: accent: #d9825 is no #rrggbb color`):
 
 - `#d9825 is no #rrggbb color`

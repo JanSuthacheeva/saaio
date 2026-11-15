@@ -1,17 +1,37 @@
 # The JSON contract
 
+- [Introduction](#introduction)
+- [The board](#the-board)
+- [A flow](#a-flow)
+    - [States](#states)
+    - [Steps](#steps)
+    - [Timeline](#timeline)
+    - [Questions](#questions)
+    - [Services](#services)
+    - [Turn](#turn)
+    - [Workspace](#workspace)
+- [Every project](#every-project)
+- [Versions](#versions)
+
+## Introduction
+
+Agents read saaio's TOON, but a program wants something it can parse and rely on. For a status
+bar, a dashboard or a script of your own, `saaio status --json` prints the whole board as JSON:
+every flow, nothing truncated, with camelCase keys and `version` first.
+
 ```sh
 saaio status --json          # this project's flows
 saaio status --all --json    # every project's flows
 saaio status shop-217 --json # a board with just that flow
 ```
 
-- The whole board: every flow, nothing truncated.
-- camelCase keys, `version` first.
-- The command line and this JSON are saaio's only public interface. The log files are private and
-  may change.
+> [!IMPORTANT]
+> The command line and this JSON are saaio's only public interface. The log files are private and
+> may change, so read the JSON, never the logs.
 
 ## The board
+
+`saaio status --json` prints one board, with its flows:
 
 ```json
 {
@@ -105,6 +125,8 @@ saaio status shop-217 --json # a board with just that flow
 }
 ```
 
+The board's own keys:
+
 | Key | Type | Holds |
 | --- | --- | --- |
 | `version` | number | the contract's version, 3 today |
@@ -116,6 +138,8 @@ saaio status shop-217 --json # a board with just that flow
 All times are Unix milliseconds.
 
 ## A flow
+
+Each entry of `flows` holds everything saaio knows about one flow:
 
 | Key | Type | Holds |
 | --- | --- | --- |
@@ -148,6 +172,8 @@ All times are Unix milliseconds.
 
 ### States
 
+`state` is one of:
+
 | State | Means |
 | --- | --- |
 | `working` | the worker is at work |
@@ -163,18 +189,20 @@ All times are Unix milliseconds.
 
 ### Steps
 
+Each entry of `steps` is one phase of the flow's workflow, in order:
+
 | Key | Type | Holds |
 | --- | --- | --- |
 | `phase` | string | the phase's name, as the flow's workflow names it |
 | `status` | string | `done`, `current` or `open` |
 | `durationMs` | number or null | the time spent in the phase. The current phase counts up to now, or up to when the merge request opened or the flow ended. Null for a phase not reached |
 
-Once a merge request is open or merged, every step is `done`. A phase skipped on the way has
-`durationMs` null.
-
-A flow keeps the phases it started with. Two flows can have different steps.
+Once a merge request is open or merged, every step is `done`, and a phase skipped on the way has
+`durationMs` null. A flow keeps the phases it started with, so two flows can have different steps.
 
 ### Timeline
+
+Each entry of `timeline` is one thing that happened, oldest first:
 
 | Key | Type | Holds |
 | --- | --- | --- |
@@ -184,8 +212,8 @@ A flow keeps the phases it started with. Two flows can have different steps.
 
 ### Questions
 
-A Claude Code worker that asks with a question dialog (AskUserQuestion). `blocker` holds the first
-question.
+When a Claude Code worker asks with a question dialog (AskUserQuestion), `questions` holds one entry
+per question, and `blocker` holds the first question:
 
 | Key | Type | Holds |
 | --- | --- | --- |
@@ -196,7 +224,8 @@ question.
 
 ### Services
 
-The repo's `.saaio/pause` and `.saaio/resume` ([repository.md](repository.md#pause-and-resume)).
+`services` tells you where the repo's `.saaio/pause` and `.saaio/resume` left the flow's services
+([repository.md](repository.md#pause-and-resume)):
 
 | Key | Type | Holds |
 | --- | --- | --- |
@@ -206,8 +235,8 @@ The repo's `.saaio/pause` and `.saaio/resume` ([repository.md](repository.md#pau
 
 ### Turn
 
-A shell call that runs a command the repository lists under `[exclusive]`
-([repository.md](repository.md#heavy-commands)) and waits while another worker runs one.
+`turn` describes a shell call that runs a command the repository lists under `[exclusive]`
+([repository.md](repository.md#heavy-commands)) and waits while another worker runs one:
 
 | Key | Type | Holds |
 | --- | --- | --- |
@@ -216,6 +245,8 @@ A shell call that runs a command the repository lists under `[exclusive]`
 | `since` | number | when it began to wait |
 
 ### Workspace
+
+`workspace` says where the worker runs:
 
 | Key | Type | Holds |
 | --- | --- | --- |
@@ -228,7 +259,7 @@ A shell call that runs a command the repository lists under `[exclusive]`
 
 ## Every project
 
-`saaio status --all --json`: one board per registered store with flows.
+`saaio status --all --json` wraps one board per registered store that has flows:
 
 ```json
 {
@@ -240,6 +271,8 @@ A shell call that runs a command the repository lists under `[exclusive]`
 }
 ```
 
+Each project holds:
+
 | Key | Type | Holds |
 | --- | --- | --- |
 | `name` | string | the project's name: its store's folder name, or `default` for the default store. ` (2)`, ` (3)` and so on after a name already taken |
@@ -248,8 +281,10 @@ A shell call that runs a command the repository lists under `[exclusive]`
 
 ## Versions
 
-- `version` increases when a change could break a reader.
-- New keys can appear without a new version. Ignore unknown keys.
+`version` increases when a change could break a reader. New keys can appear without a new version,
+so your reader should ignore keys it does not know.
+
+So far, the contract has had three versions:
 
 | Version | Changed |
 | --- | --- |
