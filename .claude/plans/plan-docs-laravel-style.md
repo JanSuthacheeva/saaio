@@ -76,3 +76,40 @@ start; only the prose of its docs-like sections changes, without an Introduction
 - [x] Update `docs/README.md` "Covers", and the prose of `README.md`'s docs-like sections
 - [x] CHANGELOG `Fixed` line for any doc fact corrected
 - [x] End to end: build the site (`cargo run --features site --bin saaio-site -- _site`), `cargo test --all-features`, read every rendered page and the GitHub rendering of two pages (alerts, nested lists)
+
+## Review
+
+Every page was read against its version on main: no fact, default, message, real output or
+`##`/`###` heading was dropped (headings only moved), every anchor named in `src/`, `examples/`
+and the docs resolves, and no em dash was added.
+
+**Fixed**
+
+- `ui.md` said "nothing is lost" of a pane's history and of a crash; a pane keeps 10,000 lines
+  (`server/host.rs` `HISTORY`), and a crash costs the running turn. Now says so (e56ba9e).
+- `agents.md` called its Codex table "four settings that decide how often a worker stops", but
+  `model_reasoning_effort` does not (e56ba9e).
+- `troubleshooting.md` said `saaio start` "checks everything before it creates anything", which
+  its own `setup: failed` rows contradict (e56ba9e).
+- `cli.md` "Two things are shared across every store": the shared folder also holds trust,
+  reports and `update.json` (41a3946).
+- Prose lines past 100 columns in `cli.md` and `README.md` (one broken mid-paragraph) rewrapped
+  (41a3946).
+
+**Open**
+
+- None. The new intros add soft claims ("Many problems with the UI...", "never throw work away
+  without asking") that hold for the cases listed; worth one read by Jan for tone.
+
+**Where to look**
+
+- `docs/troubleshooting.md` and `docs/agents.md`: sections reordered most, intros the newest prose.
+- `docs/ui.md` Notifications: split into tmux and Alacritty subsections, tmux lines now a code block.
+- The rest (`json.md`, `files.md`, `themes.md`, `cli.md`) is lead-in sentences over unchanged
+  tables and can be skimmed.
+
+**Checks**
+
+`cargo test --all-features` green at 5fbae92; after the review's docs-only fixes the site tests
+(`the_repository_builds`, the link check) pass at 41a3946. The fixes were reviewed by the same
+agent, not independently.
