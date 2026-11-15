@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::event::{EventKind, Mode, Question, ServiceStatus};
 use crate::workflow::{Phase, Workflow};
 
-pub const VIEW_VERSION: u32 = 3;
+pub const VIEW_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -168,6 +168,8 @@ pub enum StepStatus {
     Done,
     Current,
     Open,
+    /// Done before, but the flow went back to an earlier phase since: it runs again.
+    Stale,
 }
 
 impl StepStatus {
@@ -177,6 +179,7 @@ impl StepStatus {
             StepStatus::Done => "done",
             StepStatus::Current => "current",
             StepStatus::Open => "open",
+            StepStatus::Stale => "stale",
         }
     }
 }
@@ -346,7 +349,12 @@ mod tests {
         for state in states {
             assert_eq!(serde_json::to_value(state).unwrap(), state.name());
         }
-        for status in [StepStatus::Done, StepStatus::Current, StepStatus::Open] {
+        for status in [
+            StepStatus::Done,
+            StepStatus::Current,
+            StepStatus::Open,
+            StepStatus::Stale,
+        ] {
             assert_eq!(serde_json::to_value(status).unwrap(), status.name());
         }
     }
@@ -414,7 +422,7 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert!(
-            json.trim_start().starts_with("{\n  \"version\": 3,"),
+            json.trim_start().starts_with("{\n  \"version\": 4,"),
             "{json}"
         );
         assert_eq!(value["needsYou"], 1);

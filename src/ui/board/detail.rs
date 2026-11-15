@@ -330,6 +330,7 @@ impl BoardView<'_> {
                 StepStatus::Done => (glyphs.done, theme.state.done),
                 StepStatus::Current => (glyphs.step_current, theme.step_style(flow)),
                 StepStatus::Open => (glyphs.step_open, theme.ui.faint),
+                StepStatus::Stale => (glyphs.done, theme.ui.faint),
             };
             if !steps.is_empty() {
                 steps.push(Span::raw("   "));

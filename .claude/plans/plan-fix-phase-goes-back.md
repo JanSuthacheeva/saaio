@@ -153,7 +153,8 @@ Approved by the user with the recommendations:
   today: phase stays `merge-request`, every step done), then let `Phase` events through until merged
   and compute `is_done` from the current phase
 - [ ] Add `StepStatus::Stale` with a test that review and merge-request show `stale` once back at
-  implement and `done` again after they ran again; `VIEW_VERSION` 4
+  implement and `done` again after they ran again; `VIEW_VERSION` 4 (the two UI matches get their
+  stale arms here, since the variant does not compile without them)
 - [ ] Translate main-agent Edit, Write, MultiEdit, NotebookEdit PostToolUse into `Edited` in
   `adapter/claude_code.rs`, with a recorded fixture and tests, subagent edits excluded
 - [ ] Draw stale steps faint in the sidebar and the board detail; update the goldens it changes

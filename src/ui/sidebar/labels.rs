@@ -27,7 +27,8 @@ impl Sidebar<'_> {
     }
 
     /// ●───●───○───○: done steps and the joins they reached in text, the current one in its phase's
-    /// color as phase_colors says (step_style), the rest faint; all of it in text once finished.
+    /// color as phase_colors says (step_style), stale ones (done before the flow went back) as done
+    /// but faint, the rest faint; all of it in text once finished.
     pub fn steps(&self, flow: &FlowView) -> Vec<Span<'static>> {
         let theme = self.theme;
         let glyphs = &theme.glyphs;
@@ -38,10 +39,12 @@ impl Sidebar<'_> {
                 StepStatus::Done => (glyphs.step_done, theme.ui.text),
                 StepStatus::Current => (glyphs.step_current, theme.step_style(flow)),
                 StepStatus::Open => (glyphs.step_open, theme.ui.faint),
+                StepStatus::Stale => (glyphs.step_done, theme.ui.faint),
             };
             spans.push(Span::styled(glyph, style));
             if let Some(next) = flow.steps.get(index + 1) {
-                let reached = step.status == StepStatus::Done && next.status != StepStatus::Open;
+                let reached = step.status == StepStatus::Done
+                    && matches!(next.status, StepStatus::Done | StepStatus::Current);
                 let join = if flow.is_finished() || reached {
                     theme.ui.text
                 } else {

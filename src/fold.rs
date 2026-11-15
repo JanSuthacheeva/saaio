@@ -624,10 +624,10 @@ impl Folding {
                     StepStatus::Done
                 } else if current == Some(position) {
                     StepStatus::Current
-                } else if self.entered[position]
-                    || current.is_some_and(|current| position < current)
-                {
+                } else if current.is_some_and(|current| position < current) {
                     StepStatus::Done
+                } else if self.entered[position] {
+                    StepStatus::Stale
                 } else {
                     StepStatus::Open
                 };
