@@ -1,6 +1,23 @@
 # Troubleshooting
 
+- [Introduction](#introduction)
+- [Where to look first](#where-to-look-first)
+- [The terminal UI](#the-terminal-ui)
+- [Workers](#workers)
+- [Starting flows](#starting-flows)
+- [Removing flows](#removing-flows)
+- [Reporting a bug](#reporting-a-bug)
+
+## Introduction
+
+When something does not work as you expect, this page helps you find out why. It starts with the
+two places that know the most about what saaio did, then lists the problems people run into, by
+where they show up, each with its cause and its fix. If none of them fits, the last section shows
+how to report a bug.
+
 ## Where to look first
+
+Most answers are in one of two places:
 
 | Source | Shows |
 | --- | --- |
@@ -15,34 +32,17 @@ version and commit, the OS and the versions of `claude`, `codex`, `gh` and `glab
 2026-10-18 13:41:02 +07:00 [2811] hook claude-code flow 3f2a9c: no flow 3f2a9c
 ```
 
-## Reporting a bug
-
-1. Run `saaio bug-report` in the repository where the problem happened.
-2. Check the file it names before uploading it. It can hold flow names, requests and paths.
-3. Open an [issue](https://github.com/JanSuthacheeva/saaio/issues/new?template=bug_report.yml)
-   with what happened, what was expected and the steps, and attach the file. It is in
-   `reports/` of saaio's state folder, never in the repository: paste its path into the file
-   picker (`Cmd+Shift+G` on macOS).
-
-```
-$ saaio bug-report
-report: /Users/jan/.local/state/saaio/reports/saaio-report-2026-10-18.txt
-help[2]: "Check the file before uploading it: it can hold flow names, requests and paths",Attach it from there; it is never written into a repository
-```
-
-The file holds:
-
-- the saaio version, commit and protocol, the OS and the versions of `claude`, `codex`, `gh` and
-  `glab`
-- the store's path
-- where `config.toml` and `theme.toml` are and whether they load, with the error when one does not
-- the last 300 lines of `server.log` and `server.log.1`
-
-The home folder is written `~`, also as the real path a linked home leads to and in Claude Code's
-project names. A second report on the same day is written beside the first, as
-`saaio-report-<date>-2.txt`.
-
 ## The terminal UI
+
+Most problems with the UI come from a server that still runs an earlier saaio, or from a folder
+saaio runs in that is not the one you expect. The fix for the first is nearly always the same:
+
+```sh
+saaio --stop
+saaio
+```
+
+Unfinished flows resume after it.
 
 | Problem | Cause | Fix |
 | --- | --- | --- |
@@ -60,6 +60,9 @@ project names. A second report on the same day is written beside the first, as
 | colors wrong or unchanged | `theme.toml` is broken. The last working colors stay. | read the error in the title row ([themes.md](themes.md#errors)) |
 
 ## Workers
+
+A worker's row tells you what saaio knows about it. When the row looks wrong, the cause is usually
+in what the harness reports:
 
 | Problem | Cause | Fix |
 | --- | --- | --- |
@@ -79,6 +82,8 @@ project names. A second report on the same day is written beside the first, as
 
 ## Starting flows
 
+`saaio start` checks everything before it creates anything, and its error says what is missing:
+
 | Problem | Cause | Fix |
 | --- | --- | --- |
 | `saaio start` needs a git repository | run outside a repository | run it in the repository, or use `saaio start --plain <folder>` |
@@ -92,6 +97,9 @@ project names. A second report on the same day is written beside the first, as
 
 ## Removing flows
 
+`saaio remove` and `saaio clear` never throw work away without asking. When they refuse, they say
+what they would lose:
+
 | Problem | Cause | Fix |
 | --- | --- | --- |
 | `saaio remove` refuses: uncommitted work | uncommitted changes in the worktree | commit or stash them, or `--force` to discard them |
@@ -99,3 +107,35 @@ project names. A second report on the same day is written beside the first, as
 | `saaio remove` refuses: commits on no other branch | the branch has commits that exist nowhere else, local or pushed | merge or push the branch, or `--delete-unmerged` to delete it with its commits |
 | `saaio clear` kept a worktree | it had uncommitted work | commit or discard it, then `git worktree remove <path>` |
 | `teardown: not run, the repository is not trusted` | the trust was revoked | stop what the setup started yourself, or `saaio trust` before the next removal |
+
+## Reporting a bug
+
+A good bug report says what saaio did, and the versions it ran with. `saaio bug-report` gathers
+both into one file for you:
+
+```
+$ saaio bug-report
+report: /Users/jan/.local/state/saaio/reports/saaio-report-2026-10-18.txt
+help[2]: "Check the file before uploading it: it can hold flow names, requests and paths",Attach it from there; it is never written into a repository
+```
+
+To report a bug:
+
+1. Run `saaio bug-report` in the repository where the problem happened.
+2. Check the file it names before uploading it. It can hold flow names, requests and paths.
+3. Open an [issue](https://github.com/JanSuthacheeva/saaio/issues/new?template=bug_report.yml)
+   with what happened, what was expected and the steps, and attach the file. It is in
+   `reports/` of saaio's state folder, never in the repository: paste its path into the file
+   picker (`Cmd+Shift+G` on macOS).
+
+The file holds:
+
+- the saaio version, commit and protocol, the OS and the versions of `claude`, `codex`, `gh` and
+  `glab`
+- the store's path
+- where `config.toml` and `theme.toml` are and whether they load, with the error when one does not
+- the last 300 lines of `server.log` and `server.log.1`
+
+The home folder is written `~`, also as the real path a linked home leads to and in Claude Code's
+project names. A second report on the same day is written beside the first, as
+`saaio-report-<date>-2.txt`.
