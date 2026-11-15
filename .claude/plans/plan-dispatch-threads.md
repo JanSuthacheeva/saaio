@@ -190,7 +190,7 @@ A UI thread panics:
 - [x] Move every command to `run(args, &Context)` and make `cli::run` one match; tests/cli green
 - [x] CLAUDE.md (threads.rs, cli/context.rs, server spawn note) and the CHANGELOG Fixed line
 - [x] End to end: the PTY script with an injected reader panic exits in a second with 'ui server' in server.log; without it `saaio --stop` still ends the UI; a few commands (status, start, remove, hook) on a scratch store
-- [ ] Review: hold `io::stdout().lock()` in `outer::install_panic_restore` from `restore()` until the hook chain exits, so the loop draws nothing into the restored terminal; PTY check with an injected 'ui job' panic
+- [x] Review: hold `io::stdout().lock()` in `outer::install_panic_restore` from `restore()` until the hook chain exits, so the loop draws nothing into the restored terminal; PTY check with an injected 'ui job' panic
 
 ## Review
 
