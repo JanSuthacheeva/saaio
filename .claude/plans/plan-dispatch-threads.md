@@ -180,7 +180,7 @@ A UI thread panics:
 
 - [x] Add `threads::spawn` (src/threads.rs) with its unit test, in lib.rs and layering.rs
 - [x] Move the server to `threads::spawn` and remove `server::spawn_named`
-- [ ] Name the UI's threads (ui.rs, ui/update_watch.rs) through `threads::spawn`, spawn errors handled as planned
+- [x] Name the UI's threads (ui.rs, ui/update_watch.rs) through `threads::spawn`, spawn errors handled as planned
 - [ ] Name system.rs's and workspace/process.rs's threads through `threads::spawn`
 - [ ] Ban `std::thread::spawn` and `Builder::spawn` in clippy.toml; clippy clean
 - [ ] Replace `append_on_panic` with `server_log::append_and_exit_on_panic` and use it in commands/ui.rs
