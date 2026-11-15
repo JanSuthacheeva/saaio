@@ -190,3 +190,41 @@ A UI thread panics:
 - [x] Move every command to `run(args, &Context)` and make `cli::run` one match; tests/cli green
 - [x] CLAUDE.md (threads.rs, cli/context.rs, server spawn note) and the CHANGELOG Fixed line
 - [x] End to end: the PTY script with an injected reader panic exits in a second with 'ui server' in server.log; without it `saaio --stop` still ends the UI; a few commands (status, start, remove, hook) on a scratch store
+
+## Review
+
+Isolated review of `git diff flow/typed-errors...HEAD` (11 commits) against this plan and CLAUDE.md.
+
+**Fixed** - nothing: no finding could be shown wrong. Every command's order of work (store, then
+config, then cwd, then the clock) matches the dispatch it replaces; Hook, Turn, Wait, BugReport,
+Completions, Trust and Update still never open or register the store; the only `thread::spawn`
+left is in test modules; `cargo fmt --check` is clean.
+
+**Open**
+
+- A panic in a UI thread restores the terminal first (Outer's hook wraps the exiting one), then
+  captures the backtrace and appends it to server.log, and only then exits. In that window the main
+  thread may still draw a frame or mirror a pane's mouse modes into the restored terminal (a
+  "ui job" panic while a pane streams output). Not reproduced: with an injected "ui server" panic
+  in a PTY on a scratch store the UI exited cleanly, nothing drawn after `?1049l`, the panic named
+  'ui server' in server.log. Not a regression (before this branch the UI went on drawing for good).
+  Recommendation: in `outer::install_panic_restore` hold `io::stdout().lock()` across `restore()`
+  and `previous(info)`, so the ratatui backend (over `io::stdout()`) blocks until the process exits.
+- `server_log::append_and_exit_on_panic` has no automated test (it exits the process); the plan
+  covers it by the manual PTY run only. Acceptable; a test would need a panic hook seam.
+
+**Where to look**
+
+1. `src/server_log.rs` `append_and_exit_on_panic` with `src/ui/outer.rs` `install_panic_restore`
+   and `src/cli/commands/ui.rs`: the order the two hooks run in and the exit, the one behaviour
+   a user sees.
+2. `src/cli/context.rs` `open` and `src/cli.rs` `run`: the old early-return dispatch folded into
+   one match; each store command's first line is `ctx.open()?`.
+3. `src/workspace/process.rs` `finish_within` and `src/system.rs` `run`: a reader thread that
+   cannot start now kills the child and fails the run instead of panicking.
+
+Routine and skimmable: the other commands' `ctx.env`/`ctx.now()` rewrites, the server's
+`spawn_named` -> `threads::spawn` renames, `clippy.toml`, CLAUDE.md.
+
+**Checks** - `cargo test --all-features` and clippy passed at 8f12f4a, the site's link check at
+0d534b0; only the plan changed since. The fixes were not reviewed independently (there were none).
