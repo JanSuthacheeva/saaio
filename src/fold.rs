@@ -1,5 +1,7 @@
 //! A flow's events folded into its `FlowView`, views into the sorted `Board`, a name into a flow
 
+use std::path::Path;
+
 use crate::event::{Event, EventKind, Mode, ServiceStatus};
 use crate::store::FlowLog;
 use crate::text;
@@ -146,6 +148,8 @@ struct Folding {
     stopped_at: Option<u64>,
     /// An Ended event occurred; later forge updates cannot revive the worker.
     ended: bool,
+    /// The turn the current phase began in has ended: the person had the flow back since.
+    turn_ended: bool,
     pending_permission: Option<(u64, String)>,
 }
 
@@ -215,6 +219,7 @@ impl Folding {
             phase_since: at,
             stopped_at: None,
             ended: false,
+            turn_ended: false,
             pending_permission: None,
         }
     }
@@ -239,6 +244,7 @@ impl Folding {
                     | EventKind::PermissionPending { .. }
                     | EventKind::Idle { .. }
                     | EventKind::Blocked { .. }
+                    | EventKind::Edited { .. }
             )
         {
             return;
@@ -451,6 +457,15 @@ impl Folding {
                 });
             }
             EventKind::TurnTaken | EventKind::Prompted => self.view.turn = None,
+            EventKind::Edited { path } => {
+                if let Some(build) = self.build_to_go_back_to(path) {
+                    self.enter(build, at);
+                    self.view.state = State::Working;
+                    self.view.delegate = None;
+                    let text = format!("phase: {} (back)", self.phases[build].name());
+                    self.note(at, text, Tone::Progress);
+                }
+            }
             EventKind::Ended => {
                 self.pending_permission = None;
                 self.ended = true;
@@ -459,6 +474,17 @@ impl Folding {
                 self.stopped_at.get_or_insert(at);
                 self.note(at, "ended".to_string(), Tone::Neutral);
             }
+        }
+        if matches!(
+            event.kind,
+            EventKind::Idle { .. }
+                | EventKind::Waiting {
+                    permission: false,
+                    ..
+                }
+                | EventKind::Blocked { .. }
+        ) {
+            self.turn_ended = true;
         }
         // A call that waited for its turn is over once the turn stopped.
         if matches!(
@@ -511,6 +537,22 @@ impl Folding {
             .is_some_and(|workflow| workflow.starts_unasked(0))
     }
 
+    /// The build phase a change to `path` sends the flow back to: when the flow stands past it,
+    /// the person had the flow back since its phase began, no merge request is open and `path` is
+    /// in its worktree. A change in the turn that began the phase is part of that phase.
+    fn build_to_go_back_to(&self, path: &str) -> Option<usize> {
+        let build = self.phases.iter().position(Phase::is_build)?;
+        let current = self
+            .view
+            .phase
+            .as_ref()
+            .and_then(|phase| self.position(phase))?;
+        let worktree = self.view.workspace.as_ref()?;
+        let inside = Path::new(path).starts_with(&worktree.path);
+        (current > build && self.turn_ended && self.view.merge_request.is_none() && inside)
+            .then_some(build)
+    }
+
     /// Where `phase` stands in the flow's phases; None when it has none.
     fn position(&self, phase: &Phase) -> Option<usize> {
         self.phases.iter().position(|known| known == phase)
@@ -521,6 +563,7 @@ impl Folding {
         self.view.phase = Some(self.phases[position].clone());
         self.entered[position] = true;
         self.phase_since = at;
+        self.turn_ended = false;
     }
 
     fn close_phase(&mut self, until: u64) {

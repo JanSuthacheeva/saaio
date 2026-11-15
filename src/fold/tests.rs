@@ -1672,3 +1672,106 @@ fn a_flow_that_merges_nothing_is_done_once_it_answers() {
     assert_eq!(answered.state, State::Done);
     assert_eq!(steps(&answered), [(StepStatus::Done, Some(4 * MIN))]);
 }
+
+const WORKTREE: &str = "/repo/.saaio/worktrees/shop-221";
+
+fn edited(at_ms: u64, path: &str) -> Event {
+    at(at_ms, EventKind::Edited { path: path.into() })
+}
+
+fn idle(at_ms: u64, note: &str) -> Event {
+    at(at_ms, EventKind::Idle { note: note.into() })
+}
+
+/// Planned, built, reviewed, and the review's turn ended: the person can ask for more.
+fn reviewed() -> Vec<Event> {
+    vec![
+        started(0),
+        at(0, workspace(1, None)),
+        phase(MIN, Phase::of("plan")),
+        phase(2 * MIN, Phase::of("implement")),
+        phase(3 * MIN, Phase::of("review")),
+        idle(4 * MIN, "review done"),
+    ]
+}
+
+#[test]
+fn steps_back_to_implement_on_an_edit_after_the_review_turn() {
+    let mut events = reviewed();
+    let edit = EventKind::Edited {
+        path: format!("{WORKTREE}/src/csv.rs"),
+    };
+    assert!(changes("7f3c", &events, &edit, 5 * MIN));
+    events.push(at(5 * MIN, EventKind::Working));
+    events.push(at(5 * MIN, edit.clone()));
+
+    let flow = view(&events, 6 * MIN);
+
+    assert_eq!(flow.phase, Some(Phase::of("implement")));
+    assert_eq!(flow.state, State::Working);
+    assert_eq!(flow.steps[1].status, StepStatus::Current);
+    assert_eq!(texts(&flow).last(), Some(&"phase: implement (back)"));
+    assert!(!changes("7f3c", &events, &edit, 7 * MIN), "once is enough");
+}
+
+#[test]
+fn an_edit_in_the_turn_that_entered_review_is_part_of_the_review() {
+    let mut events = reviewed();
+    events.pop();
+    events.push(edited(4 * MIN, &format!("{WORKTREE}/src/csv.rs")));
+
+    assert_eq!(view(&events, 5 * MIN).phase, Some(Phase::of("review")));
+}
+
+#[test]
+fn an_edit_outside_the_worktree_does_not_step_back() {
+    let mut events = reviewed();
+    events.push(edited(5 * MIN, "/tmp/scratch/mr.md"));
+    events.push(edited(5 * MIN, "/repo/.saaio/worktrees/shop-2210/x.rs"));
+
+    assert_eq!(view(&events, 6 * MIN).phase, Some(Phase::of("review")));
+}
+
+#[test]
+fn an_edit_without_a_workspace_or_an_implement_phase_does_not_step_back() {
+    let mut bare = reviewed();
+    bare.remove(1);
+    bare.push(edited(5 * MIN, &format!("{WORKTREE}/src/csv.rs")));
+    assert_eq!(view(&bare, 6 * MIN).phase, Some(Phase::of("review")));
+
+    let custom = [
+        started_with(0, &["spec", "build", "ship"]),
+        at(0, workspace(1, None)),
+        phase(MIN, Phase::of("build")),
+        phase(2 * MIN, Phase::of("ship")),
+        idle(3 * MIN, "shipped"),
+        edited(4 * MIN, &format!("{WORKTREE}/src/csv.rs")),
+    ];
+    assert_eq!(view(&custom, 5 * MIN).phase, Some(Phase::of("ship")));
+}
+
+#[test]
+fn an_edit_at_or_before_implement_stays_where_it_is() {
+    let events = [
+        started(0),
+        at(0, workspace(1, None)),
+        phase(MIN, Phase::of("plan")),
+        idle(2 * MIN, "plan written"),
+        edited(3 * MIN, &format!("{WORKTREE}/.claude/plans/plan.md")),
+    ];
+    assert_eq!(view(&events, 4 * MIN).phase, Some(Phase::of("plan")));
+}
+
+#[test]
+fn an_edit_after_the_merge_request_opened_only_works() {
+    let mut events = reviewed();
+    events.push(phase(5 * MIN, Phase::of("merge-request")));
+    events.push(opened(6 * MIN, PR));
+    events.push(idle(7 * MIN, "PR open"));
+    events.push(at(8 * MIN, EventKind::Working));
+    events.push(edited(8 * MIN, &format!("{WORKTREE}/src/csv.rs")));
+
+    let flow = view(&events, 9 * MIN);
+    assert_eq!(flow.phase, Some(Phase::of("merge-request")));
+    assert_eq!(flow.state, State::Working);
+}

@@ -77,11 +77,11 @@ moves the phase, so the log does not grow by a line per edit.
   `permission`, and on `Blocked`. It marks that the phase was handed back to the person since it
   began, so an edit in the turn that entered review (review-changes run in the main agent) is part
   of the review.
-- New arm `EventKind::Edited { path }`: steps back to the build phase when all hold: the workflow
-  has one (`Workflow::build_phase`), the current phase stands after it, `turn_ended`, the flow is
-  not merged, no merge request is open (see open question 1), and `path` lies inside the flow's
-  workspace (`view.workspace.path`), so a merge request description or an Artifact drafted in a
-  scratch folder is no code change. Stepping back is `self.enter(build, at)`, state `Working`, the
+- New arm `EventKind::Edited { path }` (`Folding::build_to_go_back_to`): steps back to the build
+  phase when all hold: the flow's phases have one (`Phase::is_build`), the current phase stands
+  after it, `turn_ended`, the flow is not merged, no merge request is open (see open question 1),
+  and `path` lies inside the flow's workspace (`view.workspace.path`), so a merge request
+  description or an Artifact drafted in a scratch folder is no code change. Stepping back is `self.enter(build, at)`, state `Working`, the
   timeline note `phase: implement (back)`.
 - The guard at `fold.rs:228` drops `Phase` events only once the merge request merged, not once it
   opened: an explicit skill call after the PR moves the phase.
@@ -89,8 +89,9 @@ moves the phase, so the log does not grow by a line per edit.
   last, or (a flow that merges nothing) its state is `Done`. A phase after the current one that was
   entered before is `StepStatus::Stale`; before the current one it stays `Done`.
 
-`workflow.rs`: `pub fn build_phase(&self) -> Option<usize>`, the position of the phase named
-`implement` (see open question 3).
+`workflow.rs`: `pub fn is_build(&self) -> bool` on `Phase`, whether it is the phase named
+`implement` (see open question 3). Built as a method of `Phase` rather than
+`Workflow::build_phase`, since the fold also folds logs that recorded only phase names or none.
 
 `view.rs`: `StepStatus::Stale`, name `stale`. TOON and JSON print it; `VIEW_VERSION` becomes 4
 (see open question 2).
@@ -143,11 +144,11 @@ Approved by the user with the recommendations:
 
 ## Tasks
 
-- [ ] Add `steps_back_to_implement_on_an_edit_after_the_review_turn` in `src/fold/tests.rs` (fails
+- [x] Add `steps_back_to_implement_on_an_edit_after_the_review_turn` in `src/fold/tests.rs` (fails
   today: phase stays `review`, steps `[done, done, current, open]`), then add `EventKind::Edited`,
-  `Workflow::build_phase`, `Folder::turn_ended` and the `Edited` arm, with tests that an edit in the
-  turn that entered review, a subagent's edit, an edit outside the workspace and one in a workflow
-  without `implement` do not step back
+  `Phase::is_build`, `Folding::turn_ended` and the `Edited` arm, with tests that an edit in the
+  turn that entered review, an edit outside the workspace and one in a workflow without `implement`
+  do not step back (a subagent's edit never reaches the fold: tested in the adapter's task)
 - [ ] Add `a_phase_skill_after_the_merge_request_moves_the_phase` in `src/fold/tests.rs` (fails
   today: phase stays `merge-request`, every step done), then let `Phase` events through until merged
   and compute `is_done` from the current phase

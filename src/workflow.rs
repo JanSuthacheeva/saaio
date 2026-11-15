@@ -158,10 +158,19 @@ impl Phase {
     }
 }
 
+/// The phase a code change after the review sends a flow back to.
+const BUILD: &str = "implement";
+
 impl Phase {
     /// The name the workflow, the command line and the logs use.
     pub fn name(&self) -> &str {
         &self.0
+    }
+
+    /// Whether this is the build phase: the one named implement, which a code change asked for
+    /// after the review goes back to.
+    pub fn is_build(&self) -> bool {
+        self.0 == BUILD
     }
 }
 
