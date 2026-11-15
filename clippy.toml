@@ -17,4 +17,6 @@ disallowed-methods = [
     { path = "std::fs::create_dir", reason = "create folders through private.rs, for the user alone" },
     { path = "std::fs::create_dir_all", reason = "create folders through private.rs, for the user alone" },
     { path = "std::fs::DirBuilder::new", reason = "create folders through private.rs, for the user alone" },
+    { path = "std::thread::spawn", reason = "start threads with a name through threads::spawn" },
+    { path = "std::thread::Builder::spawn", reason = "start threads with a name through threads::spawn" },
 ]

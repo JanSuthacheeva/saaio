@@ -1,9 +1,9 @@
 //! Commands run with a deadline, their output read even past a process they left behind
 
-use std::io::{ErrorKind, Read};
+use std::io::{self, ErrorKind, Read};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -12,6 +12,7 @@ use anyhow::{Context, Result, bail};
 use rustix::process::{Pid, Signal, kill_process_group};
 
 use crate::text::short_duration;
+use crate::threads;
 
 /// Runs an argv in `dir` with GH_PROMPT_DISABLED=1 and no stdin; its stdout, or an error with
 /// the last line it printed. Past `limit` it is killed and fails.
@@ -52,23 +53,25 @@ pub(super) fn finish_within(
         .spawn()
         .with_context(|| format!("could not run {program}"))?;
     // Read in the background, so a full pipe never stops the command before it ends.
-    let stdout = read_in_background(child.stdout.take());
-    let stderr = read_in_background(child.stderr.take());
+    let pipes =
+        read_in_background(child.stdout.take(), format!("{program} stdout")).and_then(|stdout| {
+            let stderr = read_in_background(child.stderr.take(), format!("{program} stderr"))?;
+            Ok((stdout, stderr))
+        });
+    let (stdout, stderr) = match pipes {
+        Ok(pipes) => pipes,
+        Err(error) => {
+            kill(&mut child);
+            return Err(error).with_context(|| format!("could not read what {program} prints"));
+        }
+    };
     let deadline = Instant::now() + limit;
     let status = loop {
         if let Some(status) = child.try_wait()? {
             break status;
         }
         if Instant::now() >= deadline {
-            match Pid::from_raw(child.id().cast_signed()) {
-                Some(group) => {
-                    let _ = kill_process_group(group, Signal::KILL);
-                }
-                None => {
-                    let _ = child.kill();
-                }
-            }
-            let _ = child.wait();
+            kill(&mut child);
             let millis = u64::try_from(limit.as_millis()).unwrap_or(u64::MAX);
             bail!("no answer within {}", short_duration(millis));
         }
@@ -81,6 +84,19 @@ pub(super) fn finish_within(
         bail!("{}", last_line(&stderr, &stdout));
     }
     Ok(stdout)
+}
+
+/// Kills the child's whole process group and waits for the child.
+fn kill(child: &mut Child) {
+    match Pid::from_raw(child.id().cast_signed()) {
+        Some(group) => {
+            let _ = kill_process_group(group, Signal::KILL);
+        }
+        None => {
+            let _ = child.kill();
+        }
+    }
+    let _ = child.wait();
 }
 
 /// How often finish_within looks whether its command ended.
@@ -106,10 +122,10 @@ impl Pipe {
     }
 }
 
-fn read_in_background(pipe: Option<impl Read + Send + 'static>) -> Pipe {
+fn read_in_background(pipe: Option<impl Read + Send + 'static>, name: String) -> io::Result<Pipe> {
     let bytes = Arc::new(Mutex::new(Vec::new()));
     let shared = Arc::clone(&bytes);
-    let reader = thread::spawn(move || {
+    let reader = threads::spawn(name, move || {
         let Some(mut pipe) = pipe else {
             return;
         };
@@ -127,8 +143,8 @@ fn read_in_background(pipe: Option<impl Read + Send + 'static>) -> Pipe {
                 Err(_) => break,
             }
         }
-    });
-    Pipe { bytes, reader }
+    })?;
+    Ok(Pipe { bytes, reader })
 }
 
 /// Runs an argv; its stdout, or an error with the last line it printed.

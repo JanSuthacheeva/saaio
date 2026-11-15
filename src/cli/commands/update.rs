@@ -5,11 +5,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use anyhow::{Context, bail};
+use anyhow::{Context as _, bail};
 use rustix::fs::{Access, access};
 
 use crate::binaries::{self, Binary};
 use crate::cli::Env;
+use crate::cli::context::Context;
 use crate::cli::output::update::Others;
 use crate::cli::output::{Document, Failure, update as output};
 use crate::client;
@@ -29,8 +30,8 @@ pub struct Args {
 
 /// Installs `--version` or the latest release into this binary's folder, unless it runs that
 /// release already, was built from source or its folder cannot be written. Runs without a store.
-pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
-    let releases = env.releases();
+pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
+    let releases = ctx.env.releases();
     let target = match &args.version {
         Some(version) => Tag::parse(version).map_err(|error| Failure {
             message: format!("{error:#}"),
@@ -51,8 +52,13 @@ pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
     let running = Build::running();
     match update::step(&running, &target, args.version.is_some(), writable) {
         Step::Latest => {
-            let others = others(env, &running.version().to_string(), binaries::DEADLINE);
-            Ok(output::latest(&running, &target, &env.bin_path(), &others))
+            let others = others(ctx.env, &running.version().to_string(), binaries::DEADLINE);
+            Ok(output::latest(
+                &running,
+                &target,
+                &ctx.env.bin_path(),
+                &others,
+            ))
         }
         Step::Source => Err(output::source(&target)),
         Step::Unwritable => Err(output::unwritable(
@@ -63,8 +69,13 @@ pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
         Step::Install => {
             install(&releases, &target, dir)
                 .map_err(|error| output::failed(&target, &format!("{error:#}"), &releases))?;
-            let others = others(env, &target.version().to_string(), binaries::DEADLINE);
-            Ok(output::updated(&running, &target, &env.bin_path(), &others))
+            let others = others(ctx.env, &target.version().to_string(), binaries::DEADLINE);
+            Ok(output::updated(
+                &running,
+                &target,
+                &ctx.env.bin_path(),
+                &others,
+            ))
         }
     }
 }

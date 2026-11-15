@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use super::host::HostEvent;
 use super::master::{Instructions, Start};
 use super::reconcile::{self, Wanted};
-use super::{ConnId, Event, Server, spawn_named};
+use super::{ConnId, Event, Server};
 use crate::event::{Event as LogEvent, EventKind, is_uuid};
 use crate::fold;
 use crate::identity;
@@ -19,6 +19,7 @@ use crate::launch::worktree;
 use crate::proto::{PaneKey, PaneStatus, ServerMsg};
 use crate::server_log;
 use crate::store::{Busy, Waiter};
+use crate::threads;
 use crate::view::{FlowView, Workspace};
 use crate::workspace::git;
 
@@ -406,7 +407,7 @@ fn waiter_of(key: &PaneKey) -> Waiter {
 
 pub(super) fn forward_host_events(events: Sender<Event>) -> Result<Sender<HostEvent>> {
     let (host_events, inbox) = mpsc::channel();
-    spawn_named("host events".to_string(), move || {
+    threads::spawn("host events", move || {
         for event in inbox {
             if events.send(Event::Host(event)).is_err() {
                 break;

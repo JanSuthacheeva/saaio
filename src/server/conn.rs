@@ -15,7 +15,7 @@ use rustix::io::Errno;
 
 use super::master::Start;
 use super::outbox::Outbox;
-use super::{ConnId, Event, FRAME_EVERY, Server, Stop, spawn_named};
+use super::{ConnId, Event, FRAME_EVERY, Server, Stop};
 
 /// At most this many connections at once; one more is closed.
 const MAX_CONNS: usize = 16;
@@ -25,6 +25,7 @@ use crate::binaries::{BUILD, Binary};
 use crate::private;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, Role, ServerMsg};
 use crate::server_log;
+use crate::threads;
 
 /// One connection: its socket, the queue its messages leave by, and who it said it is and in
 /// which role once its hello came.
@@ -384,7 +385,7 @@ pub(super) fn accept_in_background(
     events: Sender<Event>,
     clock: fn() -> u64,
 ) -> Result<()> {
-    spawn_named("accept".to_string(), move || {
+    threads::spawn("accept", move || {
         let mut failing = false;
         for stream in listener.incoming() {
             match stream {
@@ -408,6 +409,7 @@ pub(super) fn accept_in_background(
             }
         }
     })
+    .map(drop)
     .context("could not start the thread that accepts connections")
 }
 
@@ -428,7 +430,7 @@ fn read_in_background(
     hello: Duration,
     events: Sender<Event>,
 ) -> io::Result<()> {
-    spawn_named(format!("conn {conn}"), move || {
+    threads::spawn(format!("conn {conn}"), move || {
         let deadline = Instant::now() + hello;
         let first = proto::read_msg::<_, ClientMsg>(&mut Until {
             stream: &mut stream,
@@ -458,6 +460,7 @@ fn read_in_background(
         }
         let _ = events.send(Event::Gone(conn));
     })
+    .map(drop)
 }
 
 /// A stream whose reads time out at one deadline, however slowly its bytes come.

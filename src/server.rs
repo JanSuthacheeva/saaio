@@ -23,12 +23,11 @@ mod typing;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
-use std::io::{self, ErrorKind};
+use std::io::ErrorKind;
 use std::ops::ControlFlow;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
-use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
@@ -48,6 +47,7 @@ use crate::proto::{ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, ServerMsg, Size};
 use crate::server_log;
 use crate::store::Store;
 use crate::system::System;
+use crate::threads;
 use crate::trust::Trust;
 use crate::view::Board;
 use conn::Conn;
@@ -388,7 +388,7 @@ impl Server {
 fn stop_on_signals(events: Sender<Event>) -> Result<()> {
     let mut signals = SignalsInfo::<WithOrigin>::new([SIGTERM, SIGINT, SIGHUP])
         .context("could not watch for SIGTERM, SIGINT and SIGHUP")?;
-    let watch = spawn_named("signals".to_string(), move || {
+    let watch = threads::spawn("signals", move || {
         for origin in signals.forever() {
             let event = Event::Signal {
                 name: signal_name(origin.signal).unwrap_or("a signal"),
@@ -400,14 +400,9 @@ fn stop_on_signals(events: Sender<Event>) -> Result<()> {
                 return;
             }
         }
-    });
+    })
+    .map(drop);
     watch.context("could not start the thread that watches for signals")
-}
-
-/// Starts a thread with a name, so a panic in it says where it happened; Err when the system
-/// cannot start one.
-pub(super) fn spawn_named<F: FnOnce() + Send + 'static>(name: String, body: F) -> io::Result<()> {
-    thread::Builder::new().name(name).spawn(body).map(drop)
 }
 
 #[cfg(test)]

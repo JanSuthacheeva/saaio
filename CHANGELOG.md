@@ -16,6 +16,9 @@ All notable changes to saaio are listed here. The format follows
 
 ### Fixed
 
+- A panic in the terminal UI ends it and gives the terminal back, with a line that says where its
+  backtrace is, instead of leaving it running unresponsive; the server and its sessions keep
+  running, so `saaio` attaches again.
 - `saaio update` names each server of another version once, and `saaio status --all` each
   project once: a store registered twice (by a shared folder moved by hand, or `SAAIO_HOME`
   with a trailing slash) no longer shows up twice, and its extra entry is cleaned up.

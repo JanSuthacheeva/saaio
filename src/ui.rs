@@ -48,6 +48,7 @@ use crate::release::source::Releases;
 use crate::release::{Build, Tag};
 use crate::repo_config::RepoConfig;
 use crate::server_log;
+use crate::threads;
 use crate::trust::Trust;
 use crate::update::UpdateCheck;
 use crate::workspace::git;
@@ -158,10 +159,10 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
     let jobs = events.clone();
     let looks = events.clone();
     let notices = events.clone();
-    read_stdin(events.clone());
-    read_server(client, events.clone());
+    read_stdin(events.clone()).context("could not start the ui's stdin thread")?;
+    read_server(client, events.clone()).context("could not start the ui's server thread")?;
     watch_resize(events.clone())?;
-    tick(events);
+    tick(events).context("could not start the ui's tick thread")?;
 
     let mut peek = PeekCache::new(env.claude_home, env.codex_home);
     let mut ticks: u32 = 0;
@@ -256,7 +257,7 @@ pub fn run(socket: &Path, env: UiEnv, clock: fn() -> u64) -> Result<String> {
                 Effect::Copy(text) => copy(&env.clipboard, &env.log, &text, clock),
                 Effect::Trust(folder) => trust(env.trust.as_ref(), &folder, &env.log, clock),
                 Effect::Notify(text) if env.notifier.in_tmux() => {
-                    ask_tmux(text, notices.clone());
+                    ask_tmux(text, notices.clone(), &env.log, clock);
                 }
                 Effect::Notify(text) => notify(&env.notifier, &env.log, &text, None, clock),
                 Effect::Quit(message) => return Ok(message),
@@ -282,11 +283,18 @@ fn copy(clipboard: &Clipboard, log_file: &Path, text: &str, clock: fn() -> u64) 
 
 /// Asks tmux on a thread of its own which terminal its client is; the notification comes back as
 /// Event::Notify, so only the loop writes to the terminal and a hung tmux never stalls it.
-fn ask_tmux(text: String, events: Sender<Event>) {
-    thread::spawn(move || {
+fn ask_tmux(text: String, events: Sender<Event>, log_file: &Path, clock: fn() -> u64) {
+    let asked = threads::spawn("ui tmux", move || {
         let client = notify::tmux_client();
         let _ = events.send(Event::Notify(text, client));
     });
+    if let Err(error) = asked {
+        log(
+            log_file,
+            clock,
+            &format!("ui: could not start the ui's tmux thread: {error}"),
+        );
+    }
 }
 
 /// Raises a desktop notification; a failure goes to server.log, since nothing on screen asked.
@@ -404,7 +412,8 @@ fn run_job(exe: &Path, job: Job, events: Sender<Event>) {
     if let Some(dir) = job.dir() {
         command.current_dir(dir);
     }
-    thread::spawn(move || {
+    let (failed, unrun) = (events.clone(), job.clone());
+    let ran = threads::spawn("ui job", move || {
         let result = match command.output() {
             Ok(output) if output.status.success() && job == Job::Overview => {
                 Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -417,17 +426,22 @@ fn run_job(exe: &Path, job: Job, events: Sender<Event>) {
         };
         let _ = events.send(Event::Ran(job, result));
     });
+    if let Err(error) = ran {
+        let error = JobError::other(format!("could not start the ui's job thread: {error}"));
+        let _ = failed.send(Event::Ran(unrun, Err(error)));
+    }
 }
 
-fn tick(events: Sender<Event>) {
-    thread::spawn(move || {
+fn tick(events: Sender<Event>) -> io::Result<()> {
+    threads::spawn("ui tick", move || {
         loop {
             thread::sleep(TICK_EVERY);
             if events.send(Event::Tick).is_err() {
                 return;
             }
         }
-    });
+    })
+    .map(drop)
 }
 
 /// Blocks for one event, then takes every other one already waiting, so a burst draws once.
@@ -438,8 +452,8 @@ fn next_batch(inbox: &Receiver<Event>) -> Result<Vec<Event>> {
     Ok(batch)
 }
 
-fn read_stdin(events: Sender<Event>) {
-    thread::spawn(move || {
+fn read_stdin(events: Sender<Event>) -> io::Result<()> {
+    threads::spawn("ui stdin", move || {
         let mut stdin = io::stdin();
         let mut buf = [0u8; 4096];
         loop {
@@ -452,28 +466,31 @@ fn read_stdin(events: Sender<Event>) {
                 }
             }
         }
-    });
+    })
+    .map(drop)
 }
 
-fn read_server(mut client: Client, events: Sender<Event>) {
-    thread::spawn(move || {
+fn read_server(mut client: Client, events: Sender<Event>) -> io::Result<()> {
+    threads::spawn("ui server", move || {
         while let Ok(Some(message)) = client.recv() {
             if events.send(Event::Server(message)).is_err() {
                 return;
             }
         }
         let _ = events.send(Event::ServerGone);
-    });
+    })
+    .map(drop)
 }
 
 fn watch_resize(events: Sender<Event>) -> Result<()> {
     let mut signals = Signals::new([SIGWINCH]).context("could not watch for resizes")?;
-    thread::spawn(move || {
+    threads::spawn("ui resize", move || {
         for _ in signals.forever() {
             if events.send(Event::Resize).is_err() {
                 return;
             }
         }
-    });
+    })
+    .context("could not start the ui's resize thread")?;
     Ok(())
 }
