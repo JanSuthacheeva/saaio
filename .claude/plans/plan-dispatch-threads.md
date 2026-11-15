@@ -184,7 +184,7 @@ A UI thread panics:
 - [x] Name system.rs's and workspace/process.rs's threads through `threads::spawn`
 - [x] Ban `std::thread::spawn` and `Builder::spawn` in clippy.toml; clippy clean
 - [x] Replace `append_on_panic` with `server_log::append_and_exit_on_panic` and use it in commands/ui.rs
-- [ ] Add `cli::context::{Context, Opened}` with unit tests for `open`
+- [x] Add `cli::context::{Context, Opened}` with unit tests for `open`
 - [ ] Move every command to `run(args, &Context)` and make `cli::run` one match; tests/cli green
 - [ ] CLAUDE.md (threads.rs, cli/context.rs, server spawn note) and the CHANGELOG Fixed line
 - [ ] End to end: the PTY script with an injected reader panic exits in a second with 'ui server' in server.log; without it `saaio --stop` still ends the UI; a few commands (status, start, remove, hook) on a scratch store
