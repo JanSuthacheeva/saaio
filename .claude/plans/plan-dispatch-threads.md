@@ -189,4 +189,4 @@ A UI thread panics:
 - [x] Add `cli::context::{Context, Opened}` with unit tests for `open`
 - [x] Move every command to `run(args, &Context)` and make `cli::run` one match; tests/cli green
 - [x] CLAUDE.md (threads.rs, cli/context.rs, server spawn note) and the CHANGELOG Fixed line
-- [ ] End to end: the PTY script with an injected reader panic exits in a second with 'ui server' in server.log; without it `saaio --stop` still ends the UI; a few commands (status, start, remove, hook) on a scratch store
+- [x] End to end: the PTY script with an injected reader panic exits in a second with 'ui server' in server.log; without it `saaio --stop` still ends the UI; a few commands (status, start, remove, hook) on a scratch store
