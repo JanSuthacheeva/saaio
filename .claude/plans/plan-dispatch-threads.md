@@ -182,7 +182,7 @@ A UI thread panics:
 - [x] Move the server to `threads::spawn` and remove `server::spawn_named`
 - [x] Name the UI's threads (ui.rs, ui/update_watch.rs) through `threads::spawn`, spawn errors handled as planned
 - [x] Name system.rs's and workspace/process.rs's threads through `threads::spawn`
-- [ ] Ban `std::thread::spawn` and `Builder::spawn` in clippy.toml; clippy clean
+- [x] Ban `std::thread::spawn` and `Builder::spawn` in clippy.toml; clippy clean
 - [ ] Replace `append_on_panic` with `server_log::append_and_exit_on_panic` and use it in commands/ui.rs
 - [ ] Add `cli::context::{Context, Opened}` with unit tests for `open`
 - [ ] Move every command to `run(args, &Context)` and make `cli::run` one match; tests/cli green
