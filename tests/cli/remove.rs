@@ -178,6 +178,7 @@ fn remove_keeps_a_branch_with_its_own_commits_unless_told() {
         text.contains("flow/shop-1 has 1 commit on no other branch"),
         "{text}"
     );
+    assert_eq!(text.lines().nth(1), Some("refusal: unmerged"), "{text}");
     assert!(
         text.contains("saaio remove shop-1 --delete-unmerged"),
         "{text}"
@@ -210,6 +211,7 @@ fn remove_refuses_uncommitted_work_unless_forced() {
         text.starts_with("error: shop-1 has uncommitted work"),
         "{text}"
     );
+    assert_eq!(text.lines().nth(1), Some("refusal: uncommitted"), "{text}");
     assert!(text.contains("saaio remove shop-1 --force"), "{text}");
     assert!(worktree.exists());
     assert!(stdout(&lab.run(&[])).contains("shop-1"));
@@ -242,6 +244,7 @@ fn remove_says_when_git_cannot_check_a_worktree() {
         "{text}"
     );
     assert!(text.contains("is no worktree of"), "{text}");
+    assert!(!text.contains("refusal:"), "{text}");
     assert!(text.contains("saaio remove shop-1 --force"), "{text}");
     assert!(worktree.exists());
 }
