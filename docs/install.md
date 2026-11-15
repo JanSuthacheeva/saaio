@@ -1,5 +1,40 @@
 # Install
 
+- [Introduction](#introduction)
+- [Requirements](#requirements)
+- [Installing saaio](#installing-saaio)
+    - [Installer settings](#installer-settings)
+- [Skills](#skills)
+- [Agent settings](#agent-settings)
+- [First run](#first-run)
+- [Updating](#updating)
+- [Manual download](#manual-download)
+    - [Verifying a download](#verifying-a-download)
+- [From source](#from-source)
+- [Shell completions](#shell-completions)
+- [Uninstalling](#uninstalling)
+
+## Introduction
+
+saaio is one binary, and getting started takes a few minutes: install saaio, install the skills
+its workers run, give your agents the permissions they need to work on their own, and open
+`saaio` in a repository. This page walks through each step, then covers the other ways to install
+and how to keep saaio up to date.
+
+## Requirements
+
+saaio runs on macOS and Linux:
+
+| Requirement | Notes |
+| --- | --- |
+| macOS or Linux | Apple silicon or Intel; x86_64 or aarch64. The Linux binaries are static and run on any distribution. |
+| git | |
+| [Claude Code](https://github.com/anthropics/claude-code) or [Codex](https://github.com/openai/codex) | either or both |
+
+## Installing saaio
+
+The quickest way to install saaio is the install script:
+
 ```sh
 curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | sh
 saaio --version    # saaio 0.1.0 (abc1234)
@@ -10,25 +45,129 @@ The script downloads the binary for this machine from the latest
 `SHA256SUMS` and installs it to `~/.local/bin`. It edits no shell startup file: when the folder is
 not on `PATH`, it prints the line to add.
 
+### Installer settings
+
+A few variables change what the script installs and where. To install a given version, for
+example:
+
+```sh
+curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | SAAIO_VERSION=v0.2.1 sh
+```
+
 | Variable | Default | Sets |
 | --- | --- | --- |
 | `SAAIO_VERSION` | the latest release | the tag to install, such as `v0.2.1` |
 | `SAAIO_INSTALL_DIR` | `~/.local/bin` | the folder `saaio` is installed to |
 | `SAAIO_DOWNLOAD_URL` | the GitHub release | a folder or mirror holding the release assets (`file://` works). `SHA256SUMS` is read from the same place, so it checks the download, not the source. |
 
+## Skills
+
+saaio tracks the work, but the skills do it. A new flow's first prompt is `/ship-feature <request>`
+for a feature and `/ship-fix <request>` for a fix (`$ship-feature` and `$ship-fix` in Codex),
+skills from [agent-skills](https://github.com/JanSuthacheeva/agent-skills). Install them with the
+[skills CLI](https://github.com/vercel-labs/skills), which asks which agents to install for:
+
 ```sh
-curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | SAAIO_VERSION=v0.2.1 sh
+npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature ship-fix design-code diagnose-bug implement-plan review-changes write-merge-request commit setup-saaio
 ```
 
-| Requirement | Notes |
+| Skill | Does |
 | --- | --- |
-| macOS or Linux | Apple silicon or Intel; x86_64 or aarch64. The Linux binaries are static and run on any distribution. |
-| git | |
-| [Claude Code](https://github.com/anthropics/claude-code) or [Codex](https://github.com/openai/codex) | either or both |
+| `ship-feature` | takes a feature from plan to merge request, using `design-code`, `implement-plan`, `review-changes`, `write-merge-request` and `commit` |
+| `ship-fix` | takes a bug from report to merge request, using `diagnose-bug` in place of `design-code` |
+| `design-code` | starts the plan phase |
+| `diagnose-bug` | starts a fix's diagnose phase: reproduces the bug, finds its cause, plans the fix |
+| `implement-plan` | starts the implement phase |
+| `review-changes` | starts the review phase |
+| `write-merge-request` | starts the merge-request phase |
+| `commit` | commits |
+| `setup-saaio` | prepares a repository for saaio, recommended once per project ([repository.md](repository.md#the-setup-saaio-skill)) |
+
+> [!TIP]
+> The skills are optional. To run your own skills instead, see
+> [Use your own workflow](configuration.md#use-your-own-workflow); with no skills at all, see
+> [Without matching skills](configuration.md#without-matching-skills).
+
+## Agent settings
+
+A worker that stops at every permission prompt isn't much help while you are away. saaio leaves
+permissions to each harness, and [agents.md](agents.md) recommends settings for workers, such as
+Claude Code's permission mode and allow rules and Codex's automatic review, sandbox network access
+and command rules.
+
+## First run
+
+Now open saaio in a repository:
+
+```sh
+saaio    # in a repository
+```
+
+On its first run, saaio writes three files to `~/.config/saaio`:
+
+| File | Holds |
+| --- | --- |
+| `config.toml` | every setting, commented out ([configuration.md](configuration.md)) |
+| `theme.toml` | every color, commented out ([themes.md](themes.md)) |
+| `master.md` | the master's instructions ([flows.md](flows.md#the-master)) |
+
+> [!IMPORTANT]
+> Two things are highly recommended before your first flow:
+>
+> 1. Read `config.toml` once. Every setting is there, commented out at its default
+>    ([configuration.md](configuration.md), [examples/config.toml](../examples/config.toml)).
+> 2. Set the recommended permissions in your agents (Claude Code's `settings.json`, Codex's
+>    `config.toml`), so workers run without stopping at every prompt and saaio works as intended
+>    ([agents.md](agents.md)).
+
+An agent opening in a folder it does not trust yet, such as a Claude Code worker's new worktree,
+or the master's or a plain session's folder, asks whether to trust it. Answer it in its pane.
+
+Codex workers trust saaio's hooks without asking, and their own worktree once you trusted the
+repository: `saaio start` refuses until you do, and the new-flow dialog asks
+([repository.md](repository.md#trust)).
+
+## Updating
+
+`saaio update` runs the latest release's install script over the binary you run
+([cli.md](cli.md#saaio-update)); running the script again does the same. The running server keeps
+the old version until it stops, so stop it and open saaio again:
+
+```sh
+saaio update
+saaio --stop
+saaio
+```
+
+Unfinished flows resume after the restart. `saaio update` lists each server that is still on
+another version, and the UI says when its server is another build
+([troubleshooting.md](troubleshooting.md#the-terminal-ui)).
+
+If you built saaio from source, `saaio update` names the line to run instead:
+
+```sh
+cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag <new tag> --force
+```
+
+> [!WARNING]
+> Another `saaio` earlier on PATH, such as an old `cargo install` in `~/.cargo/bin`, keeps running
+> when you type `saaio`. `saaio update` and the UI name it: remove it (`cargo uninstall saaio`) or
+> put the updated binary's folder first on PATH.
+
+After an update, write a completion script you saved to a file again, so it knows the new
+version's commands. `master.md` and `config.toml` are refreshed while they still hold an earlier
+default, and `theme.toml` is written only when missing. Edited files stay as they are.
+
+To hear about new versions, you don't have to do anything: the UI's title row names a newer
+release once a day, `0.1.1 is out: saaio update` ([configuration.md](configuration.md#ui) turns it
+off). You can also use GitHub's Watch > Custom > Releases on the repository, or the
+[releases feed](https://github.com/JanSuthacheeva/saaio/releases.atom). What changed is in
+[CHANGELOG.md](../CHANGELOG.md).
 
 ## Manual download
 
-Each release holds one `saaio-<target>.tar.gz` per platform and a `SHA256SUMS` file:
+If you'd rather not pipe a script into your shell, download a release yourself. Each release holds
+one `saaio-<target>.tar.gz` per platform and a `SHA256SUMS` file:
 
 | Target | Platform |
 | --- | --- |
@@ -48,34 +187,38 @@ mkdir -p ~/.local/bin && mv saaio ~/.local/bin/
 
 The tarball also holds the [completion scripts](#shell-completions) in `complete/`.
 
+> [!NOTE]
+> The binaries are not signed. macOS refuses to open one downloaded with a browser until its
+> quarantine flag is removed: `xattr -d com.apple.quarantine ~/.local/bin/saaio`. curl sets no
+> such flag.
+
+### Verifying a download
+
 Each tarball has a build provenance attestation: proof that the release workflow built it from
-the tagged commit. With the [GitHub CLI](https://cli.github.com):
+the tagged commit. You can check it with the [GitHub CLI](https://cli.github.com):
 
 ```sh
 gh attestation verify saaio-aarch64-apple-darwin.tar.gz --repo JanSuthacheeva/saaio
 ```
 
-The binaries are not signed. macOS refuses to open one downloaded with a browser until its
-quarantine flag is removed: `xattr -d com.apple.quarantine ~/.local/bin/saaio`. curl sets no such
-flag.
-
 ## From source
 
-For other platforms, or to build it yourself. Requires Rust 1.95+, installed with
-[rustup](https://rustup.rs).
+For other platforms, or to build saaio yourself, install it with cargo. It requires Rust 1.95+,
+installed with [rustup](https://rustup.rs):
 
 ```sh
 cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.2.1
 ```
 
-Installs `saaio` to `~/.cargo/bin`. `saaio --version` names the commit it was built from, or
+This installs `saaio` to `~/.cargo/bin`. `saaio --version` names the commit it was built from, or
 `unknown` when the source is not a git checkout of saaio. To name one anyway, set `SAAIO_COMMIT`
 when building.
 
 ## Shell completions
 
 `saaio completions <shell>` prints the completion script for bash, zsh, fish, elvish or
-PowerShell. It completes commands, options and their values, not flow names.
+PowerShell. It completes commands, options and their values, not flow names. Save it where your
+shell looks for completions:
 
 ```sh
 # zsh: add `fpath=(~/.zfunc $fpath)` to ~/.zshrc before compinit
@@ -90,6 +233,8 @@ mkdir -p ~/.config/fish/completions
 saaio completions fish > ~/.config/fish/completions/saaio.fish
 ```
 
+Elvish and PowerShell load it from their startup file instead:
+
 | Shell | Line for the startup file |
 | --- | --- |
 | elvish | `eval (saaio completions elvish \| slurp)` in `~/.config/elvish/rc.elv` |
@@ -97,97 +242,6 @@ saaio completions fish > ~/.config/fish/completions/saaio.fish
 
 Open a new shell afterwards. The same scripts are in `complete/` in each release tarball.
 
-## Skills
-
-Default first prompts: `/ship-feature <request>` for a feature, `/ship-fix <request>` for a fix
-(`$ship-feature` and `$ship-fix` in Codex), skills from
-[agent-skills](https://github.com/JanSuthacheeva/agent-skills). Install with the
-[skills CLI](https://github.com/vercel-labs/skills), which asks which agents to install for:
-
-```sh
-npx skills add JanSuthacheeva/agent-skills -g --skill ship-feature ship-fix design-code diagnose-bug implement-plan review-changes write-merge-request commit setup-saaio
-```
-
-| Skill | Does |
-| --- | --- |
-| `ship-feature` | takes a feature from plan to merge request, using `design-code`, `implement-plan`, `review-changes`, `write-merge-request` and `commit` |
-| `ship-fix` | takes a bug from report to merge request, using `diagnose-bug` in place of `design-code` |
-| `design-code` | starts the plan phase |
-| `diagnose-bug` | starts a fix's diagnose phase: reproduces the bug, finds its cause, plans the fix |
-| `implement-plan` | starts the implement phase |
-| `review-changes` | starts the review phase |
-| `write-merge-request` | starts the merge-request phase |
-| `commit` | commits |
-| `setup-saaio` | prepares a repository for saaio, recommended once per project ([repository.md](repository.md#the-setup-saaio-skill)) |
-
-Optional. Own skills instead: [Use your own workflow](configuration.md#use-your-own-workflow). No
-skills at all: [Without matching skills](configuration.md#without-matching-skills).
-
-## Agent settings
-
-saaio leaves permissions to each harness. Recommended settings for workers, such as Claude Code's
-permission mode and allow rules and Codex's automatic review, sandbox network access and command
-rules: [agents.md](agents.md).
-
-## First run
-
-```sh
-saaio    # in a repository
-```
-
-Writes to `~/.config/saaio`:
-
-| File | Holds |
-| --- | --- |
-| `config.toml` | every setting, commented out ([configuration.md](configuration.md)) |
-| `theme.toml` | every color, commented out ([themes.md](themes.md)) |
-| `master.md` | the master's instructions ([flows.md](flows.md#the-master)) |
-
-Highly recommended:
-
-1. Read `config.toml` once. Every setting is there, commented out at its default
-   ([configuration.md](configuration.md), [examples/config.toml](../examples/config.toml)).
-2. Set the recommended permissions in your agents (Claude Code's `settings.json`, Codex's
-   `config.toml`), so workers run without stopping at every prompt and saaio works as intended
-   ([agents.md](agents.md)).
-
-| Prompt | Answer |
-| --- | --- |
-| an agent opening in a folder it does not trust yet (a Claude Code worker's new worktree, the master's or a plain session's folder) asks whether to trust it | answer in its pane |
-
-Codex workers trust saaio's hooks without asking, and their own worktree once you trusted the
-repository: `saaio start` refuses until you do, and the new-flow dialog asks
-([repository.md](repository.md#trust)).
-
-## Updating
-
-```sh
-saaio update
-saaio --stop
-saaio
-```
-
-`saaio update` runs the latest release's install script over the binary you run
-([cli.md](cli.md#saaio-update)). Running the script again does the same.
-
-From source: `cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag <new tag> --force`.
-`saaio update` names this line for a build from source.
-
-- The running server keeps the old version until stopped. `saaio update` lists each server that
-  is still on another version, and the UI says when its server is another build
-  ([troubleshooting.md](troubleshooting.md#the-terminal-ui)).
-- Another `saaio` earlier on PATH, such as an old `cargo install` in `~/.cargo/bin`, keeps running
-  when you type `saaio`. `saaio update` and the UI name it: remove it (`cargo uninstall saaio`) or
-  put the updated binary's folder first on PATH.
-- Unfinished flows resume after the restart.
-- Write a completion script saved to a file again, so it knows the new version's commands.
-- `master.md` and `config.toml` are refreshed while they still hold an earlier default. `theme.toml`
-  is written only when missing. Edited files stay as they are.
-- New versions: the UI's title row names a newer release once a day, `0.1.1 is out: saaio update`
-  ([configuration.md](configuration.md#ui) turns it off). Or GitHub's Watch > Custom > Releases on
-  the repository, or the [releases feed](https://github.com/JanSuthacheeva/saaio/releases.atom).
-- Changes: [CHANGELOG.md](../CHANGELOG.md).
-
 ## Uninstalling
 
-[files.md](files.md#removing-saaio).
+How to remove saaio and everything it wrote is in [files.md](files.md#removing-saaio).

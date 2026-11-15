@@ -66,7 +66,7 @@ start; only the prose of its docs-like sections changes, without an Introduction
 - [x] Rewrite `docs/flows.md`
 - [x] Rewrite `docs/configuration.md`
 - [x] Rewrite `docs/ui.md`
-- [ ] Rewrite `docs/install.md`
+- [x] Rewrite `docs/install.md`
 - [ ] Rewrite `docs/agents.md`
 - [ ] Rewrite `docs/themes.md`
 - [ ] Rewrite `docs/troubleshooting.md`
