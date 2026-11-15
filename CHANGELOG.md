@@ -6,6 +6,16 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-15
+
+A minor release: `saaio status --json` is version 4, which can break a program that reads it.
+
+### Changed
+
+- `saaio status --json` is version 4: a phase step's `status` can be `stale`, done before but
+  undone since the flow went back to an earlier phase. A program that reads it should accept
+  `stale` and version 4 ([json.md](docs/json.md#versions)). The TOON agents read is unchanged.
+
 ### Added
 
 - The documentation is online at [saaio.dev](https://saaio.dev): searchable, in light and dark,
@@ -19,7 +29,7 @@ All notable changes to saaio are listed here. The format follows
 - A flow asked for another change after its review goes back to `implement`: the sidebar and the
   board show review and merge-request as stale until they run again, instead of staying at review
   or showing every step finished. A phase skill the worker runs after the merge request opened
-  moves the flow too. `saaio status --json` is version 4, since a step can be `stale`.
+  moves the flow too.
 - A panic in the terminal UI ends it and gives the terminal back, with a line that says where its
   backtrace is, instead of leaving it running unresponsive; the server and its sessions keep
   running, so `saaio` attaches again.
@@ -233,3 +243,11 @@ well tested.
   release, with checksums, and `install.sh`, which checks the binary for the machine against them
   and installs it to `~/.local/bin`.
 - The store and everything saaio writes in it readable only by you.
+
+[Unreleased]: https://github.com/JanSuthacheeva/saaio/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/JanSuthacheeva/saaio/compare/v0.2.1...v0.3.0
+[0.2.1]: https://github.com/JanSuthacheeva/saaio/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/JanSuthacheeva/saaio/compare/v0.1.2...v0.2.0
+[0.1.2]: https://github.com/JanSuthacheeva/saaio/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/JanSuthacheeva/saaio/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/JanSuthacheeva/saaio/releases/tag/v0.1.0
