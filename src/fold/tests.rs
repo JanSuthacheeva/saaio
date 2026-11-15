@@ -393,7 +393,7 @@ fn phases_close_the_previous_step_and_the_current_one_runs_until_now() {
 }
 
 #[test]
-fn going_back_a_phase_adds_to_its_time_and_keeps_later_steps_done() {
+fn going_back_a_phase_adds_to_its_time_and_makes_later_steps_stale() {
     let flow = view(
         &[
             started(0),
@@ -409,7 +409,7 @@ fn going_back_a_phase_adds_to_its_time_and_keeps_later_steps_done() {
         vec![
             (StepStatus::Done, None),
             (StepStatus::Current, Some(15 * MIN)),
-            (StepStatus::Done, Some(5 * MIN)),
+            (StepStatus::Stale, Some(5 * MIN)),
             (StepStatus::Open, None),
         ]
     );
@@ -885,7 +885,6 @@ fn an_open_or_merged_request_keeps_the_final_phase_after_worker_events() {
             started(0),
             phase(MIN, Phase::of("review")),
             mr,
-            phase(3 * MIN, Phase::of("review")),
             at(4 * MIN, EventKind::Working),
             at(
                 5 * MIN,
@@ -907,7 +906,7 @@ fn an_open_or_merged_request_keeps_the_final_phase_after_worker_events() {
 }
 
 #[test]
-fn a_custom_workflow_mr_keeps_its_last_phase_after_a_late_skill() {
+fn a_custom_workflow_merge_keeps_its_last_phase_after_a_late_skill() {
     let events = [
         at(
             0,
@@ -923,7 +922,7 @@ fn a_custom_workflow_mr_keeps_its_last_phase_after_a_late_skill() {
             },
         ),
         phase(MIN, Phase::of("build")),
-        opened(2 * MIN, PR),
+        merged(2 * MIN, PR),
         phase(3 * MIN, Phase::of("build")),
     ];
     let flow = view(&events, 4 * MIN);
@@ -1671,4 +1670,198 @@ fn a_flow_that_merges_nothing_is_done_once_it_answers() {
     let answered = view(&events, 20 * MIN);
     assert_eq!(answered.state, State::Done);
     assert_eq!(steps(&answered), [(StepStatus::Done, Some(4 * MIN))]);
+}
+
+const WORKTREE: &str = "/repo/.saaio/worktrees/shop-221";
+
+fn edited(at_ms: u64, path: &str) -> Event {
+    at(at_ms, EventKind::Edited { path: path.into() })
+}
+
+fn idle(at_ms: u64, note: &str) -> Event {
+    at(at_ms, EventKind::Idle { note: note.into() })
+}
+
+/// Planned, built, reviewed, and the review's turn ended: the person can ask for more.
+fn reviewed() -> Vec<Event> {
+    vec![
+        started(0),
+        at(0, workspace(1, None)),
+        phase(MIN, Phase::of("plan")),
+        phase(2 * MIN, Phase::of("implement")),
+        phase(3 * MIN, Phase::of("review")),
+        idle(4 * MIN, "review done"),
+    ]
+}
+
+#[test]
+fn steps_back_to_implement_on_an_edit_after_the_review_turn() {
+    let mut events = reviewed();
+    let edit = EventKind::Edited {
+        path: format!("{WORKTREE}/src/csv.rs"),
+    };
+    assert!(changes("7f3c", &events, &edit, 5 * MIN));
+    events.push(at(5 * MIN, EventKind::Working));
+    events.push(at(5 * MIN, edit.clone()));
+
+    let flow = view(&events, 6 * MIN);
+
+    assert_eq!(flow.phase, Some(Phase::of("implement")));
+    assert_eq!(flow.state, State::Working);
+    assert_eq!(flow.steps[1].status, StepStatus::Current);
+    assert_eq!(texts(&flow).last(), Some(&"phase: implement (back)"));
+    assert!(!changes("7f3c", &events, &edit, 7 * MIN), "once is enough");
+}
+
+#[test]
+fn an_edit_in_the_turn_that_entered_review_is_part_of_the_review() {
+    let mut events = reviewed();
+    events.pop();
+    events.push(edited(4 * MIN, &format!("{WORKTREE}/src/csv.rs")));
+
+    assert_eq!(view(&events, 5 * MIN).phase, Some(Phase::of("review")));
+}
+
+#[test]
+fn an_edit_outside_the_worktree_does_not_step_back() {
+    let mut events = reviewed();
+    events.push(edited(5 * MIN, "/tmp/scratch/mr.md"));
+    events.push(edited(5 * MIN, "/repo/.saaio/worktrees/shop-2210/x.rs"));
+
+    assert_eq!(view(&events, 6 * MIN).phase, Some(Phase::of("review")));
+}
+
+#[test]
+fn an_edit_without_a_workspace_or_an_implement_phase_does_not_step_back() {
+    let mut bare = reviewed();
+    bare.remove(1);
+    bare.push(edited(5 * MIN, &format!("{WORKTREE}/src/csv.rs")));
+    assert_eq!(view(&bare, 6 * MIN).phase, Some(Phase::of("review")));
+
+    let custom = [
+        started_with(0, &["spec", "build", "ship"]),
+        at(0, workspace(1, None)),
+        phase(MIN, Phase::of("build")),
+        phase(2 * MIN, Phase::of("ship")),
+        idle(3 * MIN, "shipped"),
+        edited(4 * MIN, &format!("{WORKTREE}/src/csv.rs")),
+    ];
+    assert_eq!(view(&custom, 5 * MIN).phase, Some(Phase::of("ship")));
+}
+
+#[test]
+fn an_edit_at_or_before_implement_stays_where_it_is() {
+    let events = [
+        started(0),
+        at(0, workspace(1, None)),
+        phase(MIN, Phase::of("plan")),
+        idle(2 * MIN, "plan written"),
+        edited(3 * MIN, &format!("{WORKTREE}/.claude/plans/plan.md")),
+    ];
+    assert_eq!(view(&events, 4 * MIN).phase, Some(Phase::of("plan")));
+}
+
+#[test]
+fn an_edit_after_the_merge_request_opened_only_works() {
+    let mut events = reviewed();
+    events.push(phase(5 * MIN, Phase::of("merge-request")));
+    events.push(opened(6 * MIN, PR));
+    events.push(idle(7 * MIN, "PR open"));
+    events.push(at(8 * MIN, EventKind::Working));
+    events.push(edited(8 * MIN, &format!("{WORKTREE}/src/csv.rs")));
+
+    let flow = view(&events, 9 * MIN);
+    assert_eq!(flow.phase, Some(Phase::of("merge-request")));
+    assert_eq!(flow.state, State::Working);
+}
+
+#[test]
+fn a_phase_skill_after_the_merge_request_moves_the_phase() {
+    let mut events = reviewed();
+    events.push(phase(5 * MIN, Phase::of("merge-request")));
+    events.push(opened(6 * MIN, PR));
+    events.push(idle(7 * MIN, "PR open"));
+    let skill = EventKind::Phase {
+        phase: Phase::of("implement"),
+    };
+    assert!(changes("7f3c", &events, &skill, 8 * MIN));
+    events.push(at(8 * MIN, skill));
+
+    let flow = view(&events, 9 * MIN);
+
+    assert_eq!(flow.phase, Some(Phase::of("implement")));
+    assert_eq!(flow.state, State::Working);
+    assert_eq!(flow.merge_request.as_deref(), Some(PR));
+    assert_eq!(flow.steps[1].status, StepStatus::Current);
+    assert_eq!(flow.steps[0].status, StepStatus::Done);
+}
+
+#[test]
+fn a_phase_skill_after_the_merge_changes_nothing() {
+    let mut events = reviewed();
+    events.push(merged(5 * MIN, PR));
+    events.push(phase(6 * MIN, Phase::of("implement")));
+
+    let flow = view(&events, 7 * MIN);
+
+    assert_eq!(flow.phase, Some(Phase::of("merge-request")));
+    assert!(
+        flow.steps
+            .iter()
+            .all(|step| step.status == StepStatus::Done)
+    );
+}
+
+fn statuses(view: &FlowView) -> Vec<StepStatus> {
+    view.steps.iter().map(|step| step.status).collect()
+}
+
+#[test]
+fn later_phases_are_stale_once_back_at_implement_and_done_after_they_ran_again() {
+    use StepStatus::{Current, Done, Open, Stale};
+    let mut events = reviewed();
+    events.push(edited(5 * MIN, &format!("{WORKTREE}/src/csv.rs")));
+    assert_eq!(
+        statuses(&view(&events, 6 * MIN)),
+        [Done, Current, Stale, Open]
+    );
+
+    events.push(phase(7 * MIN, Phase::of("review")));
+    events.push(phase(8 * MIN, Phase::of("merge-request")));
+    events.push(opened(9 * MIN, PR));
+    events.push(idle(10 * MIN, "PR open"));
+    events.push(phase(11 * MIN, Phase::of("implement")));
+    let back = view(&events, 12 * MIN);
+    assert_eq!(statuses(&back), [Done, Current, Stale, Stale]);
+    assert_eq!(back.steps[2].duration_ms, Some(3 * MIN));
+
+    events.push(phase(13 * MIN, Phase::of("review")));
+    assert_eq!(
+        statuses(&view(&events, 14 * MIN)),
+        [Done, Done, Current, Stale]
+    );
+    events.push(phase(15 * MIN, Phase::of("merge-request")));
+    assert_eq!(statuses(&view(&events, 16 * MIN)), [Done; 4]);
+}
+
+#[test]
+fn a_phase_skill_after_the_merge_request_runs_the_clock_again() {
+    let mut events = reviewed();
+    events.push(phase(5 * MIN, Phase::of("merge-request")));
+    events.push(opened(6 * MIN, PR));
+    events.push(idle(7 * MIN, "PR open"));
+    events.push(phase(8 * MIN, Phase::of("implement")));
+
+    let flow = view(&events, 10 * MIN);
+
+    assert_eq!(
+        flow.steps[1].duration_ms,
+        Some(3 * MIN),
+        "1 min, then 2 again"
+    );
+    assert_eq!(
+        flow.steps[3].duration_ms,
+        Some(MIN),
+        "until the request opened"
+    );
 }

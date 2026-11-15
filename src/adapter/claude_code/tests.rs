@@ -70,9 +70,56 @@ fn a_skill_sets_the_phase_and_a_subagent_is_delegated() {
     assert_eq!(events("pre_write"), vec![]);
 }
 
+fn edited(path: &str) -> EventKind {
+    EventKind::Edited { path: path.into() }
+}
+
+#[test]
+fn a_file_the_main_agent_changed_is_an_edit() {
+    assert_eq!(
+        events("post_edit"),
+        vec![EventKind::Working, edited("/repo/x.txt")]
+    );
+    assert_eq!(
+        events("post_write"),
+        vec![
+            EventKind::Working,
+            edited("/private/tmp/fe2e/probe/repo/x.txt")
+        ]
+    );
+    let changed = |tool: &str, input: Value| {
+        let payload = json!({
+            "hook_event_name": "PostToolUse",
+            "tool_name": tool,
+            "tool_input": input,
+        });
+        translate(&payload, &phases())
+    };
+    assert_eq!(
+        changed("MultiEdit", json!({"file_path": "/repo/a.rs", "edits": []})),
+        vec![EventKind::Working, edited("/repo/a.rs")]
+    );
+    assert_eq!(
+        changed("NotebookEdit", json!({"notebook_path": "/repo/n.ipynb"})),
+        vec![EventKind::Working, edited("/repo/n.ipynb")]
+    );
+    assert_eq!(changed("Edit", json!({})), vec![EventKind::Working]);
+    assert_eq!(
+        changed("Read", json!({"file_path": "/repo/a.rs"})),
+        vec![EventKind::Working]
+    );
+}
+
 #[test]
 fn of_a_subagents_events_only_a_phase_skill_counts() {
     assert_eq!(events("subagent_bash"), vec![]);
+    let mut edit = fixture("post_edit");
+    edit["agent_id"] = json!("a939a6772fbea50e7");
+    assert_eq!(
+        translate(&edit, &phases()),
+        vec![],
+        "a review fixing its findings"
+    );
     let review = json!({
         "agent_id": "a939a6772fbea50e7",
         "hook_event_name": "PreToolUse",
@@ -244,7 +291,6 @@ fn names_a_file_inside_the_session_folder_by_its_relative_path() {
 
 #[test]
 fn after_a_tool_it_works_on_and_reports_tasks_blocks_and_merge_requests() {
-    assert_eq!(events("post_write"), vec![EventKind::Working]);
     assert_eq!(events("post_bash"), vec![EventKind::Working]);
     assert_eq!(
         events("post_plan_progress"),

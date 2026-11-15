@@ -156,6 +156,11 @@ pub enum EventKind {
     /// The worker got a prompt: a call that waited for its turn is over, though an Esc that
     /// killed its hook said nothing.
     Prompted,
+    /// The worker's main agent changed a file; kept only when it moves the flow back to its
+    /// build phase.
+    Edited {
+        path: String,
+    },
 }
 
 /// A step of pausing or resuming a flow's services.
@@ -601,6 +606,22 @@ mod tests {
             Event::new(9, EventKind::Prompted).to_line(),
             r#"{"v":1,"at":9,"kind":"prompted"}"#
         );
+    }
+
+    #[test]
+    fn writes_an_edit_with_its_path() {
+        let edited = Event::new(
+            7,
+            EventKind::Edited {
+                path: "/repo/src/csv.rs".into(),
+            },
+        );
+        let line = edited.to_line();
+        assert_eq!(
+            line,
+            r#"{"v":1,"at":7,"kind":"edited","path":"/repo/src/csv.rs"}"#
+        );
+        assert_eq!(Event::from_line(&line), Some(edited));
     }
 
     #[test]

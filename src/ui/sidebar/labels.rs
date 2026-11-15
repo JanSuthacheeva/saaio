@@ -27,7 +27,8 @@ impl Sidebar<'_> {
     }
 
     /// ●───●───○───○: done steps and the joins they reached in text, the current one in its phase's
-    /// color as phase_colors says (step_style), the rest faint; all of it in text once finished.
+    /// color as phase_colors says (step_style), stale ones (done before the flow went back) as done
+    /// but faint, the rest faint; all of it in text once finished.
     pub fn steps(&self, flow: &FlowView) -> Vec<Span<'static>> {
         let theme = self.theme;
         let glyphs = &theme.glyphs;
@@ -38,10 +39,12 @@ impl Sidebar<'_> {
                 StepStatus::Done => (glyphs.step_done, theme.ui.text),
                 StepStatus::Current => (glyphs.step_current, theme.step_style(flow)),
                 StepStatus::Open => (glyphs.step_open, theme.ui.faint),
+                StepStatus::Stale => (glyphs.step_done, theme.ui.faint),
             };
             spans.push(Span::styled(glyph, style));
             if let Some(next) = flow.steps.get(index + 1) {
-                let reached = step.status == StepStatus::Done && next.status != StepStatus::Open;
+                let reached = step.status == StepStatus::Done
+                    && matches!(next.status, StepStatus::Done | StepStatus::Current);
                 let join = if flow.is_finished() || reached {
                     theme.ui.text
                 } else {
@@ -282,6 +285,55 @@ mod tests {
             ],
             "plan done, its join reached, implement current, the rest open"
         );
+    }
+
+    #[test]
+    fn draws_a_stale_step_done_but_faint_and_does_not_reach_it() {
+        use crate::workflow::Phase;
+        let phase = |name: &str| EventKind::Phase {
+            phase: Phase::of(name),
+        };
+        let started = EventKind::Started {
+            name: "shop".into(),
+            request: "x".into(),
+            mode: Mode::Auto,
+            phases: None,
+            kind: None,
+            workflow: None,
+            prompt: None,
+            merges: true,
+        };
+        let events = [
+            started,
+            phase("plan"),
+            phase("implement"),
+            phase("review"),
+            phase("implement"),
+        ]
+        .map(|kind| Event::new(0, kind));
+        let flow = crate::fold::fold("id", &events, None, 0).unwrap();
+        let theme = Theme::from_palette(Palette::SAAIO);
+        let board = empty_board();
+        let changed = HashMap::new();
+        let sidebar = sidebar(&board, &theme, &changed);
+
+        let spans = sidebar.steps(&flow);
+        let drawn: Vec<_> = spans
+            .iter()
+            .map(|span| (span.content.as_ref(), span.style))
+            .collect();
+
+        let glyphs = &theme.glyphs;
+        assert_eq!(
+            drawn[4..],
+            [
+                (glyphs.step_done, theme.ui.faint),
+                (glyphs.step_join, theme.ui.faint),
+                (glyphs.step_open, theme.ui.faint),
+            ],
+            "review stale, the join after implement not reached, MR open"
+        );
+        assert_eq!(drawn[3], (glyphs.step_join, theme.ui.faint));
     }
 
     #[test]

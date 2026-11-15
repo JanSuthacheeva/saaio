@@ -109,7 +109,8 @@ fn waiter(flow_exe: &Path, args: &[&str]) -> Value {
 }
 
 /// The flow events one Claude Code hook payload means. Of a subagent's events (agent_id set) only
-/// a phase skill counts, as when a review runs in a fresh agent; the rest follows the main agent.
+/// a phase skill counts, as when a review runs in a fresh agent; the rest follows the main agent,
+/// whose changed files are edits that may take the flow back to its build phase.
 pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
     let tool = payload["tool_name"].as_str().unwrap_or("");
     let input = &payload["tool_input"];
@@ -165,6 +166,16 @@ pub fn translate(payload: &Value, workflow: &Workflow) -> Vec<EventKind> {
                     let stdout = payload["tool_response"]["stdout"].as_str().unwrap_or("");
                     if let Some(url) = created_merge_request(command, stdout) {
                         kinds.push(EventKind::MergeRequest { url });
+                    }
+                }
+                "Edit" | "Write" | "MultiEdit" | "NotebookEdit" => {
+                    let path = input["file_path"]
+                        .as_str()
+                        .or(input["notebook_path"].as_str());
+                    if let Some(path) = path {
+                        kinds.push(EventKind::Edited {
+                            path: path.to_string(),
+                        });
                     }
                 }
                 _ => {}

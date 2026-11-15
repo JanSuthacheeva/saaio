@@ -16,6 +16,10 @@ All notable changes to saaio are listed here. The format follows
 
 ### Fixed
 
+- A flow asked for another change after its review goes back to `implement`: the sidebar and the
+  board show review and merge-request as stale until they run again, instead of staying at review
+  or showing every step finished. A phase skill the worker runs after the merge request opened
+  moves the flow too. `saaio status --json` is version 4, since a step can be `stale`.
 - A panic in the terminal UI ends it and gives the terminal back, with a line that says where its
   backtrace is, instead of leaving it running unresponsive; the server and its sessions keep
   running, so `saaio` attaches again.
