@@ -68,7 +68,7 @@ start; only the prose of its docs-like sections changes, without an Introduction
 - [x] Rewrite `docs/ui.md`
 - [x] Rewrite `docs/install.md`
 - [x] Rewrite `docs/agents.md`
-- [ ] Rewrite `docs/themes.md`
+- [x] Rewrite `docs/themes.md`
 - [ ] Rewrite `docs/troubleshooting.md`
 - [ ] Rewrite `docs/cli.md`: the bullets above the list become the Introduction, the commands a proper nested section list
 - [ ] Rewrite `docs/json.md`
