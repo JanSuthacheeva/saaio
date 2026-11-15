@@ -114,6 +114,7 @@ scripts that would run:
 ```
 $ saaio start "SHOP-240 export"
 error: "~/projects/shop is not trusted: saaio would run .saaio/setup and .saaio/teardown"
+refusal: untrusted
 help[2]: "Ask the person to read its .saaio scripts, then run `saaio trust` in ~/projects/shop in their terminal","Or start the flow in `saaio`, which asks them"
 ```
 
