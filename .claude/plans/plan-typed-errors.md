@@ -232,6 +232,6 @@ Same chain for `remove::unmerged` (`Refusal::Unmerged`) and `trust::untrusted` f
       first-line fallback
 - [x] CLI test: a refused `saaio remove` prints `refusal: uncommitted`
 - [x] docs/cli.md (remove example, errors section), CHANGELOG Added line, CLAUDE.md plan list
-- [ ] End to end: in a scratch store, `saaio remove` a flow with uncommitted work from the
+- [x] End to end: in a scratch store, `saaio remove` a flow with uncommitted work from the
       command line (sees `refusal: uncommitted`) and from saaio ui in a PTY (the discard dialog
       opens); end with `saaio --stop`
