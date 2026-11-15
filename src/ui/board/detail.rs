@@ -598,4 +598,35 @@ mod tests {
         assert_ne!(implement, working);
         assert_eq!(Some(buf[(x, 1)].fg), working);
     }
+
+    #[test]
+    fn a_stale_step_shows_done_but_faint() {
+        let phase = |name: &str| EventKind::Phase {
+            phase: crate::workflow::Phase::of(name),
+        };
+        let flow = flow(
+            "shop-221",
+            Mode::Auto,
+            vec![phase("implement"), phase("review"), phase("implement")],
+        );
+        let area = Rect::new(0, 0, 80, 6);
+        let mut buf = Buffer::empty(area);
+        let state = BoardState {
+            selected: 1,
+            all: false,
+        };
+
+        let (faint, done) = with_state(vec![flow], state, |view| {
+            view.render_detail(area, &mut buf);
+            let theme = view.theme();
+            (theme.ui.faint.fg, theme.state.done.fg)
+        });
+
+        let row = rows(&buf)[1].clone();
+        assert!(row.contains("review ✓"), "{row}");
+        let stale = row.find("review ✓").unwrap() + "review ".len();
+        let x = row[..stale].chars().count() as u16;
+        assert_ne!(faint, done);
+        assert_eq!(Some(buf[(x, 1)].fg), faint);
+    }
 }

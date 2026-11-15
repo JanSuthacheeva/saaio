@@ -157,7 +157,8 @@ Approved by the user with the recommendations:
   stale arms here, since the variant does not compile without them)
 - [x] Translate main-agent Edit, Write, MultiEdit, NotebookEdit PostToolUse into `Edited` in
   `adapter/claude_code.rs`, with a recorded fixture and tests, subagent edits excluded
-- [ ] Draw stale steps faint in the sidebar and the board detail; update the goldens it changes
+- [x] Draw stale steps faint in the sidebar and the board detail; update the goldens it changes
+  (none: no golden shows a stale step, so unit tests on the sidebar's and the detail's styles)
 - [ ] End-to-end test in `tests/cli/` driving `saaio hook claude-code` through the reproduction's
   review scenario, asserting `phase: implement` and the stale steps
 - [ ] Docs: flows.md, json.md, cli.md, configuration.md; CHANGELOG Fixed; ROADMAP Planned soon for

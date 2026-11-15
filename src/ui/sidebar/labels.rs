@@ -288,6 +288,55 @@ mod tests {
     }
 
     #[test]
+    fn draws_a_stale_step_done_but_faint_and_does_not_reach_it() {
+        use crate::workflow::Phase;
+        let phase = |name: &str| EventKind::Phase {
+            phase: Phase::of(name),
+        };
+        let started = EventKind::Started {
+            name: "shop".into(),
+            request: "x".into(),
+            mode: Mode::Auto,
+            phases: None,
+            kind: None,
+            workflow: None,
+            prompt: None,
+            merges: true,
+        };
+        let events = [
+            started,
+            phase("plan"),
+            phase("implement"),
+            phase("review"),
+            phase("implement"),
+        ]
+        .map(|kind| Event::new(0, kind));
+        let flow = crate::fold::fold("id", &events, None, 0).unwrap();
+        let theme = Theme::from_palette(Palette::SAAIO);
+        let board = empty_board();
+        let changed = HashMap::new();
+        let sidebar = sidebar(&board, &theme, &changed);
+
+        let spans = sidebar.steps(&flow);
+        let drawn: Vec<_> = spans
+            .iter()
+            .map(|span| (span.content.as_ref(), span.style))
+            .collect();
+
+        let glyphs = &theme.glyphs;
+        assert_eq!(
+            drawn[4..],
+            [
+                (glyphs.step_done, theme.ui.faint),
+                (glyphs.step_join, theme.ui.faint),
+                (glyphs.step_open, theme.ui.faint),
+            ],
+            "review stale, the join after implement not reached, MR open"
+        );
+        assert_eq!(drawn[3], (glyphs.step_join, theme.ui.faint));
+    }
+
+    #[test]
     fn a_note_is_what_the_flow_last_said_not_what_the_row_shows() {
         use crate::workflow::Phase;
         let flow = |kinds: Vec<EventKind>| {
