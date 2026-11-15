@@ -169,3 +169,43 @@ Approved by the user with the recommendations:
   `review,stale`, `merge-request,stale`
   (run 2026-11-15: all three as expected. The script now appends the workspace line `saaio start`
   records after `saaio new`, which records none, since a change counts only inside the worktree)
+
+## Review
+
+Reviewed 2026-11-15 in an isolated agent, against this plan, CLAUDE.md and the code the diff calls.
+
+**Fixed**
+
+- A phase skill after the merge request opened moved the phase, but its clock stayed stopped at the
+  request's opening (`stopped_at`), so the phase gone back to counted no time (implement showed 1
+  min instead of 3 in `a_phase_skill_after_the_merge_request_runs_the_clock_again`). The Phase arm
+  now resumes the clock (`Folding::resume`, shared with the Working arm of a flow that merges
+  nothing). docs/json.md said every step is `done` once a request is open; it now says so only at
+  the last phase or once merged. Commit 313486e. Not reviewed by a separate agent: re-read as a
+  separate pass against the finding and its neighbours (ended, merged, a flow that merges nothing,
+  a delegate starting the phase).
+
+**Open**
+
+- The worktree check compares the edit's `file_path` with `workspace.path` as text
+  (`Path::starts_with`). A path through a link (`/tmp` vs `/private/tmp` on macOS) would not step
+  back. Claude Code passes the session's own absolute paths, so likely fine; recommend leaving it
+  unless seen.
+- `turn_ended` depends on the Idle line being in the log. A review-changes run in the main agent
+  that the person continues across turns (asks it to fix an open item) steps back to implement.
+  This matches decision 1's spirit; recommend keeping.
+- Logs written before this branch keep a dropped post-PR `phase` line lost (as the plan says).
+
+**Where to look**
+
+1. `src/fold.rs` `apply`: the merged guard, the `Edited` arm and `build_to_go_back_to`, then
+   `turn_ended` set at the end of `apply` and reset in `enter`.
+2. `src/fold.rs` `finish`: `is_done` (merged, or open at the last phase) and the `Stale` arm.
+3. `src/adapter/claude_code.rs` `translate`: which tools count, subagent edits dropped.
+4. Routine, skim: the UI arms in `ui/sidebar/labels.rs` and `ui/board/detail.rs`, `VIEW_VERSION`
+   4, docs and CHANGELOG.
+
+**Checks**
+
+`cargo test --all-features`, `cargo clippy --all-targets --all-features -- -D warnings` and
+`cargo fmt --check` pass at 313486e.
