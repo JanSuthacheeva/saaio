@@ -220,7 +220,7 @@ Same chain for `remove::unmerged` (`Refusal::Unmerged`) and `trust::untrusted` f
       `client::timed_out`
 - [x] `client::Answer` and `hello -> Result<Answer>`; `connect` and `running` match on it; test
       `running` against a refusing fake server
-- [ ] `Refusal` serde (lowercase) with a round-trip test; `Failure.refusal`, `Failure::refused`,
+- [x] `Refusal` serde (lowercase) with a round-trip test; `Failure.refusal`, `Failure::refused`,
       `to_toon` prints the key; unit tests for the key's place and absence
 - [ ] `remove::uncommitted`/`unmerged` and `trust::untrusted` through `Failure::refused`; their
       tests assert the refusal field

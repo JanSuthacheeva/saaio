@@ -13,6 +13,8 @@ mod fixtures;
 
 use serde::Serialize;
 
+use crate::refusal::Refusal;
+
 pub(crate) const DESCRIPTION: &str =
     "Tracks parallel feature flows: what each is doing, where it is blocked, how far it got";
 
@@ -34,6 +36,8 @@ pub struct Failure {
     pub message: String,
     pub help: Vec<String>,
     pub code: u8,
+    /// What saaio ui asks the person about instead of showing the error.
+    pub refusal: Option<Refusal>,
 }
 
 impl Document {
@@ -56,6 +60,15 @@ impl Failure {
             message: message.into(),
             help,
             code: 1,
+            refusal: None,
+        }
+    }
+
+    /// Exit code 1, a refusal: printed with its `refusal` key.
+    pub fn refused(refusal: Refusal, message: impl Into<String>, help: Vec<String>) -> Failure {
+        Failure {
+            refusal: Some(refusal),
+            ..Failure::error(message, help)
         }
     }
 
@@ -104,20 +117,24 @@ impl Failure {
             message,
             help: vec![format!("Run `{command} --help` for the usage")],
             code: 2,
+            refusal: None,
         }
     }
 
-    /// error: ..., help[n]: ...
+    /// error: ..., refusal: ... (only on a refusal), help[n]: ...
     #[must_use]
     pub fn to_toon(&self) -> String {
         #[derive(Serialize)]
         struct ErrorDocument<'a> {
             error: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            refusal: Option<Refusal>,
             #[serde(skip_serializing_if = "<[String]>::is_empty")]
             help: &'a [String],
         }
         toon(&ErrorDocument {
             error: &self.message,
+            refusal: self.refusal,
             help: &self.help,
         })
     }
@@ -181,6 +198,30 @@ mod tests {
             failure.to_toon(),
             "error: no flow named shop-999\nhelp[1]: Run `saaio` to list the flows"
         );
+    }
+
+    #[test]
+    fn prints_a_refusal_between_the_error_and_its_next_steps() {
+        let failure = Failure::refused(
+            Refusal::Uncommitted,
+            "shop-230 has uncommitted work",
+            vec!["Run `saaio remove shop-230 --force`".into()],
+        );
+
+        assert_eq!(failure.code, 1);
+        assert_eq!(failure.refusal, Some(Refusal::Uncommitted));
+        assert_eq!(
+            failure.to_toon(),
+            "error: shop-230 has uncommitted work\nrefusal: uncommitted\nhelp[1]: Run `saaio remove shop-230 --force`"
+        );
+    }
+
+    #[test]
+    fn prints_no_refusal_for_a_plain_error() {
+        let failure = Failure::error("no flow named shop-999", Vec::new());
+
+        assert_eq!(failure.refusal, None);
+        assert_eq!(failure.to_toon(), "error: no flow named shop-999");
     }
 
     #[test]

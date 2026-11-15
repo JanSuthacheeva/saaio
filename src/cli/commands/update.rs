@@ -36,6 +36,7 @@ pub fn run(args: &Args, env: &Env) -> Result<Document, Failure> {
             message: format!("{error:#}"),
             help: vec!["Pass a release tag, such as --version v0.1.1".to_string()],
             code: 2,
+            refusal: None,
         })?,
         None => releases.latest(LIMIT).map_err(|error| {
             Failure::error(
