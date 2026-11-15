@@ -1,0 +1,40 @@
+{
+ "session_id": "7f3c0000-0000-4000-8000-000000000000",
+ "transcript_path": "/home/dev/.claude/projects/-repo/7f3c.jsonl",
+ "cwd": "/repo",
+ "prompt_id": "fc037f77-2226-4d04-a48a-7d6b1b93ea50",
+ "permission_mode": "default",
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "PostToolUse",
+ "tool_name": "Edit",
+ "tool_input": {
+  "file_path": "/repo/x.txt",
+  "old_string": "a = 1",
+  "new_string": "a = 2",
+  "replace_all": false
+ },
+ "tool_response": {
+  "filePath": "/repo/x.txt",
+  "oldString": "a = 1",
+  "newString": "a = 2",
+  "originalFile": "a = 1\n",
+  "structuredPatch": [
+   {
+    "oldStart": 1,
+    "oldLines": 1,
+    "newStart": 1,
+    "newLines": 1,
+    "lines": [
+     "-a = 1",
+     "+a = 2"
+    ]
+   }
+  ],
+  "userModified": false,
+  "replaceAll": false
+ },
+ "tool_use_id": "toolu_01JaHBFfoYvkwMk48FcvWL8X",
+ "duration_ms": 3
+}
