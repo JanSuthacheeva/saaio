@@ -62,7 +62,7 @@ start; only the prose of its docs-like sections changes, without an Introduction
 
 ## Tasks
 
-- [ ] Commit the plan, the plan's line in CLAUDE.md, and the sample `docs/repository.md` (with the `cat pint.log` correction)
+- [x] Commit the plan, the plan's line in CLAUDE.md, and the sample `docs/repository.md` (with the `cat pint.log` correction)
 - [ ] Rewrite `docs/flows.md`
 - [ ] Rewrite `docs/configuration.md`
 - [ ] Rewrite `docs/ui.md`
