@@ -67,12 +67,12 @@ impl Client {
         &self.server
     }
 
-    pub fn send(&mut self, message: &ClientMsg) -> Result<()> {
+    pub fn send(&mut self, message: &ClientMsg) -> Result<(), proto::Error> {
         proto::write_msg(&mut self.stream, message)
     }
 
     /// The next server message; None when the server closed the connection.
-    pub fn recv(&mut self) -> Result<Option<ServerMsg>> {
+    pub fn recv(&mut self) -> Result<Option<ServerMsg>, proto::Error> {
         proto::read_msg(&mut self.stream)
     }
 
@@ -285,18 +285,10 @@ pub fn close_flow(socket: &Path, id: &str, timeout: Duration) -> Result<Closing>
             Ok(Some(ServerMsg::NotOpen(open))) if open == id => return Ok(Closing::NoPane),
             Ok(Some(_)) => {}
             Ok(None) => return Ok(Closing::Closed),
-            Err(error) if timed_out(&error) => return Ok(Closing::TimedOut),
-            Err(error) => return Err(error),
+            Err(error) if error.timed_out() => return Ok(Closing::TimedOut),
+            Err(error) => return Err(error.into()),
         }
     }
-}
-
-fn timed_out(error: &anyhow::Error) -> bool {
-    error.chain().any(|cause| {
-        cause
-            .downcast_ref::<std::io::Error>()
-            .is_some_and(|io| matches!(io.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut))
-    })
 }
 
 /// Unix sockets paths must be shorter than this (104 bytes on macOS, 108 on Linux).

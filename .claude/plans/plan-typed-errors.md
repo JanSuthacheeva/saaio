@@ -103,7 +103,7 @@ pub fn read_msg<R: Read, T: DeserializeOwned>(reader: &mut R) -> Result<Option<T
 fn read_full<R: Read>(reader: &mut R, buf: &mut [u8]) -> Result<bool, Error>;
 ```
 
-The rest of proto.rs keeps anyhow. `server/outbox.rs` and `server/conn.rs` compile unchanged
+Nothing else in proto.rs used anyhow, so its import goes. `server/outbox.rs` and `server/conn.rs` compile unchanged
 (`?` into anyhow, or errors ignored).
 
 ### `src/client.rs` (modified)
@@ -214,9 +214,9 @@ Same chain for `remove::unmerged` (`Refusal::Unmerged`) and `trust::untrusted` f
 
 ## Tasks
 
-- [ ] Add `thiserror` and `proto::Error` with `timed_out`; `encode`, `write_msg`, `read_msg`,
+- [x] Add `thiserror` and `proto::Error` with `timed_out`; `encode`, `write_msg`, `read_msg`,
       `read_full` return it; unit tests for TooLarge, Cut, Decode and `timed_out`
-- [ ] `Client::send`/`recv` return `proto::Error`; `close_flow` uses `error.timed_out()`; remove
+- [x] `Client::send`/`recv` return `proto::Error`; `close_flow` uses `error.timed_out()`; remove
       `client::timed_out`
 - [ ] `client::Answer` and `hello -> Result<Answer>`; `connect` and `running` match on it; test
       `running` against a refusing fake server
