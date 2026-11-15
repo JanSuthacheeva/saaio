@@ -270,7 +270,7 @@ Codex and master sessions:
 
 ## Tasks
 
-- [ ] Add `src/id.rs` with `FlowId`, `SessionId`, `NotAnId` and `canonical`, registered in lib.rs, with unit tests for round-trip, refused forms, JSON and postcard bytes equal to a `String`'s, `Ord` versus text order and `SessionId::from(FlowId)`
+- [x] Add `src/id.rs` with `FlowId`, `SessionId`, `NotAnId` and `canonical`, registered in lib.rs, with unit tests for round-trip, refused forms, JSON and postcard bytes equal to a `String`'s, `Ord` versus text order and `SessionId::from(FlowId)`
 - [ ] Type the store and the log: `Store` id arguments, `create`, `ids` (skipping non-id stems), `stamps`, `FlowLog.id`, `Waiter::Flow`, `master_session`/`set_master_session`; `EventKind::Session.id: SessionId`; `FlowView.id`, `view::Session.id`; `fold::changes`, `Folding::new`, `resolve` by parsed id; `fixtures::flow_id(n)` and `fixtures::flow(id: FlowId, ..)`; every caller and test compiling, with tests for `ids` skipping `notes.jsonl`, resolve by id/name/uppercase id and a FlowView's JSON unchanged
 - [ ] Type the protocol and client: `PaneKey::Flow(FlowId)` (Copy), `ClientMsg::CloseFlow`, `ServerMsg::Closed`/`NotOpen`, `client::close_flow`, server `known`, `Panes::close_flow` (is_uuid check gone), `reopen_worker`, `flow`, `current_flow`, reconcile, pause_watch, startup, forge_watch; UI `worker`, `in_view`, keys; with a test that `CloseFlow` and a Board frame encode to the same bytes as before
 - [ ] Type sessions and launch: `agent_argv`/`plain_argv`/`resume_argv` with `SessionId`, the worker spec through `SessionId::from(flow.id)`, `MasterRecord.session`, `MasterRecord::spec(.., Option<SessionId>)`, codex.rs `SessionId::parse`, `record_master_session`, peek `transcript(.., SessionId)`, `hook_env(id: FlowId, ..)`
