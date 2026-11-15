@@ -11,8 +11,9 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
 
-use super::{ConnId, Event, spawn_named};
+use super::{ConnId, Event};
 use crate::proto::{self, ServerMsg};
+use crate::threads;
 
 /// Past this many bytes queued for one connection it is closed: its client stopped reading.
 pub(super) const MAX_QUEUED: usize = 2 * proto::MAX_MESSAGE;
@@ -39,7 +40,7 @@ impl Outbox {
         let written = Arc::clone(&queued);
         // macOS refuses socket options once the client hung up (EINVAL); the write says so.
         let _ = stream.set_write_timeout(Some(write));
-        spawn_named(format!("conn {conn} writer"), move || {
+        threads::spawn(format!("conn {conn} writer"), move || {
             for bytes in queue {
                 if stream.write_all(&bytes).is_err() {
                     let _ = events.send(Event::Gone(conn));
