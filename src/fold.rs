@@ -229,8 +229,8 @@ impl Folding {
         reason = "one flat match over every event kind"
     )]
     fn apply(&mut self, event: &Event) {
-        // A PR fixes the final workflow phase, though the worker can still ask or work.
-        if self.view.merge_request.is_some() && matches!(event.kind, EventKind::Phase { .. }) {
+        // A merge fixes the final workflow phase, though the worker can still ask or work.
+        if self.view.merged && matches!(event.kind, EventKind::Phase { .. }) {
             return;
         }
         // An ended worker cannot restart through a late hook. Forge metadata may still change.
@@ -611,7 +611,9 @@ impl Folding {
             .phase
             .as_ref()
             .and_then(|phase| self.position(phase));
-        let is_done = self.view.merge_request.is_some()
+        let at_last = current.is_some_and(|current| current + 1 == self.phases.len());
+        let is_done = self.view.merged
+            || (self.view.merge_request.is_some() && at_last)
             || (!self.view.merges && self.view.state == State::Done);
         self.view.steps = self
             .phases

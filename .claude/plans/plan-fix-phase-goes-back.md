@@ -149,7 +149,7 @@ Approved by the user with the recommendations:
   `Phase::is_build`, `Folding::turn_ended` and the `Edited` arm, with tests that an edit in the
   turn that entered review, an edit outside the workspace and one in a workflow without `implement`
   do not step back (a subagent's edit never reaches the fold: tested in the adapter's task)
-- [ ] Add `a_phase_skill_after_the_merge_request_moves_the_phase` in `src/fold/tests.rs` (fails
+- [x] Add `a_phase_skill_after_the_merge_request_moves_the_phase` in `src/fold/tests.rs` (fails
   today: phase stays `merge-request`, every step done), then let `Phase` events through until merged
   and compute `is_done` from the current phase
 - [ ] Add `StepStatus::Stale` with a test that review and merge-request show `stale` once back at

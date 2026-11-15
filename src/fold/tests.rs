@@ -885,7 +885,6 @@ fn an_open_or_merged_request_keeps_the_final_phase_after_worker_events() {
             started(0),
             phase(MIN, Phase::of("review")),
             mr,
-            phase(3 * MIN, Phase::of("review")),
             at(4 * MIN, EventKind::Working),
             at(
                 5 * MIN,
@@ -907,7 +906,7 @@ fn an_open_or_merged_request_keeps_the_final_phase_after_worker_events() {
 }
 
 #[test]
-fn a_custom_workflow_mr_keeps_its_last_phase_after_a_late_skill() {
+fn a_custom_workflow_merge_keeps_its_last_phase_after_a_late_skill() {
     let events = [
         at(
             0,
@@ -923,7 +922,7 @@ fn a_custom_workflow_mr_keeps_its_last_phase_after_a_late_skill() {
             },
         ),
         phase(MIN, Phase::of("build")),
-        opened(2 * MIN, PR),
+        merged(2 * MIN, PR),
         phase(3 * MIN, Phase::of("build")),
     ];
     let flow = view(&events, 4 * MIN);
@@ -1774,4 +1773,41 @@ fn an_edit_after_the_merge_request_opened_only_works() {
     let flow = view(&events, 9 * MIN);
     assert_eq!(flow.phase, Some(Phase::of("merge-request")));
     assert_eq!(flow.state, State::Working);
+}
+
+#[test]
+fn a_phase_skill_after_the_merge_request_moves_the_phase() {
+    let mut events = reviewed();
+    events.push(phase(5 * MIN, Phase::of("merge-request")));
+    events.push(opened(6 * MIN, PR));
+    events.push(idle(7 * MIN, "PR open"));
+    let skill = EventKind::Phase {
+        phase: Phase::of("implement"),
+    };
+    assert!(changes("7f3c", &events, &skill, 8 * MIN));
+    events.push(at(8 * MIN, skill));
+
+    let flow = view(&events, 9 * MIN);
+
+    assert_eq!(flow.phase, Some(Phase::of("implement")));
+    assert_eq!(flow.state, State::Working);
+    assert_eq!(flow.merge_request.as_deref(), Some(PR));
+    assert_eq!(flow.steps[1].status, StepStatus::Current);
+    assert_eq!(flow.steps[0].status, StepStatus::Done);
+}
+
+#[test]
+fn a_phase_skill_after_the_merge_changes_nothing() {
+    let mut events = reviewed();
+    events.push(merged(5 * MIN, PR));
+    events.push(phase(6 * MIN, Phase::of("implement")));
+
+    let flow = view(&events, 7 * MIN);
+
+    assert_eq!(flow.phase, Some(Phase::of("merge-request")));
+    assert!(
+        flow.steps
+            .iter()
+            .all(|step| step.status == StepStatus::Done)
+    );
 }
