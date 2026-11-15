@@ -217,6 +217,20 @@ left is in test modules; `cargo fmt --check` is clean.
 **Decided** (the user): build the stdout lock here (task above); accept no automated test for
 `append_and_exit_on_panic`.
 
+**Follow-up review** of `git diff d37ce68..HEAD` (the decisions above and eb46231).
+
+- Fixed - nothing: no finding. In `outer::install_panic_restore` the lock is taken before
+  `restore()` and held through `previous(info)`, which is `append_and_exit_on_panic`'s hook
+  (installed first in `cli/commands/ui.rs`, `Outer::enter` after it, its only caller), so it lasts
+  until `process::exit(101)`. stdout's lock is reentrant, so a panic on the thread that is drawing
+  takes it again; `process::exit` flushes stdout with `try_lock`, so it does not wait on it; the
+  backtrace and messages go to server.log and stderr, which the lock does not cover. Every UI
+  write to the terminal (ratatui's backend, `Outer::mirror`, the clipboard's OSC 52, notifications)
+  goes through `io::stdout()`, so all of them wait.
+- Open - none new. A thread blocked forever writing to a terminal that stopped reading would still
+  hold the panicking thread before its exit, but `restore()` already locked stdout per write
+  before this change, so that is not a regression.
+
 **Where to look**
 
 1. `src/server_log.rs` `append_and_exit_on_panic` with `src/ui/outer.rs` `install_panic_restore`
@@ -231,4 +245,5 @@ Routine and skimmable: the other commands' `ctx.env`/`ctx.now()` rewrites, the s
 `spawn_named` -> `threads::spawn` renames, `clippy.toml`, CLAUDE.md.
 
 **Checks** - `cargo test --all-features` and clippy passed at 8f12f4a, the site's link check at
-0d534b0; only the plan changed since. The fixes were not reviewed independently (there were none).
+0d534b0; only the plan changed since. The fixes were not reviewed independently (there were none). The follow-up
+changed only the plan, so eb46231's green run (test, clippy, fmt) still holds.
