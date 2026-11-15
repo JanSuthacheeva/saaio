@@ -10,6 +10,9 @@ All notable changes to saaio are listed here. The format follows
 
 - The documentation is online at [saaio.dev](https://saaio.dev): searchable, in light and dark,
   readable on a phone, and built from the Markdown in the repository on every merge.
+- An error that only a person may overrule says so in a `refusal` line (`uncommitted`,
+  `unmerged` or `untrusted`), so a script or agent can tell it apart without reading the
+  message ([cli.md](docs/cli.md#output-errors-and-exit-codes)).
 
 ### Fixed
 

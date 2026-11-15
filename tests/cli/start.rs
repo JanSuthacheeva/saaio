@@ -492,6 +492,7 @@ fn start_runs_nothing_of_a_repository_the_person_has_not_trusted() {
         )),
         "{text}"
     );
+    assert!(text.contains("\nrefusal: untrusted\n"), "{text}");
     assert!(text.contains("run `saaio trust`"), "{text}");
     assert!(!lab.repo.join("setup-ran").exists());
     assert!(!lab.repo.join(".saaio/worktrees").exists());
