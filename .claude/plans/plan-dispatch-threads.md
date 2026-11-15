@@ -190,6 +190,7 @@ A UI thread panics:
 - [x] Move every command to `run(args, &Context)` and make `cli::run` one match; tests/cli green
 - [x] CLAUDE.md (threads.rs, cli/context.rs, server spawn note) and the CHANGELOG Fixed line
 - [x] End to end: the PTY script with an injected reader panic exits in a second with 'ui server' in server.log; without it `saaio --stop` still ends the UI; a few commands (status, start, remove, hook) on a scratch store
+- [ ] Review: hold `io::stdout().lock()` in `outer::install_panic_restore` from `restore()` until the hook chain exits, so the loop draws nothing into the restored terminal; PTY check with an injected 'ui job' panic
 
 ## Review
 
@@ -212,6 +213,9 @@ left is in test modules; `cargo fmt --check` is clean.
   and `previous(info)`, so the ratatui backend (over `io::stdout()`) blocks until the process exits.
 - `server_log::append_and_exit_on_panic` has no automated test (it exits the process); the plan
   covers it by the manual PTY run only. Acceptable; a test would need a panic hook seam.
+
+**Decided** (the user): build the stdout lock here (task above); accept no automated test for
+`append_and_exit_on_panic`.
 
 **Where to look**
 
