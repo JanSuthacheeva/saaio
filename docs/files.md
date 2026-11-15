@@ -1,10 +1,24 @@
 # Files
 
-Every file saaio reads or writes. All plain text. Only the config folder is meant for editing.
+- [Introduction](#introduction)
+- [The config folder](#the-config-folder)
+- [The store](#the-store)
+- [The shared folder](#the-shared-folder)
+- [In a repository](#in-a-repository)
+- [Read elsewhere](#read-elsewhere)
+- [Removing saaio](#removing-saaio)
+
+## Introduction
+
+saaio keeps nothing hidden: every file it reads or writes is listed on this page, and all of them
+are plain text. They live in four places: the config folder, which is yours to edit; the store,
+where a project's flows are recorded; the shared folder, which every project uses; and the
+`.saaio` folder in your repository. Only the config folder is meant for editing.
 
 ## The config folder
 
-Location: the folder of `$SAAIO_CONFIG` if set, else `$XDG_CONFIG_HOME/saaio`, else `~/.config/saaio`.
+The config folder holds your settings. It is the folder of `$SAAIO_CONFIG` if set, else
+`$XDG_CONFIG_HOME/saaio`, else `~/.config/saaio`:
 
 | File | Holds |
 | --- | --- |
@@ -13,14 +27,14 @@ Location: the folder of `$SAAIO_CONFIG` if set, else `$XDG_CONFIG_HOME/saaio`, e
 | `themes/<name>.toml` | themes `theme.toml` can extend, often written by another tool |
 | `master.md` | the master's instructions ([flows.md](flows.md#the-master)) |
 
-- `saaio server`, which the UI starts, writes `config.toml`, `theme.toml` and `master.md` when they
-  are missing.
-- An edited file is never overwritten.
-- A newer saaio refreshes `master.md` and `config.toml` while they still hold an earlier default.
+`saaio server`, which the UI starts, writes `config.toml`, `theme.toml` and `master.md` when they
+are missing. An edited file is never overwritten, and a newer saaio refreshes `master.md` and
+`config.toml` only while they still hold an earlier default.
 
 ## The store
 
-Location, the first that applies:
+A store is where saaio records a project's flows. Each git repository gets its own, so the flows
+of one project never mix with another's. saaio picks the first of these that applies:
 
 1. `$SAAIO_HOME`
 2. in a git repository: `projects/<repository>` in the shared folder. A worktree or a subfolder uses
@@ -33,7 +47,7 @@ gone: a repository moved to another folder starts with a new store, and its earl
 readable with `SAAIO_HOME=~/.local/state/saaio/projects/<repository>`.
 
 The UI passes its store to every session it opens as `SAAIO_HOME`, so a worker reports into its
-flow's store from any folder.
+flow's store from any folder. A store holds:
 
 | File | Holds |
 | --- | --- |
@@ -46,12 +60,15 @@ flow's store from any folder.
 | `master.json` | the master's session id and folder, for resuming after a restart |
 | `repo` | in a project store: the git folder of the repository it belongs to. A store without it is taken by the first repository of its name. |
 
-The event log is private. Read flows with `saaio status --json` ([json.md](json.md)).
+> [!NOTE]
+> The event log is private and may change. Read flows with `saaio status --json`
+> ([json.md](json.md)).
 
 ## The shared folder
 
-Location: `$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`, regardless of `SAAIO_HOME`. Also
-the store outside a repository.
+Some things belong to no single project: the list of stores, the slots, the repositories you
+trust. They live in the shared folder, `$XDG_STATE_HOME/saaio`, else `~/.local/state/saaio`,
+regardless of `SAAIO_HOME`. Outside a repository, it is also the store:
 
 | File | Holds |
 | --- | --- |
@@ -65,23 +82,32 @@ the store outside a repository.
 
 ## In a repository
 
+A repository tells saaio about itself in its `.saaio` folder, which you commit, except the
+worktrees:
+
 | File | Holds | Committed |
 | --- | --- | --- |
-| `.saaio/config.toml` | the branch convention ([repository.md](repository.md#branch-names)) | yes |
+| `.saaio/config.toml` | the branch convention and the heavy commands ([repository.md](repository.md#branch-names)) | yes |
 | `.saaio/setup`, `.saaio/teardown` | the scripts run in each worktree ([repository.md](repository.md#setup-and-teardown)) | yes |
 | `.saaio/pause`, `.saaio/resume` | the scripts that pause and resume a resting flow's services ([repository.md](repository.md#pause-and-resume)) | yes |
 | `.saaio/worktrees/<name>` | each flow's worktree. `.saaio/worktrees/` is listed in `.git/info/exclude`. | no |
 
 ## Read elsewhere
 
+For the peek, saaio reads a worker's transcript where its harness keeps it:
+
 | File | Purpose |
 | --- | --- |
 | `~/.claude/projects/...` (or under `$CLAUDE_CONFIG_DIR`) | a Claude Code worker's transcript, for the peek |
 | `~/.codex/sessions/...` (or under `$CODEX_HOME`) | a Codex worker's transcript, the one its hooks name, for the peek. A file elsewhere is not read. |
 
-saaio writes nothing to `~/.claude` or `~/.codex`. Hooks are passed on each agent's command line.
+saaio writes nothing to `~/.claude` or `~/.codex`: its hooks are passed on each agent's command
+line.
 
 ## Removing saaio
+
+Since saaio installs nothing into your agents, removing it is a matter of stopping it and deleting
+its folders:
 
 ```sh
 saaio --stop      # end the server and every session
