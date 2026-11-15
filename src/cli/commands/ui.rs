@@ -16,7 +16,7 @@ pub fn run(store: &Store, env: &Env, clock: fn() -> u64) -> Result<Document, Fai
     // A broken config.toml stops the UI here: there is no last good one to keep yet.
     env.config()?;
     let log = env.server_log(store);
-    server_log::append_on_panic(log.clone(), "ui", clock);
+    server_log::append_and_exit_on_panic(log.clone(), "ui", clock);
     match attach(store, env, log.clone(), clock) {
         Ok(message) => Ok(Document::Text(message)),
         Err(error) => {

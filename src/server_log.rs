@@ -124,9 +124,10 @@ pub fn exit_on_panic(clock: fn() -> u64) {
     }));
 }
 
-/// From now on a panic appends `<source>: panic ...` and its backtrace to `log`, then runs the hook
-/// before it; for a process whose stderr is not server.log (the UI).
-pub fn append_on_panic(log: PathBuf, source: &'static str, clock: fn() -> u64) {
+/// From now on a panic in any thread appends `<source>: panic ...` and its backtrace to `log`,
+/// runs the hook before it, says where the backtrace is and ends the process (exit 101): a UI
+/// that lost a thread would stop answering. For a process whose stderr is not server.log.
+pub fn append_and_exit_on_panic(log: PathBuf, source: &'static str, clock: fn() -> u64) {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let message = info.payload_as_str().unwrap_or("a panic without a message");
@@ -134,6 +135,12 @@ pub fn append_on_panic(log: PathBuf, source: &'static str, clock: fn() -> u64) {
         let backtrace = Backtrace::force_capture();
         let _ = append(&log, clock(), &format!("{source}: {text}\n{backtrace}"));
         previous(info);
+        let _ = writeln!(
+            io::stderr(),
+            "the saaio {source} stopped after a panic; its backtrace is in {}",
+            log.display()
+        );
+        process::exit(101);
     }));
 }
 
