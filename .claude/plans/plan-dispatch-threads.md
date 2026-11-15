@@ -188,5 +188,5 @@ A UI thread panics:
 - [x] Replace `append_on_panic` with `server_log::append_and_exit_on_panic` and use it in commands/ui.rs
 - [x] Add `cli::context::{Context, Opened}` with unit tests for `open`
 - [x] Move every command to `run(args, &Context)` and make `cli::run` one match; tests/cli green
-- [ ] CLAUDE.md (threads.rs, cli/context.rs, server spawn note) and the CHANGELOG Fixed line
+- [x] CLAUDE.md (threads.rs, cli/context.rs, server spawn note) and the CHANGELOG Fixed line
 - [ ] End to end: the PTY script with an injected reader panic exits in a second with 'ui server' in server.log; without it `saaio --stop` still ends the UI; a few commands (status, start, remove, hook) on a scratch store
