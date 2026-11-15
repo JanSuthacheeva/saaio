@@ -83,9 +83,8 @@ can add kinds of your own under new names. Details: [Use your own workflow](docs
 
 Several workers in one project need their own ports, `.env` and services, or they collide. Once per
 project, let the `setup-saaio` skill write `.saaio/setup` and `.saaio/teardown`, which give each
-worktree its own. When the setup
-starts services, it also writes `.saaio/pause` and `.saaio/resume`, which pause them while the flow
-rests.
+worktree its own. When the setup starts services, it also writes `.saaio/pause` and
+`.saaio/resume`, which pause them while the flow rests.
 
 ```sh
 npx skills add JanSuthacheeva/agent-skills -g --skill setup-saaio   # included in the command above
@@ -143,9 +142,9 @@ A flow is one unit of work: one feature or ticket, from request to merge request
 git worktree and branch, a worker (the agent session doing the work) and the phases the worker
 walks through (plan, implement, review, merge request by default).
 
-Every flow is an append-only event log, so its history is never rewritten. The agents' hooks run `saaio hook`, which turns hook events
-into flow events (phase started, question waiting, merge request opened). saaio folds the logs into
-each flow's state. `saaio server` runs each agent in its own terminal. `saaio` attaches to it.
+Every flow is an append-only event log, so its history is never rewritten. The agents' hooks run
+`saaio hook`, which turns hook events into flow events (phase started, question waiting, merge
+request opened). saaio folds the logs into each flow's state. `saaio server` runs each agent in its own terminal. `saaio` attaches to it.
 
 ## CLI
 

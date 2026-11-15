@@ -461,9 +461,9 @@ characters.
 saaio new --name <name> --request <text> [--mode guided|auto] [--kind <kind>]
 ```
 
-`saaio new` tracks a flow without a worktree or worker, for a worker you run by hand. An existing unfinished flow
-of that name is returned (`existing: true`). The request: up to 20000 characters, as for
-`saaio start`. `--kind` records the kind's phases, as `saaio start` does:
+`saaio new` tracks a flow without a worktree or worker, for a worker you run by hand. An existing
+unfinished flow of that name is returned (`existing: true`). The request: up to 20000 characters,
+as for `saaio start`. `--kind` records the kind's phases, as `saaio start` does:
 
 ```
 $ saaio new --name shop-230 --request "SHOP-230 tracked by hand"
@@ -493,9 +493,9 @@ branch: deleted
 help[1]: Run `saaio` to see what is left
 ```
 
-Your work is safe with it, though. `saaio remove` refuses and changes nothing when the worktree has uncommitted work, git cannot check it (git does
-not list it as a worktree of the repository), or the branch has commits on no other branch, local
-or pushed:
+Your work is safe with it, though. `saaio remove` refuses and changes nothing when the worktree
+has uncommitted work, git cannot check it (git does not list it as a worktree of the repository),
+or the branch has commits on no other branch, local or pushed:
 
 ```
 $ saaio remove shop-221
@@ -557,9 +557,9 @@ saaio trust [<folder>] [--revoke]
 saaio trust --list
 ```
 
-`saaio trust` trusts the repository `<folder>` is in (default: the current folder), so saaio runs its `.saaio`
-scripts and lets Codex workers trust its worktrees ([repository.md](repository.md#trust)). Only a
-person trusts: run without a terminal, or in an agent's or a worker's shell, it refuses.
+`saaio trust` trusts the repository `<folder>` is in (default: the current folder), so saaio runs
+its `.saaio` scripts and lets Codex workers trust its worktrees ([repository.md](repository.md#trust)).
+Only a person trusts: run without a terminal, or in an agent's or a worker's shell, it refuses.
 
 ```
 $ saaio trust
@@ -602,9 +602,10 @@ How to report a bug: [troubleshooting.md](troubleshooting.md#reporting-a-bug).
 saaio completions <shell>
 ```
 
-`saaio completions` prints the completion script for `bash`, `zsh`, `fish`, `elvish` or `powershell` on stdout, as
-the shell reads it, not as TOON. It covers every command `saaio --help` lists, with their options
-and values. Works without a store. Where each shell keeps it: [install.md](install.md#shell-completions).
+`saaio completions` prints the completion script for `bash`, `zsh`, `fish`, `elvish` or
+`powershell` on stdout, as the shell reads it, not as TOON. It covers every command `saaio --help`
+lists, with their options and values. Works without a store. Where each shell keeps it:
+[install.md](install.md#shell-completions).
 
 ```
 $ saaio completions tcsh
@@ -618,9 +619,9 @@ help[1]: Run `saaio completions --help` for the usage
 saaio update [--version <tag>]
 ```
 
-`saaio update` installs the latest release, or the tag `--version` names (a pre-release too), over the `saaio`
-being run, in the folder it is in. It runs that release's `install.sh`, which checks the download
-against `SHA256SUMS` and renames the new binary over the old one. Works without a store.
+`saaio update` installs the latest release, or the tag `--version` names (a pre-release too), over
+the `saaio` being run, in the folder it is in. It runs that release's `install.sh`, which checks the
+download against `SHA256SUMS` and renames the new binary over the old one. Works without a store.
 
 ```
 $ saaio update
@@ -732,8 +733,9 @@ folder.
 export SAAIO_HOME=~/.local/state/saaio-work
 ```
 
-Two things are shared across every store, in the shared folder (`$XDG_STATE_HOME/saaio`, else
-`~/.local/state/saaio`), regardless of `SAAIO_HOME`:
+What ties the stores together lives in the shared folder (`$XDG_STATE_HOME/saaio`, else
+`~/.local/state/saaio`), regardless of `SAAIO_HOME`
+([files.md](files.md#the-shared-folder)):
 
 | Shared | Purpose |
 | --- | --- |
