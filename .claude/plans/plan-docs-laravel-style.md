@@ -71,7 +71,7 @@ start; only the prose of its docs-like sections changes, without an Introduction
 - [x] Rewrite `docs/themes.md`
 - [x] Rewrite `docs/troubleshooting.md`
 - [x] Rewrite `docs/cli.md`: the bullets above the list become the Introduction, the commands a proper nested section list
-- [ ] Rewrite `docs/json.md`
+- [x] Rewrite `docs/json.md`
 - [ ] Rewrite `docs/files.md`
 - [ ] Update `docs/README.md` "Covers", and the prose of `README.md`'s docs-like sections
 - [ ] CHANGELOG `Fixed` line for any doc fact corrected
