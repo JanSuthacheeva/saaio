@@ -68,8 +68,8 @@ is:
 Wherever a command takes a `<flow>`, you can give a flow's name or its id. A name means the
 unfinished flow of that name, else the most recent finished one.
 
-`saaio --version` prints the version and commit: `saaio 0.1.0 (e035b96)`, a pre-release with its
-suffix (`saaio 0.2.0-rc.2 (95aec22)`), or `unknown` for the commit of a build from source outside
+`saaio --version` prints the version and commit: `saaio 0.3.0 (e035b96)`, a pre-release with its
+suffix (`saaio 0.3.0-rc.1 (95aec22)`), or `unknown` for the commit of a build from source outside
 a git checkout of saaio ([install.md](install.md#from-source)). Every command takes `--help`.
 
 ## saaio
@@ -626,17 +626,17 @@ download against `SHA256SUMS` and renames the new binary over the old one. Works
 
 ```
 $ saaio update
-updated: saaio 0.1.2 -> 0.2.0
+updated: saaio 0.2.1 -> 0.3.0
 binary: ~/.local/bin/saaio
-shadowed: ~/.cargo/bin/saaio (saaio 0.1.0 (9b77d8c))
+shadowed: ~/.cargo/bin/saaio (saaio 0.2.0 (9b77d8c))
 servers[1]{store,pid,build,binary}:
-  ~/.local/state/saaio/projects/shop,4321,0.1.2 (45630ee),~/.local/bin/saaio
-help[3]: "`saaio` runs ~/.cargo/bin/saaio, not ~/.local/bin/saaio: remove it (`cargo uninstall saaio`) or put ~/.local/bin first on PATH","Run `SAAIO_HOME=~/.local/state/saaio/projects/shop saaio --stop`, then start saaio again; unfinished flows resume","Changes: https://github.com/JanSuthacheeva/saaio/releases/tag/v0.2.0"
+  ~/.local/state/saaio/projects/shop,4321,0.2.1 (45630ee),~/.local/bin/saaio
+help[3]: "`saaio` runs ~/.cargo/bin/saaio, not ~/.local/bin/saaio: remove it (`cargo uninstall saaio`) or put ~/.local/bin first on PATH","Run `SAAIO_HOME=~/.local/state/saaio/projects/shop saaio --stop`, then start saaio again; unfinished flows resume","Changes: https://github.com/JanSuthacheeva/saaio/releases/tag/v0.3.0"
 ```
 
 - Already on the latest release (or a newer pre-release), it changes nothing and says so.
   `--version` installs the tag it names even when it is older.
-- The latest release never is a pre-release. Install one with `--version v0.1.2-rc.1`.
+- The latest release never is a pre-release. Install one with `--version v0.3.0-rc.1`.
 - A build from source (`cargo install`) is not replaced. It names the `cargo install` line for the
   new tag instead.
 - A folder you cannot write, such as `/usr/local/bin`, is not touched. It names the `sudo` line
