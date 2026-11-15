@@ -261,6 +261,8 @@ impl Folding {
                 if let Some(position) = self.position(phase)
                     && self.view.phase.as_ref() != Some(&self.phases[position])
                 {
+                    // A skill after the merge request opened works on: the clock runs again.
+                    self.resume(at);
                     self.enter(position, at);
                     // A delegate can start the phase itself, as a review in a fresh agent does.
                     if self.view.state != State::Delegated {
@@ -279,12 +281,8 @@ impl Folding {
                     self.note(at, text, Tone::Progress);
                 }
                 // A flow that merges nothing works again on a follow-up: its phase's clock too.
-                if self.view.state == State::Done
-                    && !self.view.merges
-                    && let Some(stopped) = self.stopped_at.take()
-                {
-                    self.close_phase(stopped);
-                    self.phase_since = at;
+                if self.view.state == State::Done && !self.view.merges {
+                    self.resume(at);
                 }
                 if matches!(self.view.state, State::Waiting | State::Blocked) {
                     self.note(at, "answered".to_string(), Tone::Progress);
@@ -564,6 +562,14 @@ impl Folding {
         self.entered[position] = true;
         self.phase_since = at;
         self.turn_ended = false;
+    }
+
+    /// The flow works again after it stopped: the phase it stopped in counts until the stop.
+    fn resume(&mut self, at: u64) {
+        if let Some(stopped) = self.stopped_at.take() {
+            self.close_phase(stopped);
+            self.phase_since = at;
+        }
     }
 
     fn close_phase(&mut self, until: u64) {

@@ -1843,3 +1843,25 @@ fn later_phases_are_stale_once_back_at_implement_and_done_after_they_ran_again()
     events.push(phase(15 * MIN, Phase::of("merge-request")));
     assert_eq!(statuses(&view(&events, 16 * MIN)), [Done; 4]);
 }
+
+#[test]
+fn a_phase_skill_after_the_merge_request_runs_the_clock_again() {
+    let mut events = reviewed();
+    events.push(phase(5 * MIN, Phase::of("merge-request")));
+    events.push(opened(6 * MIN, PR));
+    events.push(idle(7 * MIN, "PR open"));
+    events.push(phase(8 * MIN, Phase::of("implement")));
+
+    let flow = view(&events, 10 * MIN);
+
+    assert_eq!(
+        flow.steps[1].duration_ms,
+        Some(3 * MIN),
+        "1 min, then 2 again"
+    );
+    assert_eq!(
+        flow.steps[3].duration_ms,
+        Some(MIN),
+        "until the request opened"
+    );
+}

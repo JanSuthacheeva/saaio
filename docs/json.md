@@ -195,10 +195,10 @@ Each entry of `steps` is one phase of the flow's workflow, in order:
 | --- | --- | --- |
 | `phase` | string | the phase's name, as the flow's workflow names it |
 | `status` | string | `done`, `current`, `open` or `stale`: done before, but the flow went back to an earlier phase since ([flows.md](flows.md#going-back-to-implement)) |
-| `durationMs` | number or null | the time spent in the phase. The current phase counts up to now, or up to when the merge request opened or the flow ended. Null for a phase not reached |
+| `durationMs` | number or null | the time spent in the phase. The current phase counts up to now, or up to when the merge request opened or the flow ended; a phase skill after that runs its clock again. Null for a phase not reached |
 
-Once a merge request is open or merged, every step is `done`, and a phase skipped on the way has
-`durationMs` null. A flow keeps the phases it started with, so two flows can have different steps.
+Once a merge request merged, or opened while the flow stands at its last phase, every step is
+`done`, and a phase skipped on the way has `durationMs` null. A flow keeps the phases it started with, so two flows can have different steps.
 
 ### Timeline
 
