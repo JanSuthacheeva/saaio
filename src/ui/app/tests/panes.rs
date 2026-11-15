@@ -337,6 +337,25 @@ fn reads_what_a_flow_command_printed() {
 }
 
 #[test]
+fn reads_the_first_line_of_what_is_not_an_error_document() {
+    assert_eq!(
+        outcome(false, "thread 'main' panicked at src/main.rs:9:5:\nboom\n"),
+        Err(JobError::other(
+            "thread 'main' panicked at src/main.rs:9:5:"
+        ))
+    );
+    assert_eq!(outcome(false, ""), Err(JobError::other("")));
+}
+
+#[test]
+fn shows_an_error_whose_refusal_it_does_not_know() {
+    assert_eq!(
+        outcome(false, "error: shop-230 is locked\nrefusal: locked\n"),
+        Err(JobError::other("shop-230 is locked"))
+    );
+}
+
+#[test]
 fn reads_an_error_toon_quoted_without_its_quotes() {
     let failure = Failure::error(
         "could not create flow in /shop: Permission denied (os error 13)",

@@ -115,6 +115,23 @@ fn knows_each_refusal_from_what_flow_remove_prints() {
 }
 
 #[test]
+fn reads_a_refusal_from_its_key_not_its_words() {
+    let reworded = Failure::refused(
+        Refusal::Uncommitted,
+        "the worktree of shop-230 holds changes",
+        vec!["Run `saaio remove shop-230 --force`".to_string()],
+    );
+    let lookalike = Failure::error("shop-230 has uncommitted work, says git", Vec::new());
+
+    let reworded = printed(&reworded).unwrap_err();
+    let lookalike = printed(&lookalike).unwrap_err();
+
+    assert_eq!(reworded.refusal, Some(Refusal::Uncommitted));
+    assert_eq!(reworded.message, "the worktree of shop-230 holds changes");
+    assert_eq!(lookalike.refusal, None);
+}
+
+#[test]
 fn asks_before_a_clean_up_loses_work() {
     let mut app = board_app();
     let first = Removal::of("shop-230");

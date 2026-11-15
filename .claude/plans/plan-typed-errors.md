@@ -67,13 +67,16 @@ with `Refusal::Uncommitted`, `Refusal::Unmerged`, `Refusal::Untrusted`; signatur
 /// refusal from the whole document, else the first line without "error: ".
 pub fn outcome(success: bool, stdout: &str) -> Result<String, JobError>;
 
-/// The `error` and `refusal` of a printed error document; None when it is not one.
+/// The `error` and `refusal` of a printed error document; None when it is not one. A refusal
+/// saaio ui does not know is no refusal.
 fn printed_error(stdout: &str) -> Option<JobError>; // replaces error_message(line)
 ```
 
 `printed_error` decodes the whole stdout with serde_toon into a private
-`struct Printed { error: String, refusal: Option<Refusal> }` (`help` ignored). `JobError` is
-unchanged.
+`struct Printed { error: String, refusal: Option<String> }` (`help` ignored), then the key into a
+`Refusal` through its own serde names (`IntoDeserializer`): serde_toon decodes no enum from a
+string (found in the build). An unknown key gives `refusal: None` with the message kept.
+`JobError` is unchanged.
 
 ### `src/proto.rs` - `proto::Error` (new)
 
@@ -224,7 +227,7 @@ Same chain for `remove::unmerged` (`Refusal::Unmerged`) and `trust::untrusted` f
       `to_toon` prints the key; unit tests for the key's place and absence
 - [x] `remove::uncommitted`/`unmerged` and `trust::untrusted` through `Failure::refused`; their
       tests assert the refusal field
-- [ ] `effect::outcome` reads the whole document through `printed_error`; remove `Refusal::of`,
+- [x] `effect::outcome` reads the whole document through `printed_error`; remove `Refusal::of`,
       `Refusal::phrase` and `error_message`; UI tests for the key, a reworded message and the
       first-line fallback
 - [ ] CLI test: a refused `saaio remove` prints `refusal: uncommitted`
