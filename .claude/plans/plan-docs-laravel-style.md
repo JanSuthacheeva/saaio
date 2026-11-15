@@ -65,7 +65,7 @@ start; only the prose of its docs-like sections changes, without an Introduction
 - [x] Commit the plan, the plan's line in CLAUDE.md, and the sample `docs/repository.md` (with the `cat pint.log` correction)
 - [x] Rewrite `docs/flows.md`
 - [x] Rewrite `docs/configuration.md`
-- [ ] Rewrite `docs/ui.md`
+- [x] Rewrite `docs/ui.md`
 - [ ] Rewrite `docs/install.md`
 - [ ] Rewrite `docs/agents.md`
 - [ ] Rewrite `docs/themes.md`

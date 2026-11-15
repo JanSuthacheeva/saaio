@@ -1,26 +1,41 @@
 # The terminal UI
 
+- [Introduction](#introduction)
+- [The screen](#the-screen)
+    - [Sidebar](#sidebar)
+- [Keys](#keys)
+- [Starting a flow](#starting-a-flow)
+- [The peek](#the-peek)
+- [The board](#the-board)
+- [History](#history)
+- [Mouse](#mouse)
+    - [Copying](#copying)
+- [Notifications](#notifications)
+    - [Notifications inside tmux](#notifications-inside-tmux)
+    - [Alacritty and Terminal.app](#alacritty-and-terminalapp)
+- [A session that ended](#a-session-that-ended)
+- [Leaving and stopping](#leaving-and-stopping)
+    - [Another saaio](#another-saaio)
+- [After a crash or a reboot](#after-a-crash-or-a-reboot)
+
+## Introduction
+
+Running several agents usually means juggling several terminals. saaio puts the master, every
+worker and every plain session into one terminal, with a sidebar that shows at a glance which of
+them need you. To open it, type `saaio` in a repository:
+
 ```sh
 saaio    # in a repository, typed in a terminal
 ```
 
-One terminal with the master, every worker and every plain session. Run by an agent or a script,
-`saaio` prints every flow instead ([cli.md](cli.md#run-by-an-agent-or-a-script)).
-
-- [The screen](#the-screen)
-- [Keys](#keys)
-- [The peek](#the-peek)
-- [The board](#the-board)
-- [Starting a flow](#starting-a-flow)
-- [A session that ended](#a-session-that-ended)
-- [History](#history)
-- [Mouse](#mouse)
-- [Leaving and stopping](#leaving-and-stopping)
-- [After a crash or a reboot](#after-a-crash-or-a-reboot)
+The UI is for people. Run by an agent or a script, `saaio` prints every flow instead
+([cli.md](cli.md#run-by-an-agent-or-a-script)).
 
 ## The screen
 
 ![The terminal UI](media/saaio-ui.png)
+
+The session in view takes most of the screen, and the sidebar lists every session beside it:
 
 | Area | Shows |
 | --- | --- |
@@ -31,11 +46,11 @@ One terminal with the master, every worker and every plain session. Run by an ag
 
 ### Sidebar
 
-Row `0` is the master, with its folder and branch. Spinner while it works. Waiting dot when it ends
-a turn, asks something or wants permission while another session is in view, until you look at it.
-The dot is in the blocked color when its turn failed.
+Row `0` is the master, with its folder and branch. It shows a spinner while it works, and a waiting
+dot when it ends a turn, asks something or wants permission while another session is in view,
+until you look at it. The dot is in the blocked color when its turn failed.
 
-Workers and plain sessions follow, grouped:
+The workers and plain sessions follow, grouped so the ones that need you are on top:
 
 | Group | States |
 | --- | --- |
@@ -44,13 +59,15 @@ Workers and plain sessions follow, grouped:
 | RUNNING | working, or a subagent is |
 | DONE | finished, a research flow that answered, or ended |
 
+Each session takes three lines:
+
 | Row line | Content |
 | --- | --- |
 | 1 | number (`1` is the top), state, name, agent (after the kind for one other than feature: `fix claude`), age |
 | 2 | steps (`●───●───○───○`), phase, task count. `waits turn` in place of the phase while a heavy command waits for another worker's run ([repository.md](repository.md#heavy-commands)). Once finished: its merge request (`PR #42`, `merged`) or its state, and how long it took. Plain session: its state, such as `idle`. |
 | 3 | what it asks or does; while it waits its turn, whose run: `after shop-42: pint` |
 
-Rows that do not fit end in `… N more`.
+Rows that do not fit end in `… N more`. The mark beside each name tells you its state:
 
 | Mark | State |
 | --- | --- |
@@ -65,8 +82,9 @@ Rows that do not fit end in `… N more`.
 
 ## Keys
 
-Prefix: `C-space` unless `[ui] prefix` sets another ([configuration.md](configuration.md#ui)).
-Press the prefix, release, press the key.
+Since the pane receives everything you type, saaio's own commands start with a prefix key, as in
+tmux. Press the prefix, release it, then press the key. The prefix is `C-space` unless
+`[ui] prefix` sets another ([configuration.md](configuration.md#ui)):
 
 | Key | Does |
 | --- | --- |
@@ -83,52 +101,13 @@ Press the prefix, release, press the key.
 | `C-space C-space` | send `C-space` to the pane |
 | `C-space ?` | show these keys |
 
-Sidebar numbers follow the sort order, so a flow's number changes with its state.
-
-## The peek
-
-| Key | Does |
-| --- | --- |
-| `C-space j`, `C-space k` | move a cursor over the workers, skipping the one in view |
-| `C-space enter` | jump into the selected worker |
-| past either end | close the peek |
-
-Under the selected worker: its latest tool calls and text, read from the harness's transcript, not
-its screen. Paths in the worker's worktree show relative to it, others in your home folder with ~.
-For a finished flow, its branch and worktree (`gone` once removed) come first. The peek shows in
-the sidebar only, not on the rail.
-
-## The board
-
-`C-space o`. A card per session. Below the cards: the selected flow's phases and how long each took,
-its timeline, decisions and last answer. Its header names its request, kind, mode, agent, branch, `on
-<base>` for a [stacked flow](flows.md#stacked-flows), slot and merge request.
-
-| Key | Does |
-| --- | --- |
-| `0` to `9` | select a card, on this project's board |
-| `h` `j` `k` `l`, arrows | move between cards |
-| `enter` | jump into the selected session |
-| `n` | start a flow |
-| `x` | clean up the selected flow, if finished |
-| `a` | every project's flows, and back to this project ([cli.md](cli.md#several-projects)) |
-| `esc`, `q`, `o` | back to the pane |
-
-Other projects' flows are read-only. `enter` and `x` work on this project's flows.
-
-A flow whose services saaio paused ([repository.md](repository.md#pause-and-resume)) says so
-beside its state on its card: `ready · paused`, `working · resuming`, or `working · services down`
-when the resume failed. The selected flow's header says since when (`services paused 14:02`),
-`services resuming`, or why the resume failed (`services down: port 8003 is taken`). The
-sidebar does not show it.
-
-A flow whose heavy command waits for another worker's run ([repository.md](repository.md#heavy-commands))
-says `working · waits turn` on its card. Its header says what, since when and whose run:
-`waits its turn for pint since 14:02; shop-42 runs`.
+> [!NOTE]
+> Sidebar numbers follow the sort order, so a flow's number changes with its state.
 
 ## Starting a flow
 
-`C-space n` opens the new-flow dialog for the repository of the session in view:
+`C-space n` opens the new-flow dialog for the repository of the session in view. Type the request,
+and press `enter`:
 
 ```
 ╭─ new flow ──────────────────────────────────────────── in ~/projects/shop ─╮
@@ -149,6 +128,10 @@ says `working · waits turn` on its card. Its header says what, since when and w
 ╰────────────────────────────────────────────────────────────────────────────╯
 ```
 
+`enter` runs `saaio start`, and the new session appears in the sidebar. A failed start shows its
+reason under the request. The other rows have sensible defaults, and you only change the ones you
+need:
+
 | Row | Holds |
 | --- | --- |
 | request | what to build, such as `SHOP-217 add CSV export`. Plain mode: the folder to open. |
@@ -158,6 +141,8 @@ says `working · waits turn` on its card. Its header says what, since when and w
 | base | the branch the flow starts from and its merge request targets ([flows.md](flows.md#stacked-flows)). Empty: what the repository has checked out, shown faint. Up and down put in the branch of one of the repository's unfinished flows, the one in view first. |
 | mode | `auto`, `guided` or `plain` ([flows.md](flows.md#guided-and-auto)) |
 | creates | the branch, worktree and slot the start creates, filled in once you type, or `every slot is taken`; `no branch` for a research flow. Plain mode: where the session opens. |
+
+In the dialog, these keys work:
 
 | Key | Does |
 | --- | --- |
@@ -175,32 +160,60 @@ says `working · waits turn` on its card. Its header says what, since when and w
 In plain mode the dialog is titled `new session`, the text row is `folder`, prefilled with the
 folder in view, and the kind, type and base rows are hidden.
 
-`enter` runs `saaio start`. The new session appears in the sidebar. A failed start shows its reason
-under the request.
+## The peek
 
-## A session that ended
-
-A worker's pane after `/exit`, a stopped process, or a start that failed (`could not start`):
+Often you only want to know what a worker is up to, without leaving the session you are in. The
+peek shows it in the sidebar:
 
 | Key | Does |
 | --- | --- |
-| `x` | clean up: `saaio remove` for the flow (worktree, branch, flow) |
-| `r` | resume the session if its flow is unfinished |
-| `esc` | back to the master |
+| `C-space j`, `C-space k` | move a cursor over the workers, skipping the one in view |
+| `C-space enter` | jump into the selected worker |
+| past either end | close the peek |
 
-`x` asks before discarding uncommitted changes or commits on no other branch. `y` confirms, any
-other key keeps the flow. A finished flow (`done` or `ended`) cannot be reopened: its slot may
-already belong to another flow. Use a new flow to continue work.
+Under the selected worker you see its latest tool calls and text, read from the harness's
+transcript, not its screen. Paths in the worker's worktree show relative to it, others in your
+home folder with ~. For a finished flow, its branch and worktree (`gone` once removed) come first.
+The peek shows in the sidebar only, not on the rail.
 
-The master's session ended: `C-space r` resumes it, `C-space Q` stops saaio.
+## The board
 
-A flow saaio has no session for shows `not open`: `C-space r` resumes it, `C-space 0` goes back to
-the master.
+The board, `C-space o`, is the overview: a card per session. Below the cards is the selected
+flow's story: its phases and how long each took, its timeline, decisions and last answer. Its
+header names its request, kind, mode, agent, branch, `on <base>` for a
+[stacked flow](flows.md#stacked-flows), slot and merge request.
+
+| Key | Does |
+| --- | --- |
+| `0` to `9` | select a card, on this project's board |
+| `h` `j` `k` `l`, arrows | move between cards |
+| `enter` | jump into the selected session |
+| `n` | start a flow |
+| `x` | clean up the selected flow, if finished |
+| `a` | every project's flows, and back to this project ([cli.md](cli.md#several-projects)) |
+| `esc`, `q`, `o` | back to the pane |
+
+Other projects' flows are read-only: `enter` and `x` work on this project's flows.
+
+A flow whose services saaio paused ([repository.md](repository.md#pause-and-resume)) says so
+beside its state on its card: `ready · paused`, `working · resuming`, or `working · services down`
+when the resume failed. The selected flow's header says since when (`services paused 14:02`),
+`services resuming`, or why the resume failed (`services down: port 8003 is taken`). The sidebar
+does not show it.
+
+A flow whose heavy command waits for another worker's run
+([repository.md](repository.md#heavy-commands)) says `working · waits turn` on its card. Its header
+says what, since when and whose run:
+
+```
+waits its turn for pint since 14:02; shop-42 runs
+```
 
 ## History
 
-`C-space [`, or the wheel over a pane whose session leaves the mouse to saaio and is not on the
-alternate screen.
+A session's output scrolls on, but nothing is lost. `C-space [` scrolls back through it, and so
+does the wheel over a pane whose session leaves the mouse to saaio and is not on the alternate
+screen:
 
 | Key | Does |
 | --- | --- |
@@ -212,7 +225,7 @@ alternate screen.
 
 ## Mouse
 
-saaio takes the mouse while it runs, like tmux with `mouse on`.
+saaio takes the mouse while it runs, like tmux with `mouse on`:
 
 | Action | Does |
 | --- | --- |
@@ -225,16 +238,14 @@ A selection stays inside what it started in: a dialog, the board, the title row,
 sidebar or the rail. It stays highlighted until the next key or click.
 
 A session that uses the mouse itself, such as Claude Code or Codex, gets the clicks, drags and
-wheel in its pane and selects and copies on its own. What it copies with OSC 52, as Claude Code
+wheel in its pane, and selects and copies on its own. What it copies with OSC 52, as Claude Code
 does over SSH, reaches your clipboard while it is the focused session.
 
 ### Copying
 
 saaio copies with OSC 52, which works over SSH too, and locally also with `pbcopy` on macOS, or
-`wl-copy` or `xclip` on Linux.
-
-Hold Shift while you drag (Option in iTerm2 and Terminal.app) to use the terminal's own selection
-instead. It can span the pane and the sidebar.
+`wl-copy` or `xclip` on Linux. To use the terminal's own selection instead, hold Shift while you
+drag (Option in iTerm2 and Terminal.app). It can span the pane and the sidebar.
 
 | Terminal | OSC 52 copy | Terminal's own selection |
 | --- | --- | --- |
@@ -245,29 +256,40 @@ instead. It can span the pane and the sidebar.
 | iTerm2 | after Settings > General > Selection > "Applications in terminal may access clipboard" | Option-drag |
 | Terminal.app | no | Option-drag |
 
-Over SSH, OSC 52 is the only way to your clipboard: in Terminal.app use Option-drag. Inside tmux,
-OSC 52 needs `set -g set-clipboard on` in `~/.tmux.conf`.
+Over SSH, OSC 52 is the only way to your clipboard, so in Terminal.app use Option-drag. Inside
+tmux, OSC 52 needs one line in `~/.tmux.conf`:
+
+```
+set -g set-clipboard on
+```
 
 ## Notifications
 
-When a flow starts waiting or is blocked while you aren't looking at it, saaio has your terminal
-raise a desktop notification: `shop-230 asks: Which approach?`, `shop-230 waits for you`,
-`shop-230 is blocked: migration needs a default`. The master raises one too when it waits or is
-blocked, never when it only comes to rest.
+You don't have to keep an eye on the sidebar. When a flow starts waiting or is blocked while you
+aren't looking at it, saaio has your terminal raise a desktop notification:
+
+```
+shop-230 asks: Which approach?
+shop-230 waits for you
+shop-230 is blocked: migration needs a default
+```
+
+The master raises one too when it waits or is blocked, never when it only comes to rest.
 
 You aren't looking at a flow when another session is in view, or when the terminal window has lost
-focus, then also for the session in view. One notification per change: a flow that stays waiting
-raises no second one, a waiting flow that becomes blocked does, and so does a new flow that is
-blocked from the start, such as one whose setup failed. Attaching raises none for what was already
-waiting. `notify = false` under `[ui]` in config.toml turns them off
-([configuration.md](configuration.md#ui)).
+focus, which then counts for the session in view too. saaio raises one notification per change: a
+flow that stays waiting raises no second one, a waiting flow that becomes blocked does, and so does
+a new flow that is blocked from the start, such as one whose setup failed. Attaching raises none
+for what was already waiting. To turn them off, set `notify` in config.toml
+([configuration.md](configuration.md#ui)):
 
-saaio writes the one escape sequence your terminal turns into a notification, picked from
-`TERM` and `TERM_PROGRAM` first, then `VTE_VERSION` and `ALACRITTY_WINDOW_ID`. Inside tmux it asks
-tmux which terminal is attached, by its `TERM` and the version it told tmux (`#{client_termname}`,
-`#{client_termtype}`), since the variables inside tmux are those of the terminal that started the
-tmux server. An attached terminal that told no version, such as Alacritty or Terminal.app, gets the
-bell:
+```toml
+[ui]
+notify = false
+```
+
+saaio writes the one escape sequence your terminal turns into a notification, picked from `TERM`
+and `TERM_PROGRAM` first, then `VTE_VERSION` and `ALACRITTY_WINDOW_ID`:
 
 | Terminal | Sent |
 | --- | --- |
@@ -278,11 +300,26 @@ bell:
 A terminal that does not know the sequence ignores it. Whether a notification shows while the
 terminal has focus, and how it looks, is up to the terminal and the system's notification settings.
 
-Inside tmux, saaio sends OSC 9 and OSC 777 through tmux's passthrough, which needs
-`set -g allow-passthrough all` in `~/.tmux.conf`. Without it tmux drops them silently, and with
-`on` it drops them while saaio's window is not the one in view. The bell needs nothing. tmux tells
-saaio when its window or the terminal loses focus only with `set -g focus-events on`; without it
-the session in view never notifies.
+### Notifications inside tmux
+
+Inside tmux, the variables are those of the terminal that started the tmux server, so saaio asks
+tmux which terminal is attached, by its `TERM` and the version it told tmux
+(`#{client_termname}`, `#{client_termtype}`). An attached terminal that told no version, such as
+Alacritty or Terminal.app, gets the bell.
+
+saaio sends OSC 9 and OSC 777 through tmux's passthrough, and tmux tells saaio when its window or
+the terminal loses focus. Both need a line in `~/.tmux.conf`:
+
+```
+set -g allow-passthrough all
+set -g focus-events on
+```
+
+Without `allow-passthrough` tmux drops the notifications silently, and with `on` instead of `all`
+it drops them while saaio's window is not the one in view. Without `focus-events`, the session in
+view never notifies. The bell needs nothing.
+
+### Alacritty and Terminal.app
 
 Alacritty and Terminal.app have no notification sequence, so saaio rings the bell. Alacritty then
 asks for attention while it is not focused: the Dock icon bounces on macOS, the window is marked
@@ -300,16 +337,36 @@ command = { program = "osascript", args = ["-e", "display notification \"a flow 
 It runs for any program's bell, not only saaio's. Terminal.app does what Settings > Profiles >
 Advanced > Bell says, such as badging its icon or bouncing it while in the background.
 
+## A session that ended
+
+A worker's pane after `/exit`, after its process stopped, or after a start that failed
+(`could not start`) offers what you can do next:
+
+| Key | Does |
+| --- | --- |
+| `x` | clean up: `saaio remove` for the flow (worktree, branch, flow) |
+| `r` | resume the session if its flow is unfinished |
+| `esc` | back to the master |
+
+`x` asks before discarding uncommitted changes or commits on no other branch: `y` confirms, any
+other key keeps the flow.
+
+> [!NOTE]
+> A finished flow (`done` or `ended`) cannot be reopened, since its slot may already belong to
+> another flow. Start a new flow to continue the work.
+
+When the master's session ended, `C-space r` resumes it, and `C-space Q` stops saaio. A flow saaio
+has no session for shows `not open`: `C-space r` resumes it, `C-space 0` goes back to the master.
+
 ## Leaving and stopping
 
-`saaio server` owns the sessions. The UI is a client.
+The sessions belong to `saaio server`, not to the UI, which is only a client. That is why you can
+close the UI without stopping a single worker. `C-space d`, or closing the terminal, detaches:
+the sessions keep running, and the next `saaio` attaches again. A second `saaio` in a terminal
+takes over from the first, since one UI is attached at a time.
 
-| Action | Effect |
-| --- | --- |
-| `C-space d`, or closing the terminal | detach. Sessions keep running. The next `saaio` attaches. |
-| `C-space Q` | stop. With unfinished flows it lists them and asks, see below. With every flow finished: `y` stops, any other key cancels. |
-| `saaio --stop` | stops the server and every session, keeps unfinished flows (like `k`) |
-| a second `saaio` in a terminal | takes over from the first. One UI is attached at a time. |
+To stop saaio itself, press `C-space Q`. With every flow finished, `y` stops and any other key
+cancels. With unfinished flows, it lists them and asks what to do with them:
 
 | Key at the stop prompt | Effect |
 | --- | --- |
@@ -317,17 +374,26 @@ Advanced > Bell says, such as badging its icon or bouncing it while in the backg
 | `e` | end: the server stops, flows are marked ended. Branches and worktrees stay until `saaio clear`. |
 | `esc` | cancel |
 
+From the shell, `saaio --stop` stops the server and every session, and keeps unfinished flows,
+like `k`:
+
+```sh
+saaio --stop
+```
+
 ### Another saaio
 
 When the UI attaches, it compares itself with the server and with the first `saaio` on PATH. If
 the server is another build, such as one started before `saaio update`, or another build comes
 first on PATH, such as an old `cargo install` in `~/.cargo/bin`, a `mismatched saaio` dialog names
 each binary with its build and what to do. Any key closes it, and the title row keeps a short line
-until the UI quits. The UI only warns: `saaio --stop` ends every session, so you choose when
+until the UI quits.
+
+The UI only warns: `saaio --stop` ends every session, so you choose when
 ([troubleshooting.md](troubleshooting.md#the-terminal-ui)).
 
 ## After a crash or a reboot
 
-The next `saaio` restarts the server and resumes the master and every unfinished worker in its
-conversation (`claude --resume`, `codex resume`). After a stop, the master starts a new
-conversation. Workers still resume.
+Nothing is lost when the machine goes down. The next `saaio` restarts the server and resumes the
+master and every unfinished worker in its conversation (`claude --resume`, `codex resume`). After a
+stop, the master starts a new conversation, and the workers still resume.
