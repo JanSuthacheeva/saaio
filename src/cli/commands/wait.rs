@@ -1,5 +1,6 @@
 //! `saaio wait`: polls the store for news as Claude Code's `asyncRewake` hook
 
+use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
@@ -36,17 +37,18 @@ pub fn run(args: &Args, ctx: &Context) -> Document {
         Some(Ok(id)) => Waiter::Flow(id),
         _ => return Document::Silent,
     };
+    let log = ctx.env.server_log(&store);
     if !identity::proves(&store, &waiter, ctx.env.key()) {
         let line = match &waiter {
-            Waiter::Master => "wait master: SAAIO_PROOF does not prove the master".to_string(),
-            Waiter::Flow(id) => format!("wait flow {id}: SAAIO_PROOF does not prove flow {id}"),
+            Waiter::Master => format!("{}: SAAIO_PROOF does not prove the master", who(&waiter)),
+            Waiter::Flow(id) => format!("{}: SAAIO_PROOF does not prove flow {id}", who(&waiter)),
         };
         // A log that cannot be written is let go: the wait ends silently all the same.
-        let _ = server_log::append(&ctx.env.server_log(&store), ctx.now(), &line);
+        let _ = server_log::append(&log, ctx.now(), &line);
         return Document::Silent;
     }
     let mut configs = ConfigWatch::new(ctx.env.config_file());
-    match wait(&store, &waiter, &mut configs, ctx.clock) {
+    match wait(&store, &waiter, &mut configs, ctx.clock, &log) {
         Some(news) => Document::Wake(news),
         None => Document::Silent,
     }
@@ -55,12 +57,13 @@ pub fn run(args: &Args, ctx: &Context) -> Document {
 /// Sleeps until there is news for the session, marked busy with the turn it wakes; None once
 /// another waiter took over, the session ended (the parent changed), or a worker's flow is
 /// finished or gone. The master gets none while [master] wake is false; a broken config keeps
-/// the last value it read.
+/// the last value it read. A busy mark that cannot be written goes to `log`, never into the news.
 fn wait(
     store: &Store,
     waiter: &Waiter,
     configs: &mut ConfigWatch,
     clock: fn() -> u64,
+    log: &Path,
 ) -> Option<String> {
     let me = std::process::id();
     store.claim_waiter(waiter, me).ok()?;
@@ -88,11 +91,20 @@ fn wait(
         if news.is_some() {
             // The turn it wakes runs no prompt hook: its Stop marks it idle again.
             if let Err(error) = store.set_busy(waiter, Busy::Turn) {
-                eprintln!("saaio wait: {error:#}");
+                let line = format!("{}: {error:#}", who(waiter));
+                let _ = server_log::append(log, clock(), &line);
             }
             return news;
         }
         thread::sleep(WAIT_EVERY);
     }
     None
+}
+
+/// How server.log names the waiter: "wait master" or "wait flow <id>".
+fn who(waiter: &Waiter) -> String {
+    match waiter {
+        Waiter::Master => "wait master".to_string(),
+        Waiter::Flow(id) => format!("wait flow {id}"),
+    }
 }

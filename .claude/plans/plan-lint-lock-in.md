@@ -147,8 +147,8 @@ A deliberate exception is `#[expect(clippy::..., reason = "...")]` at its site.
 
 ## Tasks
 
-- [ ] Move `server_log(home)` from tests/cli/identity.rs to tests/cli/support.rs and add `a_busy_mark_that_cannot_be_written_stays_out_of_the_wake_message` to tests/cli/wait.rs; see it fail
-- [ ] wait.rs: `wait(.., log: &Path)` and `who(waiter)`, the `set_busy` error to server.log; the test passes
+- [x] Move `server_log(home)` from tests/cli/identity.rs to tests/cli/support.rs and add `a_busy_mark_that_cannot_be_written_stays_out_of_the_wake_message` to tests/cli/wait.rs; see it fail
+- [x] wait.rs: `wait(.., log: &Path)` and `who(waiter)`, the `set_busy` error to server.log; the test passes
 - [ ] Cargo.toml: `unwrap_used`, `print_stdout`, `print_stderr`; the `#[expect]`s in src/main.rs and src/bin/site/main.rs; the crate-root test allows in src/lib.rs, tests/cli/main.rs, tests/install.rs; clippy clean, each lint seen firing once
 - [ ] CLAUDE.md Lints line and CLAUDE.md plan list, CHANGELOG Fixed line
 - [ ] End to end: in a scratch `SAAIO_HOME`, a worker's `saaio wait` with a message sent and `waits/<id>.busy` a folder wakes with exactly the message and logs the error; fmt, clippy and the full test suite pass
