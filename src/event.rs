@@ -956,4 +956,25 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn skips_a_session_line_whose_id_is_no_id() {
+        let line = |id: &str| format!(r#"{{"v":1,"at":7,"kind":"session","id":"{id}"}}"#);
+        let id = "01a14000-0000-7000-8000-000000000000";
+
+        assert_eq!(
+            Event::from_line(&line(id)).map(|event| event.kind),
+            Some(EventKind::Session {
+                id: SessionId::parse(id).unwrap(),
+                transcript: None
+            })
+        );
+        for forged in [
+            "-cnotify=x",
+            "../../x",
+            "01A14000-0000-7000-8000-000000000000",
+        ] {
+            assert_eq!(Event::from_line(&line(forged)), None, "{forged}");
+        }
+    }
 }
