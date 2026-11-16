@@ -157,4 +157,4 @@ A deliberate exception is `#[expect(clippy::..., reason = "...")]` at its site.
 - [x] wait.rs: `wait(.., log: &Path)` and `who(waiter)`, the `set_busy` error to server.log; the test passes
 - [x] Cargo.toml: `unwrap_used`, `print_stdout`, `print_stderr`; the `#[expect]`s in src/main.rs and src/bin/site/main.rs; the crate-root test allows in src/lib.rs, src/bin/site/main.rs, tests/cli/main.rs, tests/install.rs; clippy clean, each lint seen firing once
 - [x] CLAUDE.md Lints line and CLAUDE.md plan list, CHANGELOG Fixed line
-- [ ] End to end: in a scratch `SAAIO_HOME`, a worker's `saaio wait` with a message sent and `waits/<id>.busy` a folder wakes with exactly the message and logs the error; fmt, clippy and the full test suite pass
+- [x] End to end: in a scratch `SAAIO_HOME`, a worker's `saaio wait` with a message sent and `waits/<id>.busy` a folder wakes with exactly the message and logs the error; fmt, clippy and the full test suite pass
