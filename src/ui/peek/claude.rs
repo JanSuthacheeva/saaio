@@ -1,5 +1,6 @@
 //! Claude Code's session JSONL: where it is and the peek lines in it
 
+use crate::id::SessionId;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -8,8 +9,8 @@ use serde_json::Value;
 use super::{Lines, PeekLine, first_line};
 
 /// <claude home>/projects/*/<id>.jsonl: a worker's session id is its flow id.
-pub(super) fn transcript(claude_home: &Path, id: &str) -> Option<PathBuf> {
-    let name = format!("{id}.jsonl");
+pub(super) fn transcript(claude_home: &Path, session: SessionId) -> Option<PathBuf> {
+    let name = format!("{session}.jsonl");
     fs::read_dir(claude_home.join("projects"))
         .ok()?
         .flatten()
@@ -85,12 +86,16 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let project = dir.path().join("projects/-tmp-repo");
         fs::create_dir_all(&project).unwrap();
-        fs::write(project.join("7f3c.jsonl"), "").unwrap();
+        let session = crate::fixtures::session_id("7f3c");
+        fs::write(project.join(format!("{session}.jsonl")), "").unwrap();
 
         assert_eq!(
-            transcript(dir.path(), "7f3c"),
-            Some(project.join("7f3c.jsonl"))
+            transcript(dir.path(), session),
+            Some(project.join(format!("{session}.jsonl")))
         );
-        assert_eq!(transcript(dir.path(), "nope"), None);
+        assert_eq!(
+            transcript(dir.path(), crate::fixtures::session_id("nope")),
+            None
+        );
     }
 }

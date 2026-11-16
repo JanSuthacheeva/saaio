@@ -5,6 +5,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::event::{EventKind, Mode, Question, ServiceStatus};
+use crate::id::{FlowId, SessionId};
 use crate::workflow::{Phase, Workflow};
 
 pub const VIEW_VERSION: u32 = 4;
@@ -26,7 +27,7 @@ fn merges() -> bool {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlowView {
-    pub id: String,
+    pub id: FlowId,
     pub name: String,
     pub request: String,
     pub mode: Mode,
@@ -98,7 +99,7 @@ pub struct Services {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
-    pub id: String,
+    pub id: SessionId,
     pub transcript: Option<String>,
 }
 
@@ -359,9 +360,22 @@ mod tests {
         }
     }
 
+    const ID: &str = "27bfad67-de17-45c0-88b9-8f75f3946781";
+
+    #[test]
+    fn writes_the_id_as_its_text() {
+        let json = serde_json::to_string(&flow(State::Working)).unwrap();
+
+        assert!(json.starts_with(&format!("{{\"id\":\"{ID}\",")), "{json}");
+        assert_eq!(
+            serde_json::from_str::<FlowView>(&json).unwrap().id,
+            flow(State::Working).id
+        );
+    }
+
     fn flow(state: State) -> FlowView {
         FlowView {
-            id: "7f3c".into(),
+            id: FlowId::parse(ID).unwrap(),
             name: "shop-221".into(),
             request: "SHOP-221 add CSV export".into(),
             mode: Mode::Auto,

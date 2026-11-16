@@ -72,9 +72,9 @@ impl Sidebar<'_> {
     pub(super) fn flow_rows(&self, flow: &FlowView, index: usize) -> Vec<Row> {
         let theme = self.theme;
         let width = WIDTH;
-        let key = PaneKey::Flow(flow.id.clone());
+        let key = PaneKey::Flow(flow.id);
         let focused = *self.focus == key;
-        let selected = focused || self.cursor == Some(flow.id.as_str());
+        let selected = focused || self.cursor == Some(flow.id);
         let mark = self.mark(flow);
         let tone = theme.flow_style(flow);
         let status = self.status(flow);
@@ -146,12 +146,12 @@ impl Sidebar<'_> {
         let mut rows = vec![
             Row {
                 line: split(first, right, width),
-                key: Some(key.clone()),
+                key: Some(key),
                 mark,
             },
             Row {
                 line: split(second, second_right, width),
-                key: Some(key.clone()),
+                key: Some(key),
                 mark,
             },
         ];
@@ -175,10 +175,9 @@ impl Sidebar<'_> {
 
     /// The focused flow's rows get the focus, the peeked one's and one that just changed the light.
     fn mark(&self, flow: &FlowView) -> Mark {
-        if *self.focus == PaneKey::Flow(flow.id.clone()) {
+        if *self.focus == PaneKey::Flow(flow.id) {
             Mark::Focus
-        } else if self.cursor == Some(flow.id.as_str())
-            || self.changed.contains_key(&PaneKey::Flow(flow.id.clone()))
+        } else if self.cursor == Some(flow.id) || self.changed.contains_key(&PaneKey::Flow(flow.id))
         {
             Mark::Lit
         } else {
@@ -286,11 +285,11 @@ impl Sidebar<'_> {
         let body = body.split_off(body.len().saturating_sub(keep));
 
         let lead = || Span::raw(" ");
-        let key = Some(PaneKey::Flow(flow.id.clone()));
+        let key = Some(PaneKey::Flow(flow.id));
         let mark = self.mark(flow);
         let row = |spans: Vec<Span<'static>>| Row {
             line: Line::from(spans),
-            key: key.clone(),
+            key,
             mark,
         };
         let mut rows = vec![row(vec![

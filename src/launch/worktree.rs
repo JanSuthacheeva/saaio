@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::id::FlowId;
 use crate::view::Workspace;
 
 pub const WORKTREES_DIR: &str = ".saaio/worktrees";
@@ -99,7 +100,12 @@ pub const HOOK_VARS: [&str; 6] = [
 
 /// SAAIO_FLOW_ID, SAAIO_FLOW_NAME, SAAIO_SLOT (when it has one), SAAIO_WORKTREE, SAAIO_REPO and
 /// SAAIO_BASE (when it has one) for the hooks.
-pub fn hook_env(id: &str, name: &str, repo: &Path, workspace: &Workspace) -> Vec<(String, String)> {
+pub fn hook_env(
+    id: FlowId,
+    name: &str,
+    repo: &Path,
+    workspace: &Workspace,
+) -> Vec<(String, String)> {
     [
         Some(("SAAIO_FLOW_ID", id.to_string())),
         Some(("SAAIO_FLOW_NAME", name.to_string())),
@@ -117,6 +123,7 @@ pub fn hook_env(id: &str, name: &str, repo: &Path, workspace: &Workspace) -> Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixtures;
     use crate::launch::fixtures::{scratch, shop, strings};
 
     #[test]
@@ -223,22 +230,41 @@ mod tests {
         };
 
         assert_eq!(
-            hook_env("7f3c", "shop-217", Path::new("/repo"), &stacked).last(),
+            hook_env(
+                fixtures::flow_id("7f3c"),
+                "shop-217",
+                Path::new("/repo"),
+                &stacked
+            )
+            .last(),
             Some(&("SAAIO_BASE".to_string(), "flow/shop-216".to_string()))
         );
         assert!(
-            hook_env("7f3c", "shop-217", Path::new("/repo"), &shop())
-                .iter()
-                .all(|(key, _)| key != "SAAIO_BASE")
+            hook_env(
+                fixtures::flow_id("7f3c"),
+                "shop-217",
+                Path::new("/repo"),
+                &shop()
+            )
+            .iter()
+            .all(|(key, _)| key != "SAAIO_BASE")
         );
     }
 
     #[test]
     fn hands_the_hooks_what_they_need() {
         assert_eq!(
-            hook_env("7f3c", "shop-217", Path::new("/repo"), &shop()),
+            hook_env(
+                fixtures::flow_id("7f3c"),
+                "shop-217",
+                Path::new("/repo"),
+                &shop()
+            ),
             vec![
-                ("SAAIO_FLOW_ID".to_string(), "7f3c".to_string()),
+                (
+                    "SAAIO_FLOW_ID".to_string(),
+                    fixtures::flow_id("7f3c").to_string()
+                ),
                 ("SAAIO_FLOW_NAME".to_string(), "shop-217".to_string()),
                 ("SAAIO_SLOT".to_string(), "2".to_string()),
                 (
@@ -282,10 +308,15 @@ mod tests {
 
     #[test]
     fn sets_no_slot_for_the_hooks_without_one() {
-        let keys: Vec<String> = hook_env("7f3c", "x", Path::new("/repo"), &scratch())
-            .into_iter()
-            .map(|(key, _)| key)
-            .collect();
+        let keys: Vec<String> = hook_env(
+            fixtures::flow_id("7f3c"),
+            "x",
+            Path::new("/repo"),
+            &scratch(),
+        )
+        .into_iter()
+        .map(|(key, _)| key)
+        .collect();
 
         assert_eq!(
             keys,

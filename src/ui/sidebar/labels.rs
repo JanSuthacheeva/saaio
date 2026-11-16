@@ -138,6 +138,7 @@ mod tests {
     use super::*;
     use crate::config::prefix::Prefix;
     use crate::event::{Event, EventKind, Mode};
+    use crate::fixtures;
     use crate::proto::PaneKey;
     use crate::ui::theme::{Palette, Theme};
     use crate::view::{Board, VIEW_VERSION};
@@ -191,7 +192,7 @@ mod tests {
             holder: "shop-42".into(),
         };
         let events = [started, EventKind::Working, waiting].map(|kind| Event::new(0, kind));
-        let flow = crate::fold::fold("id", &events, None, 0).unwrap();
+        let flow = crate::fold::fold(fixtures::flow_id("id"), &events, None, 0).unwrap();
         let theme = Theme::from_palette(Palette::SAAIO);
         let board = empty_board();
         let changed = HashMap::new();
@@ -223,7 +224,7 @@ mod tests {
                 merges: true,
             };
             let events = [started, kind].map(|kind| Event::new(0, kind));
-            crate::fold::fold("id", &events, None, 0).unwrap()
+            crate::fold::fold(fixtures::flow_id("id"), &events, None, 0).unwrap()
         };
         let url = || "https://github.com/acme/shop/pull/42".to_string();
         let theme = Theme::from_palette(Palette::SAAIO);
@@ -264,7 +265,7 @@ mod tests {
             },
         ]
         .map(|kind| Event::new(0, kind));
-        let flow = crate::fold::fold("id", &events, None, 0).unwrap();
+        let flow = crate::fold::fold(fixtures::flow_id("id"), &events, None, 0).unwrap();
         let theme = Theme::from_palette(Palette::SAAIO);
         let board = empty_board();
         let changed = HashMap::new();
@@ -311,7 +312,7 @@ mod tests {
             phase("implement"),
         ]
         .map(|kind| Event::new(0, kind));
-        let flow = crate::fold::fold("id", &events, None, 0).unwrap();
+        let flow = crate::fold::fold(fixtures::flow_id("id"), &events, None, 0).unwrap();
         let theme = Theme::from_palette(Palette::SAAIO);
         let board = empty_board();
         let changed = HashMap::new();
@@ -354,7 +355,7 @@ mod tests {
                 },
             )];
             events.extend(kinds.into_iter().map(|kind| Event::new(1, kind)));
-            crate::fold::fold("id", &events, None, 2).unwrap()
+            crate::fold::fold(fixtures::flow_id("id"), &events, None, 2).unwrap()
         };
         let phase = |phase| EventKind::Phase { phase };
 

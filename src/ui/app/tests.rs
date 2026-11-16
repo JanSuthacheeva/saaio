@@ -12,6 +12,7 @@ use crate::branching::Branching;
 use crate::cli::output::Failure;
 use crate::cli::output::{remove, trust};
 use crate::event::{Event, EventKind};
+use crate::fixtures;
 use crate::fold;
 use crate::proto::{Cell, ClientMsg, Color, Flags, Frame, Mouse, ServerMsg};
 use crate::refusal::Refusal;
@@ -96,7 +97,7 @@ fn worker(id: &str, mode: crate::event::Mode, age: u64, events: Vec<EventKind>) 
         ),
     ];
     log.extend(events.into_iter().map(|kind| Event::new(at, kind)));
-    fold::fold(id, &log, None, NOW).unwrap()
+    fold::fold(fixtures::flow_id(id), &log, None, NOW).unwrap()
 }
 
 /// A plain session in `folder`, started `age` minutes ago, with the events after its Workspace.
@@ -129,7 +130,7 @@ fn plain_session(id: &str, folder: &str, age: u64, events: Vec<EventKind>) -> Fl
         ),
     ];
     log.extend(events.into_iter().map(|kind| Event::new(at, kind)));
-    fold::fold(id, &log, None, NOW).unwrap()
+    fold::fold(fixtures::flow_id(id), &log, None, NOW).unwrap()
 }
 
 fn fleet() -> Board {

@@ -87,11 +87,11 @@ impl Host {
 
     /// Spawns the child in a new PTY with a reader and a waiter thread; its pid. On Err the pane is
     /// kept as Failed.
-    pub fn open(&mut self, spec: PaneSpec) -> Result<u32> {
+    pub fn open(&mut self, spec: &PaneSpec) -> Result<u32> {
         if self.is_running(&spec.key) {
             bail!("{} is already running", spec.key);
         }
-        let key = spec.key.clone();
+        let key = spec.key;
         match self.spawn(spec) {
             Ok(process) => {
                 let pid = process.pid.as_raw_nonzero().get().cast_unsigned();
@@ -230,7 +230,7 @@ impl Host {
         let history = history.map(|back| back.min(pane.term.history_len()));
         let back = history.unwrap_or(0);
         Some(Frame {
-            key: key.clone(),
+            key: *key,
             full: full || history.is_some(),
             rows: rows
                 .into_iter()
@@ -272,7 +272,7 @@ impl Host {
         self.panes
             .iter()
             .map(|(key, pane)| PaneInfo {
-                key: key.clone(),
+                key: *key,
                 status: pane.status.clone(),
             })
             .collect()
@@ -285,7 +285,7 @@ impl Host {
         }
     }
 
-    fn spawn(&self, spec: PaneSpec) -> Result<Process> {
+    fn spawn(&self, spec: &PaneSpec) -> Result<Process> {
         let (program, args) = spec.argv.split_first().context("empty command")?;
         let pair = native_pty_system()
             .openpty(pty_size(self.size))
@@ -321,7 +321,7 @@ impl Host {
         let (drained_tx, drained_rx) = mpsc::channel::<()>();
         let events = self.events.clone();
         let backlog = Arc::clone(&self.backlog);
-        let key = spec.key.clone();
+        let key = spec.key;
         let output = threads::spawn(format!("pane {key} output"), move || {
             let mut buf = vec![0u8; 64 * 1024];
             loop {
@@ -331,7 +331,7 @@ impl Host {
                     Ok(read) => {
                         backlog.add(read);
                         if events
-                            .send(HostEvent::Output(key.clone(), buf[..read].to_vec()))
+                            .send(HostEvent::Output(key, buf[..read].to_vec()))
                             .is_err()
                         {
                             break;
@@ -390,6 +390,7 @@ mod tests {
     use std::time::Instant;
 
     use super::*;
+    use crate::fixtures;
 
     fn host() -> (Host, Receiver<HostEvent>) {
         let (events, rx) = mpsc::channel();
@@ -448,9 +449,9 @@ mod tests {
     #[test]
     fn names_the_pid_of_the_process_it_started() {
         let (mut host, rx) = host();
-        let key = PaneKey::Flow("a".into());
+        let key = PaneKey::Flow(fixtures::flow_id("a"));
 
-        let pid = host.open(spec(key.clone(), "echo $$")).unwrap();
+        let pid = host.open(&spec(key, "echo $$")).unwrap();
 
         assert_eq!(pump(&mut host, &rx, Duration::from_secs(5)), Some(Some(0)));
         assert_eq!(screen(&mut host, &key).trim(), pid.to_string());
@@ -459,9 +460,9 @@ mod tests {
     #[test]
     fn shows_the_output_and_exit_code_of_a_process_in_its_environment() {
         let (mut host, rx) = host();
-        let key = PaneKey::Flow("a".into());
+        let key = PaneKey::Flow(fixtures::flow_id("a"));
 
-        host.open(spec(key.clone(), "printf \"$GREETING\"; exit 3"))
+        host.open(&spec(key, "printf \"$GREETING\"; exit 3"))
             .unwrap();
 
         assert_eq!(pump(&mut host, &rx, Duration::from_secs(5)), Some(Some(3)));
@@ -473,8 +474,8 @@ mod tests {
     #[test]
     fn output_tail_reads_an_exited_pane() {
         let (mut host, rx) = host();
-        let key = PaneKey::Flow("tail".into());
-        host.open(spec(key.clone(), "printf 'one\\ntwo\\n'; exit 23"))
+        let key = PaneKey::Flow(fixtures::flow_id("tail"));
+        host.open(&spec(key, "printf 'one\\ntwo\\n'; exit 23"))
             .unwrap();
 
         assert_eq!(pump(&mut host, &rx, Duration::from_secs(5)), Some(Some(23)));
@@ -486,11 +487,8 @@ mod tests {
     fn passes_input_through_and_follows_a_resize() {
         let (mut host, rx) = host();
         let key = PaneKey::Master;
-        host.open(spec(
-            key.clone(),
-            "read line; stty size; echo \"got $line\"",
-        ))
-        .unwrap();
+        host.open(&spec(key, "read line; stty size; echo \"got $line\""))
+            .unwrap();
 
         host.resize(Size { cols: 70, rows: 8 });
         host.write(&key, b"abc\r").unwrap();
@@ -505,8 +503,8 @@ mod tests {
     #[test]
     fn close_ends_a_process_that_ignores_hangup() {
         let (mut host, rx) = host();
-        let key = PaneKey::Flow("stubborn".into());
-        host.open(spec(key.clone(), "trap '' HUP; echo ready; sleep 30"))
+        let key = PaneKey::Flow(fixtures::flow_id("stubborn"));
+        host.open(&spec(key, "trap '' HUP; echo ready; sleep 30"))
             .unwrap();
         let started = Instant::now();
         while !screen(&mut host, &key).contains("ready") {
@@ -525,11 +523,11 @@ mod tests {
     #[test]
     fn keeps_a_pane_that_could_not_start_with_its_reason() {
         let (mut host, _rx) = host();
-        let key = PaneKey::Flow("broken".into());
+        let key = PaneKey::Flow(fixtures::flow_id("broken"));
 
         let error = host
-            .open(PaneSpec {
-                key: key.clone(),
+            .open(&PaneSpec {
+                key,
                 argv: vec!["/no/such/program".into()],
                 cwd: std::env::temp_dir(),
                 env: vec![],
@@ -551,8 +549,8 @@ mod tests {
     fn sends_only_changed_rows_after_the_first_frame() {
         let (mut host, rx) = host();
         let key = PaneKey::Master;
-        host.open(spec(
-            key.clone(),
+        host.open(&spec(
+            key,
             "printf 'one\\ntwo'; read x; printf '\\033[1;1Hxx'; read y",
         ))
         .unwrap();
@@ -596,7 +594,7 @@ mod tests {
     fn scrolls_back_no_further_than_the_history_goes() {
         let (mut host, rx) = host();
         let key = PaneKey::Master;
-        host.open(spec(key.clone(), "seq 1 40; read x")).unwrap();
+        host.open(&spec(key, "seq 1 40; read x")).unwrap();
         let deadline = Instant::now() + Duration::from_secs(5);
         while !screen(&mut host, &key).contains("40") && Instant::now() < deadline {
             if let Ok(HostEvent::Output(key, bytes)) = rx.recv_timeout(Duration::from_millis(200)) {

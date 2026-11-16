@@ -8,6 +8,7 @@ use ratatui::text::Line;
 use super::{BoardState, BoardView};
 use crate::config::prefix::Prefix;
 use crate::event::{Event, EventKind, Mode};
+use crate::fixtures;
 use crate::fold;
 use crate::proto::PaneKey;
 use crate::ui::sidebar::Sidebar;
@@ -51,7 +52,7 @@ pub(super) fn flow(name: &str, mode: Mode, events: Vec<EventKind>) -> FlowView {
             .enumerate()
             .map(|(step, kind)| Event::new((step as u64 + 1) * MIN, kind)),
     );
-    fold::fold(name, &all, None, NOW).unwrap()
+    fold::fold(fixtures::flow_id(name), &all, None, NOW).unwrap()
 }
 
 /// Runs `look` on a board view of `flows`, with the master in ~/shop.

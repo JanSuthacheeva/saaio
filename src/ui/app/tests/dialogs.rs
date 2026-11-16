@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::binaries::{Binary, Mismatch};
+use crate::fixtures;
 use crate::ui::newflow::KindChoice;
 
 #[test]
@@ -56,9 +57,9 @@ fn a_job_passes_a_request_folder_or_name_that_starts_with_a_dash_as_written() {
 fn offers_to_clean_up_a_worker_whose_session_ended() {
     let mut app = board_app();
     app.on_input(Routed::Command(Command::Focus(2)));
-    let id = PaneKey::Flow("shop-230".into());
+    let id = PaneKey::Flow(fixtures::flow_id("shop-230"));
     app.on_server(ServerMsg::Panes(vec![PaneInfo {
-        key: id.clone(),
+        key: id,
         status: PaneStatus::Exited { code: Some(0) },
     }]));
 
@@ -482,7 +483,7 @@ fn the_dialog_from_a_plain_session_starts_in_its_folder() {
         .flows
         .push(plain_session("scratch", "/Users/jan/scratch", 5, vec![]));
     app.on_server(ServerMsg::Board(board));
-    app.focus = PaneKey::Flow("scratch".into());
+    app.focus = PaneKey::Flow(fixtures::flow_id("scratch"));
 
     let effects = app.on_input(Routed::Command(Command::NewFlow));
 

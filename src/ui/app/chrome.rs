@@ -39,7 +39,7 @@ impl App {
     /// branch.
     fn title_line(&self, theme: &Theme, width: u16, right: usize) -> Line<'static> {
         let room = |used: usize| (width as usize).saturating_sub(right + 2 + used);
-        let PaneKey::Flow(id) = &self.focus else {
+        let PaneKey::Flow(id) = self.focus else {
             let mut title = vec![Span::styled(" master", theme.ui.strong)];
             // The sidebar says where the master runs and the title its branch; the rail says neither.
             let place = match &self.master.place {
@@ -175,7 +175,7 @@ impl App {
             .workers()
             .into_iter()
             .enumerate()
-            .find(|(_, flow)| flow.needs_you() && !self.in_view(&flow.id));
+            .find(|(_, flow)| flow.needs_you() && !self.in_view(flow.id));
         if let Some((index, flow)) = next {
             let what = match flow.state {
                 State::Waiting => "is waiting",

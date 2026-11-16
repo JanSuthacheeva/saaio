@@ -6,6 +6,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
 
 use super::{App, View};
+use crate::id::FlowId;
 use crate::proto::{PaneKey, PaneStatus, Size};
 use crate::text::plural;
 use crate::ui::board::{BoardState, BoardView};
@@ -73,15 +74,17 @@ impl App {
     }
 
     fn draw_board(&self, frame: &mut Frame, state: BoardState, theme: &Theme) {
-        let back = match &self.focus {
-            PaneKey::Master => "master",
-            PaneKey::Flow(id) => self.worker(id).map_or(id.as_str(), |flow| &flow.name),
+        let back = match self.focus {
+            PaneKey::Master => "master".to_string(),
+            PaneKey::Flow(id) => self
+                .worker(id)
+                .map_or_else(|| id.to_string(), |flow| flow.name.clone()),
         };
         frame.render_widget(
             BoardView {
                 sidebar: self.sidebar(theme, &[]),
                 state,
-                back,
+                back: &back,
                 offset_secs: self.offset_secs,
                 notice: self.notice.as_deref(),
                 projects: self.projects.as_ref(),
@@ -208,7 +211,7 @@ impl App {
     }
 
     /// The stop question, or the flows it would leave unfinished with keep, end and esc as keys.
-    fn stop_dialog<'a>(&'a self, theme: &'a Theme, unfinished: &[String]) -> Dialog<'a> {
+    fn stop_dialog<'a>(&'a self, theme: &'a Theme, unfinished: &[FlowId]) -> Dialog<'a> {
         if unfinished.is_empty() {
             return Dialog {
                 keys: vec![

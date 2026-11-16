@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::event::{Mode, Question};
+use crate::fixtures;
 
 fn board(flows: Vec<FlowView>) -> ServerMsg {
     ServerMsg::Board(fold::board(flows, NOW))
@@ -126,7 +127,7 @@ fn a_flow_that_asks_names_its_first_question() {
 #[test]
 fn the_flow_in_view_raises_none_while_the_terminal_has_focus() {
     let mut app = watching_working();
-    app.focus(PaneKey::Flow("shop-230".into()));
+    app.focus(PaneKey::Flow(fixtures::flow_id("shop-230")));
 
     assert_eq!(
         notifications(app.on_server(waiting())),
@@ -137,7 +138,7 @@ fn the_flow_in_view_raises_none_while_the_terminal_has_focus() {
 #[test]
 fn the_flow_in_view_notifies_once_the_terminal_lost_focus() {
     let mut app = watching_working();
-    app.focus(PaneKey::Flow("shop-230".into()));
+    app.focus(PaneKey::Flow(fixtures::flow_id("shop-230")));
 
     assert_eq!(app.on_input(Routed::Focus(false)), vec![]);
 
@@ -182,7 +183,7 @@ fn a_flow_that_comes_to_rest_without_asking_raises_none() {
 #[test]
 fn the_master_out_of_view_notifies_when_it_waits_or_is_blocked() {
     let mut app = watching_working();
-    app.focus(PaneKey::Flow("shop-230".into()));
+    app.focus(PaneKey::Flow(fixtures::flow_id("shop-230")));
     app.on_server(master_at(State::Working, NOW));
 
     assert_eq!(
@@ -203,7 +204,7 @@ fn the_master_out_of_view_notifies_when_it_waits_or_is_blocked() {
 #[test]
 fn the_masters_first_turn_raises_none() {
     let mut app = watching_working();
-    app.focus(PaneKey::Flow("shop-230".into()));
+    app.focus(PaneKey::Flow(fixtures::flow_id("shop-230")));
 
     assert_eq!(
         notifications(app.on_server(master_at(State::Waiting, NOW))),

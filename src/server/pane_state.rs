@@ -44,6 +44,6 @@ impl Server {
 
     /// The pane's state to change, made empty the first time.
     pub(super) fn pane_mut(&mut self, key: &PaneKey) -> &mut PaneState {
-        self.panes.entry(key.clone()).or_default()
+        self.panes.entry(*key).or_default()
     }
 }

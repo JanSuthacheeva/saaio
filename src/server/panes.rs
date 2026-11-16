@@ -11,8 +11,9 @@ use super::host::HostEvent;
 use super::master::{Instructions, Start};
 use super::reconcile::{self, Wanted};
 use super::{ConnId, Event, Server};
-use crate::event::{Event as LogEvent, EventKind, is_uuid};
+use crate::event::{Event as LogEvent, EventKind};
 use crate::fold;
+use crate::id::FlowId;
 use crate::identity;
 use crate::launch::pane::{self, HOSTED, PROOF_ENV, PaneSpec};
 use crate::launch::worktree;
@@ -53,7 +54,7 @@ impl Server {
             server_log::write(now, &warning);
         }
         self.board = fold::board(fold::views(&logs, now), now);
-        let open: Vec<PaneKey> = self.host.keys().cloned().collect();
+        let open: Vec<PaneKey> = self.host.keys().copied().collect();
         let wanted = reconcile::reconcile(
             &self.board.flows,
             &open,
@@ -88,8 +89,8 @@ impl Server {
             self.host.close(key);
         }
         for (key, reason) in wanted.failed {
-            if let PaneKey::Flow(id) = &key {
-                self.known.insert(id.clone());
+            if let PaneKey::Flow(id) = key {
+                self.known.insert(id);
             }
             self.host.fail(key, reason);
         }
@@ -129,7 +130,7 @@ impl Server {
             agent,
             &self.env,
             &instructions,
-            self.store.master_session().as_deref(),
+            self.store.master_session(),
         ) {
             Some(spec) => match self.open_pane(spec) {
                 Ok(()) if start == Start::Resume => {
@@ -162,10 +163,10 @@ impl Server {
         {
             server_log::write((self.clock)(), &format!("{error:#}"));
         }
-        let key = spec.key.clone();
+        let key = spec.key;
         let adapter = spec.adapter;
-        let pid = self.host.open(spec)?;
-        if let PaneKey::Flow(id) = &key
+        let pid = self.host.open(&spec)?;
+        if let PaneKey::Flow(id) = key
             && let Err(error) = self.store.set_agent(id, pid)
         {
             server_log::write((self.clock)(), &format!("{error:#}"));
@@ -194,11 +195,11 @@ impl Server {
     /// after the start leaves a worker the next one resumes, not one it starts again fresh; takes
     /// the mark back when the agent could not start, since there is no session to resume.
     fn open_worker(&mut self, spec: PaneSpec) {
-        let key = spec.key.clone();
-        let PaneKey::Flow(id) = &key else {
+        let key = spec.key;
+        let PaneKey::Flow(id) = key else {
             return;
         };
-        self.known.insert(id.clone());
+        self.known.insert(id);
         let Some(space) = self.flow(id).and_then(|flow| flow.workspace.clone()) else {
             return;
         };
@@ -213,10 +214,8 @@ impl Server {
                 .store
                 .append(id, &LogEvent::new((self.clock)(), hosted))
             {
-                self.host.fail(
-                    key.clone(),
-                    format!("could not record its start: {error:#}"),
-                );
+                self.host
+                    .fail(key, format!("could not record its start: {error:#}"));
                 return;
             }
         }
@@ -241,8 +240,8 @@ impl Server {
     }
 
     /// Resumes an unfinished worker on the board whose pane exited or never opened.
-    pub(super) fn reopen_worker(&mut self, id: &str) {
-        let key = PaneKey::Flow(id.to_string());
+    pub(super) fn reopen_worker(&mut self, id: FlowId) {
+        let key = PaneKey::Flow(id);
         let on_board = self.board.flows.iter().any(|flow| flow.id == id);
         if !on_board || self.host.status(&key) == Some(&PaneStatus::Running) {
             return;
@@ -279,7 +278,7 @@ impl Server {
     /// Opens a pane once more with the agent's first command: its resume failed before the agent
     /// ever saved the session.
     pub(super) fn open_fresh(&mut self, key: &PaneKey) {
-        let PaneKey::Flow(id) = key else {
+        let PaneKey::Flow(id) = *key else {
             server_log::write(
                 (self.clock)(),
                 &format!("resuming {key} failed, starting it fresh"),
@@ -291,7 +290,7 @@ impl Server {
             Ok(flow) => flow,
             Err(error) => {
                 self.host
-                    .fail(key.clone(), format!("could not check flow: {error:#}"));
+                    .fail(*key, format!("could not check flow: {error:#}"));
                 return;
             }
         };
@@ -321,15 +320,15 @@ impl Server {
     /// Hangs up a flow's pane for `saaio remove` or `saaio clear`; the connection hears Closed once
     /// it exited, NotOpen when there is no pane. Only a flow on the board, or one whose log was
     /// written since the last refresh, is kept from opening again; any other id is let go.
-    pub(super) fn close_flow(&mut self, conn: ConnId, id: String) {
+    pub(super) fn close_flow(&mut self, conn: ConnId, id: FlowId) {
         let on_board = self.board.flows.iter().any(|flow| flow.id == id);
-        let logged = is_uuid(&id) && self.store.events(&id).is_ok();
+        let logged = self.store.events(id).is_ok();
         if !on_board && !logged {
             self.send_to(conn, &ServerMsg::NotOpen(id));
             return;
         }
-        let key = PaneKey::Flow(id.clone());
-        self.known.insert(id.clone());
+        let key = PaneKey::Flow(id);
+        self.known.insert(id);
         let Some(running) = self
             .host
             .status(&key)
@@ -360,7 +359,7 @@ impl Server {
         }
         if let PaneKey::Flow(id) = key {
             for conn in waiting {
-                self.send_to(conn, &ServerMsg::Closed(id.clone()));
+                self.send_to(conn, &ServerMsg::Closed(*id));
             }
         }
         self.send_panes();
@@ -369,29 +368,26 @@ impl Server {
     /// An Ended event for every unfinished flow with a worker, so the next start opens none of them.
     pub(super) fn end_flows(&mut self) {
         let now = (self.clock)();
-        let unfinished: Vec<String> = self
+        let unfinished: Vec<FlowId> = self
             .board
             .flows
             .iter()
             .filter(|flow| flow.workspace.is_some() && !flow.is_finished())
-            .map(|flow| flow.id.clone())
+            .map(|flow| flow.id)
             .collect();
         for id in unfinished {
-            if let Err(error) = self
-                .store
-                .append(&id, &LogEvent::new(now, EventKind::Ended))
-            {
+            if let Err(error) = self.store.append(id, &LogEvent::new(now, EventKind::Ended)) {
                 server_log::write((self.clock)(), &format!("{error:#}"));
             }
         }
     }
 
-    fn flow(&self, id: &str) -> Option<&FlowView> {
+    fn flow(&self, id: FlowId) -> Option<&FlowView> {
         self.board.flows.iter().find(|flow| flow.id == id)
     }
 
     /// Re-folds the current log before a launch, since the board refresh may not have run yet.
-    fn current_flow(&self, id: &str) -> Result<FlowView> {
+    fn current_flow(&self, id: FlowId) -> Result<FlowView> {
         let events = self.store.events(id)?;
         fold::fold(id, &events, None, (self.clock)()).context("flow has no start event")
     }
@@ -401,7 +397,7 @@ impl Server {
 fn waiter_of(key: &PaneKey) -> Waiter {
     match key {
         PaneKey::Master => Waiter::Master,
-        PaneKey::Flow(id) => Waiter::Flow(id.clone()),
+        PaneKey::Flow(id) => Waiter::Flow(*id),
     }
 }
 

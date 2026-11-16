@@ -27,6 +27,7 @@ mod exclusive;
 mod fixtures;
 mod fold;
 mod forge;
+mod id;
 mod identity;
 mod launch;
 #[cfg(test)]

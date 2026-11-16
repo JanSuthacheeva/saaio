@@ -10,6 +10,7 @@ use super::{Event, Server};
 use crate::event::{Event as LogEvent, EventKind};
 use crate::fold;
 use crate::forge::{self, Ask, Forge, Found};
+use crate::id::FlowId;
 use crate::server_log;
 use crate::stack;
 use crate::threads;
@@ -26,7 +27,7 @@ pub const ASK_LIMIT: Duration = Duration::from_mins(1);
 #[derive(Debug)]
 pub enum Answer {
     /// What the forge lists for a flow's branch; None when it lists nothing.
-    Found { id: String, found: Option<Found> },
+    Found { id: FlowId, found: Option<Found> },
     /// A question that failed: gh or glab missing, not logged in, offline, unreadable JSON.
     Failed(String),
     /// The round is over.
@@ -167,17 +168,17 @@ impl Server {
         let now = (self.clock)();
         match answer {
             Answer::Found { id, found } => {
-                let Ok(events) = self.store.events(&id) else {
+                let Ok(events) = self.store.events(id) else {
                     return;
                 };
-                let Some(flow) = fold::fold(&id, &events, None, now) else {
+                let Some(flow) = fold::fold(id, &events, None, now) else {
                     return;
                 };
                 let Some(kind) = forge::news(&flow, found.as_ref()) else {
                     return;
                 };
                 let merged = matches!(kind, EventKind::Merged { .. });
-                if let Err(error) = self.store.append(&id, &LogEvent::new(now, kind)) {
+                if let Err(error) = self.store.append(id, &LogEvent::new(now, kind)) {
                     server_log::write(now, &format!("{error:#}"));
                     return;
                 }
@@ -201,9 +202,9 @@ impl Server {
     }
 
     /// Appends each (id, kind); logs a failure to server.log and goes on.
-    fn restack(&self, events: Vec<(String, EventKind)>, now: u64) {
+    fn restack(&self, events: Vec<(FlowId, EventKind)>, now: u64) {
         for (id, kind) in events {
-            if let Err(error) = self.store.append(&id, &LogEvent::new(now, kind)) {
+            if let Err(error) = self.store.append(id, &LogEvent::new(now, kind)) {
                 server_log::write(now, &format!("{error:#}"));
             }
         }
@@ -214,6 +215,7 @@ impl Server {
 mod tests {
     use super::*;
     use crate::event::Mode;
+    use crate::fixtures;
 
     #[test]
     fn looks_up_a_shown_open_request_beyond_ten_closed_results() {
@@ -296,7 +298,7 @@ mod tests {
             .into_iter()
             .map(|kind| LogEvent::new(1, kind))
             .collect();
-        vec![fold::fold("csv-1", &events, None, 2).unwrap()]
+        vec![fold::fold(fixtures::flow_id("csv-1"), &events, None, 2).unwrap()]
     }
 
     #[test]

@@ -31,7 +31,7 @@ pub fn run(ctx: &Context) -> Result<Document, Failure> {
             }
         }
         restack(&store, &flows, flow, now)?;
-        store.remove(&flow.id).map_err(|error| {
+        store.remove(flow.id).map_err(|error| {
             Failure::from(error.context(format!("could not clear {}", flow.name)))
         })?;
         names.push(flow.name.clone());

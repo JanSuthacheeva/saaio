@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
+use crate::id::SessionId;
 use crate::text;
 use crate::workflow::{Phase, Workflow};
 
@@ -119,7 +120,7 @@ pub enum EventKind {
     Ended,
     /// The harness's own session id and transcript, for one that picks them itself (Codex).
     Session {
-        id: String,
+        id: SessionId,
         transcript: Option<String>,
     },
     Workspace {
@@ -221,13 +222,6 @@ pub fn unix_ms(time: SystemTime) -> u64 {
     time.duration_since(UNIX_EPOCH).map_or(0, |since| {
         u64::try_from(since.as_millis()).unwrap_or(u64::MAX)
     })
-}
-
-/// Whether `text` is a UUID: what saaio's flow and master ids and Codex's session ids are, and
-/// what alone may become a file name or a resume argument.
-#[must_use]
-pub fn is_uuid(text: &str) -> bool {
-    text.len() == 36 && uuid::Uuid::try_parse(text).is_ok()
 }
 
 impl Event {
@@ -396,27 +390,6 @@ mod tests {
 
     fn phase(name: &str) -> Phase {
         name.parse().unwrap()
-    }
-
-    #[test]
-    fn a_uuid_is_only_the_hyphenated_form() {
-        for good in [
-            "3b91bb6e-9457-4f37-9278-46e3a5e2ade4",
-            "01a14000-0000-7000-8000-000000000001",
-        ] {
-            assert!(is_uuid(good), "{good}");
-        }
-        for bad in [
-            "-cnotify=[\"sh\",\"-c\",\"id\"]",
-            "../../x",
-            "7f3c",
-            "",
-            "3b91bb6e94574f37927846e3a5e2ade4",
-            "{3b91bb6e-9457-4f37-9278-46e3a5e2ade4}",
-            "3b91bb6e-9457-4f37-9278-46e3a5e2ade4 ",
-        ] {
-            assert!(!is_uuid(bad), "{bad}");
-        }
     }
 
     #[test]
@@ -982,5 +955,26 @@ mod tests {
                 kind: EventKind::Working
             })
         );
+    }
+
+    #[test]
+    fn skips_a_session_line_whose_id_is_no_id() {
+        let line = |id: &str| format!(r#"{{"v":1,"at":7,"kind":"session","id":"{id}"}}"#);
+        let id = "01a14000-0000-7000-8000-000000000000";
+
+        assert_eq!(
+            Event::from_line(&line(id)).map(|event| event.kind),
+            Some(EventKind::Session {
+                id: SessionId::parse(id).unwrap(),
+                transcript: None
+            })
+        );
+        for forged in [
+            "-cnotify=x",
+            "../../x",
+            "01A14000-0000-7000-8000-000000000000",
+        ] {
+            assert_eq!(Event::from_line(&line(forged)), None, "{forged}");
+        }
     }
 }

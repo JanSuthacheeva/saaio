@@ -11,9 +11,9 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use anyhow::{Context, Result, bail};
-use uuid::Uuid;
 
 use crate::event::{Event, unix_ms};
+use crate::id::{FlowId, SessionId};
 use crate::private::{self, write_atomic};
 use crate::view::MasterTurn;
 use crate::wake::Seen;
@@ -29,7 +29,7 @@ const BUSY_TYPED: &str = "typed";
 /// One flow's events and its last heartbeat, as read from disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlowLog {
-    pub id: String,
+    pub id: FlowId,
     pub events: Vec<Event>,
     pub beat: Option<u64>,
 }
@@ -53,17 +53,17 @@ impl Stamp {
 }
 
 /// Whose wait: the master's or a flow's worker's.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Waiter {
     Master,
-    Flow(String),
+    Flow(FlowId),
 }
 
 impl Waiter {
-    fn key(&self) -> &str {
+    fn key(&self) -> String {
         match self {
-            Waiter::Master => "master",
-            Waiter::Flow(id) => id,
+            Waiter::Master => "master".to_string(),
+            Waiter::Flow(id) => id.to_string(),
         }
     }
 }
@@ -96,15 +96,15 @@ impl Store {
     }
 
     /// A new flow with a fresh UUID v4 and its first event; returns the id.
-    pub fn create(&self, first: &Event) -> Result<String> {
+    pub fn create(&self, first: &Event) -> Result<FlowId> {
         let flows = self.root.join("flows");
         private::create_dir(&flows)
             .with_context(|| format!("could not create flow in {}", flows.display()))?;
-        let id = Uuid::new_v4().to_string();
+        let id = FlowId::generate();
         let mut log = private::options()
             .write(true)
             .create_new(true)
-            .open(self.log(&id))
+            .open(self.log(id))
             .with_context(|| format!("could not create flow in {}", flows.display()))?;
         writeln!(log, "{}", first.to_line())
             .with_context(|| format!("could not write flow {id}"))?;
@@ -112,7 +112,7 @@ impl Store {
     }
 
     /// Appends one event to an existing log.
-    pub fn append(&self, id: &str, event: &Event) -> Result<()> {
+    pub fn append(&self, id: FlowId, event: &Event) -> Result<()> {
         let mut log = match OpenOptions::new().append(true).open(self.log(id)) {
             Ok(log) => log,
             Err(error) if error.kind() == ErrorKind::NotFound => bail!("no flow {id}"),
@@ -123,7 +123,7 @@ impl Store {
     }
 
     /// Every readable event of one flow, in order.
-    pub fn events(&self, id: &str) -> Result<Vec<Event>> {
+    pub fn events(&self, id: FlowId) -> Result<Vec<Event>> {
         let text = match fs::read_to_string(self.log(id)) {
             Ok(text) => text,
             Err(error) if error.kind() == ErrorKind::NotFound => bail!("no flow {id}"),
@@ -133,7 +133,7 @@ impl Store {
     }
 
     /// Ids of all flows, by log file name.
-    pub fn ids(&self) -> Result<Vec<String>> {
+    pub fn ids(&self) -> Result<Vec<FlowId>> {
         let flows = self.root.join("flows");
         let entries = match fs::read_dir(&flows) {
             Ok(entries) => entries,
@@ -147,8 +147,12 @@ impl Store {
             let name = entry
                 .with_context(|| format!("could not list {}", flows.display()))?
                 .file_name();
-            if let Some(id) = name.to_string_lossy().strip_suffix(".jsonl") {
-                ids.push(id.to_string());
+            if let Some(id) = name
+                .to_string_lossy()
+                .strip_suffix(".jsonl")
+                .and_then(|stem| FlowId::parse(stem).ok())
+            {
+                ids.push(id);
             }
         }
         ids.sort();
@@ -165,8 +169,8 @@ impl Store {
         let mut warnings = Vec::new();
         for id in ids {
             match self
-                .events(&id)
-                .and_then(|events| Ok((events, self.last_beat(&id)?)))
+                .events(id)
+                .and_then(|events| Ok((events, self.last_beat(id)?)))
             {
                 Ok((events, beat)) => logs.push(FlowLog { id, events, beat }),
                 Err(error) => warnings.push(format!("cannot read {id}: {error:#}")),
@@ -176,10 +180,10 @@ impl Store {
     }
 
     /// Size and modification time of each log and heartbeat file, by flow id.
-    pub fn stamps(&self) -> Result<Vec<(String, Stamp)>> {
+    pub fn stamps(&self) -> Result<Vec<(FlowId, Stamp)>> {
         let mut stamps = Vec::new();
         for id in self.ids()? {
-            let log = match fs::metadata(self.log(&id)) {
+            let log = match fs::metadata(self.log(id)) {
                 Ok(log) => log,
                 Err(error) if error.kind() == ErrorKind::NotFound => continue,
                 Err(error) => {
@@ -191,7 +195,7 @@ impl Store {
                     .with_context(|| format!("could not read when flow {id} changed"))
             };
             let mut modified = changed(&log)?;
-            if let Ok(alive) = fs::metadata(self.alive(&id)) {
+            if let Ok(alive) = fs::metadata(self.alive(id)) {
                 modified = modified.max(changed(&alive)?);
             }
             stamps.push((
@@ -206,7 +210,7 @@ impl Store {
     }
 
     /// Touches <id>.alive; its mtime is the last heartbeat.
-    pub fn beat(&self, id: &str) -> Result<()> {
+    pub fn beat(&self, id: FlowId) -> Result<()> {
         if !self.log(id).exists() {
             bail!("no flow {id}");
         }
@@ -222,7 +226,7 @@ impl Store {
     }
 
     /// Unix ms of the last heartbeat; None when the flow never sent one.
-    pub fn last_beat(&self, id: &str) -> Result<Option<u64>> {
+    pub fn last_beat(&self, id: FlowId) -> Result<Option<u64>> {
         let modified = match fs::metadata(self.alive(id)) {
             Ok(metadata) => metadata.modified()?,
             Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
@@ -257,34 +261,34 @@ impl Store {
     }
 
     /// How many of the master's messages the flow's worker was given.
-    pub fn delivered(&self, id: &str) -> usize {
+    pub fn delivered(&self, id: FlowId) -> usize {
         self.read_wait(&format!("{id}.delivered"))
             .and_then(|text| text.trim().parse().ok())
             .unwrap_or(0)
     }
 
-    pub fn set_delivered(&self, id: &str, count: usize) -> Result<()> {
+    pub fn set_delivered(&self, id: FlowId, count: usize) -> Result<()> {
         self.write_wait(&format!("{id}.delivered"), &count.to_string())
     }
 
     /// How many of the flow's queued lines the server typed into its pane.
-    pub fn typed(&self, id: &str) -> usize {
+    pub fn typed(&self, id: FlowId) -> usize {
         self.read_wait(&format!("{id}.typed"))
             .and_then(|text| text.trim().parse().ok())
             .unwrap_or(0)
     }
 
-    pub fn set_typed(&self, id: &str, count: usize) -> Result<()> {
+    pub fn set_typed(&self, id: FlowId, count: usize) -> Result<()> {
         self.write_wait(&format!("{id}.typed"), &count.to_string())
     }
 
     /// Keeps the pid of the agent the server started in the flow's pane (waits/<id>.agent).
-    pub fn set_agent(&self, id: &str, pid: u32) -> Result<()> {
+    pub fn set_agent(&self, id: FlowId, pid: u32) -> Result<()> {
         self.write_wait(&format!("{id}.agent"), &pid.to_string())
     }
 
     /// The pid of the agent in the flow's pane, as the server last started it.
-    pub fn agent(&self, id: &str) -> Option<u32> {
+    pub fn agent(&self, id: FlowId) -> Option<u32> {
         self.read_wait(&format!("{id}.agent"))
             .and_then(|text| text.trim().parse().ok())
     }
@@ -309,8 +313,8 @@ impl Store {
     }
 
     /// The master's own session id, for a harness that picks it itself (Codex).
-    pub fn set_master_session(&self, id: &str) -> Result<()> {
-        self.write_wait(MASTER_SESSION_FILE, id)
+    pub fn set_master_session(&self, id: SessionId) -> Result<()> {
+        self.write_wait(MASTER_SESSION_FILE, &id.to_string())
     }
 
     /// Forgets the master's session, as a fresh master starts a new one.
@@ -318,9 +322,9 @@ impl Store {
         self.remove_wait(MASTER_SESSION_FILE)
     }
 
-    pub fn master_session(&self) -> Option<String> {
-        let id = self.read_wait(MASTER_SESSION_FILE)?;
-        Some(id.trim().to_string()).filter(|id| !id.is_empty())
+    /// The master's session; None when it has none or its file holds no id.
+    pub fn master_session(&self) -> Option<SessionId> {
+        SessionId::parse(self.read_wait(MASTER_SESSION_FILE)?.trim()).ok()
     }
 
     /// The master's turn; None before its first hook or when the file does not parse.
@@ -349,7 +353,7 @@ impl Store {
     }
 
     /// Deletes the log, the heartbeat file and what its waiter kept.
-    pub fn remove(&self, id: &str) -> Result<()> {
+    pub fn remove(&self, id: FlowId) -> Result<()> {
         match fs::remove_file(self.log(id)) {
             Ok(()) => {}
             Err(error) if error.kind() == ErrorKind::NotFound => bail!("no flow {id}"),
@@ -397,11 +401,11 @@ impl Store {
             .with_context(|| format!("could not write {}", file.display()))
     }
 
-    fn log(&self, id: &str) -> PathBuf {
+    fn log(&self, id: FlowId) -> PathBuf {
         self.root.join("flows").join(format!("{id}.jsonl"))
     }
 
-    fn alive(&self, id: &str) -> PathBuf {
+    fn alive(&self, id: FlowId) -> PathBuf {
         self.root.join("flows").join(format!("{id}.alive"))
     }
 }
@@ -435,16 +439,16 @@ mod tests {
         let store = Store::at(dir.path().to_path_buf());
         let first = store.create(&started()).unwrap();
         let second = store.create(&started()).unwrap();
-        store.beat(&second).unwrap();
+        store.beat(second).unwrap();
 
         let (logs, warnings) = store.logs();
 
         assert_eq!(warnings, [] as [String; 0]);
         assert_eq!(logs.len(), 2);
-        let log = |id: &str| logs.iter().find(|log| log.id == id).unwrap();
-        assert_eq!(log(&first).events, vec![started()]);
-        assert_eq!(log(&first).beat, None);
-        assert!(log(&second).beat.is_some());
+        let log = |id: FlowId| logs.iter().find(|log| log.id == id).unwrap();
+        assert_eq!(log(first).events, vec![started()]);
+        assert_eq!(log(first).beat, None);
+        assert!(log(second).beat.is_some());
     }
 
     #[test]
@@ -455,10 +459,10 @@ mod tests {
         let stamp = |store: &Store| store.stamps().unwrap()[0].1;
 
         let before = stamp(&store);
-        store.append(&id, &started()).unwrap();
+        store.append(id, &started()).unwrap();
         let appended = stamp(&store);
         std::thread::sleep(std::time::Duration::from_millis(20));
-        store.beat(&id).unwrap();
+        store.beat(id).unwrap();
         let beaten = stamp(&store);
 
         assert!(appended.len > before.len);
@@ -473,10 +477,9 @@ mod tests {
 
         let id = store.create(&started()).unwrap();
         let working = Event::new(2, EventKind::Working);
-        store.append(&id, &working).unwrap();
+        store.append(id, &working).unwrap();
 
-        assert!(Uuid::parse_str(&id).is_ok());
-        assert_eq!(store.events(&id).unwrap(), vec![started(), working]);
+        assert_eq!(store.events(id).unwrap(), vec![started(), working]);
         assert_eq!(store.ids().unwrap(), vec![id]);
     }
 
@@ -486,10 +489,16 @@ mod tests {
         let store = Store::at(dir.path().to_path_buf());
 
         let error = store
-            .append("nope", &Event::new(1, EventKind::Working))
+            .append(
+                fixtures::flow_id("nope"),
+                &Event::new(1, EventKind::Working),
+            )
             .unwrap_err();
 
-        assert_eq!(error.to_string(), "no flow nope");
+        assert_eq!(
+            error.to_string(),
+            format!("no flow {}", fixtures::flow_id("nope"))
+        );
         assert!(!dir.path().join("flows/nope.jsonl").exists());
     }
 
@@ -503,7 +512,7 @@ mod tests {
         text.push_str("garbage\n{\"v\":9,\"at\":3,\"kind\":\"working\"}\n");
         fs::write(&log, text).unwrap();
 
-        assert_eq!(store.events(&id).unwrap(), vec![started()]);
+        assert_eq!(store.events(id).unwrap(), vec![started()]);
     }
 
     #[test]
@@ -511,11 +520,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
         let id = store.create(&started()).unwrap();
-        assert_eq!(store.last_beat(&id).unwrap(), None);
+        assert_eq!(store.last_beat(id).unwrap(), None);
 
         let before = now_ms();
-        store.beat(&id).unwrap();
-        let beat = store.last_beat(&id).unwrap().unwrap();
+        store.beat(id).unwrap();
+        let beat = store.last_beat(id).unwrap().unwrap();
 
         assert!(
             beat + 1_000 >= before && beat <= now_ms() + 1_000,
@@ -528,7 +537,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
 
-        assert_eq!(store.beat("nope").unwrap_err().to_string(), "no flow nope");
+        let nope = fixtures::flow_id("nope");
+        assert_eq!(
+            store.beat(nope).unwrap_err().to_string(),
+            format!("no flow {nope}")
+        );
     }
 
     #[test]
@@ -537,8 +550,12 @@ mod tests {
         let store = Store::at(dir.path().to_path_buf());
 
         assert_eq!(store.master_session(), None);
-        store.set_master_session("01a1").unwrap();
-        assert_eq!(store.master_session().as_deref(), Some("01a1"));
+        let session = SessionId::generate();
+        store.set_master_session(session).unwrap();
+        assert_eq!(store.master_session(), Some(session));
+
+        fs::write(dir.path().join("waits/master.session"), "01a1").unwrap();
+        assert_eq!(store.master_session(), None, "a file that holds no id");
     }
 
     #[test]
@@ -578,14 +595,14 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
         let id = store.create(&started()).unwrap();
-        store.beat(&id).unwrap();
+        store.beat(id).unwrap();
 
-        store.remove(&id).unwrap();
+        store.remove(id).unwrap();
 
-        assert_eq!(store.ids().unwrap(), Vec::<String>::new());
-        assert_eq!(store.last_beat(&id).unwrap(), None);
+        assert_eq!(store.ids().unwrap(), Vec::<FlowId>::new());
+        assert_eq!(store.last_beat(id).unwrap(), None);
         assert_eq!(
-            store.remove(&id).unwrap_err().to_string(),
+            store.remove(id).unwrap_err().to_string(),
             format!("no flow {id}")
         );
     }
@@ -599,14 +616,33 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().join("missing"));
 
-        assert_eq!(store.ids().unwrap(), Vec::<String>::new());
+        assert_eq!(store.ids().unwrap(), Vec::<FlowId>::new());
+    }
+
+    #[test]
+    fn lists_only_logs_named_by_an_id() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let id = store.create(&started()).unwrap();
+        fs::write(dir.path().join("flows/notes.jsonl"), "").unwrap();
+        fs::write(
+            dir.path().join(format!(
+                "flows/{}.jsonl",
+                FlowId::generate().to_string().to_uppercase()
+            )),
+            "",
+        )
+        .unwrap();
+
+        assert_eq!(store.ids().unwrap(), vec![id]);
+        assert_eq!(store.logs().1, [] as [String; 0]);
     }
 
     #[test]
     fn the_last_waiter_to_claim_a_session_is_its_waiter() {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
-        let worker = Waiter::Flow("7f3c".into());
+        let worker = Waiter::Flow(fixtures::flow_id("7f3c"));
 
         assert_eq!(store.waiter(&worker), None);
         store.claim_waiter(&worker, 41).unwrap();
@@ -622,17 +658,18 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
 
-        assert_eq!(store.delivered("7f3c"), 0);
-        store.set_delivered("7f3c", 3).unwrap();
-        assert_eq!(store.delivered("7f3c"), 3);
+        let id = fixtures::flow_id("7f3c");
+        assert_eq!(store.delivered(id), 0);
+        store.set_delivered(id, 3).unwrap();
+        assert_eq!(store.delivered(id), 3);
 
-        assert_eq!(store.typed("7f3c"), 0);
-        store.set_typed("7f3c", 2).unwrap();
-        assert_eq!(store.typed("7f3c"), 2);
+        assert_eq!(store.typed(id), 0);
+        store.set_typed(id, 2).unwrap();
+        assert_eq!(store.typed(id), 2);
 
         assert_eq!(store.seen(), None);
         let seen = Seen::from([(
-            "7f3c".to_string(),
+            id,
             Mark {
                 state: State::Waiting,
                 changed_at: 5,
@@ -646,7 +683,9 @@ mod tests {
     fn marks_a_session_idle_running_a_turn_or_typed_into() {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
-        let worker = Waiter::Flow("7f3c".into());
+        let id = fixtures::flow_id("7f3c");
+        let worker = Waiter::Flow(id);
+        let busy = dir.path().join(format!("waits/{id}.busy"));
 
         assert_eq!(store.busy(&worker), Busy::Idle);
         store.set_busy(&worker, Busy::Typed).unwrap();
@@ -655,10 +694,10 @@ mod tests {
         assert_eq!(store.busy(&worker), Busy::Turn);
         store.set_busy(&worker, Busy::Idle).unwrap();
         assert_eq!(store.busy(&worker), Busy::Idle);
-        assert!(!dir.path().join("waits/7f3c.busy").exists());
+        assert!(!busy.exists());
         store.set_busy(&worker, Busy::Idle).unwrap();
 
-        fs::write(dir.path().join("waits/7f3c.busy"), "").unwrap();
+        fs::write(&busy, "").unwrap();
         assert_eq!(
             store.busy(&worker),
             Busy::Turn,
@@ -671,20 +710,20 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
         let id = store.create(&started()).unwrap();
-        store.claim_waiter(&Waiter::Flow(id.clone()), 9).unwrap();
-        store.set_delivered(&id, 2).unwrap();
+        store.claim_waiter(&Waiter::Flow(id), 9).unwrap();
+        store.set_delivered(id, 2).unwrap();
         fs::write(dir.path().join(format!("waits/{id}.typed")), "1").unwrap();
-        store.set_key(&Waiter::Flow(id.clone()), "d1g35t").unwrap();
-        store.set_agent(&id, 4242).unwrap();
-        assert_eq!(store.agent(&id), Some(4242));
+        store.set_key(&Waiter::Flow(id), "d1g35t").unwrap();
+        store.set_agent(id, 4242).unwrap();
+        assert_eq!(store.agent(id), Some(4242));
 
-        store.remove(&id).unwrap();
+        store.remove(id).unwrap();
 
-        assert_eq!(store.agent(&id), None);
+        assert_eq!(store.agent(id), None);
 
-        assert_eq!(store.key(&Waiter::Flow(id.clone())), None);
-        assert_eq!(store.waiter(&Waiter::Flow(id.clone())), None);
-        assert_eq!(store.delivered(&id), 0);
-        assert_eq!(store.typed(&id), 0);
+        assert_eq!(store.key(&Waiter::Flow(id)), None);
+        assert_eq!(store.waiter(&Waiter::Flow(id)), None);
+        assert_eq!(store.delivered(id), 0);
+        assert_eq!(store.typed(id), 0);
     }
 }

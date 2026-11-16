@@ -19,8 +19,9 @@ use crate::cli::output::Document;
 use crate::config::Config;
 use crate::config::kind::DEFAULT_KIND;
 use crate::deliver::{self, WorkerNews};
-use crate::event::{Event, EventKind, ServiceStatus, is_uuid};
+use crate::event::{Event, EventKind, ServiceStatus};
 use crate::fold;
+use crate::id::FlowId;
 use crate::identity;
 use crate::pause;
 use crate::processes;
@@ -41,7 +42,7 @@ pub struct Args {
 /// Whose hook ran: the master's ($SAAIO_MASTER), a flow's session ($SAAIO_FLOW_ID), or neither.
 #[derive(Debug)]
 enum Hooked {
-    Flow(String),
+    Flow(FlowId),
     Master,
     Nobody,
 }
@@ -50,7 +51,7 @@ impl Hooked {
     /// The session it claims to be, None for Nobody.
     fn waiter(&self) -> Option<Waiter> {
         match self {
-            Hooked::Flow(id) => Some(Waiter::Flow(id.clone())),
+            Hooked::Flow(id) => Some(Waiter::Flow(*id)),
             Hooked::Master => Some(Waiter::Master),
             Hooked::Nobody => None,
         }
@@ -79,17 +80,19 @@ pub fn run(args: &Args, ctx: &Context) -> Document {
     };
     let hooked = match ctx.env.flow_id() {
         _ if ctx.env.is_master() => Hooked::Master,
-        Some(id) if !is_uuid(id) => {
-            Log::new(
-                ctx.env.server_log(&store),
-                &args.adapter,
-                &Hooked::Nobody,
-                ctx.clock,
-            )
-            .error(&format!("SAAIO_FLOW_ID {id:?} is no flow id"));
-            return Document::Silent;
+        Some(text) => {
+            let Ok(id) = FlowId::parse(text) else {
+                Log::new(
+                    ctx.env.server_log(&store),
+                    &args.adapter,
+                    &Hooked::Nobody,
+                    ctx.clock,
+                )
+                .error(&format!("SAAIO_FLOW_ID {text:?} is no flow id"));
+                return Document::Silent;
+            };
+            Hooked::Flow(id)
         }
-        Some(id) => Hooked::Flow(id.to_string()),
         None => Hooked::Nobody,
     };
     let log = Log::new(
@@ -130,7 +133,7 @@ pub fn run(args: &Args, ctx: &Context) -> Document {
         }
     };
     let news = hook(&store, &config, adapter, &hooked, &payload, &log, ctx.now());
-    if let Hooked::Flow(id) = &hooked
+    if let Hooked::Flow(id) = hooked
         && adapter.before_tool(&payload)
     {
         wait_for_services(&store, id, !adapter.asks(&payload), &log, ctx.clock);
@@ -174,7 +177,7 @@ const WAIT_STEP: Duration = Duration::from_millis(200);
 /// marks a resting flow working first (a worker the master woke reports no prompt), so the server
 /// begins the resume. Paused with no resume begun, it waits only PICKUP_WAIT, so a store without a
 /// server never stalls tools.
-fn wait_for_services(store: &Store, id: &str, works: bool, log: &Log, clock: fn() -> u64) {
+fn wait_for_services(store: &Store, id: FlowId, works: bool, log: &Log, clock: fn() -> u64) {
     let deadline = Instant::now() + RESUME_WAIT;
     let mut paused_since = None;
     loop {
@@ -222,7 +225,7 @@ const TURN_STEP: Duration = Duration::from_millis(500);
 /// Before a shell call that runs a command its repository lists under [exclusive]: takes the
 /// project's turn, waiting while another run has it, and hands it to `saaio turn`, which keeps it
 /// while the run lasts. Fails open: whatever goes wrong is logged and the call runs.
-fn wait_for_turn(store: &Store, id: &str, line: &str, log: &Log, clock: fn() -> u64) {
+fn wait_for_turn(store: &Store, id: FlowId, line: &str, log: &Log, clock: fn() -> u64) {
     let Some((flow, command)) = heavy(store, id, line, log) else {
         return;
     };
@@ -230,7 +233,7 @@ fn wait_for_turn(store: &Store, id: &str, line: &str, log: &Log, clock: fn() -> 
         return;
     };
     let holder = Holder {
-        flow: id.to_string(),
+        flow: id,
         name: flow.name,
         command: command.clone(),
     };
@@ -288,7 +291,7 @@ fn wait_for_turn(store: &Store, id: &str, line: &str, log: &Log, clock: fn() -> 
 
 /// The flow and the listed command `line` runs; None, quietly, when its repository lists none
 /// that it runs, and logged when the repository's config cannot be read.
-fn heavy(store: &Store, id: &str, line: &str, log: &Log) -> Option<(FlowView, String)> {
+fn heavy(store: &Store, id: FlowId, line: &str, log: &Log) -> Option<(FlowView, String)> {
     let events = store.events(id).ok()?;
     let flow = fold::fold(id, &events, None, 0)?;
     let repo = repo_dir(&flow)?;
@@ -305,7 +308,7 @@ fn heavy(store: &Store, id: &str, line: &str, log: &Log) -> Option<(FlowView, St
 
 /// The flow's agent and the processes between this hook and it (the harness); None, logged,
 /// when the server kept no agent or this hook does not run below it.
-fn agent_of(store: &Store, id: &str, log: &Log) -> Option<(u32, Vec<u32>)> {
+fn agent_of(store: &Store, id: FlowId, log: &Log) -> Option<(u32, Vec<u32>)> {
     let Some(agent) = store.agent(id) else {
         log.error("no agent pid kept for the flow; the tool runs without the turn");
         return None;
@@ -340,7 +343,7 @@ fn agent_of(store: &Store, id: &str, log: &Log) -> Option<(u32, Vec<u32>)> {
 
 /// Starts `saaio turn` with the turn's file as its stdin, in a process group of its own so the
 /// harness that ends this hook leaves it running; it holds the turn until it exits.
-fn keep_turn(turn: turns::Turn, id: &str, agent: u32, harness: &[u32]) -> Result<()> {
+fn keep_turn(turn: turns::Turn, id: FlowId, agent: u32, harness: &[u32]) -> Result<()> {
     let exe = std::env::current_exe().context("could not find the saaio binary")?;
     let harness = harness
         .iter()
@@ -348,7 +351,13 @@ fn keep_turn(turn: turns::Turn, id: &str, agent: u32, harness: &[u32]) -> Result
         .collect::<Vec<_>>()
         .join(",");
     Command::new(exe)
-        .args(["turn", "--flow", id, "--agent", &agent.to_string()])
+        .args([
+            "turn",
+            "--flow",
+            &id.to_string(),
+            "--agent",
+            &agent.to_string(),
+        ])
         .args((!harness.is_empty()).then(|| format!("--harness={harness}")))
         .stdin(Stdio::from(turn.into_file()))
         .stdout(Stdio::null())
@@ -410,9 +419,11 @@ fn hook(
             record_master_turn(store, &kinds, log, now);
             Waiter::Master
         }
-        Hooked::Flow(flow) => {
-            let id = report(store, flow, kinds, log, now)?;
-            Waiter::Flow(id)
+        Hooked::Flow(id) => {
+            if !report(store, *id, kinds, log, now) {
+                return None;
+            }
+            Waiter::Flow(*id)
         }
     };
     match adapter.turn(payload)? {
@@ -489,15 +500,14 @@ fn last_line(file: &Path, matches: &LineMatch, chunk: u64) -> std::io::Result<Op
 /// The workflow the hooked flow recorded; for one from before kinds, which was a feature flow, the
 /// feature kind's; for the master and nobody the config's default kind's.
 fn workflow_for(store: &Store, hooked: &Hooked, config: &Config, now: u64) -> Workflow {
-    let Hooked::Flow(flow) = hooked else {
+    let Hooked::Flow(id) = *hooked else {
         return config.workflow();
     };
-    let recorded = if let Ok(events) = store.events(flow) {
-        fold::fold(flow, &events, None, now).and_then(|view| view.workflow)
-    } else {
-        let (flows, _) = views(store, now);
-        fold::resolve(&flows, flow).and_then(|view| view.workflow.clone())
-    };
+    let recorded = store
+        .events(id)
+        .ok()
+        .and_then(|events| fold::fold(id, &events, None, now))
+        .and_then(|view| view.workflow);
     recorded.unwrap_or_else(|| {
         config
             .kind(Some(DEFAULT_KIND))
@@ -505,46 +515,40 @@ fn workflow_for(store: &Store, hooked: &Hooked, config: &Config, now: u64) -> Wo
     })
 }
 
-/// Appends the kinds that change flow `flow` (a name or id); its id, None when there is no such
-/// flow or its log cannot be read.
-fn report(store: &Store, flow: &str, kinds: Vec<EventKind>, log: &Log, now: u64) -> Option<String> {
-    let id = if store.events(flow).is_ok() {
-        flow.to_string()
-    } else {
-        let (flows, _) = views(store, now);
-        let Some(view) = fold::resolve(&flows, flow) else {
-            log.error(&format!("no flow {flow}"));
-            return None;
-        };
-        view.id.clone()
-    };
+/// Appends the kinds that change flow `id`; false when there is no such flow or its log cannot
+/// be read.
+fn report(store: &Store, id: FlowId, kinds: Vec<EventKind>, log: &Log, now: u64) -> bool {
+    if store.events(id).is_err() {
+        log.error(&format!("no flow {id}"));
+        return false;
+    }
     for kind in kinds {
         if let EventKind::MergeRequest { url } = &kind
-            && !of_flow_repo(store, &id, url, now)
+            && !of_flow_repo(store, id, url, now)
         {
             log.error(&format!(
                 "{url} is not a merge request of this flow's repository"
             ));
             continue;
         }
-        let events = match store.events(&id) {
+        let events = match store.events(id) {
             Ok(events) => events,
             Err(error) => {
                 log.error(&format!("{error:#}"));
-                return None;
+                return false;
             }
         };
-        if fold::changes(&id, &events, &kind, now)
-            && let Err(error) = store.append(&id, &Event::new(now, kind))
+        if fold::changes(id, &events, &kind, now)
+            && let Err(error) = store.append(id, &Event::new(now, kind))
         {
             log.error(&format!("{error:#}"));
         }
     }
-    Some(id)
+    true
 }
 
 /// True when `url` is a merge request of the flow's own repository.
-fn of_flow_repo(store: &Store, id: &str, url: &str, now: u64) -> bool {
+fn of_flow_repo(store: &Store, id: FlowId, url: &str, now: u64) -> bool {
     let events = store.events(id).unwrap_or_default();
     fold::fold(id, &events, None, now)
         .as_ref()
@@ -557,10 +561,10 @@ fn of_flow_repo(store: &Store, id: &str, url: &str, now: u64) -> bool {
 fn hand_over(store: &Store, waiter: &Waiter, log: &Log, now: u64) -> Option<String> {
     match waiter {
         Waiter::Flow(id) => {
-            let WorkerNews::News(notes) = deliver::worker_news(store, id, now) else {
+            let WorkerNews::News(notes) = deliver::worker_news(store, *id, now) else {
                 return None;
             };
-            if let Err(error) = store.append(id, &Event::new(now, EventKind::Working)) {
+            if let Err(error) = store.append(*id, &Event::new(now, EventKind::Working)) {
                 log.error(&format!("{error:#}"));
             }
             Some(wake::for_worker(&notes))
@@ -576,11 +580,11 @@ fn hand_over(store: &Store, waiter: &Waiter, log: &Log, now: u64) -> Option<Stri
 /// Keeps the master's session id, which its harness picked, so the server can resume it.
 fn record_master_session(store: &Store, kinds: &[EventKind], log: &Log) {
     let session = kinds.iter().find_map(|kind| match kind {
-        EventKind::Session { id, .. } => Some(id),
+        EventKind::Session { id, .. } => Some(*id),
         _ => None,
     });
     if let Some(id) = session
-        && store.master_session().as_ref() != Some(id)
+        && store.master_session() != Some(id)
         && let Err(error) = store.set_master_session(id)
     {
         log.error(&format!("{error:#}"));
@@ -617,6 +621,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::fixtures;
 
     #[test]
     fn finds_the_last_matching_line_across_chunks() {
@@ -654,12 +659,8 @@ mod tests {
     fn logs_an_error_with_its_source() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("server.log");
-        let log = Log::new(
-            path.clone(),
-            "codex",
-            &Hooked::Flow("3f2a9c".to_string()),
-            || 0,
-        );
+        let id = fixtures::flow_id("3f2a9c");
+        let log = Log::new(path.clone(), "codex", &Hooked::Flow(id), || 0);
 
         log.error("no flow 3f2a9c");
         Log::new(path, "codex", &Hooked::Master, || 0).error("broken");
@@ -672,7 +673,7 @@ mod tests {
         assert_eq!(
             ends,
             [
-                "hook codex flow 3f2a9c: no flow 3f2a9c",
+                &format!("hook codex flow {id}: no flow 3f2a9c"),
                 "hook codex master: broken"
             ]
         );

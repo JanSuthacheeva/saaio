@@ -141,13 +141,13 @@ pub fn run(mut args: Args, ctx: &Context) -> Result<Document, Failure> {
         }
         *url = canonical;
     }
-    let id = flow.id.clone();
+    let id = flow.id;
     match args.event.into_kind() {
-        Some(kind) => store.append(&id, &Event::new(now, kind)),
-        None => store.beat(&id),
+        Some(kind) => store.append(id, &Event::new(now, kind)),
+        None => store.beat(id),
     }?;
-    let events = store.events(&id)?;
-    let beat = store.last_beat(&id)?;
-    let reported = fold::fold(&id, &events, beat, now).expect("a resolved flow folds");
+    let events = store.events(id)?;
+    let beat = store.last_beat(id)?;
+    let reported = fold::fold(id, &events, beat, now).expect("a resolved flow folds");
     Ok(flow::reported(&reported))
 }

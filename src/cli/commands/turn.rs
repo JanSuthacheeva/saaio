@@ -11,6 +11,7 @@ use crate::cli::context::Context;
 use crate::cli::output::Document;
 use crate::exclusive::Exclusive;
 use crate::fold;
+use crate::id::FlowId;
 use crate::processes::{self, Process};
 use crate::repo_config::RepoConfig;
 use crate::server_log;
@@ -27,7 +28,7 @@ const LIST_FAILURES: u32 = 3;
 pub struct Args {
     /// The flow whose turn it keeps
     #[arg(long)]
-    flow: String,
+    flow: FlowId,
     /// The pid of the flow's agent, whose processes it watches
     #[arg(long)]
     agent: u32,
@@ -47,7 +48,7 @@ pub fn run(args: &Args, ctx: &Context) -> Document {
         let line = format!("turn watch flow {}: {text}", args.flow);
         let _ = server_log::append(&ctx.env.server_log(&store), ctx.now(), &line);
     };
-    let exclusive = match exclusive(&store, &args.flow) {
+    let exclusive = match exclusive(&store, args.flow) {
         Ok(Some(exclusive)) => exclusive,
         Ok(None) => {
             log("the repo lists no heavy commands; the turn is let go");
@@ -76,7 +77,7 @@ pub fn run(args: &Args, ctx: &Context) -> Document {
                 continue;
             }
         };
-        let asks = asks(&store, &args.flow);
+        let asks = asks(&store, args.flow);
         let found = look(&all, args, &exclusive, asks);
         if let Keep::Release(why) = watch.step(ctx.now(), found) {
             log(match why {
@@ -90,7 +91,7 @@ pub fn run(args: &Args, ctx: &Context) -> Document {
 }
 
 /// The heavy commands of the repository the flow works in.
-fn exclusive(store: &Store, id: &str) -> Result<Option<Exclusive>> {
+fn exclusive(store: &Store, id: FlowId) -> Result<Option<Exclusive>> {
     let events = store.events(id)?;
     let flow = fold::fold(id, &events, None, 0).with_context(|| format!("no flow {id}"))?;
     let repo = repo_dir(&flow).with_context(|| format!("flow {id} has no workspace"))?;
@@ -98,7 +99,7 @@ fn exclusive(store: &Store, id: &str) -> Result<Option<Exclusive>> {
 }
 
 /// Whether the flow waits on the user, a permission prompt among it.
-fn asks(store: &Store, id: &str) -> bool {
+fn asks(store: &Store, id: FlowId) -> bool {
     store
         .events(id)
         .ok()
@@ -135,7 +136,7 @@ mod tests {
 
     fn args() -> Args {
         Args {
-            flow: "f".into(),
+            flow: crate::fixtures::flow_id("f"),
             agent: 100,
             harness: vec![101],
         }

@@ -6,6 +6,7 @@ use anyhow::Result;
 
 use super::Server;
 use super::news::{self, paste};
+use crate::id::FlowId;
 use crate::proto::{PaneKey, PaneStatus};
 use crate::server_log;
 use crate::store::{Busy, Waiter};
@@ -26,7 +27,7 @@ impl Server {
         for key in running {
             let waiter = match &key {
                 PaneKey::Master => Waiter::Master,
-                PaneKey::Flow(id) => Waiter::Flow(id.clone()),
+                PaneKey::Flow(id) => Waiter::Flow(*id),
             };
             let mut busy = self.store.busy(&waiter);
             if unstarted(busy, self.pane(&key).line_at, now, self.timing.unstarted) {
@@ -40,14 +41,14 @@ impl Server {
             if !ready(busy, pane.opened_at, pane.typed_at, now, self.timing.quiet) {
                 continue;
             }
-            let events = match self.store.events(&id) {
+            let events = match self.store.events(id) {
                 Ok(events) => events,
                 Err(error) => {
                     server_log::write((self.clock)(), &format!("{error:#}"));
                     continue;
                 }
             };
-            let typed = self.store.typed(&id);
+            let typed = self.store.typed(id);
             let Some(line) = wake::untyped(&events, typed)
                 .first()
                 .map(ToString::to_string)
@@ -56,7 +57,7 @@ impl Server {
             };
             // Counted before the paste, as news is marked delivered before it is typed: a server
             // that stops between the two loses the line rather than typing it twice.
-            if let Err(error) = self.store.set_typed(&id, typed + 1) {
+            if let Err(error) = self.store.set_typed(id, typed + 1) {
                 server_log::write((self.clock)(), &format!("{error:#}"));
                 continue;
             }
@@ -65,7 +66,7 @@ impl Server {
                     (self.clock)(),
                     &format!("could not type into {key}: {error:#}"),
                 );
-                if let Err(error) = self.store.set_typed(&id, typed) {
+                if let Err(error) = self.store.set_typed(id, typed) {
                     server_log::write((self.clock)(), &format!("{error:#}"));
                 }
             }
@@ -88,14 +89,14 @@ impl Server {
 
     /// The flow whose queued lines this pane takes: a running worker of a flow that is not plain
     /// or finished, whose agent has an adapter and whose session ended a turn (answer set).
-    fn takes_lines(&self, key: &PaneKey) -> Option<String> {
-        let PaneKey::Flow(id) = key else {
+    fn takes_lines(&self, key: &PaneKey) -> Option<FlowId> {
+        let PaneKey::Flow(id) = *key else {
             return None;
         };
-        let flow = self.board.flows.iter().find(|flow| &flow.id == id)?;
+        let flow = self.board.flows.iter().find(|flow| flow.id == id)?;
         self.pane(key).adapter?;
         let takes = !flow.is_plain() && !flow.is_finished() && flow.answer.is_some();
-        takes.then(|| id.clone())
+        takes.then_some(id)
     }
 
     /// Marks a session the server typed into idle again: what it typed began no turn.
@@ -106,13 +107,13 @@ impl Server {
             return;
         }
         let name = match key {
-            PaneKey::Master => "the master",
+            PaneKey::Master => "the master".to_string(),
             PaneKey::Flow(id) => self
                 .board
                 .flows
                 .iter()
-                .find(|flow| &flow.id == id)
-                .map_or(id.as_str(), |flow| flow.name.as_str()),
+                .find(|flow| flow.id == *id)
+                .map_or_else(|| id.to_string(), |flow| flow.name.clone()),
         };
         server_log::write(
             (self.clock)(),

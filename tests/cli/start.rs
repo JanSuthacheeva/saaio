@@ -543,7 +543,7 @@ fn start_says_when_every_slot_is_taken() {
     for slot in 1..=20 {
         seed(
             &lab.home,
-            &format!("f{slot}"),
+            &format!("f{slot:07}-0000-4000-8000-000000000000"),
             &[
                 &format!(
                     r#"{{"v":1,"at":1,"kind":"started","name":"f{slot}","request":"x","mode":"guided"}}"#

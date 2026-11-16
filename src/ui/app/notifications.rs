@@ -22,7 +22,7 @@ impl App {
                 let was = old.flows.iter().find(|was| was.id == flow.id);
                 calls_for_you(was.map(|was| was.state), flow.state)
             })
-            .filter(|flow| self.out_of_sight(&PaneKey::Flow(flow.id.clone())))
+            .filter(|flow| self.out_of_sight(&PaneKey::Flow(flow.id)))
             .map(|flow| Effect::Notify(worker_text(flow)))
             .collect()
     }

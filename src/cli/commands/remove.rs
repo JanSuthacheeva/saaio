@@ -60,7 +60,7 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
     };
     restack(&store, &flows, flow, now)?;
     store
-        .remove(&flow.id)
+        .remove(flow.id)
         .map_err(|error| Failure::from(error.context(format!("could not remove {}", flow.name))))?;
     let on = flow
         .workspace

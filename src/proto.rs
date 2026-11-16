@@ -12,6 +12,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::binaries::Binary;
+use crate::id::FlowId;
 use crate::text;
 use crate::view::{Board, MasterTurn};
 
@@ -87,10 +88,10 @@ pub fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
 }
 
 /// Which session a pane runs: the master, or the worker of a flow id.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum PaneKey {
     Master,
-    Flow(String),
+    Flow(FlowId),
 }
 
 /// the master, flow 7f3c
@@ -151,7 +152,7 @@ pub enum ClientMsg {
     /// Lines back into the focused pane's history; None is live.
     History(Option<u32>),
     Reopen(PaneKey),
-    CloseFlow(String),
+    CloseFlow(FlowId),
     StopServer,
     /// Ends every unfinished flow (an Ended event), so none reopens; the UI sends it before StopServer.
     EndFlows,
@@ -188,13 +189,13 @@ pub enum ServerMsg {
     Panes(Vec<PaneInfo>),
     Frame(Frame),
     /// The flow's pane exited after CloseFlow.
-    Closed(String),
+    Closed(FlowId),
     /// Another saaio ui attached: the process `by`.
     Detached {
         by: Peer,
     },
     /// CloseFlow found no pane for the flow.
-    NotOpen(String),
+    NotOpen(FlowId),
     /// Where the master runs (its directory and the branch checked out there), and where its turn
     /// stands.
     Master {
@@ -383,6 +384,7 @@ mod tests {
 
     use super::*;
     use crate::event::{Event, EventKind, Mode};
+    use crate::fixtures;
     use crate::fold;
     use crate::view::{FlowView, VIEW_VERSION};
 
@@ -434,12 +436,12 @@ mod tests {
             Event::new(
                 2,
                 EventKind::Session {
-                    id: "01a1".into(),
+                    id: fixtures::session_id("01a1"),
                     transcript: Some("/home/dev/.codex/sessions/rollout-01a1.jsonl".into()),
                 },
             ),
         ];
-        fold::fold("7f3c", &events, None, 3).unwrap()
+        fold::fold(fixtures::flow_id("7f3c"), &events, None, 3).unwrap()
     }
 
     /// Hands out one byte per read, like a socket under load.
@@ -485,13 +487,13 @@ mod tests {
                 role: Role::Control,
                 peer: peer(),
             },
-            ClientMsg::Focus(PaneKey::Flow("7f3c".into())),
+            ClientMsg::Focus(PaneKey::Flow(fixtures::flow_id("7f3c"))),
             ClientMsg::Input(vec![0, 27, b'[', b'A']),
             ClientMsg::Resize(size),
             ClientMsg::History(Some(12)),
             ClientMsg::History(None),
             ClientMsg::Reopen(PaneKey::Master),
-            ClientMsg::CloseFlow("7f3c".into()),
+            ClientMsg::CloseFlow(fixtures::flow_id("7f3c")),
             ClientMsg::StopServer,
             ClientMsg::EndFlows,
         ]
@@ -529,11 +531,11 @@ mod tests {
                     status: PaneStatus::Running,
                 },
                 PaneInfo {
-                    key: PaneKey::Flow("a".into()),
+                    key: PaneKey::Flow(fixtures::flow_id("a")),
                     status: PaneStatus::Exited { code: Some(1) },
                 },
                 PaneInfo {
-                    key: PaneKey::Flow("b".into()),
+                    key: PaneKey::Flow(fixtures::flow_id("b")),
                     status: PaneStatus::Failed {
                         reason: "no agent".into(),
                     },
@@ -554,9 +556,9 @@ mod tests {
                 },
                 history: None,
             }),
-            ServerMsg::Closed("a".into()),
+            ServerMsg::Closed(fixtures::flow_id("a")),
             ServerMsg::Detached { by: peer() },
-            ServerMsg::NotOpen("b".into()),
+            ServerMsg::NotOpen(fixtures::flow_id("b")),
             ServerMsg::Master {
                 cwd: "/shop".into(),
                 branch: Some("main".into()),
@@ -627,7 +629,7 @@ mod tests {
     fn a_connection_says_hello_once_and_control_only_closes_a_flow() {
         let size = Size { cols: 1, rows: 1 };
         let hello = client_messages().remove(0);
-        let close = ClientMsg::CloseFlow("7f3c".into());
+        let close = ClientMsg::CloseFlow(fixtures::flow_id("7f3c"));
 
         assert!(allowed(None, &hello));
         assert!(!allowed(None, &close));
@@ -648,6 +650,29 @@ mod tests {
                 "{message:?}"
             );
         }
+    }
+
+    #[test]
+    fn writes_a_flow_id_as_the_text_it_was_before() {
+        #[derive(Serialize)]
+        enum TextKey {
+            #[expect(dead_code, reason = "only the variant order matters")]
+            Master,
+            Flow(String),
+        }
+        let id = fixtures::flow_id("7f3c");
+        let text = postcard::to_stdvec(&id.to_string()).unwrap();
+
+        let close = postcard::to_stdvec(&ClientMsg::CloseFlow(id)).unwrap();
+        assert_eq!(close[1..], text[..]);
+        assert_eq!(
+            postcard::to_stdvec(&PaneKey::Flow(id)).unwrap(),
+            postcard::to_stdvec(&TextKey::Flow(id.to_string())).unwrap()
+        );
+
+        let mut forged = close[..1].to_vec();
+        forged.extend(postcard::to_stdvec("../7f3c").unwrap());
+        assert!(postcard::from_bytes::<ClientMsg>(&forged).is_err());
     }
 
     #[test]
@@ -685,7 +710,7 @@ mod tests {
     #[test]
     fn a_stream_cut_inside_a_message_is_an_error() {
         let mut wire = Vec::new();
-        write_msg(&mut wire, &ClientMsg::CloseFlow("abc".into())).unwrap();
+        write_msg(&mut wire, &ClientMsg::CloseFlow(fixtures::flow_id("abc"))).unwrap();
         wire.truncate(wire.len() - 1);
 
         let inside = read_msg::<_, ClientMsg>(&mut Cursor::new(wire)).unwrap_err();

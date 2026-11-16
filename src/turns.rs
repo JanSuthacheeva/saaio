@@ -7,13 +7,14 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::id::FlowId;
 use crate::private;
 use crate::store::Store;
 
 /// Who holds a turn: written into the locked file for the flows that wait.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Holder {
-    pub flow: String,
+    pub flow: FlowId,
     pub name: String,
     pub command: String,
 }
@@ -117,7 +118,7 @@ mod tests {
 
     fn holder(flow: &str, command: &str) -> Holder {
         Holder {
-            flow: flow.to_string(),
+            flow: crate::fixtures::flow_id(flow),
             name: format!("{flow}-name"),
             command: command.to_string(),
         }

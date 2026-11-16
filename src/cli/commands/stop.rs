@@ -4,6 +4,7 @@ use crate::cli::Env;
 use crate::cli::context::{Context, Opened};
 use crate::cli::output::{Document, Failure};
 use crate::client;
+use crate::id::FlowId;
 use crate::store::Store;
 
 /// Stops the server of the store and every session in it, one saaio 0.1.0 started too; refused on a
@@ -29,10 +30,10 @@ pub fn run(ctx: &Context) -> Result<Document, Failure> {
 /// Err when $SAAIO_FLOW_ID names a flow in `store`: a worker's stop would end every session of the
 /// user's, its own among them.
 fn refuse_inside_own_flow(store: &Store, env: &Env) -> Result<(), Failure> {
-    let Some(id) = env.flow_id() else {
+    let Some(id) = env.flow_id().and_then(|text| FlowId::parse(text).ok()) else {
         return Ok(());
     };
-    if !store.ids()?.iter().any(|known| known == id) {
+    if !store.ids()?.contains(&id) {
         return Ok(());
     }
     Err(Failure::error(

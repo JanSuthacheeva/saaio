@@ -41,6 +41,7 @@ use crate::config::watch::ConfigWatch;
 use crate::config::{self, Config};
 use crate::default_file;
 use crate::fold;
+use crate::id::FlowId;
 use crate::launch::pane::LaunchEnv;
 use crate::private;
 use crate::proto::{ClientMsg, PROTOCOL_VERSION, PaneKey, Peer, ServerMsg, Size};
@@ -149,7 +150,7 @@ struct Server {
     board: Board,
     sent_board: Option<Board>,
     sent_master: Option<ServerMsg>,
-    known: HashSet<String>,
+    known: HashSet<FlowId>,
     refreshed_at: Instant,
     config: Config,
     /// config.toml, looked at before every refresh.
@@ -359,7 +360,7 @@ impl Server {
                 &format!("could not forget the master: {error}"),
             );
         }
-        let keys: Vec<PaneKey> = self.host.keys().cloned().collect();
+        let keys: Vec<PaneKey> = self.host.keys().copied().collect();
         for key in &keys {
             self.host.close(key);
         }

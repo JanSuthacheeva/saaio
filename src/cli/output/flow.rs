@@ -3,6 +3,7 @@
 use serde::Serialize;
 
 use super::{Document, toon};
+use crate::id::FlowId;
 use crate::view::{FlowView, State};
 use crate::workflow::Phase;
 
@@ -11,7 +12,7 @@ pub(crate) fn created(flow: &FlowView, existing: bool) -> Document {
     #[derive(Serialize)]
     struct Created<'a> {
         flow: &'a str,
-        id: &'a str,
+        id: FlowId,
         #[serde(skip_serializing_if = "Option::is_none")]
         kind: Option<&'a str>,
         existing: bool,
@@ -19,7 +20,7 @@ pub(crate) fn created(flow: &FlowView, existing: bool) -> Document {
     }
     Document::Toon(toon(&Created {
         flow: &flow.name,
-        id: &flow.id,
+        id: flow.id,
         kind: flow.kind.as_deref(),
         existing,
         help: flow
@@ -167,14 +168,15 @@ mod tests {
     #[test]
     fn created_names_the_flow_and_how_to_report_into_it() {
         let flow = flow("shop-221", vec![], MIN);
+        let id = flow.id;
 
         assert_eq!(
             created(&flow, false).text(),
             [
                 "flow: shop-221",
-                "id: shop-221-id",
+                &format!("id: {id}"),
                 "existing: false",
-                "help[2]: Run `saaio report --flow shop-221 phase plan` when plan starts,Or set SAAIO_FLOW_ID=shop-221-id in the worker's environment and leave out --flow",
+                &format!("help[2]: Run `saaio report --flow shop-221 phase plan` when plan starts,Or set SAAIO_FLOW_ID={id} in the worker's environment and leave out --flow"),
             ]
             .join("\n")
         );
@@ -184,7 +186,7 @@ mod tests {
         assert!(
             created(&fix, false)
                 .text()
-                .contains("id: shop-221-id\nkind: fix\nexisting: false"),
+                .contains(&format!("id: {id}\nkind: fix\nexisting: false")),
         );
     }
 

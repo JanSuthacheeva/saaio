@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::id::FlowId;
 use crate::private::{self, write_atomic};
 use crate::registry::Registry;
 use crate::view::FlowView;
@@ -18,7 +19,7 @@ pub const MAX_SLOTS: u8 = 20;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Claim {
     pub store: PathBuf,
-    pub flow: String,
+    pub flow: FlowId,
 }
 
 /// Hands out slots so no two unfinished flows in any project share one.
@@ -119,6 +120,7 @@ mod tests {
 
     use super::*;
     use crate::event::{Event, EventKind, Mode};
+    use crate::fixtures;
     use crate::fold;
 
     fn flow_in_slot(slot: u8, finished: bool) -> FlowView {
@@ -149,7 +151,7 @@ mod tests {
         if finished {
             events.push(Event::new(2, EventKind::Ended));
         }
-        fold::fold("id", &events, None, 3).unwrap()
+        fold::fold(fixtures::flow_id("id"), &events, None, 3).unwrap()
     }
 
     #[test]
@@ -189,7 +191,7 @@ mod tests {
     fn claim(flow: &str) -> Claim {
         Claim {
             store: PathBuf::from("/state/saaio/projects/shop"),
-            flow: flow.to_string(),
+            flow: fixtures::flow_id(flow),
         }
     }
 
@@ -214,7 +216,9 @@ mod tests {
         slots.claim(&claim("busy"), &[], |_| true).unwrap();
 
         let slot = slots
-            .claim(&claim("next"), &[], |taken| taken.flow == "busy")
+            .claim(&claim("next"), &[], |taken| {
+                taken.flow == fixtures::flow_id("busy")
+            })
             .unwrap();
 
         assert_eq!(slot, Some(1));

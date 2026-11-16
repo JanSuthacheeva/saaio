@@ -5,11 +5,12 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::event::{Event, EventKind, Mode};
+use crate::id::FlowId;
 use crate::text::{LIST_TEXT_LIMIT, truncated};
 use crate::view::{FlowView, State};
 
 /// What the master was last woken for, by flow id.
-pub type Seen = BTreeMap<String, Mark>;
+pub type Seen = BTreeMap<FlowId, Mark>;
 
 /// A flow as the master last saw it: its state and when that changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -84,7 +85,7 @@ pub fn changed_flows<'a>(flows: &'a [FlowView], seen: &Seen) -> Vec<&'a FlowView
 /// Seen after the master was told about `flows`.
 pub fn mark_seen(seen: &mut Seen, flows: &[&FlowView]) {
     for flow in flows {
-        seen.insert(flow.id.clone(), mark(flow));
+        seen.insert(flow.id, mark(flow));
     }
 }
 
@@ -93,7 +94,7 @@ pub fn first_seen(flows: &[FlowView]) -> Seen {
     flows
         .iter()
         .filter(|flow| flow.is_finished())
-        .map(|flow| (flow.id.clone(), mark(flow)))
+        .map(|flow| (flow.id, mark(flow)))
         .collect()
 }
 
@@ -214,7 +215,7 @@ mod tests {
     fn answered(kinds: Vec<EventKind>) -> bool {
         let mut events = vec![fixtures::started("ask", "ask")];
         events.extend(kinds.into_iter().map(|kind| Event::new(1, kind)));
-        let flow = fold::fold("ask", &events, None, 2).unwrap();
+        let flow = fold::fold(fixtures::flow_id("ask"), &events, None, 2).unwrap();
         dialog_answered(&flow, &events)
     }
 

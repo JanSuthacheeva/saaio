@@ -44,6 +44,6 @@ pub fn run(args: Args, ctx: &Context) -> Result<Document, Failure> {
         },
     );
     let id = store.create(&first)?;
-    let created = fold::fold(&id, &[first], None, now).expect("a started flow folds");
+    let created = fold::fold(id, &[first], None, now).expect("a started flow folds");
     Ok(flow::created(&created, false))
 }

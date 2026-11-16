@@ -6,11 +6,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::config::Agent;
 use crate::default_file::DefaultFile;
-use crate::event::is_uuid;
+use crate::id::SessionId;
 use crate::launch::pane::{self, LaunchEnv, PaneSpec};
 use crate::private;
 use crate::proto::PaneKey;
@@ -55,7 +54,7 @@ pub enum Start {
 /// The master's session id and the directory it runs in, kept across server restarts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MasterRecord {
-    pub session: String,
+    pub session: SessionId,
     pub cwd: PathBuf,
 }
 
@@ -70,7 +69,7 @@ impl MasterRecord {
             }
             Err(error) if error.kind() == ErrorKind::NotFound => {
                 let record = MasterRecord {
-                    session: Uuid::new_v4().to_string(),
+                    session: SessionId::generate(),
                     cwd: cwd.to_path_buf(),
                 };
                 if let Some(dir) = file.parent() {
@@ -98,20 +97,19 @@ impl MasterRecord {
         agent: &Agent,
         env: &LaunchEnv,
         instructions: &Instructions,
-        session: Option<&str>,
+        session: Option<SessionId>,
     ) -> Option<PaneSpec> {
-        let session = session.filter(|id| is_uuid(id));
         let start = match start {
             Start::Resume if session.is_none() && pane::names_session(agent) => Start::Fresh,
             start => start,
         };
         let argv = match start {
-            Start::Fresh => pane::agent_argv(agent, "", &self.session, MASTER_NAME, ""),
+            Start::Fresh => pane::agent_argv(agent, "", self.session, MASTER_NAME, ""),
             Start::Resume => pane::resume_argv(
                 agent,
-                &self.session,
+                self.session,
                 MASTER_NAME,
-                session.unwrap_or(&self.session),
+                session.unwrap_or(self.session),
             )?,
         };
         let path = instructions.path.display().to_string();
@@ -156,7 +154,7 @@ mod tests {
         assert_eq!(again, Start::Resume);
         assert_eq!(loaded, created);
         assert_eq!(loaded.cwd, PathBuf::from("/work"));
-        assert!(Uuid::parse_str(&loaded.session).is_ok());
+        assert_ne!(loaded.session, record().session, "a fresh session");
     }
 
     #[test]
@@ -170,9 +168,20 @@ mod tests {
         assert!(format!("{error:#}").contains("master.json"), "{error:#}");
     }
 
+    #[test]
+    fn a_session_that_is_no_id_does_not_parse() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("master.json");
+        fs::write(&file, r#"{"session":"-cnotify=x","cwd":"/work"}"#).unwrap();
+
+        let error = MasterRecord::load_or_create(&file, Path::new("/work")).unwrap_err();
+
+        assert!(format!("{error:#}").contains("master.json"), "{error:#}");
+    }
+
     fn record() -> MasterRecord {
         MasterRecord {
-            session: "5e55".into(),
+            session: SessionId::parse(OWN).unwrap(),
             cwd: PathBuf::from("/work"),
         }
     }
@@ -202,11 +211,11 @@ mod tests {
         assert_eq!(fresh.key, PaneKey::Master);
         assert_eq!(
             fresh.argv,
-            ["claude", "-n", "master", "--session-id", "5e55"].map(String::from)
+            ["claude", "-n", "master", "--session-id", OWN].map(String::from)
         );
         assert_eq!(
             resumed.argv,
-            ["claude", "-n", "master", "--resume", "5e55"].map(String::from)
+            ["claude", "-n", "master", "--resume", OWN].map(String::from)
         );
         assert_eq!(resumed.cwd, PathBuf::from("/work"));
         assert!(resumed.env.iter().all(|(key, _)| key != "SAAIO_FLOW_ID"));
@@ -273,6 +282,7 @@ mod tests {
         }
     }
 
+    const OWN: &str = "5e55a000-0000-4000-8000-000000000000";
     const SESSION: &str = "01a14000-0000-7000-8000-000000000001";
 
     #[test]
@@ -290,10 +300,13 @@ mod tests {
 
         let fresh = record().spec(Start::Fresh, codex, &env, &md, None).unwrap();
         let resumed = record()
-            .spec(Start::Resume, codex, &env, &md, Some(SESSION))
-            .unwrap();
-        let forged = record()
-            .spec(Start::Resume, codex, &env, &md, Some("-cnotify=x"))
+            .spec(
+                Start::Resume,
+                codex,
+                &env,
+                &md,
+                Some(SessionId::parse(SESSION).unwrap()),
+            )
             .unwrap();
         let never_ran = record()
             .spec(Start::Resume, codex, &env, &md, None)
@@ -310,7 +323,6 @@ mod tests {
         assert_eq!(resumed.argv[1..=wired.len()], wired[..]);
         assert_eq!(resumed.argv[wired.len() + 1..], ["resume", SESSION]);
         assert_eq!(never_ran.argv, fresh.argv, "no session yet: a new one");
-        assert_eq!(forged.argv, fresh.argv, "no UUID: a new one");
     }
 
     #[test]

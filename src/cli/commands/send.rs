@@ -88,7 +88,7 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
     let message = EventKind::Message {
         text: text.to_string(),
     };
-    store.append(&flow.id, &Event::new(now, message))?;
+    store.append(flow.id, &Event::new(now, message))?;
     Ok(output::flow::sent(flow))
 }
 
@@ -116,11 +116,11 @@ fn queue(
             vec!["Use `saaio send` for a message".to_string()],
         ));
     }
-    let events = store.events(&flow.id)?;
-    let ahead = wake::untyped(&events, store.typed(&flow.id)).len();
+    let events = store.events(flow.id)?;
+    let ahead = wake::untyped(&events, store.typed(flow.id)).len();
     let line = EventKind::Typed {
         text: text.to_string(),
     };
-    store.append(&flow.id, &Event::new(now, line))?;
+    store.append(flow.id, &Event::new(now, line))?;
     Ok(output::flow::queued(flow, text, ahead))
 }

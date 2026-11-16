@@ -16,6 +16,7 @@ use crate::binaries::Binary;
 use crate::config::Agent;
 use crate::event::{Event as LogEvent, EventKind};
 use crate::fixtures::{self, executable};
+use crate::id::FlowId;
 use crate::identity;
 use crate::launch::pane::HOSTED;
 use crate::launch::worktree::workspace_for;
@@ -272,7 +273,7 @@ fn tells_the_ui_where_the_masters_turn_stands_from_its_start() {
 }
 
 /// A flow with a worktree at dir/<name>, as `saaio start` leaves it.
-fn started_flow(store: &Store, dir: &Path, name: &str, agent: &str) -> String {
+fn started_flow(store: &Store, dir: &Path, name: &str, agent: &str) -> FlowId {
     let id = store.create(&fixtures::started(name, "x")).unwrap();
     let path = dir.join(name);
     fs::create_dir_all(&path).unwrap();
@@ -281,13 +282,13 @@ fn started_flow(store: &Store, dir: &Path, name: &str, agent: &str) -> String {
         ..fixtures::workspace(name, agent)
     };
     store
-        .append(&id, &LogEvent::new(1, workspace.into()))
+        .append(id, &LogEvent::new(1, workspace.into()))
         .unwrap();
     id
 }
 
-fn status_of(panes: &[crate::proto::PaneInfo], id: &str) -> Option<PaneStatus> {
-    let key = PaneKey::Flow(id.to_string());
+fn status_of(panes: &[crate::proto::PaneInfo], id: FlowId) -> Option<PaneStatus> {
+    let key = PaneKey::Flow(id);
     panes
         .iter()
         .find(|pane| pane.key == key)
@@ -312,7 +313,7 @@ fn a_codex_worker_that_never_starts_a_turn_waits_once() {
 
     let stalls = || {
         store
-            .events(&id)
+            .events(id)
             .unwrap()
             .iter()
             .filter(|event| {
@@ -350,7 +351,7 @@ fn an_exited_worker_blocks_once_with_its_code_and_final_output() {
 
     let blocked = || {
         store
-            .events(&id)
+            .events(id)
             .unwrap()
             .into_iter()
             .find_map(|event| match event.kind {
@@ -365,7 +366,7 @@ fn an_exited_worker_blocks_once_with_its_code_and_final_output() {
     thread::sleep(WATCH_EVERY * 2);
     assert_eq!(
         store
-            .events(&id)
+            .events(id)
             .unwrap()
             .iter()
             .filter(|event| matches!(event.kind, EventKind::Blocked { .. }))
@@ -383,7 +384,7 @@ fn a_failed_resume_retries_fresh_before_blocking() {
     let id = started_flow(&store, dir.path(), "retry", "shell");
     store
         .append(
-            &id,
+            id,
             &LogEvent::new(
                 2,
                 EventKind::Workspace {
@@ -411,7 +412,7 @@ fn a_failed_resume_retries_fresh_before_blocking() {
     });
     assert_eq!(
         store
-            .events(&id)
+            .events(id)
             .unwrap()
             .iter()
             .filter(|event| matches!(event.kind, EventKind::Blocked { .. }))
@@ -428,7 +429,7 @@ fn an_exited_idle_worker_keeps_its_state() {
     let id = started_flow(&store, dir.path(), "idle", "shell");
     store
         .append(
-            &id,
+            id,
             &LogEvent::new(
                 2,
                 EventKind::Idle {
@@ -454,8 +455,8 @@ fn an_exited_idle_worker_keeps_its_state() {
     let mut panes = Vec::new();
 
     let exited = PaneStatus::Exited { code: Some(23) };
-    wait_for(&mut ui, &mut panes, &id, Some(&exited));
-    let flow = fold::fold(&id, &store.events(&id).unwrap(), None, 3).unwrap();
+    wait_for(&mut ui, &mut panes, id, Some(&exited));
+    let flow = fold::fold(id, &store.events(id).unwrap(), None, 3).unwrap();
     assert_eq!(flow.state, State::Idle);
     proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
@@ -499,37 +500,37 @@ fn opens_a_pane_for_every_started_flow_and_marks_it_hosted() {
             ServerMsg::Panes(update) => panes = update,
             _ => {}
         }
-        flows == 3 && status_of(&panes, &later).is_some()
+        flows == 3 && status_of(&panes, later).is_some()
     });
 
-    assert_eq!(status_of(&panes, &csv), Some(PaneStatus::Running));
+    assert_eq!(status_of(&panes, csv), Some(PaneStatus::Running));
     assert_eq!(
-        status_of(&panes, &odd),
+        status_of(&panes, odd),
         Some(PaneStatus::Failed {
             reason: "no agent named codex".into()
         })
     );
     assert!(matches!(
-        status_of(&panes, &later),
+        status_of(&panes, later),
         Some(PaneStatus::Failed { .. })
     ));
-    let hosted = store.events(&csv).unwrap().into_iter().any(|event| {
+    let hosted = store.events(csv).unwrap().into_iter().any(|event| {
         matches!(event.kind, EventKind::Workspace { window: Some(ref w), .. } if w == HOSTED)
     });
     assert!(hosted, "an opened worker is marked hosted");
     let agent = store
-        .agent(&csv)
+        .agent(csv)
         .expect("an opened worker's agent pid is kept");
     let processes = crate::processes::list().unwrap();
     let running = processes.iter().find(|process| process.pid == agent);
     assert_eq!(running.map(|process| process.command.as_str()), Some("cat"));
     assert_eq!(
-        store.agent(&odd),
+        store.agent(odd),
         None,
         "a worker that never started has none"
     );
     let blocked = store
-        .events(&later)
+        .events(later)
         .unwrap()
         .into_iter()
         .any(|event| matches!(event.kind, EventKind::Blocked { .. }));
@@ -589,10 +590,10 @@ fn a_worker_whose_start_cannot_be_recorded_never_starts() {
         if let ServerMsg::Panes(update) = message {
             panes = update;
         }
-        status_of(&panes, &id).is_some()
+        status_of(&panes, id).is_some()
     });
 
-    let status = status_of(&panes, &id);
+    let status = status_of(&panes, id);
     assert!(
         matches!(&status, Some(PaneStatus::Failed { reason }) if reason.starts_with("could not record")),
         "{status:?}"
@@ -641,11 +642,11 @@ fn a_worker_whose_agent_could_not_start_starts_fresh_when_reopened() {
         if let ServerMsg::Panes(update) = message {
             panes = update;
         }
-        matches!(status_of(&panes, &id), Some(PaneStatus::Failed { .. }))
+        matches!(status_of(&panes, id), Some(PaneStatus::Failed { .. }))
     });
 
     executable(&late, "#!/bin/sh\nexec cat\n");
-    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id.clone()))).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id))).unwrap();
     recv_until(
         &mut ui,
         "the worker never left its failed start",
@@ -653,10 +654,10 @@ fn a_worker_whose_agent_could_not_start_starts_fresh_when_reopened() {
             if let ServerMsg::Panes(update) = message {
                 panes = update;
             }
-            !matches!(status_of(&panes, &id), Some(PaneStatus::Failed { reason }) if reason.starts_with("could not start"))
+            !matches!(status_of(&panes, id), Some(PaneStatus::Failed { reason }) if reason.starts_with("could not start"))
         },
     );
-    assert_eq!(status_of(&panes, &id), Some(PaneStatus::Running));
+    assert_eq!(status_of(&panes, id), Some(PaneStatus::Running));
 
     proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
@@ -675,17 +676,17 @@ fn closes_a_flow_pane_on_request_and_says_when_there_is_none() {
         },
     );
     let mut panes = Vec::new();
-    wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
+    wait_for(&mut ui, &mut panes, csv, Some(&PaneStatus::Running));
 
-    let closed = crate::client::close_flow(&paths.socket, &csv, PATIENCE);
-    let none = crate::client::close_flow(&paths.socket, "nope", PATIENCE);
+    let closed = crate::client::close_flow(&paths.socket, csv, PATIENCE);
+    let none = crate::client::close_flow(&paths.socket, fixtures::flow_id("nope"), PATIENCE);
 
     assert_eq!(closed.unwrap(), crate::client::Closing::Closed);
     assert_eq!(none.unwrap(), crate::client::Closing::NoPane);
-    wait_for(&mut ui, &mut panes, &csv, None);
+    wait_for(&mut ui, &mut panes, csv, None);
     assert!(
         store
-            .events(&csv)
+            .events(csv)
             .unwrap()
             .iter()
             .all(|event| !matches!(event.kind, EventKind::Blocked { .. })),
@@ -694,7 +695,7 @@ fn closes_a_flow_pane_on_request_and_says_when_there_is_none() {
     proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
     assert_eq!(
-        crate::client::close_flow(&paths.socket, &csv, Duration::from_secs(1)).unwrap(),
+        crate::client::close_flow(&paths.socket, csv, Duration::from_secs(1)).unwrap(),
         crate::client::Closing::NoServer
     );
 }
@@ -710,14 +711,12 @@ fn closing_a_flow_that_does_not_exist_yet_never_keeps_it_from_opening() {
             size: Size { cols: 30, rows: 4 },
         },
     );
-    let id = "0b5e4000-0000-4000-8000-0000000000c1";
+    let id = fixtures::flow_id("csv");
 
-    for unknown in [id, "../7f3c", "7f3c"] {
-        assert_eq!(
-            crate::client::close_flow(&paths.socket, unknown, PATIENCE).unwrap(),
-            crate::client::Closing::NoPane
-        );
-    }
+    assert_eq!(
+        crate::client::close_flow(&paths.socket, id, PATIENCE).unwrap(),
+        crate::client::Closing::NoPane
+    );
     fs::create_dir_all(dir.path().join("flows")).unwrap();
     let started = fixtures::started("csv", "x").to_line();
     fs::write(dir.path().join(format!("flows/{id}.jsonl")), started + "\n").unwrap();
@@ -741,7 +740,7 @@ fn closing_a_flow_that_does_not_exist_yet_never_keeps_it_from_opening() {
 fn wait_for(
     ui: &mut UnixStream,
     panes: &mut Vec<crate::proto::PaneInfo>,
-    id: &str,
+    id: FlowId,
     want: Option<&PaneStatus>,
 ) {
     if status_of(panes, id).as_ref() == want {
@@ -762,12 +761,12 @@ fn reopens_an_exited_worker_but_refuses_finished_flows() {
     let csv = started_flow(&store, dir.path(), "csv", "claude");
     let old = started_flow(&store, dir.path(), "old", "claude");
     store
-        .append(&old, &LogEvent::new(2, EventKind::Ended))
+        .append(old, &LogEvent::new(2, EventKind::Ended))
         .unwrap();
     let done = started_flow(&store, dir.path(), "done", "claude");
     store
         .append(
-            &done,
+            done,
             &LogEvent::new(
                 2,
                 EventKind::MergeRequest {
@@ -777,7 +776,7 @@ fn reopens_an_exited_worker_but_refuses_finished_flows() {
         )
         .unwrap();
     store
-        .append(&done, &LogEvent::new(3, EventKind::Ended))
+        .append(done, &LogEvent::new(3, EventKind::Ended))
         .unwrap();
     let (paths, handle) = start(dir.path());
     let mut ui = connect(
@@ -787,30 +786,30 @@ fn reopens_an_exited_worker_but_refuses_finished_flows() {
         },
     );
     let mut panes = Vec::new();
-    wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
+    wait_for(&mut ui, &mut panes, csv, Some(&PaneStatus::Running));
     assert_eq!(
-        status_of(&panes, &old),
+        status_of(&panes, old),
         None,
         "an ended flow does not open by itself"
     );
 
-    proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(csv.clone()))).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(csv))).unwrap();
     proto::write_msg(&mut ui, &ClientMsg::Input(b"\x04".to_vec())).unwrap();
     wait_for(
         &mut ui,
         &mut panes,
-        &csv,
+        csv,
         Some(&PaneStatus::Exited { code: Some(0) }),
     );
-    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(csv.clone()))).unwrap();
-    wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
-    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(old.clone()))).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(csv))).unwrap();
+    wait_for(&mut ui, &mut panes, csv, Some(&PaneStatus::Running));
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(old))).unwrap();
     let refused = PaneStatus::Failed {
         reason: "finished flow cannot reopen; start a new flow".into(),
     };
-    wait_for(&mut ui, &mut panes, &old, Some(&refused));
-    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(done.clone()))).unwrap();
-    wait_for(&mut ui, &mut panes, &done, Some(&refused));
+    wait_for(&mut ui, &mut panes, old, Some(&refused));
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(done))).unwrap();
+    wait_for(&mut ui, &mut panes, done, Some(&refused));
 
     proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
@@ -829,24 +828,24 @@ fn reopen_reads_an_end_event_before_the_board_refreshes() {
         },
     );
     let mut panes = Vec::new();
-    wait_for(&mut ui, &mut panes, &id, Some(&PaneStatus::Running));
-    proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(id.clone()))).unwrap();
+    wait_for(&mut ui, &mut panes, id, Some(&PaneStatus::Running));
+    proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(id))).unwrap();
     proto::write_msg(&mut ui, &ClientMsg::Input(b"\x04".to_vec())).unwrap();
     wait_for(
         &mut ui,
         &mut panes,
-        &id,
+        id,
         Some(&PaneStatus::Exited { code: Some(0) }),
     );
 
     store
-        .append(&id, &LogEvent::new(2, EventKind::Ended))
+        .append(id, &LogEvent::new(2, EventKind::Ended))
         .unwrap();
-    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id.clone()))).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id))).unwrap();
     let refused = PaneStatus::Failed {
         reason: "finished flow cannot reopen; start a new flow".into(),
     };
-    wait_for(&mut ui, &mut panes, &id, Some(&refused));
+    wait_for(&mut ui, &mut panes, id, Some(&refused));
 
     proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
@@ -865,22 +864,22 @@ fn reopen_refuses_to_launch_when_the_flow_log_is_unreadable() {
         },
     );
     let mut panes = Vec::new();
-    wait_for(&mut ui, &mut panes, &id, Some(&PaneStatus::Running));
-    proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(id.clone()))).unwrap();
+    wait_for(&mut ui, &mut panes, id, Some(&PaneStatus::Running));
+    proto::write_msg(&mut ui, &ClientMsg::Focus(PaneKey::Flow(id))).unwrap();
     proto::write_msg(&mut ui, &ClientMsg::Input(b"\x04".to_vec())).unwrap();
     wait_for(
         &mut ui,
         &mut panes,
-        &id,
+        id,
         Some(&PaneStatus::Exited { code: Some(0) }),
     );
 
     fs::remove_file(dir.path().join("flows").join(format!("{id}.jsonl"))).unwrap();
-    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id.clone()))).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id))).unwrap();
     let refused = PaneStatus::Failed {
         reason: format!("could not check flow: no flow {id}"),
     };
-    wait_for(&mut ui, &mut panes, &id, Some(&refused));
+    wait_for(&mut ui, &mut panes, id, Some(&refused));
 
     proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
@@ -893,7 +892,7 @@ fn ends_every_unfinished_flow_before_a_stop_when_asked() {
     let csv = started_flow(&store, dir.path(), "csv", "claude");
     let done = started_flow(&store, dir.path(), "done", "claude");
     store
-        .append(&done, &LogEvent::new(2, EventKind::Ended))
+        .append(done, &LogEvent::new(2, EventKind::Ended))
         .unwrap();
     let (paths, handle) = start(dir.path());
     let mut ui = connect(
@@ -903,13 +902,13 @@ fn ends_every_unfinished_flow_before_a_stop_when_asked() {
         },
     );
     let mut panes = Vec::new();
-    wait_for(&mut ui, &mut panes, &csv, Some(&PaneStatus::Running));
+    wait_for(&mut ui, &mut panes, csv, Some(&PaneStatus::Running));
 
     proto::write_msg(&mut ui, &ClientMsg::EndFlows).unwrap();
     proto::write_msg(&mut ui, &ClientMsg::StopServer).unwrap();
     handle.join().unwrap().unwrap();
 
-    let ends = |id: &str| {
+    let ends = |id: FlowId| {
         store
             .events(id)
             .unwrap()
@@ -917,8 +916,8 @@ fn ends_every_unfinished_flow_before_a_stop_when_asked() {
             .filter(|event| event.kind == EventKind::Ended)
             .count()
     };
-    assert_eq!(ends(&csv), 1);
-    assert_eq!(ends(&done), 1, "a finished flow is left alone");
+    assert_eq!(ends(csv), 1);
+    assert_eq!(ends(done), 1, "a finished flow is left alone");
 }
 
 #[test]
@@ -930,8 +929,8 @@ fn a_ui_that_attaches_again_starts_on_the_master() {
     let size = Size { cols: 30, rows: 4 };
     let mut first = connect(&paths.socket, Role::Attach { size });
     let mut panes = Vec::new();
-    wait_for(&mut first, &mut panes, &csv, Some(&PaneStatus::Running));
-    proto::write_msg(&mut first, &ClientMsg::Focus(PaneKey::Flow(csv.clone()))).unwrap();
+    wait_for(&mut first, &mut panes, csv, Some(&PaneStatus::Running));
+    proto::write_msg(&mut first, &ClientMsg::Focus(PaneKey::Flow(csv))).unwrap();
     proto::write_msg(&mut first, &ClientMsg::History(Some(3))).unwrap();
     drop(first);
 
@@ -984,8 +983,15 @@ fn takes_nothing_before_a_hello_and_only_closeflow_from_a_control_connection() {
 
     let mut control = connect(&paths.socket, Role::Control);
     assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-    proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
-    assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+    proto::write_msg(
+        &mut control,
+        &ClientMsg::CloseFlow(fixtures::flow_id("7f3c")),
+    )
+    .unwrap();
+    assert_eq!(
+        recv(&mut control),
+        ServerMsg::NotOpen(fixtures::flow_id("7f3c"))
+    );
     stop(&paths, handle);
 }
 
@@ -1135,8 +1141,15 @@ fn a_ui_that_stops_reading_slows_nobody_and_is_dropped() {
         let mut control = connect(&paths.socket, Role::Control);
         let asked = Instant::now();
         assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-        proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
-        assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+        proto::write_msg(
+            &mut control,
+            &ClientMsg::CloseFlow(fixtures::flow_id("7f3c")),
+        )
+        .unwrap();
+        assert_eq!(
+            recv(&mut control),
+            ServerMsg::NotOpen(fixtures::flow_id("7f3c"))
+        );
         assert!(
             asked.elapsed() < stall / 2,
             "answered after {:?}",
@@ -1165,8 +1178,15 @@ fn a_pane_that_prints_without_pause_slows_nobody() {
         thread::sleep(Duration::from_millis(300));
         let mut control = connect(&paths.socket, Role::Control);
         assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-        proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
-        assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+        proto::write_msg(
+            &mut control,
+            &ClientMsg::CloseFlow(fixtures::flow_id("7f3c")),
+        )
+        .unwrap();
+        assert_eq!(
+            recv(&mut control),
+            ServerMsg::NotOpen(fixtures::flow_id("7f3c"))
+        );
     }
     stop(&paths, handle);
 }
@@ -1228,21 +1248,20 @@ fn reopens_only_a_flow_on_the_board() {
     let mut ui = connect(&paths.socket, Role::Attach { size });
     assert!(matches!(recv(&mut ui), ServerMsg::Welcome { .. }));
 
-    for id in ["7f3c", "../7f3c"] {
-        proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id.into()))).unwrap();
-        proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Master)).unwrap();
-        recv_until(&mut ui, "no panes after the reopen", |message| {
-            let ServerMsg::Panes(panes) = message else {
-                return false;
-            };
-            assert_eq!(panes.len(), 1, "{panes:?}");
-            true
-        });
-    }
+    let id = fixtures::flow_id("7f3c");
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Flow(id))).unwrap();
+    proto::write_msg(&mut ui, &ClientMsg::Reopen(PaneKey::Master)).unwrap();
+    recv_until(&mut ui, "no panes after the reopen", |message| {
+        let ServerMsg::Panes(panes) = message else {
+            return false;
+        };
+        assert_eq!(panes.len(), 1, "{panes:?}");
+        true
+    });
     let mut control = connect(&paths.socket, Role::Control);
     assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-    proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
-    assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+    proto::write_msg(&mut control, &ClientMsg::CloseFlow(id)).unwrap();
+    assert_eq!(recv(&mut control), ServerMsg::NotOpen(id));
     stop(&paths, handle);
 }
 
@@ -1278,12 +1297,12 @@ fn random_frames_before_and_after_a_hello_never_hurt_the_server() {
             role: Role::Attach { size },
             peer: peer(9),
         },
-        ClientMsg::Focus(PaneKey::Flow("7f3c".into())),
+        ClientMsg::Focus(PaneKey::Flow(fixtures::flow_id("7f3c"))),
         ClientMsg::Input(b"noise".to_vec()),
         ClientMsg::Resize(size),
         ClientMsg::History(Some(3)),
-        ClientMsg::Reopen(PaneKey::Flow("7f3c".into())),
-        ClientMsg::CloseFlow("7f3c".into()),
+        ClientMsg::Reopen(PaneKey::Flow(fixtures::flow_id("7f3c"))),
+        ClientMsg::CloseFlow(fixtures::flow_id("7f3c")),
     ]
     .iter()
     .map(|message| postcard::to_stdvec(message).unwrap())
@@ -1314,8 +1333,15 @@ fn random_frames_before_and_after_a_hello_never_hurt_the_server() {
 
     let mut control = connect(&paths.socket, Role::Control);
     assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-    proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
-    assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+    proto::write_msg(
+        &mut control,
+        &ClientMsg::CloseFlow(fixtures::flow_id("7f3c")),
+    )
+    .unwrap();
+    assert_eq!(
+        recv(&mut control),
+        ServerMsg::NotOpen(fixtures::flow_id("7f3c"))
+    );
     stop(&paths, handle);
 }
 
@@ -1419,7 +1445,7 @@ fn starts_the_master_fresh_when_its_session_cannot_be_resumed() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("master.json"),
-        r#"{"session": "5e55", "cwd": "/tmp"}"#,
+        r#"{"session": "5e55a000-0000-4000-8000-000000000000", "cwd": "/tmp"}"#,
     )
     .unwrap();
     let fresh = dir.path().join("fresh");
@@ -1588,15 +1614,15 @@ fn fake_codex(dir: &Path) -> Agent {
 }
 
 /// What a session that had its first turn reported, so saaio server may type into it.
-fn had_a_turn(store: &Store, id: &str) {
+fn had_a_turn(store: &Store, id: FlowId) {
     let session = EventKind::Session {
-        id: "01a1".into(),
+        id: fixtures::session_id("01a1"),
         transcript: None,
     };
     store.append(id, &LogEvent::new(2, session)).unwrap();
 }
 
-fn tell(store: &Store, id: &str, text: &str) {
+fn tell(store: &Store, id: FlowId, text: &str) {
     let message = EventKind::Message { text: text.into() };
     store.append(id, &LogEvent::new(3, message)).unwrap();
 }
@@ -1611,11 +1637,9 @@ fn types_the_masters_message_into_an_idle_codex_worker_once() {
     let store = Store::at(dir.path().to_path_buf());
     let csv = started_flow(&store, dir.path(), "csv", "codex");
     let busy = started_flow(&store, dir.path(), "busy", "codex");
-    had_a_turn(&store, &csv);
-    had_a_turn(&store, &busy);
-    store
-        .set_busy(&Waiter::Flow(csv.clone()), Busy::Turn)
-        .unwrap();
+    had_a_turn(&store, csv);
+    had_a_turn(&store, busy);
+    store.set_busy(&Waiter::Flow(csv), Busy::Turn).unwrap();
     let (paths, handle) = start_with_agents(
         dir.path(),
         BTreeMap::from([("codex".to_string(), fake_codex(dir.path()))]),
@@ -1623,12 +1647,10 @@ fn types_the_masters_message_into_an_idle_codex_worker_once() {
     wait_until("the busy worker never started", || {
         dir.path().join("busy/typed").exists()
     });
-    store
-        .set_busy(&Waiter::Flow(busy.clone()), Busy::Turn)
-        .unwrap();
+    store.set_busy(&Waiter::Flow(busy), Busy::Turn).unwrap();
 
-    tell(&store, &csv, "Tabs.");
-    tell(&store, &busy, "Spaces.");
+    tell(&store, csv, "Tabs.");
+    tell(&store, busy, "Spaces.");
     wait_until_typed(dir.path(), "csv", "Tabs.");
     thread::sleep(WATCH_EVERY * 3);
 
@@ -1636,7 +1658,7 @@ fn types_the_masters_message_into_an_idle_codex_worker_once() {
     assert!(text.contains("message from the saaio master:"), "{text:?}");
     assert_eq!(text.matches("Tabs.").count(), 1, "once: {text:?}");
     assert_eq!(
-        store.delivered(&csv),
+        store.delivered(csv),
         1,
         "a busy mark from before its pane opened is stale"
     );
@@ -1645,7 +1667,7 @@ fn types_the_masters_message_into_an_idle_codex_worker_once() {
         "",
         "a busy worker gets it at its Stop"
     );
-    assert_eq!(store.delivered(&busy), 0);
+    assert_eq!(store.delivered(busy), 0);
 
     let mut ui = connect(
         &paths.socket,
@@ -1663,7 +1685,7 @@ fn never_types_into_a_session_that_had_no_turn_or_a_claude_worker() {
     let store = Store::at(dir.path().to_path_buf());
     let fresh = started_flow(&store, dir.path(), "fresh", "codex");
     let claude = started_flow(&store, dir.path(), "claude", "claude-cat");
-    had_a_turn(&store, &claude);
+    had_a_turn(&store, claude);
     let cat = Agent {
         adapter: Some(crate::adapter::Adapter::ClaudeCode),
         ..fake_codex(dir.path())
@@ -1676,8 +1698,8 @@ fn never_types_into_a_session_that_had_no_turn_or_a_claude_worker() {
         ]),
     );
 
-    tell(&store, &fresh, "Tabs.");
-    tell(&store, &claude, "Tabs.");
+    tell(&store, fresh, "Tabs.");
+    tell(&store, claude, "Tabs.");
     thread::sleep(WATCH_EVERY * 4);
 
     assert_eq!(
@@ -1698,7 +1720,7 @@ fn never_types_into_a_session_that_had_no_turn_or_a_claude_worker() {
 
 /// A Claude Code stand-in that keeps each line typed into it in `typed` and, as its prompt hook
 /// would, marks flow `id`'s turn as begun.
-fn fake_claude(dir: &Path, id: &str) -> Agent {
+fn fake_claude(dir: &Path, id: FlowId) -> Agent {
     let script = dir.join("fake-claude");
     let busy = dir.join(format!("waits/{id}.busy"));
     let body = format!(
@@ -1714,7 +1736,7 @@ fn fake_claude(dir: &Path, id: &str) -> Agent {
     }
 }
 
-fn queue(store: &Store, id: &str, line: &str) {
+fn queue(store: &Store, id: FlowId, line: &str) {
     let typed = EventKind::Typed { text: line.into() };
     store.append(id, &LogEvent::new(3, typed)).unwrap();
 }
@@ -1733,10 +1755,10 @@ fn types_queued_lines_after_pr_once_the_turn_before_it_ended() {
     let answer = EventKind::Answer {
         text: "Plan done.".into(),
     };
-    store.append(&id, &LogEvent::new(2, answer)).unwrap();
+    store.append(id, &LogEvent::new(2, answer)).unwrap();
     store
         .append(
-            &id,
+            id,
             &LogEvent::new(
                 2,
                 EventKind::MergeRequest {
@@ -1745,13 +1767,13 @@ fn types_queued_lines_after_pr_once_the_turn_before_it_ended() {
             ),
         )
         .unwrap();
-    queue(&store, &id, "/compact");
-    queue(&store, &id, "continue shipping");
+    queue(&store, id, "/compact");
+    queue(&store, id, "continue shipping");
     let (paths, handle) = start_with_agents(
         dir.path(),
-        BTreeMap::from([("claude-cat".to_string(), fake_claude(dir.path(), &id))]),
+        BTreeMap::from([("claude-cat".to_string(), fake_claude(dir.path(), id))]),
     );
-    let waiter = Waiter::Flow(id.clone());
+    let waiter = Waiter::Flow(id);
 
     wait_until_typed(dir.path(), "csv", "/compact");
     wait_until("its turn never began", || store.busy(&waiter) == Busy::Turn);
@@ -1761,7 +1783,7 @@ fn types_queued_lines_after_pr_once_the_turn_before_it_ended() {
         "\x1b[200~/compact\x1b[201~\n",
         "never mid-turn"
     );
-    assert_eq!(store.typed(&id), 1);
+    assert_eq!(store.typed(id), 1);
 
     store.set_busy(&waiter, Busy::Idle).unwrap();
     wait_until_typed(dir.path(), "csv", "continue shipping");
@@ -1769,7 +1791,7 @@ fn types_queued_lines_after_pr_once_the_turn_before_it_ended() {
         typed(dir.path(), "csv"),
         "\x1b[200~/compact\x1b[201~\n\x1b[200~continue shipping\x1b[201~\n"
     );
-    assert_eq!(store.typed(&id), 2);
+    assert_eq!(store.typed(id), 2);
     stop(&paths, handle);
 }
 
@@ -1779,14 +1801,14 @@ fn a_typed_line_that_begins_no_turn_lets_the_next_one_follow() {
     let store = Store::at(dir.path().to_path_buf());
     let id = started_flow(&store, dir.path(), "csv", "codex");
     let fresh = started_flow(&store, dir.path(), "fresh", "codex");
-    had_a_turn(&store, &id);
+    had_a_turn(&store, id);
     let answer = EventKind::Answer {
         text: "Plan done.".into(),
     };
-    store.append(&id, &LogEvent::new(2, answer)).unwrap();
-    queue(&store, &id, "/cost");
-    queue(&store, &id, "go on");
-    queue(&store, &fresh, "/compact");
+    store.append(id, &LogEvent::new(2, answer)).unwrap();
+    queue(&store, id, "/cost");
+    queue(&store, id, "go on");
+    queue(&store, fresh, "/compact");
     let (paths, handle) = start_timed(
         dir.path(),
         BTreeMap::from([("codex".to_string(), fake_codex(dir.path()))]),
@@ -1799,7 +1821,7 @@ fn a_typed_line_that_begins_no_turn_lets_the_next_one_follow() {
 
     wait_until_typed(dir.path(), "csv", "go on");
     // Not its busy mark: "go on" begins no turn either, and is let go itself after `unstarted`.
-    assert_eq!(store.typed(&id), 2);
+    assert_eq!(store.typed(id), 2);
     assert_eq!(
         typed(dir.path(), "fresh"),
         "",
@@ -1820,7 +1842,7 @@ fn fake_claude_keys(dir: &Path) -> Agent {
     }
 }
 
-fn ask(store: &Store, id: &str, questions: Vec<crate::event::Question>) {
+fn ask(store: &Store, id: FlowId, questions: Vec<crate::event::Question>) {
     let waiting = EventKind::Waiting {
         question: "Which color?".into(),
         questions,
@@ -1845,12 +1867,12 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
     let worded = started_flow(&store, dir.path(), "worded", "claude-keys");
     let pr = "https://github.com/a/b/pull/42";
     let opened = EventKind::MergeRequest { url: pr.into() };
-    store.append(&asks, &LogEvent::new(1, opened)).unwrap();
-    ask(&store, &asks, color());
-    ask(&store, &unanswered, color());
-    ask(&store, &worded, Vec::new());
-    tell(&store, &asks, "The user says: Red");
-    tell(&store, &worded, "The user says: Red");
+    store.append(asks, &LogEvent::new(1, opened)).unwrap();
+    ask(&store, asks, color());
+    ask(&store, unanswered, color());
+    ask(&store, worded, Vec::new());
+    tell(&store, asks, "The user says: Red");
+    tell(&store, worded, "The user says: Red");
     let (paths, handle) = start_with_agents(
         dir.path(),
         BTreeMap::from([("claude-keys".to_string(), fake_claude_keys(dir.path()))]),
@@ -1866,7 +1888,7 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
         typed(dir.path(), "asks").contains('\x1b')
     });
     let closed = EventKind::MergeRequestClosed { url: pr.into() };
-    store.append(&asks, &LogEvent::new(4, closed)).unwrap();
+    store.append(asks, &LogEvent::new(4, closed)).unwrap();
     thread::sleep(WATCH_EVERY * 3);
     assert_eq!(
         typed(dir.path(), "asks"),
@@ -1887,7 +1909,7 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
     let idle = EventKind::Idle {
         note: "declined".into(),
     };
-    store.append(&asks, &LogEvent::new(5, idle)).unwrap();
+    store.append(asks, &LogEvent::new(5, idle)).unwrap();
     recv_until(&mut ui, "the flow never showed idle", |message| {
         matches!(message, ServerMsg::Board(board)
             if board.flows.iter().any(|flow| flow.id == asks && flow.state == State::Idle))
@@ -1897,8 +1919,8 @@ fn presses_esc_once_into_each_dialog_the_master_answered() {
         questions: color(),
         permission: false,
     };
-    store.append(&asks, &LogEvent::new(6, again)).unwrap();
-    tell(&store, &asks, "The user says: Blue");
+    store.append(asks, &LogEvent::new(6, again)).unwrap();
+    tell(&store, asks, "The user says: Blue");
     wait_until("no Esc into the next dialog", || {
         typed(dir.path(), "asks") == "\x1b\x1b"
     });
@@ -1936,7 +1958,7 @@ fn a_running_worker_keeps_the_adapter_it_started_with() {
     let dir = TempDir::new().unwrap();
     let store = Store::at(dir.path().to_path_buf());
     let csv = started_flow(&store, dir.path(), "csv", "codex");
-    had_a_turn(&store, &csv);
+    had_a_turn(&store, csv);
     let codex = fake_codex(dir.path());
     let (paths, handle) = start_with_agents(
         dir.path(),
@@ -1953,7 +1975,7 @@ fn a_running_worker_keeps_the_adapter_it_started_with() {
         dir.path().join("next/typed").exists()
     });
 
-    tell(&store, &csv, "Tabs.");
+    tell(&store, csv, "Tabs.");
     wait_until("an edited agent took the running worker's adapter", || {
         typed(dir.path(), "csv").contains("Tabs.")
     });
@@ -2041,7 +2063,7 @@ fn trust_in(dir: &Path) -> Trust {
     Trust::at(&Registry::at(dir.join("state")))
 }
 
-fn idle_flow(store: &Store, repo: &Path, name: &str) -> String {
+fn idle_flow(store: &Store, repo: &Path, name: &str) -> FlowId {
     let id = store
         .create(&LogEvent::new(
             now() - 20 * 60_000,
@@ -2072,18 +2094,18 @@ fn idle_flow(store: &Store, repo: &Path, name: &str) -> String {
         base: None,
     };
     store
-        .append(&id, &LogEvent::new(now() - 20 * 60_000, workspace))
+        .append(id, &LogEvent::new(now() - 20 * 60_000, workspace))
         .unwrap();
     let idle = EventKind::Idle {
         note: "Plan ready.".into(),
     };
     store
-        .append(&id, &LogEvent::new(now() - 10 * 60_000, idle))
+        .append(id, &LogEvent::new(now() - 10 * 60_000, idle))
         .unwrap();
     id
 }
 
-fn services(store: &Store, id: &str) -> Vec<crate::event::ServiceStatus> {
+fn services(store: &Store, id: FlowId) -> Vec<crate::event::ServiceStatus> {
     store
         .events(id)
         .unwrap()
@@ -2095,7 +2117,7 @@ fn services(store: &Store, id: &str) -> Vec<crate::event::ServiceStatus> {
         .collect()
 }
 
-fn wait_for_services(store: &Store, id: &str, last: crate::event::ServiceStatus) {
+fn wait_for_services(store: &Store, id: FlowId, last: crate::event::ServiceStatus) {
     wait_until(&format!("never {last:?}"), || {
         services(store, id).last() == Some(&last)
     });
@@ -2139,20 +2161,20 @@ fn pauses_an_idle_flows_services_and_resumes_them_when_it_works() {
         now,
     );
 
-    wait_for_services(&store, &id, Paused);
+    wait_for_services(&store, id, Paused);
     assert_eq!(fs::read_to_string(&ran).unwrap(), "pause 4 csv\n");
     store
-        .append(&id, &LogEvent::new(now(), EventKind::Working))
+        .append(id, &LogEvent::new(now(), EventKind::Working))
         .unwrap();
-    wait_for_services(&store, &id, Running);
+    wait_for_services(&store, id, Running);
 
-    assert_eq!(services(&store, &id), [Pausing, Paused, Resuming, Running]);
+    assert_eq!(services(&store, id), [Pausing, Paused, Resuming, Running]);
     assert_eq!(
         fs::read_to_string(&ran).unwrap(),
         "pause 4 csv\nresume 4 csv\n"
     );
-    assert!(services(&store, &bare).is_empty(), "a repo without scripts");
-    assert!(services(&store, &stranger).is_empty(), "a repo not trusted");
+    assert!(services(&store, bare).is_empty(), "a repo without scripts");
+    assert!(services(&store, stranger).is_empty(), "a repo not trusted");
     stop(&paths, handle);
 }
 
@@ -2183,16 +2205,16 @@ fn a_resume_that_cannot_run_fails_so_tool_calls_stop_waiting() {
         )]),
         now,
     );
-    wait_for_services(&store, &id, Paused);
+    wait_for_services(&store, id, Paused);
 
     trust.revoke(&repo).unwrap();
     store
-        .append(&id, &LogEvent::new(now(), EventKind::Working))
+        .append(id, &LogEvent::new(now(), EventKind::Working))
         .unwrap();
 
-    wait_for_services(&store, &id, ResumeFailed);
+    wait_for_services(&store, id, ResumeFailed);
     let reason = store
-        .events(&id)
+        .events(id)
         .unwrap()
         .into_iter()
         .rev()
@@ -2239,8 +2261,15 @@ fn a_pane_that_prints_for_every_line_typed_never_stalls_the_server() {
 
     let mut control = connect(&paths.socket, Role::Control);
     assert!(matches!(recv(&mut control), ServerMsg::Welcome { .. }));
-    proto::write_msg(&mut control, &ClientMsg::CloseFlow("7f3c".into())).unwrap();
-    assert_eq!(recv(&mut control), ServerMsg::NotOpen("7f3c".into()));
+    proto::write_msg(
+        &mut control,
+        &ClientMsg::CloseFlow(fixtures::flow_id("7f3c")),
+    )
+    .unwrap();
+    assert_eq!(
+        recv(&mut control),
+        ServerMsg::NotOpen(fixtures::flow_id("7f3c"))
+    );
     stop(&paths, handle);
     reader.join().unwrap();
 }

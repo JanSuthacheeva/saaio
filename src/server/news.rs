@@ -62,7 +62,7 @@ impl Server {
                     && !flow.is_plain()
                     && !flow.is_finished()
                     && flow.session.is_some();
-                delivers.then(|| Waiter::Flow(id.clone()))
+                delivers.then_some(Waiter::Flow(*id))
             }
         }
     }
@@ -70,7 +70,7 @@ impl Server {
     /// The waiter's news, marked delivered or seen; None when there is none.
     fn take_news(&self, waiter: &Waiter) -> Option<String> {
         match waiter {
-            Waiter::Flow(id) => match deliver::worker_news(&self.store, id, (self.clock)()) {
+            Waiter::Flow(id) => match deliver::worker_news(&self.store, *id, (self.clock)()) {
                 WorkerNews::News(notes) => Some(wake::for_worker(&notes)),
                 WorkerNews::Nothing | WorkerNews::Gone => None,
             },

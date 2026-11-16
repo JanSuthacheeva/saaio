@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use crate::event::{Event, EventKind, Mode, ServiceStatus};
+use crate::id::FlowId;
 use crate::store::FlowLog;
 use crate::text;
 use crate::view::{
@@ -19,7 +20,7 @@ const PERMISSION_GRACE_MS: u64 = 3_000;
 
 /// One flow's view at `now`; None when the log has no Started event to name it.
 pub fn fold<'a>(
-    id: &str,
+    id: FlowId,
     events: impl IntoIterator<Item = &'a Event>,
     last_beat: Option<u64>,
     now: u64,
@@ -44,7 +45,7 @@ pub fn fold<'a>(
 /// True when appending `kind` changes what the flow shows: its state, phase, blocker, delegate,
 /// tasks, review, merge request and its merge, decisions, answer, session or dialog; every message
 /// and typed line does. Adapters skip the rest, so a log does not grow by a line for every tool call.
-pub fn changes(id: &str, events: &[Event], kind: &EventKind, now: u64) -> bool {
+pub fn changes(id: FlowId, events: &[Event], kind: &EventKind, now: u64) -> bool {
     if matches!(
         kind,
         EventKind::Message { .. } | EventKind::Typed { .. } | EventKind::PermissionPending { .. }
@@ -92,7 +93,7 @@ fn shown(view: &FlowView) -> impl PartialEq + '_ {
 /// Every log that names its flow, folded at `now`.
 pub fn views(logs: &[FlowLog], now: u64) -> Vec<FlowView> {
     logs.iter()
-        .filter_map(|log| fold(&log.id, &log.events, log.beat, now))
+        .filter_map(|log| fold(log.id, &log.events, log.beat, now))
         .collect()
 }
 
@@ -111,10 +112,11 @@ pub fn board(mut flows: Vec<FlowView>, now: u64) -> Board {
 /// The flow a name or id means: an exact id, else the unfinished flow of that name,
 /// else the most recent finished one of that name.
 pub fn resolve<'a>(flows: &'a [FlowView], name_or_id: &str) -> Option<&'a FlowView> {
+    let id = FlowId::parse(name_or_id).ok();
     let named = || flows.iter().filter(|flow| flow.name == name_or_id);
     flows
         .iter()
-        .find(|flow| flow.id == name_or_id)
+        .find(|flow| Some(flow.id) == id)
         .or_else(|| {
             named()
                 .filter(|flow| !flow.is_finished())
@@ -155,7 +157,7 @@ struct Folding {
 
 impl Folding {
     /// From the flow's started event.
-    fn new(id: &str, started: &EventKind, at: u64) -> Folding {
+    fn new(id: FlowId, started: &EventKind, at: u64) -> Folding {
         let EventKind::Started {
             name,
             request,
@@ -171,7 +173,7 @@ impl Folding {
         };
         let mode = *mode;
         let view = FlowView {
-            id: id.to_string(),
+            id,
             name: name.clone(),
             request: request.clone(),
             mode,
@@ -427,7 +429,7 @@ impl Folding {
             }
             EventKind::Session { id, transcript } => {
                 self.view.session = Some(Session {
-                    id: id.clone(),
+                    id: *id,
                     transcript: transcript.clone(),
                 });
             }

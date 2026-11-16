@@ -1,6 +1,7 @@
 //! Tests of `App` on the board: cards, moving, jumping in, every project, faint keys
 
 use super::*;
+use crate::fixtures;
 
 #[test]
 fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
@@ -205,7 +206,7 @@ fn moves_over_the_board_and_jumps_into_a_card() {
     assert_eq!(
         app.on_input(Routed::View(vec![Key::Enter])),
         vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
-            "shop-230".into()
+            fixtures::flow_id("shop-230")
         )))]
     );
     assert_eq!(app.view, View::Panes);
@@ -315,7 +316,7 @@ fn shows_every_project_and_jumps_only_into_this_ones_flows() {
         row(&terminal, 41)
     );
 
-    let first = fleet().flows[0].id.clone();
+    let first = fleet().flows[0].id;
     assert_eq!(
         app.on_input(Routed::View(vec![Key::Enter])),
         vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(first)))]

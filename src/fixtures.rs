@@ -1,4 +1,5 @@
-//! What tests across the crate share: `executable`, `started`, `workspace`, `flow` and `Noise`
+//! What tests across the crate share: `executable`, `started`, `workspace`, `flow_id`, `flow` and
+//! `Noise`
 
 use std::io::Write;
 use std::path::Path;
@@ -6,6 +7,7 @@ use std::process::{Command, Stdio};
 
 use crate::event::{Event, EventKind, Mode};
 use crate::fold;
+use crate::id::{FlowId, SessionId};
 use crate::view::{FlowView, Workspace};
 
 /// Writes an executable script through a child process, so this process never holds it open for
@@ -56,11 +58,29 @@ pub fn workspace(name: &str, agent: &str) -> Workspace {
     }
 }
 
-/// `id` started (named after it), then `events`, folded at `now`.
-pub fn flow(id: &str, events: Vec<Event>, now: u64) -> FlowView {
-    let mut all = vec![started(id, "x")];
+/// The id a test's flow `name` gets: the same for the same name, a different one for another.
+pub fn flow_id(name: &str) -> FlowId {
+    FlowId::parse(&id_text('a', name)).expect("the text is an id")
+}
+
+/// The id a test's harness session `name` gets, never one of flow_id's.
+pub fn session_id(name: &str) -> SessionId {
+    SessionId::parse(&id_text('b', name)).expect("the text is an id")
+}
+
+/// `name` hashed (FNV-1a) into a v4 UUID's text, `kind` its first digit.
+fn id_text(kind: char, name: &str) -> String {
+    let hash = name.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+    });
+    format!("{kind}0000000-0000-4000-8000-{:012x}", hash >> 16)
+}
+
+/// `name` started, then `events`, folded at `now`, with the id `flow_id(name)`.
+pub fn flow(name: &str, events: Vec<Event>, now: u64) -> FlowView {
+    let mut all = vec![started(name, "x")];
     all.extend(events);
-    fold::fold(id, &all, None, now).expect("a started flow folds")
+    fold::fold(flow_id(name), &all, None, now).expect("a started flow folds")
 }
 
 /// Bytes that look random but repeat for a seed (xorshift64), for the decoder fuzz tests.
