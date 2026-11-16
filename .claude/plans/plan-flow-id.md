@@ -298,3 +298,47 @@ Codex and master sessions:
 - [x] Docs: CLAUDE.md gains `id.rs` in the architecture list and `plan-flow-id.md` in the plan list, and loses `is_uuid`; `docs/HANDOVER.md` if it names `is_uuid`
 - [x] Full checks: `cargo fmt`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test --all-features`, `cargo deny check`
 - [x] End to end in a scratch store (`SAAIO_HOME=$(mktemp -d)`, `XDG_STATE_HOME` inside it): `saaio new`, `saaio report`, `saaio status` and `saaio status --json` show the same id text as the log file name; `saaio remove <id>` and `<name>` resolve; a UI in a PTY shows the flow; end with `SAAIO_HOME=<store> saaio --stop`
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and the diff `main...aa27c88`.
+Every changed line was read; the unit signatures, call chains and test seams match the plan.
+
+**Fixed**
+
+- The tests that showed a forged session (`-cnotify=...`) never reaches a resume argv were
+  removed with `is_uuid`, and nothing showed that the new defence, a `session` log line whose
+  id does not parse being skipped by `Event::from_line`, holds. Added
+  `event::tests::skips_a_session_line_whose_id_is_no_id` (fails on main, where the id is a
+  `String`): 96f6455. Test only, so no second review round.
+
+**Open** (no action recommended)
+
+- Stricter than before on the edges, all deliberate in the plan: an uppercase UUID (which
+  `is_uuid` accepted) is no longer a session or flow id; a `CloseFlow` with a bad id drops the
+  connection instead of answering `NotOpen`; a master.json whose session does not parse is an
+  error like broken JSON instead of a fresh session. saaio has written only `Uuid::new_v4`
+  lowercase ids since its first store commit, and Codex writes lowercase ids, so no real store
+  is affected.
+- A `waits/seen` file with a key that is no id now fails to parse whole and falls back to
+  `first_seen`; harmless, since saaio never wrote such a key.
+
+**Where to look**
+
+1. `src/id.rs` `canonical` and the serde attributes: the one place that decides what is an id
+   and that the wire, logs and `--json` keep their bytes (`serializes_as_its_text`, proto's
+   `writes_a_flow_id_as_the_text_it_was_before`, view's `writes_the_id_as_its_text`).
+2. `src/store.rs` `ids`: log stems that are no id are now skipped silently.
+3. `src/launch/pane.rs` `spec` and `src/server/master.rs` `spec`: the resume session now
+   trusts the type instead of an `is_uuid` filter.
+4. `src/cli/commands/hook.rs` `report`: the name-lookup fallback is gone (it was dead, since
+   `SAAIO_FLOW_ID` was already required to be a UUID).
+
+The rest (server, UI, tests) is mechanical `&str` -> `FlowId` and `.clone()` -> copy; skim it.
+
+**Checks**
+
+fmt, clippy, test and deny passed at f906a8a; at 96f6455 fmt and clippy pass and `event::tests`
+passes (the only change since). A scratch-store E2E (`saaio new`, `status --json`,
+`report --flow` by id, uppercase id and name, `remove <id>`, `saaio turn --flow nope` exit 2)
+behaved as the plan says.
