@@ -20,10 +20,6 @@ fn claiming(home: &Path, args: &[&str], vars: &[(&str, &str)]) -> Command {
     command
 }
 
-fn server_log(home: &Path) -> String {
-    fs::read_to_string(home.join("server.log")).unwrap_or_default()
-}
-
 fn flow_log(home: &Path, id: &str) -> String {
     fs::read_to_string(home.join(format!("flows/{id}.jsonl"))).unwrap()
 }
