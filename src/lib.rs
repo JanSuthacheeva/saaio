@@ -4,7 +4,9 @@
     test,
     allow(
         clippy::disallowed_methods,
-        reason = "tests set up their files, read PATH and start threads directly"
+        clippy::unwrap_used,
+        clippy::print_stderr,
+        reason = "tests set up their files, read PATH, start threads, unwrap and print skips directly"
     )
 )]
 

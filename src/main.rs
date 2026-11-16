@@ -76,6 +76,10 @@ fn now_ms() -> u64 {
 }
 
 /// Prints a command's answer where it belongs and exits with its code.
+#[expect(
+    clippy::print_stderr,
+    reason = "the process boundary prints the wake news"
+)]
 fn answer(result: Result<Document, Failure>) -> ExitCode {
     match result {
         Ok(Document::Silent) => ExitCode::SUCCESS,
@@ -95,6 +99,10 @@ fn fail(failure: &Failure) -> ExitCode {
 
 /// Writes `text` and a line break to stdout, then exits with `code`. A reader that went away, as
 /// `saaio status | head -1` does, is not an error; any other failure to write is.
+#[expect(
+    clippy::print_stderr,
+    reason = "the process boundary reports a failed write"
+)]
 fn print(text: &str, code: ExitCode) -> ExitCode {
     match writeln!(io::stdout().lock(), "{text}") {
         Ok(()) => code,

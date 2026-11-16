@@ -2,7 +2,8 @@
 
 #![allow(
     clippy::disallowed_methods,
-    reason = "tests set up their files and read PATH directly"
+    clippy::unwrap_used,
+    reason = "tests set up their files, read PATH and unwrap directly"
 )]
 
 mod bug_report;
