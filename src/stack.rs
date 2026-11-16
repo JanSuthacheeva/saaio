@@ -1,6 +1,7 @@
 //! Which flows stand on a flow's branch, and the event each gets once that branch merged (pure)
 
 use crate::event::EventKind;
+use crate::id::FlowId;
 use crate::launch::worktree::repo_of;
 use crate::view::FlowView;
 
@@ -26,7 +27,7 @@ pub fn standing_on<'a>(flows: &'a [FlowView], base: &FlowView) -> Vec<&'a FlowVi
 
 /// For each flow standing_on `merged`: its id and BaseMerged { base: merged's branch, onto }; none
 /// when the forge named no branch it merged into.
-pub fn on_merge(flows: &[FlowView], merged: &FlowView, onto: &str) -> Vec<(String, EventKind)> {
+pub fn on_merge(flows: &[FlowView], merged: &FlowView, onto: &str) -> Vec<(FlowId, EventKind)> {
     let Some(base) = merged
         .workspace
         .as_ref()
@@ -44,14 +45,14 @@ pub fn on_merge(flows: &[FlowView], merged: &FlowView, onto: &str) -> Vec<(Strin
                 base: base.clone(),
                 onto: onto.to_string(),
             };
-            (flow.id.clone(), kind)
+            (flow.id, kind)
         })
         .collect()
 }
 
 /// on_merge for every merged flow whose forge named where it merged: the BaseMerged events still
 /// missing, empty once each flow on a merged branch moved.
-pub fn pending(flows: &[FlowView]) -> Vec<(String, EventKind)> {
+pub fn pending(flows: &[FlowView]) -> Vec<(FlowId, EventKind)> {
     flows
         .iter()
         .filter(|flow| flow.merged)
@@ -64,7 +65,7 @@ pub fn pending(flows: &[FlowView]) -> Vec<(String, EventKind)> {
 mod tests {
     use super::*;
     use crate::event::Event;
-    use crate::fixtures::{flow, workspace};
+    use crate::fixtures::{self, flow, workspace};
     use crate::view::Workspace;
 
     fn at(space: Workspace, more: Vec<EventKind>) -> Vec<Event> {
@@ -137,7 +138,7 @@ mod tests {
         assert_eq!(
             pending(&flows),
             [(
-                "c".to_string(),
+                fixtures::flow_id("c"),
                 EventKind::BaseMerged {
                     base: "flow/a".into(),
                     onto: "main".into()
@@ -158,7 +159,7 @@ mod tests {
         assert_eq!(
             on_merge(&flows, &flows[0], "flow/base"),
             [("b", "flow/base"), ("c", "flow/base")].map(|(id, onto)| (
-                id.to_string(),
+                fixtures::flow_id(id),
                 EventKind::BaseMerged {
                     base: "flow/a".into(),
                     onto: onto.into()

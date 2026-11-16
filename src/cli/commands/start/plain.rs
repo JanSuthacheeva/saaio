@@ -47,13 +47,13 @@ pub(super) fn open(
     );
     let id = store.create(&first)?;
     let space = worktree::folder_workspace(&folder, agent);
-    if let Err(error) = append_workspace(store, &id, &space, now) {
-        let _ = store.remove(&id);
+    if let Err(error) = append_workspace(store, id, &space, now) {
+        let _ = store.remove(id);
         return Err(error);
     }
 
-    let events = store.events(&id)?;
-    let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");
+    let events = store.events(id)?;
+    let flow = fold::fold(id, &events, None, now).expect("a started flow folds");
     Ok(start::opened(&flow, &space, opening(&env.socket(store))))
 }
 

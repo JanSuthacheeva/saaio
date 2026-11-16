@@ -15,6 +15,7 @@ use crate::config::kind::Kind;
 use crate::config::{Agent, Config};
 use crate::event::{Event, EventKind, Mode};
 use crate::fold;
+use crate::id::FlowId;
 use crate::launch::{name, worktree};
 use crate::proto::Role;
 use crate::registry::Registry;
@@ -107,12 +108,12 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
         },
     );
     let id = store.create(&first)?;
-    let mut rollback = Rollback::new(&store, &registry, &id);
+    let mut rollback = Rollback::new(&store, &registry, id);
 
     // Claimed before the worktree and setup, so a second start cannot take the same slot meanwhile.
     let claim = Claim {
         store: store.root().to_path_buf(),
-        flow: id.clone(),
+        flow: id,
     };
     let slot = claim_slot(&registry, &claim, &flows, now)?;
     rollback.slot = Some((slot, claim));
@@ -133,22 +134,22 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
         &repo,
         Hook::Setup,
         &space,
-        &worktree::hook_env(&id, &name, &repo, &space),
+        &worktree::hook_env(id, &name, &repo, &space),
     ) {
         Ok(true) => Setup::Ran,
         Ok(false) => Setup::None,
         Err(error) => {
             let reason = format!("setup failed: {error}");
-            store.append(&id, &Event::new(now, EventKind::Blocked { reason }))?;
+            store.append(id, &Event::new(now, EventKind::Blocked { reason }))?;
             Setup::Failed(error.to_string())
         }
     };
 
     // Only now, so saaio server opens the worker once setup is done.
-    append_workspace(&store, &id, &space, now)?;
+    append_workspace(&store, id, &space, now)?;
 
-    let events = store.events(&id)?;
-    let flow = fold::fold(&id, &events, None, now).expect("a started flow folds");
+    let events = store.events(id)?;
+    let flow = fold::fold(id, &events, None, now).expect("a started flow folds");
     Ok(start::started(&flow, &space, &setup, opening(&socket)))
 }
 
@@ -290,9 +291,9 @@ fn held_slots(registry: &Registry, now: u64) -> Vec<u8> {
 /// Whether a claim's flow is still unfinished in its store.
 fn claim_is_live(claim: &Claim, now: u64) -> bool {
     Store::at(claim.store.clone())
-        .events(&claim.flow)
+        .events(claim.flow)
         .ok()
-        .and_then(|events| fold::fold(&claim.flow, &events, None, now))
+        .and_then(|events| fold::fold(claim.flow, &events, None, now))
         .is_some_and(|flow| !flow.is_finished())
 }
 
@@ -313,17 +314,17 @@ fn free_branch(repo: &Path, wanted: &str) -> String {
 struct Rollback<'a> {
     store: &'a Store,
     slots: Slots,
-    id: String,
+    id: FlowId,
     slot: Option<(u8, Claim)>,
     armed: bool,
 }
 
 impl<'a> Rollback<'a> {
-    fn new(store: &'a Store, registry: &Registry, id: &str) -> Rollback<'a> {
+    fn new(store: &'a Store, registry: &Registry, id: FlowId) -> Rollback<'a> {
         Rollback {
             store,
             slots: Slots::at(registry),
-            id: id.to_string(),
+            id,
             slot: None,
             armed: true,
         }
@@ -342,11 +343,11 @@ impl Drop for Rollback<'_> {
         if let Some((slot, claim)) = &self.slot {
             let _ = self.slots.release(*slot, claim);
         }
-        let _ = self.store.remove(&self.id);
+        let _ = self.store.remove(self.id);
     }
 }
 
-fn append_workspace(store: &Store, id: &str, space: &Workspace, now: u64) -> Result<(), Failure> {
+fn append_workspace(store: &Store, id: FlowId, space: &Workspace, now: u64) -> Result<(), Failure> {
     store
         .append(id, &Event::new(now, space.clone().into()))
         .map_err(Failure::from)

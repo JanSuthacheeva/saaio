@@ -7,7 +7,7 @@ use crate::cli::context::Context;
 use crate::cli::output::Document;
 use crate::config::watch::ConfigWatch;
 use crate::deliver::{self, WorkerNews};
-use crate::event::is_uuid;
+use crate::id::FlowId;
 use crate::identity;
 use crate::server_log;
 use crate::store::{Busy, Store, Waiter};
@@ -31,9 +31,9 @@ pub fn run(args: &Args, ctx: &Context) -> Document {
     let Ok(Some(store)) = ctx.env.store(cwd.as_deref()) else {
         return Document::Silent;
     };
-    let waiter = match ctx.env.flow_id() {
+    let waiter = match ctx.env.flow_id().map(FlowId::parse) {
         _ if args.master => Waiter::Master,
-        Some(id) if is_uuid(id) => Waiter::Flow(id.to_string()),
+        Some(Ok(id)) => Waiter::Flow(id),
         _ => return Document::Silent,
     };
     if !identity::proves(&store, &waiter, ctx.env.key()) {
@@ -73,7 +73,7 @@ fn wait(
             wakes = config.master.wake;
         }
         let news = match waiter {
-            Waiter::Flow(id) => match deliver::worker_news(store, id, clock()) {
+            Waiter::Flow(id) => match deliver::worker_news(store, *id, clock()) {
                 WorkerNews::Gone => return None,
                 WorkerNews::Nothing => None,
                 WorkerNews::News(notes) => Some(wake::for_worker(&notes)),

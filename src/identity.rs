@@ -41,6 +41,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::fixtures;
 
     #[test]
     fn a_new_key_is_64_hex_digits_and_never_the_same() {
@@ -63,7 +64,7 @@ mod tests {
     fn only_the_key_handed_to_the_pane_proves_its_session() {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
-        let worker = Waiter::Flow("7f3c".into());
+        let worker = Waiter::Flow(fixtures::flow_id("7f3c"));
         let key = new_key().unwrap();
 
         assert!(!proves(&store, &worker, Some(&key)), "no record yet");

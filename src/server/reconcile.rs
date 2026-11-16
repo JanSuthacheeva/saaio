@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 
 use crate::config::Config;
+use crate::id::FlowId;
 use crate::launch::pane::{self, LaunchEnv, PaneSpec};
 use crate::proto::PaneKey;
 use crate::view::{FlowView, Workspace};
@@ -26,7 +27,7 @@ pub fn unopenable(name: &str) -> String {
 pub fn reconcile(
     flows: &[FlowView],
     open: &[PaneKey],
-    known: &HashSet<String>,
+    known: &HashSet<FlowId>,
     config: &Config,
     env: &LaunchEnv,
     trusted: &dyn Fn(&Workspace) -> bool,
@@ -36,7 +37,7 @@ pub fn reconcile(
         let Some(space) = &flow.workspace else {
             continue;
         };
-        let key = PaneKey::Flow(flow.id.clone());
+        let key = PaneKey::Flow(flow.id);
         if flow.is_finished() || known.contains(&flow.id) || open.contains(&key) {
             continue;
         }
@@ -53,9 +54,9 @@ pub fn reconcile(
     }
     for key in open {
         if let PaneKey::Flow(id) = key
-            && !flows.iter().any(|flow| &flow.id == id)
+            && !flows.iter().any(|flow| flow.id == *id)
         {
-            wanted.close.push(key.clone());
+            wanted.close.push(*key);
         }
     }
     wanted
@@ -103,11 +104,11 @@ mod tests {
     }
 
     fn keys(wanted: &Wanted) -> Vec<PaneKey> {
-        wanted.open.iter().map(|spec| spec.key.clone()).collect()
+        wanted.open.iter().map(|spec| spec.key).collect()
     }
 
     fn worker(id: &str) -> PaneKey {
-        PaneKey::Flow(id.into())
+        PaneKey::Flow(fixtures::flow_id(id))
     }
 
     #[test]
@@ -156,7 +157,7 @@ mod tests {
             flow("seen", "claude", Some(HOSTED), false),
             flow("running", "claude", Some(HOSTED), false),
         ];
-        let known = HashSet::from(["seen".to_string()]);
+        let known = HashSet::from([fixtures::flow_id("seen")]);
 
         let wanted = reconcile(
             &flows,
@@ -177,7 +178,7 @@ mod tests {
         let wanted = reconcile(
             &flows,
             &[PaneKey::Master, worker("kept"), worker("removed")],
-            &HashSet::from(["kept".to_string(), "removed".to_string()]),
+            &HashSet::from([fixtures::flow_id("kept"), fixtures::flow_id("removed")]),
             &config(),
             &LaunchEnv::default(),
             &|_| true,

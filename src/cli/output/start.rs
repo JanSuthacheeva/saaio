@@ -5,6 +5,7 @@ use std::fmt;
 use serde::Serialize;
 
 use super::{Document, toon};
+use crate::id::FlowId;
 use crate::view::{FlowView, Workspace};
 
 /// Whether saaio ui opens a started worker now or once it runs.
@@ -25,7 +26,7 @@ pub(crate) fn started(
     #[derive(Serialize)]
     struct Started<'a> {
         flow: &'a str,
-        id: &'a str,
+        id: FlowId,
         #[serde(skip_serializing_if = "Option::is_none")]
         kind: Option<&'a str>,
         worktree: &'a str,
@@ -49,7 +50,7 @@ pub(crate) fn started(
     }
     Document::Toon(toon(&Started {
         flow: &flow.name,
-        id: &flow.id,
+        id: flow.id,
         kind: flow.kind.as_deref(),
         worktree: &workspace.path,
         branch: workspace.branch.as_deref(),
@@ -67,7 +68,7 @@ pub(crate) fn opened(flow: &FlowView, workspace: &Workspace, opening: Opening) -
     #[derive(Serialize)]
     struct Opened<'a> {
         flow: &'a str,
-        id: &'a str,
+        id: FlowId,
         folder: &'a str,
         agent: &'a str,
         pane: &'a str,
@@ -76,7 +77,7 @@ pub(crate) fn opened(flow: &FlowView, workspace: &Workspace, opening: Opening) -
     let (pane, watch) = pane(flow, opening, "session");
     Document::Toon(toon(&Opened {
         flow: &flow.name,
-        id: &flow.id,
+        id: flow.id,
         folder: &workspace.path,
         agent: &workspace.agent,
         pane,

@@ -1,6 +1,7 @@
 //! Tests of `codex`: recorded payloads as flow events, turns and approvers, the `-c` arguments
 
 use super::*;
+use crate::id::SessionId;
 
 fn fixture(name: &str) -> Value {
     let path = format!(
@@ -24,7 +25,7 @@ fn events(name: &str) -> Vec<EventKind> {
 /// The session every recorded payload ran in.
 fn session() -> EventKind {
     EventKind::Session {
-        id: "01a14000-0000-7000-8000-000000000000".into(),
+        id: SessionId::parse("01a14000-0000-7000-8000-000000000000").unwrap(),
         transcript: Some(
             "/home/dev/.codex/sessions/2026/10/16/\
              rollout-2026-10-16T14-51-43-01a14000-0000-7000-8000-000000000000.jsonl"

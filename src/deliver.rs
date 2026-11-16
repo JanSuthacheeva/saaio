@@ -4,6 +4,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::fold;
+use crate::id::FlowId;
 use crate::store::Store;
 use crate::view::FlowView;
 use crate::wake::{self, Note};
@@ -23,7 +24,7 @@ pub enum WorkerNews {
 }
 
 /// The master's messages and saaio's notes to flow `id` that its worker has not read yet.
-pub fn worker_news(store: &Store, id: &str, now: u64) -> WorkerNews {
+pub fn worker_news(store: &Store, id: FlowId, now: u64) -> WorkerNews {
     let Ok(events) = store.events(id) else {
         return WorkerNews::Gone;
     };
@@ -79,13 +80,13 @@ mod tests {
     use crate::event::{Event, EventKind};
     use crate::fixtures;
 
-    fn started(store: &Store) -> String {
+    fn started(store: &Store) -> FlowId {
         store
             .create(&fixtures::started("csv", "SHOP-221 add CSV export"))
             .unwrap()
     }
 
-    fn send(store: &Store, id: &str, text: &str) {
+    fn send(store: &Store, id: FlowId, text: &str) {
         let message = EventKind::Message {
             text: text.to_string(),
         };
@@ -98,21 +99,21 @@ mod tests {
         let store = Store::at(dir.path().to_path_buf());
         let id = started(&store);
 
-        assert_eq!(worker_news(&store, &id, 3), WorkerNews::Nothing);
-        send(&store, &id, "use the old API");
-        send(&store, &id, "and keep the tests");
+        assert_eq!(worker_news(&store, id, 3), WorkerNews::Nothing);
+        send(&store, id, "use the old API");
+        send(&store, id, "and keep the tests");
 
         assert_eq!(
-            worker_news(&store, &id, 3),
+            worker_news(&store, id, 3),
             WorkerNews::News(vec![
                 Note::Master("use the old API".to_string()),
                 Note::Master("and keep the tests".to_string())
             ])
         );
-        assert_eq!(worker_news(&store, &id, 3), WorkerNews::Nothing);
-        send(&store, &id, "one more");
+        assert_eq!(worker_news(&store, id, 3), WorkerNews::Nothing);
+        send(&store, id, "one more");
         assert_eq!(
-            worker_news(&store, &id, 3),
+            worker_news(&store, id, 3),
             WorkerNews::News(vec![Note::Master("one more".to_string())])
         );
     }
@@ -122,15 +123,15 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
         let id = started(&store);
-        send(&store, &id, "read first");
+        send(&store, id, "read first");
         let merged = EventKind::BaseMerged {
             base: "flow/a".into(),
             onto: "main".into(),
         };
-        store.append(&id, &Event::new(2, merged)).unwrap();
+        store.append(id, &Event::new(2, merged)).unwrap();
 
         assert_eq!(
-            worker_news(&store, &id, 3),
+            worker_news(&store, id, 3),
             WorkerNews::News(vec![
                 Note::Master("read first".into()),
                 Note::BaseMerged {
@@ -139,8 +140,8 @@ mod tests {
                 }
             ])
         );
-        assert_eq!(store.delivered(&id), 2);
-        assert_eq!(worker_news(&store, &id, 3), WorkerNews::Nothing);
+        assert_eq!(store.delivered(id), 2);
+        assert_eq!(worker_news(&store, id, 3), WorkerNews::Nothing);
     }
 
     #[test]
@@ -148,11 +149,14 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
         let id = started(&store);
-        send(&store, &id, "never read");
-        store.append(&id, &Event::new(2, EventKind::Ended)).unwrap();
+        send(&store, id, "never read");
+        store.append(id, &Event::new(2, EventKind::Ended)).unwrap();
 
-        assert_eq!(worker_news(&store, &id, 3), WorkerNews::Gone);
-        assert_eq!(worker_news(&store, "nope", 3), WorkerNews::Gone);
+        assert_eq!(worker_news(&store, id, 3), WorkerNews::Gone);
+        assert_eq!(
+            worker_news(&store, fixtures::flow_id("nope"), 3),
+            WorkerNews::Gone
+        );
     }
 
     #[test]
@@ -162,7 +166,7 @@ mod tests {
         let id = started(&store);
         store
             .append(
-                &id,
+                id,
                 &Event::new(
                     2,
                     EventKind::MergeRequest {
@@ -171,9 +175,9 @@ mod tests {
                 ),
             )
             .unwrap();
-        send(&store, &id, "Fix the race first");
+        send(&store, id, "Fix the race first");
         assert_eq!(
-            worker_news(&store, &id, 3),
+            worker_news(&store, id, 3),
             WorkerNews::News(vec![Note::Master("Fix the race first".into())])
         );
     }
@@ -195,15 +199,12 @@ mod tests {
         let idle = EventKind::Idle {
             note: "plan written".to_string(),
         };
-        store.append(&id, &Event::new(2, idle)).unwrap();
+        store.append(id, &Event::new(2, idle)).unwrap();
         let flows = || fold::views(&store.logs().0, 3);
 
         let news = master_news_now(&store, &flows());
 
-        assert_eq!(
-            news.iter().map(|flow| flow.id.as_str()).collect::<Vec<_>>(),
-            [id.as_str()]
-        );
+        assert_eq!(news.iter().map(|flow| flow.id).collect::<Vec<_>>(), [id]);
         assert!(master_news_now(&store, &flows()).is_empty(), "seen now");
     }
 }

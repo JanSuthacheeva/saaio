@@ -5,6 +5,7 @@ use serde::Serialize;
 use super::{DESCRIPTION, Document, toon};
 use crate::config::prefix::Prefix;
 use crate::event::ServiceStatus;
+use crate::id::FlowId;
 use crate::text::short_duration;
 use crate::text::{LIST_TEXT_LIMIT, truncated};
 use crate::view::{Board, FlowView, Projects, State};
@@ -248,7 +249,7 @@ pub(crate) fn detail(
     #[derive(Serialize)]
     struct DetailDocument {
         name: String,
-        id: String,
+        id: FlowId,
         #[serde(skip_serializing_if = "String::is_empty")]
         request: String,
         mode: &'static str,
@@ -335,7 +336,7 @@ pub(crate) fn detail(
     };
     let document = DetailDocument {
         name: flow.name.clone(),
-        id: flow.id.clone(),
+        id: flow.id,
         request: cut(&flow.request),
         mode: flow.mode.name(),
         kind: flow.kind.clone(),
@@ -699,7 +700,7 @@ mod tests {
             detail(&flow, 10 * MIN, false, None, Prefix::default()).text(),
             [
                 "name: shop-221",
-                "id: shop-221-id",
+                &format!("id: {}", flow.id),
                 "request: SHOP-221 add CSV export",
                 "mode: auto",
                 "state: blocked",

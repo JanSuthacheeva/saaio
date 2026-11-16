@@ -106,7 +106,7 @@ fn a_plain_session_refuses_a_phase_and_says_it_has_none() {
     let home = TempDir::new().unwrap();
     fs::create_dir_all(home.path().join("flows")).unwrap();
     fs::write(
-        home.path().join("flows/scratch-id.jsonl"),
+        home.path().join("flows/5c2a0000-0000-4000-8000-000000000000.jsonl"),
         "{\"v\":1,\"at\":1,\"kind\":\"started\",\"name\":\"scratch\",\"request\":\"\",\"mode\":\"plain\"}\n",
     )
     .unwrap();

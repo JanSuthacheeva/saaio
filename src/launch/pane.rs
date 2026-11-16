@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::adapter::Adapter;
 use crate::config::Agent;
 use crate::config::kind::Kind;
-use crate::event::is_uuid;
+use crate::id::SessionId;
 use crate::launch::worktree::{hook_env, repo_of};
 use crate::proto::PaneKey;
 use crate::text;
@@ -42,7 +42,14 @@ pub struct PaneSpec {
 /// The agent's command with {id}, {name}, {prompt}, {request} filled in ({prompt} itself filled
 /// first, from `prompt`), each in one pass, so a request holding a placeholder is passed on as
 /// written; an argument that fills to nothing is dropped, so an empty prompt is no argument.
-pub fn agent_argv(agent: &Agent, prompt: &str, id: &str, name: &str, request: &str) -> Vec<String> {
+pub fn agent_argv(
+    agent: &Agent,
+    prompt: &str,
+    id: SessionId,
+    name: &str,
+    request: &str,
+) -> Vec<String> {
+    let id = &id.to_string();
     let prompt = fill(prompt, id, name, request, "", "");
     agent
         .command
@@ -54,7 +61,8 @@ pub fn agent_argv(agent: &Agent, prompt: &str, id: &str, name: &str, request: &s
 
 /// The agent's command with {id} and {name} filled in and {prompt} and {request} dropped: a plain
 /// session opens at an empty prompt.
-pub fn plain_argv(agent: &Agent, id: &str, name: &str) -> Vec<String> {
+pub fn plain_argv(agent: &Agent, id: SessionId, name: &str) -> Vec<String> {
+    let id = &id.to_string();
     agent
         .command
         .iter()
@@ -65,8 +73,14 @@ pub fn plain_argv(agent: &Agent, id: &str, name: &str) -> Vec<String> {
 
 /// The agent's resume command with {id}, {name} and {session}, the id the harness resumes by,
 /// filled in; None when it has none.
-pub fn resume_argv(agent: &Agent, id: &str, name: &str, session: &str) -> Option<Vec<String>> {
+pub fn resume_argv(
+    agent: &Agent,
+    id: SessionId,
+    name: &str,
+    session: SessionId,
+) -> Option<Vec<String>> {
     let resume = agent.resume.as_ref()?;
+    let (id, session) = (&id.to_string(), &session.to_string());
     Some(
         resume
             .iter()
@@ -81,7 +95,7 @@ pub fn resume_argv(agent: &Agent, id: &str, name: &str, session: &str) -> Option
 /// either way with the agent's adapter wired in right after the program. A plain session starts
 /// without a prompt and gets the adapter's plain wiring. A harness that picks its own session
 /// resumes by the one its hooks reported, and starts again when it never reported one (it had no
-/// turn) or reported one that is no UUID, which must never become an argument. Codex trusts the
+/// turn); a Claude Code worker's session is named after its flow. Codex trusts the
 /// folder only when the person `trusted` its repository. None when the flow has no workspace, or
 /// must resume and the agent has no resume template.
 pub fn worker_spec(
@@ -91,23 +105,20 @@ pub fn worker_spec(
     trusted: bool,
 ) -> Option<PaneSpec> {
     let space = flow.workspace.as_ref()?;
-    let session = flow
-        .session
-        .as_ref()
-        .map(|session| session.id.as_str())
-        .filter(|id| is_uuid(id));
+    let own = SessionId::from(flow.id);
+    let session = flow.session.as_ref().map(|session| session.id);
     let resumes = space.window.is_some() && (session.is_some() || !names_session(agent));
     let mut argv = if resumes {
-        resume_argv(agent, &flow.id, &flow.name, session.unwrap_or(&flow.id))?
+        resume_argv(agent, own, &flow.name, session.unwrap_or(own))?
     } else if flow.is_plain() {
-        plain_argv(agent, &flow.id, &flow.name)
+        plain_argv(agent, own, &flow.name)
     } else {
         // A flow from before kinds recorded no prompt: the feature kind's.
         let prompt = flow
             .prompt
             .clone()
             .unwrap_or_else(|| Kind::feature().prompt_for(agent));
-        agent_argv(agent, &prompt, &flow.id, &flow.name, &flow.request)
+        agent_argv(agent, &prompt, own, &flow.name, &flow.request)
     };
     if let Some(adapter) = agent.adapter {
         let folder = trusted.then_some(Path::new(&space.path));
@@ -120,7 +131,7 @@ pub fn worker_spec(
         argv.splice(at..at, wiring);
     }
     Some(PaneSpec {
-        key: PaneKey::Flow(flow.id.clone()),
+        key: PaneKey::Flow(flow.id),
         argv,
         cwd: PathBuf::from(&space.path),
         env: worker_env(flow, space, env),
@@ -141,8 +152,8 @@ pub fn names_session(agent: &Agent) -> bool {
 /// from SAAIO_SLOT, then shared_env's.
 fn worker_env(flow: &FlowView, space: &Workspace, env: &LaunchEnv) -> Vec<(String, String)> {
     let mut vars = match repo_of(space) {
-        Some(repo) => hook_env(&flow.id, &flow.name, &repo, space),
-        None => vec![("SAAIO_FLOW_ID".to_string(), flow.id.clone())],
+        Some(repo) => hook_env(flow.id, &flow.name, &repo, space),
+        None => vec![("SAAIO_FLOW_ID".to_string(), flow.id.to_string())],
     };
     vars.extend(shared_env(env));
     vars
@@ -180,6 +191,7 @@ fn fill(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixtures;
     use std::path::Path;
 
     use crate::event::{Event, EventKind, Mode};
@@ -199,7 +211,7 @@ mod tests {
             agent_argv(
                 &agent,
                 "/ship-feature {request}",
-                "7f3c",
+                own("7f3c"),
                 "shop-217",
                 "SHOP-217 add CSV export"
             ),
@@ -208,7 +220,7 @@ mod tests {
                 "-n",
                 "shop-217",
                 "--session-id",
-                "7f3c",
+                &own("7f3c").to_string(),
                 "/ship-feature SHOP-217 add CSV export"
             ])
         );
@@ -224,7 +236,7 @@ mod tests {
         };
 
         assert_eq!(
-            agent_argv(&agent, "", "7f3c", "master", ""),
+            agent_argv(&agent, "", own("7f3c"), "master", ""),
             strings(&["claude", "-n", "master"])
         );
     }
@@ -243,7 +255,7 @@ mod tests {
             agent_argv(
                 &agent,
                 "/ship-feature {request}",
-                "7f3c",
+                own("7f3c"),
                 "shop-217",
                 request
             ),
@@ -266,16 +278,25 @@ mod tests {
         };
 
         assert_eq!(
-            resume_argv(&agent, "7f3c", "shop-217", "7f3c"),
-            Some(strings(&["claude", "-n", "shop-217", "--resume", "7f3c"]))
+            resume_argv(&agent, own("7f3c"), "shop-217", own("7f3c")),
+            Some(strings(&[
+                "claude",
+                "-n",
+                "shop-217",
+                "--resume",
+                &own("7f3c").to_string()
+            ]))
         );
         agent.resume = Some(strings(&["codex", "resume", "{session}"]));
         assert_eq!(
-            resume_argv(&agent, "7f3c", "shop-217", "01a1"),
-            Some(strings(&["codex", "resume", "01a1"]))
+            resume_argv(&agent, own("7f3c"), "shop-217", session()),
+            Some(strings(&["codex", "resume", SESSION]))
         );
         agent.resume = None;
-        assert_eq!(resume_argv(&agent, "7f3c", "shop-217", "7f3c"), None);
+        assert_eq!(
+            resume_argv(&agent, own("7f3c"), "shop-217", own("7f3c")),
+            None
+        );
     }
 
     #[test]
@@ -328,7 +349,7 @@ mod tests {
                 },
             ),
         ];
-        fold::fold("7f3c", &events, None, 2).unwrap()
+        fold::fold(fixtures::flow_id("7f3c"), &events, None, 2).unwrap()
     }
 
     #[test]
@@ -368,20 +389,25 @@ mod tests {
         let env = LaunchEnv::default();
 
         let fresh = worker_spec(&worker(None), claude, &env, true).unwrap();
-        assert_eq!(fresh.key, PaneKey::Flow("7f3c".into()));
+        assert_eq!(fresh.key, PaneKey::Flow(fixtures::flow_id("7f3c")));
         assert_eq!(fresh.cwd, PathBuf::from("/repo/.saaio/worktrees/shop-217"));
         assert_eq!(
             fresh.argv,
             agent_argv(
                 claude,
                 "ship-feature {request}",
-                "7f3c",
+                own("7f3c"),
                 "shop-217",
                 "SHOP-217 add CSV export"
             ),
             "without an adapter the skill is named bare"
         );
-        let mut expected = hook_env("7f3c", "shop-217", Path::new("/repo"), &shop());
+        let mut expected = hook_env(
+            fixtures::flow_id("7f3c"),
+            "shop-217",
+            Path::new("/repo"),
+            &shop(),
+        );
         expected.extend(shared_env(&env));
         assert_eq!(
             fresh.env, expected,
@@ -391,7 +417,13 @@ mod tests {
         let resumed = worker_spec(&worker(Some(HOSTED)), claude, &env, true).unwrap();
         assert_eq!(
             resumed.argv,
-            strings(&["claude", "-n", "shop-217", "--resume", "7f3c"])
+            strings(&[
+                "claude",
+                "-n",
+                "shop-217",
+                "--resume",
+                &own("7f3c").to_string()
+            ])
         );
         let old_tmux = worker_spec(&worker(Some("@12")), claude, &env, true).unwrap();
         assert_eq!(
@@ -420,7 +452,10 @@ mod tests {
         }
         assert_eq!(fresh.argv[3], "--append-system-prompt");
         assert_eq!(&fresh.argv[5..7], ["-n", "shop-217"]);
-        assert_eq!(&resumed.argv[7..], ["--resume", "7f3c"]);
+        assert_eq!(
+            &resumed.argv[7..],
+            strings(&["--resume", &own("7f3c").to_string()])
+        );
     }
 
     #[test]
@@ -430,7 +465,7 @@ mod tests {
             flow_exe: PathBuf::from("/bin/saaio"),
             ..LaunchEnv::default()
         };
-        let stacked = |window: Option<&str>, session: Option<&str>| {
+        let stacked = |window: Option<&str>, session: Option<SessionId>| {
             let mut flow = codex_worker(window, session);
             if let Some(space) = &mut flow.workspace {
                 space.base = Some("flow/shop-216".into());
@@ -443,7 +478,7 @@ mod tests {
             ("claude", [stacked(None, None), stacked(Some(HOSTED), None)]),
             (
                 "codex",
-                [stacked(None, None), stacked(Some(HOSTED), Some(SESSION))],
+                [stacked(None, None), stacked(Some(HOSTED), Some(session()))],
             ),
         ] {
             for flow in flows {
@@ -465,11 +500,20 @@ mod tests {
 
     const SESSION: &str = "01a14000-0000-7000-8000-000000000001";
 
-    fn codex_worker(window: Option<&str>, session: Option<&str>) -> FlowView {
+    fn session() -> SessionId {
+        SessionId::parse(SESSION).unwrap()
+    }
+
+    /// The session a Claude Code worker of flow `name` runs as.
+    fn own(name: &str) -> SessionId {
+        SessionId::from(fixtures::flow_id(name))
+    }
+
+    fn codex_worker(window: Option<&str>, session: Option<SessionId>) -> FlowView {
         let mut flow = worker(window);
         flow.workspace.as_mut().unwrap().agent = "codex".into();
         flow.session = session.map(|id| crate::view::Session {
-            id: id.into(),
+            id,
             transcript: None,
         });
         flow
@@ -485,7 +529,7 @@ mod tests {
         let env = LaunchEnv::default();
 
         let resumed = worker_spec(
-            &codex_worker(Some(HOSTED), Some(SESSION)),
+            &codex_worker(Some(HOSTED), Some(session())),
             &codex,
             &env,
             true,
@@ -493,12 +537,6 @@ mod tests {
         assert_eq!(
             resumed.unwrap().argv,
             strings(&["codex", "resume", SESSION])
-        );
-        let forged = codex_worker(Some(HOSTED), Some("-cnotify=[\"sh\",\"-c\",\"id\"]"));
-        assert_eq!(
-            worker_spec(&forged, &codex, &env, true).unwrap().argv,
-            strings(&["codex", "ship-feature SHOP-217 add CSV export"]),
-            "a session that is no UUID starts again, never in the argv"
         );
         let never_ran = worker_spec(&codex_worker(Some(HOSTED), None), &codex, &env, true).unwrap();
         assert_eq!(
@@ -525,7 +563,7 @@ mod tests {
 
         let fresh = worker_spec(&codex_worker(None, None), codex, &env, true).unwrap();
         let resumed = worker_spec(
-            &codex_worker(Some(HOSTED), Some(SESSION)),
+            &codex_worker(Some(HOSTED), Some(session())),
             codex,
             &env,
             true,
@@ -580,7 +618,7 @@ mod tests {
                 },
             ),
         ];
-        fold::fold("9b1d", &events, None, 2).unwrap()
+        fold::fold(fixtures::flow_id("9b1d"), &events, None, 2).unwrap()
     }
 
     #[test]
@@ -599,7 +637,11 @@ mod tests {
         let fresh = worker_spec(&scratch(None), claude, &env, true).unwrap();
         let mut expected = vec![claude.command[0].clone()];
         expected.extend(wiring.clone());
-        expected.extend(plain_argv(claude, "9b1d", "scratch").into_iter().skip(1));
+        expected.extend(
+            plain_argv(claude, own("9b1d"), "scratch")
+                .into_iter()
+                .skip(1),
+        );
         assert_eq!(fresh.argv, expected);
         assert!(
             !fresh.argv.iter().any(|arg| arg.contains("/ship-feature")),
@@ -607,7 +649,10 @@ mod tests {
             fresh.argv
         );
         assert_eq!(fresh.cwd, PathBuf::from("/Users/jan/scratch"));
-        let mut env_expected = vec![("SAAIO_FLOW_ID".to_string(), "9b1d".to_string())];
+        let mut env_expected = vec![(
+            "SAAIO_FLOW_ID".to_string(),
+            fixtures::flow_id("9b1d").to_string(),
+        )];
         env_expected.extend(shared_env(&env));
         assert_eq!(
             fresh.env, env_expected,
@@ -617,7 +662,12 @@ mod tests {
         let resumed = worker_spec(&scratch(Some(HOSTED)), claude, &env, true).unwrap();
         let mut expected = vec![claude.command[0].clone()];
         expected.extend(wiring);
-        expected.extend(strings(&["-n", "scratch", "--resume", "9b1d"]));
+        expected.extend(strings(&[
+            "-n",
+            "scratch",
+            "--resume",
+            &own("9b1d").to_string(),
+        ]));
         assert_eq!(resumed.argv, expected);
     }
 
@@ -631,8 +681,14 @@ mod tests {
         };
 
         assert_eq!(
-            plain_argv(&agent, "9b1d", "scratch"),
-            strings(&["claude", "-n", "scratch", "--session-id", "9b1d"])
+            plain_argv(&agent, own("9b1d"), "scratch"),
+            strings(&[
+                "claude",
+                "-n",
+                "scratch",
+                "--session-id",
+                &own("9b1d").to_string()
+            ])
         );
     }
 

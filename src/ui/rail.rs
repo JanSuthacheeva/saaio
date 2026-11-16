@@ -56,7 +56,7 @@ impl Rail<'_> {
                 group = Some(heading);
                 rows.push(plain(Line::raw("")));
             }
-            let key = PaneKey::Flow(flow.id.clone());
+            let key = PaneKey::Flow(flow.id);
             let focused = *sidebar.focus == key;
             let tone = theme.flow_style(flow);
             let spans = vec![

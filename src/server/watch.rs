@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 
+use crate::id::FlowId;
 use crate::store::{Stamp, Store};
 
 /// Refold at least this often, so a flow turns not responding without any file changing.
@@ -12,14 +13,14 @@ const REFOLD_EVERY_MS: u64 = 5_000;
 /// Tells the server when the board must be folded again, from file sizes and times alone.
 #[derive(Debug, Default)]
 pub struct StoreWatch {
-    stamps: HashMap<String, Stamp>,
+    stamps: HashMap<FlowId, Stamp>,
     folded_at: Option<u64>,
 }
 
 impl StoreWatch {
     /// True when a log or heartbeat changed, a flow came or went, or 5 s passed since the last fold.
     pub fn changed(&mut self, store: &Store, now: u64) -> Result<bool> {
-        let stamps: HashMap<String, Stamp> = store.stamps()?.into_iter().collect();
+        let stamps: HashMap<FlowId, Stamp> = store.stamps()?.into_iter().collect();
         let due = self
             .folded_at
             .is_none_or(|at| now.saturating_sub(at) >= REFOLD_EVERY_MS);
@@ -57,16 +58,16 @@ mod tests {
         assert!(!watch.changed(&store, 300).unwrap());
 
         store
-            .append(&id, &Event::new(1, EventKind::Working))
+            .append(id, &Event::new(1, EventKind::Working))
             .unwrap();
         assert!(watch.changed(&store, 400).unwrap(), "an append");
 
         thread::sleep(Duration::from_millis(10));
-        store.beat(&id).unwrap();
+        store.beat(id).unwrap();
         assert!(watch.changed(&store, 500).unwrap(), "a heartbeat");
         assert!(!watch.changed(&store, 600).unwrap());
 
-        store.remove(&id).unwrap();
+        store.remove(id).unwrap();
         assert!(watch.changed(&store, 700).unwrap(), "a removal");
     }
 

@@ -74,6 +74,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::*;
+    use crate::fixtures;
 
     /// How long a write to a client that stopped reading blocks: far past any runner's hiccup, so
     /// a send that waited on one shows.
@@ -109,7 +110,7 @@ mod tests {
         let (events, _inbox) = mpsc::channel();
         let outbox = Outbox::start(1, ours, STALL, events).unwrap();
         let messages = [
-            ServerMsg::Closed("a".into()),
+            ServerMsg::Closed(fixtures::flow_id("a")),
             megabyte(),
             ServerMsg::Refused {
                 reason: "bye".into(),
@@ -134,7 +135,9 @@ mod tests {
         let outbox = Outbox::start(7, ours, STALL, events).unwrap();
         drop(theirs);
 
-        outbox.send(&ServerMsg::Closed("a".into())).unwrap();
+        outbox
+            .send(&ServerMsg::Closed(fixtures::flow_id("a")))
+            .unwrap();
 
         let event = inbox.recv_timeout(Duration::from_secs(30)).unwrap();
         assert!(matches!(event, Event::Gone(7)), "{event:?}");

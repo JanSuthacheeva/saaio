@@ -99,6 +99,7 @@ fn color(color: Color, default: TuiColor) -> TuiColor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixtures;
 
     fn cell(text: &str, flags: Flags) -> Cell {
         Cell {
@@ -141,7 +142,7 @@ mod tests {
         assert_eq!(screen.rows[0][0].text, "a");
         assert_eq!(screen.rows[1][0].text, "c");
         screen.apply(frame(
-            PaneKey::Flow("x".into()),
+            PaneKey::Flow(fixtures::flow_id("x")),
             false,
             vec![(1, vec![cell("d", Flags::default())])],
         ));

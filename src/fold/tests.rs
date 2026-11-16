@@ -17,7 +17,12 @@ fn codex_permission_waits_after_a_grace_period_and_completion_cancels_it() {
     );
     let started = started(0);
     let events = [started, pending];
-    assert!(changes("x", &events[..1], &events[1].kind, 1_000));
+    assert!(changes(
+        fixtures::flow_id("x"),
+        &events[..1],
+        &events[1].kind,
+        1_000
+    ));
     assert_eq!(view(&events, 3_999).state, State::Working);
     let waiting = view(&events, 4_000);
     assert_eq!(waiting.state, State::Waiting);
@@ -28,7 +33,12 @@ fn codex_permission_waits_after_a_grace_period_and_completion_cancels_it() {
     assert_eq!(waiting.changed_at, 4_000);
     assert!(waiting.permission);
     assert!(!view(&events, 3_999).permission, "inside its grace");
-    assert!(changes("x", &events, &EventKind::Working, 2_000));
+    assert!(changes(
+        fixtures::flow_id("x"),
+        &events,
+        &EventKind::Working,
+        2_000
+    ));
     let completed = [
         events[0].clone(),
         events[1].clone(),
@@ -46,7 +56,7 @@ fn an_idle_worker_does_not_need_you_but_shows_its_last_line() {
         Event::new(1, idle("The review is still running.")),
     ];
 
-    let flow = fold("x", &events, None, 2).unwrap();
+    let flow = fold(fixtures::flow_id("x"), &events, None, 2).unwrap();
 
     assert_eq!(flow.state, State::Idle);
     assert!(!flow.needs_you());
@@ -56,13 +66,23 @@ fn an_idle_worker_does_not_need_you_but_shows_its_last_line() {
         "idle: The review is still running."
     );
     assert!(!changes(
-        "x",
+        fixtures::flow_id("x"),
         &events,
         &idle("The review is still running."),
         3
     ));
-    assert!(changes("x", &events, &idle("Tests pass."), 3));
-    assert!(changes("x", &events, &EventKind::Working, 3));
+    assert!(changes(
+        fixtures::flow_id("x"),
+        &events,
+        &idle("Tests pass."),
+        3
+    ));
+    assert!(changes(
+        fixtures::flow_id("x"),
+        &events,
+        &EventKind::Working,
+        3
+    ));
 }
 
 #[test]
@@ -78,13 +98,13 @@ fn a_message_is_in_the_timeline_and_leaves_the_state() {
         ),
     ];
 
-    let flow = fold("x", &events, None, 3).unwrap();
+    let flow = fold(fixtures::flow_id("x"), &events, None, 3).unwrap();
 
     assert_eq!(flow.state, State::Waiting);
     assert_eq!(flow.changed_at, 1);
     assert_eq!(flow.timeline.last().unwrap().text, "master: Semicolons.");
     assert!(changes(
-        "x",
+        fixtures::flow_id("x"),
         &events,
         &EventKind::Message {
             text: "Semicolons.".into()
@@ -109,12 +129,12 @@ fn a_typed_line_is_in_the_timeline_and_leaves_the_state() {
         at(2, typed.clone()),
     ];
 
-    let flow = fold("x", &events, None, 3).unwrap();
+    let flow = fold(fixtures::flow_id("x"), &events, None, 3).unwrap();
 
     assert_eq!(flow.state, State::Idle);
     assert_eq!(flow.changed_at, 1);
     assert_eq!(flow.timeline.last().unwrap().text, "master typed: /compact");
-    assert!(changes("x", &events, &typed, 3));
+    assert!(changes(fixtures::flow_id("x"), &events, &typed, 3));
 }
 
 #[test]
@@ -123,36 +143,57 @@ fn keeps_the_last_answer_whole() {
     let answer = |text: &str| EventKind::Answer { text: text.into() };
     let events = vec![started(0), at(1, answer("first")), at(2, answer(&long))];
 
-    let flow = fold("x", &events, None, 3).unwrap();
+    let flow = fold(fixtures::flow_id("x"), &events, None, 3).unwrap();
 
     assert_eq!(flow.answer.as_deref(), Some(long.as_str()));
     assert_eq!(flow.timeline.len(), 1, "an answer adds no entry");
-    assert!(!changes("x", &events, &answer(&long), 3));
-    assert!(changes("x", &events, &answer("other"), 3));
+    assert!(!changes(fixtures::flow_id("x"), &events, &answer(&long), 3));
+    assert!(changes(
+        fixtures::flow_id("x"),
+        &events,
+        &answer("other"),
+        3
+    ));
 }
 
 #[test]
 fn keeps_the_harness_session_without_showing_it() {
-    let session = |id: &str| EventKind::Session {
-        id: id.into(),
-        transcript: Some(format!("/home/dev/.codex/sessions/rollout-{id}.jsonl")),
+    let session = |name: &str| EventKind::Session {
+        id: fixtures::session_id(name),
+        transcript: Some(format!("/home/dev/.codex/sessions/rollout-{name}.jsonl")),
     };
     let events = vec![started(0), at(1, session("01a1"))];
 
-    let flow = fold("x", &events, None, 2).unwrap();
+    let flow = fold(fixtures::flow_id("x"), &events, None, 2).unwrap();
 
     assert_eq!(
         flow.session,
         Some(Session {
-            id: "01a1".into(),
+            id: fixtures::session_id("01a1"),
             transcript: Some("/home/dev/.codex/sessions/rollout-01a1.jsonl".into()),
         })
     );
     assert_eq!(flow.timeline.len(), 1, "a session adds no entry");
-    assert_eq!(flow.state, fold("x", &events[..1], None, 2).unwrap().state);
-    assert!(!changes("x", &events, &session("01a1"), 2), "a repeat");
-    assert!(changes("x", &events, &session("02b2"), 2), "a new session");
-    assert_eq!(fold("x", &events[..1], None, 2).unwrap().session, None);
+    assert_eq!(
+        flow.state,
+        fold(fixtures::flow_id("x"), &events[..1], None, 2)
+            .unwrap()
+            .state
+    );
+    assert!(
+        !changes(fixtures::flow_id("x"), &events, &session("01a1"), 2),
+        "a repeat"
+    );
+    assert!(
+        changes(fixtures::flow_id("x"), &events, &session("02b2"), 2),
+        "a new session"
+    );
+    assert_eq!(
+        fold(fixtures::flow_id("x"), &events[..1], None, 2)
+            .unwrap()
+            .session,
+        None
+    );
 }
 
 #[test]
@@ -164,7 +205,12 @@ fn a_new_idle_note_counts_as_a_change() {
         at(5, idle("Plan is ready.")),
     ];
 
-    assert_eq!(fold("x", &events, None, 6).unwrap().changed_at, 5);
+    assert_eq!(
+        fold(fixtures::flow_id("x"), &events, None, 6)
+            .unwrap()
+            .changed_at,
+        5
+    );
 }
 
 #[test]
@@ -185,7 +231,7 @@ fn a_phase_a_delegate_starts_keeps_the_flow_delegated() {
         ),
     ];
 
-    let flow = fold("x", &events, None, 3).unwrap();
+    let flow = fold(fixtures::flow_id("x"), &events, None, 3).unwrap();
 
     assert_eq!(flow.state, State::Delegated);
     assert_eq!(flow.phase, Some(Phase::of("review")));
@@ -203,7 +249,7 @@ fn the_master_is_in_the_state_its_last_saying_kind_puts_it() {
             note: "done".into(),
         },
         EventKind::Session {
-            id: "s1".into(),
+            id: fixtures::session_id("s1"),
             transcript: None,
         },
     ];
@@ -248,7 +294,7 @@ fn phase(at_ms: u64, phase: Phase) -> Event {
 }
 
 fn view(events: &[Event], now: u64) -> FlowView {
-    fold("7f3c", events, None, now).expect("a started flow folds")
+    fold(fixtures::flow_id("7f3c"), events, None, now).expect("a started flow folds")
 }
 
 fn texts(view: &FlowView) -> Vec<&str> {
@@ -284,16 +330,26 @@ fn says_whether_an_event_changes_what_the_flow_shows() {
     let events = vec![started.clone(), waiting.clone()];
 
     assert!(
-        !changes("id", &events, &waiting.kind, 2),
+        !changes(fixtures::flow_id("id"), &events, &waiting.kind, 2),
         "the same question again"
     );
-    assert!(changes("id", &events, &EventKind::Working, 2));
+    assert!(changes(
+        fixtures::flow_id("id"),
+        &events,
+        &EventKind::Working,
+        2
+    ));
     assert!(
-        !changes("id", std::slice::from_ref(&started), &EventKind::Working, 2),
+        !changes(
+            fixtures::flow_id("id"),
+            std::slice::from_ref(&started),
+            &EventKind::Working,
+            2
+        ),
         "it already works"
     );
     assert!(changes(
-        "id",
+        fixtures::flow_id("id"),
         &[started],
         &EventKind::Phase {
             phase: Phase::of("plan")
@@ -301,7 +357,7 @@ fn says_whether_an_event_changes_what_the_flow_shows() {
         2
     ));
     assert!(
-        changes("id", &[], &EventKind::Working, 2),
+        changes(fixtures::flow_id("id"), &[], &EventKind::Working, 2),
         "a log without a start"
     );
 }
@@ -335,15 +391,23 @@ fn a_plain_session_has_no_steps_but_keeps_its_phase() {
 
 #[test]
 fn needs_a_started_event_to_name_the_flow() {
-    assert_eq!(fold("7f3c", &[at(1, EventKind::Working)], None, 2), None);
-    assert_eq!(fold("7f3c", &[], None, 2), None);
+    assert_eq!(
+        fold(
+            fixtures::flow_id("7f3c"),
+            &[at(1, EventKind::Working)],
+            None,
+            2
+        ),
+        None
+    );
+    assert_eq!(fold(fixtures::flow_id("7f3c"), &[], None, 2), None);
 }
 
 #[test]
 fn a_started_flow_is_working_with_four_open_steps() {
     let flow = view(&[started(1_000)], 2_000);
 
-    assert_eq!(flow.id, "7f3c");
+    assert_eq!(flow.id, fixtures::flow_id("7f3c"));
     assert_eq!(flow.name, "shop-221");
     assert_eq!(flow.request, "SHOP-221 add CSV export");
     assert_eq!(flow.mode, Mode::Auto);
@@ -653,8 +717,8 @@ fn a_new_dialog_with_the_same_first_question_is_a_change() {
         permission: false,
     };
 
-    assert!(!changes("x", &events, &same, 2));
-    assert!(changes("x", &events, &other, 2));
+    assert!(!changes(fixtures::flow_id("x"), &events, &same, 2));
+    assert!(changes(fixtures::flow_id("x"), &events, &other, 2));
 }
 
 #[test]
@@ -940,7 +1004,7 @@ fn a_merge_of_an_open_one_keeps_the_flow_done_and_its_change_time() {
     assert_eq!(flow.changed_at, MIN, "the state did not change");
     assert_eq!(texts(&flow), vec!["started", "MR opened", "PR #42 merged"]);
     assert!(changes(
-        "x",
+        fixtures::flow_id("x"),
         &events[..2],
         &EventKind::Merged {
             url: PR.into(),
@@ -949,7 +1013,7 @@ fn a_merge_of_an_open_one_keeps_the_flow_done_and_its_change_time() {
         10 * MIN
     ));
     assert!(!changes(
-        "x",
+        fixtures::flow_id("x"),
         &events,
         &EventKind::Merged {
             url: PR.into(),
@@ -1072,32 +1136,46 @@ fn a_silent_heartbeat_means_not_responding_unless_finished() {
     let beat = Some(10 * MIN);
 
     assert_eq!(
-        fold("a", &running, beat, 10 * MIN + SILENT_AFTER_MS)
-            .unwrap()
-            .state,
+        fold(
+            fixtures::flow_id("a"),
+            &running,
+            beat,
+            10 * MIN + SILENT_AFTER_MS
+        )
+        .unwrap()
+        .state,
         State::Working
     );
     assert_eq!(
-        fold("a", &running, beat, 10 * MIN + SILENT_AFTER_MS + 1)
-            .unwrap()
-            .state,
+        fold(
+            fixtures::flow_id("a"),
+            &running,
+            beat,
+            10 * MIN + SILENT_AFTER_MS + 1
+        )
+        .unwrap()
+        .state,
         State::NotResponding
     );
     assert_eq!(
-        fold("a", &running, None, 99 * MIN).unwrap().state,
+        fold(fixtures::flow_id("a"), &running, None, 99 * MIN)
+            .unwrap()
+            .state,
         State::Working
     );
 
     let ended = [started(0), at(1, EventKind::Ended)];
     assert_eq!(
-        fold("a", &ended, beat, 99 * MIN).unwrap().state,
+        fold(fixtures::flow_id("a"), &ended, beat, 99 * MIN)
+            .unwrap()
+            .state,
         State::Ended
     );
 }
 
 fn flow_in(name: &str, state: State, changed_at: u64) -> FlowView {
     let mut flow = view(&[started(0)], 1);
-    flow.id = format!("{name}-{changed_at}");
+    flow.id = fixtures::flow_id(&format!("{name}-{changed_at}"));
     flow.name = name.to_string();
     flow.state = state;
     flow.changed_at = changed_at;
@@ -1151,7 +1229,9 @@ fn resolves_an_id_then_the_unfinished_flow_then_the_newest_finished_one() {
         flow_in("shop-230", State::Working, 1),
     ];
 
-    assert_eq!(resolve(&flows, "shop-221-1").unwrap().changed_at, 1);
+    let id = fixtures::flow_id("shop-221-1").to_string();
+    assert_eq!(resolve(&flows, &id).unwrap().changed_at, 1);
+    assert_eq!(resolve(&flows, &id.to_uppercase()), None);
     assert_eq!(resolve(&flows, "shop-221").unwrap().changed_at, 5);
     assert_eq!(resolve(&flows, "shop-230").unwrap().state, State::Done);
     assert_eq!(resolve(&flows, "shop-999"), None);
@@ -1342,7 +1422,7 @@ fn a_phase_the_flow_does_not_have_changes_nothing() {
     assert_eq!(flow.phase, Some(Phase::of("spec")));
     assert_eq!(texts(&flow), ["started", "phase: spec"]);
     assert!(!changes(
-        "x",
+        fixtures::flow_id("x"),
         &events,
         &EventKind::Phase {
             phase: Phase::of("review")
@@ -1537,25 +1617,50 @@ fn a_turn_stops_waiting_when_the_flow_stops_or_gets_a_prompt() {
 fn waiting_for_a_turn_and_having_it_change_the_flow() {
     let events = [started(0), at(MIN, EventKind::Working)];
     let waiting = turn_waiting(2 * MIN);
-    assert!(changes("x", &events, &waiting.kind, 2 * MIN));
+    assert!(changes(
+        fixtures::flow_id("x"),
+        &events,
+        &waiting.kind,
+        2 * MIN
+    ));
     assert!(
-        !changes("x", &events, &EventKind::TurnTaken, 2 * MIN),
+        !changes(
+            fixtures::flow_id("x"),
+            &events,
+            &EventKind::TurnTaken,
+            2 * MIN
+        ),
         "nothing waited"
     );
     let events = [started(0), at(MIN, EventKind::Working), waiting];
-    assert!(changes("x", &events, &EventKind::TurnTaken, 3 * MIN));
+    assert!(changes(
+        fixtures::flow_id("x"),
+        &events,
+        &EventKind::TurnTaken,
+        3 * MIN
+    ));
 }
 
 #[test]
 fn a_prompt_changes_the_flow_only_when_a_call_waited_for_its_turn() {
     let events = [started(0), at(MIN, EventKind::Working)];
-    assert!(!changes("x", &events, &EventKind::Prompted, 2 * MIN));
+    assert!(!changes(
+        fixtures::flow_id("x"),
+        &events,
+        &EventKind::Prompted,
+        2 * MIN
+    ));
     let events = [
         started(0),
         at(MIN, EventKind::Working),
         turn_waiting(2 * MIN),
     ];
-    assert!(changes("x", &events, &EventKind::Prompted, 3 * MIN));
+    assert!(changes(
+        fixtures::flow_id("x"),
+        &events,
+        &EventKind::Prompted,
+        3 * MIN
+    ));
 }
 
 #[test]
@@ -1660,7 +1765,12 @@ fn a_flow_that_merges_nothing_is_done_once_it_answers() {
     );
     assert_eq!(steps(&done), [(StepStatus::Done, Some(2 * MIN))]);
     assert!(done.is_clearable());
-    assert!(!changes("7f3c", &events, &events[2].kind, 11 * MIN));
+    assert!(!changes(
+        fixtures::flow_id("7f3c"),
+        &events,
+        &events[2].kind,
+        11 * MIN
+    ));
 
     events.push(at(12 * MIN, EventKind::Working));
     let again = view(&events, 13 * MIN);
@@ -1700,7 +1810,7 @@ fn steps_back_to_implement_on_an_edit_after_the_review_turn() {
     let edit = EventKind::Edited {
         path: format!("{WORKTREE}/src/csv.rs"),
     };
-    assert!(changes("7f3c", &events, &edit, 5 * MIN));
+    assert!(changes(fixtures::flow_id("7f3c"), &events, &edit, 5 * MIN));
     events.push(at(5 * MIN, EventKind::Working));
     events.push(at(5 * MIN, edit.clone()));
 
@@ -1710,7 +1820,10 @@ fn steps_back_to_implement_on_an_edit_after_the_review_turn() {
     assert_eq!(flow.state, State::Working);
     assert_eq!(flow.steps[1].status, StepStatus::Current);
     assert_eq!(texts(&flow).last(), Some(&"phase: implement (back)"));
-    assert!(!changes("7f3c", &events, &edit, 7 * MIN), "once is enough");
+    assert!(
+        !changes(fixtures::flow_id("7f3c"), &events, &edit, 7 * MIN),
+        "once is enough"
+    );
 }
 
 #[test]
@@ -1784,7 +1897,7 @@ fn a_phase_skill_after_the_merge_request_moves_the_phase() {
     let skill = EventKind::Phase {
         phase: Phase::of("implement"),
     };
-    assert!(changes("7f3c", &events, &skill, 8 * MIN));
+    assert!(changes(fixtures::flow_id("7f3c"), &events, &skill, 8 * MIN));
     events.push(at(8 * MIN, skill));
 
     let flow = view(&events, 9 * MIN);

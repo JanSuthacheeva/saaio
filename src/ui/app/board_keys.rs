@@ -29,7 +29,7 @@ impl App {
                 let key = match state.selected.checked_sub(1) {
                     None => PaneKey::Master,
                     Some(at) => match self.workers().get(at) {
-                        Some(flow) => PaneKey::Flow(flow.id.clone()),
+                        Some(flow) => PaneKey::Flow(flow.id),
                         None => return vec![],
                     },
                 };

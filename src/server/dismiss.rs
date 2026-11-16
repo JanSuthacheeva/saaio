@@ -53,10 +53,10 @@ impl Server {
 
     /// The flow behind a running worker pane whose dialog the master answered, and when it asked.
     fn answered_dialog(&self, key: &PaneKey) -> Option<(&FlowView, u64)> {
-        let PaneKey::Flow(id) = key else {
+        let PaneKey::Flow(id) = *key else {
             return None;
         };
-        let flow = self.board.flows.iter().find(|flow| &flow.id == id)?;
+        let flow = self.board.flows.iter().find(|flow| flow.id == id)?;
         if flow.questions.is_empty() {
             return None;
         }

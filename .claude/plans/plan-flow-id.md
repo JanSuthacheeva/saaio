@@ -186,11 +186,13 @@ pub(super) fn transcript(claude_home: &Path, session: SessionId) -> Option<PathB
 ### `src/fixtures.rs`
 
 ```rust
-pub fn flow_id(n: u8) -> FlowId;  // 00000000-0000-0000-0000-0000000000nn through FlowId::parse
-pub fn flow(id: FlowId, events: Vec<Event>, now: u64) -> FlowView;
+pub fn flow_id(name: &str) -> FlowId;       // name hashed into a0000000-0000-4000-8000-<hash>
+pub fn session_id(name: &str) -> SessionId; // the same, b0000000-...
+pub fn flow(name: &str, events: Vec<Event>, now: u64) -> FlowView; // id flow_id(name)
 ```
 
-Tests that used `"7f3c"`, `"a"`, `"01a1"` as flow ids take `fixtures::flow_id(n)`.
+Tests that used `"7f3c"`, `"a"`, `"01a1"` as ids take `fixtures::flow_id("7f3c")` or
+`fixtures::session_id("01a1")`, so they keep their readable names.
 
 ## Data
 
@@ -268,13 +270,31 @@ Codex and master sessions:
 7. No CHANGELOG entry; CLAUDE.md's module list gains `id.rs` and drops `is_uuid`.
 8. `PaneKey` becomes `Copy`.
 
+## Build notes
+
+- Tasks 2 to 5 landed as one commit: typing `FlowView.id` breaks every module at once, and
+  shims between the tasks would have been thrown away.
+- `fixtures::flow_id` takes a name, not a number (above), and `fixtures::flow` keeps naming
+  the flow, so tests read as before.
+- `Waiter` is `Copy` too; `Waiter::key` returns a `String`.
+- hook.rs `report(store, id: FlowId, ..) -> bool` and `workflow_for` lost their name-lookup
+  fallback: `SAAIO_FLOW_ID` is now always a parsed id, so it never named a flow by name.
+- `Host::open` and `Host::spawn` take `&PaneSpec` (clippy: the spec is no longer consumed once
+  `PaneKey` is `Copy`).
+- tests/cli seeded logs and slot claims under ids that are no UUID (`cccc`, `8a1b`,
+  `scratch-id`, `f1`); they now use UUID names, since `Store::ids` skips the others
+  (assumption 3). What each test checks is unchanged.
+- Tests that sent `../7f3c` or a forged session id now cannot build one; proto's
+  `writes_a_flow_id_as_the_text_it_was_before` shows such a frame fails to decode, and
+  `a_session_that_is_no_id_does_not_parse` covers master.json.
+
 ## Tasks
 
 - [x] Add `src/id.rs` with `FlowId`, `SessionId`, `NotAnId` and `canonical`, registered in lib.rs, with unit tests for round-trip, refused forms, JSON and postcard bytes equal to a `String`'s, `Ord` versus text order and `SessionId::from(FlowId)`
-- [ ] Type the store and the log: `Store` id arguments, `create`, `ids` (skipping non-id stems), `stamps`, `FlowLog.id`, `Waiter::Flow`, `master_session`/`set_master_session`; `EventKind::Session.id: SessionId`; `FlowView.id`, `view::Session.id`; `fold::changes`, `Folding::new`, `resolve` by parsed id; `fixtures::flow_id(n)` and `fixtures::flow(id: FlowId, ..)`; every caller and test compiling, with tests for `ids` skipping `notes.jsonl`, resolve by id/name/uppercase id and a FlowView's JSON unchanged
-- [ ] Type the protocol and client: `PaneKey::Flow(FlowId)` (Copy), `ClientMsg::CloseFlow`, `ServerMsg::Closed`/`NotOpen`, `client::close_flow`, server `known`, `Panes::close_flow` (is_uuid check gone), `reopen_worker`, `flow`, `current_flow`, reconcile, pause_watch, startup, forge_watch; UI `worker`, `in_view`, keys; with a test that `CloseFlow` and a Board frame encode to the same bytes as before
-- [ ] Type sessions and launch: `agent_argv`/`plain_argv`/`resume_argv` with `SessionId`, the worker spec through `SessionId::from(flow.id)`, `MasterRecord.session`, `MasterRecord::spec(.., Option<SessionId>)`, codex.rs `SessionId::parse`, `record_master_session`, peek `transcript(.., SessionId)`, `hook_env(id: FlowId, ..)`
-- [ ] Type the remaining flow ids: `Seen`, `deliver::worker_news`, `slots::Claim.flow`, `turns::Holder.flow`, hook.rs `Hooked::Flow` and helpers, wait.rs, stop.rs, turn.rs `Args.flow: FlowId`, start.rs `Rollback::new` and `append_workspace`; delete `event::is_uuid`; no `.id.clone()` left on a flow id
+- [x] Type the store and the log: `Store` id arguments, `create`, `ids` (skipping non-id stems), `stamps`, `FlowLog.id`, `Waiter::Flow`, `master_session`/`set_master_session`; `EventKind::Session.id: SessionId`; `FlowView.id`, `view::Session.id`; `fold::changes`, `Folding::new`, `resolve` by parsed id; `fixtures::flow_id(n)` and `fixtures::flow(id: FlowId, ..)`; every caller and test compiling, with tests for `ids` skipping `notes.jsonl`, resolve by id/name/uppercase id and a FlowView's JSON unchanged
+- [x] Type the protocol and client: `PaneKey::Flow(FlowId)` (Copy), `ClientMsg::CloseFlow`, `ServerMsg::Closed`/`NotOpen`, `client::close_flow`, server `known`, `Panes::close_flow` (is_uuid check gone), `reopen_worker`, `flow`, `current_flow`, reconcile, pause_watch, startup, forge_watch; UI `worker`, `in_view`, keys; with a test that `CloseFlow` and a Board frame encode to the same bytes as before
+- [x] Type sessions and launch: `agent_argv`/`plain_argv`/`resume_argv` with `SessionId`, the worker spec through `SessionId::from(flow.id)`, `MasterRecord.session`, `MasterRecord::spec(.., Option<SessionId>)`, codex.rs `SessionId::parse`, `record_master_session`, peek `transcript(.., SessionId)`, `hook_env(id: FlowId, ..)`
+- [x] Type the remaining flow ids: `Seen`, `deliver::worker_news`, `slots::Claim.flow`, `turns::Holder.flow`, hook.rs `Hooked::Flow` and helpers, wait.rs, stop.rs, turn.rs `Args.flow: FlowId`, start.rs `Rollback::new` and `append_workspace`; delete `event::is_uuid`; no `.id.clone()` left on a flow id
 - [ ] Docs: CLAUDE.md gains `id.rs` in the architecture list and `plan-flow-id.md` in the plan list, and loses `is_uuid`; `docs/HANDOVER.md` if it names `is_uuid`
 - [ ] Full checks: `cargo fmt`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test --all-features`, `cargo deny check`
 - [ ] End to end in a scratch store (`SAAIO_HOME=$(mktemp -d)`, `XDG_STATE_HOME` inside it): `saaio new`, `saaio report`, `saaio status` and `saaio status --json` show the same id text as the log file name; `saaio remove <id>` and `<name>` resolve; a UI in a PTY shows the flow; end with `SAAIO_HOME=<store> saaio --stop`

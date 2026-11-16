@@ -4,6 +4,7 @@ use std::fmt::Write as _;
 use std::mem;
 
 use super::{App, Confirmed, Effect, Job, Removal, View};
+use crate::id::FlowId;
 use crate::proto::{ClientMsg, PaneKey};
 use crate::text::plural;
 use crate::ui::board::BoardState;
@@ -48,17 +49,17 @@ impl App {
                     .workers()
                     .into_iter()
                     .filter(|flow| !flow.is_finished())
-                    .map(|flow| flow.id.clone())
+                    .map(|flow| flow.id)
                     .collect();
                 self.view = View::Stop(unfinished);
                 vec![]
             }
-            Command::Reopen => vec![Effect::Send(ClientMsg::Reopen(self.focus.clone()))],
+            Command::Reopen => vec![Effect::Send(ClientMsg::Reopen(self.focus))],
             Command::Cursor(step) => {
                 self.move_cursor(step);
                 vec![]
             }
-            Command::Jump => match self.cursor.clone() {
+            Command::Jump => match self.cursor {
                 Some(id) => self.focus(PaneKey::Flow(id)),
                 None => vec![],
             },
@@ -101,7 +102,7 @@ impl App {
                 let Some(flow) = self.workers().get(digit as usize - 1).copied() else {
                     return vec![];
                 };
-                self.focus(PaneKey::Flow(flow.id.clone()))
+                self.focus(PaneKey::Flow(flow.id))
             }
         }
     }
@@ -150,7 +151,7 @@ impl App {
 
     /// With every worker finished: y stops, any other key keeps saaio running. With some unfinished:
     /// k keeps them for the next saaio ui, e ends them, esc goes back.
-    fn on_stop_key(&mut self, unfinished: Vec<String>, key: Key) -> Vec<Effect> {
+    fn on_stop_key(&mut self, unfinished: Vec<FlowId>, key: Key) -> Vec<Effect> {
         let stop =
             |message: String| vec![Effect::Send(ClientMsg::StopServer), Effect::Quit(message)];
         if unfinished.is_empty() {
@@ -222,7 +223,7 @@ impl App {
     fn on_ended_key(&mut self, name: String, bytes: &[u8]) -> Vec<Effect> {
         match bytes {
             b"x" | b"X" => self.remove(Removal::of(name)),
-            b"r" | b"R" => vec![Effect::Send(ClientMsg::Reopen(self.focus.clone()))],
+            b"r" | b"R" => vec![Effect::Send(ClientMsg::Reopen(self.focus))],
             [0x1b] => self.focus(PaneKey::Master),
             _ => vec![],
         }
@@ -235,7 +236,7 @@ impl App {
         if key == PaneKey::Master {
             self.master.unseen = false;
         }
-        self.focus = key.clone();
+        self.focus = key;
         self.cursor = None;
         self.selection = None;
         if matches!(self.view, View::History(_)) {
@@ -247,23 +248,22 @@ impl App {
 
     /// Moves the peek cursor over the workers not in view; past either end it goes away.
     fn move_cursor(&mut self, step: Step) {
-        let ids: Vec<String> = self
+        let ids: Vec<FlowId> = self
             .workers()
             .into_iter()
-            .filter(|flow| !self.in_view(&flow.id))
-            .map(|flow| flow.id.clone())
+            .filter(|flow| !self.in_view(flow.id))
+            .map(|flow| flow.id)
             .collect();
         let at = self
             .cursor
-            .as_ref()
-            .and_then(|id| ids.iter().position(|other| other == id));
+            .and_then(|id| ids.iter().position(|&other| other == id));
         let next = match (at, step) {
             (None, Step::Next) => Some(0),
             (None, Step::Prev) => ids.len().checked_sub(1),
             (Some(at), Step::Next) => Some(at + 1),
             (Some(at), Step::Prev) => at.checked_sub(1),
         };
-        self.cursor = next.and_then(|index| ids.get(index)).cloned();
+        self.cursor = next.and_then(|index| ids.get(index)).copied();
     }
 
     /// The new-flow dialog for the repo in view, asking for its branch convention; the branches

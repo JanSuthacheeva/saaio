@@ -1,6 +1,7 @@
 //! Tests of `App`'s sidebar and rail: rows, focus, the peek, the master's dot, phase colors
 
 use super::*;
+use crate::fixtures;
 
 #[test]
 fn shows_the_sidebar_from_the_start_and_keeps_the_pane_when_workers_come() {
@@ -132,7 +133,7 @@ fn focuses_a_worker_by_digit_or_click_and_marks_it() {
     assert_eq!(
         app.on_input(Routed::Command(Command::Focus(2))),
         vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
-            "shop-230".into()
+            fixtures::flow_id("shop-230")
         )))]
     );
     let terminal = render_at(&app, FLEET);
@@ -158,7 +159,7 @@ fn focuses_a_worker_by_digit_or_click_and_marks_it() {
     assert_eq!(
         click(&mut app, 120, 7),
         vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
-            "shop-221".into()
+            fixtures::flow_id("shop-221")
         )))]
     );
     assert_eq!(click(&mut app, 120, 30), vec![]);
@@ -174,11 +175,11 @@ fn shows_workers_that_exited_failed_or_have_no_session() {
     let mut app = with_fleet();
     app.on_server(ServerMsg::Panes(vec![
         PaneInfo {
-            key: PaneKey::Flow("shop-221".into()),
+            key: PaneKey::Flow(fixtures::flow_id("shop-221")),
             status: PaneStatus::Exited { code: Some(0) },
         },
         PaneInfo {
-            key: PaneKey::Flow("shop-230".into()),
+            key: PaneKey::Flow(fixtures::flow_id("shop-230")),
             status: PaneStatus::Failed {
                 reason: "no agent named codex".into(),
             },
@@ -364,7 +365,7 @@ fn peeks_into_a_worker_under_the_cursor_and_jumps_in() {
     assert_eq!(
         app.on_input(Routed::Command(Command::Jump)),
         vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
-            "export-csv".into()
+            fixtures::flow_id("export-csv")
         )))]
     );
     assert_eq!(app.peeked(), None);
@@ -520,7 +521,7 @@ fn folds_the_sidebar_to_a_rail_and_back() {
     assert_eq!(
         click(&mut app, 146, 6),
         vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
-            "shop-230".into()
+            fixtures::flow_id("shop-230")
         )))]
     );
     assert_eq!(

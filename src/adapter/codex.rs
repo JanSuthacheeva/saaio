@@ -10,7 +10,8 @@ use sha2::{Digest, Sha256};
 use crate::adapter::answer::turn_end;
 use crate::adapter::calls::{created_merge_request, simple_commands, tool_call};
 use crate::adapter::{Adapter, Approver, LineMatch, Turn, cut};
-use crate::event::{EventKind, is_uuid};
+use crate::event::EventKind;
+use crate::id::SessionId;
 use crate::workflow::Phase;
 use crate::workflow::Workflow;
 
@@ -302,9 +303,9 @@ const SPAWN_AGENT: &str = "spawn_agent";
 /// The session a payload names: Codex's session id and its rollout file; none when the id is no
 /// UUID, since a resume passes it to codex as an argument.
 fn session(payload: &Value) -> Option<EventKind> {
-    let id = payload["session_id"].as_str().filter(|id| is_uuid(id))?;
+    let id = SessionId::parse(payload["session_id"].as_str()?).ok()?;
     Some(EventKind::Session {
-        id: id.to_string(),
+        id,
         transcript: payload["transcript_path"].as_str().map(String::from),
     })
 }

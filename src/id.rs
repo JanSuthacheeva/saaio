@@ -131,7 +131,11 @@ mod tests {
             "fix-login",
             "",
         ] {
-            assert_eq!(FlowId::parse(text), Err(NotAnId(text.to_string())), "{text}");
+            assert_eq!(
+                FlowId::parse(text),
+                Err(NotAnId(text.to_string())),
+                "{text}"
+            );
             assert!(SessionId::parse(text).is_err(), "{text}");
         }
         assert_eq!(

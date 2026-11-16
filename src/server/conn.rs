@@ -74,7 +74,7 @@ impl Server {
                 self.send_full_frame();
             }
             ClientMsg::Input(bytes) => {
-                let focus = self.focus.clone();
+                let focus = self.focus;
                 self.pane_mut(&focus).typed_at = Some(Instant::now());
                 if let Err(error) = self.host.write(&self.focus, &bytes) {
                     server_log::write((self.clock)(), &format!("{error:#}"));
@@ -95,7 +95,7 @@ impl Server {
             }
             ClientMsg::CloseFlow(id) => self.close_flow(conn, id),
             ClientMsg::Reopen(PaneKey::Flow(id)) => {
-                self.reopen_worker(&id);
+                self.reopen_worker(id);
                 self.send_panes();
                 self.send_full_frame();
             }

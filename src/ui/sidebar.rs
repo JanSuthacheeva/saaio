@@ -13,6 +13,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 
 use crate::config::prefix::Prefix;
+use crate::id::FlowId;
 use crate::proto::{PaneInfo, PaneKey, PaneStatus};
 use crate::ui::fit;
 use crate::ui::focus;
@@ -36,7 +37,7 @@ pub struct Sidebar<'a> {
     pub panes: &'a [PaneInfo],
     pub focus: &'a PaneKey,
     /// The flow whose peek shows (the prefix j/k).
-    pub cursor: Option<&'a str>,
+    pub cursor: Option<FlowId>,
     pub peek: &'a [PeekLine],
     /// Where the master runs: ~/projects/shop · main.
     pub master: Option<&'a str>,
@@ -240,6 +241,7 @@ pub(super) fn plain(line: Line<'static>) -> Row {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixtures;
     use crate::view::VIEW_VERSION;
 
     fn working(id: &str) -> FlowView {
@@ -270,7 +272,7 @@ mod tests {
                 },
             ),
         ];
-        crate::fold::fold(id, &events, None, 0).unwrap()
+        crate::fold::fold(fixtures::flow_id(id), &events, None, 0).unwrap()
     }
 
     #[test]
@@ -336,13 +338,13 @@ mod tests {
             flows,
         };
         let theme = Theme::default();
-        let changed = HashMap::from([(PaneKey::Flow("c".into()), 0)]);
-        let focus = PaneKey::Flow("a".into());
+        let changed = HashMap::from([(PaneKey::Flow(fixtures::flow_id("c")), 0)]);
+        let focus = PaneKey::Flow(fixtures::flow_id("a"));
         let sidebar = Sidebar {
             board: &board,
             panes: &[],
             focus: &focus,
-            cursor: Some("b"),
+            cursor: Some(fixtures::flow_id("b")),
             peek: &[],
             master: None,
             master_state: None,
@@ -383,7 +385,7 @@ mod tests {
             flows: vec![working("a")],
         };
         let theme = Theme::default();
-        let focus = PaneKey::Flow("a".into());
+        let focus = PaneKey::Flow(fixtures::flow_id("a"));
         let area = Rect::new(0, 0, 40, 12);
         let mut buf = Buffer::empty(area);
 

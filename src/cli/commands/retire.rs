@@ -78,14 +78,14 @@ pub fn restack(
         return Ok(());
     };
     for (id, kind) in stack::on_merge(flows, flow, onto) {
-        store.append(&id, &Event::new(now, kind))?;
+        store.append(id, &Event::new(now, kind))?;
     }
     Ok(())
 }
 
 /// Ends the flow's session in saaio ui before its worktree goes.
 pub fn close_pane(socket: &Path, flow: &FlowView) -> Result<Closing, Failure> {
-    client::close_flow(socket, &flow.id, CLOSE_WAIT).map_err(Failure::from)
+    client::close_flow(socket, flow.id, CLOSE_WAIT).map_err(Failure::from)
 }
 
 /// Runs the teardown hook when trust covers the repo and removes the flow's worktree; keeps it with
@@ -109,7 +109,7 @@ pub fn retire_worktree(
     } else if !trust.covers(&repo) {
         Teardown::Untrusted
     } else {
-        let env = worktree::hook_env(&flow.id, &flow.name, &repo, space);
+        let env = worktree::hook_env(flow.id, &flow.name, &repo, space);
         match hooks::run(trust, &repo, Hook::Teardown, space, &env) {
             Ok(true) => Teardown::Ran,
             Ok(false) => Teardown::None,

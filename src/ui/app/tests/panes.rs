@@ -1,6 +1,7 @@
 //! Tests of `App` on the panes: keys, modes, sizes, the master, history, any terminal size
 
 use super::*;
+use crate::fixtures;
 use crate::proto::Peer;
 
 #[test]
@@ -306,7 +307,7 @@ fn draws_every_view_in_a_terminal_of_any_size() {
             Vec::new(),
         ))),
         View::History(3),
-        View::Stop(vec!["shop-221".into()]),
+        View::Stop(vec![fixtures::flow_id("shop-221")]),
         View::Help,
         View::Confirm {
             question: "shop-230 has uncommitted changes. Discard them?".into(),

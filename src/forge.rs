@@ -7,6 +7,7 @@ use serde::Deserialize;
 
 use crate::adapter::calls;
 use crate::event::EventKind;
+use crate::id::FlowId;
 use crate::launch::worktree::repo_of;
 use crate::view::FlowView;
 
@@ -21,7 +22,7 @@ pub enum Forge {
 /// worktree, whose .git the worker controls), its branch and when it started.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ask {
-    pub id: String,
+    pub id: FlowId,
     pub dir: PathBuf,
     pub repo: PathBuf,
     pub branch: String,
@@ -303,7 +304,7 @@ pub fn asks(flows: &[FlowView]) -> Vec<Ask> {
         .filter_map(|flow| {
             let space = flow.workspace.as_ref()?;
             Some(Ask {
-                id: flow.id.clone(),
+                id: flow.id,
                 dir: PathBuf::from(&space.path),
                 repo: repo_of(space)?,
                 branch: space.branch.clone()?,
@@ -370,6 +371,7 @@ pub fn pick(found: Vec<Found>, since: u64) -> Option<Found> {
 mod tests {
     use super::*;
     use crate::event::{Event, Mode};
+    use crate::fixtures;
     use crate::fold;
 
     const A: &str = "https://github.com/acme/shop/pull/7";
@@ -400,7 +402,7 @@ mod tests {
             .chain(more)
             .map(|kind| Event::new(1, kind))
             .collect();
-        fold::fold("csv-1", &events, None, 2).unwrap()
+        fold::fold(fixtures::flow_id("csv-1"), &events, None, 2).unwrap()
     }
 
     fn flow(more: Vec<EventKind>) -> FlowView {
@@ -424,14 +426,14 @@ mod tests {
 
     #[test]
     fn asks_about_every_flow_with_a_branch_until_it_is_merged() {
-        let ids = |flows: &[FlowView]| -> Vec<String> {
+        let ids = |flows: &[FlowView]| -> Vec<FlowId> {
             asks(flows).into_iter().map(|ask| ask.id).collect()
         };
 
         assert_eq!(
             asks(&[flow(vec![])]),
             [Ask {
-                id: "csv-1".into(),
+                id: fixtures::flow_id("csv-1"),
                 dir: PathBuf::from("/work/shop/.saaio/worktrees/csv"),
                 repo: PathBuf::from("/work/shop"),
                 branch: "flow/csv".into(),
@@ -440,8 +442,16 @@ mod tests {
             }]
         );
         assert_eq!(asks(&[flow(vec![opened(A)])])[0].shown.as_deref(), Some(A));
-        assert_eq!(ids(&[flow(vec![opened(A)])]), ["csv-1"], "done, not merged");
-        assert_eq!(ids(&[flow(vec![EventKind::Ended])]), ["csv-1"], "ended");
+        assert_eq!(
+            ids(&[flow(vec![opened(A)])]),
+            [fixtures::flow_id("csv-1")],
+            "done, not merged"
+        );
+        assert_eq!(
+            ids(&[flow(vec![EventKind::Ended])]),
+            [fixtures::flow_id("csv-1")],
+            "ended"
+        );
         assert!(ids(&[flow(vec![merged(A)])]).is_empty(), "merged");
         assert!(
             ids(&[flow_of(Mode::Auto, None, vec![])]).is_empty(),

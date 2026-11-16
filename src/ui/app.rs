@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 use crate::binaries::{Binary, Mismatch};
 use crate::config::prefix::Prefix;
+use crate::id::FlowId;
 use crate::launch::worktree::{WORKTREES_DIR, repo_of};
 use crate::proto::{Modes, PaneInfo, PaneKey, PaneStatus, Size};
 use crate::ui::board::BoardState;
@@ -44,7 +45,7 @@ pub enum View {
     /// Scrolled back this many lines in the pane's history (the prefix and [).
     History(u32),
     /// The prefix and Q: the ids of the workers that are not finished, which the answer keeps or ends.
-    Stop(Vec<String>),
+    Stop(Vec<FlowId>),
     /// The prefix and ?: every key.
     Help,
     /// The binaries disagree: any key closes it.
@@ -87,7 +88,7 @@ pub struct App {
     panes: Vec<PaneInfo>,
     focus: PaneKey,
     /// The flow whose peek the sidebar shows.
-    cursor: Option<String>,
+    cursor: Option<FlowId>,
     view: View,
     mirrored: Modes,
     now: u64,
@@ -272,13 +273,13 @@ impl App {
 
     /// The flow under the sidebar cursor, for the peek.
     pub fn peeked(&self) -> Option<&FlowView> {
-        let id = self.cursor.as_deref()?;
+        let id = self.cursor?;
         self.worker(id)
     }
 
     /// The focused worker's name when its session is no longer running.
     fn ended_worker(&self) -> Option<String> {
-        let PaneKey::Flow(id) = &self.focus else {
+        let PaneKey::Flow(id) = self.focus else {
             return None;
         };
         match self.status(&self.focus) {
@@ -292,8 +293,8 @@ impl App {
     /// The branches of `repo`'s unfinished worktree flows, a new flow can stand on; the focused
     /// flow's first.
     fn bases_in(&self, repo: &Path) -> Vec<String> {
-        let focused = match &self.focus {
-            PaneKey::Flow(id) => Some(id.as_str()),
+        let focused = match self.focus {
+            PaneKey::Flow(id) => Some(id),
             PaneKey::Master => None,
         };
         let mut flows: Vec<&FlowView> = self
@@ -307,7 +308,7 @@ impl App {
                     .is_some_and(|of| of == repo)
             })
             .collect();
-        flows.sort_by_key(|flow| Some(flow.id.as_str()) != focused);
+        flows.sort_by_key(|flow| Some(flow.id) != focused);
         flows
             .into_iter()
             .filter_map(|flow| flow.workspace.as_ref()?.branch.clone())
@@ -317,7 +318,7 @@ impl App {
     /// The repository of the pane in view: the master's directory, the repo a worker's worktree is
     /// in, or a plain session's folder.
     fn focused_repo(&self) -> PathBuf {
-        let focused = match &self.focus {
+        let focused = match self.focus {
             PaneKey::Master => None,
             PaneKey::Flow(id) => self.worker(id),
         };
@@ -343,13 +344,13 @@ impl App {
         fit::tilde(path, self.home.as_deref())
     }
 
-    fn worker(&self, id: &str) -> Option<&FlowView> {
+    fn worker(&self, id: FlowId) -> Option<&FlowView> {
         self.workers().into_iter().find(|flow| flow.id == id)
     }
 
     /// Whether the flow's pane is the one in view.
-    fn in_view(&self, id: &str) -> bool {
-        matches!(&self.focus, PaneKey::Flow(focused) if focused == id)
+    fn in_view(&self, id: FlowId) -> bool {
+        self.focus == PaneKey::Flow(id)
     }
 
     /// What row 0's glyph shows: Working or Delegated as they are; Waiting for an unseen Idle or
@@ -382,7 +383,7 @@ impl App {
             board: self.board.as_ref().unwrap_or(&EMPTY),
             panes: &self.panes,
             focus: &self.focus,
-            cursor: self.cursor.as_deref(),
+            cursor: self.cursor,
             peek,
             master: self.master.place.as_deref(),
             master_state: self.master_state(),

@@ -12,6 +12,7 @@ use nix::sys::socket::{getsockopt, sockopt};
 use rustix::process::{Pid, Signal};
 
 use crate::binaries::{BUILD, Binary};
+use crate::id::FlowId;
 use crate::launch::{pane, worktree};
 use crate::private;
 use crate::proto::{self, ClientMsg, PROTOCOL_VERSION, Peer, Role, ServerMsg};
@@ -279,11 +280,11 @@ fn seen_pid(raw: i32) -> io::Result<Pid> {
 }
 
 /// Asks a running server to end a flow's pane and waits for it; the outcome when there is no server or no pane.
-pub fn close_flow(socket: &Path, id: &str, timeout: Duration) -> Result<Closing> {
+pub fn close_flow(socket: &Path, id: FlowId, timeout: Duration) -> Result<Closing> {
     let Some(mut client) = Client::connect(socket, Role::Control)? else {
         return Ok(Closing::NoServer);
     };
-    client.send(&ClientMsg::CloseFlow(id.to_string()))?;
+    client.send(&ClientMsg::CloseFlow(id))?;
     let deadline = Instant::now() + timeout;
     loop {
         let Some(left) = deadline.checked_duration_since(Instant::now()) else {

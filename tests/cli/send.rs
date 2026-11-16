@@ -238,18 +238,18 @@ fn send_refuses_what_has_no_worker_to_read_it() {
     let home = TempDir::new().unwrap();
     seed_worker(
         home.path(),
-        "aaaa",
+        "aaaa0000-0000-4000-8000-000000000000",
         "shipped",
         r#"{"v":1,"at":2000,"kind":"ended"}"#,
     );
     seed(
         home.path(),
-        "bbbb",
+        "bbbb0000-0000-4000-8000-000000000000",
         &[r#"{"v":1,"at":1000,"kind":"started","name":"tracked","request":"x","mode":"auto"}"#],
     );
     seed_worker(
         home.path(),
-        "cccc",
+        "cccc0000-0000-4000-8000-000000000000",
         "live",
         r#"{"v":1,"at":2000,"kind":"working"}"#,
     );
@@ -274,10 +274,16 @@ fn send_refuses_what_has_no_worker_to_read_it() {
     assert!(refused(&["send", "live", "  "], None).contains("nothing to send"));
     let long = "x".repeat(4001);
     assert!(refused(&["send", "live", &long], None).contains("over 4000"));
-    assert!(refused(&["send", "live", "hi"], Some("cccc")).contains("only the master sends"));
+    assert!(
+        refused(
+            &["send", "live", "hi"],
+            Some("cccc0000-0000-4000-8000-000000000000")
+        )
+        .contains("only the master sends")
+    );
     seed(
         home.path(),
-        "dddd",
+        "dddd0000-0000-4000-8000-000000000000",
         &[
             r#"{"v":1,"at":1000,"kind":"started","name":"scratch","request":"","mode":"plain"}"#,
             r#"{"v":1,"at":1500,"kind":"workspace","path":"/tmp","branch":null,"slot":null,"window":"saaio-ui","agent":"claude"}"#,
@@ -289,7 +295,11 @@ fn send_refuses_what_has_no_worker_to_read_it() {
             && plain.contains("Plain sessions are the user's own"),
         "{plain}"
     );
-    let log = fs::read_to_string(home.path().join("flows/cccc.jsonl")).unwrap();
+    let log = fs::read_to_string(
+        home.path()
+            .join("flows/cccc0000-0000-4000-8000-000000000000.jsonl"),
+    )
+    .unwrap();
     assert!(!log.contains("message"), "{log}");
 }
 
@@ -376,7 +386,7 @@ fn send_type_refuses_more_than_one_line_and_an_agent_without_turns() {
     );
     seed(
         home.path(),
-        "aaaa",
+        "aaaa0000-0000-4000-8000-000000000000",
         &[
             r#"{"v":1,"at":1000,"kind":"started","name":"old-cli","request":"x","mode":"auto"}"#,
             r#"{"v":1,"at":1500,"kind":"workspace","path":"/repo","branch":"flow/old-cli","slot":2,"window":"saaio-ui","agent":"aider"}"#,

@@ -1,6 +1,7 @@
 //! Tests of `App`'s mouse: selections, copies, clicks and the wheel
 
 use super::*;
+use crate::fixtures;
 use crate::ui::selection::Selection;
 
 /// The text a copy effect takes from what was drawn, as the loop reads it.
@@ -60,7 +61,7 @@ fn a_click_focuses_and_selects_nothing() {
     assert_eq!(
         click(&mut app, 120, 7),
         vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
-            "shop-221".into()
+            fixtures::flow_id("shop-221")
         )))]
     );
     assert_eq!(reversed(&render_at(&app, FLEET)), vec![]);
@@ -84,7 +85,7 @@ fn a_double_click_copies_the_word_and_a_triple_click_the_line() {
     assert_eq!(
         click(&mut app, 117, 6),
         vec![Effect::Send(ClientMsg::Focus(PaneKey::Flow(
-            "shop-221".into()
+            fixtures::flow_id("shop-221")
         )))]
     );
 

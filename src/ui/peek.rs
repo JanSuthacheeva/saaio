@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde_json::Value;
 
+use crate::id::{FlowId, SessionId};
 use crate::view::FlowView;
 
 /// How much of the end of a transcript the peek reads first; it doubles until it has enough lines,
@@ -62,7 +63,8 @@ pub fn transcript_of(
         .and_then(|session| session.transcript.as_ref());
     match reported {
         Some(path) => codex::rollout(codex_home, path).map(|file| (file, Format::Codex)),
-        None => claude::transcript(claude_home, &flow.id).map(|file| (file, Format::Claude)),
+        None => claude::transcript(claude_home, SessionId::from(flow.id))
+            .map(|file| (file, Format::Claude)),
     }
 }
 
@@ -173,7 +175,7 @@ fn first_line(content: &Value) -> Option<String> {
 pub struct PeekCache {
     claude_home: PathBuf,
     codex_home: PathBuf,
-    flow: Option<String>,
+    flow: Option<FlowId>,
     file: Option<(PathBuf, Format)>,
     /// The transcript's length when last read; None to read it again.
     len: Option<u64>,
@@ -200,8 +202,8 @@ impl PeekCache {
             self.lines.clear();
             return had;
         };
-        if self.flow.as_deref() != Some(flow.id.as_str()) {
-            self.flow = Some(flow.id.clone());
+        if self.flow != Some(flow.id) {
+            self.flow = Some(flow.id);
             self.file = None;
             self.len = None;
         }
@@ -249,6 +251,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::fixtures;
 
     fn line(value: &Value) -> String {
         value.to_string()
@@ -409,12 +412,12 @@ mod tests {
             crate::event::Event::new(
                 1,
                 crate::event::EventKind::Session {
-                    id: "01a1".into(),
+                    id: fixtures::session_id("01a1"),
                     transcript: Some(transcript.to_string_lossy().into_owned()),
                 },
             ),
         ];
-        crate::fold::fold("7f3c", &events, None, 2).unwrap()
+        crate::fold::fold(fixtures::flow_id("7f3c"), &events, None, 2).unwrap()
     }
 
     #[test]

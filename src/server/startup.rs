@@ -6,6 +6,7 @@ use super::Server;
 use crate::adapter::Adapter;
 use crate::event::{Event as LogEvent, EventKind};
 use crate::fold;
+use crate::id::FlowId;
 use crate::proto::{PaneKey, PaneStatus};
 use crate::server_log;
 use crate::view::{FlowView, State};
@@ -16,7 +17,7 @@ pub(super) const STALLED_START: &str = "no turn began after launch: answer the d
 impl Server {
     /// Blocks a flow whose worker process ended while the flow still says working.
     pub(super) fn notice_exited_worker(&mut self, key: &PaneKey, code: Option<u32>) {
-        let PaneKey::Flow(id) = key else {
+        let PaneKey::Flow(id) = *key else {
             return;
         };
         let events = match self.store.events(id) {
@@ -58,12 +59,12 @@ impl Server {
     /// Appends Waiting { question: STALLED_START } to each flow whose start stalled.
     pub(super) fn notice_stalled_starts(&mut self) {
         let now = Instant::now();
-        let ids: Vec<String> = self
+        let ids: Vec<FlowId> = self
             .board
             .flows
             .iter()
             .filter(|flow| {
-                let key = PaneKey::Flow(flow.id.clone());
+                let key = PaneKey::Flow(flow.id);
                 stalled(
                     flow,
                     self.pane(&key).adapter,
@@ -73,11 +74,11 @@ impl Server {
                     self.timing.first_turn_grace,
                 )
             })
-            .map(|flow| flow.id.clone())
+            .map(|flow| flow.id)
             .collect();
         for id in ids {
             let event = LogEvent::new((self.clock)(), EventKind::waiting(STALLED_START));
-            if let Err(error) = self.store.append(&id, &event) {
+            if let Err(error) = self.store.append(id, &event) {
                 server_log::write((self.clock)(), &format!("{error:#}"));
             }
         }
@@ -176,7 +177,7 @@ mod tests {
         ));
         let mut started = flow();
         started.session = Some(Session {
-            id: "01a1".into(),
+            id: fixtures::session_id("01a1"),
             transcript: None,
         });
         assert!(!stalled(

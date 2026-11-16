@@ -17,9 +17,7 @@ pub(super) fn flow(name: &str, events: Vec<EventKind>, now: u64) -> FlowView {
             .enumerate()
             .map(|(step, kind)| Event::new((step as u64 + 1) * MIN, kind)),
     );
-    let mut view = fold::fold(&format!("{name}-id"), &all, None, now).unwrap();
-    view.id = format!("{name}-id");
-    view
+    fold::fold(fixtures::flow_id(name), &all, None, now).unwrap()
 }
 
 /// shop-221, a fix, blocked; shop-230, a feature, planning; export-csv, from before kinds, done.

@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use super::{Event, Server};
 use crate::event::{Event as LogEvent, EventKind, ServiceStatus};
+use crate::id::FlowId;
 use crate::launch::worktree;
 use crate::pause::{self, Job};
 use crate::server_log;
@@ -19,7 +20,7 @@ use crate::workspace::hooks::{self, Hook};
 /// What a job's thread sends back.
 #[derive(Debug)]
 pub struct Finished {
-    pub id: String,
+    pub id: FlowId,
     pub job: Job,
     /// Ok(false): the script was gone by the time it ran.
     pub result: Result<bool, String>,
@@ -28,7 +29,7 @@ pub struct Finished {
 /// The flows a job runs for.
 #[derive(Debug, Default)]
 pub struct PauseWatch {
-    running: HashSet<String>,
+    running: HashSet<FlowId>,
 }
 
 impl PauseWatch {
@@ -45,7 +46,7 @@ impl PauseWatch {
                 continue;
             }
             if let Some(job) = pause::next(flow, now, after) {
-                self.running.insert(flow.id.clone());
+                self.running.insert(flow.id);
                 due.push((flow.clone(), job));
             }
         }
@@ -53,8 +54,8 @@ impl PauseWatch {
     }
 
     /// The job for `id` ended.
-    pub fn done(&mut self, id: &str) {
-        self.running.remove(id);
+    pub fn done(&mut self, id: FlowId) {
+        self.running.remove(&id);
     }
 }
 
@@ -74,12 +75,12 @@ impl Server {
                         Job::Pause => ServiceStatus::PauseFailed,
                         Job::Resume => ServiceStatus::ResumeFailed,
                     };
-                    self.append_services(&flow.id, now, status, Some(reason));
-                    self.pauses.done(&flow.id);
+                    self.append_services(flow.id, now, status, Some(reason));
+                    self.pauses.done(flow.id);
                     continue;
                 }
                 _ => {
-                    self.pauses.done(&flow.id);
+                    self.pauses.done(flow.id);
                     continue;
                 }
             };
@@ -91,12 +92,12 @@ impl Server {
                 status,
                 reason: None,
             };
-            if let Err(error) = self.store.append(&flow.id, &LogEvent::new(now, kind)) {
+            if let Err(error) = self.store.append(flow.id, &LogEvent::new(now, kind)) {
                 server_log::write(now, &format!("{error:#}"));
-                self.pauses.done(&flow.id);
+                self.pauses.done(flow.id);
                 continue;
             }
-            let id = flow.id.clone();
+            let id = flow.id;
             if let Err(error) = run_in_background(flow, repo, trust, job, self.events.clone()) {
                 self.pause_finished(Finished {
                     id,
@@ -110,7 +111,7 @@ impl Server {
     /// Appends paused, running, pause-failed or resume-failed; logs a failure.
     pub(super) fn pause_finished(&mut self, finished: Finished) {
         let now = (self.clock)();
-        self.pauses.done(&finished.id);
+        self.pauses.done(finished.id);
         let (status, reason) = match (finished.job, finished.result) {
             (Job::Pause, Ok(true)) => (ServiceStatus::Paused, None),
             (Job::Resume, Ok(true)) | (_, Ok(false)) => (ServiceStatus::Running, None),
@@ -123,7 +124,7 @@ impl Server {
                 .flows
                 .iter()
                 .find(|flow| flow.id == finished.id)
-                .map_or(finished.id.as_str(), |flow| flow.name.as_str());
+                .map_or_else(|| finished.id.to_string(), |flow| flow.name.clone());
             let job = match finished.job {
                 Job::Pause => "pausing",
                 Job::Resume => "resuming",
@@ -133,10 +134,10 @@ impl Server {
                 &format!("{job} the services of {name} failed: {reason}"),
             );
         }
-        self.append_services(&finished.id, now, status, reason);
+        self.append_services(finished.id, now, status, reason);
     }
 
-    fn append_services(&self, id: &str, now: u64, status: ServiceStatus, reason: Option<String>) {
+    fn append_services(&self, id: FlowId, now: u64, status: ServiceStatus, reason: Option<String>) {
         let kind = EventKind::Services { status, reason };
         if let Err(error) = self.store.append(id, &LogEvent::new(now, kind)) {
             server_log::write(now, &format!("{error:#}"));
@@ -184,7 +185,7 @@ fn run_in_background(
             Job::Pause => Hook::Pause,
             Job::Resume => Hook::Resume,
         };
-        let env = worktree::hook_env(&flow.id, &flow.name, &repo, space);
+        let env = worktree::hook_env(flow.id, &flow.name, &repo, space);
         let result =
             hooks::run(&trust, &repo, hook, space, &env).map_err(|error| format!("{error:#}"));
         let _ = events.send(Event::Paused(Finished {
@@ -200,6 +201,7 @@ fn run_in_background(
 mod tests {
     use super::*;
     use crate::event::Mode;
+    use crate::fixtures;
     use crate::fold::fold;
 
     const MIN: u64 = 60_000;
@@ -238,7 +240,7 @@ mod tests {
                 },
             ),
         ];
-        fold(id, &events, None, 0).unwrap()
+        fold(fixtures::flow_id(id), &events, None, 0).unwrap()
     }
 
     #[test]
@@ -253,17 +255,20 @@ mod tests {
             .collect();
         assert_eq!(
             due,
-            vec![("csv".into(), Job::Pause), ("pdf".into(), Job::Pause)]
+            vec![
+                (fixtures::flow_id("csv"), Job::Pause),
+                (fixtures::flow_id("pdf"), Job::Pause)
+            ]
         );
         assert!(
             watch.due(&flows, 10 * MIN, AFTER).is_empty(),
             "still running"
         );
 
-        watch.done("csv");
+        watch.done(fixtures::flow_id("csv"));
         let again = watch.due(&flows, 10 * MIN, AFTER);
         assert_eq!(again.len(), 1);
-        assert_eq!(again[0].0.id, "csv");
+        assert_eq!(again[0].0.id, fixtures::flow_id("csv"));
         assert_eq!(
             watch.due(&flows, 10 * MIN, None),
             [] as [(FlowView, Job); 0]

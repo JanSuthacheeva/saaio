@@ -70,7 +70,7 @@ fn the_masters_wait_ends_with_the_flows_that_stopped() {
     );
     seed_worker(
         home.path(),
-        "8a1b",
+        "8a1b0000-0000-4000-8000-000000000000",
         "shop-218",
         r#"{"v":1,"at":2000,"kind":"working"}"#,
     );
@@ -92,8 +92,13 @@ fn the_masters_wait_ends_with_the_flows_that_stopped() {
         "it saw shop-217 already"
     );
     fs::write(
-        home.path().join("flows/8a1b.jsonl"),
-        fs::read_to_string(home.path().join("flows/8a1b.jsonl")).unwrap()
+        home.path()
+            .join("flows/8a1b0000-0000-4000-8000-000000000000.jsonl"),
+        fs::read_to_string(
+            home.path()
+                .join("flows/8a1b0000-0000-4000-8000-000000000000.jsonl"),
+        )
+        .unwrap()
             + r#"{"v":1,"at":3000,"kind":"idle","note":"Plan is ready."}"#
             + "\n",
     )
