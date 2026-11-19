@@ -6,6 +6,11 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A worker woken with the master's message no longer gets saaio's own error above it when its
+  busy mark cannot be written; the error goes to server.log.
+
 ## [0.3.0] - 2026-11-15
 
 A minor release: `saaio status --json` is version 4, which can break a program that reads it.

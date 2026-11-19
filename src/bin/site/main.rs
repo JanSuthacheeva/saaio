@@ -1,5 +1,7 @@
 //! saaio-site: builds the saaio.dev docs site from the Markdown in a checkout.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "tests unwrap directly"))]
+
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -27,6 +29,11 @@ struct Args {
     out: PathBuf,
 }
 
+#[expect(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "the site builder's process boundary prints"
+)]
 fn main() -> ExitCode {
     let args = match Args::try_parse() {
         Ok(args) => args,

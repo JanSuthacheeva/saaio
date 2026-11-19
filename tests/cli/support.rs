@@ -70,6 +70,11 @@ pub fn as_master(home: &Path, args: &[&str]) -> Output {
         .expect("the saaio binary runs")
 }
 
+/// home/server.log, where the CLI's own errors go; empty when there is none.
+pub fn server_log(home: &Path) -> String {
+    fs::read_to_string(home.join("server.log")).unwrap_or_default()
+}
+
 /// The key the pane of `name` (a flow id, or master) proves its session with, its digest kept in
 /// the store as saaio server keeps it.
 pub fn key(home: &Path, name: &str) -> String {

@@ -60,6 +60,35 @@ fn a_workers_wait_ends_with_the_masters_message_once() {
 }
 
 #[test]
+fn a_busy_mark_that_cannot_be_written_stays_out_of_the_wake_message() {
+    let home = TempDir::new().unwrap();
+    let id = "7f3c0000-0000-4000-8000-000000000000";
+    seed_worker(
+        home.path(),
+        id,
+        "shop-217",
+        r#"{"v":1,"at":2000,"kind":"waiting","question":"Which delimiter?"}"#,
+    );
+    let busy = home.path().join(format!("waits/{id}.busy"));
+    fs::create_dir_all(busy.join("in-the-way")).unwrap();
+    as_master(home.path(), &["send", "shop-217", "Semicolons."]);
+
+    let mut child = waiter(home.path(), Some(id), &[]);
+    let (code, out, err) = ended(&mut child, PATIENCE).expect("woken");
+
+    assert_eq!((code, out.as_str()), (2, ""));
+    assert_eq!(
+        err.trim_end(),
+        "message from the saaio master:\n  Semicolons."
+    );
+    assert!(
+        server_log(home.path()).contains(&format!("wait flow {id}:")),
+        "{}",
+        server_log(home.path())
+    );
+}
+
+#[test]
 fn the_masters_wait_ends_with_the_flows_that_stopped() {
     let home = TempDir::new().unwrap();
     seed_worker(
