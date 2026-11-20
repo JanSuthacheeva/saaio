@@ -146,7 +146,7 @@ Approved by the user on 2026-11-20 with both recommendations.
 
 ## Tasks
 
-- [ ] Add `a_look_that_cannot_list_never_lets_go` in `src/turn_watch.rs` (a run seen, then looks
+- [x] Add `a_look_that_cannot_list_never_lets_go` in `src/turn_watch.rs` (a run seen, then looks
   with `runs: None` for 60 s hold, then `Some(false)` twice releases `RunEnded`; and before a run
   was seen, `None` looks past GRACE hold) - fails today to compile, `runs` is a `bool`; then change
   `Look::runs` to `Option<bool>` and `TurnWatch::step` as in Fix, the existing tests moved to

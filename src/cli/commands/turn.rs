@@ -117,7 +117,7 @@ fn look(all: &[Process], args: &Args, exclusive: &Exclusive, asks: bool) -> Look
         .any(|process| exclusive.runs(&process.command).is_some());
     Look {
         agent_alive,
-        runs,
+        runs: Some(runs),
         asks,
     }
 }
@@ -157,7 +157,7 @@ mod tests {
         ];
         let found = look(&all, &args(), &pint(), false);
         assert!(found.agent_alive);
-        assert!(found.runs);
+        assert_eq!(found.runs, Some(true));
     }
 
     #[test]
@@ -168,7 +168,7 @@ mod tests {
             process(200, 1, "./vendor/bin/pint"),
         ];
         let found = look(&all, &args(), &pint(), true);
-        assert!(!found.runs);
+        assert_eq!(found.runs, Some(false));
         assert!(found.asks);
     }
 
