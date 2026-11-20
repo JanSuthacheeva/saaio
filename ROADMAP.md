@@ -1,6 +1,6 @@
 # Roadmap
 
-Planned after 0.3.0. Subject to change. Shipped: [CHANGELOG.md](CHANGELOG.md).
+Planned after 0.3.1. Subject to change. Shipped: [CHANGELOG.md](CHANGELOG.md).
 
 ## Implementing
 
