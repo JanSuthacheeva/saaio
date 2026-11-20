@@ -1,13 +1,16 @@
-//! `Process`: the system's process table, and which processes run below another
+//! `Process`: the system's process table, which processes run below another, and whether one
+//! lives
 
 use std::time::Duration;
 
 use anyhow::Result;
+use rustix::process::{Pid, test_kill_process};
 
 use crate::workspace::process;
 
-/// How long `ps` may take.
-const LIST_LIMIT: Duration = Duration::from_secs(1);
+/// How long `ps` may take: a loaded machine, swapping, takes seconds to page in every process's
+/// arguments.
+const LIST_LIMIT: Duration = Duration::from_secs(10);
 
 /// One running process: its pid, its parent's and its command line.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,6 +24,15 @@ pub struct Process {
 pub fn list() -> Result<Vec<Process>> {
     let argv = ["ps", "-A", "-o", "pid=,ppid=,command="].map(String::from);
     Ok(parse(&process::output(&argv, LIST_LIMIT)?))
+}
+
+/// Whether `pid` is a live process, asked of the kernel (signal 0), so it holds however slow `ps`
+/// is. A pid of 0 or one past i32 is none.
+pub fn alive(pid: u32) -> bool {
+    i32::try_from(pid)
+        .ok()
+        .and_then(Pid::from_raw)
+        .is_some_and(|pid| test_kill_process(pid).is_ok())
 }
 
 /// `ps`'s lines: pid, ppid, then the command line; a line that does not read so is left out.
@@ -113,6 +125,17 @@ mod tests {
     fn stops_at_a_loop_in_the_table() {
         let all = parse("  10    11 a\n  11    10 b\n");
         assert!(!descends(&all, 10, 12));
+    }
+
+    #[test]
+    fn knows_a_process_lives_until_it_is_reaped() {
+        assert!(alive(std::process::id()));
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        assert!(!alive(pid));
+        assert!(!alive(0));
+        assert!(!alive(u32::MAX));
     }
 
     #[test]

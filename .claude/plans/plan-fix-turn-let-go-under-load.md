@@ -151,7 +151,7 @@ Approved by the user on 2026-11-20 with both recommendations.
   was seen, `None` looks past GRACE hold) - fails today to compile, `runs` is a `bool`; then change
   `Look::runs` to `Option<bool>` and `TurnWatch::step` as in Fix, the existing tests moved to
   `Some(..)`
-- [ ] Add `processes::alive` with a test (this process alive, a reaped child's pid not), raise
+- [x] Add `processes::alive` with a test (this process alive, a reaped child's pid not), raise
   `LIST_LIMIT` to 10 s, and rework `cli/commands/turn.rs` as in Fix: `runs()` replaces `look()`
   (its tests kept on the run detection), `LIST_FAILURES` gone, failures logged once per stretch
 - [ ] Docs and changelog: `docs/repository.md` Waiting for a turn, `CHANGELOG.md` Fixed
