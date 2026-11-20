@@ -159,3 +159,47 @@ Approved by the user on 2026-11-20 with both recommendations.
   (worker 2's `start` after worker 1's `end`) with `the run ended; the turn is let go`, no
   `3 times`; `run.sh 6 12` (ps 12 s, past the new limit) serial too, server.log with `could not
   list the processes ...; the turn is kept while the agent lives`; and `run.sh none` still serial
+
+## Review
+
+Reviewed in an isolated context against this plan and CLAUDE.md. The code matches the Fix section:
+`Look::runs` is `Option<bool>`, a blind look holds and its time does not count against GRACE,
+agent liveness comes from `processes::alive` (signal 0), `LIST_LIMIT` is 10 s, `LIST_FAILURES` is
+gone and a failed list is logged once per stretch. No stored data or public surface changes.
+
+**Fixed**
+
+- CLAUDE.md's `processes.rs` line did not name `alive` or the 10 s limit, and the `turn_watch.rs`
+  line did not say a blind look holds and is not counted (44255cb). Docs only.
+
+**Open**
+
+- A watch that stays blind (every `ps` past 10 s) holds the turn after the run ended, until the
+  agent exits; waiting workers then run after `TURN_WAIT` (30 min). This is Decision 1, and the
+  scratchpad run with `ps` at 12 s shows it: worker 1's run ended, worker 2 was still waiting when
+  the 95 s script stopped. The plan's checked task says `run.sh 6 12` ran "serial"; that is true,
+  but the first `run.sh 6 12` run (after.txt) logged no `could not list` line, so it did not
+  exercise the blind path; only the later run (again.txt) did. On a real machine the load usually
+  drops with the run and `ps` recovers, so this is accepted as designed. Recommendation: keep.
+- When the agent dies during a slow `ps`, the turn is freed after that `ps` returns (up to 10 s),
+  not "at once" as docs/repository.md says for a crashed worker. Minor; not changed.
+- The docs' "a turn already taken is let go early only when its worker is gone" leaves out that
+  `saaio turn` lets go if it cannot read the flow or the repo config on its first look (the hook
+  read the same config a moment before). Wording only; not changed.
+
+**Where to look**
+
+1. `src/turn_watch.rs` `TurnWatch::step`: the `None` branch before the run/quiet logic, and
+   `paused_ms` shared by asking and blind time.
+2. `src/cli/commands/turn.rs` `run` loop: the order list -> log -> `alive` -> step, and the
+   `blind` flag.
+3. `src/processes.rs` `alive` and `LIST_LIMIT`, which `hook.rs` `agent_of` also uses (a tool call
+   now waits up to 10 s for `ps` before it can fail open).
+
+The tests, docs and changelog lines are routine and can be skimmed.
+
+**Checks**
+
+`cargo test --all-features`, clippy and `cargo fmt --check` passed at 8f58d66; only docs and the
+plan changed since (the docs link check passed at 59bbf01). The review's fix touches CLAUDE.md only.
+Production fixes: none, so no second review round was needed.
