@@ -10,6 +10,8 @@ All notable changes to saaio are listed here. The format follows
 
 - A worker woken with the master's message no longer gets saaio's own error above it when its
   busy mark cannot be written; the error goes to server.log.
+- A heavy command listed under `[exclusive]` no longer loses its turn while it runs on a busy
+  machine, so another worker's heavy command waits for it instead of running beside it.
 
 ## [0.3.0] - 2026-11-15
 

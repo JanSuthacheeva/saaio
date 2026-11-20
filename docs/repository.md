@@ -441,6 +441,9 @@ The board card says `working · waits turn`, and `saaio status` has `turn: waiti
 ends, or is killed, the waiting call goes on within about a second. If two calls wait, either may
 go first.
 
+A turn is kept for as long as its run lasts, even when the machine is so busy that saaio can't
+look at the run for a while; then server.log says the turn is kept while the agent lives.
+
 saaio makes sure a turn is never held by something that is gone. When the worker that has the
 turn crashes or its session ends, the turn is free at once. When a call took the turn but no
 listed process showed within 10 seconds (the tool was refused or failed to start), the turn is let
@@ -448,8 +451,9 @@ go; time spent on a permission prompt doesn't count. And a call that waited 30 m
 anyway, which server.log notes.
 
 > [!TIP]
-> Turns fail open. When something goes wrong, such as a config that can't be read or a worker's
-> agent saaio does not know, the call runs without waiting, and server.log says why.
+> Turns fail open. When something goes wrong before a call has its turn, such as a config that
+> can't be read or a worker's agent saaio does not know, the call runs without waiting, and
+> server.log says why. A turn already taken is let go early only when its worker is gone.
 
 Each harness has a few edges of its own:
 

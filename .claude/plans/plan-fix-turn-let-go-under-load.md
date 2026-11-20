@@ -154,7 +154,7 @@ Approved by the user on 2026-11-20 with both recommendations.
 - [x] Add `processes::alive` with a test (this process alive, a reaped child's pid not), raise
   `LIST_LIMIT` to 10 s, and rework `cli/commands/turn.rs` as in Fix: `runs()` replaces `look()`
   (its tests kept on the run detection), `LIST_FAILURES` gone, failures logged once per stretch
-- [ ] Docs and changelog: `docs/repository.md` Waiting for a turn, `CHANGELOG.md` Fixed
+- [x] Docs and changelog: `docs/repository.md` Waiting for a turn, `CHANGELOG.md` Fixed
 - [ ] End-to-end: `cargo build`, then `run.sh 6` (ps 1.5 s) again and see the runs serial
   (worker 2's `start` after worker 1's `end`) with `the run ended; the turn is let go`, no
   `3 times`; `run.sh 6 12` (ps 12 s, past the new limit) serial too, server.log with `could not
