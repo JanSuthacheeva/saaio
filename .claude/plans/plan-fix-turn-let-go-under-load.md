@@ -155,7 +155,7 @@ Approved by the user on 2026-11-20 with both recommendations.
   `LIST_LIMIT` to 10 s, and rework `cli/commands/turn.rs` as in Fix: `runs()` replaces `look()`
   (its tests kept on the run detection), `LIST_FAILURES` gone, failures logged once per stretch
 - [x] Docs and changelog: `docs/repository.md` Waiting for a turn, `CHANGELOG.md` Fixed
-- [ ] Docs wording from the review (decided by the user on 2026-11-20: fix review items 2 and 3,
+- [x] Docs wording from the review (decided by the user on 2026-11-20: fix review items 2 and 3,
   keep item 1 as Decision 1): `docs/repository.md` says a crashed worker's turn is free within
   seconds, not at once; and that while it watches, a taken turn is let go early only when its
   worker is gone
