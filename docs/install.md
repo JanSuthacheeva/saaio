@@ -37,7 +37,7 @@ The quickest way to install saaio is the install script:
 
 ```sh
 curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | sh
-saaio --version    # saaio 0.3.0 (abc1234)
+saaio --version    # saaio 0.3.1 (abc1234)
 ```
 
 The script downloads the binary for this machine from the latest
@@ -51,12 +51,12 @@ A few variables change what the script installs and where. To install a given ve
 example:
 
 ```sh
-curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | SAAIO_VERSION=v0.3.0 sh
+curl -fsSL https://github.com/JanSuthacheeva/saaio/releases/latest/download/install.sh | SAAIO_VERSION=v0.3.1 sh
 ```
 
 | Variable | Default | Sets |
 | --- | --- | --- |
-| `SAAIO_VERSION` | the latest release | the tag to install, such as `v0.3.0` |
+| `SAAIO_VERSION` | the latest release | the tag to install, such as `v0.3.1` |
 | `SAAIO_INSTALL_DIR` | `~/.local/bin` | the folder `saaio` is installed to |
 | `SAAIO_DOWNLOAD_URL` | the GitHub release | a folder or mirror holding the release assets (`file://` works). `SHA256SUMS` is read from the same place, so it checks the download, not the source. |
 
@@ -207,7 +207,7 @@ For other platforms, or to build saaio yourself, install it with cargo. It requi
 installed with [rustup](https://rustup.rs):
 
 ```sh
-cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.3.0
+cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag v0.3.1
 ```
 
 This installs `saaio` to `~/.cargo/bin`. `saaio --version` names the commit it was built from, or
