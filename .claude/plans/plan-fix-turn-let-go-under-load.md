@@ -159,7 +159,7 @@ Approved by the user on 2026-11-20 with both recommendations.
   keep item 1 as Decision 1): `docs/repository.md` says a crashed worker's turn is free within
   seconds, not at once; and that while it watches, a taken turn is let go early only when its
   worker is gone
-- [ ] End-to-end: `cargo build`, then `run.sh 6` (ps 1.5 s) again and see the runs serial
+- [x] End-to-end: `cargo build`, then `run.sh 6` (ps 1.5 s) again and see the runs serial
   (worker 2's `start` after worker 1's `end`) with `the run ended; the turn is let go`, no
   `3 times`; `run.sh 6 12` (ps 12 s, past the new limit) serial too, server.log with `could not
   list the processes ...; the turn is kept while the agent lives`; and `run.sh none` still serial
