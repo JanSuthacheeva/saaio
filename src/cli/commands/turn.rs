@@ -21,8 +21,6 @@ use crate::view::State;
 
 /// How often the watch looks at the agent's processes.
 const LOOK_STEP: Duration = Duration::from_millis(500);
-/// Process lists in a row that may fail before the turn is let go.
-const LIST_FAILURES: u32 = 3;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -60,26 +58,24 @@ pub fn run(args: &Args, ctx: &Context) -> Document {
         }
     };
     let mut watch = TurnWatch::new(ctx.now());
-    let mut failures = 0;
+    let mut blind = false;
     loop {
         thread::sleep(LOOK_STEP);
-        let all = match processes::list() {
-            Ok(all) => {
-                failures = 0;
-                all
-            }
-            Err(error) => {
-                failures += 1;
-                if failures >= LIST_FAILURES {
-                    log(&format!("{error:#}, {failures} times; the turn is let go"));
-                    return Document::Silent;
-                }
-                continue;
-            }
+        let listed = processes::list();
+        match (&listed, blind) {
+            (Err(error), false) => log(&format!(
+                "could not list the processes ({error:#}); the turn is kept while the agent lives"
+            )),
+            (Ok(_), true) => log("the processes list again"),
+            _ => {}
+        }
+        blind = listed.is_err();
+        let look = Look {
+            agent_alive: processes::alive(args.agent),
+            runs: listed.ok().map(|all| runs(&all, args, &exclusive)),
+            asks: asks(&store, args.flow),
         };
-        let asks = asks(&store, args.flow);
-        let found = look(&all, args, &exclusive, asks);
-        if let Keep::Release(why) = watch.step(ctx.now(), found) {
+        if let Keep::Release(why) = watch.step(ctx.now(), look) {
             log(match why {
                 Release::AgentGone => "the agent is gone; the turn is let go",
                 Release::RunEnded => "the run ended; the turn is let go",
@@ -107,19 +103,12 @@ fn asks(store: &Store, id: FlowId) -> bool {
         .is_some_and(|flow| flow.state == State::Waiting)
 }
 
-/// One look: whether the agent lives and whether a process below it, the harness left out, runs
-/// a listed command.
-fn look(all: &[Process], args: &Args, exclusive: &Exclusive, asks: bool) -> Look {
-    let agent_alive = all.iter().any(|process| process.pid == args.agent);
-    let runs = processes::under(all, args.agent)
+/// Whether a process below the agent, the harness left out, runs a listed command.
+fn runs(all: &[Process], args: &Args, exclusive: &Exclusive) -> bool {
+    processes::under(all, args.agent)
         .iter()
         .filter(|process| !args.harness.contains(&process.pid))
-        .any(|process| exclusive.runs(&process.command).is_some());
-    Look {
-        agent_alive,
-        runs,
-        asks,
-    }
+        .any(|process| exclusive.runs(&process.command).is_some())
 }
 
 #[cfg(test)]
@@ -155,9 +144,7 @@ mod tests {
             process(101, 100, "codex 'fix it and run pint'"),
             process(102, 101, "/bin/zsh -c ./vendor/bin/pint"),
         ];
-        let found = look(&all, &args(), &pint(), false);
-        assert!(found.agent_alive);
-        assert!(found.runs);
+        assert!(runs(&all, &args(), &pint()));
     }
 
     #[test]
@@ -167,14 +154,6 @@ mod tests {
             process(101, 100, "codex 'fix it and run pint'"),
             process(200, 1, "./vendor/bin/pint"),
         ];
-        let found = look(&all, &args(), &pint(), true);
-        assert!(!found.runs);
-        assert!(found.asks);
-    }
-
-    #[test]
-    fn knows_when_the_agent_is_gone() {
-        let all = [process(102, 1, "./vendor/bin/pint")];
-        assert!(!look(&all, &args(), &pint(), false).agent_alive);
+        assert!(!runs(&all, &args(), &pint()));
     }
 }
