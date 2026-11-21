@@ -423,3 +423,31 @@ Routine, skim: the `hooks::run` signature threading, docs, UI key wiring, golden
 
 `cargo test --all-features`, clippy with `-D warnings` and `cargo fmt` pass at a9d7067
 (`cargo deny` passed at 17cac75; dependencies unchanged).
+
+### Second review
+
+Covers bcf7f01, the After review task, in isolation. No production code changed, so no fix
+needed a second look.
+
+Fixed:
+
+- No test held the `delegated` half of the rule: dropping `State::Delegated` from `set_up`'s
+  match left the suite green. Added `a_failure_while_a_delegate_works_leaves_it_delegated`
+  (fails without it). 4f3a41a
+- docs/troubleshooting.md still said a failed setup always blocks the flow. 245f527
+
+Open:
+
+- A worker whose state is `working` but stale (its session gone without a Stop) gets only a
+  timeline note from a failed `saaio setup`, no block and no UI notification. `startup.rs`
+  blocks a worker that exited while working, so this needs a lost hook; the master still hears
+  of the failure. Recommendation: leave it.
+- A master or person who runs `saaio setup` while the worker works now raises no `blocked`
+  notification either: saaio cannot tell who ran it, as decided. Recommendation: leave it.
+
+Where to look: `src/fold.rs` `set_up` with `reported_working`, which only `Working` and
+`Delegated` set, so a new flow (folded `working` before its worker says anything) still blocks
+on the setup `saaio start` ran. `a_failed_setup_blocks_the_flow_and_outlives_working` holds that.
+
+Checks: `cargo test --all-features`, clippy with `-D warnings` and `cargo fmt --check` pass at
+245f527.
