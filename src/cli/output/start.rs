@@ -1,9 +1,8 @@
 //! What `saaio start` prints: the started or plain flow, its setup and where it opens
 
-use std::fmt;
-
 use serde::Serialize;
 
+use super::setup::Setup;
 use super::{Document, toon};
 use crate::id::FlowId;
 use crate::view::{FlowView, Workspace};
@@ -99,21 +98,39 @@ fn pane(flow: &FlowView, opening: Opening, what: &str) -> (&'static str, String)
     }
 }
 
-/// What `saaio start` did with the repo's .saaio/setup.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Setup {
-    Ran,
-    None,
-    Failed(String),
-}
+#[cfg(test)]
+mod tests {
+    use super::super::fixtures::flow;
+    use super::*;
+    use crate::fixtures::workspace;
 
-/// ran, none, failed: why
-impl fmt::Display for Setup {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Setup::Ran => f.write_str("ran"),
-            Setup::None => f.write_str("none"),
-            Setup::Failed(reason) => write!(f, "failed: {reason}"),
-        }
+    #[test]
+    fn names_a_failed_setup_and_its_whole_output() {
+        let flow = flow("shop-240", vec![], 0);
+        let log = "/store/hooks/0b6e/setup.log".to_string();
+        let text = |setup: &Setup| {
+            started(
+                &flow,
+                &workspace("shop-240", "claude"),
+                setup,
+                Opening::Running,
+            )
+            .text()
+            .to_string()
+        };
+
+        let failed = text(&Setup::Failed {
+            reason: "Please run composer update".into(),
+            log: log.clone(),
+        });
+        let ran = text(&Setup::Ran { log });
+
+        assert!(
+            failed.contains(
+                "setup: \"failed: Please run composer update (full output: /store/hooks/0b6e/setup.log)\""
+            ),
+            "{failed}"
+        );
+        assert!(ran.contains("\nsetup: ran\n"), "{ran}");
     }
 }
