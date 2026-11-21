@@ -341,7 +341,7 @@ failed setup. An append that fails is a `Failure` as today.
 
 - [x] Add `private::create_fresh(path)` with unit tests for a file, a symlink, modes
 - [x] Add `process::finish_into` and `last_line_of` with unit tests for order, failure line, timeout output, a left-behind process
-- [ ] Give `hooks::run`/`run_within` a `log: &Path` and `Store::hook_log`; `Store::remove` removes `hooks/<id>/`; pass logs from `retire::teardown` (new, `retire_worktree` gains the store), `pause_watch` and `start`; tests for the log content and removal
+- [x] Give `hooks::run`/`run_within` a `log: &Path` and `Store::hook_log`; `Store::remove` removes `hooks/<id>/`; pass logs from `retire::teardown` (new, `retire_worktree` gains the store), `pause_watch` and `start`; tests for the log content and removal
 
 ### The setup outcome
 

@@ -20,7 +20,7 @@ pub fn run(ctx: &Context) -> Result<Document, Failure> {
     let mut untrusted = Vec::new();
     for flow in flows.iter().filter(|flow| flow.is_clearable()) {
         close_pane(&socket, flow)?;
-        let (retired, teardown) = retire_worktree(&trust, flow, Uncommitted::Keep);
+        let (retired, teardown) = retire_worktree(&trust, &store, flow, Uncommitted::Keep);
         if teardown == Teardown::Untrusted {
             untrusted.push(flow.name.clone());
         }

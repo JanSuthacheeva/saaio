@@ -53,7 +53,7 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
         refuse_unmerged_commits(flow, &stacked)?;
     }
     let pane = close_pane(&socket, flow)?;
-    let retired = retire_worktree(&trust, flow, uncommitted);
+    let retired = retire_worktree(&trust, &store, flow, uncommitted);
     let branch = match retired.0 {
         Retired::Kept(_) => BranchFate::Kept,
         Retired::NoWorktree | Retired::Removed => drop_branch(flow, unmerged),

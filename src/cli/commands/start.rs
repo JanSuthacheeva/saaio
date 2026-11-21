@@ -135,6 +135,7 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
         Hook::Setup,
         &space,
         &worktree::hook_env(id, &name, &repo, &space),
+        &store.hook_log(id, Hook::Setup.name()),
     ) {
         Ok(true) => Setup::Ran,
         Ok(false) => Setup::None,
