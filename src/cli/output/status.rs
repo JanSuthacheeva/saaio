@@ -367,7 +367,10 @@ pub(crate) fn detail(
             .filter(|blocker| flow.setup_problem().as_ref() != Some(blocker))
             .as_deref()
             .map(cut),
-        setup: flow.setup_line(full),
+        // "failed: ...", as `saaio start` says it.
+        setup: flow
+            .setup_line(full)
+            .and_then(|line| line.strip_prefix("setup ").map(str::to_string)),
         services: services(flow),
         services_error: flow
             .services
@@ -672,7 +675,7 @@ mod tests {
 
         assert!(
             text.contains(&format!(
-                "\nsetup: \"setup failed: Please run composer update (full output: {LOG})\"\n"
+                "\nsetup: \"failed: Please run composer update (full output: {LOG})\"\n"
             )),
             "{text}"
         );
