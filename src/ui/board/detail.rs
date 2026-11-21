@@ -49,6 +49,7 @@ impl BoardView<'_> {
         // First: it changes, and a long request would cut it off.
         facts.extend(self.turn(flow));
         facts.extend(self.services(flow));
+        facts.extend(self.setup(flow));
         if !flow.request.is_empty() {
             facts.push(flow.request.clone());
         }
@@ -125,6 +126,16 @@ impl BoardView<'_> {
             turn.command,
             clock(turn.since, self.offset_secs),
             turn.holder
+        ))
+    }
+
+    /// The header's word on a failed setup: why, and where its whole output is.
+    fn setup(&self, flow: &FlowView) -> Option<String> {
+        let run = flow.setup.as_ref()?;
+        let why = run.failed.as_deref()?;
+        Some(format!(
+            "setup failed: {why} (full output: {})",
+            self.sidebar.tilde(&run.log)
         ))
     }
 

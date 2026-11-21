@@ -20,6 +20,8 @@ use crate::wake::Seen;
 
 /// What the waiters keep: each session's waiter pid, deliveries, the master's seen marks.
 const WAITS_DIR: &str = "waits";
+/// Each flow's hook logs: hooks/<id>/<hook>.log.
+const HOOKS_DIR: &str = "hooks";
 const SEEN_FILE: &str = "master.seen";
 const MASTER_SESSION_FILE: &str = "master.session";
 const MASTER_TURN_FILE: &str = "master.turn";
@@ -352,7 +354,15 @@ impl Store {
         self.write_wait(SEEN_FILE, &text)
     }
 
-    /// Deletes the log, the heartbeat file and what its waiter kept.
+    /// Where the flow's last run of the hook named `hook` wrote: hooks/<id>/<hook>.log.
+    pub fn hook_log(&self, id: FlowId, hook: &str) -> PathBuf {
+        self.root
+            .join(HOOKS_DIR)
+            .join(id.to_string())
+            .join(format!("{hook}.log"))
+    }
+
+    /// Deletes the log, the heartbeat file, what its waiter kept and hooks/<id>/.
     pub fn remove(&self, id: FlowId) -> Result<()> {
         match fs::remove_file(self.log(id)) {
             Ok(()) => {}
@@ -375,7 +385,13 @@ impl Store {
                 return Err(error).with_context(|| format!("could not remove {}", file.display()));
             }
         }
-        Ok(())
+        let hooks = self.root.join(HOOKS_DIR).join(id.to_string());
+        match fs::remove_dir_all(&hooks) {
+            Err(error) if error.kind() != ErrorKind::NotFound => {
+                Err(error).with_context(|| format!("could not remove {}", hooks.display()))
+            }
+            _ => Ok(()),
+        }
     }
 
     fn read_wait(&self, name: &str) -> Option<String> {
@@ -591,16 +607,20 @@ mod tests {
     }
 
     #[test]
-    fn removes_the_log_and_the_heartbeat() {
+    fn removes_the_log_the_heartbeat_and_the_hook_logs() {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
         let id = store.create(&started()).unwrap();
         store.beat(id).unwrap();
+        let log = store.hook_log(id, "setup");
+        assert_eq!(log, dir.path().join(format!("hooks/{id}/setup.log")));
+        private::create_fresh(&log).unwrap();
 
         store.remove(id).unwrap();
 
         assert_eq!(store.ids().unwrap(), Vec::<FlowId>::new());
         assert_eq!(store.last_beat(id).unwrap(), None);
+        assert!(!dir.path().join(format!("hooks/{id}")).exists());
         assert_eq!(
             store.remove(id).unwrap_err().to_string(),
             format!("no flow {id}")
@@ -673,6 +693,7 @@ mod tests {
             Mark {
                 state: State::Waiting,
                 changed_at: 5,
+                setup_failed: Some(4),
             },
         )]);
         store.set_seen(&seen).unwrap();

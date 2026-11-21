@@ -12,22 +12,28 @@ use crate::view::{FlowView, State};
 /// What the master was last woken for, by flow id.
 pub type Seen = BTreeMap<FlowId, Mark>;
 
-/// A flow as the master last saw it: its state and when that changed.
+/// A flow as the master last saw it: its state and when that changed, and when the failed setup
+/// it was told about failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Mark {
     pub state: State,
     pub changed_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub setup_failed: Option<u64>,
 }
 
-/// What a worker hears: the master's message, or saaio's word that its base merged.
+/// What a worker hears: the master's message, saaio's word that its base merged, or that its
+/// setup failed for `reason`, its whole output in `log`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Note {
     Master(String),
     BaseMerged { base: String, onto: String },
+    SetupFailed { reason: String, log: String },
 }
 
-/// The notes in a flow's log after the first `delivered` of them (Message and BaseMerged events);
-/// a flow that merges nothing has nothing to rebase, so its base moves without a note.
+/// The notes in a flow's log after the first `delivered` of them (Message, BaseMerged and failed
+/// Setup events); a flow that merges nothing has nothing to rebase, so its base moves without a
+/// note.
 pub fn undelivered(events: &[Event], delivered: usize) -> Vec<Note> {
     let merges = events
         .iter()
@@ -39,6 +45,13 @@ pub fn undelivered(events: &[Event], delivered: usize) -> Vec<Note> {
             EventKind::BaseMerged { base, onto } if merges => Some(Note::BaseMerged {
                 base: base.clone(),
                 onto: onto.clone(),
+            }),
+            EventKind::Setup {
+                failed: Some(reason),
+                log,
+            } => Some(Note::SetupFailed {
+                reason: reason.clone(),
+                log: log.clone(),
             }),
             _ => None,
         })
@@ -70,13 +83,21 @@ pub fn dialog_answered(flow: &FlowView, events: &[Event]) -> bool {
         .any(|event| matches!(event.kind, EventKind::Message { .. }))
 }
 
-/// Flows whose state needs the master and that changed since it last saw them, oldest first; never
-/// a plain session, which is the user's own.
+/// Flows whose state needs the master and that changed since it last saw them, or whose setup
+/// failed since, whatever their state; oldest first; never a plain session, which is the user's
+/// own.
 pub fn changed_flows<'a>(flows: &'a [FlowView], seen: &Seen) -> Vec<&'a FlowView> {
     let mut changed: Vec<&FlowView> = flows
         .iter()
-        .filter(|flow| needs_master(flow.state) && !flow.is_plain())
-        .filter(|flow| seen.get(&flow.id) != Some(&mark(flow)))
+        .filter(|flow| !flow.is_plain())
+        .filter(|flow| {
+            let last = seen.get(&flow.id);
+            let moved = last.map(|mark| (mark.state, mark.changed_at))
+                != Some((flow.state, flow.changed_at));
+            let failed = setup_failed(flow);
+            (needs_master(flow.state) && moved)
+                || (failed.is_some() && last.and_then(|mark| mark.setup_failed) != failed)
+        })
         .collect();
     changed.sort_by_key(|flow| flow.changed_at);
     changed
@@ -110,7 +131,14 @@ fn mark(flow: &FlowView) -> Mark {
     Mark {
         state: flow.state,
         changed_at: flow.changed_at,
+        setup_failed: setup_failed(flow),
     }
+}
+
+/// When the flow's last setup run failed; None while it passed or never ran.
+fn setup_failed(flow: &FlowView) -> Option<u64> {
+    let run = flow.setup.as_ref()?;
+    run.failed.as_ref().map(|_| run.at)
 }
 
 /// What a worker reads when saaio wakes it: each of the master's messages, indented, and what to
@@ -127,6 +155,12 @@ pub fn for_worker(notes: &[Note]) -> String {
 Rebase your own commits onto it (`git fetch`, then `git rebase --onto origin/{onto} {base}`, or \
 `origin/{base}` once that branch is gone), point your merge request at {onto} and push with \
 `--force-with-lease`."
+            )],
+            Note::SetupFailed { reason, log } => vec![format!(
+                "news from saaio: .saaio/setup failed for this worktree: {reason}. Its whole output \
+is in {log}. Read it. When the cause is in this repository, fix it and run `saaio setup`; when it \
+needs something on this machine, such as a missing PHP extension, end your turn saying what is \
+missing."
             )],
         })
         .collect::<Vec<_>>()
@@ -162,12 +196,18 @@ pub fn for_master(flows: &[&FlowView]) -> String {
         help.push("`saaio status <name>` lists a question dialog's options");
     }
     help.push("`saaio status <name> --full` shows its whole last answer");
-    let says = |flow: &FlowView| {
-        let text = flow.blocker.as_deref().unwrap_or_else(|| {
+    let says = |flow: &FlowView| match (&flow.blocker, flow.setup_line(false)) {
+        (Some(blocker), _) if flow.setup_problem().as_ref() != Some(blocker) => {
+            truncated(blocker, LIST_TEXT_LIMIT, false)
+        }
+        (_, Some(setup)) => setup,
+        (blocker, None) => {
             let last = flow.timeline.last().map_or("", |entry| entry.text.as_str());
-            last.strip_prefix("idle: ").unwrap_or(last)
-        });
-        truncated(text, LIST_TEXT_LIMIT, false)
+            let text = blocker
+                .as_deref()
+                .unwrap_or_else(|| last.strip_prefix("idle: ").unwrap_or(last));
+            truncated(text, LIST_TEXT_LIMIT, false)
+        }
     };
     serde_toon::to_string(&News {
         changed: flows
@@ -453,6 +493,126 @@ with `--force-with-lease`."
         let changed = changed_flows(&flows, &seen);
         assert_eq!(changed.len(), 1);
         assert_eq!(changed[0].state, State::Waiting);
+    }
+
+    const LOG: &str = "/store/hooks/0b6e/setup.log";
+
+    fn setup(failed: Option<&str>) -> EventKind {
+        EventKind::Setup {
+            failed: failed.map(str::to_string),
+            log: LOG.into(),
+        }
+    }
+
+    #[test]
+    fn hands_a_worker_its_failed_setup_in_order_with_the_messages() {
+        let events: Vec<Event> = [
+            message("one"),
+            setup(Some("Please run composer update")),
+            setup(None),
+            message("two"),
+        ]
+        .into_iter()
+        .map(|kind| Event::new(1, kind))
+        .collect();
+        let note = Note::SetupFailed {
+            reason: "Please run composer update".into(),
+            log: LOG.into(),
+        };
+
+        assert_eq!(
+            undelivered(&events, 0),
+            [master("one"), note.clone(), master("two")]
+        );
+        assert_eq!(
+            undelivered(&events, 2),
+            [master("two")],
+            "a pass is no note"
+        );
+        assert_eq!(
+            for_worker(&[note]),
+            format!(
+                "news from saaio: .saaio/setup failed for this worktree: Please run composer \
+update. Its whole output is in {LOG}. Read it. When the cause is in this repository, fix it and \
+run `saaio setup`; when it needs something on this machine, such as a missing PHP extension, end \
+your turn saying what is missing."
+            )
+        );
+    }
+
+    #[test]
+    fn tells_the_master_once_per_failed_setup_whatever_the_flow_does() {
+        let failed = flow(
+            "shop-240",
+            vec![(1, setup(Some("Please run composer update")))],
+        );
+        let news = changed_flows(std::slice::from_ref(&failed), &Seen::new());
+        assert_eq!(news.len(), 1);
+        assert_eq!(
+            for_master(&news).lines().nth(1).unwrap().trim(),
+            format!(
+                "shop-240,blocked,auto,\"setup failed: Please run composer update (full output: {LOG})\""
+            )
+        );
+        let mut seen = Seen::new();
+        mark_seen(&mut seen, &news);
+
+        let working = flow(
+            "shop-240",
+            vec![
+                (1, setup(Some("Please run composer update"))),
+                (2, EventKind::Working),
+            ],
+        );
+        assert_eq!(
+            changed_flows(std::slice::from_ref(&working), &seen).len(),
+            0
+        );
+
+        let again = flow(
+            "shop-240",
+            vec![
+                (1, setup(Some("Please run composer update"))),
+                (2, EventKind::Working),
+                (3, setup(Some("ext-zip is missing"))),
+            ],
+        );
+        let news = changed_flows(std::slice::from_ref(&again), &seen);
+        assert_eq!(news.len(), 1, "a second failure is news while it works");
+        mark_seen(&mut seen, &news);
+        assert_eq!(changed_flows(std::slice::from_ref(&again), &seen).len(), 0);
+
+        let passed = flow(
+            "shop-240",
+            vec![
+                (1, setup(Some("Please run composer update"))),
+                (2, EventKind::Working),
+                (4, setup(None)),
+            ],
+        );
+        assert_eq!(changed_flows(std::slice::from_ref(&passed), &seen).len(), 0);
+    }
+
+    #[test]
+    fn the_master_says_a_long_setup_reason_cut_but_the_log_whole() {
+        let why = "z".repeat(LIST_TEXT_LIMIT + 5);
+        let failed = flow("shop-240", vec![(1, setup(Some(&why)))]);
+
+        let news = for_master(&[&failed]);
+
+        assert!(news.contains(&format!("(full output: {LOG})")), "{news}");
+        assert!(news.contains("(truncated, 85 chars"), "{news}");
+    }
+
+    #[test]
+    fn reads_a_mark_written_before_setups_were_kept() {
+        let mark: Mark = serde_json::from_str(r#"{"state":"blocked","changed_at":4}"#).unwrap();
+
+        assert_eq!(mark.setup_failed, None);
+        assert_eq!(
+            serde_json::to_string(&mark).unwrap(),
+            r#"{"state":"blocked","changed_at":4}"#
+        );
     }
 
     #[test]

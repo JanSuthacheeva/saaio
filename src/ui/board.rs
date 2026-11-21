@@ -188,6 +188,9 @@ impl BoardView<'_> {
         let many = self.cards() > 1;
         let reachable = self.reachable();
         let finished = reachable && self.selected().is_some_and(FlowView::is_finished);
+        let settable = self.selected().is_some_and(|flow| {
+            !flow.is_finished() && !flow.is_plain() && flow.workspace.is_some()
+        });
         let mut hints = Vec::new();
         if !self.state.all {
             hints.push(active(Hint::new("0-9", "select"), many));
@@ -197,6 +200,11 @@ impl BoardView<'_> {
             active(Hint::new("enter", "jump in"), reachable),
             Hint::new("n", "new flow"),
             active(Hint::new("x", "clear finished flow"), finished),
+        ]);
+        if !self.state.all {
+            hints.push(active(Hint::new("s", "set up again"), settable));
+        }
+        hints.extend([
             Hint::new(
                 "a",
                 if self.state.all {

@@ -4,11 +4,11 @@ mod plain;
 
 use std::path::{Path, PathBuf};
 
-use super::{check_request, pick_kind, views};
+use super::{check_request, pick_kind, setup, views};
 use crate::adapter::Adapter;
 use crate::branching::{self, Branching};
 use crate::cli::context::{Context, Opened};
-use crate::cli::output::start::{self, Opening, Setup};
+use crate::cli::output::start::{self, Opening};
 use crate::cli::output::{self, Document, Failure};
 use crate::client::Client;
 use crate::config::kind::Kind;
@@ -26,7 +26,7 @@ use crate::trust::Trust;
 use crate::view::{FlowView, Workspace};
 use crate::workspace;
 use crate::workspace::git::{self, StartPoint};
-use crate::workspace::hooks::{self, Hook};
+use crate::workspace::hooks;
 
 #[derive(Debug, clap::Args)]
 pub struct Args {
@@ -129,21 +129,7 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
     workspace::create_worktree(&repo, &space, from.as_ref())?;
     rollback.disarm();
 
-    let setup = match hooks::run(
-        &trust,
-        &repo,
-        Hook::Setup,
-        &space,
-        &worktree::hook_env(id, &name, &repo, &space),
-    ) {
-        Ok(true) => Setup::Ran,
-        Ok(false) => Setup::None,
-        Err(error) => {
-            let reason = format!("setup failed: {error}");
-            store.append(id, &Event::new(now, EventKind::Blocked { reason }))?;
-            Setup::Failed(error.to_string())
-        }
-    };
+    let setup = setup::run_setup(&store, &trust, &repo, id, &name, &space, now)?;
 
     // Only now, so saaio server opens the worker once setup is done.
     append_workspace(&store, id, &space, now)?;

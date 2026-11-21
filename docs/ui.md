@@ -65,7 +65,7 @@ Each session takes three lines:
 | --- | --- |
 | 1 | number (`1` is the top), state, name, agent (after the kind for one other than feature: `fix claude`), age |
 | 2 | steps (`●───●───○───○`), phase, task count. `waits turn` in place of the phase while a heavy command waits for another worker's run ([repository.md](repository.md#heavy-commands)). Once finished: its merge request (`PR #42`, `merged`) or its state, and how long it took. Plain session: its state, such as `idle`. |
-| 3 | what it asks or does; while it waits its turn, whose run: `after shop-42: pint` |
+| 3 | what it asks or does; while it waits its turn, whose run: `after shop-42: pint`; while its setup failed, `setup failed: <last line>` in the blocked color ([repository.md](repository.md#when-setup-or-teardown-fails)) |
 
 Rows that do not fit end in `… N more`. The mark beside each name tells you its state:
 
@@ -95,6 +95,7 @@ tmux. Press the prefix, release it, then press the key. The prefix is `C-space` 
 | `C-space o` | open the [board](#the-board) |
 | `C-space b` | fold the sidebar to a rail, and back |
 | `C-space r` | resume the session in view when it is not running: the master, or a worker whose flow is unfinished |
+| `C-space s` | run the worker's `.saaio/teardown`, then its `.saaio/setup` again (`saaio setup`), after `y` |
 | `C-space [` | scroll back through the session's [history](#history) |
 | `C-space d` | detach: leave the UI, every session keeps running |
 | `C-space Q` | stop saaio ([Leaving and stopping](#leaving-and-stopping)) |
@@ -190,10 +191,15 @@ header names its request, kind, mode, agent, branch, `on <base>` for a
 | `enter` | jump into the selected session |
 | `n` | start a flow |
 | `x` | clean up the selected flow, if finished |
+| `s` | run the selected worker's teardown, then its setup again, after `y` |
 | `a` | every project's flows, and back to this project ([cli.md](cli.md#several-projects)) |
 | `esc`, `q`, `o` | back to the pane |
 
-Other projects' flows are read-only: `enter` and `x` work on this project's flows.
+Other projects' flows are read-only: `enter` and `x` work on this project's flows, and `s` only on
+this project's board.
+
+A flow whose setup failed names it first in its header, with the file that holds the whole output:
+`setup failed: Please run composer update (full output: ~/.local/state/saaio/projects/shop/hooks/.../setup.log)`.
 
 A flow whose services saaio paused ([repository.md](repository.md#pause-and-resume)) says so
 beside its state on its card: `ready · paused`, `working · resuming`, or `working · services down`

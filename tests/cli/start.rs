@@ -453,7 +453,7 @@ fn a_failing_setup_marks_the_flow_blocked_but_still_records_the_worker() {
     let lab = Lab::new();
     lab.hook(
         "setup",
-        "#!/bin/sh\necho 'port 8001 is taken' >&2\nexit 1\n",
+        "#!/bin/sh\necho 'checking ports'\necho 'port 8001 is taken' >&2\nexit 1\n",
     );
     lab.trust();
 
@@ -461,17 +461,27 @@ fn a_failing_setup_marks_the_flow_blocked_but_still_records_the_worker() {
 
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
+    let board: serde_json::Value =
+        serde_json::from_slice(&saaio(&lab.home, &["status", "--json"]).stdout).unwrap();
+    let flow = &board["flows"][0];
+    let log = flow["setup"]["log"].as_str().unwrap().to_string();
     assert!(
-        text.contains("setup: \"failed: port 8001 is taken\""),
+        text.contains(&format!(
+            "setup: \"failed: port 8001 is taken (full output: {log})\""
+        )),
         "{text}"
     );
     assert!(text.contains("pane: when saaio opens"), "{text}");
-    let board: serde_json::Value =
-        serde_json::from_slice(&saaio(&lab.home, &["status", "--json"]).stdout).unwrap();
-    assert_eq!(board["flows"][0]["state"], "blocked");
+    assert_eq!(flow["state"], "blocked");
     assert_eq!(
-        board["flows"][0]["blocker"],
-        "setup failed: port 8001 is taken"
+        flow["blocker"],
+        format!("setup failed: port 8001 is taken (full output: {log})")
+    );
+    assert_eq!(flow["setup"]["failed"], "port 8001 is taken");
+    assert!(log.ends_with("/setup.log"), "{log}");
+    assert_eq!(
+        fs::read_to_string(&log).unwrap(),
+        "checking ports\nport 8001 is taken\n"
     );
 }
 

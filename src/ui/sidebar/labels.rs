@@ -88,8 +88,8 @@ impl Sidebar<'_> {
         }
     }
 
-    /// The third row: why the pane is not running, whose run it waits for, what the flow asks, or
-    /// what it does.
+    /// The third row: why the pane is not running, whose run it waits for, what the flow asks,
+    /// that its setup failed, or what it does.
     pub(super) fn note(
         &self,
         flow: &FlowView,
@@ -106,8 +106,14 @@ impl Sidebar<'_> {
             let text = format!("after {}: {}", turn.holder, turn.command);
             return Some((text, theme.ui.faint));
         }
-        if let Some(blocker) = &flow.blocker {
+        let setup = flow.setup.as_ref().and_then(|run| run.failed.as_deref());
+        if let Some(blocker) = &flow.blocker
+            && (setup.is_none() || flow.setup_problem().as_ref() != Some(blocker))
+        {
             return Some((blocker.clone(), theme.ui.faint));
+        }
+        if let Some(why) = setup {
+            return Some((format!("setup failed: {why}"), theme.state.blocked));
         }
         if let Some(delegate) = &flow.delegate {
             return Some((format!("agent: {delegate}"), theme.ui.faint));
@@ -173,6 +179,58 @@ mod tests {
             prefix: Prefix::default(),
             theme,
         }
+    }
+
+    #[test]
+    fn says_a_setup_failed_unless_something_more_pressing_shows() {
+        let flow = |kinds: Vec<EventKind>| {
+            let started = EventKind::Started {
+                name: "shop".into(),
+                request: "x".into(),
+                mode: Mode::Auto,
+                phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
+            };
+            let events: Vec<Event> = std::iter::once(started)
+                .chain(kinds)
+                .map(|kind| Event::new(0, kind))
+                .collect();
+            crate::fold::fold(fixtures::flow_id("id"), &events, None, 0).unwrap()
+        };
+        let failed = || EventKind::Setup {
+            failed: Some("Please run composer update".into()),
+            log: "/s/setup.log".into(),
+        };
+        let theme = Theme::from_palette(Palette::SAAIO);
+        let board = empty_board();
+        let changed = HashMap::new();
+        let sidebar = sidebar(&board, &theme, &changed);
+        let short = (
+            "setup failed: Please run composer update".to_string(),
+            theme.state.blocked,
+        );
+
+        assert_eq!(
+            sidebar.note(&flow(vec![failed()]), None),
+            Some(short.clone())
+        );
+        assert_eq!(
+            sidebar.note(&flow(vec![failed(), EventKind::Working]), None),
+            Some(short)
+        );
+        let blocked = flow(vec![
+            failed(),
+            EventKind::Blocked {
+                reason: "tests fail".into(),
+            },
+        ]);
+        assert_eq!(
+            sidebar.note(&blocked, None),
+            Some(("tests fail".to_string(), theme.ui.faint))
+        );
     }
 
     #[test]

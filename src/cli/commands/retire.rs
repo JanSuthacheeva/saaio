@@ -88,10 +88,34 @@ pub fn close_pane(socket: &Path, flow: &FlowView) -> Result<Closing, Failure> {
     client::close_flow(socket, flow.id, CLOSE_WAIT).map_err(Failure::from)
 }
 
+/// Runs the flow's .saaio/teardown into its teardown log when trust covers the repo.
+pub fn teardown(trust: &Trust, store: &Store, flow: &FlowView) -> Teardown {
+    let Some(space) = &flow.workspace else {
+        return Teardown::None;
+    };
+    let Some(repo) = worktree::repo_of(space) else {
+        return Teardown::None;
+    };
+    if !hooks::exists(&repo, Hook::Teardown) {
+        Teardown::None
+    } else if !trust.covers(&repo) {
+        Teardown::Untrusted
+    } else {
+        let env = worktree::hook_env(flow.id, &flow.name, &repo, space);
+        let log = store.hook_log(flow.id, Hook::Teardown.name());
+        match hooks::run(trust, &repo, Hook::Teardown, space, &env, &log) {
+            Ok(true) => Teardown::Ran,
+            Ok(false) => Teardown::None,
+            Err(error) => Teardown::Failed(format!("{error:#}")),
+        }
+    }
+}
+
 /// Runs the teardown hook when trust covers the repo and removes the flow's worktree; keeps it with
 /// uncommitted work unless forced.
 pub fn retire_worktree(
     trust: &Trust,
+    store: &Store,
     flow: &FlowView,
     uncommitted: Uncommitted,
 ) -> (Retired, Teardown) {
@@ -104,18 +128,7 @@ pub fn retire_worktree(
     if !Path::new(&space.path).exists() {
         return (Retired::NoWorktree, Teardown::None);
     }
-    let teardown = if !hooks::exists(&repo, Hook::Teardown) {
-        Teardown::None
-    } else if !trust.covers(&repo) {
-        Teardown::Untrusted
-    } else {
-        let env = worktree::hook_env(flow.id, &flow.name, &repo, space);
-        match hooks::run(trust, &repo, Hook::Teardown, space, &env) {
-            Ok(true) => Teardown::Ran,
-            Ok(false) => Teardown::None,
-            Err(error) => Teardown::Failed(format!("{error:#}")),
-        }
-    };
+    let teardown = teardown(trust, store, flow);
     let force = uncommitted == Uncommitted::Discard;
     let retired = if workspace::remove_worktree(&repo, space, force).unwrap_or(false) {
         Retired::Removed

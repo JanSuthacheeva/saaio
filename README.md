@@ -179,6 +179,7 @@ public interface. The logs are private.
 | `saaio send --type <flow> <line>` | type a line such as `/compact` into a worker's pane |
 | `saaio report <event>` | report into a flow by hand |
 | `saaio remove <flow>`, `saaio clear` | tear down and forget |
+| `saaio setup [<flow>]` | run a flow's teardown, then its setup again |
 | `saaio bug-report` | a file to attach to a bug report |
 | `saaio completions <shell>` | the completion script for bash, zsh, fish, elvish or PowerShell |
 | `saaio update` | install the latest release over this binary |

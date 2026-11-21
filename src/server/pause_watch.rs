@@ -12,6 +12,7 @@ use crate::id::FlowId;
 use crate::launch::worktree;
 use crate::pause::{self, Job};
 use crate::server_log;
+use crate::store::Store;
 use crate::threads;
 use crate::trust::Trust;
 use crate::view::FlowView;
@@ -98,7 +99,14 @@ impl Server {
                 continue;
             }
             let id = flow.id;
-            if let Err(error) = run_in_background(flow, repo, trust, job, self.events.clone()) {
+            if let Err(error) = run_in_background(
+                flow,
+                repo,
+                trust,
+                self.store.clone(),
+                job,
+                self.events.clone(),
+            ) {
                 self.pause_finished(Finished {
                     id,
                     job,
@@ -174,6 +182,7 @@ fn run_in_background(
     flow: FlowView,
     repo: PathBuf,
     trust: Trust,
+    store: Store,
     job: Job,
     events: Sender<Event>,
 ) -> io::Result<()> {
@@ -186,8 +195,9 @@ fn run_in_background(
             Job::Resume => Hook::Resume,
         };
         let env = worktree::hook_env(flow.id, &flow.name, &repo, space);
-        let result =
-            hooks::run(&trust, &repo, hook, space, &env).map_err(|error| format!("{error:#}"));
+        let log = store.hook_log(flow.id, hook.name());
+        let result = hooks::run(&trust, &repo, hook, space, &env, &log)
+            .map_err(|error| format!("{error:#}"));
         let _ = events.send(Event::Paused(Finished {
             id: flow.id,
             job,

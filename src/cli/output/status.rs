@@ -92,11 +92,10 @@ fn board_list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool)
     let blockers = board
         .flows
         .iter()
-        .filter(|flow| flow.needs_you())
-        .filter_map(|flow| {
-            flow.blocker.as_ref().map(|blocker| BlockerRow {
+        .flat_map(|flow| {
+            blockers(flow, full).into_iter().map(|blocker| BlockerRow {
                 name: &flow.name,
-                blocker: truncated(blocker, LIST_TEXT_LIMIT, full),
+                blocker,
             })
         })
         .collect();
@@ -117,6 +116,24 @@ fn board_list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool)
         warnings,
         help,
     }))
+}
+
+/// What stops a flow in the list: the blocker of a flow that needs you, and the failed setup of
+/// one that has not ended, whatever it does, its reason cut but its log's path whole; one row when
+/// they are the same.
+fn blockers(flow: &FlowView, full: bool) -> Vec<String> {
+    let problem = flow.setup_problem();
+    let mut rows = Vec::new();
+    if flow.needs_you()
+        && let Some(blocker) = &flow.blocker
+        && problem.as_ref() != Some(blocker)
+    {
+        rows.push(truncated(blocker, LIST_TEXT_LIMIT, full));
+    }
+    if let Some(setup) = flow.setup_line(full).filter(|_| !flow.is_finished()) {
+        rows.push(setup);
+    }
+    rows
 }
 
 /// Where a flow's services stand: empty while they run or were never paused, else paused,
@@ -201,13 +218,14 @@ pub(crate) fn all(projects: &Projects, warnings: &[String], full: bool) -> Docum
         .collect::<Vec<_>>();
     let blockers = flows
         .iter()
-        .filter(|(_, flow)| flow.needs_you())
-        .filter_map(|&(project, flow)| {
-            flow.blocker.as_ref().map(|blocker| AllBlockerRow {
-                project,
-                name: &flow.name,
-                blocker: truncated(blocker, LIST_TEXT_LIMIT, full),
-            })
+        .flat_map(|&(project, flow)| {
+            blockers(flow, full)
+                .into_iter()
+                .map(move |blocker| AllBlockerRow {
+                    project,
+                    name: &flow.name,
+                    blocker,
+                })
         })
         .collect();
     let mut help = Vec::new();
@@ -260,6 +278,8 @@ pub(crate) fn detail(
         phase: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         blocker: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        setup: Option<String>,
         #[serde(skip_serializing_if = "str::is_empty")]
         services: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -342,7 +362,16 @@ pub(crate) fn detail(
         kind: flow.kind.clone(),
         state: flow.state.name(),
         phase: flow.phase.as_ref().map(|phase| phase.name().to_string()),
-        blocker: flow.blocker.as_deref().map(cut),
+        blocker: flow
+            .blocker
+            .clone()
+            .filter(|blocker| flow.setup_problem().as_ref() != Some(blocker))
+            .as_deref()
+            .map(cut),
+        // "failed: ...", as `saaio start` says it.
+        setup: flow
+            .setup_line(full)
+            .and_then(|line| line.strip_prefix("setup ").map(str::to_string)),
         services: services(flow),
         services_error: flow
             .services
@@ -579,6 +608,95 @@ mod tests {
             text.contains("  shop,export-csv,\"\",done,merge-request,\"\",29m,paused"),
             "{text}"
         );
+    }
+
+    fn failed_setup(why: &str) -> EventKind {
+        EventKind::Setup {
+            failed: Some(why.to_string()),
+            log: LOG.to_string(),
+        }
+    }
+
+    const LOG: &str = "/store/hooks/0b6e/setup.log";
+
+    #[test]
+    fn the_list_names_a_failed_setup_with_its_whole_log_path_once() {
+        let why = "c".repeat(LIST_TEXT_LIMIT + 1);
+        let board = fold::board(
+            vec![
+                flow("shop-240", vec![failed_setup(&why)], MIN),
+                flow(
+                    "shop-241",
+                    vec![
+                        failed_setup("Please run composer update"),
+                        EventKind::Working,
+                    ],
+                    3 * MIN,
+                ),
+            ],
+            3 * MIN,
+        );
+
+        let short = list(&board, &[], false);
+        let text = short.text();
+
+        assert!(text.contains("blockers[2]{name,blocker}:"), "{text}");
+        assert!(
+            text.contains(&format!(
+                "shop-240,\"setup failed: {} (truncated, 81 chars - use --full) (full output: {LOG})\"",
+                "c".repeat(LIST_TEXT_LIMIT)
+            )),
+            "{text}"
+        );
+        assert!(
+            text.contains(&format!(
+                "shop-241,\"setup failed: Please run composer update (full output: {LOG})\""
+            )),
+            "{text}"
+        );
+        let full = list(&board, &[], true);
+        assert!(
+            full.text()
+                .contains(&format!("setup failed: {why} (full output: {LOG})")),
+            "{}",
+            full.text()
+        );
+    }
+
+    #[test]
+    fn the_list_leaves_out_the_failed_setup_of_an_ended_flow() {
+        let board = fold::board(
+            vec![flow(
+                "shop-240",
+                vec![failed_setup("Please run composer update"), EventKind::Ended],
+                2 * MIN,
+            )],
+            2 * MIN,
+        );
+
+        let text = list(&board, &[], false).text().to_string();
+
+        assert!(!text.contains("blockers"), "{text}");
+    }
+
+    #[test]
+    fn the_detail_names_a_failed_setup_in_place_of_its_blocker() {
+        let flow = flow(
+            "shop-240",
+            vec![failed_setup("Please run composer update")],
+            2 * MIN,
+        );
+
+        let document = detail(&flow, 2 * MIN, false, None, Prefix::default());
+        let text = document.text();
+
+        assert!(
+            text.contains(&format!(
+                "\nsetup: \"failed: Please run composer update (full output: {LOG})\"\n"
+            )),
+            "{text}"
+        );
+        assert!(!text.contains("\nblocker:"), "{text}");
     }
 
     #[test]

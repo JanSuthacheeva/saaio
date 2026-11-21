@@ -150,6 +150,31 @@ fn every_view_looks_as_it_did() {
     });
     golden("board-paused", &render_at(&paused, FLEET));
 
+    let mut setup = board_app().with_home(Some("/Users/jan".into()));
+    let mut fleet = super::fleet();
+    let delegated = fleet
+        .flows
+        .iter_mut()
+        .find(|flow| flow.name == "export-csv")
+        .unwrap();
+    delegated.setup = Some(crate::view::SetupRun {
+        failed: Some("Please run composer update".into()),
+        log: "/Users/jan/.local/state/saaio/projects/shop/hooks/0b6e/setup.log".into(),
+        at: delegated.changed_at,
+    });
+    let selected = fleet
+        .flows
+        .iter()
+        .position(|flow| flow.name == "export-csv")
+        .unwrap();
+    setup.on_server(ServerMsg::Board(fleet));
+    golden("setup-failed", &render_at(&setup, FLEET));
+    setup.view = View::Board(BoardState {
+        selected: selected + 1,
+        all: false,
+    });
+    golden("board-setup-failed", &render_at(&setup, FLEET));
+
     let narrow = Size { cols: 96, rows: 30 };
     board.on_resize(narrow);
     golden("narrow-board", &render_at(&board, narrow));
