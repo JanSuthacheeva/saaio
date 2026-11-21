@@ -7,8 +7,8 @@ use crate::id::FlowId;
 use crate::store::FlowLog;
 use crate::text;
 use crate::view::{
-    Board, FlowView, ReviewCount, Services, Session, State, Step, StepStatus, Tasks, TimelineEntry,
-    Tone, TurnWait, VIEW_VERSION, Workspace,
+    Board, FlowView, ReviewCount, Services, Session, SetupRun, State, Step, StepStatus, Tasks,
+    TimelineEntry, Tone, TurnWait, VIEW_VERSION, Workspace,
 };
 use crate::workflow::Phase;
 use crate::workflow::Workflow;
@@ -207,6 +207,7 @@ impl Folding {
             permission: false,
             services: None,
             turn: None,
+            setup: None,
         };
         let phases = match (workflow, phases) {
             (Some(workflow), _) => workflow.phases(),
@@ -246,6 +247,7 @@ impl Folding {
                     | EventKind::PermissionPending { .. }
                     | EventKind::Idle { .. }
                     | EventKind::Blocked { .. }
+                    | EventKind::Setup { .. }
                     | EventKind::Edited { .. }
             )
         {
@@ -457,7 +459,7 @@ impl Folding {
                 });
             }
             EventKind::TurnTaken | EventKind::Prompted => self.view.turn = None,
-            EventKind::Setup { .. } => {}
+            EventKind::Setup { failed, log } => self.set_up(failed.as_ref(), log, at),
             EventKind::Edited { path } => {
                 if let Some(build) = self.build_to_go_back_to(path) {
                     self.enter(build, at);
@@ -585,6 +587,26 @@ impl Folding {
             let spent = until.saturating_sub(self.phase_since);
             let total = &mut self.durations[current];
             *total = Some(total.unwrap_or(0) + spent);
+        }
+    }
+
+    /// Keeps the run; a failure blocks the flow, a pass after one says so and lets go of a flow
+    /// still blocked on it.
+    fn set_up(&mut self, failed: Option<&String>, log: &str, at: u64) {
+        let before = self.view.setup_problem();
+        self.view.setup = Some(SetupRun {
+            failed: failed.cloned(),
+            log: log.to_string(),
+            at,
+        });
+        if let Some(problem) = self.view.setup_problem() {
+            self.stop_for(State::Blocked, &problem, at, "blocked", Tone::Problem);
+        } else if let Some(problem) = before {
+            self.note(at, "setup passed".to_string(), Tone::Progress);
+            if self.view.state == State::Blocked && self.view.blocker.as_deref() == Some(&problem) {
+                self.view.state = State::Idle;
+                self.view.blocker = None;
+            }
         }
     }
 

@@ -346,7 +346,7 @@ failed setup. An append that fails is a `Failure` as today.
 ### The setup outcome
 
 - [x] Add `EventKind::Setup` with JSON round trip and `clean` tests
-- [ ] Add `view::SetupRun`, `FlowView.setup`, `setup_problem`, and fold `Setup` (failure survives Working, pass notes and unblocks) with fold tests
+- [x] Add `view::SetupRun`, `FlowView.setup`, `setup_problem`, and fold `Setup` (failure survives Working, pass notes and unblocks) with fold tests
 - [ ] Move `Setup` to `output/setup.rs` as `Ran{log}`/`None`/`Failed{reason, log}`; add `setup::run_setup` and use it in `start::run` instead of the Blocked line; start TOON tests
 - [ ] Status: setup blocker row (reason cut, path whole, no duplicate blocker row) and the one-flow `setup` key, with TOON tests
 
