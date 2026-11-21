@@ -9,6 +9,7 @@
     - [Questions](#questions)
     - [Services](#services)
     - [Turn](#turn)
+    - [Setup](#setup)
     - [Workspace](#workspace)
 - [Every project](#every-project)
 - [Versions](#versions)
@@ -84,7 +85,8 @@ saaio status shop-217 --json # a board with just that flow
       "questions": [],
       "permission": false,
       "services": null,
-      "turn": null
+      "turn": null,
+      "setup": null
     },
     {
       "id": "5418e55e-581e-4117-a46c-0824b8e475d9",
@@ -119,7 +121,8 @@ saaio status shop-217 --json # a board with just that flow
       "questions": [],
       "permission": false,
       "services": null,
-      "turn": null
+      "turn": null,
+      "setup": null
     }
   ]
 }
@@ -169,6 +172,7 @@ Each entry of `flows` holds everything saaio knows about one flow:
 | `permission` | boolean | the flow is `waiting` on a permission prompt in its pane; `blocker` names the tool call. A Codex request counts once it is `waiting`, three seconds in. |
 | `services` | object or null | where the flow's services stand. Null until saaio first pauses them. See [Services](#services). |
 | `turn` | object or null | a heavy command of the flow that waits for another worker's run. Null when none waits. See [Turn](#turn). |
+| `setup` | object or null | the last run of the repo's `.saaio/setup` for the flow. Null when the repository has none. See [Setup](#setup). |
 
 ### States
 
@@ -207,7 +211,7 @@ Each entry of `timeline` is one thing that happened, oldest first:
 | Key | Type | Holds |
 | --- | --- | --- |
 | `at` | number | when it happened |
-| `text` | string | what happened: `started`, `phase: plan`, `phase: implement (back)`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `PR #42 merged` (`MR !88 merged` on GitLab), `PR #42 closed`, `master: ...` (a message from the master), `master typed: ...` (a line typed into its pane), `pause failed: ...`, `resume failed: ...`, `ended` |
+| `text` | string | what happened: `started`, `phase: plan`, `phase: implement (back)`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `PR #42 merged` (`MR !88 merged` on GitLab), `PR #42 closed`, `master: ...` (a message from the master), `master typed: ...` (a line typed into its pane), `pause failed: ...`, `resume failed: ...`, `setup passed`, `ended` |
 | `tone` | string | `neutral`, `progress`, `attention`, `problem` or `success` |
 
 ### Questions
@@ -231,7 +235,7 @@ per question, and `blocker` holds the first question:
 | --- | --- | --- |
 | `status` | string | `pausing`, `paused`, `resuming`, `running`, `pause-failed` or `resume-failed` |
 | `since` | number | when it got there |
-| `reason` | string or null | the script's last error line, for `pause-failed` and `resume-failed` |
+| `reason` | string or null | the last line the script printed, for `pause-failed` and `resume-failed`; its whole output is in the store's `hooks/<id>/pause.log` or `resume.log` ([files.md](files.md)) |
 
 ### Turn
 
@@ -243,6 +247,18 @@ per question, and `blocker` holds the first question:
 | `command` | string | the listed command it runs |
 | `holder` | string | the name of the flow whose run has the turn |
 | `since` | number | when it began to wait |
+
+### Setup
+
+`setup` holds the last run of the repo's `.saaio/setup`, at `saaio start` or by `saaio setup`
+([repository.md](repository.md#when-setup-or-teardown-fails)). A failure stays until a run passes,
+whatever the flow's `state`:
+
+| Key | Type | Holds |
+| --- | --- | --- |
+| `failed` | string or null | the last line the script printed when it failed. Null when it passed |
+| `log` | string | the file with the run's whole output |
+| `at` | number | when it ran |
 
 ### Workspace
 

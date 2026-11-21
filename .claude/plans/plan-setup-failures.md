@@ -372,7 +372,7 @@ failed setup. An append that fails is a `Failure` as today.
 ### Instructions and docs
 
 - [x] master.md setup line and `saaio setup`, current text kept as `master-v14.md`; master tests
-- [ ] Docs: cli.md (`saaio setup`, start's `setup` field), repository.md (When setup fails), troubleshooting.md, files.md (`hooks/`), json.md (`setup`), ui.md (keys, sidebar), README command list if it lists commands; CHANGELOG Unreleased; CLAUDE.md plan list and architecture lines
+- [x] Docs: cli.md (`saaio setup`, start's `setup` field), repository.md (When setup fails), troubleshooting.md, files.md (`hooks/`), json.md (`setup`), ui.md (keys, sidebar), README command list if it lists commands; CHANGELOG Unreleased; CLAUDE.md plan list and architecture lines
 
 ### Check
 

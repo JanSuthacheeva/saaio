@@ -53,6 +53,7 @@ flow's store from any folder. A store holds:
 | --- | --- |
 | `flows/<id>.jsonl` | one flow's events, one JSON line each, append-only |
 | `flows/<id>.alive` | modification time is the flow's last heartbeat |
+| `hooks/<id>/<hook>.log` | the whole output of the flow's last run of `.saaio/setup`, `teardown`, `pause` or `resume`, stdout and stderr in order. Each run replaces the file before; removing the flow deletes the folder. |
 | `waits/` | wake-up state: each session's waiter, messages given to a worker, lines typed into a worker's pane, whether a session is busy, what the master last saw, the master's turn and its Codex session id, a hash of each session's key, and the pid of each worker's agent |
 | `turns/0.lock` | held by the worker whose heavy command runs ([repository.md](repository.md#heavy-commands)), naming it. Freed when the process that holds it exits. |
 | `server.sock` | the socket between the UI and the server, owner-only. If its path would be 100 bytes or longer: `saaio-<uid>/<hash>.sock` in `$XDG_RUNTIME_DIR`, else `$TMPDIR`, else `/tmp`, with the log next to it as `<hash>.log`. saaio uses that folder only while it is yours and closed to others (`0700`), and talks only to processes of your user. |

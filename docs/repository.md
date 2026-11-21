@@ -189,18 +189,31 @@ env -u GIT_DIR -u GIT_WORK_TREE git -C "$SAAIO_REPO" status
 
 ### When setup or teardown fails
 
-A failed setup does not stop the flow. The flow is blocked with the setup's last error line, and
-the worker still opens, so you can look at what went wrong:
+A failed setup does not stop the flow. The flow is blocked, and the worker still opens, so it can
+help find what went wrong. Each script's whole output, stdout and stderr in order, goes to a file
+in the store, `hooks/<flow id>/<script>.log` ([files.md](files.md)), and a failure names the file
+beside the output's last line:
 
 ```
 $ saaio start "SHOP-240 broken setup"
 flow: shop-240
 ...
-setup: "failed: composer: lock file out of date"
+setup: "failed: Please run composer update (full output: ~/.local/state/saaio/projects/shop/hooks/0b6e5c4a-.../setup.log)"
 ```
 
+The last line is often only the hint; the cause, such as the PHP extensions composer missed, is
+higher up in the file. The failure stays in `saaio status`, among the blockers, and on the flow's
+row in the sidebar until a setup run passes, whatever the worker does meanwhile. saaio tells the
+worker and the master too, with the path, so either can read it.
+
+Once the cause is fixed, `saaio setup <flow>` runs the flow's teardown, then its setup again, with
+its slot and worktree, and keeps everything else ([cli.md](cli.md#saaio-setup)). In the UI, `s`
+behind the prefix does it for the worker in view, and `s` on the board for the selected card. A
+worker may run `saaio setup` itself once it fixed the repository. saaio never runs setup again on
+its own: a retry would hide a failure that comes and goes.
+
 A setup that runs longer than 10 minutes is stopped with everything it started, and the flow is
-blocked with `setup failed: no answer within 10m`.
+blocked with `setup failed: no answer within 10m`. What it printed until then stays in its file.
 
 A teardown never holds up a removal. When it fails, the removal goes on; when it runs longer than
 2 minutes, it is stopped with everything it started, and the removal goes on as well.
@@ -321,7 +334,7 @@ services are paused and no `saaio server` runs, a tool call waits 2 seconds, the
 
 ### When pause or resume fails
 
-When a pause fails, the flow's timeline says `pause failed: <last error line>`, and saaio tries
+When a pause fails, the flow's timeline says `pause failed: <its last line>`, and saaio tries
 again once the flow's state changed.
 
 When a resume fails, the tool runs anyway. The board card says `working · services down`, and
