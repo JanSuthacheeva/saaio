@@ -80,7 +80,7 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
     let repo = git::repo_root(&cwd).map_err(|_| {
         Failure::error(
             "saaio start needs a git repository",
-            vec!["Run it inside the repository the flow works on".to_string()],
+            ["Run it inside the repository the flow works on"],
         )
     })?;
     let trust = Trust::at(&registry);
@@ -189,7 +189,7 @@ fn pick_agent<'a>(
         let known: Vec<&str> = config.agents.keys().map(String::as_str).collect();
         Failure::error(
             format!("no agent named {}", asked.unwrap_or(&config.worker.agent)),
-            vec![format!("Agents: {}", known.join(", "))],
+            [format!("Agents: {}", known.join(", "))],
         )
     })
 }
@@ -213,7 +213,7 @@ fn pick_branch_type(
         return match asked {
             Some(_) => Err(Failure::error(
                 format!("a {name} flow has no branch, so no branch type"),
-                vec!["Leave out --type".to_string()],
+                ["Leave out --type"],
             )),
             None => Ok(None),
         };
@@ -229,7 +229,7 @@ fn pick_branch_type(
     .map_err(|error| {
         Failure::error(
             format!("{error:#}"),
-            vec![format!(
+            [format!(
                 "Name the types in {}: [branch] types = [\"feature\", \"bugfix\"]",
                 repo_config::CONFIG_FILE
             )],
@@ -246,11 +246,11 @@ fn pick_base(repo: &Path, asked: Option<&str>) -> Result<Option<StartPoint>, Fai
     git::start_point(repo, base).map(Some).map_err(|error| {
         let help = if git::is_branch_name(repo, base) {
             vec![
-                "Run `git branch -a` to see the branches".to_string(),
-                "Push it first when it lives in another clone".to_string(),
+                "Run `git branch -a` to see the branches",
+                "Push it first when it lives in another clone",
             ]
         } else {
-            vec!["Name a branch, e.g. --base flow/shop-216".to_string()]
+            vec!["Name a branch, e.g. --base flow/shop-216"]
         };
         Failure::error(format!("{error:#}"), help)
     })
@@ -270,9 +270,9 @@ fn claim_slot(
         .ok_or_else(|| {
             Failure::error(
                 format!("all {} slots are in use", slots::MAX_SLOTS),
-                vec![
-                    "Run `saaio status --all` to see which flows hold them".to_string(),
-                    "Run `saaio clear` in projects with finished flows".to_string(),
+                [
+                    "Run `saaio status --all` to see which flows hold them",
+                    "Run `saaio clear` in projects with finished flows",
                 ],
             )
         })

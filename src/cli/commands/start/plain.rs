@@ -73,7 +73,7 @@ fn resolve(given: &Path, cwd: &Path, home: Option<&Path>) -> Result<PathBuf, Fai
             };
             Err(Failure::error(
                 format!("no folder {}", shown.display()),
-                vec!["Name an existing folder".to_string()],
+                ["Name an existing folder"],
             ))
         }
     }

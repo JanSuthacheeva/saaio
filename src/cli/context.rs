@@ -30,19 +30,19 @@ impl Context<'_> {
         let store = self.env.store(cwd.as_deref()).map_err(|error| {
             Failure::error(
                 format!("could not open the store: {error:#}"),
-                vec!["Set SAAIO_HOME to a directory".to_string()],
+                ["Set SAAIO_HOME to a directory"],
             )
         })?;
         let Some(store) = store else {
             return Err(Failure::error(
                 "cannot find a state directory",
-                vec!["Set SAAIO_HOME to a directory".to_string()],
+                ["Set SAAIO_HOME to a directory"],
             ));
         };
         let Some(registry) = self.env.registry() else {
             return Err(Failure::error(
                 "cannot find a state directory",
-                vec!["Set HOME or XDG_STATE_HOME to a directory".to_string()],
+                ["Set HOME or XDG_STATE_HOME to a directory"],
             ));
         };
         let _ = registry.register(&store);
@@ -94,10 +94,7 @@ mod tests {
         let failure = ctx.open().err().unwrap();
 
         assert_eq!(failure.message, "cannot find a state directory");
-        assert_eq!(
-            failure.help,
-            vec!["Set SAAIO_HOME to a directory".to_string()]
-        );
+        assert_eq!(failure.help, ["Set SAAIO_HOME to a directory"]);
     }
 
     #[test]
@@ -114,9 +111,6 @@ mod tests {
 
         let failure = ctx.open().err().unwrap();
 
-        assert_eq!(
-            failure.help,
-            vec!["Set HOME or XDG_STATE_HOME to a directory".to_string()]
-        );
+        assert_eq!(failure.help, ["Set HOME or XDG_STATE_HOME to a directory"]);
     }
 }

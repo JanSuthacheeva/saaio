@@ -30,33 +30,30 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
     if ctx.env.saaio_master && ctx.env.key().is_none() {
         return Err(Failure::error(
             "this pane has no key: an earlier saaio server opened it",
-            vec![
-                "Ask the user to run `saaio --stop` and start saaio again; unfinished flows resume"
-                    .to_string(),
-            ],
+            ["Ask the user to run `saaio --stop` and start saaio again; unfinished flows resume"],
         ));
     }
     if !identity::proves(&store, &Waiter::Master, ctx.env.key()) {
         return Err(Failure::error(
             "only the master sends",
-            vec!["End your turn with the question; saaio wakes the master".to_string()],
+            ["End your turn with the question; saaio wakes the master"],
         ));
     }
     let text = args.text.trim();
     if text.is_empty() {
-        return Err(Failure::error("nothing to send", Vec::new()));
+        return Err(Failure::bare("nothing to send"));
     }
     let length = text.chars().count();
     if length > LONG_TEXT_LIMIT {
         return Err(Failure::error(
             format!("the message is {length} chars, over {LONG_TEXT_LIMIT}"),
-            vec!["Say it shorter, or point to a file in the worktree".to_string()],
+            ["Say it shorter, or point to a file in the worktree"],
         ));
     }
     if args.typed && text.contains(['\n', '\r']) {
         return Err(Failure::error(
             "a typed line is one line",
-            vec!["Queue one `saaio send --type` per line".to_string()],
+            ["Queue one `saaio send --type` per line"],
         ));
     }
     let (flows, _) = views(&store, now);
@@ -64,22 +61,19 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
     if flow.is_finished() {
         return Err(Failure::error(
             format!("{} is finished", flow.name),
-            vec!["Run `saaio` for the flows still running".to_string()],
+            ["Run `saaio` for the flows still running"],
         ));
     }
     if flow.workspace.is_none() {
-        return Err(Failure::error(
-            format!(
-                "{} has no worker; it was not started with saaio start",
-                flow.name
-            ),
-            Vec::new(),
-        ));
+        return Err(Failure::bare(format!(
+            "{} has no worker; it was not started with saaio start",
+            flow.name
+        )));
     }
     if flow.is_plain() {
         return Err(Failure::error(
             format!("{} is a plain session; it is not the master's", flow.name),
-            vec!["Plain sessions are the user's own".to_string()],
+            ["Plain sessions are the user's own"],
         ));
     }
     if args.typed {
@@ -113,7 +107,7 @@ fn queue(
                 flow.name,
                 agent.unwrap_or_default()
             ),
-            vec!["Use `saaio send` for a message".to_string()],
+            ["Use `saaio send` for a message"],
         ));
     }
     let events = store.events(flow.id)?;

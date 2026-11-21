@@ -23,7 +23,7 @@ pub fn run(ctx: &Context) -> Result<Document, Failure> {
     let Some(registry) = ctx.env.registry() else {
         return Err(Failure::error(
             "cannot find a state directory",
-            vec!["Set HOME or XDG_STATE_HOME to a directory".to_string()],
+            ["Set HOME or XDG_STATE_HOME to a directory"],
         ));
     };
     let dir = registry.root().join(REPORTS_DIR);
@@ -75,7 +75,7 @@ pub fn run(ctx: &Context) -> Result<Document, Failure> {
     let could_not = |path: &Path, error: io::Error| {
         Failure::error(
             format!("could not write {}: {error}", path.display()),
-            vec![format!("Make {} a folder you can write to", dir.display())],
+            [format!("Make {} a folder you can write to", dir.display())],
         )
     };
     private::create_dir(&dir).map_err(|error| could_not(&dir, error))?;

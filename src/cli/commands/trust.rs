@@ -27,7 +27,7 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
     let Some(registry) = ctx.env.registry() else {
         return Err(Failure::error(
             "cannot find a state directory",
-            vec!["Set HOME or XDG_STATE_HOME to a directory".to_string()],
+            ["Set HOME or XDG_STATE_HOME to a directory"],
         ));
     };
     let trust = Trust::at(&registry);
@@ -58,7 +58,7 @@ fn root(folder: &Path) -> Result<PathBuf, Failure> {
     let folder = folder.canonicalize().map_err(|error| {
         Failure::error(
             format!("cannot open {}: {error}", folder.display()),
-            vec!["Pass an existing folder".to_string()],
+            ["Pass an existing folder"],
         )
     })?;
     Ok(git::root_or_folder(&folder))

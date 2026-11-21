@@ -46,7 +46,7 @@ fn check_request(request: &str) -> Result<(), Failure> {
     if length > REQUEST_LIMIT {
         return Err(Failure::error(
             format!("the request is {length} chars, over {REQUEST_LIMIT}"),
-            vec!["Put the details in a file in the repo and name it in the request".to_string()],
+            ["Put the details in a file in the repo and name it in the request"],
         ));
     }
     Ok(())
@@ -58,7 +58,7 @@ fn pick_kind<'a>(config: &'a Config, asked: Option<&str>) -> Result<(&'a str, &'
         let known: Vec<&str> = config.kinds.keys().map(String::as_str).collect();
         Failure::error(
             format!("no kind named {}", asked.unwrap_or(&config.worker.kind)),
-            vec![format!("Kinds: {}", known.join(", "))],
+            [format!("Kinds: {}", known.join(", "))],
         )
     })
 }
@@ -66,7 +66,7 @@ fn pick_kind<'a>(config: &'a Config, asked: Option<&str>) -> Result<(&'a str, &'
 fn no_flow(name: &str) -> Failure {
     Failure::error(
         format!("no flow named {name}"),
-        vec![
+        [
             "Run `saaio` to list the flows".to_string(),
             format!("Run `saaio new --name {name} --request <text>` to start it"),
         ],

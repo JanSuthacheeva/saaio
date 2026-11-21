@@ -86,7 +86,7 @@ fn no_phase(flow: &FlowView, phase: &Phase) -> Failure {
     };
     Failure::error(
         format!("{} has no phase {}", flow.name, phase.name()),
-        vec![help],
+        [help],
     )
 }
 
@@ -94,13 +94,10 @@ fn no_phase(flow: &FlowView, phase: &Phase) -> Failure {
 fn no_merge_request(url: &str) -> Failure {
     Failure::error(
         format!("{url} is no merge request URL"),
-        vec![
-            concat!(
-                "Report it as https://<host>/<owner>/<repo>/pull/<n> ",
-                "or https://<host>/<group>/<repo>/-/merge_requests/<n>"
-            )
-            .to_string(),
-        ],
+        [concat!(
+            "Report it as https://<host>/<owner>/<repo>/pull/<n> ",
+            "or https://<host>/<group>/<repo>/-/merge_requests/<n>"
+        )],
     )
 }
 
@@ -108,7 +105,7 @@ fn no_merge_request(url: &str) -> Failure {
 fn foreign_merge_request(flow: &FlowView, url: &str) -> Failure {
     Failure::error(
         format!("{url} is not a merge request of {}'s repository", flow.name),
-        vec!["Report the URL `gh pr create` or `glab mr create` printed".to_string()],
+        ["Report the URL `gh pr create` or `glab mr create` printed"],
     )
 }
 
