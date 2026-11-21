@@ -376,4 +376,4 @@ failed setup. An append that fails is a `Failure` as today.
 
 ### Check
 
-- [ ] End to end in a scratch store and repo: a start whose setup fails like composer's (several lines, the cause not last), status and the worker note name the log with the whole output, `saaio setup` fails again, fix the script, `saaio setup` passes and the blocker clears; the UI's `s` in a PTY; `saaio --stop` at the end
+- [x] End to end in a scratch store and repo: a start whose setup fails like composer's (several lines, the cause not last), status and the worker note name the log with the whole output, `saaio setup` fails again, fix the script, `saaio setup` passes and the blocker clears; the UI's `s` in a PTY; `saaio --stop` at the end
