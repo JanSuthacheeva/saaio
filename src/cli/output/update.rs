@@ -146,7 +146,7 @@ pub(crate) fn latest(running: &Build, latest: &Tag, binary: &str, others: &Other
 pub(crate) fn source(to: &Tag) -> Failure {
     Failure::error(
         "this saaio was built from source, so saaio update does not replace it",
-        vec![
+        [
             format!(
                 "Run `cargo install --locked --git https://github.com/JanSuthacheeva/saaio --tag {to} --force`"
             ),
@@ -159,7 +159,7 @@ pub(crate) fn source(to: &Tag) -> Failure {
 pub(crate) fn failed(to: &Tag, why: &str, releases: &Releases) -> Failure {
     Failure::error(
         format!("could not install {to}: {why}"),
-        vec![
+        [
             format!("Check that {to} is a release: {}", releases.page()),
             "Check the connection, then try again".to_string(),
         ],
@@ -176,7 +176,7 @@ pub(crate) fn unwritable(dir: &str, releases: &Releases, to: &Tag) -> Failure {
         .collect();
     Failure::error(
         format!("cannot write to {dir}"),
-        vec![format!(
+        [format!(
             "Run `curl -fsSL {} | sudo env {} sh`",
             releases.url(Some(to), "install.sh"),
             env.join(" ")

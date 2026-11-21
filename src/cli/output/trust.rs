@@ -15,7 +15,7 @@ pub(crate) fn untrusted(repo: &Path, hooks: &[Hook], codex: bool) -> Failure {
     Failure::refused(
         Refusal::Untrusted,
         format!("{repo} is not trusted: {}", consequences(hooks, codex)),
-        vec![
+        [
             format!(
                 "Ask the person to read its .saaio scripts, then run `saaio trust` in {repo} in their terminal"
             ),
@@ -90,7 +90,7 @@ pub(crate) fn list(repos: &[PathBuf]) -> Document {
 pub(crate) fn not_a_person(repo: &Path) -> Failure {
     Failure::error(
         "only a person trusts a repository: run `saaio trust` in your own terminal",
-        vec![format!(
+        [format!(
             "Ask the person to read the .saaio scripts in {repo}, then run `saaio trust` there in their terminal",
             repo = repo.display()
         )],

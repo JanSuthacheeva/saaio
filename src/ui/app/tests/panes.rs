@@ -360,7 +360,7 @@ fn shows_an_error_whose_refusal_it_does_not_know() {
 fn reads_an_error_toon_quoted_without_its_quotes() {
     let failure = Failure::error(
         "could not create flow in /shop: Permission denied (os error 13)",
-        vec!["Set SAAIO_HOME to a directory".to_string()],
+        ["Set SAAIO_HOME to a directory"],
     );
     let printed = format!("{}\n", failure.to_toon());
     assert!(

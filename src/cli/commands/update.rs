@@ -34,15 +34,16 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
     let releases = ctx.env.releases();
     let target = match &args.version {
         Some(version) => Tag::parse(version).map_err(|error| Failure {
-            message: format!("{error:#}"),
-            help: vec!["Pass a release tag, such as --version v0.1.1".to_string()],
             code: 2,
-            refusal: None,
+            ..Failure::error(
+                format!("{error:#}"),
+                ["Pass a release tag, such as --version v0.1.1"],
+            )
         })?,
         None => releases.latest(LIMIT).map_err(|error| {
             Failure::error(
                 format!("could not read the latest release: {error:#}"),
-                vec!["Check the connection, or pass --version <tag>".to_string()],
+                ["Check the connection, or pass --version <tag>"],
             )
         })?,
     };

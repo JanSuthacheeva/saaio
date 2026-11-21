@@ -55,17 +55,29 @@ impl Document {
 
 impl Failure {
     /// Exit code 1.
-    pub fn error(message: impl Into<String>, help: Vec<String>) -> Failure {
+    pub fn error(
+        message: impl Into<String>,
+        help: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Failure {
         Failure {
             message: message.into(),
-            help,
+            help: help.into_iter().map(Into::into).collect(),
             code: 1,
             refusal: None,
         }
     }
 
+    /// Exit code 1, no next steps.
+    pub fn bare(message: impl Into<String>) -> Failure {
+        Failure::error(message, Vec::<String>::new())
+    }
+
     /// Exit code 1, a refusal: printed with its `refusal` key.
-    pub fn refused(refusal: Refusal, message: impl Into<String>, help: Vec<String>) -> Failure {
+    pub fn refused(
+        refusal: Refusal,
+        message: impl Into<String>,
+        help: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Failure {
         Failure {
             refusal: Some(refusal),
             ..Failure::error(message, help)
@@ -143,7 +155,7 @@ impl Failure {
 /// Exit code 1: the error chain as the message.
 impl From<anyhow::Error> for Failure {
     fn from(error: anyhow::Error) -> Failure {
-        Failure::error(format!("{error:#}"), Vec::new())
+        Failure::bare(format!("{error:#}"))
     }
 }
 
@@ -188,10 +200,7 @@ mod tests {
 
     #[test]
     fn prints_an_error_with_next_steps_as_toon() {
-        let failure = Failure::error(
-            "no flow named shop-999",
-            vec!["Run `saaio` to list the flows".into()],
-        );
+        let failure = Failure::error("no flow named shop-999", ["Run `saaio` to list the flows"]);
 
         assert_eq!(failure.code, 1);
         assert_eq!(
@@ -205,7 +214,7 @@ mod tests {
         let failure = Failure::refused(
             Refusal::Uncommitted,
             "shop-230 has uncommitted work",
-            vec!["Run `saaio remove shop-230 --force`".into()],
+            ["Run `saaio remove shop-230 --force`"],
         );
 
         assert_eq!(failure.code, 1);
@@ -218,7 +227,7 @@ mod tests {
 
     #[test]
     fn prints_no_refusal_for_a_plain_error() {
-        let failure = Failure::error("no flow named shop-999", Vec::new());
+        let failure = Failure::bare("no flow named shop-999");
 
         assert_eq!(failure.refusal, None);
         assert_eq!(failure.to_toon(), "error: no flow named shop-999");

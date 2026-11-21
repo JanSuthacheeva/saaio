@@ -38,6 +38,6 @@ fn refuse_inside_own_flow(store: &Store, env: &Env) -> Result<(), Failure> {
     }
     Err(Failure::error(
         "`saaio --stop` runs inside a flow's worker, on the store that flow lives in: it would end the user's sessions",
-        vec!["Set SAAIO_HOME to a scratch folder to stop a server of your own".to_string()],
+        ["Set SAAIO_HOME to a scratch folder to stop a server of your own"],
     ))
 }

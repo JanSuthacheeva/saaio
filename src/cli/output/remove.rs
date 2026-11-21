@@ -14,7 +14,7 @@ pub(crate) fn uncommitted(name: &str, path: &str) -> Failure {
     Failure::refused(
         Refusal::Uncommitted,
         format!("{name} has uncommitted work in {path}"),
-        vec![
+        [
             format!("Commit or stash it in {path}, then run `saaio remove {name}` again"),
             format!("Run `saaio remove {name} --force` to discard the uncommitted work"),
         ],
@@ -26,7 +26,7 @@ pub(crate) fn uncommitted(name: &str, path: &str) -> Failure {
 pub(crate) fn unchecked(name: &str, path: &str, reason: &anyhow::Error) -> Failure {
     Failure::error(
         format!("git cannot check {path} for uncommitted changes ({reason:#})"),
-        vec![format!(
+        [format!(
             "Run `saaio remove {name} --force` to remove it without the check"
         )],
     )
