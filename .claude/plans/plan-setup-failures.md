@@ -209,7 +209,8 @@ help[2]:
 
 - List: a failed setup is a `blockers` row, its reason cut to the list limit but the log path kept
   whole; the plain blocker row is left out when it is the same failure.
-- One flow: a `setup` key with `setup_problem`.
+- One flow: a `setup` key with `setup_problem` (reason cut like the list), and no `blocker` key when
+  the blocker is that same failure.
 
 ### `src/cli.rs`, `src/cli/commands.rs` (modified)
 
@@ -348,7 +349,7 @@ failed setup. An append that fails is a `Failure` as today.
 - [x] Add `EventKind::Setup` with JSON round trip and `clean` tests
 - [x] Add `view::SetupRun`, `FlowView.setup`, `setup_problem`, and fold `Setup` (failure survives Working, pass notes and unblocks) with fold tests
 - [x] Move `Setup` to `output/setup.rs` as `Ran{log}`/`None`/`Failed{reason, log}`; add `setup::run_setup` and use it in `start::run` instead of the Blocked line; start TOON tests
-- [ ] Status: setup blocker row (reason cut, path whole, no duplicate blocker row) and the one-flow `setup` key, with TOON tests
+- [x] Status: setup blocker row (reason cut, path whole, no duplicate blocker row) and the one-flow `setup` key, with TOON tests
 
 ### Who hears it
 
