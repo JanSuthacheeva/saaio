@@ -100,3 +100,41 @@ fn a_setup_after_the_end_is_ignored() {
     assert_eq!(flow.state, State::Ended);
     assert_eq!(flow.setup, None);
 }
+
+#[test]
+fn a_failure_while_the_worker_works_leaves_it_working() {
+    let flow = view(
+        &[
+            started(0),
+            at(1, EventKind::Working),
+            setup(2, Some("Please run composer update")),
+        ],
+        3,
+    );
+    let problem = format!("setup failed: Please run composer update (full output: {LOG})");
+
+    assert_eq!(flow.state, State::Working);
+    assert_eq!(flow.blocker, None);
+    assert_eq!(flow.setup_problem().as_deref(), Some(problem.as_str()));
+    assert_eq!(texts(&flow).last(), Some(&problem.as_str()));
+}
+
+#[test]
+fn a_failure_after_the_turn_ended_blocks_the_flow() {
+    let flow = view(
+        &[
+            started(0),
+            at(1, EventKind::Working),
+            at(
+                2,
+                EventKind::Idle {
+                    note: "done".into(),
+                },
+            ),
+            setup(3, Some("Please run composer update")),
+        ],
+        4,
+    );
+
+    assert_eq!(flow.state, State::Blocked);
+}

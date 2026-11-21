@@ -153,6 +153,8 @@ struct Folding {
     /// The turn the current phase began in has ended: the person had the flow back since.
     turn_ended: bool,
     pending_permission: Option<(u64, String)>,
+    /// The worker itself said it works: a new flow folds as Working before it says anything.
+    reported_working: bool,
 }
 
 impl Folding {
@@ -224,6 +226,7 @@ impl Folding {
             ended: false,
             turn_ended: false,
             pending_permission: None,
+            reported_working: false,
         }
     }
 
@@ -293,8 +296,10 @@ impl Folding {
                 }
                 self.view.state = State::Working;
                 self.view.delegate = None;
+                self.reported_working = true;
             }
             EventKind::Delegated { description } => {
+                self.reported_working = true;
                 self.view.state = State::Delegated;
                 self.view.delegate = Some(description.clone());
             }
@@ -600,7 +605,12 @@ impl Folding {
             at,
         });
         if let Some(problem) = self.view.setup_problem() {
-            self.stop_for(State::Blocked, &problem, at, "blocked", Tone::Problem);
+            let mid_turn = matches!(self.view.state, State::Working | State::Delegated);
+            if mid_turn && self.reported_working {
+                self.note(at, problem, Tone::Problem);
+            } else {
+                self.stop_for(State::Blocked, &problem, at, "blocked", Tone::Problem);
+            }
         } else if let Some(problem) = before {
             self.note(at, "setup passed".to_string(), Tone::Progress);
             if self.view.state == State::Blocked && self.view.blocker.as_deref() == Some(&problem) {

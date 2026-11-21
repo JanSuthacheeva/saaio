@@ -211,7 +211,7 @@ Each entry of `timeline` is one thing that happened, oldest first:
 | Key | Type | Holds |
 | --- | --- | --- |
 | `at` | number | when it happened |
-| `text` | string | what happened: `started`, `phase: plan`, `phase: implement (back)`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `PR #42 merged` (`MR !88 merged` on GitLab), `PR #42 closed`, `master: ...` (a message from the master), `master typed: ...` (a line typed into its pane), `pause failed: ...`, `resume failed: ...`, `setup passed`, `ended` |
+| `text` | string | what happened: `started`, `phase: plan`, `phase: implement (back)`, `waiting: ...`, `answered`, `idle: ...`, `blocked: ...`, `decided: ...`, `review: 3 fixed, 1 open`, `MR opened`, `PR #42 merged` (`MR !88 merged` on GitLab), `PR #42 closed`, `master: ...` (a message from the master), `master typed: ...` (a line typed into its pane), `pause failed: ...`, `resume failed: ...`, `setup failed: ...` (while its worker was working), `setup passed`, `ended` |
 | `tone` | string | `neutral`, `progress`, `attention`, `problem` or `success` |
 
 ### Questions

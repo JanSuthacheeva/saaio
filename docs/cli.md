@@ -551,7 +551,9 @@ help[1]: Run `saaio status shop-240` to see the flow
 ```
 
 A setup that passes clears the failure from `saaio status`, and a flow still blocked on it is
-`idle` again. One that fails again exits 1, and its error names the file with the whole output:
+`idle` again. One that fails again exits 1, and its error names the file with the whole output.
+It blocks the flow unless its worker is in the middle of a turn, as when the worker ran it: then
+the flow stays `working` and the failure shows in `saaio status` and the timeline:
 
 ```
 $ saaio setup shop-240

@@ -380,7 +380,7 @@ failed setup. An append that fails is a `Failure` as today.
 
 ### After review
 
-- [ ] Fold a failed `Setup` as blocked only while the flow is not `working` or `delegated` (a timeline note `setup failed: ...` instead, `view.setup` and the master news unchanged), with fold tests
+- [x] Fold a failed `Setup` as blocked only while the flow is not `working` or `delegated` (a timeline note `setup failed: ...` instead, `view.setup` and the master news unchanged), with fold tests
 
 ## Review
 
