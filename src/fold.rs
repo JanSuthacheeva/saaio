@@ -457,6 +457,7 @@ impl Folding {
                 });
             }
             EventKind::TurnTaken | EventKind::Prompted => self.view.turn = None,
+            EventKind::Setup { .. } => {}
             EventKind::Edited { path } => {
                 if let Some(build) = self.build_to_go_back_to(path) {
                     self.enter(build, at);
