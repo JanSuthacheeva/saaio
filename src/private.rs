@@ -5,7 +5,7 @@
     reason = "the module the rule routes file creation through"
 )]
 
-use std::fs::{self, DirBuilder, OpenOptions, Permissions};
+use std::fs::{self, DirBuilder, File, OpenOptions, Permissions};
 use std::io::{self, Write};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
@@ -75,6 +75,18 @@ pub fn write_atomic(path: &Path, contents: &[u8]) -> io::Result<()> {
     let _ = fs::remove_file(&partial);
     write_new(&partial, contents)?;
     fs::rename(&partial, path)
+}
+
+/// An empty 0600 file at `path` in place of anything there, a link too; its folder created 0700.
+pub fn create_fresh(path: &Path) -> io::Result<File> {
+    if let Some(dir) = path.parent() {
+        create_dir(dir)?;
+    }
+    match fs::remove_file(path) {
+        Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+        _ => {}
+    }
+    options().write(true).create_new(true).open(path)
 }
 
 #[cfg(test)]
@@ -193,5 +205,29 @@ mod tests {
         assert_eq!(mode(&file), 0o600);
         assert!(!target.exists(), "the partial file's link was followed");
         assert!(!partial.exists());
+    }
+
+    #[test]
+    fn creates_a_fresh_file_in_place_of_a_file_or_a_link() {
+        let dir = TempDir::new().unwrap();
+        let log = dir.path().join("hooks/flow/setup.log");
+        let target = dir.path().join("target");
+        fs::write(&target, "kept").unwrap();
+
+        let mut first = create_fresh(&log).unwrap();
+        first.write_all(b"old run").unwrap();
+        create_fresh(&log).unwrap();
+        assert_eq!(fs::read_to_string(&log).unwrap(), "");
+        assert_eq!(mode(&log), 0o600);
+        assert_eq!(mode(&dir.path().join("hooks")), 0o700);
+        assert_eq!(mode(&dir.path().join("hooks/flow")), 0o700);
+
+        fs::remove_file(&log).unwrap();
+        symlink(&target, &log).unwrap();
+        create_fresh(&log).unwrap().write_all(b"new").unwrap();
+
+        assert_eq!(fs::read_to_string(&target).unwrap(), "kept");
+        assert!(!fs::symlink_metadata(&log).unwrap().is_symlink());
+        assert_eq!(fs::read_to_string(&log).unwrap(), "new");
     }
 }
