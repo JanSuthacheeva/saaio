@@ -377,3 +377,43 @@ failed setup. An append that fails is a `Failure` as today.
 ### Check
 
 - [x] End to end in a scratch store and repo: a start whose setup fails like composer's (several lines, the cause not last), status and the worker note name the log with the whole output, `saaio setup` fails again, fix the script, `saaio setup` passes and the blocker clears; the UI's `s` in a PTY; `saaio --stop` at the end
+
+## Review
+
+Reviewed in isolation against this plan; the fix was re-read by the same reviewer, not by an
+independent agent.
+
+### Fixed
+
+- `saaio status` listed an ended flow's failed setup among the `blockers`, asking for a
+  `saaio setup` it refuses ("has ended"); the sidebar already hid it. Shown end to end with a
+  start whose setup failed, then `saaio report ended`. Now left out of the list (one flow's
+  `setup` key still says it). a9d7067
+
+### Open
+
+- A worker that runs `saaio setup` mid-turn and fails flips its flow to `blocked` until its
+  PostToolUse hook says `working` a moment later (shown with `report working` then `saaio setup`).
+  The master is told anyway (setup news ignores state), but the UI may raise a `blocked`
+  notification, and the worker gets a `SetupFailed` note at Stop about the failure it just saw.
+  Recommendation: leave it; if it bothers in use, fold a failed `Setup` as blocked only while the
+  flow is not `working`.
+- Two `saaio setup` runs of one flow at once share one log file (assumption 8): the earlier run's
+  reason can be read from the later run's log. Recommendation: accept, as planned.
+
+### Where to look
+
+1. `src/fold.rs` `set_up` with `stop_for`: when a failure blocks and a pass unblocks (only when
+   the blocker is the same text).
+2. `src/wake.rs` `changed_flows` and `mark`: master news once per failure by `Mark.setup_failed`,
+   and the older `Mark` JSON it reads.
+3. `src/workspace/process.rs` `finish_into` and `src/private.rs` `create_fresh`: the log replaced
+   by unlink and `create_new`, so a process left behind writes into the old inode.
+4. `src/cli/commands/setup.rs` `run`: the order of refusals, teardown before setup.
+
+Routine, skim: the `hooks::run` signature threading, docs, UI key wiring, goldens.
+
+### Checks
+
+`cargo test --all-features`, clippy with `-D warnings` and `cargo fmt` pass at a9d7067
+(`cargo deny` passed at 17cac75; dependencies unchanged).
