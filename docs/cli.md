@@ -281,7 +281,7 @@ Some fields show only when they apply:
 | Field | Shown |
 | --- | --- |
 | `blocker` | while there is one |
-| `setup` | while the flow's last setup run failed: `failed: <its last line> (full output: <log>)`, in place of a `blocker` that says the same. The list shows it among the `blockers`, whatever the flow's state. |
+| `setup` | while the flow's last setup run failed: `failed: <its last line> (full output: <log>)`, in place of a `blocker` that says the same. The list shows it among the `blockers` until the flow ends, whatever its state. |
 | `questions`, `options` | while the worker waits on a question dialog: each question with its header and whether it takes `one` option or `several`, then each option's label and description by question number |
 | `delegate` | while a subagent works (what the worker handed to it) |
 | `tasks` | with task counts |

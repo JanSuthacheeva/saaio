@@ -212,7 +212,7 @@ help[2]:
 
 ### `src/cli/output/status.rs` (modified)
 
-- List: a failed setup is a `blockers` row, its reason cut to the list limit but the log path kept
+- List: a failed setup of a flow that has not ended is a `blockers` row, its reason cut to the list limit but the log path kept
   whole; the plain blocker row is left out when it is the same failure.
 - One flow: a `setup` key with `setup_problem` (reason cut like the list), and no `blocker` key when
   the blocker is that same failure.

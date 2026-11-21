@@ -118,8 +118,9 @@ fn board_list(board: &Board, bin: Option<&str>, warnings: &[String], full: bool)
     }))
 }
 
-/// What stops a flow in the list: the blocker of a flow that needs you, and a failed setup
-/// whatever the flow does, its reason cut but its log's path whole; one row when they are the same.
+/// What stops a flow in the list: the blocker of a flow that needs you, and the failed setup of
+/// one that has not ended, whatever it does, its reason cut but its log's path whole; one row when
+/// they are the same.
 fn blockers(flow: &FlowView, full: bool) -> Vec<String> {
     let problem = flow.setup_problem();
     let mut rows = Vec::new();
@@ -129,7 +130,7 @@ fn blockers(flow: &FlowView, full: bool) -> Vec<String> {
     {
         rows.push(truncated(blocker, LIST_TEXT_LIMIT, full));
     }
-    if let Some(setup) = flow.setup_line(full) {
+    if let Some(setup) = flow.setup_line(full).filter(|_| !flow.is_finished()) {
         rows.push(setup);
     }
     rows
@@ -660,6 +661,22 @@ mod tests {
             "{}",
             full.text()
         );
+    }
+
+    #[test]
+    fn the_list_leaves_out_the_failed_setup_of_an_ended_flow() {
+        let board = fold::board(
+            vec![flow(
+                "shop-240",
+                vec![failed_setup("Please run composer update"), EventKind::Ended],
+                2 * MIN,
+            )],
+            2 * MIN,
+        );
+
+        let text = list(&board, &[], false).text().to_string();
+
+        assert!(!text.contains("blockers"), "{text}");
     }
 
     #[test]
