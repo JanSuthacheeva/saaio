@@ -378,6 +378,10 @@ failed setup. An append that fails is a `Failure` as today.
 
 - [x] End to end in a scratch store and repo: a start whose setup fails like composer's (several lines, the cause not last), status and the worker note name the log with the whole output, `saaio setup` fails again, fix the script, `saaio setup` passes and the blocker clears; the UI's `s` in a PTY; `saaio --stop` at the end
 
+### After review
+
+- [ ] Fold a failed `Setup` as blocked only while the flow is not `working` or `delegated` (a timeline note `setup failed: ...` instead, `view.setup` and the master news unchanged), with fold tests
+
 ## Review
 
 Reviewed in isolation against this plan; the fix was re-read by the same reviewer, not by an
@@ -398,8 +402,10 @@ independent agent.
   notification, and the worker gets a `SetupFailed` note at Stop about the failure it just saw.
   Recommendation: leave it; if it bothers in use, fold a failed `Setup` as blocked only while the
   flow is not `working`.
+  Decided: fold a failed `Setup` as blocked only while the flow is not `working` or `delegated`
+  (task under After review). The duplicate note stays: saaio cannot tell who ran the setup.
 - Two `saaio setup` runs of one flow at once share one log file (assumption 8): the earlier run's
-  reason can be read from the later run's log. Recommendation: accept, as planned.
+  reason can be read from the later run's log. Recommendation: accept, as planned. Decided: accept.
 
 ### Where to look
 
