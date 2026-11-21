@@ -693,6 +693,7 @@ mod tests {
             Mark {
                 state: State::Waiting,
                 changed_at: 5,
+                setup_failed: Some(4),
             },
         )]);
         store.set_seen(&seen).unwrap();

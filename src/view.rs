@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::event::{EventKind, Mode, Question, ServiceStatus};
 use crate::id::{FlowId, SessionId};
+use crate::text::{LIST_TEXT_LIMIT, truncated};
 use crate::workflow::{Phase, Workflow};
 
 pub const VIEW_VERSION: u32 = 4;
@@ -289,8 +290,14 @@ impl Projects {
 impl FlowView {
     /// "setup failed: <why> (full output: <log>)" while the last setup run failed.
     pub fn setup_problem(&self) -> Option<String> {
+        self.setup_line(true)
+    }
+
+    /// `setup_problem` for a list: the reason cut to LIST_TEXT_LIMIT unless `full`, the log's
+    /// path always whole.
+    pub fn setup_line(&self, full: bool) -> Option<String> {
         let run = self.setup.as_ref()?;
-        let why = run.failed.as_deref()?;
+        let why = truncated(run.failed.as_deref()?, LIST_TEXT_LIMIT, full);
         Some(format!("setup failed: {why} (full output: {})", run.log))
     }
 

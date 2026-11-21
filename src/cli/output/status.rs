@@ -129,18 +129,10 @@ fn blockers(flow: &FlowView, full: bool) -> Vec<String> {
     {
         rows.push(truncated(blocker, LIST_TEXT_LIMIT, full));
     }
-    if let Some(setup) = setup(flow, full) {
+    if let Some(setup) = flow.setup_line(full) {
         rows.push(setup);
     }
     rows
-}
-
-/// "setup failed: <why> (full output: <log>)" while the last setup run failed, the reason cut
-/// unless `full` and the path whole.
-fn setup(flow: &FlowView, full: bool) -> Option<String> {
-    let run = flow.setup.as_ref()?;
-    let why = truncated(run.failed.as_deref()?, LIST_TEXT_LIMIT, full);
-    Some(format!("setup failed: {why} (full output: {})", run.log))
 }
 
 /// Where a flow's services stand: empty while they run or were never paused, else paused,
@@ -375,7 +367,7 @@ pub(crate) fn detail(
             .filter(|blocker| flow.setup_problem().as_ref() != Some(blocker))
             .as_deref()
             .map(cut),
-        setup: setup(flow, full),
+        setup: flow.setup_line(full),
         services: services(flow),
         services_error: flow
             .services

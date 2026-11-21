@@ -91,6 +91,8 @@ pub struct SetupRun {
 impl FlowView {
     /// "setup failed: <why> (full output: <log>)" while the last setup run failed.
     pub fn setup_problem(&self) -> Option<String>;
+    /// The same for a list: the reason cut to LIST_TEXT_LIMIT unless `full`, the path whole.
+    pub fn setup_line(&self, full: bool) -> Option<String>;
 }
 ```
 
@@ -110,8 +112,8 @@ New `--json` key `setup`; no `VIEW_VERSION` bump (new keys are allowed, docs/jso
 pub enum Note {
     Master(String),
     BaseMerged { base: String, onto: String },
-    /// The setup of the flow named `flow` failed for `reason`; its whole output is in `log`.
-    SetupFailed { flow: String, reason: String, log: String },
+    /// The flow's setup failed for `reason`; its whole output is in `log`.
+    SetupFailed { reason: String, log: String },
 }
 
 pub struct Mark {
@@ -130,7 +132,8 @@ pub struct Mark {
   your turn saying what is missing."
 - `changed_flows`: a flow is news when its state needs the master and its mark changed (as today),
   or when its setup failed at a time the master has not seen, whatever its state.
-- `for_master` `says`: blocker, else `setup_problem`, else the last note.
+- `for_master` `says`: a blocker other than the setup failure, else `setup_line(false)`, else the
+  blocker or the last note.
 
 ### `src/cli/commands/setup.rs` (new)
 
@@ -353,7 +356,7 @@ failed setup. An append that fails is a `Failure` as today.
 
 ### Who hears it
 
-- [ ] `wake::Note::SetupFailed` in `undelivered` and `for_worker`; `Mark.setup_failed` in `changed_flows`, `mark` and `for_master`; wake tests including old Mark JSON
+- [x] `wake::Note::SetupFailed` in `undelivered` and `for_worker`; `Mark.setup_failed` in `changed_flows`, `mark` and `for_master`; wake tests including old Mark JSON
 
 ### `saaio setup`
 
