@@ -28,6 +28,18 @@ fn asks_before_setting_up_the_worker_in_view_and_runs_it_on_y() {
             then: Confirmed::Setup("shop-221".into()),
         }
     );
+    let terminal = render_at(&app, FLEET);
+    let screen: Vec<String> = (0..FLEET.rows - 2).map(|y| row(&terminal, y)).collect();
+    assert!(
+        screen.iter().any(|line| line.contains("─ set up again ─")),
+        "{screen:#?}"
+    );
+    assert!(
+        screen
+            .iter()
+            .any(|line| line.contains("any other key runs nothing")),
+        "{screen:#?}"
+    );
     let effects = app.on_input(Routed::View(vec![Key::Char('y')]));
     assert_eq!(effects, vec![Effect::Run(Job::Setup("shop-221".into()))]);
     assert_eq!(app.notice.as_deref(), Some("setting up shop-221…"));
