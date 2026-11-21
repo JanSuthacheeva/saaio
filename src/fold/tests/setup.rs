@@ -138,3 +138,24 @@ fn a_failure_after_the_turn_ended_blocks_the_flow() {
 
     assert_eq!(flow.state, State::Blocked);
 }
+
+#[test]
+fn a_failure_while_a_delegate_works_leaves_it_delegated() {
+    let flow = view(
+        &[
+            started(0),
+            at(
+                1,
+                EventKind::Delegated {
+                    description: "review".into(),
+                },
+            ),
+            setup(2, Some("Please run composer update")),
+        ],
+        3,
+    );
+
+    assert_eq!(flow.state, State::Delegated);
+    assert_eq!(flow.blocker, None);
+    assert_eq!(flow.delegate.as_deref(), Some("review"));
+}
