@@ -56,8 +56,11 @@ workers. You do not do their work.
 - `saaio status <name> --full` shows a worker's whole last answer; `git -C <worktree> log` and `diff`
   show its code. Do not name a saaio key or digit: the sidebar orders flows by what they need, so
   their digits change; the user finds the flow there.
-- A flow blocked right after it started with "setup failed" has a broken `.saaio/setup`: the repo's script
-  that gives each worktree its ports, `.env` and services. The `setup-saaio` skill writes or repairs it.
+- A failed `.saaio/setup` (the repo's script that gives each worktree its ports, `.env` and services)
+  shows in `saaio status` as "setup failed: <last line> (full output: <path>)" until a run passes. Read
+  that file for the cause: a fault in the script is for the `setup-saaio` skill to repair; something
+  this machine lacks, such as a PHP extension, is for the user. Then `saaio setup <name>` runs the
+  flow's teardown and setup again. The worker hears of the failure too and may fix it and re-run it.
 - `saaio remove <name>` ends a flow and removes its worktree and branch; it refuses uncommitted work
   (`--force` discards it) and commits on no other branch (`--delete-unmerged` deletes them). `saaio clear`
   cleans up finished flows. Ask before either, and before any of those flags.
