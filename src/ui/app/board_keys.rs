@@ -1,4 +1,5 @@
-//! The board's keys: moving over the cards, jumping in, every project, clearing a flow
+//! The board's keys: moving over the cards, jumping in, every project, clearing a flow, setting
+//! one up again
 
 use super::{App, Effect, Removal, View};
 use crate::proto::PaneKey;
@@ -46,15 +47,24 @@ impl App {
                 self.ask_overview()
             }
             Key::Char('x') => {
-                let flow = state
-                    .selected
-                    .checked_sub(1)
-                    .and_then(|at| self.workers().get(at).copied())
-                    .cloned();
+                let flow = self.card(state);
                 self.clear(flow)
+            }
+            Key::Char('s') => {
+                let flow = self.card(state);
+                self.ask_setup(flow)
             }
             _ => self.on_any_board_key(key),
         }
+    }
+
+    /// The worker on this project's selected card; None for the master's.
+    fn card(&self, state: BoardState) -> Option<FlowView> {
+        state
+            .selected
+            .checked_sub(1)
+            .and_then(|at| self.workers().get(at).copied())
+            .cloned()
     }
 
     /// Keys on every project's board: the cards of other projects are only shown.

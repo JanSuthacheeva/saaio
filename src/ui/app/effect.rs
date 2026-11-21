@@ -37,6 +37,8 @@ impl Removal {
 pub enum Job {
     Start(Box<NewFlowForm>),
     Remove(Removal),
+    /// `saaio setup` for the flow of this name.
+    Setup(String),
     /// `saaio status --all --json`: every project's board.
     Overview,
 }
@@ -88,6 +90,7 @@ impl Job {
                 args.extend(["--".to_string(), removal.name.clone()]);
                 args
             }
+            Job::Setup(name) => vec!["setup".to_string(), "--".to_string(), name.clone()],
             Job::Overview => vec![
                 "status".to_string(),
                 "--all".to_string(),
@@ -111,7 +114,7 @@ impl Job {
     pub fn dir(&self) -> Option<&Path> {
         match self {
             Job::Start(form) => Some(&form.repo),
-            Job::Remove(_) | Job::Overview => None,
+            Job::Remove(_) | Job::Setup(_) | Job::Overview => None,
         }
     }
 }

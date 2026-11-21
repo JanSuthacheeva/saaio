@@ -164,6 +164,7 @@ pub fn help(prefix: Prefix, theme: &Theme) -> Dialog<'_> {
         ("o", "the board of every session"),
         ("b", "fold the sidebar to a rail and back"),
         ("r", "resume a session that ended"),
+        ("s", "set up the worker in view again"),
         ("[", "scroll back through the history"),
         ("d", "detach; every session keeps running"),
         ("Q", "stop saaio"),

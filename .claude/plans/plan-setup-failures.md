@@ -366,7 +366,7 @@ failed setup. An append that fails is a `Failure` as today.
 
 ### UI
 
-- [ ] `Command::Setup` (`C-space s`), board `s`, `Confirmed::Setup`, `Job::Setup`, `ask_setup`, `rerun_setup`, `on_ran` arms, help view and hints, with app tests
+- [x] `Command::Setup` (`C-space s`), board `s`, `Confirmed::Setup`, `Job::Setup`, `ask_setup`, `rerun_setup`, `on_ran` arms, help view and hints, with app tests
 - [ ] Sidebar line 3 and board detail header show a failed setup, with golden and unit tests
 
 ### Instructions and docs

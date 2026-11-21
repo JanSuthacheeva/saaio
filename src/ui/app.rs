@@ -64,6 +64,8 @@ pub enum Confirmed {
     Remove(Removal),
     /// Trust the form's repository, then start the flow again.
     Trust(Box<NewFlowForm>),
+    /// Run the flow's teardown, then its setup again.
+    Setup(String),
 }
 
 /// The master as the UI shows it.

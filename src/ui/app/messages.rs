@@ -123,6 +123,8 @@ impl App {
                 };
             }
             (Job::Remove(_), Err(error)) => self.notice = Some(error.message),
+            (Job::Setup(name), Ok(_)) => self.notice = Some(format!("{name} is set up")),
+            (Job::Setup(_), Err(error)) => self.notice = Some(error.message),
         }
     }
 
