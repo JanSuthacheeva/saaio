@@ -53,4 +53,4 @@ tests in `tests/cli/` prove the output is unchanged.
 ## Tasks
 
 - [x] Make `Failure::error` and `Failure::refused` take `impl IntoIterator<Item = impl Into<String>>`, add `Failure::bare`, move every caller to plain arrays or `bare`, and `update.rs:36` onto `Failure::error`; build, clippy and the full suite green
-- [ ] End-to-end check: failing commands (`saaio report` on an unknown flow, `saaio update --version x`, `saaio send` with nothing) print the same TOON as on main
+- [x] End-to-end check: failing commands (`saaio report` on an unknown flow, `saaio update --version x`, `saaio send` with nothing) print the same TOON as on main
