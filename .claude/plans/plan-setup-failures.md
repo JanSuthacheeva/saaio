@@ -184,11 +184,15 @@ impl fmt::Display for Setup { ... }
 /// flow, teardown, setup, log, help.
 pub(crate) fn reran(flow: &FlowView, teardown: &Teardown, setup: &Setup) -> Document;
 
-/// error "setup failed: <reason>", teardown, log, help: read the log, run it again once fixed.
+/// error "setup failed: <reason> (full output: <log>)", help: read the log, a failed teardown's
+/// reason, run it again once fixed. (A Failure carries no keys beyond error, refusal and help.)
 pub(crate) fn failed(flow: &FlowView, teardown: &Teardown, reason: &str, log: &str) -> Failure;
 
-/// "<name> has no worktree to set up", "this repository has no .saaio/setup", ...
+/// "<name> has no worktree to set up", "<name> has no .saaio/setup in <repo>", ...
 pub(crate) fn refused(name: &str, why: &str) -> Failure;
+
+/// "<repo>, the repository of <name>, is not trusted", help: `saaio trust` in the person's terminal.
+pub(crate) fn untrusted(name: &str, repo: &Path) -> Failure;
 ```
 
 ```
@@ -200,9 +204,7 @@ log: /Users/jan/.local/state/saaio/projects/shop/hooks/0b6e.../setup.log
 help[1]: Run `saaio status shop-240` to see the flow
 
 $ saaio setup shop-240          # exit 1
-error: "setup failed: Please run composer update"
-teardown: ran
-log: /Users/jan/.local/state/saaio/projects/shop/hooks/0b6e.../setup.log
+error: "setup failed: Please run composer update (full output: /Users/jan/.local/state/saaio/projects/shop/hooks/0b6e.../setup.log)"
 help[2]:
   Read its whole output in the log
   Run `saaio setup shop-240` again once the cause is fixed
@@ -360,7 +362,7 @@ failed setup. An append that fails is a `Failure` as today.
 
 ### `saaio setup`
 
-- [ ] Add `cli/commands/setup.rs` (`Args`, `run`, refusals, default to `SAAIO_FLOW_ID`), `output::setup::{reran, failed, refused}`, `Command::Setup` in `cli.rs`; `tests/cli/setup.rs` end to end
+- [x] Add `cli/commands/setup.rs` (`Args`, `run`, refusals, default to `SAAIO_FLOW_ID`), `output::setup::{reran, failed, refused}`, `Command::Setup` in `cli.rs`; `tests/cli/setup.rs` end to end
 
 ### UI
 

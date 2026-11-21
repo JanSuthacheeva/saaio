@@ -11,8 +11,8 @@ pub use env::Env;
 use clap::{Parser, Subcommand};
 
 use commands::{
-    bug_report, clear, completions, home, hook, new, remove, report, send, server, start, status,
-    stop, trust, turn, ui, update, wait,
+    bug_report, clear, completions, home, hook, new, remove, report, send, server, setup, start,
+    status, stop, trust, turn, ui, update, wait,
 };
 use context::Context;
 use output::{Document, Failure};
@@ -58,6 +58,8 @@ enum Command {
     Start(start::Args),
     /// Stop a flow's worker, tear down its worktree and forget it
     Remove(remove::Args),
+    /// Run a flow's .saaio/teardown, then its .saaio/setup again
+    Setup(setup::Args),
     /// Tell a flow's worker something: an answer, an instruction, a correction
     Send(send::Args),
     /// Forget flows that are done or ended
@@ -101,6 +103,7 @@ pub fn run(cli: Cli, env: &Env, clock: fn() -> u64) -> Result<Document, Failure>
         Some(Command::Status(args)) => status::run(&args, &ctx),
         Some(Command::Start(args)) => start::run(&args, &ctx),
         Some(Command::Remove(args)) => remove::run(&args, &ctx),
+        Some(Command::Setup(args)) => setup::run(&args, &ctx),
         Some(Command::Send(args)) => send::run(&args, &ctx),
         Some(Command::Clear) => clear::run(&ctx),
         Some(Command::BugReport) => bug_report::run(&ctx),

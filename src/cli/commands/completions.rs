@@ -53,6 +53,7 @@ mod tests {
                 "status",
                 "start",
                 "remove",
+                "setup",
                 "send",
                 "clear",
                 "bug-report",
