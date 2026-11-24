@@ -257,6 +257,11 @@ impl Event {
             .ok()
             .filter(|event| event.v == EVENT_VERSION)
     }
+
+    /// Every readable event of a log's text, in order: from_line of each line.
+    pub fn from_log(text: &str) -> Vec<Event> {
+        text.lines().filter_map(Event::from_line).collect()
+    }
 }
 
 impl EventKind {

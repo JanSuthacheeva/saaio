@@ -131,7 +131,7 @@ impl Store {
             Err(error) if error.kind() == ErrorKind::NotFound => bail!("no flow {id}"),
             Err(error) => return Err(error).with_context(|| format!("could not read flow {id}")),
         };
-        Ok(text.lines().filter_map(Event::from_line).collect())
+        Ok(Event::from_log(&text))
     }
 
     /// Ids of all flows, by log file name.

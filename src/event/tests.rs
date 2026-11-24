@@ -620,6 +620,26 @@ fn skips_broken_lines_other_versions_and_unknown_kinds() {
 }
 
 #[test]
+fn reads_every_readable_line_of_a_log_in_order() {
+    let log = concat!(
+        "{\"v\":1,\"at\":1,\"kind\":\"working\"}\n",
+        "\n",
+        "{\"v\":1,\"at\":2,\"ki\n",
+        "{\"v\":1,\"at\":3,\"kind\":\"working\"}\r\n",
+        "{\"v\":1,\"at\":4,\"kind\":\"working\"}",
+    );
+
+    assert_eq!(
+        Event::from_log(log)
+            .iter()
+            .map(|event| event.at)
+            .collect::<Vec<_>>(),
+        [1, 3, 4]
+    );
+    assert_eq!(Event::from_log(""), []);
+}
+
+#[test]
 fn skips_a_session_line_whose_id_is_no_id() {
     let line = |id: &str| format!(r#"{{"v":1,"at":7,"kind":"session","id":"{id}"}}"#);
     let id = "01a14000-0000-7000-8000-000000000000";
