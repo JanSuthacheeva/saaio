@@ -438,3 +438,19 @@ fn trusts_a_folder_without_writing_config() {
         Some("trusted")
     );
 }
+
+mod properties {
+    use proptest::prelude::*;
+
+    use crate::fuzzing;
+    use crate::strategies;
+
+    proptest! {
+        #[test]
+        fn any_payload_translates_into_events_the_log_keeps(
+            text in prop_oneof![strategies::hook_payload("codex"), strategies::text()],
+        ) {
+            fuzzing::codex_hook(&text);
+        }
+    }
+}

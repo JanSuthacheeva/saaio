@@ -472,3 +472,19 @@ fn the_master_reports_every_event_and_always_waits() {
         .count();
     assert_eq!(waiters, WAIT_EVENTS.len());
 }
+
+mod properties {
+    use proptest::prelude::*;
+
+    use crate::fuzzing;
+    use crate::strategies;
+
+    proptest! {
+        #[test]
+        fn any_payload_translates_into_events_the_log_keeps(
+            text in prop_oneof![strategies::hook_payload("claude-code"), strategies::text()],
+        ) {
+            fuzzing::claude_code_hook(&text);
+        }
+    }
+}

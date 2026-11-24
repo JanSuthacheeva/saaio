@@ -164,7 +164,7 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 
 1. driver -> `codex_hook(text)` -> `hook(Adapter::Codex, text, Approver::User)`, `hook(.., Approver::Reviewer)`
 2. `hook` -> `serde_json::from_str::<Value>(text)`; not JSON -> return (saaio hook logs and stops)
-3. `hook` -> `adapter.turn`, `before_tool`, `command`, `asks` (must not panic)
+3. `hook` -> `adapter.turn`, `before_tool`, `command`, `asks`, `approver(payload, |_, _| None)` (must not panic; the rollout reader stays out of scope)
 4. `hook` -> `adapter.translate(&payload, &Workflow::builtin(), approver): Vec<EventKind>`
 5. each kind -> `log_line(&Event::new(0, kind).to_line())`
 6. Error path: a panic, or an event the log does not read back -> found bug
@@ -217,7 +217,7 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 - [x] Add the `fuzzing` feature and `src/fuzzing.rs` `log_line` and `log`, with `any_event_survives_its_log_line`, `cleaning_an_event_twice_changes_nothing`, `any_line_reads_back_as_it_was`
 - [x] Add `a_log_cut_anywhere_keeps_every_whole_event_and_the_next` in the store tests
 - [x] Add `client_msg`, `server_msg` strategies and `fuzzing::frames` (`Header`, `header`, `read_all`) with its example tests, `any_message_survives_its_frame`, `any_bytes_read_as_their_header_says`; drop the `Noise` proto test
-- [ ] Add `json`, `hook_payload` strategies and `fuzzing::claude_code_hook`, `codex_hook` with `any_payload_translates_into_events_the_log_keeps` in both adapter test modules
+- [x] Add `json`, `hook_payload` strategies and `fuzzing::claude_code_hook`, `codex_hook` with `any_payload_translates_into_events_the_log_keeps` in both adapter test modules
 - [ ] Add the `.fuzz/` package with the five targets and its lockfile; run each target locally on nightly for a minute
 - [ ] CI: fmt and clippy over `.fuzz/` in `ci.yml`; new `fuzz.yml`; run it once with `workflow_dispatch` after push if possible
 - [ ] Docs: CONTRIBUTING.md Fuzzing section and CI entry, CLAUDE.md (build command, structure, plan list), CHANGELOG Fixed line

@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 
 use proptest::prelude::*;
+use serde_json::{Map, Number, Value};
 use uuid::Uuid;
 
 use crate::binaries::Binary;
@@ -410,6 +411,82 @@ pub fn server_msg() -> impl Strategy<Value = ServerMsg> {
             .boxed(),
         text().prop_map(ServerMsg::Clipboard).boxed(),
     ]
+}
+
+/// Any JSON value, up to depth 3.
+pub fn json() -> impl Strategy<Value = Value> {
+    let leaf = prop_oneof![
+        Just(Value::Null),
+        any::<bool>().prop_map(Value::Bool),
+        any::<i64>().prop_map(|number| Value::Number(number.into())),
+        any::<f64>().prop_map(|number| Number::from_f64(number).map_or(Value::Null, Value::Number)),
+        text().prop_map(Value::String),
+    ];
+    leaf.prop_recursive(3, 32, 4, |inner| {
+        prop_oneof![
+            prop::collection::vec(inner.clone(), 0..4).prop_map(Value::Array),
+            prop::collection::vec((text(), inner), 0..4)
+                .prop_map(|fields| Value::Object(fields.into_iter().collect::<Map<_, _>>())),
+        ]
+    })
+}
+
+/// The JSON pointer of every value inside `value`, nested ones included.
+fn pointers(value: &Value, at: &str, all: &mut Vec<String>) {
+    let children: Vec<(String, &Value)> = match value {
+        Value::Object(fields) => fields
+            .iter()
+            .map(|(key, child)| (key.replace('~', "~0").replace('/', "~1"), child))
+            .collect(),
+        Value::Array(items) => items
+            .iter()
+            .enumerate()
+            .map(|(index, child)| (index.to_string(), child))
+            .collect(),
+        _ => Vec::new(),
+    };
+    for (key, child) in children {
+        let pointer = format!("{at}/{key}");
+        all.push(pointer.clone());
+        pointers(child, &pointer, all);
+    }
+}
+
+/// A recorded payload from src/adapter/fixtures/<harness> with up to three of its fields
+/// replaced by any JSON value, nested ones included.
+pub fn hook_payload(harness: &str) -> impl Strategy<Value = String> {
+    let folder = format!(
+        "{}/src/adapter/fixtures/{harness}",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let mut payloads = std::fs::read_dir(&folder)
+        .expect("the recorded payloads")
+        .map(|entry| entry.expect("a recorded payload").path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "json")
+        })
+        .map(|path| {
+            let text = std::fs::read_to_string(&path).expect("a recorded payload");
+            serde_json::from_str::<Value>(&text).expect("a recorded payload is JSON")
+        })
+        .collect::<Vec<_>>();
+    payloads.sort_by_key(Value::to_string);
+    let swaps = prop::collection::vec((any::<prop::sample::Index>(), json()), 0..=3);
+    (prop::sample::select(payloads), swaps).prop_map(|(mut payload, swaps)| {
+        for (at, value) in swaps {
+            let mut all = Vec::new();
+            pointers(&payload, "", &mut all);
+            if all.is_empty() {
+                break;
+            }
+            let pointer = &all[at.index(all.len())];
+            *payload
+                .pointer_mut(pointer)
+                .expect("a pointer into the payload") = value;
+        }
+        payload.to_string()
+    })
 }
 
 /// How many EventKind variants there are; `variant` numbers them.

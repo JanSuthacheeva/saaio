@@ -7,11 +7,14 @@ use std::io::Cursor;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde_json::Value;
 
+use crate::adapter::{Adapter, Approver};
 use crate::event::{EVENT_VERSION, Event};
 use crate::fold;
 use crate::id::FlowId;
 use crate::proto::{self, ClientMsg, Error, MAX_MESSAGE, ServerMsg};
+use crate::workflow::Workflow;
 
 /// A clock a little past today, for folding: logs are read long after they were written.
 const NOW: u64 = 1_800_000_000_000;
@@ -45,6 +48,41 @@ pub fn log(bytes: &[u8]) {
     let id = FlowId::parse("01a14000-0000-7000-8000-000000000000").expect("a flow id's text");
     fold::fold(id, &events, None, NOW);
     fold::fold(id, &events, Some(NOW), NOW);
+}
+
+/// Any text as a Claude Code hook payload: what Adapter::ClaudeCode makes of it survives the log.
+///
+/// # Panics
+///
+/// When the adapter panics, or an event it makes does not survive its line.
+pub fn claude_code_hook(text: &str) {
+    hook(Adapter::ClaudeCode, text, Approver::User);
+}
+
+/// Any text as a Codex hook payload, for either approver.
+///
+/// # Panics
+///
+/// When the adapter panics, or an event it makes does not survive its line.
+pub fn codex_hook(text: &str) {
+    hook(Adapter::Codex, text, Approver::User);
+    hook(Adapter::Codex, text, Approver::Reviewer);
+}
+
+/// Every event a payload means, through the adapter's whole surface; text that is not JSON ends
+/// where saaio hook stops.
+fn hook(adapter: Adapter, text: &str, approver: Approver) {
+    let Ok(payload) = serde_json::from_str::<Value>(text) else {
+        return;
+    };
+    adapter.turn(&payload);
+    adapter.before_tool(&payload);
+    adapter.command(&payload);
+    adapter.asks(&payload);
+    adapter.approver(&payload, |_, _| None);
+    for kind in adapter.translate(&payload, &Workflow::builtin(), approver) {
+        log_line(&Event::new(0, kind).to_line());
+    }
 }
 
 /// Bytes as a stream of frames, read as ClientMsg and again as ServerMsg: each read ends as its
