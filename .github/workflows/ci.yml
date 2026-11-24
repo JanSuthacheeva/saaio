@@ -30,6 +30,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install
       - run: cargo fmt --check
+      - run: cargo fmt --check --manifest-path .fuzz/Cargo.toml
 
   clippy:
     name: clippy (${{ matrix.os }})
@@ -51,6 +52,8 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
+      # The fuzz targets run on nightly weekly (fuzz.yml); here they only have to build clean.
+      - run: cargo clippy --manifest-path .fuzz/Cargo.toml --locked -- -D warnings
 
   test:
     name: test (${{ matrix.os }})

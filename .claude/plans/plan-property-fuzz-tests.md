@@ -219,6 +219,6 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 - [x] Add `client_msg`, `server_msg` strategies and `fuzzing::frames` (`Header`, `header`, `read_all`) with its example tests, `any_message_survives_its_frame`, `any_bytes_read_as_their_header_says`; drop the `Noise` proto test
 - [x] Add `json`, `hook_payload` strategies and `fuzzing::claude_code_hook`, `codex_hook` with `any_payload_translates_into_events_the_log_keeps` in both adapter test modules
 - [x] Add the `.fuzz/` package with the five targets and its lockfile; run each target locally on nightly for a minute
-- [ ] CI: fmt and clippy over `.fuzz/` in `ci.yml`; new `fuzz.yml`; run it once with `workflow_dispatch` after push if possible
+- [x] CI: fmt and clippy over `.fuzz/` in `ci.yml`; new `fuzz.yml`; run it once with `workflow_dispatch` after push if possible
 - [ ] Docs: CONTRIBUTING.md Fuzzing section and CI entry, CLAUDE.md (build command, structure, plan list), CHANGELOG Fixed line
 - [ ] End to end: a scratch store with a log cut mid-line by hand, then `saaio report` appends and `saaio status --json` shows the new event's state; full `cargo test --all-features`, clippy, fmt, deny
