@@ -24,6 +24,12 @@ All notable changes to saaio are listed here. The format follows
   whole output.
 - A failed script's reason is the last line it printed on stdout or stderr, no longer stderr first.
 
+### Fixed
+
+- A flow whose log a crash cut short in the middle of a line keeps its next event: saaio starts
+  it on a line of its own instead of gluing it onto the broken one, which lost both. A cut inside
+  a non-ASCII character no longer makes the whole flow unreadable.
+
 ## [0.3.1] - 2026-11-20
 
 ### Fixed
