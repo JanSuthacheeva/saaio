@@ -240,6 +240,8 @@ No production code changed in the fixes, so they had no second review.
 - `fuzz.yml` uses an unpinned nightly. Recommendation: accept for a non-required weekly job; pin only if nightly breakage becomes noise.
 - Not verified: `fuzz.yml` itself has never run on GitHub (it needs a push and `workflow_dispatch`). Recommendation: dispatch it once after the PR merges and check the hook targets' corpus seeding (`claude_code` -> `claude-code`).
 
+Decided (user, 2026-11-24): the first two accepted as they are; the third is done after merge.
+
 ### Where to look
 
 1. `src/store.rs` `append` and `torn`: the only change to how logs are written - opened read+append, one `read_exact_at` of the last byte, the newline and event in one `write_all`. Two appenders on a torn log may each add a newline; the empty line is skipped (Assumption 8).
