@@ -413,17 +413,13 @@ mod properties {
     use crate::fuzzing;
     use crate::strategies;
 
-    fn stream(frames: &[Vec<u8>]) -> Vec<u8> {
-        frames.concat()
-    }
-
     /// Valid frames of both directions, as one stream.
     fn frames() -> impl Strategy<Value = Vec<u8>> {
         let frame = prop_oneof![
             strategies::client_msg().prop_map(|message| encode(&message).unwrap()),
             strategies::server_msg().prop_map(|message| encode(&message).unwrap()),
         ];
-        prop::collection::vec(frame, 0..4).prop_map(|frames| stream(&frames))
+        prop::collection::vec(frame, 0..4).prop_map(|frames| frames.concat())
     }
 
     /// Any bytes, or a valid stream cut anywhere, with a frame's length changed or a byte changed.
@@ -459,14 +455,14 @@ mod properties {
             clients in prop::collection::vec(strategies::client_msg(), 0..5),
             servers in prop::collection::vec(strategies::server_msg(), 0..5),
         ) {
-            let bytes = stream(&clients.iter().map(|message| encode(message).unwrap()).collect::<Vec<_>>());
+            let bytes: Vec<u8> = clients.iter().flat_map(|message| encode(message).unwrap()).collect();
             let mut cursor = Cursor::new(&bytes);
             for message in clients {
                 prop_assert_eq!(read_msg::<_, ClientMsg>(&mut cursor).unwrap(), Some(message));
             }
             prop_assert_eq!(read_msg::<_, ClientMsg>(&mut cursor).unwrap(), None);
 
-            let bytes = stream(&servers.iter().map(|message| encode(message).unwrap()).collect::<Vec<_>>());
+            let bytes: Vec<u8> = servers.iter().flat_map(|message| encode(message).unwrap()).collect();
             let mut cursor = Cursor::new(&bytes);
             for message in servers {
                 prop_assert_eq!(read_msg::<_, ServerMsg>(&mut cursor).unwrap(), Some(message));
