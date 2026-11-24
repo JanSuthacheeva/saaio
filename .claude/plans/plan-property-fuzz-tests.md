@@ -221,4 +221,4 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 - [x] Add the `.fuzz/` package with the five targets and its lockfile; run each target locally on nightly for a minute
 - [x] CI: fmt and clippy over `.fuzz/` in `ci.yml`; new `fuzz.yml`; run it once with `workflow_dispatch` after push if possible
 - [x] Docs: CONTRIBUTING.md Fuzzing section and CI entry, CLAUDE.md (build command, structure, plan list), CHANGELOG Fixed line
-- [ ] End to end: a scratch store with a log cut mid-line by hand, then `saaio report` appends and `saaio status --json` shows the new event's state; full `cargo test --all-features`, clippy, fmt, deny
+- [x] End to end: a scratch store with a log cut mid-line by hand, then `saaio report` appends and `saaio status --json` shows the new event's state; full `cargo test --all-features`, clippy, fmt, deny
