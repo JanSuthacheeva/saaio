@@ -213,6 +213,9 @@ pub fn event_kind() -> impl Strategy<Value = EventKind> {
         (text(), text())
             .prop_map(|(command, holder)| EventKind::TurnWaiting { command, holder })
             .boxed(),
+        (texts(), text())
+            .prop_map(|(failed, log)| EventKind::Setup { failed, log })
+            .boxed(),
         Just(EventKind::TurnTaken).boxed(),
         Just(EventKind::Prompted).boxed(),
         text().prop_map(|path| EventKind::Edited { path }).boxed(),
@@ -490,7 +493,7 @@ pub fn hook_payload(harness: &str) -> impl Strategy<Value = String> {
 }
 
 /// How many EventKind variants there are; `variant` numbers them.
-pub const VARIANTS: usize = 26;
+pub const VARIANTS: usize = 27;
 
 /// The variant's position, by a match without a wildcard: a new variant fails to compile here
 /// until event_kind() makes it.
@@ -522,6 +525,7 @@ pub fn variant(kind: &EventKind) -> usize {
         EventKind::TurnTaken => 23,
         EventKind::Prompted => 24,
         EventKind::Edited { .. } => 25,
+        EventKind::Setup { .. } => 26,
     }
 }
 
