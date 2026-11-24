@@ -45,6 +45,10 @@ fn header(rest: &[u8]) -> Header;
 /// One message type read over the whole stream, each read checked against its header.
 fn read_all<T: Serialize + DeserializeOwned + PartialEq + Debug>(bytes: &[u8]);
 
+/// The message a read gave as its header promised, or None when the read ended the stream as
+/// its header says; panics on any other pairing (the seam the example tests use).
+fn settle<T: Debug>(header: Header, read: Result<Option<T>, Error>) -> Option<T>;
+
 /// Every event a payload means, through the adapter's whole surface.
 fn hook(adapter: Adapter, text: &str, approver: Approver);
 ```
@@ -63,7 +67,8 @@ pub fn event_kind() -> impl Strategy<Value = EventKind>;
 /// Event::new(at, kind): an event as saaio writes it, texts cleaned.
 pub fn event() -> impl Strategy<Value = Event>;
 /// Every ClientMsg and ServerMsg variant; Board is up to three flows folded from a Started event
-/// and up to eight event_kind()s.
+/// and up to eight event_kind()s, without the fields the wire skips (workflow, prompt,
+/// merged_into: `#[serde(skip)]`, server-side only).
 pub fn client_msg() -> impl Strategy<Value = ClientMsg>;
 pub fn server_msg() -> impl Strategy<Value = ServerMsg>;
 /// A recorded payload from src/adapter/fixtures/<harness> with up to three of its fields
@@ -142,6 +147,7 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 2. `frames` -> `read_all::<ClientMsg>(bytes)`, then `read_all::<ServerMsg>(bytes)`
 3. `read_all` -> `header(rest): Header`
 4. `read_all` -> `proto::read_msg(&mut cursor): Result<Option<T>, Error>`
+4a. `read_all` -> `settle(header, read): Option<T>`
 5. `Body(len)` + `Ok(Some(msg))` -> `proto::encode(&msg)` -> `read_msg`: `Some(msg)` again; cursor at `4 + len`; loop
 6. `End` -> `Ok(None)`; `Cut` -> `Err(Cut)`; `TooLarge(n)` -> `Err(TooLarge(n))`; `Body` -> `Err(Decode)`: stop
 7. Error path: any other pairing (Io, Encode, another length, a message that changes on re-encode) -> `panic!` naming header and result; the fuzzer saves the input, proptest shrinks it
@@ -210,7 +216,7 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 - [x] Add proptest and `src/strategies.rs` (`text`, `phase`, `workflow`, `flow_id`, `session_id`, `event_kind`, `event`, `variant`, `VARIANTS`) with `the_strategy_makes_every_kind`
 - [x] Add the `fuzzing` feature and `src/fuzzing.rs` `log_line` and `log`, with `any_event_survives_its_log_line`, `cleaning_an_event_twice_changes_nothing`, `any_line_reads_back_as_it_was`
 - [x] Add `a_log_cut_anywhere_keeps_every_whole_event_and_the_next` in the store tests
-- [ ] Add `client_msg`, `server_msg` strategies and `fuzzing::frames` (`Header`, `header`, `read_all`) with its example tests, `any_message_survives_its_frame`, `any_bytes_read_as_their_header_says`; drop the `Noise` proto test
+- [x] Add `client_msg`, `server_msg` strategies and `fuzzing::frames` (`Header`, `header`, `read_all`) with its example tests, `any_message_survives_its_frame`, `any_bytes_read_as_their_header_says`; drop the `Noise` proto test
 - [ ] Add `json`, `hook_payload` strategies and `fuzzing::claude_code_hook`, `codex_hook` with `any_payload_translates_into_events_the_log_keeps` in both adapter test modules
 - [ ] Add the `.fuzz/` package with the five targets and its lockfile; run each target locally on nightly for a minute
 - [ ] CI: fmt and clippy over `.fuzz/` in `ci.yml`; new `fuzz.yml`; run it once with `workflow_dispatch` after push if possible

@@ -368,25 +368,6 @@ fn a_length_alone_allocates_nothing_near_it() {
 }
 
 #[test]
-fn random_bytes_decode_or_fail_but_never_panic() {
-    let mut noise = crate::fixtures::Noise::new(0x5aa10);
-    let seeds: Vec<Vec<u8>> = client_messages()
-        .iter()
-        .map(|message| postcard::to_stdvec(message).unwrap())
-        .collect();
-    for case in 0..2000 {
-        let bytes = match case % 3 {
-            0 => noise.bytes(64),
-            _ => noise.mutate(&seeds[case % seeds.len()]),
-        };
-        let mut wire = u32::try_from(bytes.len()).unwrap().to_le_bytes().to_vec();
-        wire.extend(&bytes);
-        let _ = read_msg::<_, ClientMsg>(&mut Cursor::new(&wire));
-        let _ = read_msg::<_, ClientMsg>(&mut Cursor::new(&bytes));
-    }
-}
-
-#[test]
 fn refuses_oversized_and_undecodable_messages() {
     let oversized = ((MAX_MESSAGE + 1) as u32).to_le_bytes().to_vec();
     let error = read_msg::<_, ClientMsg>(&mut Cursor::new(oversized)).unwrap_err();
@@ -423,4 +404,79 @@ fn only_a_passed_deadline_is_a_time_out() {
     }
     assert!(!Error::Cut.timed_out());
     assert!(!Error::TooLarge(1).timed_out());
+}
+
+mod properties {
+    use proptest::prelude::*;
+
+    use super::*;
+    use crate::fuzzing;
+    use crate::strategies;
+
+    fn stream(frames: &[Vec<u8>]) -> Vec<u8> {
+        frames.concat()
+    }
+
+    /// Valid frames of both directions, as one stream.
+    fn frames() -> impl Strategy<Value = Vec<u8>> {
+        let frame = prop_oneof![
+            strategies::client_msg().prop_map(|message| encode(&message).unwrap()),
+            strategies::server_msg().prop_map(|message| encode(&message).unwrap()),
+        ];
+        prop::collection::vec(frame, 0..4).prop_map(|frames| stream(&frames))
+    }
+
+    /// Any bytes, or a valid stream cut anywhere, with a frame's length changed or a byte changed.
+    fn damaged_stream() -> impl Strategy<Value = Vec<u8>> {
+        let cut = (frames(), any::<prop::sample::Index>())
+            .prop_map(|(bytes, at)| bytes[..at.index(bytes.len() + 1)].to_vec());
+        let length = (strategies::client_msg(), any::<u32>()).prop_map(|(message, len)| {
+            let mut bytes = encode(&message).unwrap();
+            bytes[..4].copy_from_slice(&len.to_le_bytes());
+            bytes
+        });
+        let changed = (frames(), any::<prop::sample::Index>(), any::<u8>()).prop_map(
+            |(mut bytes, at, byte)| {
+                if !bytes.is_empty() {
+                    let at = at.index(bytes.len());
+                    bytes[at] = byte;
+                }
+                bytes
+            },
+        );
+        prop_oneof![
+            prop::collection::vec(any::<u8>(), 0..64),
+            frames(),
+            cut,
+            length,
+            changed,
+        ]
+    }
+
+    proptest! {
+        #[test]
+        fn any_message_survives_its_frame(
+            clients in prop::collection::vec(strategies::client_msg(), 0..5),
+            servers in prop::collection::vec(strategies::server_msg(), 0..5),
+        ) {
+            let bytes = stream(&clients.iter().map(|message| encode(message).unwrap()).collect::<Vec<_>>());
+            let mut cursor = Cursor::new(&bytes);
+            for message in clients {
+                prop_assert_eq!(read_msg::<_, ClientMsg>(&mut cursor).unwrap(), Some(message));
+            }
+            prop_assert_eq!(read_msg::<_, ClientMsg>(&mut cursor).unwrap(), None);
+
+            let bytes = stream(&servers.iter().map(|message| encode(message).unwrap()).collect::<Vec<_>>());
+            let mut cursor = Cursor::new(&bytes);
+            for message in servers {
+                prop_assert_eq!(read_msg::<_, ServerMsg>(&mut cursor).unwrap(), Some(message));
+            }
+            prop_assert_eq!(read_msg::<_, ServerMsg>(&mut cursor).unwrap(), None);
+        }
+
+        #[test]
+        fn any_bytes_read_as_their_header_says(bytes in damaged_stream()) {
+            fuzzing::frames(&bytes);
+        }
+    }
 }

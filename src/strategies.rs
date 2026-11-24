@@ -1,12 +1,20 @@
-//! The values property tests generate: texts, ids, workflows and every `EventKind`
+//! The values property tests generate: texts, ids, workflows, every `EventKind` and every
+//! message between the UI and the server
 
 use std::collections::BTreeSet;
 
 use proptest::prelude::*;
 use uuid::Uuid;
 
+use crate::binaries::Binary;
 use crate::event::{Choice, Event, EventKind, Mode, Question, ServiceStatus};
-use crate::id::SessionId;
+use crate::fold;
+use crate::id::{FlowId, SessionId};
+use crate::proto::{
+    Cell, ClientMsg, Color, Flags, Frame, Modes, Mouse, PaneInfo, PaneKey, PaneStatus, Peer, Role,
+    ServerMsg, Size,
+};
+use crate::view::{Board, MasterTurn, State};
 use crate::workflow::{Phase, PhaseSpec, Workflow};
 
 /// Any text, control characters, quotes, newlines and non-ASCII included, up to 60 chars.
@@ -69,6 +77,10 @@ pub fn workflow() -> impl Strategy<Value = Workflow> {
 
 fn uuid() -> impl Strategy<Value = String> {
     any::<[u8; 16]>().prop_map(|bytes| Uuid::from_bytes(bytes).to_string())
+}
+
+pub fn flow_id() -> impl Strategy<Value = FlowId> {
+    uuid().prop_map(|text| FlowId::parse(&text).expect("a uuid's text"))
 }
 
 pub fn session_id() -> impl Strategy<Value = SessionId> {
@@ -209,6 +221,195 @@ pub fn event_kind() -> impl Strategy<Value = EventKind> {
 /// Event::new(at, kind): an event as saaio writes it, texts cleaned.
 pub fn event() -> impl Strategy<Value = Event> {
     (any::<u64>(), event_kind()).prop_map(|(at, kind)| Event::new(at, kind))
+}
+
+fn size() -> impl Strategy<Value = Size> {
+    any::<(u16, u16)>().prop_map(|(cols, rows)| Size { cols, rows })
+}
+
+fn pane_key() -> impl Strategy<Value = PaneKey> {
+    prop_oneof![Just(PaneKey::Master), flow_id().prop_map(PaneKey::Flow)]
+}
+
+fn peer() -> impl Strategy<Value = Peer> {
+    (any::<u32>(), text(), text()).prop_map(|(pid, cwd, build)| Peer {
+        pid,
+        cwd: cwd.into(),
+        build,
+    })
+}
+
+/// Every ClientMsg variant, fields at any value.
+pub fn client_msg() -> impl Strategy<Value = ClientMsg> {
+    let role = prop_oneof![
+        size().prop_map(|size| Role::Attach { size }),
+        Just(Role::Control),
+    ];
+    prop_oneof![
+        (any::<u32>(), role, peer())
+            .prop_map(|(version, role, peer)| ClientMsg::Hello {
+                version,
+                role,
+                peer
+            })
+            .boxed(),
+        pane_key().prop_map(ClientMsg::Focus).boxed(),
+        prop::collection::vec(any::<u8>(), 0..32)
+            .prop_map(ClientMsg::Input)
+            .boxed(),
+        size().prop_map(ClientMsg::Resize).boxed(),
+        any::<Option<u32>>().prop_map(ClientMsg::History).boxed(),
+        pane_key().prop_map(ClientMsg::Reopen).boxed(),
+        flow_id().prop_map(ClientMsg::CloseFlow).boxed(),
+        Just(ClientMsg::StopServer).boxed(),
+        Just(ClientMsg::EndFlows).boxed(),
+    ]
+}
+
+/// Up to three flows, each folded from a Started event and up to eight event_kind()s, without
+/// the fields the wire leaves to the server (`#[serde(skip)]`).
+fn board() -> impl Strategy<Value = Board> {
+    let flow = (
+        flow_id(),
+        (text(), text(), mode()),
+        prop::collection::vec((any::<u64>(), event_kind()), 0..8),
+        any::<u64>(),
+    )
+        .prop_map(|(id, (name, request, mode), events, now)| {
+            let started = EventKind::Started {
+                name,
+                request,
+                mode,
+                phases: None,
+                kind: None,
+                workflow: None,
+                prompt: None,
+                merges: true,
+            };
+            let events = std::iter::once(Event::new(0, started))
+                .chain(events.into_iter().map(|(at, kind)| Event::new(at, kind)))
+                .collect::<Vec<_>>();
+            let mut flow = fold::fold(id, &events, None, now).expect("a started flow folds");
+            flow.workflow = None;
+            flow.prompt = None;
+            flow.merged_into = None;
+            flow
+        });
+    (prop::collection::vec(flow, 0..=3), any::<u64>())
+        .prop_map(|(flows, now)| fold::board(flows, now))
+}
+
+fn color() -> impl Strategy<Value = Color> {
+    prop_oneof![
+        Just(Color::Default),
+        any::<u8>().prop_map(Color::Indexed),
+        any::<(u8, u8, u8)>().prop_map(|(r, g, b)| Color::Rgb(r, g, b)),
+    ]
+}
+
+fn flags() -> impl Strategy<Value = Flags> {
+    let all = [
+        Flags::BOLD,
+        Flags::DIM,
+        Flags::ITALIC,
+        Flags::UNDERLINE,
+        Flags::REVERSE,
+        Flags::STRIKE,
+        Flags::WIDE,
+        Flags::SPACER,
+    ];
+    prop::sample::subsequence(all.to_vec(), 0..=all.len()).prop_map(|flags| {
+        flags
+            .into_iter()
+            .fold(Flags::default(), |all, flag| all | flag)
+    })
+}
+
+fn frame() -> impl Strategy<Value = Frame> {
+    let cell = (text(), color(), color(), flags()).prop_map(|(text, fg, bg, flags)| Cell {
+        text,
+        fg,
+        bg,
+        flags,
+    });
+    let row = (any::<u16>(), prop::collection::vec(cell, 0..4));
+    let mouse = prop::sample::select(vec![Mouse::Off, Mouse::Press, Mouse::Drag, Mouse::Motion]);
+    let modes = (any::<[bool; 5]>(), mouse).prop_map(
+        |([paste, sgr_mouse, app_cursor, focus, alt_screen], mouse)| Modes {
+            paste,
+            mouse,
+            sgr_mouse,
+            app_cursor,
+            focus,
+            alt_screen,
+        },
+    );
+    (
+        pane_key(),
+        any::<bool>(),
+        prop::collection::vec(row, 0..4),
+        any::<Option<(u16, u16)>>(),
+        modes,
+        any::<Option<u32>>(),
+    )
+        .prop_map(|(key, full, rows, cursor, modes, history)| Frame {
+            key,
+            full,
+            rows,
+            cursor,
+            modes,
+            history,
+        })
+}
+
+fn master_turn() -> impl Strategy<Value = MasterTurn> {
+    let state = prop::sample::select(vec![
+        State::Working,
+        State::Delegated,
+        State::Waiting,
+        State::Idle,
+        State::Blocked,
+        State::NotResponding,
+        State::Done,
+        State::Ended,
+    ]);
+    (state, any::<u64>()).prop_map(|(state, at)| MasterTurn { state, at })
+}
+
+/// Every ServerMsg variant, fields at any value.
+pub fn server_msg() -> impl Strategy<Value = ServerMsg> {
+    let status = prop_oneof![
+        Just(PaneStatus::Running),
+        any::<Option<u32>>().prop_map(|code| PaneStatus::Exited { code }),
+        text().prop_map(|reason| PaneStatus::Failed { reason }),
+    ];
+    let pane = (pane_key(), status).prop_map(|(key, status)| PaneInfo { key, status });
+    prop_oneof![
+        (any::<u32>(), text(), text())
+            .prop_map(|(version, exe, build)| ServerMsg::Welcome {
+                version,
+                server: Binary {
+                    exe: exe.into(),
+                    build
+                },
+            })
+            .boxed(),
+        text()
+            .prop_map(|reason| ServerMsg::Refused { reason })
+            .boxed(),
+        board().prop_map(ServerMsg::Board).boxed(),
+        prop::collection::vec(pane, 0..4)
+            .prop_map(ServerMsg::Panes)
+            .boxed(),
+        frame().prop_map(ServerMsg::Frame).boxed(),
+        flow_id().prop_map(ServerMsg::Closed).boxed(),
+        peer().prop_map(|by| ServerMsg::Detached { by }).boxed(),
+        flow_id().prop_map(ServerMsg::NotOpen).boxed(),
+        (text(), texts(), prop::option::of(master_turn()))
+            .prop_map(|(cwd, branch, turn)| ServerMsg::Master { cwd, branch, turn })
+            .boxed(),
+        text().prop_map(ServerMsg::Clipboard).boxed(),
+    ]
 }
 
 /// How many EventKind variants there are; `variant` numbers them.
