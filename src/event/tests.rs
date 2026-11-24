@@ -659,3 +659,60 @@ fn skips_a_session_line_whose_id_is_no_id() {
         assert_eq!(Event::from_line(&line(forged)), None, "{forged}");
     }
 }
+
+mod properties {
+    use proptest::prelude::*;
+
+    use super::*;
+    use crate::fuzzing;
+    use crate::strategies;
+
+    /// An event's line cut anywhere, or with one byte changed.
+    fn damaged_line() -> impl Strategy<Value = String> {
+        let cut = (strategies::event(), any::<prop::sample::Index>()).prop_map(|(event, at)| {
+            let line = event.to_line().into_bytes();
+            String::from_utf8_lossy(&line[..at.index(line.len() + 1)]).into_owned()
+        });
+        let changed = (
+            strategies::event(),
+            any::<prop::sample::Index>(),
+            any::<u8>(),
+        )
+            .prop_map(|(event, at, byte)| {
+                let mut line = event.to_line().into_bytes();
+                let at = at.index(line.len());
+                line[at] = byte;
+                String::from_utf8_lossy(&line).into_owned()
+            });
+        prop_oneof![
+            strategies::text(),
+            strategies::event().prop_map(|event| event.to_line()),
+            cut,
+            changed,
+        ]
+    }
+
+    proptest! {
+        #[test]
+        fn any_event_survives_its_log_line(event in strategies::event()) {
+            let line = event.to_line();
+
+            prop_assert!(!line.contains('\n'));
+            fuzzing::log_line(&line);
+            prop_assert_eq!(Event::from_line(&line), Some(event));
+        }
+
+        #[test]
+        fn cleaning_an_event_twice_changes_nothing(event in strategies::event()) {
+            prop_assert_eq!(Event::new(event.at, event.kind.clone()), event);
+        }
+
+        #[test]
+        fn any_line_reads_back_as_it_was(lines in prop::collection::vec(damaged_line(), 0..6)) {
+            for line in &lines {
+                fuzzing::log_line(line);
+            }
+            fuzzing::log(&lines.join("\n"));
+        }
+    }
+}

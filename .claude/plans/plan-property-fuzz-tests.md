@@ -205,8 +205,8 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 - [x] Move `event.rs` tests to `src/event/tests.rs` and `proto.rs` tests to `src/proto/tests.rs`, unchanged
 - [x] Add `Event::from_log(text)` and make `Store::events` use it, with an example test
 - [x] Fix `Store::append` with `torn(log)`, test first: an example test of a torn log followed by an append
-- [ ] Add proptest and `src/strategies.rs` (`text`, `phase`, `workflow`, `flow_id`, `session_id`, `event_kind`, `event`, `variant`, `VARIANTS`) with `the_strategy_makes_every_kind`
-- [ ] Add the `fuzzing` feature and `src/fuzzing.rs` `log_line` and `log`, with `any_event_survives_its_log_line`, `cleaning_an_event_twice_changes_nothing`, `any_line_reads_back_as_it_was`
+- [x] Add proptest and `src/strategies.rs` (`text`, `phase`, `workflow`, `flow_id`, `session_id`, `event_kind`, `event`, `variant`, `VARIANTS`) with `the_strategy_makes_every_kind`
+- [x] Add the `fuzzing` feature and `src/fuzzing.rs` `log_line` and `log`, with `any_event_survives_its_log_line`, `cleaning_an_event_twice_changes_nothing`, `any_line_reads_back_as_it_was`
 - [ ] Add `a_log_cut_anywhere_keeps_every_whole_event_and_the_next` in the store tests
 - [ ] Add `client_msg`, `server_msg` strategies and `fuzzing::frames` (`Header`, `header`, `read_all`) with its example tests, `any_message_survives_its_frame`, `any_bytes_read_as_their_header_says`; drop the `Noise` proto test
 - [ ] Add `json`, `hook_payload` strategies and `fuzzing::claude_code_hook`, `codex_hook` with `any_payload_translates_into_events_the_log_keeps` in both adapter test modules
