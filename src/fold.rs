@@ -7,8 +7,8 @@ use crate::id::FlowId;
 use crate::store::FlowLog;
 use crate::text;
 use crate::view::{
-    Board, FlowView, ReviewCount, Services, Session, State, Step, StepStatus, Tasks, TimelineEntry,
-    Tone, TurnWait, VIEW_VERSION, Workspace,
+    Board, FlowView, ReviewCount, Services, Session, SetupRun, State, Step, StepStatus, Tasks,
+    TimelineEntry, Tone, TurnWait, VIEW_VERSION, Workspace,
 };
 use crate::workflow::Phase;
 use crate::workflow::Workflow;
@@ -153,6 +153,8 @@ struct Folding {
     /// The turn the current phase began in has ended: the person had the flow back since.
     turn_ended: bool,
     pending_permission: Option<(u64, String)>,
+    /// The worker itself said it works: a new flow folds as Working before it says anything.
+    reported_working: bool,
 }
 
 impl Folding {
@@ -207,6 +209,7 @@ impl Folding {
             permission: false,
             services: None,
             turn: None,
+            setup: None,
         };
         let phases = match (workflow, phases) {
             (Some(workflow), _) => workflow.phases(),
@@ -223,6 +226,7 @@ impl Folding {
             ended: false,
             turn_ended: false,
             pending_permission: None,
+            reported_working: false,
         }
     }
 
@@ -246,6 +250,7 @@ impl Folding {
                     | EventKind::PermissionPending { .. }
                     | EventKind::Idle { .. }
                     | EventKind::Blocked { .. }
+                    | EventKind::Setup { .. }
                     | EventKind::Edited { .. }
             )
         {
@@ -291,8 +296,10 @@ impl Folding {
                 }
                 self.view.state = State::Working;
                 self.view.delegate = None;
+                self.reported_working = true;
             }
             EventKind::Delegated { description } => {
+                self.reported_working = true;
                 self.view.state = State::Delegated;
                 self.view.delegate = Some(description.clone());
             }
@@ -457,6 +464,7 @@ impl Folding {
                 });
             }
             EventKind::TurnTaken | EventKind::Prompted => self.view.turn = None,
+            EventKind::Setup { failed, log } => self.set_up(failed.as_ref(), log, at),
             EventKind::Edited { path } => {
                 if let Some(build) = self.build_to_go_back_to(path) {
                     self.enter(build, at);
@@ -584,6 +592,31 @@ impl Folding {
             let spent = until.saturating_sub(self.phase_since);
             let total = &mut self.durations[current];
             *total = Some(total.unwrap_or(0) + spent);
+        }
+    }
+
+    /// Keeps the run; a failure blocks the flow, a pass after one says so and lets go of a flow
+    /// still blocked on it.
+    fn set_up(&mut self, failed: Option<&String>, log: &str, at: u64) {
+        let before = self.view.setup_problem();
+        self.view.setup = Some(SetupRun {
+            failed: failed.cloned(),
+            log: log.to_string(),
+            at,
+        });
+        if let Some(problem) = self.view.setup_problem() {
+            let mid_turn = matches!(self.view.state, State::Working | State::Delegated);
+            if mid_turn && self.reported_working {
+                self.note(at, problem, Tone::Problem);
+            } else {
+                self.stop_for(State::Blocked, &problem, at, "blocked", Tone::Problem);
+            }
+        } else if let Some(problem) = before {
+            self.note(at, "setup passed".to_string(), Tone::Progress);
+            if self.view.state == State::Blocked && self.view.blocker.as_deref() == Some(&problem) {
+                self.view.state = State::Idle;
+                self.view.blocker = None;
+            }
         }
     }
 

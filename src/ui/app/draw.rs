@@ -154,14 +154,14 @@ impl App {
     pub(super) fn dialog<'a>(&'a self, theme: &'a Theme) -> Option<Dialog<'a>> {
         match &self.view {
             View::Stop(unfinished) => Some(self.stop_dialog(theme, unfinished)),
-            View::Confirm { question, .. } => Some(Dialog {
+            View::Confirm { question, then } => Some(Dialog {
                 border: theme.state.waiting,
                 keys: vec![
                     Hint::new("y", "yes"),
-                    Hint::new("any other key", "keeps the flow").kept(),
+                    Hint::new("any other key", then.otherwise()).kept(),
                 ],
                 ..Dialog::new(
-                    "clean up",
+                    then.title(),
                     vec![Line::styled(question.as_str(), theme.ui.text)],
                     theme,
                 )

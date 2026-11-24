@@ -5,6 +5,8 @@ use crate::event::{Question, ServiceStatus};
 use crate::fixtures;
 use crate::view::{Services, TurnWait};
 
+mod setup;
+
 const MIN: u64 = 60_000;
 
 #[test]

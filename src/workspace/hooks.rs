@@ -6,11 +6,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 
 use super::git;
-use super::process::finish_within;
+use super::process::finish_into;
 use crate::launch::pane::PROOF_ENV;
+use crate::private;
 use crate::trust::Trust;
 use crate::view::Workspace;
 
@@ -25,17 +26,19 @@ pub enum Hook {
 }
 
 /// Runs <repo>/.saaio/<hook> in the worktree with env and no stdin when it exists and is
-/// executable, killed with what it started and failed past `hook.limit()`; Ok(false) when there is
-/// none. A non-zero exit is an Err with the last stderr line; a repo trust does not cover, an Err
-/// naming it. Git in a hook that `pins_git` acts on the worktree's registered git dir.
+/// executable, its stdout and stderr into a fresh file at `log`, killed with what it started and
+/// failed past `hook.limit()`; Ok(false) when there is none. A non-zero exit is an Err with the
+/// log's last line; a repo trust does not cover, an Err naming it. Git in a hook that `pins_git`
+/// acts on the worktree's registered git dir.
 pub fn run(
     trust: &Trust,
     repo: &Path,
     hook: Hook,
     workspace: &Workspace,
     env: &[(String, String)],
+    log: &Path,
 ) -> Result<bool> {
-    run_within(trust, repo, hook, workspace, env, hook.limit())
+    run_within(trust, repo, hook, workspace, env, log, hook.limit())
 }
 
 /// `run` with a limit of its own. Err when a pinned hook's worktree has no registered git dir.
@@ -45,6 +48,7 @@ pub fn run_within(
     hook: Hook,
     workspace: &Workspace,
     env: &[(String, String)],
+    log: &Path,
     limit: Duration,
 ) -> Result<bool> {
     let file = path(repo, hook);
@@ -59,8 +63,12 @@ pub fn run_within(
     } else {
         None
     };
-    finish_within(
+    let output =
+        private::create_fresh(log).with_context(|| format!("could not write {}", log.display()))?;
+    finish_into(
         command(&file, workspace, env, git_dir.as_deref()),
+        output,
+        log,
         &file.display().to_string(),
         limit,
     )?;
@@ -161,6 +169,7 @@ mod tests {
         let (_dir, repo) = repo();
         let state = TempDir::new().unwrap();
         let trust = Trust::at(&Registry::at(state.path().to_path_buf()));
+        let log = state.path().join("hooks/hook.log");
         let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         hook(
@@ -171,14 +180,14 @@ touch ran.txt
 ",
         );
 
-        let error = run(&trust, &repo, Hook::Setup, &workspace, &[]).unwrap_err();
+        let error = run(&trust, &repo, Hook::Setup, &workspace, &[], &log).unwrap_err();
 
         assert_eq!(
             format!("{error:#}"),
             format!("{} is not trusted", repo.display())
         );
         assert!(!Path::new(&workspace.path).join("ran.txt").exists());
-        assert!(!run(&trust, &repo, Hook::Teardown, &workspace, &[]).unwrap());
+        assert!(!run(&trust, &repo, Hook::Teardown, &workspace, &[], &log).unwrap());
         assert_eq!(present(&repo), [Hook::Setup]);
     }
 
@@ -193,7 +202,8 @@ touch ran.txt
     #[test]
     fn runs_a_hook_in_the_worktree_with_the_flow_environment() {
         let (_dir, repo) = repo();
-        let (_state, trust) = trusted(&repo);
+        let (state, trust) = trusted(&repo);
+        let log = state.path().join("hooks/hook.log");
         let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 3, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         hook(
@@ -208,19 +218,21 @@ touch ran.txt
             Hook::Setup,
             &workspace,
             &[("SAAIO_SLOT".into(), "3".into())],
+            &log,
         )
         .unwrap();
 
         assert!(ran);
         let written = fs::read_to_string(Path::new(&workspace.path).join("ran.txt")).unwrap();
         assert_eq!(written.trim(), format!("3 {}", workspace.path));
-        assert!(!run(&trust, &repo, Hook::Teardown, &workspace, &[]).unwrap());
+        assert!(!run(&trust, &repo, Hook::Teardown, &workspace, &[], &log).unwrap());
     }
 
     #[test]
     fn a_failing_hook_reports_its_last_error_line() {
         let (_dir, repo) = repo();
-        let (_state, trust) = trusted(&repo);
+        let (state, trust) = trusted(&repo);
+        let log = state.path().join("hooks/hook.log");
         let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         hook(
@@ -229,21 +241,63 @@ touch ran.txt
             "#!/bin/sh\necho starting >&2\necho 'port 8001 is taken' >&2\nexit 3\n",
         );
 
-        let error = run(&trust, &repo, Hook::Setup, &workspace, &[]).unwrap_err();
+        let error = run(&trust, &repo, Hook::Setup, &workspace, &[], &log).unwrap_err();
 
         assert_eq!(error.to_string(), "port 8001 is taken");
     }
 
     #[test]
+    fn keeps_a_hook_whole_output_in_its_log_and_replaces_it_on_the_next_run() {
+        let (_dir, repo) = repo();
+        let (state, trust) = trusted(&repo);
+        let log = state.path().join("hooks/flow/setup.log");
+        let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
+        create_worktree(&repo, &workspace, None).unwrap();
+        hook(
+            &repo,
+            "setup",
+            "#!/bin/sh\necho 'requires ext-zip' >&2\necho 'requires ext-bcmath' >&2\necho 'Please run composer update'\nexit 2\n",
+        );
+
+        let error = run(&trust, &repo, Hook::Setup, &workspace, &[], &log).unwrap_err();
+
+        assert_eq!(error.to_string(), "Please run composer update");
+        assert_eq!(
+            fs::read_to_string(&log).unwrap(),
+            "requires ext-zip\nrequires ext-bcmath\nPlease run composer update\n"
+        );
+        hook(&repo, "setup", "#!/bin/sh\necho installed\n");
+        assert!(run(&trust, &repo, Hook::Setup, &workspace, &[], &log).unwrap());
+        assert_eq!(fs::read_to_string(&log).unwrap(), "installed\n");
+    }
+
+    #[test]
+    fn writes_no_log_for_a_missing_hook_or_an_untrusted_repo() {
+        let (_dir, repo) = repo();
+        let state = TempDir::new().unwrap();
+        let trust = Trust::at(&Registry::at(state.path().to_path_buf()));
+        let log = state.path().join("hooks/flow/setup.log");
+        let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
+        create_worktree(&repo, &workspace, None).unwrap();
+
+        assert!(!run(&trust, &repo, Hook::Setup, &workspace, &[], &log).unwrap());
+        hook(&repo, "setup", "#!/bin/sh\necho ran\n");
+        run(&trust, &repo, Hook::Setup, &workspace, &[], &log).unwrap_err();
+
+        assert!(!log.exists());
+    }
+
+    #[test]
     fn runs_pause_and_resume_within_a_limit_with_the_flow_environment() {
         let (_dir, repo) = repo();
-        let (_state, trust) = trusted(&repo);
+        let (state, trust) = trusted(&repo);
+        let log = state.path().join("hooks/hook.log");
         let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 3, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         let env = [("SAAIO_SLOT".to_string(), "3".to_string())];
 
         assert!(!exists(&repo, Hook::Pause));
-        assert!(!run_within(&trust, &repo, Hook::Pause, &workspace, &env, LIMIT).unwrap());
+        assert!(!run_within(&trust, &repo, Hook::Pause, &workspace, &env, &log, LIMIT).unwrap());
         hook(
             &repo,
             "pause",
@@ -252,12 +306,13 @@ touch ran.txt
         hook(&repo, "resume", "#!/bin/sh\nexec sleep 30\n");
 
         assert!(exists(&repo, Hook::Pause));
-        assert!(run_within(&trust, &repo, Hook::Pause, &workspace, &env, LIMIT).unwrap());
+        assert!(run_within(&trust, &repo, Hook::Pause, &workspace, &env, &log, LIMIT).unwrap());
         let written = fs::read_to_string(Path::new(&workspace.path).join("ran.txt")).unwrap();
         assert_eq!(written.trim(), format!("paused 3 {}", workspace.path));
         let started = Instant::now();
         let limit = Duration::from_millis(200);
-        let error = run_within(&trust, &repo, Hook::Resume, &workspace, &env, limit).unwrap_err();
+        let error =
+            run_within(&trust, &repo, Hook::Resume, &workspace, &env, &log, limit).unwrap_err();
         assert!(started.elapsed() < SOON);
         assert_eq!(format!("{error:#}"), "no answer within 0s");
         fs::set_permissions(
@@ -271,7 +326,8 @@ touch ran.txt
     #[test]
     fn a_hook_that_leaves_a_process_behind_still_ends() {
         let (_dir, repo) = repo();
-        let (_state, trust) = trusted(&repo);
+        let (state, trust) = trusted(&repo);
+        let log = state.path().join("hooks/hook.log");
         let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 3, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         let pids = repo.join("pids");
@@ -284,8 +340,9 @@ touch ran.txt
         );
         let started = Instant::now();
 
-        assert!(run_within(&trust, &repo, Hook::Resume, &workspace, &[], LIMIT).unwrap());
-        let error = run_within(&trust, &repo, Hook::Pause, &workspace, &[], LIMIT).unwrap_err();
+        assert!(run_within(&trust, &repo, Hook::Resume, &workspace, &[], &log, LIMIT).unwrap());
+        let error =
+            run_within(&trust, &repo, Hook::Pause, &workspace, &[], &log, LIMIT).unwrap_err();
         // A process left behind can hold the pipes of other tests' commands it inherited.
         for pid in fs::read_to_string(&pids).unwrap().split_whitespace() {
             Command::new("kill").arg(pid).status().unwrap();
@@ -333,7 +390,8 @@ git rev-parse --absolute-git-dir > git-dir.txt
     #[test]
     fn pins_git_to_the_registered_worktree_in_teardown_pause_and_resume() {
         let (_dir, repo) = repo();
-        let (_state, trust) = trusted(&repo);
+        let (state, trust) = trusted(&repo);
+        let log = state.path().join("hooks/hook.log");
         let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         let registered = repo.join(".git/worktrees/shop-217");
@@ -343,7 +401,7 @@ git rev-parse --absolute-git-dir > git-dir.txt
             hook(&repo, pinned.name(), GIT_SCRIPT);
 
             assert!(pinned.pins_git());
-            assert!(run_within(&trust, &repo, pinned, &workspace, &[], LIMIT).unwrap());
+            assert!(run_within(&trust, &repo, pinned, &workspace, &[], &log, LIMIT).unwrap());
             let git_dir = fs::read_to_string(Path::new(&workspace.path).join("git-dir.txt"));
             assert_eq!(
                 git_dir.unwrap().trim(),
@@ -358,14 +416,15 @@ git rev-parse --absolute-git-dir > git-dir.txt
     #[test]
     fn leaves_git_in_setup_to_the_worktree() {
         let (_dir, repo) = repo();
-        let (_state, trust) = trusted(&repo);
+        let (state, trust) = trusted(&repo);
+        let log = state.path().join("hooks/hook.log");
         let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         create_worktree(&repo, &workspace, None).unwrap();
         let (_decoy, git_dir, marker) = tamper(&workspace);
         hook(&repo, "setup", GIT_SCRIPT);
 
         assert!(!Hook::Setup.pins_git());
-        assert!(run(&trust, &repo, Hook::Setup, &workspace, &[]).unwrap());
+        assert!(run(&trust, &repo, Hook::Setup, &workspace, &[], &log).unwrap());
 
         let found = fs::read_to_string(Path::new(&workspace.path).join("git-dir.txt")).unwrap();
         assert_eq!(found.trim(), git_dir.to_string_lossy());
@@ -375,7 +434,8 @@ git rev-parse --absolute-git-dir > git-dir.txt
     #[test]
     fn runs_no_pinned_hook_in_a_folder_that_is_no_worktree() {
         let (_dir, repo) = repo();
-        let (_state, trust) = trusted(&repo);
+        let (state, trust) = trusted(&repo);
+        let log = state.path().join("hooks/hook.log");
         let workspace = workspace_for(&repo, "shop-217", Some("flow/shop-217".into()), 1, "claude");
         fs::create_dir_all(&workspace.path).unwrap();
         hook(
@@ -386,7 +446,7 @@ touch ran.txt
 ",
         );
 
-        let error = run(&trust, &repo, Hook::Teardown, &workspace, &[]).unwrap_err();
+        let error = run(&trust, &repo, Hook::Teardown, &workspace, &[], &log).unwrap_err();
 
         assert!(
             format!("{error:#}").ends_with(&format!("is no worktree of {}", repo.display())),

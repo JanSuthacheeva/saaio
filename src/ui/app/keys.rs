@@ -11,6 +11,7 @@ use crate::ui::board::BoardState;
 use crate::ui::input::{Command, Key, Routed, Step};
 use crate::ui::newflow::{FormAction, NewFlowForm};
 use crate::ui::screen::Screen;
+use crate::view::FlowView;
 
 impl App {
     pub fn on_input(&mut self, routed: Routed) -> Vec<Effect> {
@@ -55,6 +56,17 @@ impl App {
                 vec![]
             }
             Command::Reopen => vec![Effect::Send(ClientMsg::Reopen(self.focus))],
+            Command::Setup => {
+                let flow = match self.focus {
+                    PaneKey::Master => None,
+                    PaneKey::Flow(id) => self
+                        .workers()
+                        .into_iter()
+                        .find(|flow| flow.id == id)
+                        .cloned(),
+                };
+                self.ask_setup(flow)
+            }
             Command::Cursor(step) => {
                 self.move_cursor(step);
                 vec![]
@@ -139,6 +151,7 @@ impl App {
             View::Stop(unfinished) => self.on_stop_key(unfinished, key),
             View::Confirm { then, .. } if key == Key::Char('y') => match then {
                 Confirmed::Remove(removal) => self.remove(removal),
+                Confirmed::Setup(name) => self.rerun_setup(name),
                 Confirmed::Trust(form) => {
                     let mut effects = vec![Effect::Trust(form.repo.clone())];
                     effects.extend(self.start(form));
@@ -282,6 +295,35 @@ impl App {
     fn start(&mut self, form: Box<NewFlowForm>) -> Vec<Effect> {
         self.notice = Some("starting the flow…".to_string());
         vec![Effect::Run(Job::Start(form))]
+    }
+
+    /// Asks y before re-running setup for the flow in view or the board's card; a notice for
+    /// the master, a plain session or a finished flow.
+    pub(super) fn ask_setup(&mut self, flow: Option<FlowView>) -> Vec<Effect> {
+        let refusal = match &flow {
+            None => Some("setup runs for a worker's flow, not the master".to_string()),
+            Some(flow) if flow.is_plain() || flow.workspace.is_none() => {
+                Some(format!("{} is a plain session: it has no setup", flow.name))
+            }
+            Some(flow) if flow.is_finished() => Some(format!("{} has ended", flow.name)),
+            Some(_) => None,
+        };
+        match (refusal, flow) {
+            (None, Some(flow)) => {
+                self.view = View::Confirm {
+                    question: format!("Run teardown, then setup, for {}?", flow.name),
+                    then: Confirmed::Setup(flow.name),
+                };
+            }
+            (refusal, _) => self.notice = refusal,
+        }
+        vec![]
+    }
+
+    /// Runs `saaio setup` for the flow in the background; its answer comes back in on_ran.
+    pub(super) fn rerun_setup(&mut self, name: String) -> Vec<Effect> {
+        self.notice = Some(format!("setting up {name}…"));
+        vec![Effect::Run(Job::Setup(name))]
     }
 
     pub(super) fn remove(&mut self, removal: Removal) -> Vec<Effect> {

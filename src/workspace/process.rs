@@ -1,9 +1,10 @@
 //! Commands run with a deadline, their output read even past a process they left behind
 
-use std::io::{self, ErrorKind, Read};
+use std::fs::File;
+use std::io::{self, ErrorKind, Read, Seek, SeekFrom};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -65,18 +66,7 @@ pub(super) fn finish_within(
             return Err(error).with_context(|| format!("could not read what {program} prints"));
         }
     };
-    let deadline = Instant::now() + limit;
-    let status = loop {
-        if let Some(status) = child.try_wait()? {
-            break status;
-        }
-        if Instant::now() >= deadline {
-            kill(&mut child);
-            let millis = u64::try_from(limit.as_millis()).unwrap_or(u64::MAX);
-            bail!("no answer within {}", short_duration(millis));
-        }
-        thread::sleep(WAIT_STEP);
-    };
+    let status = wait_within(&mut child, limit)?;
     let read_until = Instant::now() + READ_GRACE;
     let stdout = stdout.collect(read_until);
     let stderr = stderr.collect(read_until);
@@ -84,6 +74,63 @@ pub(super) fn finish_within(
         bail!("{}", last_line(&stderr, &stdout));
     }
     Ok(stdout)
+}
+
+/// Runs `command` with no stdin in a process group of its own, stdout and stderr both into `log`;
+/// Err with the last non-empty line `path` holds on a non-zero exit, or "no answer within ..." past
+/// `limit`, the whole group killed (what it printed until then stays in the file).
+pub(super) fn finish_into(
+    mut command: Command,
+    log: File,
+    path: &Path,
+    program: &str,
+    limit: Duration,
+) -> Result<()> {
+    let errors = log
+        .try_clone()
+        .with_context(|| format!("could not write {}", path.display()))?;
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(log)
+        .stderr(errors)
+        .process_group(0)
+        .spawn()
+        .with_context(|| format!("could not run {program}"))?;
+    let status = wait_within(&mut child, limit)?;
+    if !status.success() {
+        bail!("{}", last_line_of(path));
+    }
+    Ok(())
+}
+
+/// How much of a log's end `last_line_of` reads.
+const TAIL: u64 = 64 * 1024;
+
+/// The last non-empty line of the file's last 64 KiB, or "failed without a message".
+fn last_line_of(path: &Path) -> String {
+    let mut tail = Vec::new();
+    if let Ok(mut file) = File::open(path) {
+        let length = file.metadata().map(|meta| meta.len()).unwrap_or(0);
+        let _ = file.seek(SeekFrom::Start(length.saturating_sub(TAIL)));
+        let _ = file.take(TAIL).read_to_end(&mut tail);
+    }
+    last_line(&[], &tail)
+}
+
+/// The child's exit status, or an error once `limit` passed, its whole group killed.
+fn wait_within(child: &mut Child, limit: Duration) -> Result<ExitStatus> {
+    let deadline = Instant::now() + limit;
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(status);
+        }
+        if Instant::now() >= deadline {
+            kill(child);
+            let millis = u64::try_from(limit.as_millis()).unwrap_or(u64::MAX);
+            bail!("no answer within {}", short_duration(millis));
+        }
+        thread::sleep(WAIT_STEP);
+    }
 }
 
 /// Kills the child's whole process group and waits for the child.
@@ -271,5 +318,74 @@ mod tests {
             let _ = kill_process(pid, Signal::KILL);
         }
         assert!(!alive, "the background sleep outlived its command");
+    }
+
+    fn into_log(script: &str, limit: Duration) -> (Result<()>, String) {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("hook.log");
+        let log = crate::private::create_fresh(&path).unwrap();
+        let mut command = Command::new("sh");
+        command.args(["-c", script]);
+        let result = finish_into(command, log, &path, "sh", limit);
+        (result, fs::read_to_string(&path).unwrap())
+    }
+
+    #[test]
+    fn writes_stdout_and_stderr_to_the_log_in_order() {
+        let (result, log) = into_log("echo one; echo two >&2; echo three", LIMIT);
+
+        result.unwrap();
+        assert_eq!(log, "one\ntwo\nthree\n");
+    }
+
+    #[test]
+    fn a_failing_command_reports_the_last_line_of_its_log() {
+        let script = "echo 'requires ext-zip' >&2; echo 'Please run composer update'; echo; exit 2";
+        let (result, log) = into_log(script, LIMIT);
+
+        assert_eq!(
+            format!("{:#}", result.unwrap_err()),
+            "Please run composer update"
+        );
+        assert!(log.contains("requires ext-zip"), "{log}");
+        let (silent, _) = into_log("exit 1", LIMIT);
+        assert_eq!(
+            format!("{:#}", silent.unwrap_err()),
+            "failed without a message"
+        );
+    }
+
+    #[test]
+    fn a_command_killed_past_its_limit_leaves_its_output_in_the_log() {
+        let started = Instant::now();
+        let (result, log) = into_log("echo installing; exec sleep 30", Duration::from_secs(2));
+
+        assert!(started.elapsed() < SOON);
+        assert!(format!("{:#}", result.unwrap_err()).starts_with("no answer within"),);
+        assert_eq!(log, "installing\n");
+    }
+
+    #[test]
+    fn a_process_left_behind_does_not_hold_the_command_up() {
+        let started = Instant::now();
+        let (result, log) = into_log("sleep 30 & echo done", LIMIT);
+
+        result.unwrap();
+        assert!(started.elapsed() < Duration::from_secs(10));
+        assert_eq!(log, "done\n");
+    }
+
+    #[test]
+    fn reads_only_the_end_of_a_long_log() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("long.log");
+        let long = format!("{}\nthe cause\n\n", "x".repeat(200_000));
+        fs::write(&path, long).unwrap();
+
+        assert_eq!(last_line_of(&path), "the cause");
+        assert_eq!(
+            last_line_of(&dir.path().join("missing")),
+            "failed without a message"
+        );
     }
 }

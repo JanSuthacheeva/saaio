@@ -6,6 +6,24 @@ All notable changes to saaio are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `saaio setup [<flow>]` runs a flow's `.saaio/teardown`, then its `.saaio/setup` again, with its
+  slot and worktree, without removing it; `C-space s` and the board's `s` do it in the UI, after
+  `y`. A worker can run it for its own flow once it fixed the cause
+  ([cli.md](docs/cli.md#saaio-setup)).
+- The whole output of each `.saaio` script, stdout and stderr in order, goes to
+  `hooks/<flow id>/<script>.log` in the store, and a failed setup names the file
+  ([files.md](docs/files.md)).
+
+### Changed
+
+- A failed setup stays in `saaio status`, the sidebar and the board until a setup run passes,
+  instead of going away with the worker's first prompt, and `saaio status --json` gives each flow
+  `setup` ([json.md](docs/json.md#setup)). The worker and the master are told, with the path of the
+  whole output.
+- A failed script's reason is the last line it printed on stdout or stderr, no longer stderr first.
+
 ## [0.3.1] - 2026-11-20
 
 ### Fixed

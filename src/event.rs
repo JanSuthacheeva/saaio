@@ -146,6 +146,13 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
+    /// The repo's .saaio/setup ran for this flow: why it failed (its log's last line), None when it
+    /// passed; where its whole output is.
+    Setup {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        failed: Option<String>,
+        log: String,
+    },
     /// A tool call that runs `command` waits for the project's turn, which `holder` (a flow's
     /// name) has.
     TurnWaiting {
@@ -283,6 +290,12 @@ impl EventKind {
             EventKind::TurnWaiting { command, holder } => {
                 clean(command, TEXT_LIMIT);
                 clean(holder, TEXT_LIMIT);
+            }
+            EventKind::Setup { failed, log } => {
+                if let Some(reason) = failed {
+                    clean(reason, TEXT_LIMIT);
+                }
+                clean(log, LONG_TEXT_LIMIT);
             }
             EventKind::Message { text }
             | EventKind::Typed { text }
@@ -490,6 +503,14 @@ mod tests {
                 status: ServiceStatus::ResumeFailed,
                 reason: Some("port 8003 is taken".into()),
             },
+            EventKind::Setup {
+                failed: Some("Please run composer update".into()),
+                log: "/store/hooks/0b6e/setup.log".into(),
+            },
+            EventKind::Setup {
+                failed: None,
+                log: "/store/hooks/0b6e/setup.log".into(),
+            },
         ]
     }
 
@@ -519,6 +540,40 @@ mod tests {
             assert!(!line.contains('\n'));
             assert_eq!(Event::from_line(&line), Some(event));
         }
+    }
+
+    #[test]
+    fn writes_a_setup_line_without_failed_when_it_passed_and_cleans_its_texts() {
+        let passed = Event::new(
+            7,
+            EventKind::Setup {
+                failed: None,
+                log: "/s/setup.log".into(),
+            },
+        );
+        assert_eq!(
+            passed.to_line(),
+            r#"{"v":1,"at":7,"kind":"setup","log":"/s/setup.log"}"#
+        );
+
+        let failed = Event::new(
+            7,
+            EventKind::Setup {
+                failed: Some(format!("no\u{1b}[31m ext-zip{}", "x".repeat(TEXT_LIMIT))),
+                log: format!("/s/\u{7}{}", "l".repeat(LONG_TEXT_LIMIT)),
+            },
+        );
+        let EventKind::Setup {
+            failed: Some(reason),
+            log,
+        } = failed.kind
+        else {
+            panic!("kind changed");
+        };
+        assert!(reason.starts_with("no[31m ext-zip"), "{reason}");
+        assert_eq!(reason.chars().count(), TEXT_LIMIT);
+        assert!(log.starts_with("/s/l"));
+        assert_eq!(log.chars().count(), LONG_TEXT_LIMIT);
     }
 
     #[test]

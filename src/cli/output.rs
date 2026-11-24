@@ -3,6 +3,7 @@
 pub(crate) mod bug_report;
 pub(crate) mod flow;
 pub(crate) mod remove;
+pub(crate) mod setup;
 pub(crate) mod start;
 pub(crate) mod status;
 pub(crate) mod trust;

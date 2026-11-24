@@ -64,6 +64,28 @@ pub enum Confirmed {
     Remove(Removal),
     /// Trust the form's repository, then start the flow again.
     Trust(Box<NewFlowForm>),
+    /// Run the flow's teardown, then its setup again.
+    Setup(String),
+}
+
+impl Confirmed {
+    /// The title of the dialog that asks.
+    pub fn title(&self) -> &'static str {
+        match self {
+            Confirmed::Remove(_) => "clean up",
+            Confirmed::Trust(_) => "trust",
+            Confirmed::Setup(_) => "set up again",
+        }
+    }
+
+    /// What any key but y does.
+    pub fn otherwise(&self) -> &'static str {
+        match self {
+            Confirmed::Remove(_) => "keeps the flow",
+            Confirmed::Trust(_) => "starts nothing",
+            Confirmed::Setup(_) => "runs nothing",
+        }
+    }
 }
 
 /// The master as the UI shows it.

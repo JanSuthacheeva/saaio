@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::event::{EventKind, Mode, Question, ServiceStatus};
 use crate::id::{FlowId, SessionId};
+use crate::text::{LIST_TEXT_LIMIT, truncated};
 use crate::workflow::{Phase, Workflow};
 
 pub const VIEW_VERSION: u32 = 4;
@@ -73,6 +74,19 @@ pub struct FlowView {
     /// The tool call that waits for the project's turn; None when none waits.
     #[serde(default)]
     pub turn: Option<TurnWait>,
+    /// The last setup run: None when the repo has no .saaio/setup or the flow predates this.
+    #[serde(default)]
+    pub setup: Option<SetupRun>,
+}
+
+/// A run of the repo's .saaio/setup: why it failed (None when it passed), where its whole output
+/// is, and when it ran.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupRun {
+    pub failed: Option<String>,
+    pub log: String,
+    pub at: u64,
 }
 
 /// A tool call waiting for the project's turn: the listed command it runs, the flow that has the
@@ -274,6 +288,19 @@ impl Projects {
 }
 
 impl FlowView {
+    /// "setup failed: <why> (full output: <log>)" while the last setup run failed.
+    pub fn setup_problem(&self) -> Option<String> {
+        self.setup_line(true)
+    }
+
+    /// `setup_problem` for a list: the reason cut to LIST_TEXT_LIMIT unless `full`, the log's
+    /// path always whole.
+    pub fn setup_line(&self, full: bool) -> Option<String> {
+        let run = self.setup.as_ref()?;
+        let why = truncated(run.failed.as_deref()?, LIST_TEXT_LIMIT, full);
+        Some(format!("setup failed: {why} (full output: {})", run.log))
+    }
+
     /// Waiting, blocked or not responding.
     pub fn needs_you(&self) -> bool {
         matches!(
@@ -419,6 +446,7 @@ mod tests {
             permission: false,
             services: None,
             turn: None,
+            setup: None,
         }
     }
 
@@ -454,11 +482,36 @@ mod tests {
         assert_eq!(flow["workspace"]["window"], "@14");
         assert_eq!(flow["permission"], false);
         assert_eq!(flow["services"], serde_json::Value::Null);
+        assert_eq!(flow["setup"], serde_json::Value::Null);
         assert_eq!(flow["kind"], "feature");
         assert_eq!(flow["merges"], true);
         for skipped in ["workflow", "prompt"] {
             assert!(flow.get(skipped).is_none(), "{skipped} is saaio's own");
         }
+    }
+
+    #[test]
+    fn names_a_failed_setup_and_its_log_in_json() {
+        let mut flow = flow(State::Working);
+        flow.setup = Some(SetupRun {
+            failed: Some("Please run composer update".into()),
+            log: "/store/hooks/a/setup.log".into(),
+            at: 5,
+        });
+
+        let value = serde_json::to_value(&flow).unwrap();
+
+        assert_eq!(value["setup"]["failed"], "Please run composer update");
+        assert_eq!(value["setup"]["log"], "/store/hooks/a/setup.log");
+        assert_eq!(value["setup"]["at"], 5);
+        assert_eq!(
+            flow.setup_problem().as_deref(),
+            Some(
+                "setup failed: Please run composer update (full output: /store/hooks/a/setup.log)"
+            )
+        );
+        flow.setup.as_mut().unwrap().failed = None;
+        assert_eq!(flow.setup_problem(), None);
     }
 
     #[test]

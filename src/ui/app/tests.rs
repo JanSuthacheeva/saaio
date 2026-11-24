@@ -303,4 +303,5 @@ mod notifications;
 mod panes;
 mod pointer;
 mod prefix;
+mod setup;
 mod sidebar;

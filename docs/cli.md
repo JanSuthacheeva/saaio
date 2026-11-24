@@ -15,6 +15,7 @@
 - [saaio report](#saaio-report)
 - [saaio new](#saaio-new)
 - [saaio remove](#saaio-remove)
+- [saaio setup](#saaio-setup)
 - [saaio clear](#saaio-clear)
 - [saaio trust](#saaio-trust)
 - [saaio bug-report](#saaio-bug-report)
@@ -59,6 +60,7 @@ is:
 | `saaio report [--flow <flow>] <event>` | add an event to a flow by hand |
 | `saaio new --name <name> --request <text> [--mode] [--kind]` | track a flow without starting a worker |
 | `saaio remove <flow> [--force] [--delete-unmerged]` | end a flow and tear down its worktree |
+| `saaio setup [<flow>]` | run a flow's `.saaio/teardown`, then its `.saaio/setup` again |
 | `saaio clear` | forget finished flows and answered research flows, and tear down their worktrees |
 | `saaio trust [<folder>] [--revoke] [--list]` | let saaio run a repository's `.saaio` scripts |
 | `saaio bug-report` | write a file to attach to a bug report |
@@ -169,7 +171,7 @@ help[2]: Run `saaio` in a terminal to open the worker,Run `saaio` for all flows
 
 | Field | Values |
 | --- | --- |
-| `setup` | `ran`, `none` (no executable `.saaio/setup`), `failed: <its last error line>`. A failed setup marks the flow blocked. The worker still opens. |
+| `setup` | `ran`, `none` (no executable `.saaio/setup`), `failed: <its last line> (full output: <log>)`. A failed setup marks the flow blocked and stays in `saaio status` until a run passes. The worker still opens and hears of it ([repository.md](repository.md#when-setup-or-teardown-fails)). |
 | `pane` | `opening` while the UI runs, else `when saaio opens` |
 | `branch` | left out for a research flow, which says it has none in `help` |
 
@@ -279,6 +281,7 @@ Some fields show only when they apply:
 | Field | Shown |
 | --- | --- |
 | `blocker` | while there is one |
+| `setup` | while the flow's last setup run failed: `failed: <its last line> (full output: <log>)`, in place of a `blocker` that says the same. The list shows it among the `blockers` until the flow ends, whatever its state. |
 | `questions`, `options` | while the worker waits on a question dialog: each question with its header and whether it takes `one` option or `several`, then each option's label and description by question number |
 | `delegate` | while a subagent works (what the worker handed to it) |
 | `tasks` | with task counts |
@@ -288,7 +291,7 @@ Some fields show only when they apply:
 | `base` | for a [stacked flow](#stacked-flows): the branch it stands on, after `branch` |
 | `folder` | for a plain session |
 | `answer` | the closing message of the worker's last turn |
-| `services`, `services_error` | while the flow's services are not running: `paused`, `resume-failed`, ..., and the last error line of a failed pause or resume |
+| `services`, `services_error` | while the flow's services are not running: `paused`, `resume-failed`, ..., and the last line a failed pause or resume printed |
 | `turn` | while a heavy command waits for another worker's run: `waits to run pint after shop-42` |
 
 A Claude Code worker that asks with a question dialog (AskUserQuestion) shows its questions and
@@ -509,7 +512,7 @@ Its output fields:
 | Field | Values |
 | --- | --- |
 | `pane` | `closed`, `none` or `timed out` |
-| `teardown` | `ran`, `none` (no worktree or no executable `.saaio/teardown`), `failed: <its last error line>`, or `not run, the repository is not trusted` |
+| `teardown` | `ran`, `none` (no worktree or no executable `.saaio/teardown`), `failed: <its last line>`, or `not run, the repository is not trusted` |
 | `worktree` | `removed`, `none` or `kept: <path>`, with a help line to discard what is left |
 | `branch` | `deleted`, `kept` or `none` |
 | `stacked[n]` | the unfinished flows that stand on its branch ([Stacked flows](#stacked-flows)), with a help line. Left out without any. |
@@ -526,6 +529,47 @@ refusal for unmerged commits names them too. When saaio saw the base merge, `saa
 | `--delete-unmerged` | also delete a branch whose commits are on no other branch |
 
 For a plain session, only the session is forgotten. The folder is never touched.
+
+## saaio setup
+
+```
+saaio setup [<flow>]
+```
+
+`saaio setup` runs a flow's `.saaio/teardown`, then its `.saaio/setup` again, in its worktree and
+with its slot, as `saaio start` ran them. Run it once you fixed what made setup fail; the flow
+keeps its worker, worktree and branch. Without a `<flow>` it takes the flow of the worker that runs
+it, so a worker can set up its own worktree again:
+
+```
+$ saaio setup shop-240
+flow: shop-240
+teardown: ran
+setup: ran
+log: ~/.local/state/saaio/projects/shop/hooks/0b6e5c4a-.../setup.log
+help[1]: Run `saaio status shop-240` to see the flow
+```
+
+A setup that passes clears the failure from `saaio status`, and a flow still blocked on it is
+`idle` again. One that fails again exits 1, and its error names the file with the whole output.
+It blocks the flow unless its worker is in the middle of a turn, as when the worker ran it: then
+the flow stays `working` and the failure shows in `saaio status` and the timeline:
+
+```
+$ saaio setup shop-240
+error: "setup failed: Please run composer update (full output: ~/.local/state/saaio/projects/shop/hooks/0b6e5c4a-.../setup.log)"
+help[2]: Read its whole output in the log,Run `saaio setup shop-240` again once the cause is fixed
+```
+
+A teardown that fails is named in the help and the setup runs anyway. `saaio setup` never retries
+on its own, and it refuses a flow that has ended, a plain session, a flow whose worktree is gone,
+a repository with no `.saaio/setup`, and one you have not [trusted](repository.md#trust).
+
+| Field | Values |
+| --- | --- |
+| `teardown` | as in [saaio remove](#saaio-remove) |
+| `setup` | `ran` |
+| `log` | the file that holds the setup's whole output ([files.md](files.md)) |
 
 ## saaio clear
 

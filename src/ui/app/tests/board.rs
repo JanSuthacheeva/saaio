@@ -44,7 +44,7 @@ fn opens_the_board_on_the_card_in_view_and_draws_every_session() {
     );
     assert!(
         row(&terminal, 41)
-            .starts_with(" 0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   a every project   esc back to shop-230")
+            .starts_with(" 0-9 select   h j k l move   enter jump in   n new flow   x clear finished flow   s set up again   a every project   esc back to shop-230")
     );
     let buffer = terminal.backend().buffer();
     let theme = Theme::default();
