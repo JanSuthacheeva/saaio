@@ -67,6 +67,9 @@ input and panics when a property breaks. `cargo test` checks them with generated
 cargo-fuzz targets in `.fuzz/` check them with libFuzzer for as long as you let them run. The
 package is `.fuzz/`, not `fuzz/`, since `cargo install --git` refuses a repository with a second
 package that has binaries and skips folders that start with a dot.
+It keeps a lockfile of its own, `.fuzz/Cargo.lock`, which CI reads with `--locked`: a change to
+saaio's `version` or dependencies in `Cargo.toml` updates it too, with
+`cargo update -p saaio --manifest-path .fuzz/Cargo.toml`.
 
 | Target | Input | Oracle |
 | --- | --- | --- |
@@ -248,7 +251,8 @@ plain one. It keeps the symbols: a panic's backtrace in server.log names its fun
 `SAAIO_COMMIT` set while building overrides it.
 
 1. Set `version` in `Cargo.toml` and run `cargo build`, so `Cargo.lock` names it too (the
-   release builds with `--locked`). In `CHANGELOG.md`, rename `## [Unreleased]` to the version and
+   release builds with `--locked`), and `cargo update -p saaio --manifest-path .fuzz/Cargo.toml`,
+   so `.fuzz/Cargo.lock` does (ci.yml lints `.fuzz/` with `--locked`). In `CHANGELOG.md`, rename `## [Unreleased]` to the version and
    its date, such as `## [0.2.0] - 2026-11-03`.
 2. Keep the defaults the last release wrote, so a newer saaio still refreshes an untouched copy:
    when `examples/config.toml` changed since the last tag, add the tag's text as the next
