@@ -5,8 +5,9 @@
     reason = "the store writes its own logs and marks"
 )]
 
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Write};
+use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -115,12 +116,21 @@ impl Store {
 
     /// Appends one event to an existing log.
     pub fn append(&self, id: FlowId, event: &Event) -> Result<()> {
-        let mut log = match OpenOptions::new().append(true).open(self.log(id)) {
+        let mut log = match OpenOptions::new()
+            .read(true)
+            .append(true)
+            .open(self.log(id))
+        {
             Ok(log) => log,
             Err(error) if error.kind() == ErrorKind::NotFound => bail!("no flow {id}"),
             Err(error) => return Err(error).with_context(|| format!("could not open flow {id}")),
         };
-        log.write_all(format!("{}\n", event.to_line()).as_bytes())
+        let fresh = if torn(&log).with_context(|| format!("could not read flow {id}"))? {
+            "\n"
+        } else {
+            ""
+        };
+        log.write_all(format!("{fresh}{}\n", event.to_line()).as_bytes())
             .with_context(|| format!("could not write flow {id}"))
     }
 
@@ -426,6 +436,17 @@ impl Store {
     }
 }
 
+/// The log ends inside a line, a write a crash cut short: its last byte is not a newline.
+fn torn(log: &File) -> std::io::Result<bool> {
+    let len = log.metadata()?.len();
+    if len == 0 {
+        return Ok(false);
+    }
+    let mut last = [0];
+    log.read_exact_at(&mut last, len - 1)?;
+    Ok(last != *b"\n")
+}
+
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
@@ -529,6 +550,22 @@ mod tests {
         fs::write(&log, text).unwrap();
 
         assert_eq!(store.events(id).unwrap(), vec![started()]);
+    }
+
+    #[test]
+    fn appends_after_a_line_a_crash_cut_short_on_a_line_of_its_own() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let id = store.create(&started()).unwrap();
+        let log = dir.path().join("flows").join(format!("{id}.jsonl"));
+        let mut text = fs::read_to_string(&log).unwrap();
+        text.push_str(r#"{"v":1,"at":7,"ki"#);
+        fs::write(&log, text).unwrap();
+        let working = Event::new(8, EventKind::Working);
+
+        store.append(id, &working).unwrap();
+
+        assert_eq!(store.events(id).unwrap(), vec![started(), working]);
     }
 
     #[test]

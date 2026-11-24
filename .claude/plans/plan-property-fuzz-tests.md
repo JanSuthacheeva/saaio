@@ -93,7 +93,7 @@ Tests move to `src/event/tests.rs` (past 400 lines).
 pub fn append(&self, id: FlowId, event: &Event) -> Result<()>;   // opens read + append; "\n" first when torn
 pub fn events(&self, id: FlowId) -> Result<Vec<Event>>;          // calls Event::from_log
 /// The log ends inside a line: its last byte is not a newline. False for an empty log.
-fn torn(log: &File) -> Result<bool>;
+fn torn(log: &File) -> std::io::Result<bool>;
 ```
 
 ### `src/proto.rs` (tests only)
@@ -204,7 +204,7 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 
 - [x] Move `event.rs` tests to `src/event/tests.rs` and `proto.rs` tests to `src/proto/tests.rs`, unchanged
 - [x] Add `Event::from_log(text)` and make `Store::events` use it, with an example test
-- [ ] Fix `Store::append` with `torn(log)`, test first: an example test of a torn log followed by an append
+- [x] Fix `Store::append` with `torn(log)`, test first: an example test of a torn log followed by an append
 - [ ] Add proptest and `src/strategies.rs` (`text`, `phase`, `workflow`, `flow_id`, `session_id`, `event_kind`, `event`, `variant`, `VARIANTS`) with `the_strategy_makes_every_kind`
 - [ ] Add the `fuzzing` feature and `src/fuzzing.rs` `log_line` and `log`, with `any_event_survives_its_log_line`, `cleaning_an_event_twice_changes_nothing`, `any_line_reads_back_as_it_was`
 - [ ] Add `a_log_cut_anywhere_keeps_every_whole_event_and_the_next` in the store tests
