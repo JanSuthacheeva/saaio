@@ -258,9 +258,13 @@ impl Event {
             .filter(|event| event.v == EVENT_VERSION)
     }
 
-    /// Every readable event of a log's text, in order: from_line of each line.
-    pub fn from_log(text: &str) -> Vec<Event> {
-        text.lines().filter_map(Event::from_line).collect()
+    /// Every readable event of a log, in order: from_line of each line, a line a crash cut
+    /// inside a character skipped like any other broken line.
+    pub fn from_log(log: &[u8]) -> Vec<Event> {
+        log.split(|byte| *byte == b'\n')
+            .filter_map(|line| str::from_utf8(line).ok())
+            .filter_map(Event::from_line)
+            .collect()
     }
 }
 

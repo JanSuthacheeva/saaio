@@ -136,12 +136,12 @@ impl Store {
 
     /// Every readable event of one flow, in order.
     pub fn events(&self, id: FlowId) -> Result<Vec<Event>> {
-        let text = match fs::read_to_string(self.log(id)) {
-            Ok(text) => text,
+        let log = match fs::read(self.log(id)) {
+            Ok(log) => log,
             Err(error) if error.kind() == ErrorKind::NotFound => bail!("no flow {id}"),
             Err(error) => return Err(error).with_context(|| format!("could not read flow {id}")),
         };
-        Ok(Event::from_log(&text))
+        Ok(Event::from_log(&log))
     }
 
     /// Ids of all flows, by log file name.
@@ -569,6 +569,19 @@ mod tests {
     }
 
     #[test]
+    fn reads_a_log_a_crash_cut_inside_a_character() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let id = store.create(&started()).unwrap();
+        let log = dir.path().join("flows").join(format!("{id}.jsonl"));
+        let mut bytes = fs::read(&log).unwrap();
+        bytes.extend_from_slice(&r#"{"v":1,"at":7,"kind":"blocked","reason":"é"#.as_bytes()[..42]);
+        fs::write(&log, bytes).unwrap();
+
+        assert_eq!(store.events(id).unwrap(), vec![started()]);
+    }
+
+    #[test]
     fn remembers_the_last_heartbeat_of_a_flow() {
         let dir = TempDir::new().unwrap();
         let store = Store::at(dir.path().to_path_buf());
@@ -783,5 +796,47 @@ mod tests {
         assert_eq!(store.waiter(&Waiter::Flow(id)), None);
         assert_eq!(store.delivered(id), 0);
         assert_eq!(store.typed(id), 0);
+    }
+
+    mod properties {
+        use proptest::prelude::*;
+
+        use super::*;
+        use crate::strategies;
+
+        proptest! {
+            #[test]
+            fn a_log_cut_anywhere_keeps_every_whole_event_and_the_next(
+                events in prop::collection::vec(strategies::event(), 1..=6),
+                cut in any::<prop::sample::Index>(),
+                next in strategies::event(),
+            ) {
+                let dir = TempDir::new().unwrap();
+                let store = Store::at(dir.path().to_path_buf());
+                let id = store.create(&events[0]).unwrap();
+                for event in &events[1..] {
+                    store.append(id, event).unwrap();
+                }
+                let log = dir.path().join("flows").join(format!("{id}.jsonl"));
+                let len = fs::metadata(&log).unwrap().len() as usize;
+                let cut = cut.index(len + 1);
+                OpenOptions::new().write(true).open(&log).unwrap().set_len(cut as u64).unwrap();
+
+                store.append(id, &next).unwrap();
+
+                let mut end = 0;
+                let mut whole = events
+                    .into_iter()
+                    .take_while(|event| {
+                        end += event.to_line().len();
+                        let kept = end <= cut;
+                        end += 1;
+                        kept
+                    })
+                    .collect::<Vec<_>>();
+                whole.push(next);
+                prop_assert_eq!(store.events(id).unwrap(), whole);
+            }
+        }
     }
 }

@@ -621,22 +621,21 @@ fn skips_broken_lines_other_versions_and_unknown_kinds() {
 
 #[test]
 fn reads_every_readable_line_of_a_log_in_order() {
-    let log = concat!(
-        "{\"v\":1,\"at\":1,\"kind\":\"working\"}\n",
-        "\n",
-        "{\"v\":1,\"at\":2,\"ki\n",
-        "{\"v\":1,\"at\":3,\"kind\":\"working\"}\r\n",
-        "{\"v\":1,\"at\":4,\"kind\":\"working\"}",
-    );
+    let mut log = Vec::new();
+    log.extend_from_slice(b"{\"v\":1,\"at\":1,\"kind\":\"working\"}\n\n");
+    log.extend_from_slice(b"{\"v\":1,\"at\":2,\"ki\n");
+    log.extend_from_slice(b"{\"v\":1,\"at\":5,\"kind\":\"blocked\",\"reason\":\"\xc3\"}\n");
+    log.extend_from_slice(b"{\"v\":1,\"at\":3,\"kind\":\"working\"}\r\n");
+    log.extend_from_slice(b"{\"v\":1,\"at\":4,\"kind\":\"working\"}");
 
     assert_eq!(
-        Event::from_log(log)
+        Event::from_log(&log)
             .iter()
             .map(|event| event.at)
             .collect::<Vec<_>>(),
         [1, 3, 4]
     );
-    assert_eq!(Event::from_log(""), []);
+    assert_eq!(Event::from_log(b""), []);
 }
 
 #[test]
@@ -712,7 +711,7 @@ mod properties {
             for line in &lines {
                 fuzzing::log_line(line);
             }
-            fuzzing::log(&lines.join("\n"));
+            fuzzing::log(lines.join("\n").as_bytes());
         }
     }
 }

@@ -10,6 +10,7 @@ Rust quality audit item 8 (https://claude.ai/artifact/SmextdM2HEKjvHEwSJv4gu).
 - The fuzz package lives in `.fuzz/`, not `fuzz/`: a second package with binaries makes `cargo install --git` fail ("multiple packages with binaries found", reproduced; `required-features` does not help); cargo skips dot folders when it searches a git repo. cargo-fuzz runs with `--fuzz-dir .fuzz`.
 - `fuzzing` is the one public module besides `cli`, and only with the `fuzzing` feature, which installs never enable.
 - Fix in this PR: `Store::append` after a torn line (a crash cut a write short) glues the next event onto it and both are lost. Append now starts a fresh line.
+- Fix found while building (the store property): a write cut inside a multi-byte character made `fs::read_to_string` fail, so the whole flow was unreadable. `Store::events` reads bytes and `Event::from_log` skips a line that is not UTF-8 like any other broken line.
 - PRs run the properties (in `cargo test`) and fmt and clippy over `.fuzz/`. A weekly `fuzz.yml` on nightly runs each target 5 minutes, not required. Why: a fuzzer finds new inputs over long runs, so a short run per PR finds little and makes a required check slow and nondeterministic; the properties are the deterministic gate.
 
 ## Units
@@ -28,8 +29,8 @@ pub fn frames(bytes: &[u8]);
 /// event, at EVENT_VERSION.
 pub fn log_line(text: &str);
 
-/// Any text as a whole log: every event it reads keeps log_line's property, and the events fold.
-pub fn log(text: &str);
+/// Any bytes as a whole log: every event it reads keeps log_line's property, and the events fold.
+pub fn log(bytes: &[u8]);
 
 /// Any text as a Claude Code hook payload: what Adapter::ClaudeCode makes of it survives the log.
 pub fn claude_code_hook(text: &str);
@@ -80,8 +81,9 @@ pub const VARIANTS: usize;
 
 ```rust
 impl Event {
-    /// Every readable event of a log's text, in order: from_line of each line.
-    pub fn from_log(text: &str) -> Vec<Event>;
+    /// Every readable event of a log, in order: from_line of each line, a line that is not
+    /// UTF-8 skipped.
+    pub fn from_log(log: &[u8]) -> Vec<Event>;
 }
 ```
 
@@ -91,7 +93,7 @@ Tests move to `src/event/tests.rs` (past 400 lines).
 
 ```rust
 pub fn append(&self, id: FlowId, event: &Event) -> Result<()>;   // opens read + append; "\n" first when torn
-pub fn events(&self, id: FlowId) -> Result<Vec<Event>>;          // calls Event::from_log
+pub fn events(&self, id: FlowId) -> Result<Vec<Event>>;          // fs::read, then Event::from_log
 /// The log ends inside a line: its last byte is not a newline. False for an empty log.
 fn torn(log: &File) -> std::io::Result<bool>;
 ```
@@ -122,7 +124,7 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 |---|---|---|
 | `frames` | `&[u8]` | `fuzzing::frames` |
 | `log_line` | `&str` | `fuzzing::log_line` |
-| `log` | `&str` | `fuzzing::log` |
+| `log` | `&[u8]` | `fuzzing::log` |
 | `hook_claude_code` | `&str` | `fuzzing::claude_code_hook` |
 | `hook_codex` | `&str` | `fuzzing::codex_hook` |
 
@@ -130,7 +132,7 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 
 - `ci.yml`: fmt job adds `cargo fmt --check --manifest-path .fuzz/Cargo.toml`; clippy job adds `cargo clippy --manifest-path .fuzz/Cargo.toml --locked -- -D warnings`.
 - `.github/workflows/fuzz.yml` (new): `schedule` Mondays 07:00 and `workflow_dispatch`; ubuntu-24.04; nightly; cargo-fuzz installed pinned with `--locked`; matrix over the five targets; hook targets seeded from `src/adapter/fixtures/<harness>/` into `.fuzz/corpus/<target>/`; `cargo +nightly fuzz run --fuzz-dir .fuzz <target> -- -max_total_time=300`; on failure upload `.fuzz/artifacts/<target>` with `actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2`. `permissions: contents: read`. Not a required check.
-- CONTRIBUTING.md: a Fuzzing section (run a target, replay a crash, turn the input into an example test) and the fuzz workflow under CI. CLAUDE.md: the build command, `fuzzing.rs`, `strategies.rs`, `.fuzz/`, this plan in the plan list. CHANGELOG `Fixed`: a log line cut short by a crash no longer takes the next event with it.
+- CONTRIBUTING.md: a Fuzzing section (run a target, replay a crash, turn the input into an example test) and the fuzz workflow under CI. CLAUDE.md: the build command, `fuzzing.rs`, `strategies.rs`, `.fuzz/`, this plan in the plan list. CHANGELOG `Fixed`: a log line cut short by a crash no longer takes the next event with it, nor makes the whole flow unreadable when the cut falls inside a character.
 
 ## Call chains
 
@@ -146,8 +148,8 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 
 ### `fuzzing::log(text)`
 
-1. driver -> `fuzzing::log(text)`
-2. `log` -> `Event::from_log(text): Vec<Event>`
+1. driver -> `fuzzing::log(bytes)`
+2. `log` -> `Event::from_log(bytes): Vec<Event>`
 3. each event -> `log_line(&event.to_line())`: `Event::from_line(line) == Some(event)`, line has no `\n`
 4. `log` -> `fold::fold(id, &events, None, now): Option<FlowView>` (None without Started is fine)
 5. Error path: a panic in fold or a changed event -> found bug
@@ -207,7 +209,7 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 - [x] Fix `Store::append` with `torn(log)`, test first: an example test of a torn log followed by an append
 - [x] Add proptest and `src/strategies.rs` (`text`, `phase`, `workflow`, `flow_id`, `session_id`, `event_kind`, `event`, `variant`, `VARIANTS`) with `the_strategy_makes_every_kind`
 - [x] Add the `fuzzing` feature and `src/fuzzing.rs` `log_line` and `log`, with `any_event_survives_its_log_line`, `cleaning_an_event_twice_changes_nothing`, `any_line_reads_back_as_it_was`
-- [ ] Add `a_log_cut_anywhere_keeps_every_whole_event_and_the_next` in the store tests
+- [x] Add `a_log_cut_anywhere_keeps_every_whole_event_and_the_next` in the store tests
 - [ ] Add `client_msg`, `server_msg` strategies and `fuzzing::frames` (`Header`, `header`, `read_all`) with its example tests, `any_message_survives_its_frame`, `any_bytes_read_as_their_header_says`; drop the `Noise` proto test
 - [ ] Add `json`, `hook_payload` strategies and `fuzzing::claude_code_hook`, `codex_hook` with `any_payload_translates_into_events_the_log_keeps` in both adapter test modules
 - [ ] Add the `.fuzz/` package with the five targets and its lockfile; run each target locally on nightly for a minute

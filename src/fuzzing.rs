@@ -25,13 +25,13 @@ pub fn log_line(text: &str) {
     assert_eq!(Event::from_line(&line), Some(event), "{text:?} as {line:?}");
 }
 
-/// Any text as a whole log: every event it reads keeps log_line's property, and the events fold.
+/// Any bytes as a whole log: every event it reads keeps log_line's property, and the events fold.
 ///
 /// # Panics
 ///
 /// When an event does not survive its line, or folding panics.
-pub fn log(text: &str) {
-    let events = Event::from_log(text);
+pub fn log(bytes: &[u8]) {
+    let events = Event::from_log(bytes);
     for event in &events {
         log_line(&event.to_line());
     }
