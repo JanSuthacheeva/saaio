@@ -222,3 +222,33 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 - [x] CI: fmt and clippy over `.fuzz/` in `ci.yml`; new `fuzz.yml`; run it once with `workflow_dispatch` after push if possible
 - [x] Docs: CONTRIBUTING.md Fuzzing section and CI entry, CLAUDE.md (build command, structure, plan list), CHANGELOG Fixed line
 - [x] End to end: a scratch store with a log cut mid-line by hand, then `saaio report` appends and `saaio status --json` shows the new event's state; full `cargo test --all-features`, clippy, fmt, deny
+
+## Review
+
+Isolated review of `main..flow/property-fuzz-tests` against this plan, CLAUDE.md and CONTRIBUTING.md. Re-proved the torn-log fix end to end on a scratch store (a log cut inside `é`, then `saaio report blocked`: `saaio status --json` reads the flow and shows `blocked`); ran `log` and `hook_codex` for 45 s each on nightly, no crash.
+
+### Fixed
+
+- A version bump in `Cargo.toml` left `.fuzz/Cargo.lock` naming the old saaio, so ci.yml's `cargo clippy --manifest-path .fuzz/Cargo.toml --locked` failed on every release PR (shown by bumping 0.3.1 to 0.3.2 in a scratch copy: "cannot update the lock file"). CONTRIBUTING.md now says to run `cargo update -p saaio --manifest-path .fuzz/Cargo.toml` in Releasing step 1 and after any dependency change. 1ec1455
+- `src/proto/tests.rs`: a one-line `stream` wrapper around `concat` and two lines past 100 columns inside `proptest!` (which rustfmt does not reach). 69ed461
+
+No production code changed in the fixes, so they had no second review.
+
+### Open
+
+- The fuzz lockfile still drifts silently on `cargo update` of the root (same requirements, older versions): the targets then fuzz a slightly different dependency set than saaio ships. Recommendation: accept; the weekly run is a search, not a gate. If it matters later, a CI step can compare the two lockfiles' shared entries.
+- `fuzz.yml` uses an unpinned nightly. Recommendation: accept for a non-required weekly job; pin only if nightly breakage becomes noise.
+- Not verified: `fuzz.yml` itself has never run on GitHub (it needs a push and `workflow_dispatch`). Recommendation: dispatch it once after the PR merges and check the hook targets' corpus seeding (`claude_code` -> `claude-code`).
+
+### Where to look
+
+1. `src/store.rs` `append` and `torn`: the only change to how logs are written - opened read+append, one `read_exact_at` of the last byte, the newline and event in one `write_all`. Two appenders on a torn log may each add a newline; the empty line is skipped (Assumption 8).
+2. `src/event.rs` `from_log` with `Store::events`: bytes split on `\n`, non-UTF-8 lines skipped; `\r\n` logs still read (serde_json takes the trailing `\r` as whitespace, tested).
+3. `src/fuzzing.rs` `header`/`settle`/`read_all`: the frame oracle's contract with `proto::read_msg`; a wrong pairing there would either hide a bug or make the fuzzer cry wolf.
+4. `.fuzz/` and `.github/workflows/fuzz.yml`: packaging and CI; routine.
+
+Skim: the moved `event`/`proto` tests (moved unchanged in 14badfe), `src/strategies.rs` (generators; `variant` keeps it exhaustive), the docs.
+
+### Checks
+
+Full suite, clippy (both manifests), fmt and deny green at 09a2792; after the fixes, `cargo test --all-features --lib proto::`, `cargo clippy --all-targets --all-features --locked -- -D warnings` and `cargo fmt --check` green at 69ed461.
