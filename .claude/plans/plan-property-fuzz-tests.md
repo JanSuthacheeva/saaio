@@ -202,7 +202,7 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| saaio::fuzzing::frames(bytes));
 
 ## Tasks
 
-- [ ] Move `event.rs` tests to `src/event/tests.rs` and `proto.rs` tests to `src/proto/tests.rs`, unchanged
+- [x] Move `event.rs` tests to `src/event/tests.rs` and `proto.rs` tests to `src/proto/tests.rs`, unchanged
 - [ ] Add `Event::from_log(text)` and make `Store::events` use it, with an example test
 - [ ] Fix `Store::append` with `torn(log)`, test first: an example test of a torn log followed by an append
 - [ ] Add proptest and `src/strategies.rs` (`text`, `phase`, `workflow`, `flow_id`, `session_id`, `event_kind`, `event`, `variant`, `VARIANTS`) with `the_strategy_makes_every_kind`
