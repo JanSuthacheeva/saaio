@@ -2,8 +2,19 @@
 //! output (pure)
 
 use base64::Engine as _;
-use base64::engine::general_purpose::{GeneralPurpose, GeneralPurposeConfig};
 use base64::engine::DecodePaddingMode;
+use base64::engine::general_purpose::{GeneralPurpose, GeneralPurposeConfig};
+
+/// What a terminal that supports the protocol answers to `ESC ] 7501 ; ? ESC \`.
+pub const QUERY_ANSWER: &[u8] =
+    b"\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth\x1b\\";
+/// The longest sequence the spec allows; a longer one is dropped whole.
+const MAX_SEQUENCE: usize = 4096;
+const PREFIX: &[u8] = b"7501;";
+const ESC: u8 = 0x1b;
+const BEL: u8 = 0x07;
+const CAN: u8 = 0x18;
+const SUB: u8 = 0x1a;
 
 /// `msg` is standard base64 with its padding optional.
 const MESSAGE: GeneralPurpose = GeneralPurpose::new(
@@ -42,6 +53,116 @@ pub enum Sequence {
     Query,
     /// A report, or None for `clear`.
     Status(Option<Report>),
+}
+
+/// One sequence in a program's output, with the offset just past its terminator.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Found {
+    pub end: usize,
+    pub sequence: Sequence,
+}
+
+/// Finds OSC 7501 sequences in a program's output across reads.
+#[derive(Debug, Default)]
+pub struct Scanner {
+    state: Scan,
+    body: Vec<u8>,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum Scan {
+    #[default]
+    Ground,
+    /// After an ESC.
+    Escape,
+    /// In an OSC that may be ours, its body so far in `body`.
+    Osc,
+    /// After an ESC in an OSC: a `\\` ends it, anything else aborts it.
+    OscEscape,
+    /// In an OSC that is not ours or grew too long, until its end.
+    Skip,
+}
+
+impl Scanner {
+    /// The sequences that end in `bytes`, with the offset just past each one's terminator;
+    /// a sequence cut off at the end of `bytes` is kept for the next call.
+    pub fn scan(&mut self, bytes: &[u8]) -> Vec<Found> {
+        let mut found = Vec::new();
+        for (at, &byte) in bytes.iter().enumerate() {
+            let ended = match self.state {
+                Scan::Ground => {
+                    if byte == ESC {
+                        self.state = Scan::Escape;
+                    }
+                    false
+                }
+                Scan::Escape => {
+                    self.escape(byte);
+                    false
+                }
+                Scan::Osc => self.osc(byte),
+                Scan::OscEscape if byte == b'\\' => {
+                    self.state = Scan::Ground;
+                    true
+                }
+                Scan::OscEscape => {
+                    self.escape(byte);
+                    false
+                }
+                Scan::Skip => {
+                    self.state = match byte {
+                        ESC => Scan::Escape,
+                        BEL | CAN | SUB => Scan::Ground,
+                        _ => Scan::Skip,
+                    };
+                    false
+                }
+            };
+            if ended
+                && let Some(body) = self.body.strip_prefix(PREFIX)
+                && let Some(sequence) = parse(body)
+            {
+                found.push(Found {
+                    end: at + 1,
+                    sequence,
+                });
+            }
+        }
+        found
+    }
+
+    /// The byte after an ESC: `]` opens an OSC, another ESC waits again.
+    fn escape(&mut self, byte: u8) {
+        self.state = match byte {
+            b']' => {
+                self.body.clear();
+                Scan::Osc
+            }
+            ESC => Scan::Escape,
+            _ => Scan::Ground,
+        };
+    }
+
+    /// One byte of an OSC's body; true when it ends the sequence (BEL).
+    fn osc(&mut self, byte: u8) -> bool {
+        match byte {
+            BEL => {
+                self.state = Scan::Ground;
+                return true;
+            }
+            ESC => self.state = Scan::OscEscape,
+            CAN | SUB => self.state = Scan::Ground,
+            _ => {
+                self.body.push(byte);
+                let ours = PREFIX.starts_with(&self.body) || self.body.starts_with(PREFIX);
+                if !ours || self.body.len() > MAX_SEQUENCE {
+                    self.body.clear();
+                    self.state = Scan::Skip;
+                }
+            }
+        }
+        false
+    }
 }
 
 impl Report {
@@ -128,6 +249,133 @@ mod tests {
         match parse(body.as_bytes()) {
             Some(Sequence::Status(report)) => report,
             other => panic!("{body}: {other:?}"),
+        }
+    }
+
+    fn scan(bytes: &[u8]) -> Vec<Found> {
+        Scanner::default().scan(bytes)
+    }
+
+    fn idle() -> Sequence {
+        Sequence::Status(Some(Report {
+            status: Status::Idle,
+            need: None,
+            message: None,
+        }))
+    }
+
+    #[test]
+    fn finds_a_report_ended_by_st_or_bel_where_it_ends() {
+        assert_eq!(
+            scan(b"ab\x1b]7501;state=idle\x1b\\cd"),
+            vec![Found {
+                end: 21,
+                sequence: idle()
+            }]
+        );
+        assert_eq!(
+            scan(b"\x1b]7501;?\x07\x1b]7501;state=idle\x07"),
+            vec![
+                Found {
+                    end: 9,
+                    sequence: Sequence::Query
+                },
+                Found {
+                    end: 27,
+                    sequence: idle()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn finds_a_sequence_split_anywhere_across_reads() {
+        let bytes = b"x\x1b]7501;state=idle\x1b\\y";
+        for split in 0..=bytes.len() {
+            let mut scanner = Scanner::default();
+            let (first, second) = bytes.split_at(split);
+
+            let mut found = scanner.scan(first);
+            found.extend(scanner.scan(second).into_iter().map(|mut found| {
+                found.end += split;
+                found
+            }));
+
+            assert_eq!(
+                found,
+                vec![Found {
+                    end: 20,
+                    sequence: idle()
+                }],
+                "split at {split}"
+            );
+        }
+    }
+
+    #[test]
+    fn ignores_other_sequences_and_text() {
+        assert_eq!(
+            scan(b"\x1b]52;c;aGk=\x07\x1b]0;7501;state=idle\x07"),
+            vec![]
+        );
+        assert_eq!(
+            scan(b"7501;state=idle\x1b\\\x1b[7501;state=idle\x07"),
+            vec![]
+        );
+        assert_eq!(scan(b"\x1b]75011;state=idle\x07"), vec![]);
+    }
+
+    #[test]
+    fn an_esc_or_can_aborts_the_sequence_and_an_esc_starts_the_next() {
+        assert_eq!(scan(b"\x1b]7501;state=working\x18state=idle\x07"), vec![]);
+        assert_eq!(scan(b"\x1b]7501;state=working\x1a\x07"), vec![]);
+        assert_eq!(
+            scan(b"\x1b]7501;state=working\x1b]7501;state=idle\x07"),
+            vec![Found {
+                end: 38,
+                sequence: idle()
+            }]
+        );
+        assert_eq!(scan(b"\x1b]7501;state=working\x1bxstate=idle\x07"), vec![]);
+    }
+
+    #[test]
+    fn drops_a_sequence_longer_than_the_spec_allows_and_finds_the_next() {
+        let long = format!("\x1b]7501;state=idle:app={}\x07", "a".repeat(MAX_SEQUENCE));
+        let fits = format!(
+            "\x1b]7501;state=idle:app={}\x07",
+            "a".repeat(MAX_SEQUENCE - 20)
+        );
+        let next = format!("{long}\x1b]7501;state=idle\x07");
+
+        assert_eq!(scan(long.as_bytes()), vec![]);
+        assert_eq!(scan(fits.as_bytes()).len(), 1);
+        assert_eq!(
+            scan(next.as_bytes()),
+            vec![Found {
+                end: next.len(),
+                sequence: idle()
+            }]
+        );
+    }
+
+    #[test]
+    fn the_query_answer_says_every_state_and_kind() {
+        let answer = std::str::from_utf8(QUERY_ANSWER).unwrap();
+
+        assert!(answer.starts_with("\x1b]7501;?:"));
+        assert!(answer.ends_with("\x1b\\"));
+        for word in [
+            "idle",
+            "working",
+            "done",
+            "blocked",
+            "error",
+            "permission",
+            "question",
+            "auth",
+        ] {
+            assert!(answer.contains(word), "{word}");
         }
     }
 

@@ -52,7 +52,9 @@ impl Report {
 
 Scanning rules: introducer `ESC ]`, body must start with `7501;`; terminators ST (`ESC \`) and BEL;
 an ESC not followed by `\` aborts the OSC and starts a new escape; CAN (0x18) and SUB (0x1A) abort;
-past `MAX_SEQUENCE` the sequence is dropped (`Scan::TooLong` until its terminator). Body: pairs
+past `MAX_SEQUENCE`, or once its body cannot start with `7501;`, the sequence is skipped
+(`Scan::Skip` until its terminator; built as `Skip` rather than `TooLong`, so other OSCs such as
+OSC 52 are never buffered). Body: pairs
 `key=value` split on `:`, whitespace trimmed, last repeated key wins, unknown keys ignored, a
 malformed pair skipped. `?` alone is `Sequence::Query`. `state=clear` is `Sequence::Status(None)`.
 `msg` is base64 (standard alphabet, padding optional), decoded to UTF-8; a decode failure or a
@@ -179,7 +181,7 @@ pub enum Sequence {
 pub struct Found { pub end: usize, pub sequence: Sequence }
 
 #[derive(Debug, Default)]
-enum Scan { #[default] Ground, Escape, Osc, OscEscape, TooLong }
+enum Scan { #[default] Ground, Escape, Osc, OscEscape, Skip }
 ```
 
 These cross terminal -> host -> server only; never the wire or the log. Stored: nothing new.
@@ -261,7 +263,7 @@ Errors as for a worker.
 ## Tasks
 
 - [x] Add `program_status.rs` with `Report`, `Status`, `Need`, `Sequence`, `parse` and `Report::at_rest`, with unit tests per state, kind, base64, control characters, unknown keys and child ids
-- [ ] Add `Scanner::scan` with `Found` and `QUERY_ANSWER`, with unit tests for ST, BEL, splits, aborts and over-long sequences
+- [x] Add `Scanner::scan` with `Found` and `QUERY_ANSWER`, with unit tests for ST, BEL, splits, aborts and over-long sequences
 - [ ] Add the `fuzzing::program_status` oracle, `strategies::report`, the `mod properties` test and the `.fuzz` target
 - [ ] Scan in `Terminal::feed`, answer the query in order and add `Terminal::statuses`, with tests for query-then-DA1 order whole and split
 - [ ] Return `Fed` from `Host::feed` and pass statuses to the server
