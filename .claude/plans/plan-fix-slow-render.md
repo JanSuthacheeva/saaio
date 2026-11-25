@@ -178,7 +178,9 @@ would be a longer interval by another name.
   changes no row until its end, so the emulator holds what Claude Code now marks
 - [x] CLAUDE.md (program_status line), CHANGELOG.md (Fixed, under Unreleased), ROADMAP.md
   (Planned soon: panes say their terminal is saaio, not the tmux the server started in)
-- [ ] End-to-end: rerun the reproduction (tmux and direct, 48 x yes, the haiku list, with the
+- [x] End-to-end: rerun the reproduction (tmux and direct, 48 x yes, the haiku list, with the
   frame probe) and see Claude Code's output carry `CSI ? 2026 h` (over 100 in 40 s, today 0), and
   no frame whose rows show a half-written redraw: every frame sent while the program is inside a
-  synchronized update carries no changed content; remove the probe again
+  synchronized update carries no changed content; remove the probe again. Result (48 x yes, 40 s):
+  tmux 172 `CSI ? 2026 h`, 172 of 468 frames sent inside an update, 0 of them with a changed row;
+  direct 304 `CSI ? 2026 h`, 178 of 510 frames inside an update, 0 with a changed row
