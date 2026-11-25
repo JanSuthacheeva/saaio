@@ -471,8 +471,9 @@ anyway, which server.log notes.
 
 Each harness has a few edges of its own:
 
-- Esc in a Claude Code worker while its call waits cancels the call. `waits turn` stays until the
-  worker's next prompt, since Claude Code says nothing on Esc.
+- Esc in a Claude Code worker while its call waits cancels the call, and its status report ends
+  the turn, which clears `waits turn`. A Claude Code older than 2.1.295 reports nothing, so
+  `waits turn` stays until the worker's next prompt.
 - When one Claude Code turn runs two heavy calls in parallel, the second may wait about 10 seconds
   for the first, then both run at once.
 - Codex's shell yields after about 30 seconds without output, so the model may call a held command

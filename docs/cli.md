@@ -394,7 +394,8 @@ help[2]: saaio types it into shop-221's pane once its session is idle,"Queue the
   without typing in that pane.
 - A line that begins no turn (a command that only opens a dialog, such as `/cost`) holds the next
   line for 30 seconds.
-- Claude Code runs no hook on Esc. After an Esc in a Claude Code worker, its lines wait until the
+- After an Esc in a Claude Code worker, its lines are typed once it is idle, as after a turn's
+  end; with a Claude Code older than 2.1.295, which does not report an Esc, they wait until the
   next prompt typed in that pane ends its turn.
 - Lines wait while the UI is closed and are typed once it opens again.
 
