@@ -176,7 +176,7 @@ would be a longer interval by another name.
   `ESC [` not found, an OSC 7501 query right after an XTVERSION query both found in order
 - [x] A test in `src/server/terminal.rs` that a redraw inside `CSI ? 2026 h ... l` fed in two parts
   changes no row until its end, so the emulator holds what Claude Code now marks
-- [ ] CLAUDE.md (program_status line), CHANGELOG.md (Fixed, under Unreleased), ROADMAP.md
+- [x] CLAUDE.md (program_status line), CHANGELOG.md (Fixed, under Unreleased), ROADMAP.md
   (Planned soon: panes say their terminal is saaio, not the tmux the server started in)
 - [ ] End-to-end: rerun the reproduction (tmux and direct, 48 x yes, the haiku list, with the
   frame probe) and see Claude Code's output carry `CSI ? 2026 h` (over 100 in 40 s, today 0), and
