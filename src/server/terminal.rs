@@ -141,10 +141,6 @@ impl Terminal {
     }
 
     /// The program's status reports since the last call, drained; None for a `clear`.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the server reads it from a later commit on")
-    )]
     pub fn statuses(&mut self) -> Vec<Option<Report>> {
         std::mem::take(&mut self.statuses)
     }

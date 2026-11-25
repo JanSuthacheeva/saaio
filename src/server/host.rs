@@ -16,6 +16,7 @@ use rustix::process::{Pid, Signal, kill_process_group};
 use super::backlog::Backlog;
 use super::pane_input::PaneInput;
 use crate::launch::pane::PaneSpec;
+use crate::program_status::Report;
 use crate::proto::{Frame, PaneInfo, PaneKey, PaneStatus, Size};
 use crate::server::terminal::Terminal;
 use crate::threads;
@@ -26,6 +27,19 @@ const HISTORY: usize = 10_000;
 const CLOSE_GRACE: Duration = Duration::from_secs(3);
 /// How long an exit waits for the last output still in the PTY.
 const DRAIN: Duration = Duration::from_millis(500);
+
+/// What a pane's output carried besides its screen.
+#[derive(Debug, Default)]
+pub struct Fed {
+    /// The text the program copied (OSC 52).
+    pub copied: Option<String>,
+    /// Its status reports (OSC 7501), in order; None for a `clear`.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the server acts on them from the next commit on")
+    )]
+    pub statuses: Vec<Option<Report>>,
+}
 
 /// What the pane threads report to the thread that owns the Host.
 #[derive(Debug, PartialEq, Eq)]
@@ -134,11 +148,13 @@ impl Host {
         );
     }
 
-    /// Feeds output into the pane's Terminal and writes the Terminal's replies (DA, DSR) back to
-    /// the PTY; the text the program copied (OSC 52), if it did.
-    pub fn feed(&mut self, key: &PaneKey, bytes: &[u8]) -> Option<String> {
+    /// Feeds output into the pane's Terminal and writes the Terminal's replies (DA, DSR, the
+    /// status query's answer) back to the PTY; what else the output carried.
+    pub fn feed(&mut self, key: &PaneKey, bytes: &[u8]) -> Fed {
         self.backlog.fed(bytes.len());
-        let pane = self.panes.get_mut(key)?;
+        let Some(pane) = self.panes.get_mut(key) else {
+            return Fed::default();
+        };
         pane.term.feed(bytes);
         let replies = pane.term.replies();
         if let Some(process) = pane.process.as_mut()
@@ -146,7 +162,10 @@ impl Host {
         {
             let _ = process.input.send(&replies);
         }
-        pane.term.copied()
+        Fed {
+            copied: pane.term.copied(),
+            statuses: pane.term.statuses(),
+        }
     }
 
     /// Writes input to a running pane; Ok without writing to an exited one.
@@ -391,6 +410,7 @@ mod tests {
 
     use super::*;
     use crate::fixtures;
+    use crate::program_status::Status;
 
     fn host() -> (Host, Receiver<HostEvent>) {
         let (events, rx) = mpsc::channel();
@@ -588,6 +608,35 @@ mod tests {
             .find(|(index, _)| *index == row)
             .map(|(_, cells)| cells.iter().map(|cell| cell.text.as_str()).collect())
             .unwrap_or_default()
+    }
+
+    #[test]
+    fn hands_over_what_the_output_carried_besides_its_screen() {
+        let (mut host, rx) = host();
+        let key = PaneKey::Master;
+        host.open(&spec(
+            key,
+            r"printf '\033]52;c;aGk=\007\033]7501;state=working\033\\\033]7501;state=idle\007'; read x",
+        ))
+        .unwrap();
+        let mut copied = None;
+        let mut statuses = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while statuses.len() < 2 && Instant::now() < deadline {
+            if let Ok(HostEvent::Output(key, bytes)) = rx.recv_timeout(Duration::from_millis(200)) {
+                let fed = host.feed(&key, &bytes);
+                copied = copied.or(fed.copied);
+                statuses.extend(fed.statuses);
+            }
+        }
+
+        assert_eq!(copied.as_deref(), Some("hi"));
+        let states: Vec<_> = statuses
+            .iter()
+            .map(|status| status.as_ref().map(|report| report.status))
+            .collect();
+        assert_eq!(states, vec![Some(Status::Working), Some(Status::Idle)]);
+        host.close(&key);
     }
 
     #[test]
