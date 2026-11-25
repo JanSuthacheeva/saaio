@@ -474,4 +474,77 @@ mod tests {
         assert_eq!(parse(b"state=working:id=task-1"), None);
         assert_eq!(parse(b"state=clear:id=task-1"), None);
     }
+
+    mod properties {
+        use proptest::prelude::*;
+
+        use super::super::*;
+        use crate::fuzzing;
+        use crate::strategies;
+
+        /// A report as a program writes it, with ST or BEL.
+        fn osc(report: &Report, bel: bool) -> Vec<u8> {
+            let state = match report.status {
+                Status::Idle => "idle",
+                Status::Working => "working",
+                Status::Blocked => "blocked",
+                Status::Done => "done",
+                Status::Error => "error",
+            };
+            let mut body = format!("state={state}:app=test");
+            if let Some(need) = report.need {
+                let kind = match need {
+                    Need::Permission => "permission",
+                    Need::Question => "question",
+                    Need::Auth => "auth",
+                };
+                body = format!("{body}:kind={kind}");
+            }
+            if let Some(message) = &report.message {
+                body = format!("{body}:msg={}", encoded(message));
+            }
+            let end = if bel { "\x07" } else { "\x1b\\" };
+            format!("\x1b]7501;{body}{end}").into_bytes()
+        }
+
+        /// Output between reports: anything but an ESC, which could open a sequence of its own.
+        fn filler() -> impl Strategy<Value = Vec<u8>> {
+            prop::collection::vec(
+                any::<u8>().prop_filter("no ESC", |byte| *byte != ESC),
+                0..40,
+            )
+        }
+
+        proptest! {
+            #[test]
+            fn finds_every_report_between_any_output(
+                parts in prop::collection::vec((filler(), strategies::report(), any::<bool>()), 0..5),
+                tail in filler(),
+            ) {
+                let mut bytes = Vec::new();
+                let mut reports = Vec::new();
+                for (before, report, bel) in parts {
+                    bytes.extend(before);
+                    bytes.extend(osc(&report, bel));
+                    reports.push(Sequence::Status(Some(report)));
+                }
+                bytes.extend(tail);
+
+                let found: Vec<Sequence> = Scanner::default()
+                    .scan(&bytes)
+                    .into_iter()
+                    .map(|found| found.sequence)
+                    .collect();
+                prop_assert_eq!(found, reports);
+                fuzzing::program_status(&bytes);
+            }
+
+            #[test]
+            fn any_output_scans_the_same_split_anywhere(
+                bytes in prop::collection::vec(any::<u8>(), 0..200),
+            ) {
+                fuzzing::program_status(&bytes);
+            }
+        }
+    }
 }

@@ -13,6 +13,7 @@ use crate::adapter::{Adapter, Approver};
 use crate::event::{EVENT_VERSION, Event};
 use crate::fold;
 use crate::id::FlowId;
+use crate::program_status::{Found, Scanner};
 use crate::proto::{self, ClientMsg, Error, MAX_MESSAGE, ServerMsg};
 use crate::workflow::Workflow;
 
@@ -96,6 +97,43 @@ fn hook(adapter: Adapter, text: &str, approver: Approver) {
 pub fn frames(bytes: &[u8]) {
     read_all::<ClientMsg>(bytes);
     read_all::<ServerMsg>(bytes);
+}
+
+/// The most places program_status splits one input at, so a long input stays quick.
+const SPLITS: usize = 512;
+
+/// Any bytes as pane output: a scan in two reads, split anywhere, finds the same sequences at
+/// the same places as one scan, every offset inside the input, in order and just past a
+/// terminator.
+///
+/// # Panics
+///
+/// When a split changes what is found, or an offset is out of place.
+pub fn program_status(bytes: &[u8]) {
+    let whole = Scanner::default().scan(bytes);
+    let mut last = 0;
+    for found in &whole {
+        assert!(
+            found.end > last && found.end <= bytes.len(),
+            "{found:?} after {last}"
+        );
+        assert!(
+            matches!(bytes[found.end - 1], 0x07 | b'\\'),
+            "{found:?} ends without a terminator"
+        );
+        last = found.end;
+    }
+    let step = bytes.len().div_ceil(SPLITS).max(1);
+    for split in (0..=bytes.len()).step_by(step) {
+        let mut scanner = Scanner::default();
+        let (first, second) = bytes.split_at(split);
+        let mut found = scanner.scan(first);
+        found.extend(scanner.scan(second).into_iter().map(|later| Found {
+            end: later.end + split,
+            ..later
+        }));
+        assert_eq!(found, whole, "split at {split}");
+    }
 }
 
 /// What the header in front of the rest of a stream says the next read must end as.

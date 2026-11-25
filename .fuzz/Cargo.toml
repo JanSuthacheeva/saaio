@@ -49,3 +49,10 @@ path = "fuzz_targets/hook_codex.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "program_status"
+path = "fuzz_targets/program_status.rs"
+test = false
+doc = false
+bench = false

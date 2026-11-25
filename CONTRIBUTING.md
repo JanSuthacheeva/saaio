@@ -62,7 +62,7 @@ SAAIO_HOME=$(mktemp -d) env -u CLAUDECODE -u CODEX_THREAD_ID -u SAAIO_FLOW_ID -u
 ## Fuzzing
 
 The parsers saaio feeds with what it did not write itself (the event log, the UI's frames, the
-harnesses' hook payloads) each have an oracle in `src/fuzzing.rs`: a function that takes any
+harnesses' hook payloads, the status reports in a pane's output) each have an oracle in `src/fuzzing.rs`: a function that takes any
 input and panics when a property breaks. `cargo test` checks them with generated values; the
 cargo-fuzz targets in `.fuzz/` check them with libFuzzer for as long as you let them run. The
 package is `.fuzz/`, not `fuzz/`, since `cargo install --git` refuses a repository with a second
@@ -78,6 +78,7 @@ saaio's `version` or dependencies in `Cargo.toml` updates it too, with
 | `log` | bytes as a whole log, folded | `fuzzing::log` |
 | `hook_claude_code` | text as a Claude Code hook payload | `fuzzing::claude_code_hook` |
 | `hook_codex` | text as a Codex hook payload | `fuzzing::codex_hook` |
+| `program_status` | bytes as a pane's output, scanned for OSC 7501 in one read and in two | `fuzzing::program_status` |
 
 Fuzzing needs nightly Rust and cargo-fuzz:
 

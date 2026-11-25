@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [frames, log_line, log, hook_claude_code, hook_codex]
+        target: [frames, log_line, log, hook_claude_code, hook_codex, program_status]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
