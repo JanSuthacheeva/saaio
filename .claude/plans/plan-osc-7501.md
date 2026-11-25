@@ -240,7 +240,7 @@ Errors as for a worker.
 - `terminal.rs`: query then DA1 in one feed and split in two answer in that order; a report drains
   through `statuses`; the screen is unchanged by the sequence.
 - `server/program_status.rs`: `interrupted` as a truth table (before, after, adapter, busy).
-- `server/tests.rs`: a Claude Code-adapter flow pane whose script prints working then idle with
+- `server/tests/program_status.rs` (a subject of `server/tests.rs`): a Claude Code-adapter flow pane whose script prints working then idle with
   the busy file at Turn: the log gains `idle: interrupted`, busy is Idle, a queued
   `saaio send --type` line is typed. With busy Idle (after Stop) nothing is appended.
 - End to end: a real Claude Code worker in a scratch store, driven through the UI in tmux.
@@ -268,6 +268,6 @@ Errors as for a worker.
 - [x] Scan in `Terminal::feed`, answer the query in order and add `Terminal::statuses`, with tests for query-then-DA1 order whole and split
 - [x] Return `Fed` from `Host::feed` and pass statuses to the server
 - [x] Add `Adapter::hooks_interrupt`, `PaneState::status` (reset in open), and `server/program_status.rs` with `program_status`, `interrupt` and the `interrupted` truth-table tests
-- [ ] Add server tests over a real socket: a working-then-idle pane under Busy::Turn logs `idle: interrupted` and types a queued line; under Busy::Idle nothing is appended; the master's turn goes idle
+- [x] Add server tests over a real socket: a working-then-idle pane under Busy::Turn logs `idle: interrupted` and types a queued line; under Busy::Idle nothing is appended; the master's turn goes idle
 - [ ] Update ROADMAP, troubleshooting, HANDOVER, repository.md, CLAUDE.md architecture and CHANGELOG
 - [ ] End to end with a real Claude Code worker in a scratch store, through the UI in tmux: Esc mid-turn shows idle, a queued `saaio send --type` line is typed, a `waits turn` clears; then `saaio --stop`

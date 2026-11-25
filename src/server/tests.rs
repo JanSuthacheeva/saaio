@@ -1,5 +1,7 @@
 //! Tests of `server` over a real socket: panes, the master, UIs, typing, news, pauses, stop
 
+mod program_status;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{Read, Write};
