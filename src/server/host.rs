@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
@@ -291,6 +291,11 @@ impl Host {
                 status: pane.status.clone(),
             })
             .collect()
+    }
+
+    /// When the pane's open synchronized update times out, if it has one open.
+    pub fn sync_deadline(&self, key: &PaneKey) -> Option<Instant> {
+        self.panes.get(key)?.term.sync_deadline()
     }
 
     /// Ends synchronized updates their programs left open too long.

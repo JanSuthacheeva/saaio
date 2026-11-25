@@ -13,7 +13,7 @@ use crate::adapter::{Adapter, Approver};
 use crate::event::{EVENT_VERSION, Event};
 use crate::fold;
 use crate::id::FlowId;
-use crate::program_status::{Found, Scanner};
+use crate::program_status::{Found, Scanner, Sequence};
 use crate::proto::{self, ClientMsg, Error, MAX_MESSAGE, ServerMsg};
 use crate::workflow::Workflow;
 
@@ -117,10 +117,11 @@ pub fn program_status(bytes: &[u8]) {
             found.end > last && found.end <= bytes.len(),
             "{found:?} after {last}"
         );
-        assert!(
-            matches!(bytes[found.end - 1], 0x07 | b'\\'),
-            "{found:?} ends without a terminator"
-        );
+        let terminator = match found.sequence {
+            Sequence::Version => matches!(bytes[found.end - 1], b'q'),
+            _ => matches!(bytes[found.end - 1], 0x07 | b'\\'),
+        };
+        assert!(terminator, "{found:?} ends without a terminator");
         last = found.end;
     }
     let step = bytes.len().div_ceil(SPLITS).max(1);

@@ -1,5 +1,5 @@
 //! OSC 7501, the Program Status Protocol: a program's reports of where it stands, read from its
-//! output (pure)
+//! output, and XTVERSION, the program asking which terminal it runs in (pure)
 
 use base64::Engine as _;
 use base64::engine::DecodePaddingMode;
@@ -8,6 +8,9 @@ use base64::engine::general_purpose::{GeneralPurpose, GeneralPurposeConfig};
 /// What a terminal that supports the protocol answers to `ESC ] 7501 ; ? ESC \`.
 pub const QUERY_ANSWER: &[u8] =
     b"\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth\x1b\\";
+/// What saaio answers to XTVERSION (`CSI > q`, `CSI > 0 q`): its name and version.
+pub const VERSION_ANSWER: &[u8] =
+    concat!("\x1bP>|saaio ", env!("CARGO_PKG_VERSION"), "\x1b\\").as_bytes();
 /// The longest sequence the spec allows; a longer one is dropped whole.
 const MAX_SEQUENCE: usize = 4096;
 const PREFIX: &[u8] = b"7501;";
@@ -51,6 +54,8 @@ pub struct Report {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Sequence {
     Query,
+    /// XTVERSION: the program asks the terminal's name and version.
+    Version,
     /// A report, or None for `clear`.
     Status(Option<Report>),
 }
@@ -62,7 +67,7 @@ pub struct Found {
     pub sequence: Sequence,
 }
 
-/// Finds OSC 7501 sequences in a program's output across reads.
+/// Finds OSC 7501 sequences and XTVERSION queries in a program's output across reads.
 #[derive(Debug, Default)]
 pub struct Scanner {
     state: Scan,
@@ -81,6 +86,9 @@ enum Scan {
     OscEscape,
     /// In an OSC that is not ours or grew too long, until its end.
     Skip,
+    /// After `ESC [`: the bytes of a CSI that may be XTVERSION so far (`>`, then `0` or none),
+    /// in `body`.
+    Csi,
 }
 
 impl Scanner {
@@ -89,25 +97,31 @@ impl Scanner {
     pub fn scan(&mut self, bytes: &[u8]) -> Vec<Found> {
         let mut found = Vec::new();
         for (at, &byte) in bytes.iter().enumerate() {
-            let ended = match self.state {
+            let sequence = match self.state {
                 Scan::Ground => {
                     if byte == ESC {
                         self.state = Scan::Escape;
                     }
-                    false
+                    None
                 }
                 Scan::Escape => {
                     self.escape(byte);
-                    false
+                    None
                 }
-                Scan::Osc => self.osc(byte),
+                Scan::Osc => {
+                    if self.osc(byte) {
+                        self.ended()
+                    } else {
+                        None
+                    }
+                }
                 Scan::OscEscape if byte == b'\\' => {
                     self.state = Scan::Ground;
-                    true
+                    self.ended()
                 }
                 Scan::OscEscape => {
                     self.escape(byte);
-                    false
+                    None
                 }
                 Scan::Skip => {
                     self.state = match byte {
@@ -115,13 +129,11 @@ impl Scanner {
                         BEL | CAN | SUB => Scan::Ground,
                         _ => Scan::Skip,
                     };
-                    false
+                    None
                 }
+                Scan::Csi => self.csi(byte),
             };
-            if ended
-                && let Some(body) = self.body.strip_prefix(PREFIX)
-                && let Some(sequence) = parse(body)
-            {
+            if let Some(sequence) = sequence {
                 found.push(Found {
                     end: at + 1,
                     sequence,
@@ -131,16 +143,39 @@ impl Scanner {
         found
     }
 
-    /// The byte after an ESC: `]` opens an OSC, another ESC waits again.
+    /// The byte after an ESC: `]` opens an OSC, `[` a CSI, another ESC waits again.
     fn escape(&mut self, byte: u8) {
         self.state = match byte {
             b']' => {
                 self.body.clear();
                 Scan::Osc
             }
+            b'[' => {
+                self.body.clear();
+                Scan::Csi
+            }
             ESC => Scan::Escape,
             _ => Scan::Ground,
         };
+    }
+
+    /// The OSC that just ended, when it is ours and reads.
+    fn ended(&self) -> Option<Sequence> {
+        parse(self.body.strip_prefix(PREFIX)?)
+    }
+
+    /// One byte of a CSI that may be XTVERSION: `>`, then at most one `0`, then `q` ends it.
+    fn csi(&mut self, byte: u8) -> Option<Sequence> {
+        match (self.body.as_slice(), byte) {
+            ([], b'>') | ([b'>'], b'0') => self.body.push(byte),
+            ([b'>'] | [b'>', b'0'], b'q') => {
+                self.state = Scan::Ground;
+                return Some(Sequence::Version);
+            }
+            (_, ESC) => self.state = Scan::Escape,
+            _ => self.state = Scan::Ground,
+        }
+        None
     }
 
     /// One byte of an OSC's body; true when it ends the sequence (BEL).
@@ -356,6 +391,84 @@ mod tests {
                 end: next.len(),
                 sequence: idle()
             }]
+        );
+    }
+
+    #[test]
+    fn finds_an_xtversion_query_with_or_without_its_zero() {
+        let version = |end| Found {
+            end,
+            sequence: Sequence::Version,
+        };
+
+        assert_eq!(scan(b"a\x1b[>qb"), vec![version(5)]);
+        assert_eq!(scan(b"\x1b[>0q\x1b[c"), vec![version(5)]);
+    }
+
+    #[test]
+    fn finds_an_xtversion_query_split_anywhere_across_reads() {
+        let bytes = b"x\x1b[>0qy";
+        for split in 0..=bytes.len() {
+            let mut scanner = Scanner::default();
+            let (first, second) = bytes.split_at(split);
+
+            let mut found = scanner.scan(first);
+            found.extend(scanner.scan(second).into_iter().map(|mut found| {
+                found.end += split;
+                found
+            }));
+
+            assert_eq!(
+                found,
+                vec![Found {
+                    end: 6,
+                    sequence: Sequence::Version
+                }],
+                "split at {split}"
+            );
+        }
+    }
+
+    #[test]
+    fn ignores_other_csi_sequences_and_xtversion_without_its_introducer() {
+        assert_eq!(scan(b"\x1b[>1q"), vec![]);
+        assert_eq!(scan(b"\x1b[>00q"), vec![]);
+        assert_eq!(scan(b"\x1b[>0c"), vec![], "DA2");
+        assert_eq!(scan(b"\x1b[?u"), vec![]);
+        assert_eq!(scan(b"\x1b[q"), vec![]);
+        assert_eq!(scan(b">0q"), vec![]);
+    }
+
+    #[test]
+    fn finds_a_status_query_right_after_an_xtversion_query() {
+        assert_eq!(
+            scan(b"\x1b[>0q\x1b]7501;?\x1b\\"),
+            vec![
+                Found {
+                    end: 5,
+                    sequence: Sequence::Version
+                },
+                Found {
+                    end: 15,
+                    sequence: Sequence::Query
+                },
+            ]
+        );
+        assert_eq!(
+            scan(b"\x1b[>\x1b[>0q"),
+            vec![Found {
+                end: 8,
+                sequence: Sequence::Version
+            }],
+            "an ESC in the CSI starts the next sequence"
+        );
+    }
+
+    #[test]
+    fn the_version_answer_names_saaio_and_its_version() {
+        assert_eq!(
+            std::str::from_utf8(VERSION_ANSWER).unwrap(),
+            format!("\x1bP>|saaio {}\x1b\\", env!("CARGO_PKG_VERSION"))
         );
     }
 

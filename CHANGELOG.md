@@ -30,6 +30,9 @@ All notable changes to saaio are listed here. The format follows
   shows `idle interrupted`, lines queued with `saaio send --type` are typed and `waits turn`
   clears. saaio answers Claude Code's status query and reads its reports (OSC 7501), which
   Claude Code 2.1.295 and later send ([flows.md](docs/flows.md#claude-code)).
+- A busy machine no longer shows a Claude Code pane drawing itself slowly from top to bottom:
+  saaio tells Claude Code which terminal it is (XTVERSION), so Claude Code marks each redraw as
+  one and saaio shows it only when it is whole.
 - A flow whose log a crash cut short in the middle of a line keeps its next event: saaio starts
   it on a line of its own instead of gluing it onto the broken one, which lost both. A cut inside
   a non-ASCII character no longer makes the flow disappear from saaio.

@@ -10,7 +10,7 @@ use alacritty_terminal::term::cell::Flags as CellFlags;
 use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor, Processor, Rgb};
 
-use crate::program_status::{QUERY_ANSWER, Report, Scanner, Sequence};
+use crate::program_status::{QUERY_ANSWER, Report, Scanner, Sequence, VERSION_ANSWER};
 use crate::proto::{Cell, Color, Flags, Modes, Mouse, Size};
 
 /// Foreground and background a program is told when it asks (OSC 10/11).
@@ -120,22 +120,27 @@ impl Terminal {
         }
     }
 
-    /// Feeds the emulator up to each OSC 7501 sequence's end, answering a query right there,
-    /// so its answer leaves before the DA1 answer that follows it; keeps each report.
+    /// Feeds the emulator up to each OSC 7501 sequence's or XTVERSION query's end, answering a
+    /// query right there, so its answer leaves before the DA1 answer that follows it; keeps each
+    /// report.
     pub fn feed(&mut self, bytes: &[u8]) {
         let mut from = 0;
         for found in self.scanner.scan(bytes) {
             self.parser.advance(&mut self.term, &bytes[from..found.end]);
             from = found.end;
-            match found.sequence {
-                Sequence::Query => self
-                    .listener
-                    .replies
-                    .lock()
-                    .expect("replies lock")
-                    .extend_from_slice(QUERY_ANSWER),
-                Sequence::Status(status) => self.statuses.push(status),
-            }
+            let answer = match found.sequence {
+                Sequence::Query => QUERY_ANSWER,
+                Sequence::Version => VERSION_ANSWER,
+                Sequence::Status(status) => {
+                    self.statuses.push(status);
+                    continue;
+                }
+            };
+            self.listener
+                .replies
+                .lock()
+                .expect("replies lock")
+                .extend_from_slice(answer);
         }
         self.parser.advance(&mut self.term, &bytes[from..]);
     }
@@ -145,12 +150,15 @@ impl Terminal {
         std::mem::take(&mut self.statuses)
     }
 
+    /// When the synchronized update the program has open times out, if one is open.
+    pub fn sync_deadline(&self) -> Option<std::time::Instant> {
+        self.parser.sync_timeout().sync_timeout()
+    }
+
     /// Ends a synchronized update the program left open past its timeout, so its screen shows.
     pub fn expire_sync(&mut self) {
         let expired = self
-            .parser
-            .sync_timeout()
-            .sync_timeout()
+            .sync_deadline()
             .is_some_and(|deadline| deadline <= std::time::Instant::now());
         if expired {
             self.parser.stop_sync(&mut self.term);
@@ -412,11 +420,15 @@ mod tests {
     fn answers_the_queries_claude_code_sends() {
         let mut term = term(20, 2);
 
-        term.feed(b"\x1b[c\x1b[?2026$p\x1b[6n");
+        term.feed(b"\x1b[>0q\x1b[c\x1b[?2026$p\x1b[6n");
 
         assert_eq!(
             String::from_utf8(term.replies()).unwrap(),
-            "\x1b[?6c\x1b[?2026;2$y\x1b[1;1R"
+            concat!(
+                "\x1bP>|saaio ",
+                env!("CARGO_PKG_VERSION"),
+                "\x1b\\\x1b[?6c\x1b[?2026;2$y\x1b[1;1R"
+            )
         );
         assert_eq!(term.replies(), b"");
     }
@@ -513,6 +525,22 @@ mod tests {
             vec![2],
             "only the cursor's row stays marked"
         );
+    }
+
+    #[test]
+    fn holds_a_synchronized_redraw_until_its_end() {
+        let mut term = term(10, 3);
+        term.feed(b"old one\r\nold two");
+        term.damaged();
+
+        term.feed(b"\x1b[?2026h\x1b[Hnew one\r\n");
+        assert_eq!(term.damaged(), vec![1], "only the cursor's row");
+        assert_eq!(text(&term.row(0, 0)), "old one");
+
+        term.feed(b"new two\x1b[?2026l");
+        assert_eq!(text(&term.row(0, 0)), "new one");
+        assert_eq!(text(&term.row(1, 0)), "new two");
+        assert!(term.damaged().contains(&0));
     }
 
     #[test]
