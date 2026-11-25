@@ -200,7 +200,7 @@ Isolated review of `git diff flow/osc-7501...HEAD`.
   marks the pane dirty once it passes (`Host::sync_deadline`, `Terminal::sync_deadline`). 448708a.
   Checked again by a second agent: no state busy-spins, the watch tick is not delayed.
 
-**Open**
+**Open** (decided 2026-11-25: both left as they are)
 
 - A query inside an open synchronized update is answered out of order: the scanner answers
   XTVERSION (and the OSC 7501 query) at once, while vte holds DA and DSR until the update ends
