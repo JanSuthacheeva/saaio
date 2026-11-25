@@ -265,7 +265,7 @@ Errors as for a worker.
 - [x] Add `program_status.rs` with `Report`, `Status`, `Need`, `Sequence`, `parse` and `Report::at_rest`, with unit tests per state, kind, base64, control characters, unknown keys and child ids
 - [x] Add `Scanner::scan` with `Found` and `QUERY_ANSWER`, with unit tests for ST, BEL, splits, aborts and over-long sequences
 - [x] Add the `fuzzing::program_status` oracle, `strategies::report`, the `mod properties` test and the `.fuzz` target
-- [ ] Scan in `Terminal::feed`, answer the query in order and add `Terminal::statuses`, with tests for query-then-DA1 order whole and split
+- [x] Scan in `Terminal::feed`, answer the query in order and add `Terminal::statuses`, with tests for query-then-DA1 order whole and split
 - [ ] Return `Fed` from `Host::feed` and pass statuses to the server
 - [ ] Add `Adapter::hooks_interrupt`, `PaneState::status` (reset in open), and `server/program_status.rs` with `program_status`, `interrupt` and the `interrupted` truth-table tests
 - [ ] Add server tests over a real socket: a working-then-idle pane under Busy::Turn logs `idle: interrupted` and types a queued line; under Busy::Idle nothing is appended; the master's turn goes idle

@@ -167,6 +167,10 @@ impl Scanner {
 
 impl Report {
     /// Idle, done and error: the program waits for the person.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the server reads it from a later commit on")
+    )]
     pub fn at_rest(&self) -> bool {
         matches!(self.status, Status::Idle | Status::Done | Status::Error)
     }
@@ -235,8 +239,8 @@ fn message(encoded: &str) -> Option<String> {
     (!text.chars().any(char::is_control)).then_some(text)
 }
 
-/// `msg` as a program writes it, for tests and the fuzz oracle.
-#[cfg(any(test, feature = "fuzzing"))]
+/// `msg` as a program writes it, for tests.
+#[cfg(test)]
 pub fn encoded(text: &str) -> String {
     MESSAGE.encode(text)
 }

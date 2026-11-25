@@ -10,6 +10,7 @@ use alacritty_terminal::term::cell::Flags as CellFlags;
 use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor, Processor, Rgb};
 
+use crate::program_status::{QUERY_ANSWER, Report, Scanner, Sequence};
 use crate::proto::{Cell, Color, Flags, Modes, Mouse, Size};
 
 /// Foreground and background a program is told when it asks (OSC 10/11).
@@ -29,12 +30,15 @@ pub struct Terminal {
     term: Term<Listener>,
     parser: Processor,
     listener: Listener,
+    scanner: Scanner,
+    statuses: Vec<Option<Report>>,
 }
 
 impl fmt::Debug for Terminal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Terminal")
             .field("listener", &self.listener)
+            .field("statuses", &self.statuses)
             .finish_non_exhaustive()
     }
 }
@@ -111,11 +115,38 @@ impl Terminal {
             term,
             parser: Processor::new(),
             listener,
+            scanner: Scanner::default(),
+            statuses: Vec::new(),
         }
     }
 
+    /// Feeds the emulator up to each OSC 7501 sequence's end, answering a query right there,
+    /// so its answer leaves before the DA1 answer that follows it; keeps each report.
     pub fn feed(&mut self, bytes: &[u8]) {
-        self.parser.advance(&mut self.term, bytes);
+        let mut from = 0;
+        for found in self.scanner.scan(bytes) {
+            self.parser.advance(&mut self.term, &bytes[from..found.end]);
+            from = found.end;
+            match found.sequence {
+                Sequence::Query => self
+                    .listener
+                    .replies
+                    .lock()
+                    .expect("replies lock")
+                    .extend_from_slice(QUERY_ANSWER),
+                Sequence::Status(status) => self.statuses.push(status),
+            }
+        }
+        self.parser.advance(&mut self.term, &bytes[from..]);
+    }
+
+    /// The program's status reports since the last call, drained; None for a `clear`.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the server reads it from a later commit on")
+    )]
+    pub fn statuses(&mut self) -> Vec<Option<Report>> {
+        std::mem::take(&mut self.statuses)
     }
 
     /// Ends a synchronized update the program left open past its timeout, so its screen shows.
@@ -334,6 +365,7 @@ fn asked_color(index: usize) -> Rgb {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::program_status::Status;
 
     fn term(cols: u16, rows: u16) -> Terminal {
         Terminal::new(Size { cols, rows }, 100)
@@ -390,6 +422,45 @@ mod tests {
             String::from_utf8(term.replies()).unwrap(),
             "\x1b[?6c\x1b[?2026;2$y\x1b[1;1R"
         );
+        assert_eq!(term.replies(), b"");
+    }
+
+    #[test]
+    fn answers_the_status_query_before_the_device_attributes_that_follow_it() {
+        let asked = b"\x1b]7501;?\x1b\\\x1b[c";
+        let expected = [QUERY_ANSWER, b"\x1b[?6c"].concat();
+        for split in 0..=asked.len() {
+            let mut term = term(20, 2);
+            let (first, second) = asked.split_at(split);
+
+            term.feed(first);
+            let mut replies = term.replies();
+            term.feed(second);
+            replies.extend(term.replies());
+
+            assert_eq!(replies, expected, "split at {split}");
+        }
+    }
+
+    #[test]
+    fn keeps_the_status_reports_in_order_and_shows_none_of_them() {
+        let mut term = term(30, 2);
+
+        term.feed(b"a\x1b]7501;state=working\x1b\\b\x1b]7501;state=clear\x07c");
+
+        assert_eq!(
+            term.statuses(),
+            vec![
+                Some(Report {
+                    status: Status::Working,
+                    need: None,
+                    message: None
+                }),
+                None
+            ]
+        );
+        assert_eq!(term.statuses(), vec![]);
+        assert_eq!(text(&term.row(0, 0)), "abc");
         assert_eq!(term.replies(), b"");
     }
 
