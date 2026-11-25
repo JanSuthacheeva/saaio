@@ -34,10 +34,6 @@ pub struct Fed {
     /// The text the program copied (OSC 52).
     pub copied: Option<String>,
     /// Its status reports (OSC 7501), in order; None for a `clear`.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the server acts on them from the next commit on")
-    )]
     pub statuses: Vec<Option<Report>>,
 }
 

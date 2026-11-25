@@ -167,10 +167,6 @@ impl Scanner {
 
 impl Report {
     /// Idle, done and error: the program waits for the person.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the server reads it from a later commit on")
-    )]
     pub fn at_rest(&self) -> bool {
         matches!(self.status, Status::Idle | Status::Done | Status::Error)
     }

@@ -267,7 +267,7 @@ Errors as for a worker.
 - [x] Add the `fuzzing::program_status` oracle, `strategies::report`, the `mod properties` test and the `.fuzz` target
 - [x] Scan in `Terminal::feed`, answer the query in order and add `Terminal::statuses`, with tests for query-then-DA1 order whole and split
 - [x] Return `Fed` from `Host::feed` and pass statuses to the server
-- [ ] Add `Adapter::hooks_interrupt`, `PaneState::status` (reset in open), and `server/program_status.rs` with `program_status`, `interrupt` and the `interrupted` truth-table tests
+- [x] Add `Adapter::hooks_interrupt`, `PaneState::status` (reset in open), and `server/program_status.rs` with `program_status`, `interrupt` and the `interrupted` truth-table tests
 - [ ] Add server tests over a real socket: a working-then-idle pane under Busy::Turn logs `idle: interrupted` and types a queued line; under Busy::Idle nothing is appended; the master's turn goes idle
 - [ ] Update ROADMAP, troubleshooting, HANDOVER, repository.md, CLAUDE.md architecture and CHANGELOG
 - [ ] End to end with a real Claude Code worker in a scratch store, through the UI in tmux: Esc mid-turn shows idle, a queued `saaio send --type` line is typed, a `waits turn` clears; then `saaio --stop`
