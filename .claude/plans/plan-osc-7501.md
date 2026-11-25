@@ -271,3 +271,41 @@ Errors as for a worker.
 - [x] Add server tests over a real socket: a working-then-idle pane under Busy::Turn logs `idle: interrupted` and types a queued line; under Busy::Idle nothing is appended; the master's turn goes idle
 - [x] Update ROADMAP, troubleshooting, HANDOVER, repository.md, CLAUDE.md architecture and CHANGELOG
 - [x] End to end with a real Claude Code worker in a scratch store, through the UI in tmux: Esc mid-turn shows idle, a queued `saaio send --type` line is typed, a `waits turn` clears; then `saaio --stop`
+
+## Review
+
+Reviewed at 0a2f33c against main, in a context that did not write the branch. Claude Code's own
+emitter was read from the installed 2.1.331 binary to check what it reports and when.
+
+- **Fixed** - nothing. No finding could be shown to be wrong.
+- **Checked against Claude Code 2.1.331** - a turn that completes reports `done` (or `working`
+  while it awaits background tasks), a stopped turn (Esc) reports `idle`, an API error `error`;
+  `idle` also comes from a fresh or resumed conversation (`/clear`, resume), which never runs
+  under `Busy::Turn`. Reports and the query are written raw, never wrapped for tmux passthrough,
+  so the scanner sees them inside tmux too. Report bodies carry `title=` (base64) and child
+  records `id=`, which `parse` ignores and drops as planned. msg (2048 chars) plus title stay
+  under `MAX_SEQUENCE`.
+- **Open** -
+  1. An auth error turn reports `blocked kind=auth`, then `idle` once the person signs in again.
+     Claude Code runs StopFailure, not Stop, there, so busy is still Turn and the server logs
+     `idle: interrupted`. The flow correctly ends up idle; only the note's word is off.
+     Recommendation: leave it.
+  2. dismiss.rs presses Esc into an answered question dialog. If Claude Code then reports `idle`
+     before it takes the held message (its status is `working` while a message is queued, so
+     likely not), the flow would log `idle: interrupted` and busy go Idle while the next turn
+     starts. Not reproduced. Recommendation: the planned follow-up (Esc only while the pane reports
+     `blocked`) covers it; watch server.log for "was interrupted" right after "closed ... question
+     dialog".
+  3. The `2.1.295` minimum in the docs and CHANGELOG comes from the research page, not checked here.
+- **Where to look** -
+  1. `src/server/program_status.rs` `program_status` -> `interrupted` -> `interrupt`: the only
+     place the server writes on a report; the guard (adapter without an interrupt hook, busy Turn,
+     not-at-rest before, idle after) is what keeps normal turn ends out.
+  2. `src/server/terminal.rs` `feed`: the emulator advanced in slices so the query's answer leaves
+     before the DA1 reply; every byte still reaches the emulator.
+  3. `src/program_status.rs` `Scanner::scan`/`osc`: the state machine; split-anywhere is covered by
+     the proptest and the fuzz oracle.
+  Routine, skim: `host.rs` (`Fed`), `pane_state.rs`, `panes.rs`, `adapter.rs`, strategies, fuzz
+  target, docs.
+- **Checks** - `cargo test --all-features`, both clippy runs and `cargo fmt --check` passed at
+  0a2f33c; no code changed since.
