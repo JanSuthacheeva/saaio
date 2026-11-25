@@ -235,6 +235,40 @@ fn a_ui_attaches_types_into_the_master_and_sees_it() {
 }
 
 #[test]
+fn shows_a_synchronized_update_its_program_never_ends_past_its_timeout() {
+    let dir = TempDir::new().unwrap();
+    let held = vec![
+        "sh".into(),
+        "-c".into(),
+        r"read go; printf '\033[?2026hheld'; exec sleep 60".into(),
+    ];
+    let (paths, handle) = start_with(
+        dir.path(),
+        Agent {
+            command: held.clone(),
+            prompt: None,
+            adapter: None,
+            resume: Some(held),
+        },
+    );
+    let mut ui = connect(
+        &paths.socket,
+        Role::Attach {
+            size: Size { cols: 30, rows: 6 },
+        },
+    );
+
+    proto::write_msg(&mut ui, &ClientMsg::Input(b"\r".to_vec())).unwrap();
+
+    recv_until(
+        &mut ui,
+        "the held update never showed",
+        |message| matches!(message, ServerMsg::Frame(frame) if (0..6).any(|row| text(&frame, row).contains("held"))),
+    );
+    stop(&paths, handle);
+}
+
+#[test]
 fn tells_the_ui_where_the_masters_turn_stands_from_its_start() {
     let dir = TempDir::new().unwrap();
     let store = Store::at(dir.path().to_path_buf());

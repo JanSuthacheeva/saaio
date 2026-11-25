@@ -150,12 +150,15 @@ impl Terminal {
         std::mem::take(&mut self.statuses)
     }
 
+    /// When the synchronized update the program has open times out, if one is open.
+    pub fn sync_deadline(&self) -> Option<std::time::Instant> {
+        self.parser.sync_timeout().sync_timeout()
+    }
+
     /// Ends a synchronized update the program left open past its timeout, so its screen shows.
     pub fn expire_sync(&mut self) {
         let expired = self
-            .parser
-            .sync_timeout()
-            .sync_timeout()
+            .sync_deadline()
             .is_some_and(|deadline| deadline <= std::time::Instant::now());
         if expired {
             self.parser.stop_sync(&mut self.term);
