@@ -21,6 +21,20 @@ fn interrupted_claude(dir: &Path, name: &str) -> Agent {
     }
 }
 
+/// The master as `cat`, the flows' agent `claude-esc`.
+fn agents(flows: Agent) -> BTreeMap<String, Agent> {
+    let cat = Agent {
+        command: vec!["cat".into()],
+        prompt: None,
+        adapter: None,
+        resume: Some(vec!["cat".into()]),
+    };
+    BTreeMap::from([
+        ("claude".to_string(), cat),
+        ("claude-esc".to_string(), flows),
+    ])
+}
+
 fn interrupted_events(store: &Store, id: FlowId) -> usize {
     store
         .events(id)
@@ -39,7 +53,7 @@ fn interrupted_events(store: &Store, id: FlowId) -> usize {
 fn an_esc_mid_turn_ends_the_turn_and_types_the_queued_line() {
     let dir = TempDir::new().unwrap();
     let store = Store::at(dir.path().to_path_buf());
-    let id = started_flow(&store, dir.path(), "csv", "claude");
+    let id = started_flow(&store, dir.path(), "csv", "claude-esc");
     let answer = EventKind::Answer {
         text: "Plan done.".into(),
     };
@@ -48,7 +62,8 @@ fn an_esc_mid_turn_ends_the_turn_and_types_the_queued_line() {
         .append(id, &LogEvent::new(3, EventKind::Working))
         .unwrap();
     queue(&store, id, "continue shipping");
-    let (paths, handle) = start_with(dir.path(), interrupted_claude(dir.path(), "csv"));
+    let (paths, handle) =
+        start_with_agents(dir.path(), agents(interrupted_claude(dir.path(), "csv")));
     let waiter = Waiter::Flow(id);
     wait_until("the worker never started", || {
         dir.path().join("csv/started").exists()
@@ -66,11 +81,12 @@ fn an_esc_mid_turn_ends_the_turn_and_types_the_queued_line() {
 fn idle_after_the_stop_hook_appends_nothing() {
     let dir = TempDir::new().unwrap();
     let store = Store::at(dir.path().to_path_buf());
-    let id = started_flow(&store, dir.path(), "csv", "claude");
+    let id = started_flow(&store, dir.path(), "csv", "claude-esc");
     store
         .append(id, &LogEvent::new(3, EventKind::Working))
         .unwrap();
-    let (paths, handle) = start_with(dir.path(), interrupted_claude(dir.path(), "csv"));
+    let (paths, handle) =
+        start_with_agents(dir.path(), agents(interrupted_claude(dir.path(), "csv")));
     wait_until("the worker never started", || {
         dir.path().join("csv/started").exists()
     });
