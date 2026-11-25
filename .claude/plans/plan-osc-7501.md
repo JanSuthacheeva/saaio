@@ -297,6 +297,8 @@ emitter was read from the installed 2.1.331 binary to check what it reports and 
      `blocked`) covers it; watch server.log for "was interrupted" right after "closed ... question
      dialog".
   3. The `2.1.295` minimum in the docs and CHANGELOG comes from the research page, not checked here.
+- **Decided** - all three left as they are (2026-11-25): 1 is only the note's word, 2 goes to the
+  answered-in-pane follow-up, 3 stays as the research page states it.
 - **Where to look** -
   1. `src/server/program_status.rs` `program_status` -> `interrupted` -> `interrupt`: the only
      place the server writes on a report; the guard (adapter without an interrupt hook, busy Turn,
