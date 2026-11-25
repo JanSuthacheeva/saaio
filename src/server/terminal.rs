@@ -10,7 +10,7 @@ use alacritty_terminal::term::cell::Flags as CellFlags;
 use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor, Processor, Rgb};
 
-use crate::program_status::{QUERY_ANSWER, Report, Scanner, Sequence};
+use crate::program_status::{QUERY_ANSWER, Report, Scanner, Sequence, VERSION_ANSWER};
 use crate::proto::{Cell, Color, Flags, Modes, Mouse, Size};
 
 /// Foreground and background a program is told when it asks (OSC 10/11).
@@ -120,22 +120,27 @@ impl Terminal {
         }
     }
 
-    /// Feeds the emulator up to each OSC 7501 sequence's end, answering a query right there,
-    /// so its answer leaves before the DA1 answer that follows it; keeps each report.
+    /// Feeds the emulator up to each OSC 7501 sequence's or XTVERSION query's end, answering a
+    /// query right there, so its answer leaves before the DA1 answer that follows it; keeps each
+    /// report.
     pub fn feed(&mut self, bytes: &[u8]) {
         let mut from = 0;
         for found in self.scanner.scan(bytes) {
             self.parser.advance(&mut self.term, &bytes[from..found.end]);
             from = found.end;
-            match found.sequence {
-                Sequence::Query => self
-                    .listener
-                    .replies
-                    .lock()
-                    .expect("replies lock")
-                    .extend_from_slice(QUERY_ANSWER),
-                Sequence::Status(status) => self.statuses.push(status),
-            }
+            let answer = match found.sequence {
+                Sequence::Query => QUERY_ANSWER,
+                Sequence::Version => VERSION_ANSWER,
+                Sequence::Status(status) => {
+                    self.statuses.push(status);
+                    continue;
+                }
+            };
+            self.listener
+                .replies
+                .lock()
+                .expect("replies lock")
+                .extend_from_slice(answer);
         }
         self.parser.advance(&mut self.term, &bytes[from..]);
     }
@@ -412,11 +417,15 @@ mod tests {
     fn answers_the_queries_claude_code_sends() {
         let mut term = term(20, 2);
 
-        term.feed(b"\x1b[c\x1b[?2026$p\x1b[6n");
+        term.feed(b"\x1b[>0q\x1b[c\x1b[?2026$p\x1b[6n");
 
         assert_eq!(
             String::from_utf8(term.replies()).unwrap(),
-            "\x1b[?6c\x1b[?2026;2$y\x1b[1;1R"
+            concat!(
+                "\x1bP>|saaio ",
+                env!("CARGO_PKG_VERSION"),
+                "\x1b\\\x1b[?6c\x1b[?2026;2$y\x1b[1;1R"
+            )
         );
         assert_eq!(term.replies(), b"");
     }

@@ -165,14 +165,15 @@ would be a longer interval by another name.
 
 ## Tasks
 
-- [ ] Add `\x1b[>0q` first, as Claude Code sends it, to `answers_the_queries_claude_code_sends` in
+- [x] Add `\x1b[>0q` first, as Claude Code sends it, to `answers_the_queries_claude_code_sends` in
   `src/server/terminal.rs` (fails today: the replies start with `\x1b[?6c` where
   `\x1bP>|saaio 0.3.1\x1b\\` is expected), then add `Sequence::Version`, `Scan::Csi` and
-  `VERSION_ANSWER` in `src/program_status.rs` and answer it in `Terminal::feed`
+  `VERSION_ANSWER` in `src/program_status.rs` and answer it in `Terminal::feed`;
+  `fuzzing::program_status` accepts `q` as the end of a `Version` (moved here from the next task,
+  since its property test would fail on a random `ESC [ > q` without it)
 - [ ] Scanner tests in `src/program_status.rs`: `CSI > q` and `CSI > 0 q` found with their end,
   one split anywhere found once, `CSI > 1 q`, `CSI > 0 c` (DA2), `CSI ? u` and `>0q` without
-  `ESC [` not found, an OSC 7501 query right after an XTVERSION query both found in order; and
-  `fuzzing::program_status` accepts `q` as the end of a `Version`
+  `ESC [` not found, an OSC 7501 query right after an XTVERSION query both found in order
 - [ ] A test in `src/server/terminal.rs` that a redraw inside `CSI ? 2026 h ... l` fed in two parts
   changes no row until its end, so the emulator holds what Claude Code now marks
 - [ ] CLAUDE.md (program_status line), CHANGELOG.md (Fixed, under Unreleased), ROADMAP.md
