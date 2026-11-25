@@ -260,7 +260,7 @@ Errors as for a worker.
 
 ## Tasks
 
-- [ ] Add `program_status.rs` with `Report`, `Status`, `Need`, `Sequence`, `parse` and `Report::at_rest`, with unit tests per state, kind, base64, control characters, unknown keys and child ids
+- [x] Add `program_status.rs` with `Report`, `Status`, `Need`, `Sequence`, `parse` and `Report::at_rest`, with unit tests per state, kind, base64, control characters, unknown keys and child ids
 - [ ] Add `Scanner::scan` with `Found` and `QUERY_ANSWER`, with unit tests for ST, BEL, splits, aborts and over-long sequences
 - [ ] Add the `fuzzing::program_status` oracle, `strategies::report`, the `mod properties` test and the `.fuzz` target
 - [ ] Scan in `Terminal::feed`, answer the query in order and add `Terminal::statuses`, with tests for query-then-DA1 order whole and split

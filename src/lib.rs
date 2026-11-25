@@ -42,6 +42,11 @@ mod layering;
 mod pause;
 mod private;
 mod processes;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the terminal scans for it from a later commit on")
+)]
+mod program_status;
 mod proto;
 mod refusal;
 mod registry;
