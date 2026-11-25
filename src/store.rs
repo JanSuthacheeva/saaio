@@ -5,8 +5,9 @@
     reason = "the store writes its own logs and marks"
 )]
 
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Write};
+use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -115,23 +116,32 @@ impl Store {
 
     /// Appends one event to an existing log.
     pub fn append(&self, id: FlowId, event: &Event) -> Result<()> {
-        let mut log = match OpenOptions::new().append(true).open(self.log(id)) {
+        let mut log = match OpenOptions::new()
+            .read(true)
+            .append(true)
+            .open(self.log(id))
+        {
             Ok(log) => log,
             Err(error) if error.kind() == ErrorKind::NotFound => bail!("no flow {id}"),
             Err(error) => return Err(error).with_context(|| format!("could not open flow {id}")),
         };
-        log.write_all(format!("{}\n", event.to_line()).as_bytes())
+        let fresh = if torn(&log).with_context(|| format!("could not read flow {id}"))? {
+            "\n"
+        } else {
+            ""
+        };
+        log.write_all(format!("{fresh}{}\n", event.to_line()).as_bytes())
             .with_context(|| format!("could not write flow {id}"))
     }
 
     /// Every readable event of one flow, in order.
     pub fn events(&self, id: FlowId) -> Result<Vec<Event>> {
-        let text = match fs::read_to_string(self.log(id)) {
-            Ok(text) => text,
+        let log = match fs::read(self.log(id)) {
+            Ok(log) => log,
             Err(error) if error.kind() == ErrorKind::NotFound => bail!("no flow {id}"),
             Err(error) => return Err(error).with_context(|| format!("could not read flow {id}")),
         };
-        Ok(text.lines().filter_map(Event::from_line).collect())
+        Ok(Event::from_log(&log))
     }
 
     /// Ids of all flows, by log file name.
@@ -426,6 +436,17 @@ impl Store {
     }
 }
 
+/// The log ends inside a line, a write a crash cut short: its last byte is not a newline.
+fn torn(log: &File) -> std::io::Result<bool> {
+    let len = log.metadata()?.len();
+    if len == 0 {
+        return Ok(false);
+    }
+    let mut last = [0];
+    log.read_exact_at(&mut last, len - 1)?;
+    Ok(last != *b"\n")
+}
+
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
@@ -527,6 +548,35 @@ mod tests {
         let mut text = fs::read_to_string(&log).unwrap();
         text.push_str("garbage\n{\"v\":9,\"at\":3,\"kind\":\"working\"}\n");
         fs::write(&log, text).unwrap();
+
+        assert_eq!(store.events(id).unwrap(), vec![started()]);
+    }
+
+    #[test]
+    fn appends_after_a_line_a_crash_cut_short_on_a_line_of_its_own() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let id = store.create(&started()).unwrap();
+        let log = dir.path().join("flows").join(format!("{id}.jsonl"));
+        let mut text = fs::read_to_string(&log).unwrap();
+        text.push_str(r#"{"v":1,"at":7,"ki"#);
+        fs::write(&log, text).unwrap();
+        let working = Event::new(8, EventKind::Working);
+
+        store.append(id, &working).unwrap();
+
+        assert_eq!(store.events(id).unwrap(), vec![started(), working]);
+    }
+
+    #[test]
+    fn reads_a_log_a_crash_cut_inside_a_character() {
+        let dir = TempDir::new().unwrap();
+        let store = Store::at(dir.path().to_path_buf());
+        let id = store.create(&started()).unwrap();
+        let log = dir.path().join("flows").join(format!("{id}.jsonl"));
+        let mut bytes = fs::read(&log).unwrap();
+        bytes.extend_from_slice(&r#"{"v":1,"at":7,"kind":"blocked","reason":"é"#.as_bytes()[..42]);
+        fs::write(&log, bytes).unwrap();
 
         assert_eq!(store.events(id).unwrap(), vec![started()]);
     }
@@ -746,5 +796,47 @@ mod tests {
         assert_eq!(store.waiter(&Waiter::Flow(id)), None);
         assert_eq!(store.delivered(id), 0);
         assert_eq!(store.typed(id), 0);
+    }
+
+    mod properties {
+        use proptest::prelude::*;
+
+        use super::*;
+        use crate::strategies;
+
+        proptest! {
+            #[test]
+            fn a_log_cut_anywhere_keeps_every_whole_event_and_the_next(
+                events in prop::collection::vec(strategies::event(), 1..=6),
+                cut in any::<prop::sample::Index>(),
+                next in strategies::event(),
+            ) {
+                let dir = TempDir::new().unwrap();
+                let store = Store::at(dir.path().to_path_buf());
+                let id = store.create(&events[0]).unwrap();
+                for event in &events[1..] {
+                    store.append(id, event).unwrap();
+                }
+                let log = dir.path().join("flows").join(format!("{id}.jsonl"));
+                let len = fs::metadata(&log).unwrap().len() as usize;
+                let cut = cut.index(len + 1);
+                OpenOptions::new().write(true).open(&log).unwrap().set_len(cut as u64).unwrap();
+
+                store.append(id, &next).unwrap();
+
+                let mut end = 0;
+                let mut whole = events
+                    .into_iter()
+                    .take_while(|event| {
+                        end += event.to_line().len();
+                        let kept = end <= cut;
+                        end += 1;
+                        kept
+                    })
+                    .collect::<Vec<_>>();
+                whole.push(next);
+                prop_assert_eq!(store.events(id).unwrap(), whole);
+            }
+        }
     }
 }

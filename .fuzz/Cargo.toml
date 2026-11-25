@@ -1,0 +1,51 @@
+[package]
+name = "saaio-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+saaio = { path = "..", features = ["fuzzing"] }
+
+# Not a member of the saaio workspace: it builds only on nightly, with cargo fuzz.
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "frames"
+path = "fuzz_targets/frames.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "log_line"
+path = "fuzz_targets/log_line.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "log"
+path = "fuzz_targets/log.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hook_claude_code"
+path = "fuzz_targets/hook_claude_code.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hook_codex"
+path = "fuzz_targets/hook_codex.rs"
+test = false
+doc = false
+bench = false

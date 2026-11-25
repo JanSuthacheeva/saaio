@@ -5,6 +5,7 @@ approach is agreed before the code.
 
 - [Build and test](#build-and-test)
 - [Checking the UI by hand](#checking-the-ui-by-hand)
+- [Fuzzing](#fuzzing)
 - [CI](#ci)
 - [Docs site](#docs-site)
 - [Project rules](#project-rules)
@@ -29,6 +30,7 @@ cargo install --path .                       # install the saaio binary
 | Test | Where |
 | --- | --- |
 | unit tests | inline `mod tests`, or a sibling `tests.rs` past about 400 lines |
+| properties of the parsers | `mod properties` in the parser's tests: proptest values (`src/strategies.rs`) checked by the oracles in `src/fuzzing.rs` |
 | command line, end to end | `tests/cli/`, one module per subject (`main.rs` lists them) |
 | UI screens | golden files in `src/ui/golden` |
 
@@ -57,6 +59,53 @@ agent's markers unset:
 SAAIO_HOME=$(mktemp -d) env -u CLAUDECODE -u CODEX_THREAD_ID -u SAAIO_FLOW_ID -u SAAIO_MASTER cargo run
 ```
 
+## Fuzzing
+
+The parsers saaio feeds with what it did not write itself (the event log, the UI's frames, the
+harnesses' hook payloads) each have an oracle in `src/fuzzing.rs`: a function that takes any
+input and panics when a property breaks. `cargo test` checks them with generated values; the
+cargo-fuzz targets in `.fuzz/` check them with libFuzzer for as long as you let them run. The
+package is `.fuzz/`, not `fuzz/`, since `cargo install --git` refuses a repository with a second
+package that has binaries and skips folders that start with a dot.
+It keeps a lockfile of its own, `.fuzz/Cargo.lock`, which CI reads with `--locked`: a change to
+saaio's `version` or dependencies in `Cargo.toml` updates it too, with
+`cargo update -p saaio --manifest-path .fuzz/Cargo.toml`.
+
+| Target | Input | Oracle |
+| --- | --- | --- |
+| `frames` | bytes as a stream of UI and server messages | `fuzzing::frames` |
+| `log_line` | text as one log line | `fuzzing::log_line` |
+| `log` | bytes as a whole log, folded | `fuzzing::log` |
+| `hook_claude_code` | text as a Claude Code hook payload | `fuzzing::claude_code_hook` |
+| `hook_codex` | text as a Codex hook payload | `fuzzing::codex_hook` |
+
+Fuzzing needs nightly Rust and cargo-fuzz:
+
+```sh
+rustup toolchain install nightly --profile minimal
+cargo install cargo-fuzz --locked
+cargo +nightly fuzz run --fuzz-dir .fuzz frames -- -max_total_time=300
+```
+
+Seed a hook target with the recorded payloads first, so it starts from real events:
+
+```sh
+mkdir -p .fuzz/corpus/hook_codex && cp src/adapter/fixtures/codex/*.json .fuzz/corpus/hook_codex/
+```
+
+A crash saves its input under `.fuzz/artifacts/<target>/` (or in the fuzz run's artifact on
+GitHub). Replay it, shrink it, and turn it into an example test beside the parser before you fix
+it:
+
+```sh
+cargo +nightly fuzz run --fuzz-dir .fuzz frames .fuzz/artifacts/frames/crash-<hash>
+cargo +nightly fuzz tmin --fuzz-dir .fuzz frames .fuzz/artifacts/frames/crash-<hash>
+```
+
+A property test that fails prints its smallest failing input and saves its seed under
+`proptest-regressions/`; commit that file with the fix, so the case runs first from then on.
+`PROPTEST_CASES=10000 cargo test` runs more cases than the default 256.
+
 ## CI
 
 `.github/workflows/ci.yml` runs on every pull request and every push to `main`. Each check is a
@@ -64,8 +113,8 @@ job of its own, named so branch protection can require it:
 
 | Check | Runs |
 | --- | --- |
-| `fmt` | `cargo fmt --check` on Linux |
-| `clippy (linux)`, `clippy (macos)` | `cargo clippy --all-targets --all-features --locked -- -D warnings` |
+| `fmt` | `cargo fmt --check` on Linux, for saaio and `.fuzz/` |
+| `clippy (linux)`, `clippy (macos)` | `cargo clippy --all-targets --all-features --locked -- -D warnings`, and clippy over `.fuzz/` |
 | `test (linux)`, `test (macos)` | `cargo test --all-features --locked`, then fails if a test changed or left a file in the tree |
 | `deny` | `cargo deny --locked check` with `deny.toml`: advisories, licences, bans, sources |
 | `site` | `.github/workflows/docs.yml`: builds the docs site, fails on a broken link or anchor |
@@ -79,6 +128,12 @@ failure there means a dependency needs an update or, when none exists yet, an `i
 and on demand (Actions, stable, Run workflow), since `cargo install --git` builds with the user's
 Rust. It is not a required check: a failure there is a new lint or a break to fix before users
 meet it.
+
+`.github/workflows/fuzz.yml` runs each fuzz target for five minutes on nightly every Monday and on
+demand (Actions, fuzz, Run workflow). A fuzzer finds new inputs over long runs, so a short run on
+every pull request would find little and make a required check slow and nondeterministic; the
+property tests in `cargo test` are the gate. It is not a required check: a crash fails the run and
+uploads the input as the artifact `fuzz-<target>` ([Fuzzing](#fuzzing) says how to replay it).
 
 CI uses the toolchain `rust-toolchain.toml` pins, as you do locally. To move to a newer Rust,
 change `channel` there and `rust-version` in `Cargo.toml` in one pull request, and fix what the
@@ -196,7 +251,8 @@ plain one. It keeps the symbols: a panic's backtrace in server.log names its fun
 `SAAIO_COMMIT` set while building overrides it.
 
 1. Set `version` in `Cargo.toml` and run `cargo build`, so `Cargo.lock` names it too (the
-   release builds with `--locked`). In `CHANGELOG.md`, rename `## [Unreleased]` to the version and
+   release builds with `--locked`), and `cargo update -p saaio --manifest-path .fuzz/Cargo.toml`,
+   so `.fuzz/Cargo.lock` does (ci.yml lints `.fuzz/` with `--locked`). In `CHANGELOG.md`, rename `## [Unreleased]` to the version and
    its date, such as `## [0.2.0] - 2026-11-03`.
 2. Keep the defaults the last release wrote, so a newer saaio still refreshes an untouched copy:
    when `examples/config.toml` changed since the last tag, add the tag's text as the next

@@ -26,6 +26,8 @@ required-features = ["site"]
 
 [features]
 site = []
+# The parsers' oracles in saaio::fuzzing, for the fuzz targets in .fuzz/.
+fuzzing = []
 
 [dependencies]
 alacritty_terminal = "0.26"
@@ -53,6 +55,7 @@ unicode-width = "0.2.2"
 uuid = { version = "1.28.0", features = ["v4"] }
 
 [dev-dependencies]
+proptest = "1"
 tempfile = "3.27.0"
 
 # release.yml and cargo install both build this profile. panic stays unwind: the panic hooks

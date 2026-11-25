@@ -1,0 +1,2 @@
+# The fuzz targets run inside libFuzzer's harness, which writes its own files: saaio's rules in
+# ../clippy.toml are for saaio's code, which the targets only call.

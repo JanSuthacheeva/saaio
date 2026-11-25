@@ -1,4 +1,5 @@
-//! The module tree: `cli` public, the rest crate-only; `commit`, `fixtures`, `layering` in tests
+//! The module tree: `cli` public, `fuzzing` too with its feature, the rest crate-only; `commit`,
+//! `fixtures`, `layering`, `strategies` in tests
 
 #![cfg_attr(
     test,
@@ -29,6 +30,10 @@ mod exclusive;
 mod fixtures;
 mod fold;
 mod forge;
+#[cfg(feature = "fuzzing")]
+pub mod fuzzing;
+#[cfg(all(test, not(feature = "fuzzing")))]
+mod fuzzing;
 mod id;
 mod identity;
 mod launch;
@@ -47,6 +52,8 @@ mod server_log;
 mod slots;
 mod stack;
 mod store;
+#[cfg(test)]
+mod strategies;
 mod system;
 mod text;
 mod threads;
