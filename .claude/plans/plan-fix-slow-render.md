@@ -184,3 +184,43 @@ would be a longer interval by another name.
   synchronized update carries no changed content; remove the probe again. Result (48 x yes, 40 s):
   tmux 172 `CSI ? 2026 h`, 172 of 468 frames sent inside an update, 0 of them with a changed row;
   direct 304 `CSI ? 2026 h`, 178 of 510 frames inside an update, 0 with a changed row
+
+## Review
+
+Isolated review of `git diff flow/osc-7501...HEAD`.
+
+**Fixed**
+
+- A synchronized update a program opened and never closed stayed hidden for good: the server
+  checked vte's 150 ms timeout only in `flush`, which runs only after the focused pane writes
+  again. Until now Claude Code never sent the markers, so it never mattered; with XTVERSION
+  answered it does (a program stopped mid-redraw, or one that writes `CSI ? 2026 h` and waits for
+  input). Shown by `shows_a_synchronized_update_its_program_never_ends_past_its_timeout` (timed
+  out at 30 s before the fix). `serve` now also waits for the focused pane's sync deadline and
+  marks the pane dirty once it passes (`Host::sync_deadline`, `Terminal::sync_deadline`). 448708a.
+  Checked again by a second agent: no state busy-spins, the watch tick is not delayed.
+
+**Open**
+
+- A query inside an open synchronized update is answered out of order: the scanner answers
+  XTVERSION (and the OSC 7501 query) at once, while vte holds DA and DSR until the update ends
+  (`ESC[?2026h ESC[c ESC[>0q` replies XTVERSION first, DA after `ESC[?2026l`). Shown by a probe
+  test, not committed. Claude Code and Codex ask at start-up, outside an update, so nothing hits
+  it today. Recommendation: leave it; if it ever matters, answer the scanner's queries only while
+  `sync_deadline` is None, else queue them for the update's end.
+- Under very heavy load a redraw that takes longer than 150 ms between its markers is still shown
+  in parts when the timeout expires - the same as any terminal. Recommendation: accept.
+
+**Where to look**
+
+1. `src/program_status.rs` `Scanner::csi` and `escape`: the new CSI state, what ends it, that
+   `>00q`, `>1q` and DA2 stay unanswered.
+2. `src/server/terminal.rs` `feed`: the answer leaves before the DA answer that follows it.
+3. `src/server.rs` `serve`: the wait now also covers the focused pane's sync deadline (the
+   review fix).
+
+Routine, skim: CLAUDE.md, CHANGELOG.md, ROADMAP.md, `fuzzing::program_status`'s terminator.
+
+**Checks**
+
+Tests, clippy and fmt pass at 448708a; `cargo deny check` passed at 99f1ef1 (no dependency changed).
