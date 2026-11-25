@@ -525,6 +525,22 @@ mod tests {
     }
 
     #[test]
+    fn holds_a_synchronized_redraw_until_its_end() {
+        let mut term = term(10, 3);
+        term.feed(b"old one\r\nold two");
+        term.damaged();
+
+        term.feed(b"\x1b[?2026h\x1b[Hnew one\r\n");
+        assert_eq!(term.damaged(), vec![1], "only the cursor's row");
+        assert_eq!(text(&term.row(0, 0)), "old one");
+
+        term.feed(b"new two\x1b[?2026l");
+        assert_eq!(text(&term.row(0, 0)), "new one");
+        assert_eq!(text(&term.row(1, 0)), "new two");
+        assert!(term.damaged().contains(&0));
+    }
+
+    #[test]
     fn scrolls_old_lines_into_history() {
         let mut term = term(10, 4);
 

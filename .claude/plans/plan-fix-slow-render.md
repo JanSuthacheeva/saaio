@@ -174,7 +174,7 @@ would be a longer interval by another name.
 - [x] Scanner tests in `src/program_status.rs`: `CSI > q` and `CSI > 0 q` found with their end,
   one split anywhere found once, `CSI > 1 q`, `CSI > 0 c` (DA2), `CSI ? u` and `>0q` without
   `ESC [` not found, an OSC 7501 query right after an XTVERSION query both found in order
-- [ ] A test in `src/server/terminal.rs` that a redraw inside `CSI ? 2026 h ... l` fed in two parts
+- [x] A test in `src/server/terminal.rs` that a redraw inside `CSI ? 2026 h ... l` fed in two parts
   changes no row until its end, so the emulator holds what Claude Code now marks
 - [ ] CLAUDE.md (program_status line), CHANGELOG.md (Fixed, under Unreleased), ROADMAP.md
   (Planned soon: panes say their terminal is saaio, not the tmux the server started in)
