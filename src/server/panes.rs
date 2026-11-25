@@ -175,6 +175,7 @@ impl Server {
         pane.adapter = adapter;
         pane.opened_at = Some(Instant::now());
         pane.line_at = None;
+        pane.status = None;
         Ok(())
     }
 
@@ -394,7 +395,7 @@ impl Server {
 }
 
 /// Whose wait a pane's session is.
-fn waiter_of(key: &PaneKey) -> Waiter {
+pub(super) fn waiter_of(key: &PaneKey) -> Waiter {
     match key {
         PaneKey::Master => Waiter::Master,
         PaneKey::Flow(id) => Waiter::Flow(*id),

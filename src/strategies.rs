@@ -11,6 +11,7 @@ use crate::binaries::Binary;
 use crate::event::{Choice, Event, EventKind, Mode, Question, ServiceStatus};
 use crate::fold;
 use crate::id::{FlowId, SessionId};
+use crate::program_status::{Need, Report, Status};
 use crate::proto::{
     Cell, ClientMsg, Color, Flags, Frame, Modes, Mouse, PaneInfo, PaneKey, PaneStatus, Peer, Role,
     ServerMsg, Size,
@@ -42,6 +43,31 @@ pub fn text() -> impl Strategy<Value = String> {
 
 fn texts() -> impl Strategy<Value = Option<String>> {
     prop::option::of(text())
+}
+
+/// A status report a program may send: a need only when blocked, a message without control
+/// characters.
+pub fn report() -> impl Strategy<Value = Report> {
+    let status = prop::sample::select(vec![
+        Status::Idle,
+        Status::Working,
+        Status::Blocked,
+        Status::Done,
+        Status::Error,
+    ]);
+    let need = prop::option::of(prop::sample::select(vec![
+        Need::Permission,
+        Need::Question,
+        Need::Auth,
+    ]));
+    let message = prop::option::of(
+        text().prop_map(|text| text.chars().filter(|char| !char.is_control()).collect()),
+    );
+    (status, need, message).prop_map(|(status, need, message)| Report {
+        status,
+        need: need.filter(|_| status == Status::Blocked),
+        message,
+    })
 }
 
 /// A valid phase name.

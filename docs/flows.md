@@ -419,7 +419,13 @@ With `adapter = "claude-code"`, saaio passes its hooks with `--settings`:
 | a permission prompt | `waiting permission: Bash(rm -rf build)` |
 | a tool finishing | `working`. A file the main agent changed with Edit, Write, MultiEdit or NotebookEdit, which can take the flow [back to implement](#going-back-to-implement). Task counts and blocks from a plan-progress tool (`mcp__plan-progress__report`), when the worker has one. A merge request printed by `gh pr create` or `glab mr create`, when it belongs to a remote of the worktree (origin, or a fork's upstream). |
 | the end of a turn | `waiting <the question>` when the last line asks one, else `idle <the last sentence>`, even while a background task runs. The closing message, up to 4000 characters, becomes the flow's `answer`. |
+| Esc during a turn | `idle interrupted` |
 | `/exit` | `ended` |
+
+Claude Code runs no hook on Esc. saaio answers its terminal's status query, so Claude Code 2.1.295
+and later report in their pane's output where they stand (OSC 7501); a report going from working
+to idle while a turn runs is an Esc. Only that report is used, and the hooks stay the record: a
+background task Claude Code reports as working after its turn's end changes nothing.
 
 ### Codex
 

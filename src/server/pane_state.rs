@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use super::{ConnId, Server};
 use crate::adapter::Adapter;
+use crate::program_status::Report;
 use crate::proto::PaneKey;
 
 /// What the server keeps about one pane; kept after it closes, so a reopened pane starts from it.
@@ -24,6 +25,9 @@ pub(super) struct PaneState {
     /// The last question dialog (when its Waiting event was logged) the server pressed Esc into;
     /// kept, so no failed read of a log forgets it.
     pub(super) dismissed: Option<u64>,
+    /// The program's last status report (OSC 7501); None until it sends one, after a `clear`
+    /// and in a pane reopened since.
+    pub(super) status: Option<Report>,
 }
 
 static UNTOUCHED: PaneState = PaneState {
@@ -34,6 +38,7 @@ static UNTOUCHED: PaneState = PaneState {
     opened_at: None,
     line_at: None,
     dismissed: None,
+    status: None,
 };
 
 impl Server {

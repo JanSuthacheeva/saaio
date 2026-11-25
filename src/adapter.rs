@@ -163,6 +163,15 @@ impl Adapter {
         }
     }
 
+    /// True when the harness runs a hook on an interrupt (Codex's Interrupt); false when only its
+    /// status report says so (Claude Code).
+    pub fn hooks_interrupt(self) -> bool {
+        match self {
+            Adapter::ClaudeCode => false,
+            Adapter::Codex => true,
+        }
+    }
+
     /// The master's command line, `argv` being its agent's: right after the program its hooks,
     /// which in the master's pane keep where its turn stands (Claude Code's also arm the
     /// `saaio wait --master` waiter; Codex's record its session and hand news over at Stop) and

@@ -26,6 +26,10 @@ All notable changes to saaio are listed here. The format follows
 
 ### Fixed
 
+- Esc in a Claude Code worker or master ends its turn in saaio too: the spinner stops, the flow
+  shows `idle interrupted`, lines queued with `saaio send --type` are typed and `waits turn`
+  clears. saaio answers Claude Code's status query and reads its reports (OSC 7501), which
+  Claude Code 2.1.295 and later send ([flows.md](docs/flows.md#claude-code)).
 - A flow whose log a crash cut short in the middle of a line keeps its next event: saaio starts
   it on a line of its own instead of gluing it onto the broken one, which lost both. A cut inside
   a non-ASCII character no longer makes the flow disappear from saaio.

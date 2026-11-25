@@ -312,8 +312,8 @@ See `.claude/plans/plan-flow-master-indicator.md`. Decisions:
   no phase, so phase_colors does not tint it), lit a moment on a change; the rail's 0 the same.
   Rejected: folding the master as a pseudo-flow (it would show in the Board, `--json` and status)
   and keeping "seen" in the server.
-- Claude Code runs no hook on an Esc interrupt, so an interrupted Claude master keeps its spinner
-  until its next prompt, as a worker does; Codex reports the interrupt as idle.
+- Claude Code runs no hook on an Esc interrupt; its OSC 7501 status report (idle right after
+  working while `master.busy` says turn) sets `master.turn` idle, as Codex's Interrupt hook does.
 
 ## Typing into a worker (built 2026-10-17)
 
@@ -347,8 +347,10 @@ the pane (payloads in `src/adapter/fixtures/*/pre_compact.json`, `post_compact.j
 - Both run `/compact` from a bracketed paste and `\r`.
 - PreCompact begins a turn and PostCompact leaves the session idle (`Turn::Idle`, as an Esc in
   Codex). Codex runs no Stop after a compaction, so its hook hands no news over there.
-- Claude Code runs no hook on an Esc, so an interrupted Claude Code worker takes typed lines again
-  only after its next turn ends. Codex's saaio hook trust is passed on each launch and resume.
+- Claude Code runs no hook on an Esc. The server reads its OSC 7501 status report instead
+  (`server/program_status.rs`): idle right after working or blocked, while the busy file says
+  turn, appends `Idle { note: "interrupted" }`, the event Codex's Interrupt hook writes, and marks
+  the session idle, so typed lines follow. Codex's saaio hook trust is passed on each launch and resume.
 - A Codex pane that reaches no first turn in 30 seconds is shown as waiting; the user can answer
   its dialog in the pane. After the first prompt, its hooks report the session and return the flow
   to working.
@@ -366,7 +368,7 @@ ancestors and sleeps 170 s (past the 150 s saaio used before):
 - Claude Code waits quietly: the Bash call stays pending and runs once the hook exits.
 - An Esc in Claude Code while the hook waits interrupts the call and kills the hook, and no hook
   says so, so nothing follows the flow's `turn-waiting`. The next prompt's `prompted` event clears
-  it.
+  it, or the interrupted Idle the server appends from the pane's status report (2026-11-25).
 - Codex does not look patient. Its shell calls are code-mode `exec` scripts, which yield after
   about 30 s with "Script running with cell ID n" and no output. The model then polled with
   `wait`, issued the same command twice more (each a new hook waiting beside the first) and, after

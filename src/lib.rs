@@ -42,6 +42,7 @@ mod layering;
 mod pause;
 mod private;
 mod processes;
+mod program_status;
 mod proto;
 mod refusal;
 mod registry;

@@ -16,6 +16,7 @@ mod pane_input;
 mod pane_state;
 mod panes;
 mod pause_watch;
+mod program_status;
 mod startup;
 mod timing;
 mod typing;
@@ -319,10 +320,13 @@ impl Server {
             Event::Forge(answer) => self.forge_answer(answer),
             Event::Paused(finished) => self.pause_finished(finished),
             Event::Host(HostEvent::Output(key, bytes)) => {
-                let copied = self.host.feed(&key, &bytes);
+                let fed = self.host.feed(&key, &bytes);
+                for status in fed.statuses {
+                    self.program_status(&key, status);
+                }
                 if key == self.focus {
                     self.dirty = true;
-                    if let Some(text) = copied {
+                    if let Some(text) = fed.copied {
                         self.send_clipboard(text);
                     }
                 }
