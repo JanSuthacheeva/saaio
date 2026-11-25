@@ -171,7 +171,7 @@ would be a longer interval by another name.
   `VERSION_ANSWER` in `src/program_status.rs` and answer it in `Terminal::feed`;
   `fuzzing::program_status` accepts `q` as the end of a `Version` (moved here from the next task,
   since its property test would fail on a random `ESC [ > q` without it)
-- [ ] Scanner tests in `src/program_status.rs`: `CSI > q` and `CSI > 0 q` found with their end,
+- [x] Scanner tests in `src/program_status.rs`: `CSI > q` and `CSI > 0 q` found with their end,
   one split anywhere found once, `CSI > 1 q`, `CSI > 0 c` (DA2), `CSI ? u` and `>0q` without
   `ESC [` not found, an OSC 7501 query right after an XTVERSION query both found in order
 - [ ] A test in `src/server/terminal.rs` that a redraw inside `CSI ? 2026 h ... l` fed in two parts

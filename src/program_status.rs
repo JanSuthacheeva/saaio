@@ -395,6 +395,84 @@ mod tests {
     }
 
     #[test]
+    fn finds_an_xtversion_query_with_or_without_its_zero() {
+        let version = |end| Found {
+            end,
+            sequence: Sequence::Version,
+        };
+
+        assert_eq!(scan(b"a\x1b[>qb"), vec![version(5)]);
+        assert_eq!(scan(b"\x1b[>0q\x1b[c"), vec![version(5)]);
+    }
+
+    #[test]
+    fn finds_an_xtversion_query_split_anywhere_across_reads() {
+        let bytes = b"x\x1b[>0qy";
+        for split in 0..=bytes.len() {
+            let mut scanner = Scanner::default();
+            let (first, second) = bytes.split_at(split);
+
+            let mut found = scanner.scan(first);
+            found.extend(scanner.scan(second).into_iter().map(|mut found| {
+                found.end += split;
+                found
+            }));
+
+            assert_eq!(
+                found,
+                vec![Found {
+                    end: 6,
+                    sequence: Sequence::Version
+                }],
+                "split at {split}"
+            );
+        }
+    }
+
+    #[test]
+    fn ignores_other_csi_sequences_and_xtversion_without_its_introducer() {
+        assert_eq!(scan(b"\x1b[>1q"), vec![]);
+        assert_eq!(scan(b"\x1b[>00q"), vec![]);
+        assert_eq!(scan(b"\x1b[>0c"), vec![], "DA2");
+        assert_eq!(scan(b"\x1b[?u"), vec![]);
+        assert_eq!(scan(b"\x1b[q"), vec![]);
+        assert_eq!(scan(b">0q"), vec![]);
+    }
+
+    #[test]
+    fn finds_a_status_query_right_after_an_xtversion_query() {
+        assert_eq!(
+            scan(b"\x1b[>0q\x1b]7501;?\x1b\\"),
+            vec![
+                Found {
+                    end: 5,
+                    sequence: Sequence::Version
+                },
+                Found {
+                    end: 15,
+                    sequence: Sequence::Query
+                },
+            ]
+        );
+        assert_eq!(
+            scan(b"\x1b[>\x1b[>0q"),
+            vec![Found {
+                end: 8,
+                sequence: Sequence::Version
+            }],
+            "an ESC in the CSI starts the next sequence"
+        );
+    }
+
+    #[test]
+    fn the_version_answer_names_saaio_and_its_version() {
+        assert_eq!(
+            std::str::from_utf8(VERSION_ANSWER).unwrap(),
+            format!("\x1bP>|saaio {}\x1b\\", env!("CARGO_PKG_VERSION"))
+        );
+    }
+
+    #[test]
     fn the_query_answer_says_every_state_and_kind() {
         let answer = std::str::from_utf8(QUERY_ANSWER).unwrap();
 
