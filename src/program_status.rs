@@ -515,7 +515,39 @@ mod tests {
             )
         }
 
+        /// The statuses a recorded pane output reports, scanned in pieces cut at `cuts`.
+        fn recorded(name: &str, cuts: &[prop::sample::Index]) -> Vec<Status> {
+            let path = format!(
+                "{}/src/program_status/fixtures/{name}.raw",
+                env!("CARGO_MANIFEST_DIR")
+            );
+            let bytes = std::fs::read(path).unwrap();
+            let mut at: Vec<usize> = cuts.iter().map(|cut| cut.index(bytes.len() + 1)).collect();
+            at.push(0);
+            at.push(bytes.len());
+            at.sort_unstable();
+            let mut scanner = Scanner::default();
+            at.windows(2)
+                .flat_map(|piece| scanner.scan(&bytes[piece[0]..piece[1]]))
+                .filter_map(|found| match found.sequence {
+                    Sequence::Status(Some(report)) => Some(report.status),
+                    _ => None,
+                })
+                .collect()
+        }
+
         proptest! {
+            #[test]
+            fn reads_what_codex_0_172_really_sent_cut_anywhere(
+                cuts in prop::collection::vec(any::<prop::sample::Index>(), 0..8),
+            ) {
+                use Status::{Done, Error, Idle, Working};
+                prop_assert_eq!(recorded("codex-0.172-turn-failed", &cuts), [Idle, Working, Error]);
+                prop_assert_eq!(recorded("codex-0.172-turn-done", &cuts), [Idle, Working, Done]);
+                prop_assert_eq!(recorded("codex-0.172-interrupted", &cuts), [Idle, Working, Idle]);
+                prop_assert_eq!(recorded("codex-0.172-login", &cuts), []);
+            }
+
             #[test]
             fn finds_every_report_between_any_output(
                 parts in prop::collection::vec((filler(), strategies::report(), any::<bool>()), 0..5),

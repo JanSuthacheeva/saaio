@@ -221,8 +221,8 @@ Neither check runs; `stalled` and the hooks behave as today (always for a login 
 ## Tasks
 
 - [x] Move `last_line` from `cli/commands/hook.rs` to `src/tail.rs` (`tail::last_line`, `tail::CHUNK`) with its tests; `rollout_line` uses it
-- [ ] Add `codex::turn_error`, `at_turn_edge`, `failure` and `Adapter::turn_error` with tests over `rollout_turn_failed.jsonl`, `rollout_turn_ok.jsonl`, an earlier failed turn and a missing file
-- [ ] Add scanner tests over the four recorded `.raw` fixtures in random splits
+- [x] Add `codex::turn_error`, `at_turn_edge`, `failure` and `Adapter::turn_error` with tests over `rollout_turn_failed.jsonl`, `rollout_turn_ok.jsonl`, an earlier failed turn and a missing file
+- [x] Add scanner tests over the four recorded `.raw` fixtures in random splits
 - [ ] Add `failed_turn`, `Server::flow_now` and `Server::fail_turn` in `server/program_status.rs` (flow Blocked with the rollout's reason, busy idle, master turn idle) with table tests and a server test with a fake codex replaying `codex-0.172-turn-failed.raw`
 - [ ] Add `startup::dialog_question`, `blocked_at_start` and `Server::wait_on_dialog` with table tests and a server test with a fake codex reporting `blocked kind=auth` before any session
 - [ ] Update `docs/troubleshooting.md`, CHANGELOG (Unreleased, Fixed), HANDOVER D1 and CLAUDE.md's `server/program_status.rs`, `tail.rs` and adapter entries
