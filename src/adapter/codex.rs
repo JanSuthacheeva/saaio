@@ -240,6 +240,40 @@ pub fn approver(
     }
 }
 
+/// The error message of the rollout's newest turn when it ended on one: its last task_started or
+/// task_complete line is a task_complete with error.message. None when it ended well, is still
+/// running, or the rollout cannot be read.
+pub fn turn_error(
+    transcript: &Path,
+    last_line: impl FnOnce(&Path, &LineMatch) -> Option<String>,
+) -> Option<String> {
+    let edge = last_line(transcript, &at_turn_edge)?;
+    failure(&edge)
+}
+
+/// True for a rollout line that starts (task_started) or ends (task_complete) a turn.
+fn at_turn_edge(line: &str) -> bool {
+    (line.contains("\"task_started\"") || line.contains("\"task_complete\""))
+        && serde_json::from_str::<Value>(line).is_ok_and(|line| {
+            line["type"] == "event_msg"
+                && matches!(
+                    line["payload"]["type"].as_str(),
+                    Some("task_started" | "task_complete")
+                )
+        })
+}
+
+/// error.message of a task_complete line; None for any other line or a turn that ended well.
+fn failure(line: &str) -> Option<String> {
+    let line: Value = serde_json::from_str(line).ok()?;
+    let payload = &line["payload"];
+    if payload["type"] != "task_complete" {
+        return None;
+    }
+    let message = payload["error"]["message"].as_str()?.trim();
+    (!message.is_empty()).then(|| message.to_string())
+}
+
 /// The approvals_reviewer values that mean Codex's automatic reviewer.
 const REVIEWERS: [&str; 2] = ["auto_review", "guardian_subagent"];
 

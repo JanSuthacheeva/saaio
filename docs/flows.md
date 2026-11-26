@@ -420,12 +420,14 @@ With `adapter = "claude-code"`, saaio passes its hooks with `--settings`:
 | a tool finishing | `working`. A file the main agent changed with Edit, Write, MultiEdit or NotebookEdit, which can take the flow [back to implement](#going-back-to-implement). Task counts and blocks from a plan-progress tool (`mcp__plan-progress__report`), when the worker has one. A merge request printed by `gh pr create` or `glab mr create`, when it belongs to a remote of the worktree (origin, or a fork's upstream). |
 | the end of a turn | `waiting <the question>` when the last line asks one, else `idle <the last sentence>`, even while a background task runs. The closing message, up to 4000 characters, becomes the flow's `answer`. |
 | Esc during a turn | `idle interrupted` |
+| a turn that failed | `blocked turn failed: see its pane` |
 | `/exit` | `ended` |
 
 Claude Code runs no hook on Esc. saaio answers its terminal's status query, so Claude Code 2.1.295
 and later report in their pane's output where they stand (OSC 7501); a report going from working
-to idle while a turn runs is an Esc. Only that report is used, and the hooks stay the record: a
-background task Claude Code reports as working after its turn's end changes nothing.
+to idle while a turn runs is an Esc, and one going from working to error is a turn that failed.
+Only those reports are used, and the hooks stay the record: a background task Claude Code reports
+as working after its turn's end changes nothing.
 
 ### Codex
 
@@ -448,6 +450,13 @@ With `adapter = "codex"`, the hooks, their per-launch trust state and the worker
 | a tool finishing | `working`. A merge request, as for Claude Code. |
 | the end of a turn | as for Claude Code |
 | Esc | `idle interrupted` |
+| a turn that failed, a rate limit included | `blocked turn failed: <Codex's error>` |
+| a dialog before the first turn | `waiting`, saying what it needs (a permission, a question or a sign-in) |
+
+Codex runs no hook when a turn fails. Codex 0.172 and later report in their pane's output where
+they stand (OSC 7501), so saaio sees the turn end on an error and reads the error from the
+session's rollout file. The next prompt returns the flow to `working`. Without these reports, as
+in earlier Codex versions, a failed turn leaves the flow `working`.
 
 Codex has no Skill tool hook. A `$skill` named in a prompt starts its configured phase, and for
 later phases saaio watches for a single `SKILL.md` read. The worker instruction makes that read a
@@ -468,8 +477,10 @@ counts as yours, and server.log says why.
 
 A few more differences from Claude Code:
 
-- A running Codex worker with no first turn after 30 seconds becomes `waiting`. Answer the dialog
-  in its pane, and its first prompt returns it to `working`.
+- A running Codex worker with no first turn after 30 seconds becomes `waiting`, at once when it
+  reports a dialog. Answer the dialog in its pane, and its first prompt returns it to `working`.
+  Codex's login screen sends no report, so a worker that must log in waits only after the 30
+  seconds.
 - There is no plan-progress tool, so no task counts.
 - There is no `/exit` event: end the flow from the UI or with `saaio remove`.
 

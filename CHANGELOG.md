@@ -30,6 +30,11 @@ All notable changes to saaio are listed here. The format follows
   shows `idle interrupted`, lines queued with `saaio send --type` are typed and `waits turn`
   clears. saaio answers Claude Code's status query and reads its reports (OSC 7501), which
   Claude Code 2.1.295 and later send ([flows.md](docs/flows.md#claude-code)).
+- A Codex worker whose turn fails, on a rate limit, an unsupported model or a lost connection, is
+  `blocked` with Codex's error instead of staying `working`, and saaio types the master's news
+  into it again. A Claude Code turn that fails is blocked too. A dialog before a Codex worker's
+  first turn makes it `waiting` at once instead of after 30 seconds. Both need Codex 0.172 or
+  later, or Claude Code 2.1.295 or later ([flows.md](docs/flows.md#codex)).
 - A busy machine no longer shows a Claude Code pane drawing itself slowly from top to bottom:
   saaio tells Claude Code which terminal it is (XTVERSION), so Claude Code marks each redraw as
   one and saaio shows it only when it is whole.
