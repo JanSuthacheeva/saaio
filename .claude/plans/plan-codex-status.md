@@ -227,3 +227,34 @@ Neither check runs; `stalled` and the hooks behave as today (always for a login 
 - [x] Add `startup::dialog_question`, `blocked_at_start` and `Server::wait_on_dialog` with table tests and a server test with a fake codex reporting `blocked kind=auth` before any session
 - [x] Update `docs/troubleshooting.md`, CHANGELOG (Unreleased, Fixed), HANDOVER D1 and CLAUDE.md's `server/program_status.rs`, `tail.rs` and adapter entries
 - [x] End to end in a scratch store with real Codex 0.172: a worker with `-m saaio-no-such-model` ends blocked with Codex's message, `saaio status` shows it, busy is idle; check for the workspace sidebar; `saaio --stop`
+
+## Review
+
+Reviewed in an isolated context against this plan, CLAUDE.md and the code the diff calls.
+
+- **Fixed** - `Server::program_status`'s doc named only the interrupt and the failed turn, not
+  the dialog check the plan lists (e6ef944, comment only).
+- **Open**
+  - `failed_turn` does not check the busy file, unlike `interrupted` (which needs `Busy::Turn`).
+    flows.md says a background task Claude Code reports as working after its turn's end changes
+    nothing; if Claude Code ever reports working then error for such a task after Stop, the
+    flow is blocked with "turn failed: see its pane" though no turn runs. Not proven: no
+    recording of Claude Code sending `error` exists. Recommendation: add
+    `busy == Busy::Turn` to `failed_turn` (Codex's failed turn keeps busy at turn, since no Stop
+    runs), or record a Claude Code API error first and decide then.
+  - The rollout is read the moment the `error` report arrives. If Codex ever emits the report
+    before its `task_complete` line reaches the rollout, the reason falls back to "see its pane".
+    The end-to-end run read the message, so 0.172 writes first; nothing to do now.
+  - A Codex worker already waiting on the 30 s guess that then reports a dialog keeps the
+    guess's text (`blocked_at_start` needs state working). Cosmetic; leave it.
+- **Where to look**
+  1. `src/server/program_status.rs` `program_status` -> `failed_turn` -> `fail_turn`: when a
+     flow is blocked, and what the busy file and master.turn become.
+  2. `blocked_at_start` and `wait_on_dialog`: the flow folded from the log at the report, its
+     state working and no session.
+  3. `src/adapter/codex.rs` `turn_error`, `at_turn_edge`, `failure`: only the newest turn edge
+     counts.
+  Routine, skim: `src/tail.rs` (moved unchanged), the `.raw` and rollout fixtures, the docs.
+- **Checks** - tests, clippy and fmt passed at 1a05b83; the only fix since is a doc comment
+  (clippy and fmt rerun and clean at e6ef944). The fix was not reviewed independently (comment
+  only).
