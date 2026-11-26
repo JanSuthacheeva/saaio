@@ -225,5 +225,5 @@ Neither check runs; `stalled` and the hooks behave as today (always for a login 
 - [x] Add scanner tests over the four recorded `.raw` fixtures in random splits
 - [x] Add `failed_turn`, `Server::flow_now` and `Server::fail_turn` in `server/program_status.rs` (flow Blocked with the rollout's reason, busy idle, master turn idle) with table tests and a server test with a fake codex replaying `codex-0.172-turn-failed.raw`
 - [x] Add `startup::dialog_question`, `blocked_at_start` and `Server::wait_on_dialog` with table tests and a server test with a fake codex reporting `blocked kind=auth` before any session
-- [ ] Update `docs/troubleshooting.md`, CHANGELOG (Unreleased, Fixed), HANDOVER D1 and CLAUDE.md's `server/program_status.rs`, `tail.rs` and adapter entries
+- [x] Update `docs/troubleshooting.md`, CHANGELOG (Unreleased, Fixed), HANDOVER D1 and CLAUDE.md's `server/program_status.rs`, `tail.rs` and adapter entries
 - [ ] End to end in a scratch store with real Codex 0.172: a worker with `-m saaio-no-such-model` ends blocked with Codex's message, `saaio status` shows it, busy is idle; check for the workspace sidebar; `saaio --stop`

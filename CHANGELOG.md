@@ -30,6 +30,11 @@ All notable changes to saaio are listed here. The format follows
   shows `idle interrupted`, lines queued with `saaio send --type` are typed and `waits turn`
   clears. saaio answers Claude Code's status query and reads its reports (OSC 7501), which
   Claude Code 2.1.295 and later send ([flows.md](docs/flows.md#claude-code)).
+- A Codex worker whose turn fails, on a rate limit, an unsupported model or a lost connection, is
+  `blocked` with Codex's error instead of staying `working`, and saaio types the master's news
+  into it again. A Claude Code turn that fails is blocked too. A dialog before a Codex worker's
+  first turn makes it `waiting` at once instead of after 30 seconds. Both need Codex 0.172 or
+  later, or Claude Code 2.1.295 or later ([flows.md](docs/flows.md#codex)).
 - A flow whose log a crash cut short in the middle of a line keeps its next event: saaio starts
   it on a line of its own instead of gluing it onto the broken one, which lost both. A cut inside
   a non-ASCII character no longer makes the flow disappear from saaio.
