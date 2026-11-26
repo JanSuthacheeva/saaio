@@ -103,7 +103,7 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
             phases: None,
             kind: Some(kind_name.to_string()),
             workflow: Some(kind.phases.clone()),
-            prompt: Some(kind.prompt_for(agent)),
+            prompt: Some(kind.prompt_for(agent, true)),
             merges: kind.branch,
         },
     );

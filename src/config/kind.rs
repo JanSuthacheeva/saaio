@@ -80,8 +80,9 @@ impl Kind {
 
     /// The first prompt `agent` gets: its own, else this kind's, else "{skill} {request}"
     /// ("{request}" without a skill); {skill} as the agent's harness calls it, {request}, {id}
-    /// and {name} left for the pane.
-    pub fn prompt_for(&self, agent: &Agent) -> String {
+    /// and {name} left for the pane. Without the skill, a prompt that would start by calling it
+    /// is `fallback_prompt` instead, since Claude Code runs no turn for an unknown command.
+    pub fn prompt_for(&self, agent: &Agent, has_skill: bool) -> String {
         if let Some(prompt) = &agent.prompt {
             return prompt.clone();
         }
@@ -94,12 +95,32 @@ impl Kind {
             Some(adapter) => adapter.skill_call(skill),
             None => skill.to_string(),
         });
-        match call {
-            Some(call) => fill(template, &[("skill", &call)]),
-            None => template.to_string(),
+        let Some(call) = call else {
+            return template.to_string();
+        };
+        let prompt = fill(template, &[("skill", &call)]);
+        if has_skill || !prompt.starts_with(&call) {
+            return prompt;
         }
+        self.fallback_prompt()
+    }
+
+    /// The first prompt when the agent lacks the kind's skill: names no skill.
+    pub fn fallback_prompt(&self) -> String {
+        match self.skill.as_deref() {
+            Some("ship-feature") => FEATURE_FALLBACK,
+            Some("ship-fix") => FIX_FALLBACK,
+            _ => "{request}",
+        }
+        .to_string()
     }
 }
+
+const FEATURE_FALLBACK: &str = "Build this: plan it, implement it with tests, commit as you go, \
+    then ask before you push and open a merge request. {request}";
+
+const FIX_FALLBACK: &str = "Fix this bug: reproduce it, find its cause, fix it with a regression \
+    test, commit, then ask before you push and open a merge request. {request}";
 
 /// A kind's name, as a phase's: lowercase letters, digits and '-'.
 pub fn check_name(name: &str) -> Result<(), String> {
@@ -166,11 +187,14 @@ mod tests {
 
         let claude = agent(Some(Adapter::ClaudeCode), None);
         let codex = agent(Some(Adapter::Codex), None);
-        assert_eq!(fix.prompt_for(&claude), "/ship-fix {request}");
-        assert_eq!(fix.prompt_for(&codex), "$ship-fix {request}");
-        assert_eq!(fix.prompt_for(&agent(None, None)), "ship-fix {request}");
+        assert_eq!(fix.prompt_for(&claude, true), "/ship-fix {request}");
+        assert_eq!(fix.prompt_for(&codex, true), "$ship-fix {request}");
         assert_eq!(
-            Kind::feature().prompt_for(&claude),
+            fix.prompt_for(&agent(None, None), true),
+            "ship-fix {request}"
+        );
+        assert_eq!(
+            Kind::feature().prompt_for(&claude, true),
             "/ship-feature {request}"
         );
     }
@@ -181,9 +205,12 @@ mod tests {
         fix.prompt = Some("{skill} now: {request} ({name})".to_string());
         let claude = agent(Some(Adapter::ClaudeCode), None);
 
-        assert_eq!(fix.prompt_for(&claude), "/ship-fix now: {request} ({name})");
+        assert_eq!(
+            fix.prompt_for(&claude, true),
+            "/ship-fix now: {request} ({name})"
+        );
         let own = agent(Some(Adapter::ClaudeCode), Some("do {request}"));
-        assert_eq!(fix.prompt_for(&own), "do {request}");
+        assert_eq!(fix.prompt_for(&own, true), "do {request}");
     }
 
     #[test]
@@ -200,11 +227,47 @@ mod tests {
         let claude = agent(Some(Adapter::ClaudeCode), None);
 
         assert_eq!(
-            research.prompt_for(&claude),
+            research.prompt_for(&claude, true),
             "Research this and answer here. Change no code and commit nothing: {request}"
         );
         let mut bare = research.clone();
         bare.prompt = None;
-        assert_eq!(bare.prompt_for(&claude), "{request}");
+        assert_eq!(bare.prompt_for(&claude, true), "{request}");
+    }
+
+    #[test]
+    fn falls_back_without_the_skill() {
+        let claude = agent(Some(Adapter::ClaudeCode), None);
+
+        assert_eq!(
+            Kind::feature().prompt_for(&claude, false),
+            "Build this: plan it, implement it with tests, commit as you go, then ask before you \
+             push and open a merge request. {request}"
+        );
+        let fix = &Kind::builtins()["fix"];
+        assert_eq!(
+            fix.prompt_for(&claude, false),
+            "Fix this bug: reproduce it, find its cause, fix it with a regression test, commit, \
+             then ask before you push and open a merge request. {request}"
+        );
+        let mut ghost = fix.clone();
+        ghost.skill = Some("no-such-skill".to_string());
+        assert_eq!(ghost.prompt_for(&claude, false), "{request}");
+        ghost.prompt = Some("{skill} now: {request}".to_string());
+        assert_eq!(ghost.prompt_for(&claude, false), "{request}");
+    }
+
+    #[test]
+    fn a_prompt_that_does_not_start_with_the_skill_is_sent_as_written() {
+        let mut fix = Kind::builtins()["fix"].clone();
+        fix.prompt = Some("Use {skill} for {request}".to_string());
+        let claude = agent(Some(Adapter::ClaudeCode), None);
+
+        assert_eq!(
+            fix.prompt_for(&claude, false),
+            "Use /ship-fix for {request}"
+        );
+        let own = agent(Some(Adapter::ClaudeCode), Some("/ship-fix {request}"));
+        assert_eq!(fix.prompt_for(&own, false), "/ship-fix {request}");
     }
 }

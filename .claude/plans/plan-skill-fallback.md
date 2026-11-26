@@ -96,7 +96,7 @@ not, records a built-in prompt that names no skill.
 
   ```rust
   /// The first prompt when the agent lacks the kind's skill: names no skill.
-  pub fn fallback_prompt(&self) -> String;   // feature, fix: their own; any other: "{request}"
+  pub fn fallback_prompt(&self) -> String;   // by skill: ship-feature, ship-fix: their own; any other: "{request}"
   /// prompt_for as today when `has_skill`; else, when the prompt would start with the skill's
   /// call, fallback_prompt().
   pub fn prompt_for(&self, agent: &Agent, has_skill: bool) -> String;
@@ -159,7 +159,7 @@ not, records a built-in prompt that names no skill.
 
 ## Tasks
 
-- [ ] Add `falls_back_without_the_skill` in `src/config/kind.rs` tests (fails today: does not
+- [x] Add `falls_back_without_the_skill` in `src/config/kind.rs` tests (fails today: does not
   compile, since `prompt_for` takes no `has_skill`; with the argument added and ignored, fails
   with `left: "/ship-feature {request}"`). Then add `Kind::fallback_prompt` and the
   `has_skill` argument, and update the callers to pass `true`.
