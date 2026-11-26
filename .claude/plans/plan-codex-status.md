@@ -105,7 +105,12 @@ fn flow_now(&self, key: &PaneKey) -> Option<FlowView>;
 
 /// True when `after` ends a running turn on an error: error right after working or blocked, in
 /// a session with an adapter (any harness; a plain session never).
-fn failed_turn(before: Option<&Report>, after: Option<&Report>, adapter: Option<Adapter>) -> bool;
+fn failed_turn(
+    before: Option<&Report>,
+    after: Option<&Report>,
+    adapter: Option<Adapter>,
+    busy: Busy,
+) -> bool;   // also needs busy == Busy::Turn (decided in review)
 
 /// True when `after` is a dialog a Codex worker shows before its first turn: blocked, not blocked
 /// before, its flow working with no session yet.
@@ -227,6 +232,7 @@ Neither check runs; `stalled` and the hooks behave as today (always for a login 
 - [x] Add `startup::dialog_question`, `blocked_at_start` and `Server::wait_on_dialog` with table tests and a server test with a fake codex reporting `blocked kind=auth` before any session
 - [x] Update `docs/troubleshooting.md`, CHANGELOG (Unreleased, Fixed), HANDOVER D1 and CLAUDE.md's `server/program_status.rs`, `tail.rs` and adapter entries
 - [x] End to end in a scratch store with real Codex 0.172: a worker with `-m saaio-no-such-model` ends blocked with Codex's message, `saaio status` shows it, busy is idle; check for the workspace sidebar; `saaio --stop`
+- [ ] Add `busy == Busy::Turn` to `failed_turn` (busy read only for an error report), with table tests: an error while busy is idle or typed fails no turn
 
 ## Review
 
@@ -247,6 +253,8 @@ Reviewed in an isolated context against this plan, CLAUDE.md and the code the di
     The end-to-end run read the message, so 0.172 writes first; nothing to do now.
   - A Codex worker already waiting on the 30 s guess that then reports a dialog keeps the
     guess's text (`blocked_at_start` needs state working). Cosmetic; leave it.
+- **Decided** (the user, after the review): add the busy guard to `failed_turn`; leave the
+  rollout timing and the guess's text as they are.
 - **Where to look**
   1. `src/server/program_status.rs` `program_status` -> `failed_turn` -> `fail_turn`: when a
      flow is blocked, and what the busy file and master.turn become.
