@@ -17,6 +17,7 @@ fn start_makes_a_worktree_runs_setup_and_leaves_the_worker_to_saaio_ui() {
         "#!/bin/sh\necho \"slot $SAAIO_SLOT\" > setup-ran\n",
     );
     lab.trust();
+    lab.install_skill("ship-feature");
 
     let output = lab.start(&["SHOP-217 add CSV export"]);
 

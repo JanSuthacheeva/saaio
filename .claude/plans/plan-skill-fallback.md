@@ -143,6 +143,9 @@ not, records a built-in prompt that names no skill.
 - The check runs at `saaio start` on the machine that starts the flow. The server runs the pane
   with the same home, so the answer holds for the pane.
 - The output key is `skill`, printed only when the skill was missing.
+- Built: tasks 2 and 3 share one commit, since `skills.rs` is dead code (a lint error) until
+  `saaio start` calls it. The CLI tests' `Lab::install_skill` puts a skill in their Claude home, so
+  the tests of the ordinary start keep calling the skill.
 - The regression test for `prompt_for` goes in `src/config/kind.rs`'s tests. The lookup's tests
   go in `skills.rs` with a temp folder. A CLI test in `tests/cli/` checks the start output with
   `CLAUDE_CONFIG_DIR` pointing at an empty folder.
@@ -163,9 +166,9 @@ not, records a built-in prompt that names no skill.
   compile, since `prompt_for` takes no `has_skill`; with the argument added and ignored, fails
   with `left: "/ship-feature {request}"`). Then add `Kind::fallback_prompt` and the
   `has_skill` argument, and update the callers to pass `true`.
-- [ ] Add `src/skills.rs` (`ClaudeSkills`) with tests for the home, repo, commands and plugin
+- [x] Add `src/skills.rs` (`ClaudeSkills`) with tests for the home, repo, commands and plugin
   cache places and a missing name, and register it in `lib.rs` and CLAUDE.md's architecture list.
-- [ ] Wire it into `saaio start` and its output (`skill:` and the help line), with a CLI test in
+- [x] Wire it into `saaio start` and its output (`skill:` and the help line), with a CLI test in
   `tests/cli/` that starts a flow under an empty `CLAUDE_CONFIG_DIR` and sees the fallback prompt
   in the log and `skill:` in the output.
 - [ ] Correct docs/configuration.md "Without matching skills", and add the CHANGELOG line.

@@ -20,6 +20,7 @@ use crate::launch::{name, worktree};
 use crate::proto::Role;
 use crate::registry::Registry;
 use crate::repo_config::{self, RepoConfig};
+use crate::skills::ClaudeSkills;
 use crate::slots::{self, Claim, Slots};
 use crate::store::Store;
 use crate::trust::Trust;
@@ -94,6 +95,11 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
     let from = pick_base(&repo, args.base.as_deref())?;
     let (flows, _) = views(&store, now);
     let name = name::choose(args.name.as_deref(), request, &live_names(&flows));
+    let missing_skill = missing_skill(
+        kind,
+        agent,
+        &ClaudeSkills::new(ctx.env.claude_home(), repo.clone()),
+    );
     let first = Event::new(
         now,
         EventKind::Started {
@@ -103,7 +109,7 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
             phases: None,
             kind: Some(kind_name.to_string()),
             workflow: Some(kind.phases.clone()),
-            prompt: Some(kind.prompt_for(agent, true)),
+            prompt: Some(kind.prompt_for(agent, missing_skill.is_none())),
             merges: kind.branch,
         },
     );
@@ -136,7 +142,13 @@ pub fn run(args: &Args, ctx: &Context) -> Result<Document, Failure> {
 
     let events = store.events(id)?;
     let flow = fold::fold(id, &events, None, now).expect("a started flow folds");
-    Ok(start::started(&flow, &space, &setup, opening(&socket)))
+    Ok(start::started(
+        &flow,
+        &space,
+        &setup,
+        missing_skill,
+        opening(&socket),
+    ))
 }
 
 /// Fails before anything is created when the repo has hooks, or the agent is Codex, and the person
@@ -155,6 +167,13 @@ fn refuse_untrusted(
         return Ok(());
     }
     Err(output::trust::untrusted(repo, &hooks, codex))
+}
+
+/// The kind's skill when the agent is Claude Code and lacks it; Claude Code answers an unknown
+/// command without a turn, while Codex passes an unknown skill to the model as text.
+fn missing_skill<'a>(kind: &'a Kind, agent: &Agent, skills: &ClaudeSkills) -> Option<&'a str> {
+    let skill = kind.skill.as_deref()?;
+    (agent.adapter == Some(Adapter::ClaudeCode) && !skills.has(skill)).then_some(skill)
 }
 
 /// The names unfinished flows hold; a new flow takes another.
