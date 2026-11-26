@@ -24,7 +24,7 @@ const FAILED: &str = "turn failed: see its pane";
 
 impl Server {
     /// Keeps the pane's last report and acts on the change from the one before: an interrupt, a
-    /// failed turn.
+    /// failed turn, a dialog before a Codex worker's first turn.
     pub(super) fn program_status(&mut self, key: &PaneKey, status: Option<Report>) {
         let before = std::mem::replace(&mut self.pane_mut(key).status, status);
         let after = self.pane(key).status.clone();
