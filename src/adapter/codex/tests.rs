@@ -439,6 +439,67 @@ fn trusts_a_folder_without_writing_config() {
     );
 }
 
+fn rollout_named(name: &str) -> String {
+    let path = format!(
+        "{}/src/adapter/fixtures/codex/{name}.jsonl",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    std::fs::read_to_string(path).unwrap()
+}
+
+#[test]
+fn a_failed_turn_reads_its_error_from_the_rollout() {
+    let file = Path::new("/sessions/rollout.jsonl");
+    let mut read_from = None;
+
+    let error = turn_error(file, |file, matches| {
+        read_from = Some(file.to_path_buf());
+        last_line_of(rollout_named("rollout_turn_failed"))(file, matches)
+    });
+
+    assert_eq!(
+        error.as_deref(),
+        Some(
+            "The 'saaio-no-such-model' model is not supported when using Codex with a ChatGPT account."
+        )
+    );
+    assert_eq!(read_from.as_deref(), Some(file));
+}
+
+#[test]
+fn a_turn_that_ended_well_has_no_error() {
+    let ok = rollout_named("rollout_turn_ok");
+
+    assert_eq!(turn_error(Path::new("r"), last_line_of(ok)), None);
+}
+
+#[test]
+fn only_the_newest_turn_counts() {
+    let started = rollout_named("rollout_turn_failed")
+        .lines()
+        .next()
+        .unwrap()
+        .to_string();
+    let failed_then_started = format!("{}{started}\n", rollout_named("rollout_turn_failed"));
+    let unrelated = r#"{"type":"response_item","payload":{"type":"message","content":"ok"}}"#;
+    let failed_then_more = format!("{}{unrelated}\n", rollout_named("rollout_turn_failed"));
+
+    assert_eq!(
+        turn_error(Path::new("r"), last_line_of(failed_then_started)),
+        None
+    );
+    assert!(turn_error(Path::new("r"), last_line_of(failed_then_more)).is_some());
+}
+
+#[test]
+fn an_unreadable_rollout_has_no_error() {
+    assert_eq!(turn_error(Path::new("r"), |_, _| None), None);
+    assert_eq!(
+        turn_error(Path::new("r"), last_line_of("not json\n".to_string())),
+        None
+    );
+}
+
 mod properties {
     use proptest::prelude::*;
 

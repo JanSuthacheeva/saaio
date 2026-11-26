@@ -255,6 +255,20 @@ impl Adapter {
         }
     }
 
+    /// What the turn that just failed failed on, read from the session's transcript; None when
+    /// the harness writes no reason there or the turn's end is not written yet. `last_line` reads
+    /// the last line that matches in `transcript`; it is called only for Codex.
+    pub fn turn_error(
+        self,
+        transcript: &Path,
+        last_line: impl FnOnce(&Path, &LineMatch) -> Option<String>,
+    ) -> Option<String> {
+        match self {
+            Adapter::ClaudeCode => None,
+            Adapter::Codex => codex::turn_error(transcript, last_line),
+        }
+    }
+
     /// The flow events one hook payload means; empty for one that means nothing. A permission
     /// request the reviewer answers waits for no one.
     pub fn translate(
