@@ -103,8 +103,21 @@ If your agent has no skills that match the phases, saaio still follows the flow.
 merge request still finishes the flow. Only the steps stay `○───○───○───○`, and the sidebar shows
 the state where the phase label would be: `starting` while working, `idle`, `waiting`.
 
-A first prompt that names a skill you have not installed is harmless, too. Claude Code passes the
-line to the model as a plain message, so the worker gets the request and works without the skill.
+A first prompt that calls a skill you have not installed is not. Claude Code answers a slash
+command it does not know with `Unknown command` and runs no turn, so the worker would wait forever.
+So `saaio start` first looks for the kind's skill where Claude Code finds skills: `~/.claude` (or
+`$CLAUDE_CONFIG_DIR`), the repository's `.claude` and installed plugins. When it is missing, the
+worker gets a built-in prompt that calls no skill, and `saaio start` says so:
+
+```text
+skill: "ship-feature not found, the worker got saaio's built-in prompt"
+```
+
+The feature and fix kinds' built-in prompts ask the worker to plan or reproduce, build with tests,
+commit, and ask before it pushes and opens a merge request; any other kind sends the request alone.
+To word it yourself, set the kind's `prompt` without `{skill}` at its start. A prompt that starts
+with something else is sent as written. Codex is not affected: it passes an unknown `$skill` to
+the model as text.
 
 ## [worker]
 

@@ -171,7 +171,7 @@ not, records a built-in prompt that names no skill.
 - [x] Wire it into `saaio start` and its output (`skill:` and the help line), with a CLI test in
   `tests/cli/` that starts a flow under an empty `CLAUDE_CONFIG_DIR` and sees the fallback prompt
   in the log and `skill:` in the output.
-- [ ] Correct docs/configuration.md "Without matching skills", and add the CHANGELOG line.
+- [x] Correct docs/configuration.md "Without matching skills", and add the CHANGELOG line.
 - [ ] End-to-end: run the reproduction again. Expected: `saaio start` prints `skill:
   no-such-skill-xyz not found ...`, the pane gets the built-in prompt and answers, the flow's
   log shows `working` then `idle` from the hooks, and `saaio status` shows `ghost2` `idle`, not

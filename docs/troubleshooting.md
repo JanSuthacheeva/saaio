@@ -68,6 +68,7 @@ in what the harness reports:
 | --- | --- | --- |
 | `pane: when saaio opens` | the flow is recorded, the UI is not running | run `saaio` in a terminal. It opens the worker within half a second. |
 | the row shows only whether it runs | the agent has no `adapter` | set `adapter = "claude-code"` or `"codex"` on a custom agent that runs one of them ([configuration.md](configuration.md#agents)) |
+| `saaio start` says `skill: ... not found` | Claude Code has no skill of the kind's name, so the worker got saaio's built-in prompt | install the skill, or set the kind's `prompt` ([configuration.md](configuration.md#without-matching-skills)) |
 | a Codex flow is waiting with "no turn began after launch" | its pane stopped at a Codex dialog before its first turn | jump to the worker and answer the dialog |
 | steps stay `○───○───○───○`, the sidebar shows the state instead of a phase | no skill the worker ran matches a phase. The flow still works. | list your skills under the kind's `phases` ([configuration.md](configuration.md#use-your-own-workflow)) |
 | a Claude Code worker keeps its spinner after Esc | Claude Code older than 2.1.295 sends no status reports, and runs no hook on Esc | update Claude Code. Until then the state corrects at the worker's next prompt. |

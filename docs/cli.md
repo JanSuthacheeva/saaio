@@ -173,6 +173,7 @@ help[2]: Run `saaio` in a terminal to open the worker,Run `saaio` for all flows
 | --- | --- |
 | `setup` | `ran`, `none` (no executable `.saaio/setup`), `failed: <its last line> (full output: <log>)`. A failed setup marks the flow blocked and stays in `saaio status` until a run passes. The worker still opens and hears of it ([repository.md](repository.md#when-setup-or-teardown-fails)). |
 | `pane` | `opening` while the UI runs, else `when saaio opens` |
+| `skill` | only when the agent is Claude Code and the kind's skill is not installed: `<skill> not found, the worker got saaio's built-in prompt`, with a `help` line on how to change that ([configuration.md](configuration.md#without-matching-skills)) |
 | `branch` | left out for a research flow, which says it has none in `help` |
 
 | Option | Default | Effect |

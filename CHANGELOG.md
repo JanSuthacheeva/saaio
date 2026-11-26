@@ -26,6 +26,9 @@ All notable changes to saaio are listed here. The format follows
 
 ### Fixed
 
+- A Claude Code worker whose kind calls a skill you have not installed, such as `ship-feature`,
+  no longer waits forever at `working`: `saaio start` sends a built-in prompt that calls no skill
+  and says so ([configuration.md](docs/configuration.md#without-matching-skills)).
 - Esc in a Claude Code worker or master ends its turn in saaio too: the spinner stops, the flow
   shows `idle interrupted`, lines queued with `saaio send --type` are typed and `waits turn`
   clears. saaio answers Claude Code's status query and reads its reports (OSC 7501), which
