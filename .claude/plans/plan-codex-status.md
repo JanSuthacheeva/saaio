@@ -266,3 +266,29 @@ Reviewed in an isolated context against this plan, CLAUDE.md and the code the di
 - **Checks** - tests, clippy and fmt passed at 1a05b83; the only fix since is a doc comment
   (clippy and fmt rerun and clean at e6ef944). The fix was not reviewed independently (comment
   only).
+
+### Second round (0920e02..f6108dc: the busy guard)
+
+Reviewed in an isolated context: 8236b75 (plan) and f6108dc (`failed_turn` needs `Busy::Turn`).
+
+- The guard holds for every way a turn begins: UserPromptSubmit and PreCompact mark busy turn
+  for both harnesses (`hook.rs`), a Claude Code rewake marks it in `saaio wait`, and a line the
+  server types goes typed, then turn at its prompt hook. A Codex failed turn runs no Stop, so
+  busy is still turn when the `error` report arrives. The table test fails without the guard.
+- **Fixed**
+  - No test showed `program_status` passes the session's real busy mark: replacing the read
+    with `Busy::Turn` kept every test green. Added a server test, an `error` replay with busy
+    idle blocks nothing; it fails with the read replaced (72bb9f2, test only).
+  - HANDOVER D1 described the failed-turn check without the guard (25cff79, docs only).
+- **Open**
+  - If Claude Code ever runs Stop before it reports `error` on an API failure, busy is idle by
+    then and the flow stays idle instead of blocked. Not proven: still no recording of Claude
+    Code sending `error`. Recommendation: leave it; record a Claude Code API error when one
+    comes along and decide then (same as the first round's open point, now the other side).
+- **Where to look** - `src/server/program_status.rs` `program_status`: the busy file is read
+  only for an `error` report, then `failed_turn`. Routine, skim: the table tests' added
+  `Busy::Turn` arguments.
+- **Checks** - tests (1056 lib + integration), clippy and fmt passed at 72bb9f2, the last code
+  change; 25cff79 is docs only. No production code changed in this round, so no fix review was
+  needed. `/security-review` did not run: the round's delta is one boolean guard with no input,
+  file or shell surface, and the command would diff the whole branch the first round covered.
