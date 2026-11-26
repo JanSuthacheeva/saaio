@@ -35,6 +35,9 @@ All notable changes to saaio are listed here. The format follows
   into it again. A Claude Code turn that fails is blocked too. A dialog before a Codex worker's
   first turn makes it `waiting` at once instead of after 30 seconds. Both need Codex 0.172 or
   later, or Claude Code 2.1.295 or later ([flows.md](docs/flows.md#codex)).
+- A busy machine no longer shows a Claude Code pane drawing itself slowly from top to bottom:
+  saaio tells Claude Code which terminal it is (XTVERSION), so Claude Code marks each redraw as
+  one and saaio shows it only when it is whole.
 - A flow whose log a crash cut short in the middle of a line keeps its next event: saaio starts
   it on a line of its own instead of gluing it onto the broken one, which lost both. A cut inside
   a non-ASCII character no longer makes the flow disappear from saaio.

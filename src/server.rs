@@ -278,6 +278,8 @@ impl Server {
             let watch = WATCH_EVERY.saturating_sub(self.refreshed_at.elapsed());
             let wait = if self.dirty {
                 watch.min(FRAME_EVERY.saturating_sub(self.flushed_at.elapsed()))
+            } else if let Some(deadline) = self.host.sync_deadline(&self.focus) {
+                watch.min(deadline.saturating_duration_since(Instant::now()))
             } else {
                 watch
             };
@@ -304,6 +306,14 @@ impl Server {
                 self.pause_idle();
                 self.type_lines();
                 self.dismiss_dialogs();
+            }
+            if self
+                .host
+                .sync_deadline(&self.focus)
+                .is_some_and(|deadline| deadline <= Instant::now())
+            {
+                // A held update shows once it times out, though the program writes nothing more.
+                self.dirty = true;
             }
             self.flush();
         }
