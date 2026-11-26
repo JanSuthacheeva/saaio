@@ -34,7 +34,8 @@ impl Server {
         if idle && interrupted(before, after, adapter, self.store.busy(&waiter_of(key))) {
             self.interrupt(key);
         }
-        if failed_turn(before, after, adapter) {
+        let error = after.is_some_and(|report| report.status == Status::Error);
+        if error && failed_turn(before, after, adapter, self.store.busy(&waiter_of(key))) {
             self.fail_turn(key);
         }
         if let (PaneKey::Flow(id), Some(report)) = (key, after)
@@ -183,10 +184,16 @@ fn interrupted(
         && after.is_some_and(|report| report.status == Status::Idle)
 }
 
-/// True when `after` ends a running turn on an error: error right after working or blocked, in
-/// a session with an adapter (any harness; a plain session never).
-fn failed_turn(before: Option<&Report>, after: Option<&Report>, adapter: Option<Adapter>) -> bool {
+/// True when `after` ends a turn the hooks say still runs on an error: error right after working
+/// or blocked, in a session with an adapter (any harness; a plain session never).
+fn failed_turn(
+    before: Option<&Report>,
+    after: Option<&Report>,
+    adapter: Option<Adapter>,
+    busy: Busy,
+) -> bool {
     adapter.is_some()
+        && busy == Busy::Turn
         && before.is_some_and(|report| !report.at_rest())
         && after.is_some_and(|report| report.status == Status::Error)
 }
@@ -314,6 +321,7 @@ mod tests {
                         Some(&report(before)),
                         Some(&report(Status::Error)),
                         Some(adapter),
+                        Busy::Turn,
                     ),
                     "{adapter:?} {before:?}"
                 );
@@ -334,6 +342,7 @@ mod tests {
                     before.as_ref(),
                     Some(&report(Status::Error)),
                     Some(Adapter::Codex),
+                    Busy::Turn,
                 ),
                 "{before:?}"
             );
@@ -344,6 +353,7 @@ mod tests {
                     Some(&report(Status::Working)),
                     Some(&report(after)),
                     Some(Adapter::Codex),
+                    Busy::Turn,
                 ),
                 "{after:?}"
             );
@@ -351,7 +361,8 @@ mod tests {
         assert!(!failed_turn(
             Some(&report(Status::Working)),
             None,
-            Some(Adapter::Codex)
+            Some(Adapter::Codex),
+            Busy::Turn,
         ));
     }
 
@@ -361,6 +372,7 @@ mod tests {
             Some(&report(Status::Working)),
             Some(&report(Status::Error)),
             None,
+            Busy::Turn,
         ));
     }
 
@@ -373,6 +385,7 @@ mod tests {
                     Some(&report(pair[0])),
                     Some(&report(pair[1])),
                     Some(Adapter::Codex),
+                    Busy::Turn,
                 ));
             }
         }
@@ -460,6 +473,21 @@ mod tests {
             assert!(
                 !blocked_at_start(None, Some(&blocked()), adapter, Some(&starting())),
                 "{adapter:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_error_fails_only_a_turn_the_hooks_say_runs() {
+        for busy in [Busy::Idle, Busy::Typed] {
+            assert!(
+                !failed_turn(
+                    Some(&report(Status::Working)),
+                    Some(&report(Status::Error)),
+                    Some(Adapter::ClaudeCode),
+                    busy,
+                ),
+                "{busy:?}"
             );
         }
     }

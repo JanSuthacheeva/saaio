@@ -232,7 +232,7 @@ Neither check runs; `stalled` and the hooks behave as today (always for a login 
 - [x] Add `startup::dialog_question`, `blocked_at_start` and `Server::wait_on_dialog` with table tests and a server test with a fake codex reporting `blocked kind=auth` before any session
 - [x] Update `docs/troubleshooting.md`, CHANGELOG (Unreleased, Fixed), HANDOVER D1 and CLAUDE.md's `server/program_status.rs`, `tail.rs` and adapter entries
 - [x] End to end in a scratch store with real Codex 0.172: a worker with `-m saaio-no-such-model` ends blocked with Codex's message, `saaio status` shows it, busy is idle; check for the workspace sidebar; `saaio --stop`
-- [ ] Add `busy == Busy::Turn` to `failed_turn` (busy read only for an error report), with table tests: an error while busy is idle or typed fails no turn
+- [x] Add `busy == Busy::Turn` to `failed_turn` (busy read only for an error report), with table tests: an error while busy is idle or typed fails no turn
 
 ## Review
 
