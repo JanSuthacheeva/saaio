@@ -146,6 +146,10 @@ not, records a built-in prompt that names no skill.
 - Built: tasks 2 and 3 share one commit, since `skills.rs` is dead code (a lint error) until
   `saaio start` calls it. The CLI tests' `Lab::install_skill` puts a skill in their Claude home, so
   the tests of the ordinary start keep calling the skill.
+- End-to-end after the fix: `saaio start` printed the `skill:` line and its help line, the log
+  recorded `"prompt":"{request}"`, and 6 s after `saaio server` it had `answer "Hi"` and `idle`
+  from the hooks; `saaio status` showed `ghost2,ghost,idle`. No separate `working` line: a fresh
+  start already folds to working, so the hook adds none.
 - The regression test for `prompt_for` goes in `src/config/kind.rs`'s tests. The lookup's tests
   go in `skills.rs` with a temp folder. A CLI test in `tests/cli/` checks the start output with
   `CLAUDE_CONFIG_DIR` pointing at an empty folder.
@@ -172,7 +176,7 @@ not, records a built-in prompt that names no skill.
   `tests/cli/` that starts a flow under an empty `CLAUDE_CONFIG_DIR` and sees the fallback prompt
   in the log and `skill:` in the output.
 - [x] Correct docs/configuration.md "Without matching skills", and add the CHANGELOG line.
-- [ ] End-to-end: run the reproduction again. Expected: `saaio start` prints `skill:
+- [x] End-to-end: run the reproduction again. Expected: `saaio start` prints `skill:
   no-such-skill-xyz not found ...`, the pane gets the built-in prompt and answers, the flow's
   log shows `working` then `idle` from the hooks, and `saaio status` shows `ghost2` `idle`, not
   `working`.
