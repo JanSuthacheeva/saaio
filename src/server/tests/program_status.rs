@@ -132,9 +132,10 @@ fn an_esc_mid_turn_in_the_master_makes_its_turn_idle() {
 
     fs::write(&go, "").unwrap();
 
-    wait_until("the master's turn never went idle", || {
+    // The server marks the session idle just after the turn: wait for both.
+    wait_until("the master's turn and session never went idle", || {
         store.master_turn().map(|turn| turn.state) == Some(State::Idle)
+            && store.busy(&Waiter::Master) == Busy::Idle
     });
-    assert_eq!(store.busy(&Waiter::Master), Busy::Idle);
     stop(&paths, handle);
 }
