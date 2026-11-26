@@ -211,6 +211,28 @@ fn a_codex_turn_that_failed_blocks_with_its_error_and_ends_the_turn() {
     stop(&paths, handle);
 }
 
+#[test]
+fn an_error_after_the_hooks_ended_the_turn_blocks_nothing() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::at(dir.path().to_path_buf());
+    let id = started_flow(&store, dir.path(), "csv", "codex-failing");
+    store
+        .append(id, &LogEvent::new(3, EventKind::Working))
+        .unwrap();
+    let codex = recorded_codex(dir.path(), "csv", "codex-0.172-turn-failed");
+    let agents = BTreeMap::from([("codex-failing".to_string(), codex)]);
+    let (paths, handle) = start_with_agents(dir.path(), agents);
+    wait_until("the worker never started", || {
+        dir.path().join("csv/started").exists()
+    });
+
+    fs::write(dir.path().join("csv/go"), "").unwrap();
+    thread::sleep(WATCH_EVERY * 3);
+
+    assert!(blockers(&store, id).is_empty());
+    stop(&paths, handle);
+}
+
 fn waits_on(store: &Store, id: FlowId, asked: &str) -> usize {
     store
         .events(id)
