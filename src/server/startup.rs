@@ -1,4 +1,5 @@
-//! A worker that exited while working, and a Codex worker that began no first turn
+//! A worker that exited while working, and a Codex worker that began no first turn: stalled, or
+//! held by a dialog it reported
 
 use std::time::{Duration, Instant};
 
@@ -7,6 +8,7 @@ use crate::adapter::Adapter;
 use crate::event::{Event as LogEvent, EventKind};
 use crate::fold;
 use crate::id::FlowId;
+use crate::program_status::Need;
 use crate::proto::{PaneKey, PaneStatus};
 use crate::server_log;
 use crate::view::{FlowView, State};
@@ -82,6 +84,16 @@ impl Server {
                 server_log::write((self.clock)(), &format!("{error:#}"));
             }
         }
+    }
+}
+
+/// The question a dialog before the first turn waits on, by what it needs.
+pub(super) fn dialog_question(need: Option<Need>) -> &'static str {
+    match need {
+        Some(Need::Permission) => "a permission dialog holds the first turn: answer it in its pane",
+        Some(Need::Question) => "a question holds the first turn: answer it in its pane",
+        Some(Need::Auth) => "a sign-in holds the first turn: sign in in its pane",
+        None => "a dialog holds the first turn: answer it in its pane",
     }
 }
 
@@ -226,5 +238,25 @@ mod tests {
             stopped.state = state;
             assert!(!exited_while_working(&stopped, Some(&exited)), "{state:?}");
         }
+    }
+
+    #[test]
+    fn a_dialog_before_the_first_turn_says_what_it_needs() {
+        assert_eq!(
+            dialog_question(Some(Need::Permission)),
+            "a permission dialog holds the first turn: answer it in its pane"
+        );
+        assert_eq!(
+            dialog_question(Some(Need::Question)),
+            "a question holds the first turn: answer it in its pane"
+        );
+        assert_eq!(
+            dialog_question(Some(Need::Auth)),
+            "a sign-in holds the first turn: sign in in its pane"
+        );
+        assert_eq!(
+            dialog_question(None),
+            "a dialog holds the first turn: answer it in its pane"
+        );
     }
 }

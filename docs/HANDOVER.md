@@ -267,7 +267,12 @@ Codex facts" list every source line). Decisions:
   the master folder is left alone.
 - **D1:** A running non-plain Codex worker with no session 30 seconds after launch becomes waiting
   with `no turn began after launch: answer the dialog in its pane`. Its first UserPromptSubmit puts
-  it back to working.
+  it back to working. A `blocked` OSC 7501 report before that (Codex 0.172) makes it waiting at
+  once with what the dialog needs (`startup::dialog_question`); a login screen sends no report, so
+  only the 30 s guess sees it. An `error` report right after working or blocked, while busy says
+  a turn runs (any harness; Codex runs no hook on a failed turn), blocks the flow with
+  `turn failed: <error.message of the rollout's newest task_complete>`, else `see its pane`, and
+  sets busy idle.
 - Codex picks its own session id: a `session` event (`FlowView.session`, `PROTOCOL_VERSION` 4)
   records it and the rollout path; `{session}` resumes it. A Codex master keeps it in
   `waits/master.session`, forgotten when the master starts fresh. A session that never had a turn

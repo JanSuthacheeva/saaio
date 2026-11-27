@@ -57,6 +57,7 @@ mod store;
 #[cfg(test)]
 mod strategies;
 mod system;
+mod tail;
 mod text;
 mod threads;
 mod trust;

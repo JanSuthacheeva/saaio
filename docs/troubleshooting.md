@@ -69,7 +69,9 @@ in what the harness reports:
 | `pane: when saaio opens` | the flow is recorded, the UI is not running | run `saaio` in a terminal. It opens the worker within half a second. |
 | the row shows only whether it runs | the agent has no `adapter` | set `adapter = "claude-code"` or `"codex"` on a custom agent that runs one of them ([configuration.md](configuration.md#agents)) |
 | `saaio start` says `skill: ... not found` | Claude Code has no skill of the kind's name, so the worker got saaio's built-in prompt | install the skill, or set the kind's `prompt` ([configuration.md](configuration.md#without-matching-skills)) |
-| a Codex flow is waiting with "no turn began after launch" | its pane stopped at a Codex dialog before its first turn | jump to the worker and answer the dialog |
+| a Codex flow is waiting with "no turn began after launch" | its pane stopped at a Codex dialog before its first turn, often its sign-in | jump to the worker and answer the dialog or sign in |
+| a Codex flow is waiting with "... holds the first turn" | Codex reported a dialog before its first turn: a permission, a question or a sign-in | jump to the worker and answer it |
+| a flow is blocked with "turn failed: ..." | the harness ended the turn on an error: an unsupported model, a rate limit, a lost connection. The text after the colon is Codex's error. Claude Code's reads "see its pane". | fix the cause, for a rate limit wait or switch the model, then send the worker a new prompt |
 | steps stay `○───○───○───○`, the sidebar shows the state instead of a phase | no skill the worker ran matches a phase. The flow still works. | list your skills under the kind's `phases` ([configuration.md](configuration.md#use-your-own-workflow)) |
 | a Claude Code worker keeps its spinner after Esc | Claude Code older than 2.1.295 sends no status reports, and runs no hook on Esc | update Claude Code. Until then the state corrects at the worker's next prompt. |
 | a Codex flow shows no task counts and never ends | Codex has no task count tool and no `/exit` event | end it from the UI (`x` on its exited pane, or on the board when done) or with `saaio remove` |
