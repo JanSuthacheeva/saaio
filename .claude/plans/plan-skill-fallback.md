@@ -115,7 +115,7 @@ not, records a built-in prompt that names no skill.
 - `src/cli/commands/start.rs` `run`: for an agent with the Claude Code adapter and a kind with a
   skill, build `ClaudeSkills` from `ctx.env.claude_home()` and the repo root, and pass
   `has(skill)` to `prompt_for`. Codex and agents without an adapter always pass `true`.
-- `src/cli/output/start.rs` `started`: takes `missing_skill: Option<&str>` and then prints
+- `src/cli/output/start.rs` `started`: takes `missing_skill: Option<&str>` (set only when the prompt fell back) and then prints
   `skill: ship-feature not found, the worker got saaio's built-in prompt`. It adds a help line:
   `Install the ship-feature skill for Claude Code, or set [kinds.feature] prompt
   (docs/configuration.md#without-matching-skills)`.

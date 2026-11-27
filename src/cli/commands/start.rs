@@ -169,11 +169,13 @@ fn refuse_untrusted(
     Err(output::trust::untrusted(repo, &hooks, codex))
 }
 
-/// The kind's skill when the agent is Claude Code and lacks it; Claude Code answers an unknown
-/// command without a turn, while Codex passes an unknown skill to the model as text.
+/// The kind's skill when the agent is Claude Code, its first prompt would call the skill, and it
+/// lacks it; Claude Code answers an unknown command without a turn, while Codex passes an unknown
+/// skill to the model as text.
 fn missing_skill<'a>(kind: &'a Kind, agent: &Agent, skills: &ClaudeSkills) -> Option<&'a str> {
     let skill = kind.skill.as_deref()?;
-    (agent.adapter == Some(Adapter::ClaudeCode) && !skills.has(skill)).then_some(skill)
+    let calls = kind.prompt_for(agent, true) != kind.prompt_for(agent, false);
+    (agent.adapter == Some(Adapter::ClaudeCode) && calls && !skills.has(skill)).then_some(skill)
 }
 
 /// The names unfinished flows hold; a new flow takes another.

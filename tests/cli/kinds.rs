@@ -86,6 +86,26 @@ fn start_sends_a_built_in_prompt_when_claude_code_lacks_the_kinds_skill() {
 }
 
 #[test]
+fn start_says_nothing_of_the_skill_when_the_kinds_prompt_is_sent_as_written() {
+    let lab = Lab::new();
+    fs::create_dir_all(&lab.home).unwrap();
+    fs::write(
+        lab.home.join("no-config.toml"),
+        "[kinds.fix]\nskill = \"ship-fix\"\nprompt = \"Use {skill} for {request}\"\n\
+         phases = [{ name = \"fix\", skills = [\"ship-fix\"] }]\n",
+    )
+    .unwrap();
+
+    let output = lab.start(&["SHOP-232 fix totals on credits", "--kind", "fix"]);
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(!text.contains("\nskill:"), "{text}");
+    assert!(!text.contains("Install the ship-fix skill"), "{text}");
+    assert_eq!(started_line(&lab)["prompt"], "Use /ship-fix for {request}");
+}
+
+#[test]
 fn a_research_flow_gets_a_detached_worktree_and_no_branch() {
     let lab = Lab::new();
     types(&lab);
