@@ -199,30 +199,37 @@ not, records a built-in prompt that names no skill.
 
 ## Review
 
-Isolated review of main...flow/skill-fallback (c091a6a, then the fix below).
+Isolated reviews of main...flow/skill-fallback: the first at f78b2e5 (c091a6a, then its fix
+e3b1caf), the second at 1d058e3 (the check task 8e158bc, the frontmatter lookup 3b7575f and the
+end-to-end notes 1d058e3), each over the whole branch.
 
 **Fixed**
 
-- `saaio start` printed `skill: <skill> not found, the worker got saaio's built-in prompt` and the
-  `[kinds.*] prompt` help line whenever Claude Code lacked the kind's skill, even when the prompt
-  was sent as written (a kind prompt with `{skill}` later in the text, or an agent's own prompt).
-  Shown by `start_says_nothing_of_the_skill_when_the_kinds_prompt_is_sent_as_written`
+- First review: `saaio start` printed `skill: <skill> not found, the worker got saaio's built-in
+  prompt` and the `[kinds.*] prompt` help line whenever Claude Code lacked the kind's skill, even
+  when the prompt was sent as written (a kind prompt with `{skill}` later in the text, or an
+  agent's own prompt). Shown by
+  `start_says_nothing_of_the_skill_when_the_kinds_prompt_is_sent_as_written`
   (tests/cli/kinds.rs). `missing_skill` now reports the skill only when the prompt actually fell
   back; docs/cli.md says so. e3b1caf.
+- Second review: nothing to fix. The frontmatter lookup matches what the check task found in
+  Claude Code 2.1.332; its test fails without it (`frontmatter-bbb` is found only through
+  `frontmatter_name`) and also pins that a `name:` in the body does not count. Symlinked skill
+  folders (common with dotfiles) are followed, since `is_dir`/`is_file` follow links.
 
 **Open**
 
-- Skill lookup by folder name: `ClaudeSkills::has` looks for `skills/<name>/SKILL.md`. If Claude
-  Code names a skill by its frontmatter `name` when that differs from the folder, the check can
-  be wrong either way. Recommend: verify against Claude Code once; if it uses frontmatter, read
-  the `name:` line too. Not proven either way.
-- Project skills are looked up under the main checkout's `.claude`, while the worker runs in the
-  worktree (`.saaio/worktrees/<name>`). An untracked `.claude/skills` exists only in the main
-  checkout; whether Claude Code in the worktree still finds it (by walking up) decides whether the
-  check matches. Recommend: check once in the E2E setup; low impact, since a wrong "present" only
-  leaves the old stall.
+- Resolved by the check task (8e158bc, 3b7575f): the first review's two open items, the lookup
+  by folder name (Claude Code answers to the frontmatter `name` too, now read) and project skills
+  in a worktree (Claude Code walks up to the repository's `.claude`, where `has` already looks).
+- Not proven, low impact, no change recommended: `frontmatter_name` reads `name:` only at the
+  start of a line in the first `---` block, takes off quotes but not a trailing `# comment`, and
+  does not skip a UTF-8 BOM before the opening `---`. Each case only makes a skill that exists
+  look missing, which sends the built-in prompt instead of the skill; worth a line if a user
+  reports it.
 - Known and accepted by the plan: a disabled plugin's skill counts as present; the new-flow dialog
-  shows no note; flows started before the fix stay stuck until removed.
+  shows no note; flows started before the fix stay stuck until removed; a bundled Claude Code
+  command used as a kind's skill falls back.
 
 **Where to look**
 
@@ -230,14 +237,18 @@ Isolated review of main...flow/skill-fallback (c091a6a, then the fix below).
    it starts with the skill's call) and the two built-in texts.
 2. `src/cli/commands/start.rs` `missing_skill`: the Claude Code-only gate and the
    fell-back condition that drives the output.
-3. `src/skills.rs` `has`: which places count as "Claude Code has it".
+3. `src/skills.rs` `has` -> `defines` -> `frontmatter_name`: which places and names count as
+   "Claude Code has it".
 
 Routine, skim: docs, CHANGELOG, the `true` added at existing call sites, the test-only
-`Lab::install_skill`, and the server test that now waits for both idle marks.
+`Lab::install_skill`, the server test that now waits for both idle marks, and the plan's
+end-to-end notes.
 
 **Checks**
 
 fmt, clippy (`--all-targets --all-features -D warnings`) and `cargo test --all-features` pass at
-e3b1caf. The fix was reviewed by this same agent in a separate pass, not independently. No security
-review tool ran: the diff takes no untrusted input (only file-existence checks on the user's own
-config's skill name).
+3b7575f; only the plan changed after it, so they were not rerun. The first review's fix was
+reviewed by that same agent in a separate pass, not independently; the second review made no
+fix. No security review tool ran in either review: the diff takes no untrusted input (only file
+existence and the `name:` line of SKILL.md files under the user's Claude home, the repository and
+the plugin cache, never executed).
