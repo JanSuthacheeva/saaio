@@ -150,6 +150,10 @@ not, records a built-in prompt that names no skill.
   recorded `"prompt":"{request}"`, and 6 s after `saaio server` it had `answer "Hi"` and `idle`
   from the hooks; `saaio status` showed `ghost2,ghost,idle`. No separate `working` line: a fresh
   start already folds to working, so the hook adds none.
+- End-to-end after the review's check: again `ghost2` got `{request}`, answered `Hi` and went
+  idle in 6 s; a kind `named` whose skill `frontmatter-bbb` exists only as the frontmatter name
+  of `.claude/skills/folder-aaa` printed no `skill:` line, recorded `/frontmatter-bbb {request}`,
+  answered `SKILLOKA` from the skill and went idle in phase `build`.
 - The regression test for `prompt_for` goes in `src/config/kind.rs`'s tests. The lookup's tests
   go in `skills.rs` with a temp folder. A CLI test in `tests/cli/` checks the start output with
   `CLAUDE_CONFIG_DIR` pointing at an empty folder.
@@ -188,7 +192,7 @@ not, records a built-in prompt that names no skill.
   from the worktree to the repository, which is where `has` looks already, and no higher (a skill
   in the repository's parent folder answered `Unknown command`). No change for (b); the
   repository test covers that place.
-- [ ] End-to-end: run the reproduction again. Expected: `saaio start` prints `skill:
+- [x] End-to-end: run the reproduction again. Expected: `saaio start` prints `skill:
   no-such-skill-xyz not found ...`, the pane gets the built-in prompt and answers, the flow's
   log shows `working` then `idle` from the hooks, and `saaio status` shows `ghost2` `idle`, not
   `working`.
