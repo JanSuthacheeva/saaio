@@ -180,3 +180,48 @@ not, records a built-in prompt that names no skill.
   no-such-skill-xyz not found ...`, the pane gets the built-in prompt and answers, the flow's
   log shows `working` then `idle` from the hooks, and `saaio status` shows `ghost2` `idle`, not
   `working`.
+
+## Review
+
+Isolated review of main...flow/skill-fallback (c091a6a, then the fix below).
+
+**Fixed**
+
+- `saaio start` printed `skill: <skill> not found, the worker got saaio's built-in prompt` and the
+  `[kinds.*] prompt` help line whenever Claude Code lacked the kind's skill, even when the prompt
+  was sent as written (a kind prompt with `{skill}` later in the text, or an agent's own prompt).
+  Shown by `start_says_nothing_of_the_skill_when_the_kinds_prompt_is_sent_as_written`
+  (tests/cli/kinds.rs). `missing_skill` now reports the skill only when the prompt actually fell
+  back; docs/cli.md says so. e3b1caf.
+
+**Open**
+
+- Skill lookup by folder name: `ClaudeSkills::has` looks for `skills/<name>/SKILL.md`. If Claude
+  Code names a skill by its frontmatter `name` when that differs from the folder, the check can
+  be wrong either way. Recommend: verify against Claude Code once; if it uses frontmatter, read
+  the `name:` line too. Not proven either way.
+- Project skills are looked up under the main checkout's `.claude`, while the worker runs in the
+  worktree (`.saaio/worktrees/<name>`). An untracked `.claude/skills` exists only in the main
+  checkout; whether Claude Code in the worktree still finds it (by walking up) decides whether the
+  check matches. Recommend: check once in the E2E setup; low impact, since a wrong "present" only
+  leaves the old stall.
+- Known and accepted by the plan: a disabled plugin's skill counts as present; the new-flow dialog
+  shows no note; flows started before the fix stay stuck until removed.
+
+**Where to look**
+
+1. `src/config/kind.rs` `prompt_for` -> `fallback_prompt`: when a prompt falls back (only when
+   it starts with the skill's call) and the two built-in texts.
+2. `src/cli/commands/start.rs` `missing_skill`: the Claude Code-only gate and the
+   fell-back condition that drives the output.
+3. `src/skills.rs` `has`: which places count as "Claude Code has it".
+
+Routine, skim: docs, CHANGELOG, the `true` added at existing call sites, the test-only
+`Lab::install_skill`, and the server test that now waits for both idle marks.
+
+**Checks**
+
+fmt, clippy (`--all-targets --all-features -D warnings`) and `cargo test --all-features` pass at
+e3b1caf. The fix was reviewed by this same agent in a separate pass, not independently. No security
+review tool ran: the diff takes no untrusted input (only file-existence checks on the user's own
+config's skill name).
