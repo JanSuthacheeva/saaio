@@ -29,6 +29,7 @@ fn types(lab: &Lab) {
 #[test]
 fn start_records_the_feature_kind_unless_asked_for_another() {
     let lab = Lab::new();
+    lab.install_skill("ship-feature");
 
     let output = lab.start(&["SHOP-217 add CSV export"]);
 
@@ -48,11 +49,13 @@ fn start_records_the_feature_kind_unless_asked_for_another() {
 fn a_fix_takes_the_kinds_branch_type_and_prompt() {
     let lab = Lab::new();
     types(&lab);
+    lab.install_skill("ship-fix");
 
     let output = lab.start(&["SHOP-230 fix totals on refunds", "--kind", "fix"]);
 
     let text = stdout(&output);
     assert!(output.status.success(), "{text}");
+    assert!(!text.contains("\nskill:"), "{text}");
     assert!(
         text.contains("branch: bugfix/SHOP-230-fix-totals-on-refunds"),
         "{text}"
@@ -62,6 +65,44 @@ fn a_fix_takes_the_kinds_branch_type_and_prompt() {
     assert_eq!(started["prompt"], "/ship-fix {request}");
     assert_eq!(started["workflow"][0]["name"], "diagnose");
     assert_eq!(started["workflow"][0]["skills"][0], "diagnose-bug");
+}
+
+#[test]
+fn start_sends_a_built_in_prompt_when_claude_code_lacks_the_kinds_skill() {
+    let lab = Lab::new();
+
+    let output = lab.start(&["SHOP-231 fix totals on returns", "--kind", "fix"]);
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(
+        text.contains("skill: \"ship-fix not found, the worker got saaio's built-in prompt\""),
+        "{text}"
+    );
+    assert!(text.contains("set [kinds.fix] prompt"), "{text}");
+    let prompt = started_line(&lab)["prompt"].as_str().unwrap().to_string();
+    assert!(prompt.starts_with("Fix this bug: reproduce it"), "{prompt}");
+    assert!(prompt.ends_with("{request}"), "{prompt}");
+}
+
+#[test]
+fn start_says_nothing_of_the_skill_when_the_kinds_prompt_is_sent_as_written() {
+    let lab = Lab::new();
+    fs::create_dir_all(&lab.home).unwrap();
+    fs::write(
+        lab.home.join("no-config.toml"),
+        "[kinds.fix]\nskill = \"ship-fix\"\nprompt = \"Use {skill} for {request}\"\n\
+         phases = [{ name = \"fix\", skills = [\"ship-fix\"] }]\n",
+    )
+    .unwrap();
+
+    let output = lab.start(&["SHOP-232 fix totals on credits", "--kind", "fix"]);
+
+    let text = stdout(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(!text.contains("\nskill:"), "{text}");
+    assert!(!text.contains("Install the ship-fix skill"), "{text}");
+    assert_eq!(started_line(&lab)["prompt"], "Use /ship-fix for {request}");
 }
 
 #[test]

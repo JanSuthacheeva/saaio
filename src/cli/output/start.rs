@@ -15,11 +15,13 @@ pub(crate) enum Opening {
 }
 
 /// flow, id, kind, worktree, branch (none for a flow that merges nothing), base (for a stacked
-/// flow), slot, setup (ran / none / failed: ...), agent, pane, help.
+/// flow), slot, setup (ran / none / failed: ...), agent, skill (only when the agent lacked the
+/// kind's skill), pane, help.
 pub(crate) fn started(
     flow: &FlowView,
     workspace: &Workspace,
     setup: &Setup,
+    missing_skill: Option<&str>,
     opening: Opening,
 ) -> Document {
     #[derive(Serialize)]
@@ -36,6 +38,8 @@ pub(crate) fn started(
         slot: Option<u8>,
         setup: String,
         agent: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        skill: Option<String>,
         pane: &'a str,
         help: Vec<String>,
     }
@@ -47,6 +51,13 @@ pub(crate) fn started(
                 .to_string(),
         );
     }
+    if let Some(skill) = missing_skill {
+        help.push(format!(
+            "Install the {skill} skill for Claude Code, or set [kinds.{}] prompt \
+             (docs/configuration.md#without-matching-skills)",
+            flow.kind.as_deref().unwrap_or("feature")
+        ));
+    }
     Document::Toon(toon(&Started {
         flow: &flow.name,
         id: flow.id,
@@ -57,6 +68,8 @@ pub(crate) fn started(
         slot: workspace.slot,
         setup: setup.to_string(),
         agent: &workspace.agent,
+        skill: missing_skill
+            .map(|skill| format!("{skill} not found, the worker got saaio's built-in prompt")),
         pane,
         help,
     }))
@@ -113,6 +126,7 @@ mod tests {
                 &flow,
                 &workspace("shop-240", "claude"),
                 setup,
+                None,
                 Opening::Running,
             )
             .text()
@@ -132,5 +146,34 @@ mod tests {
             "{failed}"
         );
         assert!(ran.contains("\nsetup: ran\n"), "{ran}");
+        assert!(!ran.contains("skill:"), "{ran}");
+    }
+
+    #[test]
+    fn says_when_the_worker_got_the_built_in_prompt_and_how_to_change_that() {
+        let mut flow = flow("shop-240", vec![], 0);
+        flow.kind = Some("fix".to_string());
+
+        let text = started(
+            &flow,
+            &workspace("shop-240", "claude"),
+            &Setup::None,
+            Some("ship-fix"),
+            Opening::Running,
+        )
+        .text()
+        .to_string();
+
+        assert!(
+            text.contains("skill: \"ship-fix not found, the worker got saaio's built-in prompt\""),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "Install the ship-fix skill for Claude Code, or set [kinds.fix] prompt \
+                 (docs/configuration.md#without-matching-skills)"
+            ),
+            "{text}"
+        );
     }
 }

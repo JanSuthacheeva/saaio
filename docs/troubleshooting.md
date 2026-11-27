@@ -68,6 +68,7 @@ in what the harness reports:
 | --- | --- | --- |
 | `pane: when saaio opens` | the flow is recorded, the UI is not running | run `saaio` in a terminal. It opens the worker within half a second. |
 | the row shows only whether it runs | the agent has no `adapter` | set `adapter = "claude-code"` or `"codex"` on a custom agent that runs one of them ([configuration.md](configuration.md#agents)) |
+| `saaio start` says `skill: ... not found` | Claude Code has no skill of the kind's name, so the worker got saaio's built-in prompt | install the skill, or set the kind's `prompt` ([configuration.md](configuration.md#without-matching-skills)) |
 | a Codex flow is waiting with "no turn began after launch" | its pane stopped at a Codex dialog before its first turn, often its sign-in | jump to the worker and answer the dialog or sign in |
 | a Codex flow is waiting with "... holds the first turn" | Codex reported a dialog before its first turn: a permission, a question or a sign-in | jump to the worker and answer it |
 | a flow is blocked with "turn failed: ..." | the harness ended the turn on an error: an unsupported model, a rate limit, a lost connection. The text after the colon is Codex's error. Claude Code's reads "see its pane". | fix the cause, for a rate limit wait or switch the model, then send the worker a new prompt |

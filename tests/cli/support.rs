@@ -431,6 +431,13 @@ impl Lab {
         assert!(terminal.shows("trusted: "), "{}", terminal.text());
     }
 
+    /// A skill in the Claude Code home saaio_command points CLAUDE_CONFIG_DIR at.
+    pub fn install_skill(&self, name: &str) {
+        let dir = self.home.join("no-claude-home/skills").join(name);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("SKILL.md"), format!("---\nname: {name}\n---\n")).unwrap();
+    }
+
     pub fn hook(&self, name: &str, script: &str) {
         let dir = self.repo.join(".saaio");
         fs::create_dir_all(&dir).unwrap();

@@ -117,7 +117,7 @@ pub fn worker_spec(
         let prompt = flow
             .prompt
             .clone()
-            .unwrap_or_else(|| Kind::feature().prompt_for(agent));
+            .unwrap_or_else(|| Kind::feature().prompt_for(agent, true));
         agent_argv(agent, &prompt, own, &flow.name, &flow.request)
     };
     if let Some(adapter) = agent.adapter {
