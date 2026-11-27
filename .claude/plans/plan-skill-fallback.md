@@ -176,7 +176,12 @@ not, records a built-in prompt that names no skill.
   `tests/cli/` that starts a flow under an empty `CLAUDE_CONFIG_DIR` and sees the fallback prompt
   in the log and `skill:` in the output.
 - [x] Correct docs/configuration.md "Without matching skills", and add the CHANGELOG line.
-- [x] End-to-end: run the reproduction again. Expected: `saaio start` prints `skill:
+- [ ] Check against Claude Code 2.1.332 (the user's decision on the review's open items,
+  2026-11-27): (a) whether `/<x>` calls a skill by its folder name or its frontmatter `name:`
+  when they differ; (b) whether a worker in `.saaio/worktrees/<name>` finds a skill that exists
+  only in the main checkout's untracked `.claude/skills`. Make `ClaudeSkills::has` match what
+  Claude Code does, with a test for each finding.
+- [ ] End-to-end: run the reproduction again. Expected: `saaio start` prints `skill:
   no-such-skill-xyz not found ...`, the pane gets the built-in prompt and answers, the flow's
   log shows `working` then `idle` from the hooks, and `saaio status` shows `ghost2` `idle`, not
   `working`.
