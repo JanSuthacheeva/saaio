@@ -16,7 +16,9 @@ impl ClaudeSkills {
     }
 
     /// True when `/name` calls a skill or command Claude Code has: in its home, the repository's
-    /// `.claude`, or any installed plugin version, which Claude Code calls without its namespace.
+    /// `.claude` (a worktree inside the repository finds it there too), or any installed plugin
+    /// version, which Claude Code calls without its namespace. A skill answers to its folder's
+    /// name and to the `name` its frontmatter gives.
     pub fn has(&self, name: &str) -> bool {
         let mut roots = vec![self.home.clone(), self.repo.join(".claude")];
         roots.extend(plugin_versions(&self.home.join("plugins").join("cache")));
@@ -24,10 +26,28 @@ impl ClaudeSkills {
     }
 }
 
-/// Whether `root` holds `skills/<name>/SKILL.md` or `commands/<name>.md`.
+/// Whether `root` holds `skills/<name>/SKILL.md`, a skill whose frontmatter names it, or
+/// `commands/<name>.md`.
 fn defines(root: &Path, name: &str) -> bool {
-    root.join("skills").join(name).join("SKILL.md").is_file()
+    let skills = root.join("skills");
+    skills.join(name).join("SKILL.md").is_file()
         || root.join("commands").join(format!("{name}.md")).is_file()
+        || subdirs(&skills).iter().any(|dir| {
+            fs::read_to_string(dir.join("SKILL.md"))
+                .is_ok_and(|text| frontmatter_name(&text) == Some(name))
+        })
+}
+
+/// The `name:` of a SKILL.md's frontmatter, quotes taken off.
+fn frontmatter_name(text: &str) -> Option<&str> {
+    let mut lines = text.lines();
+    if lines.next()?.trim() != "---" {
+        return None;
+    }
+    lines
+        .take_while(|line| line.trim() != "---")
+        .find_map(|line| line.strip_prefix("name:"))
+        .map(|value| value.trim().trim_matches(['"', '\'']))
 }
 
 /// The plugin folders in Claude Code's cache: `<marketplace>/<plugin>/<version>`.
@@ -96,6 +116,22 @@ mod tests {
 
         assert!(skills(&dir).has("brainstorming"));
         assert!(skills(&dir).has("ship-fix"));
+    }
+
+    #[test]
+    fn finds_a_skill_by_the_name_its_frontmatter_gives() {
+        let dir = TempDir::new().unwrap();
+        let skill = dir.path().join("repo/.claude/skills/folder-aaa/SKILL.md");
+        fs::create_dir_all(skill.parent().unwrap()).unwrap();
+        fs::write(
+            &skill,
+            "---\ndescription: x\nname: \"frontmatter-bbb\"\n---\n\nname: body-ccc\n",
+        )
+        .unwrap();
+
+        assert!(skills(&dir).has("frontmatter-bbb"));
+        assert!(skills(&dir).has("folder-aaa"));
+        assert!(!skills(&dir).has("body-ccc"));
     }
 
     #[test]
